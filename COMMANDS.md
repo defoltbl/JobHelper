@@ -4,7 +4,7 @@ Quick reference for every command. Run all of these from the project root with
 the virtual environment activated.
 
 ```bash
-cd /path/to/JobHelper
+cd path/to/JobHelper          # the folder this file is in
 source .venv/bin/activate
 ```
 
@@ -311,7 +311,7 @@ up in the app's **Account** card (see sections 7 and 10).
 
 ```bash
 python status.py sync                 # scan inbox → update statuses + response DB + reports
-python status.py sync --days 10       # only scan the last 10 days (default: IMAP_LOOKBACK_DAYS)
+python status.py sync --days 10       # only scan the last 10 days (default: "Scan emails from the last" in Options)
 python status.py responses            # show reply / interview / offer / rejection-reason breakdown
 python status.py responses --scan     # scan inbox first, then show the report
 python status.py repair-emails        # re-read email text (no Claude usage) and fix replies that were
@@ -471,13 +471,13 @@ emojis, no gap admissions ("not yet", "although", "limited", "lack" ...), and no
 technology outside the master CV presented as experience (it may be named as the
 employer's platform or as something you want to work with). Files are named
 `<Name>_CoverLetter_<Company>_<RoleShort>.docx` in `data/cover_letters/`.
-Your own letters in `~/Documents/CV/Letter` are never rewritten.
+Your own letters (the folder set as `COVER_LETTERS_DIR` in `.env`, by default `~/Documents/CV/Letter`) are never rewritten.
 
 ## 9. Weekly automation (macOS LaunchAgent)
 
 A LaunchAgent runs a **job search + email analysis** every Monday 09:00:
 `~/Library/LaunchAgents/com.jobhelper.weeklyscan.plist` → `weekly_jobhelper.sh` →
-`run.py --reuse-profile` then `status.py sync --days 10`
+`run.py --reuse-profile` then `status.py sync --summary`
 
 Easiest way to change it: click the **Weekly run** card in the app to turn it
 on/off and pick the day + time. The commands below do the same by hand:
@@ -490,7 +490,9 @@ launchctl load -w ~/Library/LaunchAgents/com.jobhelper.weeklyscan.plist  # re-en
 tail -f data/weekly_jobhelper.log                # watch results
 ```
 
-Requires: Mac awake + logged in + the Samsung SSD mounted at run time.
+Requires: Mac awake and logged in, and the disk the project is on connected at run time.
+The script finds the project by its own location and uses the project's `.venv`, so it works
+unchanged wherever the folder is.
 The weekly run uses the Options saved in the app. It stops without generating
 anything if a protected file was changed and not approved, or if the data key is
 missing; the reason is written to `data/weekly_jobhelper.log`.
@@ -527,14 +529,14 @@ What is protected:
 ### Do this once: save your recovery key
 
 ```bash
-cd /path/to/JobHelper && source .venv/bin/activate && python status.py security recovery-key
+python status.py security recovery-key
 ```
 
 It prints one line of letters and digits. Copy it into a password manager (or
 write it down and keep it somewhere safe). The data key exists only in this Mac's
 Keychain: on a new Mac, or after a Keychain reset, this line is the only way to
 open your encrypted data and backups. Anyone who has it can read them, so do not
-keep it in a file on the Samsung drive. You only need to do this once; the key
+keep it in a file next to the data. You only need to do this once; the key
 does not change.
 
 To use it later (new Mac, or the app says the key is missing):

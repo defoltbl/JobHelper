@@ -115,15 +115,25 @@ def cmd_retailor(args) -> int:
     return 0
 
 
+def scan_days() -> int:
+    """How far back the email scan looks: "Scan emails from the last … days" in the app's
+    Options, or IMAP_LOOKBACK_DAYS when that was never saved."""
+    try:
+        saved = int(config.ui_settings().get("scan_days") or 0)
+    except (TypeError, ValueError):
+        saved = 0
+    return saved if saved > 0 else config.IMAP_LOOKBACK_DAYS
+
+
 def cmd_sync(args) -> int:
     jobs = store.load_jobs()
     if not jobs:
         print("No jobs tracked yet. Run: python run.py")
         return 0
-    span = f"last {args.days} days" if args.days else f"last {config.IMAP_LOOKBACK_DAYS} days"
-    print(f"Reading inbox ({config.IMAP_USER}), {span} — read-only, nothing is sent or deleted …")
+    days = args.days or scan_days()
+    print(f"Reading inbox ({config.IMAP_USER}), last {days} days — read-only, nothing is sent or deleted …")
     try:
-        stats = agent5_responses.process_inbox(jobs, lookback_days=args.days)
+        stats = agent5_responses.process_inbox(jobs, lookback_days=days)
     except RuntimeError as e:
         print(f"✗ {e}")
         return 1
@@ -351,7 +361,7 @@ def main() -> int:
     p_apply.set_defaults(func=cmd_apply)
 
     p_sync = sub.add_parser("sync", help="Read inbox replies: update statuses + response DB")
-    p_sync.add_argument("--days", type=int, default=None, help="How many days back to scan (default: .env IMAP_LOOKBACK_DAYS)")
+    p_sync.add_argument("--days", type=int, default=None, help="How many days back to scan (default: the app's Options, else .env IMAP_LOOKBACK_DAYS)")
     p_sync.add_argument("--summary", action="store_true",
                         help="Afterwards, print the last 7 days in a few lines and send them as one notification (weekly run)")
     p_sync.set_defaults(func=cmd_sync)

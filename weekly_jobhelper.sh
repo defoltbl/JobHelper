@@ -1,16 +1,25 @@
 #!/bin/zsh
-# JobHelper — weekly automation (run by launchd). Does BOTH:
-#   1. Job search  : run.py  (search Prague ≤10 days, score, letters + tailored CVs, prune applied)
-#   2. Email scan  : status.py sync  (classify replies, update statuses, rejection DB, reports)
-# Search runs first (finds new leads); then email analysis updates applications.
+# JobHelper: the weekly run (started by the LaunchAgent the app's Weekly run card installs).
+#   1. Job search : run.py           (search, score, write letters and adapted CVs)
+#   2. Email scan : status.py sync   (read replies, update statuses, send the week's summary)
+# Both use the Options saved in the app. Nothing here is specific to one computer:
+# the project folder is wherever this file is, and Python is the project's own .venv.
 
-PROJECT="/path/to/JobHelper"
-export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+PROJECT="${0:A:h}"                       # the folder this script is in
+# launchd starts with a short PATH: add the usual places for the Claude CLI and Homebrew
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
-cd "$PROJECT" || exit 1   # SSD must be mounted; if not, abort
+cd "$PROJECT" || exit 1                  # e.g. an external disk that is not connected
 
-LOG="$PROJECT/data/weekly_jobhelper.log"
 PY="$PROJECT/.venv/bin/python"
+[[ -x "$PY" ]] || PY="$(command -v python3)"
+mkdir -p "$PROJECT/data"
+LOG="$PROJECT/data/weekly_jobhelper.log"
+
+if [[ -z "$PY" ]]; then
+    echo "===== weekly JobHelper $(date '+%Y-%m-%d %H:%M'): no Python found (expected $PROJECT/.venv) =====" >> "$LOG"
+    exit 1
+fi
 
 echo "===== weekly JobHelper $(date '+%Y-%m-%d %H:%M') =====" >> "$LOG"
 
@@ -18,6 +27,6 @@ echo "--- job search ---" >> "$LOG"
 "$PY" run.py --reuse-profile >> "$LOG" 2>&1
 
 echo "--- email analysis ---" >> "$LOG"
-"$PY" status.py sync --days 10 --summary >> "$LOG" 2>&1
+"$PY" status.py sync --summary >> "$LOG" 2>&1
 
 echo "" >> "$LOG"

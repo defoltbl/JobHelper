@@ -33,7 +33,7 @@ per-token billing).
 ## Setup
 
 ```bash
-cd /path/to/JobHelper
+cd path/to/JobHelper          # wherever you put the project
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --require-hashes -r requirements.lock   # exact, hash-checked packages (or: pip install -r requirements.txt)
@@ -210,7 +210,7 @@ Every new feature gets tests in the same change.
 ## Open in VS Code
 
 ```bash
-code /path/to/JobHelper
+code path/to/JobHelper
 ```
 
 Recommended extensions (Python + debugpy) are suggested automatically, and the

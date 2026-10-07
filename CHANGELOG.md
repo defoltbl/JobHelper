@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 8 October 2026
 
+- **Weekly run works from any folder**: the weekly script finds the project by its own location and takes the scan period from Options, so nothing in it is tied to one computer.
 - **Before you apply**: a checklist at the top of a new job's window (posting, CV, letter, one PDF, answers) that remembers what you have done, ending with Mark applied.
 - **One PDF**: the letter followed by the CV as a single file, for forms that take only one.
 - **Search in Answers**: find a question or an answer by typing.
