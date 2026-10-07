@@ -20,6 +20,11 @@ READY = {"claude": True, "plan": "pro", "claude_email": "me@example.com", "paid_
          "vault": "ok", "changed_files": []}
 
 
+def qml_source() -> str:
+    """The text of every QML file of the window (it is split into one file per window)."""
+    return "\n".join(p.read_text(encoding="utf-8") for p in sorted((ROOT / "ui_qt").glob("*.qml")))
+
+
 class Ui:
     """A loaded window plus helpers to poke it."""
 
@@ -32,12 +37,38 @@ class Ui:
         assert obj is not None, f"no QML object named {name!r}"
         return obj
 
+    # each window lives in its own file; names inside a window are only known in that window's context
+    WINDOWS = ["tableDialog", "detailDialog", "compareDialog", "answersDialog", "helpDialog", "prepDialog", "letterDialog",
+               "responseDialog", "limitDialog", "welcome", "optDialog", "schedDialog"]
+
+    def _inside(self, obj):
+        """The context of the file an object was written in. For a window made in Main.qml
+        that is not the object's own context (Main's) but the one its children were created in."""
+        own = qmlContext(obj)
+        if obj is self.win:
+            return own
+        for child in obj.findChildren(QObject):
+            ctx = qmlContext(child)
+            if ctx is not None and ctx != own and ctx.parentContext() == own:
+                return ctx
+        return own
+
     def js(self, code, scope=None):
-        target = scope or self.win
-        expr = QQmlExpression(qmlContext(target), target, code)   # the file's context, so ids resolve
-        value = expr.evaluate()
-        assert not expr.hasError(), expr.error().toString()
-        return value[0] if isinstance(value, tuple) else value
+        """Evaluate in the main window's context; if a name is only known inside one of
+        the windows (its text fields, lists …), evaluate there instead."""
+        targets = [scope] if scope else [self.win] + [self.win.findChild(QObject, name) for name in self.WINDOWS]
+        error = ""
+        for target in targets:
+            if target is None:
+                continue
+            expr = QQmlExpression(self._inside(target), target, code)   # that file's context, so its ids resolve
+            value = expr.evaluate()
+            if not expr.hasError():
+                return value[0] if isinstance(value, tuple) else value
+            error = error or expr.error().toString()
+            if "ReferenceError" not in expr.error().toString():
+                break
+        raise AssertionError(error)
 
     def wait(self, ms=60):
         QTest.qWait(ms)
@@ -749,7 +780,7 @@ def test_help_opens_from_the_button_and_covers_the_app(ui):
 
 
 def test_last_run_card_says_what_you_paid_and_the_api_price(ui):
-    source = (ROOT / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
+    source = qml_source()
     assert '"You paid"' in source and '"Same work via API"' in source and "$0 · subscription" in source
     assert '"Total cost"' not in source and '"Cost (API-equiv.)"' not in source
     assert ui.js("usageData.cost !== undefined") in (True, False) and ui.warnings == []
@@ -776,7 +807,7 @@ def test_help_marks_key_words(ui):
     for word in ("Run search", "Scan email", "Mark applied", "strong", "stretch", "Not interested", "recovery key"):
         assert f"<b>{word}</b>" in text, word
     assert text.count("<b>") == text.count("</b>") and "<b><b>" not in text
-    source = (ROOT / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
+    source = qml_source()
     assert "textFormat: Text.StyledText" in source
 
 
@@ -963,7 +994,7 @@ def test_application_only_cards_are_hidden_for_a_new_job_and_nothing_overflows(u
 
 
 def test_sidebar_counts_and_icons_share_one_column(ui):
-    source = (ROOT / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
+    source = qml_source()
     assert 'objectName: "navTail_" + modelData.k; implicitWidth: 46' in source
     tail = source[source.index('objectName: "navTail_"'):][:1400]
     assert tail.count("anchors.centerIn: parent") >= 3                             # the pill, its number and the icon
@@ -979,7 +1010,7 @@ def test_filtered_out_list_opens_from_the_last_run_card(ui):
     ui.bridge._api.note_run(filtered=2)
     ui.js("lastRunData = bridge.lastRun()")
     ui.wait(100)
-    source = (ROOT / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
+    source = qml_source()
     assert 'lastRunData.filtered + " · see why ›"' in source and "win.openView(modelData.view)" in source
     ui.js('openView("skip")')
     ui.wait(450)
@@ -995,7 +1026,7 @@ def test_filtered_out_list_opens_from_the_last_run_card(ui):
 
 
 def test_polish_empty_filtered_row_older_master_note_and_old_letter_chip(ui, monkeypatch):
-    source = (ROOT / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
+    source = qml_source()
     assert '" · see why ›" : "after next search"' in source                      # not a bare dash that looks broken
     assert 'letter_old_format === true ? "letter: older format, open in Word"' in source
     note = ui.find("olderMaster")
@@ -1154,4 +1185,33 @@ def test_start_up_check_shows_one_line_only_when_something_is_wrong(ui):
     ui.js("healthHidden = false; healthData = bridge.selfCheck(true)")
     assert ui.js("healthData.problems") <= max(start, 3)
     ui.js('healthData = { ok: true, checks: [], problems: 0, message: "" }')
+    assert ui.warnings == []
+
+
+# ── the window is split into one file per window ────────────────────────────
+def test_every_window_has_its_own_file_and_main_stays_small():
+    folder = ROOT / "ui_qt"
+    for name in ("TableDialog", "DetailDialog", "CompareDialog", "AnswersDialog", "HelpDialog", "PrepDialog", "LetterDialog",
+                 "ResponseDialog", "LimitDialog", "WelcomeOverlay", "OptionsDialog", "ScheduleDialog", "SmallButton", "DetailCard"):
+        assert (folder / f"{name}.qml").is_file(), name
+    main = (folder / "Main.qml").read_text(encoding="utf-8")
+    assert len(main.splitlines()) < 1400                                   # new windows go into their own file
+    assert "\n    Dialog {" not in main and "\n    component " not in main
+
+
+def test_a_split_file_never_hands_a_robot_its_own_empty_theme(ui):
+    """Inside another file `theme: theme` means the robot's own (empty) property, not the app's colours."""
+    for path in (ROOT / "ui_qt").glob("*.qml"):
+        if path.name != "Main.qml":
+            assert "theme: theme" not in path.read_text(encoding="utf-8"), path.name
+    assert ui.js("logoBot.theme === win.appTheme && logoBot.theme.accent !== undefined") is True
+
+
+def test_every_window_opens_from_the_main_file_without_warnings(ui):
+    for name in Ui.WINDOWS:
+        assert ui.win.findChild(QObject, name) is not None, name
+    for code in ('openView("new")', "tableDialog.close()", "helpDialog.open()", "helpDialog.close()", "limitDialog.open()", "limitDialog.close()",
+                 "schedDialog.open()", "schedDialog.close()", 'answersDialog.show("")', "answersDialog.close()"):
+        ui.js(code)
+        ui.wait(380)
     assert ui.warnings == []
