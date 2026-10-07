@@ -334,6 +334,25 @@ class Api:
             self._change(job_id, go)
         return result
 
+    # ── what changed (CHANGELOG.md, shown in Help) ──────────────
+    @_guarded(list)
+    def changelog(self):
+        """[{date, items}] from CHANGELOG.md, newest first; **words** become <b>words</b>."""
+        import html
+        import re
+        try:
+            text = (config.ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        except OSError:
+            return []
+        out = []
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith("## "):
+                out.append({"date": line[3:].strip(), "items": []})
+            elif line.startswith("- ") and out:
+                out[-1]["items"].append(re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", html.escape(line[2:].strip(), quote=False)))
+        return [entry for entry in out if entry["items"]]
+
     # ── what the last search filtered out ───────────────────────
     @_guarded(dict)
     def filtered_out(self):

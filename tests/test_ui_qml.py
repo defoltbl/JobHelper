@@ -1029,3 +1029,16 @@ def test_level_words_and_years_are_edited_in_options(ui):
     ui.wait(350)
     ui.bridge.saveOptions(start)
     assert ui.warnings == []
+
+
+def test_help_has_a_what_changed_tab(ui):
+    dialog = ui.find("helpDialog")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    assert ui.js("helpDialog.tab") == "how" and ui.js("helpDialog.changes.length") >= 2
+    ui.js('helpDialog.tab = "new"')
+    ui.wait(150)
+    assert "2026" in ui.js("helpDialog.changes[0].date") and "<b>" in ui.js("helpDialog.changes[0].items[0]")
+    ui.js('helpDialog.tab = "how"; helpDialog.close()')
+    ui.wait(350)
+    assert ui.warnings == []

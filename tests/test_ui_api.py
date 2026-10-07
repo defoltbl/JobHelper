@@ -289,3 +289,27 @@ def test_options_default_skip_words(api):
     assert opts["skip_words"] == ["intern", "internship"] and opts["keep_words"] == []
     api.save_options({**opts, "skip_words": [], "keep_words": ["x"]})
     assert api.options()["skip_words"] == [] and api.options()["keep_words"] == ["x"]
+
+
+# ── what changed ────────────────────────────────────────────────────────────
+def test_changelog_is_read_from_the_file_newest_first(api, monkeypatch, tmp_path):
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# What changed\n\nIntro text.\n- a bullet before any date is ignored\n\n"
+        "## 7 October 2026\n\n- **Compare CV**: shows <only> what differs & nothing else.\n- Second line.\n\n"
+        "## Empty section\n\n## 6 October 2026\n- Older change.\n", encoding="utf-8")
+    monkeypatch.setattr(config, "ROOT", tmp_path)
+    got = api.changelog()
+    assert [e["date"] for e in got] == ["7 October 2026", "6 October 2026"]
+    assert got[0]["items"] == ["<b>Compare CV</b>: shows &lt;only&gt; what differs &amp; nothing else.", "Second line."]
+    (tmp_path / "CHANGELOG.md").unlink()
+    assert api.changelog() == []                                   # a missing file is an empty list, not a crash
+
+
+def test_the_real_changelog_is_well_formed():
+    import re
+    got = ui_api.Api().changelog()
+    assert len(got) >= 2 and all(e["items"] for e in got)
+    assert re.fullmatch(r"\d{1,2} \w+ \d{4}", got[0]["date"])    # the newest entry carries a real date
+    for entry in got:
+        for item in entry["items"]:
+            assert item.count("<b>") == item.count("</b>") and "**" not in item and "—" not in item

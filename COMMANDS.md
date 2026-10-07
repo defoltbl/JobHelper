@@ -464,6 +464,24 @@ The weekly run uses the Options saved in the app. It stops without generating
 anything if a protected file was changed and not approved, or if the data key is
 missing; the reason is written to `data/weekly_jobhelper.log`.
 
+## Version history and "What changed"
+
+The project is a local git repository (nothing is uploaded anywhere). Everything in
+`data/` and the `.env` file stay out of it, so your CV, letters, rules and database are
+never part of the history; they are protected by the encrypted backups instead (section 10).
+
+```bash
+git log --oneline            # the saved versions, newest first
+git status                   # what has changed since the last saved version
+git diff                     # the changes themselves
+git restore path/to/file     # put one file back to the last saved version
+```
+
+`CHANGELOG.md` lists the changes in plain words, newest first. The app shows the same
+list in **Help → What changed**. Add a `- ` line under a `## date` heading for each change.
+
+---
+
 ## 10. Security: encryption, Keychain and tamper check
 
 What is protected:

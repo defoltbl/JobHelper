@@ -491,6 +491,10 @@ class Bridge(QObject):
             self._post("replyReady", result)
         threading.Thread(target=work, daemon=True).start()
 
+    @Slot(result="QVariantList")
+    def changelog(self):
+        return self._api.changelog()
+
     @Slot(result="QVariantMap")
     def filteredOut(self):
         return self._api.filtered_out()

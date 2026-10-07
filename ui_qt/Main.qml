@@ -2065,7 +2065,10 @@ ApplicationWindow {
         Overlay.modal: Rectangle { color: win.dimColor; Behavior on opacity { NumberAnimation { duration: 200 } } }
         width: Math.min(720, win.width - 60); height: Math.min(760, win.height - 50)
         padding: 0
-        onAboutToShow: helpFlick.contentY = 0
+        property string tab: "how"            // how: how the app works | new: what changed
+        property var changes: []
+        onAboutToShow: { helpFlick.contentY = 0; changes = bridge.changelog(); }
+        onTabChanged: helpFlick.contentY = 0
         // Each topic: a title and short lines. Kept here so the help always matches this window.
         readonly property var topics: [
             { title: "What JobHelper does", lines: [
@@ -2120,7 +2123,20 @@ ApplicationWindow {
         contentItem: ColumnLayout {
             spacing: 0
             RowLayout { Layout.fillWidth: true; Layout.margins: 16
-                Text { text: "Help"; color: theme.ink; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
+                Text { text: "Help"; color: theme.ink; font.pixelSize: 17; font.bold: true }
+                Row { Layout.leftMargin: 14; spacing: 6
+                    Repeater { model: [["how", "How it works"], ["new", "What changed"]]
+                        Rectangle {
+                            readonly property bool on: helpDialog.tab === modelData[0]
+                            objectName: "helpTab_" + modelData[0]
+                            height: 26; radius: 13; width: htT.implicitWidth + 22
+                            color: on ? theme.accent : (htMa.containsMouse ? theme.inset : "transparent")
+                            border.width: 1; border.color: on ? "transparent" : theme.line
+                            Text { id: htT; anchors.centerIn: parent; text: modelData[1]; font.pixelSize: 12; font.bold: parent.on
+                                color: parent.on ? "#ffffff" : theme.soft }
+                            MouseArea { id: htMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                onClicked: helpDialog.tab = modelData[0] } } } }
+                Item { Layout.fillWidth: true }
                 Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
                     Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: helpDialog.close() } }
@@ -2134,8 +2150,20 @@ ApplicationWindow {
                 ColumnLayout {
                     id: helpCol
                     x: 16; y: 14; width: helpFlick.width - 32; spacing: 12
+                    Text { visible: helpDialog.tab === "new" && helpDialog.changes.length === 0; Layout.fillWidth: true
+                        wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 13
+                        text: "The list of changes (CHANGELOG.md in the app's folder) could not be read." }
                     Repeater {
-                        model: helpDialog.topics
+                        model: helpDialog.tab === "new" ? helpDialog.changes : []
+                        DetailCard { heading: modelData.date
+                            Repeater { model: modelData.items
+                                RowLayout { Layout.fillWidth: true; spacing: 8
+                                    Text { text: "•"; color: theme.accent; font.pixelSize: 13; Layout.alignment: Qt.AlignTop }
+                                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; lineHeight: 1.3
+                                        textFormat: Text.StyledText; text: modelData } } } }
+                    }
+                    Repeater {
+                        model: helpDialog.tab === "how" ? helpDialog.topics : []
                         DetailCard { heading: modelData.title
                             Repeater { model: modelData.lines
                                 Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; lineHeight: 1.3
