@@ -412,3 +412,66 @@ def protect_all() -> dict:
     from . import housekeeping
     report["housekeeping"] = housekeeping.run()      # old backups and long logs
     return report
+
+
+# ── proof that a backup can really be restored ──────────────────────────────
+def _usable(name: str, data: bytes) -> str:
+    """'' if restored content can be used as what it is, otherwise what is wrong with it."""
+    import json
+    import sqlite3
+    try:
+        if name.endswith(".json"):
+            json.loads(data.decode("utf-8"))
+        elif name.endswith(".db"):
+            conn = sqlite3.connect(":memory:")
+            try:
+                conn.deserialize(data)
+                if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                    return "the database is damaged"
+            finally:
+                conn.close()
+    except Exception as e:  # noqa: BLE001 - any failure means "not usable"
+        return f"cannot be opened ({type(e).__name__})"
+    return ""
+
+
+def restore_test() -> dict:
+    """Back up the data files, restore that backup into a throwaway folder, and
+    compare every restored file with the live data. Then try to decrypt every
+    older backup too. The live data is only read; the throwaway folder (plain
+    copies of your data) is removed before this returns.
+
+    {ok, backup, files: [{name, ok, problem}], older: {files, readable, unreadable: [names]}}"""
+    import shutil
+    import tempfile
+    if state() != "ok":
+        raise VaultError("Protection is not active, so there is nothing to test. Run: python status.py security protect")
+    live = {p.name: read_bytes(p) for p in data_files() if Path(p).is_file()}
+    backup = make_backup("restore_test")
+    scratch = Path(tempfile.mkdtemp(prefix="jobhelper-restore-"))
+    files = []
+    try:
+        restore_backup(backup, scratch)
+        for name, original in sorted(live.items()):
+            restored = scratch / name
+            if not restored.is_file():
+                problem = "missing from the restored copy"
+            elif restored.read_bytes() != original:
+                problem = "differs from the live data"
+            else:
+                problem = _usable(name, restored.read_bytes())
+            files.append({"name": name, "ok": not problem, "problem": problem})
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)       # plain copies of your data must not stay behind
+    older = {"files": 0, "readable": 0, "unreadable": []}
+    for path in sorted(backups_dir().rglob("*")):
+        if not path.is_file() or path.name == ".DS_Store" or backup in path.parents:
+            continue
+        older["files"] += 1
+        try:
+            read_bytes(path)
+            older["readable"] += 1
+        except Exception:  # noqa: BLE001 - VaultError, a damaged file, anything
+            older["unreadable"].append(str(path.relative_to(backups_dir())))
+    return {"ok": bool(files) and all(f["ok"] for f in files) and not older["unreadable"],
+            "backup": backup.name, "files": files, "older": older}

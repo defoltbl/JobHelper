@@ -253,3 +253,62 @@ def test_mac_keychain_sends_the_secret_on_stdin_not_in_arguments(monkeypatch):
 def test_mac_keychain_rejects_control_characters():
     with pytest.raises(vault.VaultError):
         vault.MacKeychain().set("imap_password", "line1\nline2")
+
+
+# ── a restore that is really run, not assumed ───────────────────────────────
+def _seed(tmp_path):
+    import sqlite3
+
+    from jobhelper import config, db, store
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme")])
+    db.upsert_response({"msg_id": "m1", "job_id": "a", "stage": "rejection", "company": "Acme", "subject": "s",
+                        "from_addr": "hr@example.com", "received_date": "2026-10-01"})
+    assert sqlite3 is not None
+
+
+def test_restore_test_proves_a_backup_matches_the_live_data(isolate_data):
+    import tempfile
+    from pathlib import Path
+
+    from jobhelper import config, vault
+    _seed(isolate_data)
+    before = set(Path(tempfile.gettempdir()).glob("jobhelper-restore-*"))
+    report = vault.restore_test()
+    assert report["ok"] is True and report["backup"].startswith("restore_test_")
+    names = {f["name"]: f for f in report["files"]}
+    assert set(names) == {"jobs.json", "responses.db"} and all(f["ok"] and f["problem"] == "" for f in names.values())
+    assert set(Path(tempfile.gettempdir()).glob("jobhelper-restore-*")) == before      # no plain copy left behind
+    assert vault.file_is_encrypted(config.JOBS_JSON)                                  # the live data was only read
+    assert (vault.backups_dir() / report["backup"] / "jobs.json.enc").is_file()
+
+
+def test_restore_test_reports_an_old_backup_that_cannot_be_read(isolate_data):
+    from jobhelper import vault
+    _seed(isolate_data)
+    good = vault.make_backup("earlier")
+    bad = vault.backups_dir() / "broken" / "jobs.json.enc"
+    bad.parent.mkdir(parents=True)
+    bad.write_bytes(b"JHENC1\nnot really encrypted data")
+    report = vault.restore_test()
+    assert report["ok"] is False and report["older"]["unreadable"] == ["broken/jobs.json.enc"]
+    assert report["older"]["files"] == report["older"]["readable"] + 1 and good.is_dir()
+    assert all(f["ok"] for f in report["files"])                                      # today's data itself is fine
+
+
+def test_restored_content_must_also_be_usable():
+    from jobhelper import vault
+    assert vault._usable("jobs.json", b'[{"id": 1}]') == ""
+    assert "cannot be opened" in vault._usable("jobs.json", b"{broken")
+    assert "cannot be opened" in vault._usable("responses.db", b"this is not a database") \
+        or "damaged" in vault._usable("responses.db", b"this is not a database")
+    assert vault._usable("notes.txt", b"anything") == ""
+
+
+def test_restore_test_needs_protection_to_be_on(isolate_data, monkeypatch):
+    import pytest as _pytest
+
+    from jobhelper import vault
+    monkeypatch.setattr(vault, "state", lambda: "off")
+    with _pytest.raises(vault.VaultError, match="not active"):
+        vault.restore_test()

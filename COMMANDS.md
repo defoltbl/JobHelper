@@ -552,6 +552,21 @@ Approve in the app (**Account** chip → **Approve** on the *Data protection* ro
 python status.py security approve
 ```
 
+### Check that your backups really restore
+
+```bash
+python status.py security test-restore
+```
+
+Makes a fresh backup, restores it into a temporary folder, compares every file with the
+live data and checks that it opens (the JSON parses, the database passes its integrity
+check), then tries to decrypt every older backup. The live data is only read, and the
+temporary folder is removed afterwards. Run it after moving to a new Mac or restoring a key.
+
+Backups hold the app's data files (jobs, responses, settings, notes, answers). Your master
+CV, the letters, the adapted CVs, the two rule files and the letter template are ordinary
+files in `data/`: keep those safe with Time Machine or a copy of the `data/` folder.
+
 ### All security commands
 
 ```bash

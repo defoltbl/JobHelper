@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 8 October 2026
 
+- **Restore test**: `python status.py security test-restore` makes a backup, restores it into a temporary folder and compares it with the live data, then checks that every older backup can still be decrypted.
 - **Week by week** in Insights: applications sent and replies received each week.
 - **How long companies take to decide**: days from applying to the first rejection or invitation, and which waiting applications are past that point.
 - **Why jobs score low**: what the explanations of low scores mention most (missing technology, more experience, another field, another language).

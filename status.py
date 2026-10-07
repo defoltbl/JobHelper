@@ -310,6 +310,17 @@ def cmd_security(args) -> int:
             print("Key restored to the Keychain.")
         elif args.action == "backup":
             print(f"Encrypted backup written to {vault.make_backup('manual')}")
+        elif args.action == "test-restore":
+            report = vault.restore_test()
+            print(f"Backup made: {report['backup']}, restored into a temporary folder and compared with the live data:")
+            for f in report["files"]:
+                print(f"  {'ok     ' if f['ok'] else 'PROBLEM'}  {f['name']}" + (f"  ({f['problem']})" if f["problem"] else ""))
+            older = report["older"]
+            print(f"Older backups: {older['readable']} of {older['files']} files can be decrypted.")
+            for name in older["unreadable"]:
+                print(f"  cannot be read: {name}")
+            print("\n✅ Your backups can be restored." if report["ok"] else "\n✗ Something is wrong with the backups. See the lines above.")
+            return 0 if report["ok"] else 1
         elif args.action == "restore":
             if len(args.paths) != 2:
                 print("Usage: python status.py security restore <backup file or folder> <destination folder>")
@@ -375,7 +386,7 @@ def main() -> int:
     p_fu.set_defaults(func=cmd_followups)
 
     p_sec = sub.add_parser("security", help="Encryption, Keychain and tamper-check tools")
-    p_sec.add_argument("action", choices=["status", "protect", "approve", "recovery-key", "restore-key", "backup", "restore"])
+    p_sec.add_argument("action", choices=["status", "protect", "approve", "recovery-key", "restore-key", "backup", "restore", "test-restore"])
     p_sec.add_argument("paths", nargs="*", help="restore: <backup> <destination>")
     p_sec.set_defaults(func=cmd_security)
 
