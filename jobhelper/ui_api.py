@@ -518,6 +518,9 @@ class Api:
                 "keywords": insights.keyword_stats(jobs, list(opts.get("queries") or []), threshold),
                 "gaps": insights.skill_gaps(jobs, self._cv_text()),
                 "salaries": insights.salaries(jobs),
+                "trends": insights.trends(jobs, db.all_responses()),
+                "reply_times": insights.reply_times(jobs, db.all_responses()),
+                "low_scores": insights.low_score_reasons(jobs, self._cv_text(), threshold),
                 "threshold": threshold, "min_group": insights.MIN_GROUP}
 
     # ── not interested ──────────────────────────────────────────

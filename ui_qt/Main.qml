@@ -1278,6 +1278,25 @@ ApplicationWindow {
             head("What is working: where the job came from", "");
             (works.by_source || []).forEach(function (r) {
                 row(r.name, r.applications, r.verdict + "  ·  " + r.rejected + " rejected, " + r.waiting + " waiting", mark(r.verdict)); });
+            head("Week by week", "the number is how many applications you sent that week · weeks start on Monday");
+            (ins.trends || []).forEach(function (t) {
+                row("Week of " + t.week + (t.current ? " (this week)" : ""), t.applications,
+                    t.replies + (t.replies === 1 ? " reply" : " replies") + "  ·  " + t.invitations
+                    + (t.invitations === 1 ? " invitation" : " invitations") + ", " + t.rejections + (t.rejections === 1 ? " rejection" : " rejections")); });
+            var rt = ins.reply_times || {};
+            head("How long companies take to decide", (rt.decisions || 0) === 0 ? "no decisions with a known apply date yet"
+                 : "days from applying to the first rejection or invitation · from " + rt.decisions + " decisions");
+            if ((rt.decisions || 0) > 0) {
+                row("Middle value", rt.middle + " d", "half of the decisions came sooner than this");
+                row("4 of 5 decisions came within", rt.most_within + " d", "the slowest took " + rt.slowest + " days");
+                (rt.by_role || []).forEach(function (r) {
+                    row("↳ " + r.name, r.middle + " d", "middle value from " + r.decisions + " decisions  ·  between " + r.fastest + " and " + r.slowest + " days"); });
+                row("Waiting longer than that", rt.waiting_late, "of " + rt.waiting + " waiting applications · after " + rt.most_within
+                    + " days of silence a decision is unlikely, though the slowest took " + rt.slowest, rt.waiting_late > 0 ? "weak" : "");
+                (rt.late || []).forEach(function (l) {
+                    out.push({ primary: "↳ " + l.company + "  ·  " + l.title, secondary: "no decision for " + l.days + " days",
+                               badge: "", value: l.days + " d", actions: [], id: l.id }); });
+            }
             head("Search keywords", "the number is how many jobs the keyword found · score " + (ins.threshold || 30) + "+ gets a CV and letter");
             (ins.keywords || []).forEach(function (r) {
                 row(r.keyword, r.leads, r.verdict + (r.average !== null && r.average !== undefined ? "  ·  average score " + r.average : "")
@@ -1289,6 +1308,13 @@ ApplicationWindow {
             if ((gaps.languages || []).length > 0)
                 row("Languages asked for", gaps.languages.map(function (l) { return l.postings; }).reduce(function (a, b) { return a + b; }, 0),
                     gaps.languages.map(function (l) { return l.language + " in " + l.postings; }).join("  ·  "));
+            var lows = ins.low_scores || {};
+            head("Why jobs score low", (lows.jobs || 0) + " jobs scored below " + (lows.threshold || 30)
+                 + " · read from the explanation of each score · one job can count under several reasons");
+            (lows.rows || []).forEach(function (r) { row(r.reason, r.jobs, "in " + r.share + "% of the low-scoring jobs"); });
+            if ((lows.technologies || []).length > 0)
+                row("Named most often as missing", lows.technologies.length,
+                    lows.technologies.map(function (t) { return t.skill + " in " + t.jobs; }).join("  ·  "));
             var pay = ins.salaries || {};
             head("What the postings pay", (pay.stated || 0) + " of " + (pay.postings || 0) + " postings state it · gross CZK per month · the number is the top of the range"
                  + (pay.median ? " · middle value " + Math.round(pay.median / 1000) + "k" : ""));

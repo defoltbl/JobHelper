@@ -194,3 +194,68 @@ def test_api_makes_keeps_and_returns_the_preparation(isolate_data, monkeypatch):
     failed = api.make_interview_prep("i1")
     assert failed["ok"] is False and "limit is used up" in failed["msg"]
     assert len(api.interview_prep("i1")["questions"]) == 4                         # the earlier one is kept
+
+
+# ── trends, time to a decision, why jobs score low ──────────────────────────
+from datetime import date, datetime, timedelta  # noqa: E402
+from email.utils import format_datetime  # noqa: E402
+
+WED = date(2026, 10, 7)                       # a Wednesday; its week starts on Monday 5 October
+
+
+def _mail(job_id, day, stage):
+    return {"job_id": job_id, "stage": stage, "received_date": format_datetime(datetime.combine(day, datetime.min.time()))}
+
+
+def test_trends_count_by_calendar_week(isolate_data):
+    jobs = [_app("1", "Dev", "waiting", date_applied="2026-10-05"), _app("2", "Dev", "rejected", date_applied="2026-10-07"),
+            _app("3", "Dev", "waiting", date_applied="2026-10-04"),                 # Sunday: the week before
+            _app("4", "Dev", "waiting", date_applied=""),
+            store.new_job(id="lead", title="Dev", company="X", status="found", date_applied="2026-10-06")]
+    mails = [_mail("2", date(2026, 10, 6), "rejection"), _mail("1", date(2026, 10, 5), "acknowledged"),
+             _mail("3", date(2026, 9, 30), "interview"), _mail("9", date(2026, 9, 1), "assessment"), {"job_id": "x", "stage": "other", "received_date": "?"}]
+    got = insights.trends(jobs, mails, weeks=8, today=WED)
+    assert got[0] == {"week": "2026-10-05", "current": True, "applications": 2, "replies": 2, "invitations": 0, "rejections": 1}
+    assert got[1] == {"week": "2026-09-28", "current": False, "applications": 1, "replies": 1, "invitations": 1, "rejections": 0}
+    assert got[-1]["week"] == "2026-08-31" and got[-1]["invitations"] == 1          # empty older weeks are cut off
+    assert [t["week"] for t in insights.trends([], [], today=WED)] == ["2026-10-05"]
+
+
+def test_reply_times_and_who_has_waited_too_long(isolate_data):
+    def decided(i, applied, after, title="Junior Python Developer", stage="rejection"):
+        return _app(str(i), title, "rejected", date_applied=applied), _mail(str(i), date.fromisoformat(applied) + timedelta(days=after), stage)
+    pairs = [decided(1, "2026-09-01", 2), decided(2, "2026-09-01", 4), decided(3, "2026-09-01", 6),
+             decided(4, "2026-09-01", 8, "IT Support"), decided(5, "2026-09-01", 20, "IT Support", "interview")]
+    jobs = [p[0] for p in pairs] + [_app("w1", "Dev", "waiting", date_applied="2026-10-06"),
+                                    _app("w2", "Dev", "waiting", date_applied="2026-08-01"),
+                                    _app("w3", "Dev", "waiting", date_applied=""),
+                                    _app("early", "Dev", "rejected", date_applied="2026-09-10")]
+    mails = [p[1] for p in pairs] + [_mail("1", date(2026, 9, 2), "acknowledged"),           # a confirmation is not a decision
+                                     _mail("1", date(2026, 9, 9), "rejection"),              # only the first decision counts
+                                     _mail("early", date(2026, 9, 1), "rejection")]          # before the apply date: ignored
+    got = insights.reply_times(jobs, mails, today=WED)
+    assert (got["decisions"], got["middle"], got["most_within"], got["slowest"]) == (5, 6, 20, 20)
+    assert got["by_role"] == [{"name": "Software development", "decisions": 3, "middle": 4, "fastest": 2, "slowest": 6}]
+    assert (got["waiting"], got["waiting_late"]) == (2, 1) and got["late"][0]["id"] == "w2" and got["late"][0]["days"] == 67
+    empty = insights.reply_times([_app("w", "Dev", "waiting", date_applied="2026-01-01")], [], today=WED)
+    assert (empty["decisions"], empty["waiting_late"], empty["late"]) == (0, 0, [])           # nothing to compare with: nobody is "late"
+
+
+def test_low_score_reasons_are_read_from_the_explanations():
+    def scored(i, score, reason):
+        return store.new_job(id=str(i), title="T", company="C", match_score=score, match_reason=reason)
+    jobs = [scored(1, 10, "This is a sales role, completely unrelated to the candidate's software background."),
+            scored(2, 15, "Requires 8-10 years of commercial Java experience; the candidate has no Java."),
+            scored(3, 20, "German at an advanced level is a must-have requirement."),
+            scored(4, 25, "The profile lacks Kubernetes and Terraform, and there is no mention of Java."),
+            scored(5, 5, "A poor match overall."),
+            scored(6, 80, "Unrelated words in a high score do not count: lacks nothing."),
+            scored(7, 10, ""), store.new_job(id="8", title="T", company="C")]
+    got = insights.low_score_reasons(jobs, "Python, Docker", threshold=30)
+    assert got["jobs"] == 5 and got["threshold"] == 30
+    by = {r["reason"]: (r["jobs"], r["share"]) for r in got["rows"]}
+    assert by == {"Technology you have not used": (2, 40), "More experience than you have": (1, 20), "A different field": (1, 20),
+                  "Another language required": (1, 20), insights.LOW_OTHER: (1, 20)}
+    assert got["rows"][0]["reason"] == "Technology you have not used" and got["rows"][-1]["reason"] == insights.LOW_OTHER
+    assert got["technologies"] == [{"skill": "Java", "jobs": 2}]                    # named twice, and not in the CV
+    assert insights.low_score_reasons([], "")["rows"] == []

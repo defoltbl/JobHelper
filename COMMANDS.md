@@ -139,6 +139,11 @@ Inside the window:
 - **Compare CV** (job window, when an adapted Word CV exists) — master CV on the left,
   adapted CV on the right, only the paragraphs that differ; replaced words are struck
   through, new words are bold.
+- **Week by week**, **How long companies take to decide**, **Why jobs score low** (Insights) —
+  applications and replies per calendar week; days from applying to the first rejection or
+  invitation (middle value, the point by which 4 of 5 decisions came, and the waiting
+  applications past it); and what the scorer's explanations of low scores mention most.
+  All counted locally, no Claude.
 - **What the postings pay** (Insights) — every posting in your lists that states pay,
   converted to gross CZK per month (yearly ÷ 12, EUR × 25, USD × 23, rough fixed rates),
   next to your target, with the middle value.

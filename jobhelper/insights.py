@@ -6,12 +6,17 @@
                   produce low scores can be dropped;
 * skill_gaps  - technologies the postings ask for most that the CV does not
                 show: a learning list. It is only ever displayed; nothing from
-                it is added to a CV or a letter.
+                it is added to a CV or a letter;
+* trends      - applications and replies week by week;
+* reply_times - how long companies took to decide, and which waiting
+                applications are past that point;
+* low_score_reasons - what the scorer's explanations say about low scores.
 """
 from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
+from datetime import date
 from typing import Any
 
 from . import keywords, store
@@ -206,3 +211,125 @@ def skill_gaps(jobs: list[dict[str, Any]], cv_text: str, limit: int = 15) -> dic
     return {"postings": len(postings), "relevant": relevant, "skills": rows[:limit],
             "languages": [{"language": k, "postings": n} for k, n in languages.most_common()],
             "in_cv": sorted(have - _LANGUAGES)}
+
+
+# ── trends: what happened week by week ──────────────────────────────────────
+def _day(text: str) -> date | None:
+    try:
+        return date.fromisoformat((text or "")[:10])
+    except ValueError:
+        return None
+
+
+def trends(jobs: list[dict[str, Any]], responses: list[dict[str, Any]], weeks: int = 8,
+           today: date | None = None) -> list[dict[str, Any]]:
+    """The last `weeks` weeks (Monday to Sunday), newest first:
+    {week (its Monday), applications, replies, invitations, rejections, current}."""
+    from datetime import timedelta
+    from . import db
+    today = today or date.today()
+    this_monday = today - timedelta(days=today.weekday())
+    out = []
+    for n in range(weeks):
+        start = this_monday - timedelta(days=7 * n)
+        end = start + timedelta(days=7)
+        inside = lambda d: d is not None and start <= d < end                         # noqa: E731
+        got = [r for r in responses if inside(db.received_at(r.get("received_date", "")).date())]
+        out.append({
+            "week": start.isoformat(), "current": n == 0,
+            "applications": sum(1 for j in jobs if j.get("status") in store.APPLICATION_STATUSES
+                                and inside(_day(j.get("date_applied", "")))),
+            "replies": len(got),
+            "invitations": sum(1 for r in got if r.get("stage") in ("interview", "assessment", "offer")),
+            "rejections": sum(1 for r in got if r.get("stage") == "rejection"),
+        })
+    while len(out) > 1 and not (out[-1]["applications"] or out[-1]["replies"]):
+        out.pop()                                       # no empty weeks before your first activity
+    return out
+
+
+# ── how long companies take to decide ───────────────────────────────────────
+_DECISIONS = ("rejection", "interview", "assessment", "offer")
+
+
+def _middle(values: list[int]) -> int:
+    values = sorted(values)
+    return values[len(values) // 2] if values else 0
+
+
+def reply_times(jobs: list[dict[str, Any]], responses: list[dict[str, Any]], today: date | None = None) -> dict[str, Any]:
+    """Days from applying to the first decision (a rejection or an invitation),
+    overall and per kind of role, and how many waiting applications are already
+    past the point by which 4 of 5 decisions had arrived."""
+    from . import db
+    today = today or date.today()
+    first: dict[str, date] = {}
+    for r in responses:
+        if r.get("stage") in _DECISIONS and r.get("job_id"):
+            when = db.received_at(r.get("received_date", ""))
+            if when.year > 1 and (r["job_id"] not in first or when.date() < first[r["job_id"]]):
+                first[r["job_id"]] = when.date()
+    days_by_kind: dict[str, list[int]] = {}
+    for j in jobs:
+        applied = _day(j.get("date_applied", ""))
+        decided = first.get(j.get("id", ""))
+        if j.get("status") in store.APPLICATION_STATUSES and applied and decided and decided >= applied:
+            days_by_kind.setdefault(role_type(j.get("title", "")), []).append((decided - applied).days)
+    everything = sorted(d for group in days_by_kind.values() for d in group)
+    most = everything[min(len(everything) - 1, int(len(everything) * 0.8))] if everything else 0
+    waiting = [j for j in jobs if j.get("status") == "waiting" and _day(j.get("date_applied", ""))]
+    late = [j for j in waiting if (today - _day(j["date_applied"])).days > most] if everything else []
+    kinds = [{"name": name, "decisions": len(d), "middle": _middle(d), "fastest": min(d), "slowest": max(d)}
+             for name, d in days_by_kind.items() if len(d) >= MIN_GROUP]
+    kinds.sort(key=lambda k: (-k["decisions"], k["name"]))
+    return {"decisions": len(everything), "middle": _middle(everything), "most_within": most,
+            "slowest": everything[-1] if everything else 0, "by_role": kinds,
+            "waiting": len(waiting), "waiting_late": len(late),
+            "late": [{"id": j["id"], "company": j.get("company", ""), "title": j.get("title", ""),
+                      "days": (today - _day(j["date_applied"])).days} for j in sorted(late, key=lambda j: j["date_applied"])[:8]]}
+
+
+# ── why jobs score low ──────────────────────────────────────────────────────
+# Read from the scorer's own explanation. One reason can count under several headings.
+_LOW_REASONS = [
+    ("A different field", r"unrelated|different (?:domain|field|profession|discipline)|no overlap|non-technical|"
+                          r"entirely (?:different|outside)|not a (?:software|technical|development)|outside (?:the|your) (?:candidate'?s? )?(?:field|profile)"),
+    ("More experience than you have", r"\b\d{1,2}\s*(?:\+|-\s*\d{1,2}\s*)?\+?\s*years|years of (?:professional|commercial|hands-on|dedicated)|"
+                                      r"\bsenior\b|proven track record|extensive (?:\w+ )?experience"),
+    ("Another language required", r"\b(?:german|czech|french|dutch|italian|spanish|polish|hungarian|slovak)\b[^.]{0,60}"
+                                  r"(?:fluen|required|must|native|level|communicat|speak)|"
+                                  r"(?:fluen\w+|native|speak\w*|proficien\w+) (?:in )?(?:german|czech|french|dutch|italian|spanish|polish)"),
+    ("Technology you have not used", r"\blacks?\b|absent|none of which|not (?:mentioned|evident|reflected|demonstrated)|no (?:mention|evidence|experience)|"
+                                     r"neither of which|does not have|doesn't have|\b(?:has|have|with) no\b|missing|unmet"),
+]
+_LOW_RE = [(name, re.compile(pattern, re.IGNORECASE)) for name, pattern in _LOW_REASONS]
+LOW_OTHER = "Other reasons"
+
+
+def low_score_reasons(jobs: list[dict[str, Any]], cv_text: str = "", threshold: int = 30) -> dict[str, Any]:
+    """Why the jobs below `threshold` scored low: how many explanations mention each
+    kind of reason, and the technologies named most often that are not in the CV."""
+    low = [j for j in jobs if isinstance(j.get("match_score"), int) and j["match_score"] < threshold
+           and (j.get("match_reason") or "").strip()]
+    counts = {name: 0 for name, _ in _LOW_RE}
+    counts[LOW_OTHER] = 0
+    have = set(keywords.extract(cv_text)) if cv_text else set()
+    tech: dict[str, int] = {}
+    for j in low:
+        reason = j["match_reason"]
+        hit = False
+        for name, pattern in _LOW_RE:
+            if pattern.search(reason):
+                counts[name] += 1
+                hit = True
+        if not hit:
+            counts[LOW_OTHER] += 1
+        for word in set(keywords.extract(reason)):
+            if word not in have and word not in _LANGUAGES and word not in _SOFT:
+                tech[word] = tech.get(word, 0) + 1
+    rows = [{"reason": name, "jobs": n, "share": round(100 * n / len(low)) if low else 0}
+            for name, n in counts.items() if n]
+    rows.sort(key=lambda r: (r["reason"] == LOW_OTHER, -r["jobs"]))
+    named = sorted(tech.items(), key=lambda kv: (-kv[1], kv[0]))[:8]
+    return {"jobs": len(low), "threshold": threshold, "rows": rows,
+            "technologies": [{"skill": k, "jobs": n} for k, n in named if n >= 2]}

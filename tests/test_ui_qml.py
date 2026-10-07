@@ -684,7 +684,10 @@ def test_insights_view_lists_roles_keywords_and_skills(ui, monkeypatch):
     ui.wait(450)
     rows = [(ui.js(f"listView.model[{i}].primary"), ui.js(f"listView.model[{i}].heading")) for i in range(ui.find("listView").property("count"))]
     heads = [text for text, heading in rows if heading is True]
-    assert heads == ["What is working: kinds of role", "What is working: where the job came from", "Search keywords", "Skills to learn", "What the postings pay"]
+    assert heads == ["What is working: kinds of role", "What is working: where the job came from", "Week by week",
+                     "How long companies take to decide", "Search keywords", "Skills to learn", "Why jobs score low",
+                     "What the postings pay"]
+    assert any(str(text).startswith("Week of ") and str(text).endswith("(this week)") for text, _ in rows)
     assert any(text == "Kubernetes" for text, _ in rows)                           # asked for in the seeded posting, not in the CV
     assert ui.js("sorts.length", ui.find("tableDialog")) == 0                      # a plain list, no toolbar
     ui.js("tableDialog.close()")
