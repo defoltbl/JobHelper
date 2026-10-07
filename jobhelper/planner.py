@@ -181,8 +181,9 @@ def ics(job: dict[str, Any], now: datetime | None = None) -> str:
 
 
 # ── a thank-you note after an interview ─────────────────────────────────────
-def thanks_due(job: dict[str, Any], today: date | None = None) -> bool:
-    """An interview or call whose day has come, for an application still open, not thanked yet."""
+def thanks_due(job: dict[str, Any], today: date | None = None, now: datetime | None = None) -> bool:
+    """An interview or call that has taken place (its day has come and, when a time is
+    set, that time has passed), for an application still open, not thanked yet."""
     e = job.get("event") or {}
     if e.get("kind") not in ("interview", "call") or job.get("status") in _OVER:
         return False
@@ -190,7 +191,15 @@ def thanks_due(job: dict[str, Any], today: date | None = None) -> bool:
         day = date.fromisoformat(e.get("date", ""))
     except ValueError:
         return False
-    return day <= (today or date.today()) and job.get("thanked_for") != e.get("date")
+    today = today or date.today()
+    if day > today or job.get("thanked_for") == e.get("date"):
+        return False
+    if day == today and e.get("time"):
+        try:                                            # today, with a time: only once it has started
+            return (now or datetime.now()).time() >= datetime.strptime(e["time"], "%H:%M").time()
+        except ValueError:
+            return True
+    return True
 
 
 def thanks_draft(job: dict[str, Any], name: str = "", contact: str = "") -> dict[str, str]:

@@ -1077,7 +1077,7 @@ def test_thank_you_card_appears_after_the_interview_day(ui, monkeypatch):
     today = date.today().isoformat()
     _open_job(ui)
     assert ui.find("thanksCard").property("visible") is False and ui.find("evCalendar").property("visible") is False
-    ui.js(f'evDate.text = "{today}"; evTime.text = "10:00"; detailDialog.eventKind = "interview"; detailDialog.saveEvent()')
+    ui.js(f'evDate.text = "{today}"; evTime.text = "00:00"; detailDialog.eventKind = "interview"; detailDialog.saveEvent()')
     assert ui.find("thanksCard").property("visible") is True and ui.find("evCalendar").property("visible") is True
     assert ui.js("bridge.exportEvent(detailDialog.job.id).ok") is True and opened[-1].endswith(".ics")
     ui.js("detailDialog.thanks = bridge.thanksDraft(detailDialog.job.id)")

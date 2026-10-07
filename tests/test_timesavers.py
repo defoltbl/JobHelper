@@ -175,3 +175,10 @@ def test_api_thank_you_flow_and_answers(api, monkeypatch):
     assert api.fill_answer("Because {company}.", "") == "Because {company}."
     week = api.week_summary()
     assert week["lines"][0]["label"] == "New jobs found" and week["headline"].endswith(".")
+
+
+def test_no_thank_you_before_todays_interview_has_started():
+    job = _app(event=_event("2026-10-07", "14:30"))
+    assert planner.thanks_due(job, TODAY, now=datetime(2026, 10, 7, 9, 0)) is False
+    assert planner.thanks_due(job, TODAY, now=datetime(2026, 10, 7, 14, 30)) is True
+    assert planner.thanks_due(job, TODAY + timedelta(days=1), now=datetime(2026, 10, 8, 8, 0)) is True
