@@ -45,7 +45,8 @@ ApplicationWindow {
     property var lastRunData: ({})    // what the last search / scan did; kept between app starts
     property var upcomingData: []     // the next dated events (interviews, deadlines)
     // dates that are tomorrow or today are announced once a day, at start and every hour after
-    Timer { interval: 3600 * 1000; repeat: true; running: true; onTriggered: { bridge.remind(); win.upcomingData = bridge.upcoming(); } }
+    // every five minutes, so a date with a time can also be announced about three hours and one hour before
+    Timer { interval: 300 * 1000; repeat: true; running: true; onTriggered: { bridge.remind(); win.upcomingData = bridge.upcoming(); } }
     Timer { interval: 4000; running: true; onTriggered: bridge.remind() }
     property bool appRunning: false   // mirror of bridge.running (avoids teardown binding churn)
     property bool usageBusy: false

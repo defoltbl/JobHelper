@@ -426,3 +426,54 @@ def test_compare_says_when_the_cv_was_adapted_from_an_earlier_master(api, monkey
     assert api.cv_compare("a")["older_master"] is False                # adapted after the master: nothing to explain
     os.utime(master, (3_000_000, 3_000_000))                           # the master CV was changed later
     assert api.cv_compare("a")["older_master"] is True
+
+
+# ── reminders by the hour, for a date with a time ───────────────────────────
+from datetime import datetime  # noqa: E402
+
+
+def _at(hour, minute=0, day=TODAY):
+    return datetime(day.year, day.month, day.day, hour, minute)
+
+
+def test_hour_reminders_three_hours_and_one_hour_before():
+    jobs = [_job("a", event={"date": "2026-10-07", "time": "14:30", "kind": "test task", "note": ""})]
+    morning = planner.due_reminders(jobs, now=_at(8, 0))
+    assert [d["label"] for d in morning] == ["today"] and "minutes" not in morning[0]       # the usual on-the-day reminder
+    assert planner.due_reminders(jobs, now=_at(9, 0)) == []
+    three = planner.due_reminders(jobs, now=_at(11, 40))                                     # 170 minutes left
+    assert [d["minutes"] for d in three] == [170]
+    assert planner.reminder_text(three[0]) == "In 2 hours 50 min (14:30): test task · Acme"
+    assert planner.due_reminders(jobs, now=_at(12, 30)) == []                                # not again at two hours
+    one = planner.due_reminders(jobs, now=_at(13, 35))
+    assert planner.reminder_text(one[0]) == "In 55 minutes (14:30): test task · Acme"
+    assert planner.due_reminders(jobs, now=_at(14, 0)) == []
+    assert planner.due_reminders(jobs, now=_at(15, 0)) == []                                 # it has started: nothing more
+
+
+def test_first_reminder_of_the_day_inside_the_last_hours_is_one_message():
+    jobs = [_job("a", event={"date": "2026-10-07", "time": "10:00", "kind": "interview", "note": ""})]
+    got = planner.due_reminders(jobs, now=_at(9, 20))                  # the app was opened 40 minutes before
+    assert len(got) == 1 and got[0]["minutes"] == 40
+    assert planner.reminder_text(got[0]) == "In 40 minutes (10:00): interview · Acme"
+    assert planner.due_reminders(jobs, now=_at(9, 30)) == []
+
+
+def test_a_date_without_a_time_keeps_the_two_day_reminders_only():
+    jobs = [_job("a", event={"date": "2026-10-07", "time": "", "kind": "deadline", "note": ""})]
+    assert len(planner.due_reminders(jobs, now=_at(8))) == 1
+    assert planner.due_reminders(jobs, now=_at(12)) == [] and planner.due_reminders(jobs, now=_at(23, 30)) == []
+
+
+def test_old_single_mark_is_understood_and_a_new_date_starts_fresh():
+    jobs = [_job("a", event={"date": "2026-10-07", "time": "18:00", "kind": "call", "note": ""}, event_notified="2026-10-07:0")]
+    assert planner.due_reminders(jobs, now=_at(8)) == []                                     # already announced by the older version
+    assert len(planner.due_reminders(jobs, now=_at(15, 30))) == 1
+    day = (date.today() + timedelta(days=2)).isoformat()
+    assert planner.set_event(jobs[0], day, "18:00", "call") == "" and "event_marks" not in jobs[0]
+
+
+@pytest.mark.parametrize("minutes, text", [(1, "In 1 minute"), (45, "In 45 minutes"), (60, "In 1 hour"), (63, "In 1 hour"),
+                                           (95, "In 1 hour 35 min"), (180, "In 3 hours")])
+def test_time_left_wording(minutes, text):
+    assert planner._in(minutes) == text

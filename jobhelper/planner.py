@@ -50,12 +50,14 @@ def set_event(job: dict[str, Any], day_text: str, time_text: str = "", kind: str
         return problem
     job["event"] = {"date": day, "time": (time_text or "").strip(), "kind": kind, "note": (note or "").strip()[:200]}
     job.pop("event_notified", None)
+    job.pop("event_marks", None)
     return ""
 
 
 def clear_event(job: dict[str, Any]) -> None:
     job.pop("event", None)
     job.pop("event_notified", None)
+    job.pop("event_marks", None)
 
 
 def _when(job: dict[str, Any]) -> tuple[str, str]:
@@ -82,24 +84,60 @@ def upcoming(jobs: list[dict[str, Any]], today: date | None = None, limit: int =
     return out[:limit] if limit else out
 
 
-def due_reminders(jobs: list[dict[str, Any]], today: date | None = None) -> list[dict[str, Any]]:
-    """Events that are tomorrow or today and have not been announced for that day yet.
-    Marks them as announced (mutates jobs), so each reminder is given once per day."""
-    today = today or date.today()
+HOUR_STEPS = (180, 60)       # with a time set: also about three hours and one hour before
+
+
+def _minutes_left(item: dict[str, Any], now: datetime) -> int | None:
+    """Minutes until an event that has a time; None without one."""
+    try:
+        at = datetime.combine(date.fromisoformat(item["date"]), datetime.strptime(item.get("time", ""), "%H:%M").time())
+    except ValueError:
+        return None
+    return int((at - now).total_seconds() // 60)
+
+
+def due_reminders(jobs: list[dict[str, Any]], today: date | None = None, now: datetime | None = None) -> list[dict[str, Any]]:
+    """Reminders that are due and were not given yet: once the day before, once on
+    the day, and for an event with a time also about three hours and one hour
+    before it. Marks them as given (mutates jobs). Each item carries `minutes`
+    when it is one of the hour reminders."""
+    now = now or (datetime.combine(today, datetime.min.time()) if today else datetime.now())
+    today = today or now.date()
     due = []
     for item in upcoming(jobs, today):
         if item["days"] > 1:
             continue
         job = next(j for j in jobs if j["id"] == item["id"])
-        mark = f"{today.isoformat()}:{item['days']}"
-        if job.get("event_notified") == mark:
+        given = job.get("event_marks")
+        if not isinstance(given, list):                       # the earlier single mark
+            given = [job["event_notified"]] if job.get("event_notified") else []
+        marks = [f"{today.isoformat()}:{item['days']}"]
+        left = _minutes_left(item, now)
+        hour_mark = None
+        if left is not None and left > 0:
+            step = next((s for s in sorted(HOUR_STEPS) if left <= s), None)
+            if step:
+                hour_mark = f"{item['date']}T{item['time']}:{step}m"
+                marks.append(hour_mark)
+        new = [m for m in marks if m not in given]
+        if not new:
             continue
-        job["event_notified"] = mark
-        due.append(item)
+        job["event_marks"] = (given + new)[-12:]
+        job["event_notified"] = marks[0]
+        due.append(dict(item, minutes=left) if hour_mark in new else item)
     return due
 
 
+def _in(minutes: int) -> str:
+    if minutes < 60:
+        return f"In {minutes} minutes" if minutes != 1 else "In 1 minute"
+    hours, rest = divmod(minutes, 60)
+    return ("In 1 hour" if hours == 1 else f"In {hours} hours") + (f" {rest} min" if rest >= 5 else "")
+
+
 def reminder_text(item: dict[str, Any]) -> str:
+    if item.get("minutes"):
+        return f"{_in(item['minutes'])} ({item['time']}): {item['kind']} · {item['company'] or item['title']}"
     when = item["label"].capitalize() + (f" at {item['time']}" if item.get("time") else "")
     return f"{when}: {item['kind']} · {item['company'] or item['title']}"
 
