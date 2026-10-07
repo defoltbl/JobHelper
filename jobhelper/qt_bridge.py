@@ -491,6 +491,35 @@ class Bridge(QObject):
             self._post("replyReady", result)
         threading.Thread(target=work, daemon=True).start()
 
+    @Slot(str, result="QVariantMap")
+    def exportEvent(self, job_id):
+        return self._api.export_event(job_id)
+
+    @Slot(str, result="QVariantMap")
+    def thanksDraft(self, job_id):
+        return self._api.thanks_draft(job_id)
+
+    @Slot(str, result=bool)
+    def markThanked(self, job_id):
+        return self._api.mark_thanked(job_id)
+
+    @Slot(result="QVariantList")
+    def answers(self):
+        return self._api.answers()
+
+    @Slot("QVariantList", result="QVariantMap")
+    def saveAnswers(self, entries):
+        return self._api.save_answers([dict(e) for e in (entries or [])])
+
+    @Slot(str, str, result=bool)
+    def copyAnswer(self, text, job_id):
+        """Copy an answer, with {company} and {role} filled in from the open job."""
+        return self.copyText(self._api.fill_answer(text, job_id))
+
+    @Slot(result="QVariantMap")
+    def weekSummary(self):
+        return self._api.week_summary()
+
     @Slot(result="QVariantList")
     def changelog(self):
         return self._api.changelog()

@@ -89,7 +89,7 @@ ApplicationWindow {
     // ── shared motion (same feel in the welcome screen, dialogs and buttons) ──
     readonly property int motion: 260
     readonly property color dimColor: Qt.rgba(0, 0, 0, dark ? 0.42 : 0.22)
-    readonly property bool dialogOpen: tableDialog.visible || optDialog.visible || schedDialog.visible || detailDialog.visible || limitDialog.visible || responseDialog.visible || letterDialog.visible || prepDialog.visible || helpDialog.visible || compareDialog.visible
+    readonly property bool dialogOpen: tableDialog.visible || optDialog.visible || schedDialog.visible || detailDialog.visible || limitDialog.visible || responseDialog.visible || letterDialog.visible || prepDialog.visible || helpDialog.visible || compareDialog.visible || answersDialog.visible
     property bool stopping: false        // Stop was pressed; waiting for the current step to end
     property bool paused: false          // the run waits because Claude's limit is used up
     property bool canResume: false       // ...and the limit has reset, so Resume works
@@ -1126,6 +1126,7 @@ ApplicationWindow {
                     }
                     Item { Layout.fillHeight: true }
                     PillButton { Layout.fillWidth: true; text: "Options"; glyph: "gear"; onClicked: optDialog.open() }
+                    PillButton { objectName: "answersButton"; Layout.fillWidth: true; text: "Answers"; onClicked: answersDialog.show("") }
                     PillButton { objectName: "helpButton"; Layout.fillWidth: true; text: "Help"; glyph: "help"; onClicked: helpDialog.open() }
                 }
             }
@@ -1302,7 +1303,11 @@ ApplicationWindow {
             var an = bridge.analytics();
             var st = an.applications_by_status || {}, em = an.by_stage || {};
             function line(label, value, note) { return { primary: label, secondary: note || "", badge: "", value: "" + value, actions: [] }; }
-            var rows4 = [
+            var wk = bridge.weekSummary();
+            var rows4 = [{ primary: "The last 7 days", secondary: (wk.from || "") + " to " + (wk.to || ""), heading: true, badge: "", value: "", actions: [] }];
+            (wk.lines || []).forEach(function (r) { rows4.push(line(r.label, r.value, r.note)); });
+            rows4.push({ primary: "All time", secondary: "every application and reply the app knows", heading: true, badge: "", value: "", actions: [] });
+            rows4 = rows4.concat([
                 line("Applications", an.applications_tracked || 0, "the four rows below add up to this"),
                 line("↳ waiting for an answer", st.waiting || 0),
                 line("↳ in interviews now", st.interview || 0),
@@ -1318,7 +1323,7 @@ ApplicationWindow {
                 line("↳ rejections", em.rejection || 0),
                 line("↳ other", em.other || 0, "feedback requests, account messages"),
                 line("Why the rejection emails said no", em.rejection || 0, "the rows below add up to this")
-            ];
+            ]);
             var rr = an.rejection_reasons || {};
             for (var key in rr) rows4.push(line("↳ " + key.replace(/_/g, " "), rr[key]));
             tableDialog.show("Analytics — outcomes & rejection reasons", rows4, "", []);
@@ -1548,6 +1553,8 @@ ApplicationWindow {
         property string replyInfo: ""
         property string replyErr: ""
         property string replyJob: ""
+        property var thanks: ({})
+        property string thanksNote: ""
         function saveEvent() {
             eventErr = "";
             var r = bridge.setEvent(job.id, evDate.text, evTime.text, eventKind, evNote.text);
@@ -1613,7 +1620,7 @@ ApplicationWindow {
             var d = bridge.jobDetail(jobId);
             if (!d || !d.id) { ticker.text = "That job could not be opened."; return; }
             job = d; draft = ({}); note = ""; dateErr = ""; if (!prepBusy) prepErr = "";
-            eventErr = ""; notesInfo = ""; replyErr = ""; replyInfo = ""; replyOpen = false;
+            eventErr = ""; notesInfo = ""; replyErr = ""; replyInfo = ""; replyOpen = false; thanks = ({}); thanksNote = "";
             detailFlick.contentY = 0;
             open();
         }
@@ -1789,6 +1796,11 @@ ApplicationWindow {
                                 background: Rectangle { radius: 7; color: theme.inset; border.width: 1
                                     border.color: evNote.activeFocus ? theme.accent : theme.line } }
                             SmallButton { objectName: "evSave"; primaryStyle: true; text: "Save"; onClicked: detailDialog.saveEvent() }
+                            SmallButton { objectName: "evCalendar"; visible: !!(detailDialog.job.event && detailDialog.job.event.date)
+                                text: "Add to calendar"
+                                onClicked: { var c = bridge.exportEvent(detailDialog.job.id);
+                                    if (c && c.ok) ticker.text = "Opened a calendar file. Confirm it in Calendar and it syncs to your phone.";
+                                    else detailDialog.eventErr = (c && c.msg) || "Couldn't make the calendar file."; } }
                             SmallButton { visible: !!(detailDialog.job.event && detailDialog.job.event.date); text: "Clear"
                                 onClicked: { bridge.clearEvent(detailDialog.job.id); detailDialog.refresh(); win.upcomingData = bridge.upcoming(); } }
                         }
@@ -1796,6 +1808,40 @@ ApplicationWindow {
                             color: theme.crit; font.pixelSize: 11; font.bold: true; text: detailDialog.eventErr }
                         Text { visible: detailDialog.eventErr === ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                             text: "Shown on the main screen. A notification comes the day before and on the day." }
+                    }
+
+                    DetailCard { heading: "After the " + ((detailDialog.job.event && detailDialog.job.event.kind) || "interview"); objectName: "thanksCard"
+                        visible: detailDialog.job.thanks_due === true
+                        border.color: theme.a2
+                        RowLayout { Layout.fillWidth: true; spacing: 10
+                            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 13; color: theme.ink
+                                text: "A short thank-you note the same or the next day is a good habit. Here is a draft to adjust and send yourself." }
+                            SmallButton { objectName: "thanksToggle"; text: detailDialog.thanks.body ? "Hide draft" : "Draft thank-you"
+                                onClicked: { detailDialog.thanksNote = "";
+                                    detailDialog.thanks = detailDialog.thanks.body ? ({}) : bridge.thanksDraft(detailDialog.job.id); } }
+                        }
+                        ColumnLayout { visible: !!detailDialog.thanks.body; Layout.fillWidth: true; spacing: 6
+                            TextEdit { Layout.fillWidth: true; readOnly: true; selectByMouse: true; wrapMode: TextEdit.Wrap
+                                text: "Subject: " + (detailDialog.thanks.subject || ""); color: theme.ink; font.pixelSize: 12; font.bold: true
+                                selectionColor: theme.accent }
+                            Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.color: theme.line; border.width: 1
+                                implicitHeight: thanksBody.implicitHeight + 20
+                                TextEdit { id: thanksBody; objectName: "thanksBody"; x: 10; y: 10; width: parent.width - 20
+                                    readOnly: true; selectByMouse: true; wrapMode: TextEdit.Wrap
+                                    text: detailDialog.thanks.body || ""; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent } }
+                            RowLayout { Layout.fillWidth: true; spacing: 6
+                                Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
+                                    color: detailDialog.thanksNote !== "" ? theme.good : theme.faint
+                                    text: detailDialog.thanksNote !== "" ? detailDialog.thanksNote
+                                        : "The app never sends email. Add one thing you really talked about before you send it." }
+                                SmallButton { text: "Copy"
+                                    onClicked: { bridge.copyText((detailDialog.thanks.subject || "") + "\n\n" + (detailDialog.thanks.body || ""));
+                                                 detailDialog.thanksNote = "Copied. Paste it into your mail app."; } }
+                                SmallButton { objectName: "thanksDone"; primaryStyle: true; text: "Mark as sent"
+                                    onClicked: { if (bridge.markThanked(detailDialog.job.id)) {
+                                                     detailDialog.refresh(); ticker.text = "Thank-you noted."; } } }
+                            }
+                        }
                     }
 
                     DetailCard { heading: "A reply that is not in your mailbox"; objectName: "replyCard"
@@ -1953,6 +1999,7 @@ ApplicationWindow {
                 SmallButton { objectName: "editLetter"; visible: detailDialog.job.letter_editable === true; text: "Edit letter"
                     onClicked: letterDialog.show(detailDialog.job.id) }
                 }
+                SmallButton { objectName: "answersOpen"; text: "Answers"; onClicked: answersDialog.show(detailDialog.job.id) }
                 SmallButton { objectName: "notInterested"; visible: detailDialog.job.is_lead === true; text: "Not interested"
                     onClicked: { var r = bridge.dismissJob(detailDialog.job.id);
                                  if (r && r.ok) { ticker.text = "Removed. It will not come back in later searches (see the “not interested” filter to undo).";
@@ -2058,6 +2105,111 @@ ApplicationWindow {
         }
     }
 
+    // ───────────────────────── answers to repeated form questions ─────────────────────────
+    Dialog {
+        id: answersDialog; objectName: "answersDialog"
+        modal: true; anchors.centerIn: parent; closePolicy: Popup.CloseOnEscape
+        enter: Transition { ParallelAnimation {
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
+            NumberAnimation { property: "scale"; from: 0.92; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 0.7 } } }
+        exit: Transition { ParallelAnimation {
+            NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 170; easing.type: Easing.InCubic }
+            NumberAnimation { property: "scale"; from: 1; to: 0.96; duration: 170; easing.type: Easing.InCubic } } }
+        Overlay.modal: Rectangle { color: win.dimColor; Behavior on opacity { NumberAnimation { duration: 200 } } }
+        width: Math.min(720, win.width - 60); height: Math.min(740, win.height - 50)
+        padding: 0
+        property string jobId: ""             // the job whose company and role fill {company} and {role}
+        property string info: ""
+        property bool dirty: false
+        ListModel { id: answersModel }
+        function show(job) {
+            jobId = job || ""; info = ""; dirty = false;
+            answersModel.clear();
+            var list = bridge.answers();
+            for (var i = 0; i < list.length; i++) answersModel.append({ question: list[i].question, answer: list[i].answer });
+            ansFlick.contentY = 0; open();
+        }
+        function all() {
+            var out = [];
+            for (var i = 0; i < answersModel.count; i++) out.push({ question: answersModel.get(i).question, answer: answersModel.get(i).answer });
+            return out;
+        }
+        function save() {
+            var r = bridge.saveAnswers(all());
+            if (r && r.ok) { dirty = false; info = "Saved."; show(jobId); info = "Saved."; }
+            else info = "Couldn't save the answers.";
+        }
+        function copy(i) {
+            var text = answersModel.get(i).answer;
+            if (text.trim() === "") { info = "That answer is still empty."; return; }
+            bridge.copyAnswer(text, jobId);
+            info = "Copied" + (jobId !== "" && /\{(company|role)\}/.test(text) ? ", with this job's company and role filled in." : ".");
+        }
+        background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1 }
+        contentItem: ColumnLayout {
+            spacing: 0
+            RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
+                ColumnLayout { Layout.fillWidth: true; spacing: 2
+                    Text { text: "Your answers"; color: theme.ink; font.pixelSize: 17; font.bold: true }
+                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
+                        text: "Write each answer once, then copy it into application forms. {company} and {role} are replaced with the job's when you open this from a job window." } }
+                Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
+                    Layout.alignment: Qt.AlignTop
+                    Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: answersDialog.close() } }
+            }
+            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
+            Flickable {
+                id: ansFlick
+                Layout.fillWidth: true; Layout.fillHeight: true; clip: true
+                contentHeight: ansCol.implicitHeight + 28; boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar {}
+                ColumnLayout {
+                    id: ansCol
+                    x: 16; y: 14; width: ansFlick.width - 32; spacing: 12
+                    Repeater {
+                        model: answersModel
+                        Rectangle { Layout.fillWidth: true; radius: 12; color: theme.surface2; border.color: theme.line; border.width: 1
+                            implicitHeight: ansItem.implicitHeight + 24
+                            ColumnLayout { id: ansItem; x: 12; y: 12; width: parent.width - 24; spacing: 6
+                                RowLayout { Layout.fillWidth: true; spacing: 6
+                                    TextField { Layout.fillWidth: true; implicitHeight: 28; text: model.question; color: theme.ink
+                                        font.pixelSize: 13; font.bold: true; selectByMouse: true; maximumLength: 200
+                                        placeholderText: "The question"; placeholderTextColor: theme.faint
+                                        background: Rectangle { radius: 7; color: theme.inset; border.width: 1
+                                            border.color: parent.activeFocus ? theme.accent : theme.line }
+                                        onTextEdited: { answersModel.setProperty(index, "question", text); answersDialog.dirty = true; answersDialog.info = ""; } }
+                                    SmallButton { text: "Copy"; onClicked: answersDialog.copy(index) }
+                                    SmallButton { text: "Remove"
+                                        onClicked: { answersModel.remove(index); answersDialog.dirty = true; answersDialog.info = ""; } }
+                                }
+                                Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
+                                    border.color: ansEdit.activeFocus ? theme.accent : theme.line
+                                    implicitHeight: Math.max(56, ansEdit.implicitHeight + 16)
+                                    TextEdit { id: ansEdit; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap; selectByMouse: true
+                                        color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
+                                        Component.onCompleted: text = model.answer
+                                        onTextChanged: if (activeFocus) { answersModel.setProperty(index, "answer", text); answersDialog.dirty = true; answersDialog.info = ""; }
+                                        Text { visible: ansEdit.text === ""; text: "Your answer"; color: theme.faint; font.pixelSize: 12 } } }
+                            }
+                        }
+                    }
+                    SmallButton { objectName: "answersAdd"; text: "+ Add a question"
+                        onClicked: { answersModel.append({ question: "", answer: "" }); answersDialog.dirty = true; answersDialog.info = ""; } }
+                }
+            }
+            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
+            RowLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 6
+                Text { objectName: "answersInfo"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
+                    color: answersDialog.info !== "" ? theme.good : theme.faint
+                    text: answersDialog.info !== "" ? answersDialog.info
+                        : answersDialog.dirty ? "Not saved yet." : "Kept encrypted on this Mac. A question with no text is dropped when you save." }
+                SmallButton { text: "Close"; onClicked: answersDialog.close() }
+                PillButton { objectName: "answersSave"; primaryStyle: true; text: "Save"; onClicked: answersDialog.save() }
+            }
+        }
+    }
+
     // ───────────────────────── help ─────────────────────────
     Dialog {
         id: helpDialog; objectName: "helpDialog"
@@ -2107,7 +2259,9 @@ ApplicationWindow {
                 "For a job you applied to: <b>A date to remember</b>: put an interview, a deadline or a test task on a job. It appears under <b>Coming up</b> on the main screen, and you get a notification the day before and on the day.",
                 "<b>Paste a reply</b>: an answer that came on LinkedIn or in a company portal can be pasted in, and it is filed like an email.",
                 "<b>Notes</b> are kept for the company, not the job: who you spoke to, the salary mentioned, what they asked. They show again when you apply there later.",
-                "<b>Compare CV</b> puts your <b>master CV</b> next to the adapted one and shows only the paragraphs that differ." ] },
+                "<b>Compare CV</b> puts your <b>master CV</b> next to the adapted one and shows only the paragraphs that differ.",
+                "<b>Add to calendar</b> opens a saved date in Calendar, so your phone reminds you too. From the day of an interview the window offers a <b>thank-you</b> draft.",
+                "<b>Answers</b> keeps your replies to questions forms repeat (salary, start date, why this company) ready to copy." ] },
             { title: "Your CV and letters", lines: [
                 "The app <b>never invents experience</b>. An adapted CV changes only the Profile and Key Skills parts of your <b>master CV</b>, and a letter may only use what your CV shows.",
                 "Change your <b>master CV</b> in the <b>Account card</b>. The rules the app follows are in two files in the data folder; if you edit them by hand, approve the change in the <b>Account</b> card." ] },

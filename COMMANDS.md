@@ -156,6 +156,18 @@ Inside the window:
   of experience from which a posting is skipped (0 = never). Both start from the level in
   your CV: the usual list and 4 years for a junior, 7 for mid, nothing for a senior. Change
   them freely; a title that itself says junior or graduate is never skipped by a level word.
+- **Add to calendar** (job window, next to a saved date) — writes `data/calendar/<company>-<kind>-<date>.ics`
+  and opens it; confirm it in Calendar and it syncs to your phone with its own reminders
+  (a day and an hour before; for a date without a time, 9:00 the day before and on the day).
+- **Thank-you draft** (job window) — offered from the day of an interview or call, for an
+  application that is still open. Plain template, no Claude; copy it, add one real detail,
+  send it yourself, then **Mark as sent**.
+- **Answers** (right panel and job window) — your answers to questions forms keep asking.
+  `{company}` and `{role}` in an answer are replaced when you copy it from a job window.
+  Stored encrypted in `data/answers.json`.
+- **The last 7 days** (top of Analytics) — new jobs, ready to send, applications sent, replies,
+  follow-ups due, thank-you notes, dates coming up. `python status.py sync --summary` prints
+  the same and sends it as one notification; the weekly run does this.
 - **Follow-up reminders** — an application still *waiting* with no reply for N days
   (Options → *Remind me after*, default 10, 0 = never; counted from the day you applied,
   the company's last email or your last follow-up; never for applications whose date is
@@ -386,6 +398,8 @@ Or just open the app (`python app_qt.py`) and use **Run search** / **Scan email*
 | `data/ui_settings.json` | Desktop-app Options: city, source, thresholds, model (encrypted) |
 | `data/company_notes.json` | Your notes per company (encrypted) |
 | `data/filtered_out.json` | What the last search filtered out, with reasons (encrypted) |
+| `data/answers.json` | Your answers to repeated form questions (encrypted) |
+| `data/calendar/` | Calendar files made by **Add to calendar** |
 | `data/backups/` | Timestamped backups, encrypted (`*.enc`) |
 | `data/vault.json` | Which key this data belongs to (no secret inside) |
 | `data/integrity.json` | Signatures for the tamper check |

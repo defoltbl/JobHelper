@@ -145,6 +145,13 @@ def cmd_sync(args) -> int:
     print(f"→ {config.RESPONSES_REPORT}\n")
     agent5_responses.print_report(jobs)
     print(f"\n{usage.format_report()}")
+    if getattr(args, "summary", False):
+        from jobhelper import db, summary
+        week = summary.week(jobs, db.all_responses(), int(config.ui_settings().get("followup_days", 10) or 0))
+        print("\n── The last 7 days ──")
+        for row in summary.lines(week):
+            print(f"  {row['label']}: {row['value']}  {row['note']}".rstrip())
+        notify.send(summary.headline(week), "Your week")
     return 0
 
 
@@ -334,6 +341,8 @@ def main() -> int:
 
     p_sync = sub.add_parser("sync", help="Read inbox replies: update statuses + response DB")
     p_sync.add_argument("--days", type=int, default=None, help="How many days back to scan (default: .env IMAP_LOOKBACK_DAYS)")
+    p_sync.add_argument("--summary", action="store_true",
+                        help="Afterwards, print the last 7 days in a few lines and send them as one notification (weekly run)")
     p_sync.set_defaults(func=cmd_sync)
 
     sub.add_parser("rebuild", help="Regenerate the Excel table").set_defaults(func=cmd_rebuild)

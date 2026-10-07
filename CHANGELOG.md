@@ -5,6 +5,10 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 7 October 2026
 
+- **Add to calendar**: a date to remember can be opened as a calendar file, so Calendar (and your phone) reminds you when the app is closed.
+- **Thank-you draft**: on and after the day of an interview or call, the job window offers a short note to copy and send yourself.
+- **Answers**: write your answers to repeated form questions once and copy them; {company} and {role} are filled in from the open job.
+- **The last 7 days**: Analytics starts with new jobs, replies, follow-ups due and dates coming up; the weekly run sends the same as one notification.
 - **Bring back**: a posting in the filtered-out list can be added to New Jobs with one button; the next search run scores it.
 - **English ads are no longer mistaken for Czech**: a long English posting with a few Czech letters (a bank or city name) was removed as "written in Czech"; 12 such postings were lost in one search.
 - **Years that are only a wish** ("5 years is an advantage") no longer count as a requirement.

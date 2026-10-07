@@ -14,7 +14,7 @@ import subprocess
 import sys
 from datetime import date
 
-from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, filters,
+from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, answers, filters, summary,
                compare, config, cover_letter, db, followup, housekeeping, insights, integrity, interview_prep, keywords, merge, pdf,
                planner, salary, store, usage, vault)
 
@@ -191,6 +191,7 @@ class Api:
             "letter_editable": self._editable_letter(j),
             "letter_old_format": self._old_format_letter(j),
             "event": dict(j.get("event") or {}),
+            "thanks_due": planner.thanks_due(j),
             "company_notes": planner.company_notes(j.get("company", "")),
             "pay": salary.stated(j) or {},
             "can_compare": self._comparable(j),
@@ -310,6 +311,55 @@ class Api:
                 if twin is not None and saved is not None:
                     twin["event_notified"] = saved.get("event_notified")
         return due
+
+    def export_event(self, job_id):
+        """Write the job's date as a calendar file and open it (Calendar adds it; it syncs to the phone)."""
+        j = store.find(store.load_jobs(), job_id)
+        text = planner.ics(j) if j else ""
+        if not text:
+            return {"ok": False, "msg": "Save a date first."}
+        folder = config.DATA_DIR / "calendar"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / (store.slugify(f"{j.get('company', '')} {j['event'].get('kind', '')} {j['event']['date']}") + ".ics")
+        path.write_text(text, encoding="utf-8", newline="")
+        self._open(path)
+        return {"ok": True, "file": path.name}
+
+    # ── a thank-you note after an interview ─────────────────────
+    def _my_name(self) -> str:
+        try:
+            profile = agent1_cv.load_profile()
+        except Exception:  # noqa: BLE001
+            profile = None
+        cv = agent1_cv.find_cv()
+        return followup.candidate_name(profile, cv.name if cv else "")
+
+    def thanks_draft(self, job_id):
+        j = store.find(store.load_jobs(), job_id)
+        if not j:
+            return {}
+        return planner.thanks_draft(j, self._my_name(), planner.company_notes(j.get("company", "")).get("contact", ""))
+
+    def mark_thanked(self, job_id):
+        return bool(self._change(job_id, lambda jobs, j: planner.mark_thanked(j), render=False).get("ok"))
+
+    # ── answers to the questions forms keep asking ──────────────
+    @_guarded(list)
+    def answers(self):
+        return answers.load()
+
+    def save_answers(self, entries):
+        return {"ok": True, "count": len(answers.save(list(entries or [])))}
+
+    def fill_answer(self, text, job_id=""):
+        """An answer with {company} and {role} replaced by the open job's."""
+        return answers.fill(str(text or ""), store.find(store.load_jobs(), job_id) if job_id else None)
+
+    # ── the last seven days ─────────────────────────────────────
+    @_guarded(dict)
+    def week_summary(self):
+        w = summary.week(store.load_jobs(), db.all_responses(), int(self.options().get("followup_days") or 0))
+        return {"from": w["from"], "to": w["to"], "lines": summary.lines(w), "headline": summary.headline(w)}
 
     # ── notes per company ───────────────────────────────────────
     def save_company_notes(self, company, fields):

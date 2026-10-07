@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -141,3 +142,78 @@ def save_company_notes(company: str, fields: dict[str, Any]) -> bool:
     config.ensure_dirs()
     vault.write_text(_path(), json.dumps(data, ensure_ascii=False, indent=2))
     return True
+
+
+# ── a calendar file for a date, so the phone reminds you too ────────────────
+def _ics_text(text: str) -> str:
+    out = (text or "").replace("\r", "")
+    for ch in ("\\", ";", ","):
+        out = out.replace(ch, "\\" + ch)
+    return out.replace("\n", "\\n")
+
+
+def ics(job: dict[str, Any], now: datetime | None = None) -> str:
+    """The job's date as an iCalendar event (opens in Calendar, which syncs to the phone).
+    With a time: one hour, reminders a day and an hour before. Without: an all-day
+    event, reminders at 9:00 the day before and at 9:00 on the day. '' if there is no date."""
+    e = job.get("event") or {}
+    try:
+        day = date.fromisoformat(e.get("date", ""))
+    except ValueError:
+        return ""
+    title = f"{(e.get('kind') or 'other').capitalize()}: {job.get('company') or job.get('title') or 'JobHelper'}"
+    details = "\n".join(x for x in (job.get("title", ""), e.get("note", ""), job.get("url", "")) if x)
+    stamp = (now or datetime.now()).strftime("%Y%m%dT%H%M%S")
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//JobHelper//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+             "BEGIN:VEVENT", f"UID:jobhelper-{job.get('id', '')}@jobhelper.local", f"DTSTAMP:{stamp}",
+             f"SUMMARY:{_ics_text(title)}", f"DESCRIPTION:{_ics_text(details)}"]
+    try:
+        start = datetime.combine(day, datetime.strptime(e.get("time", ""), "%H:%M").time())
+        lines += [f"DTSTART:{start:%Y%m%dT%H%M%S}", f"DTEND:{start + timedelta(hours=1):%Y%m%dT%H%M%S}"]
+        alarms = ["-P1D", "-PT1H"]
+    except ValueError:                                  # no time: an all-day event
+        lines += [f"DTSTART;VALUE=DATE:{day:%Y%m%d}", f"DTEND;VALUE=DATE:{day + timedelta(days=1):%Y%m%d}"]
+        alarms = ["-PT15H", "PT9H"]
+    for trigger in alarms:
+        lines += ["BEGIN:VALARM", "ACTION:DISPLAY", f"DESCRIPTION:{_ics_text(title)}", f"TRIGGER:{trigger}", "END:VALARM"]
+    lines += ["END:VEVENT", "END:VCALENDAR"]
+    return "\r\n".join(lines) + "\r\n"
+
+
+# ── a thank-you note after an interview ─────────────────────────────────────
+def thanks_due(job: dict[str, Any], today: date | None = None) -> bool:
+    """An interview or call whose day has come, for an application still open, not thanked yet."""
+    e = job.get("event") or {}
+    if e.get("kind") not in ("interview", "call") or job.get("status") in _OVER:
+        return False
+    try:
+        day = date.fromisoformat(e.get("date", ""))
+    except ValueError:
+        return False
+    return day <= (today or date.today()) and job.get("thanked_for") != e.get("date")
+
+
+def thanks_draft(job: dict[str, Any], name: str = "", contact: str = "") -> dict[str, str]:
+    """A short thank-you for the user to send themselves (plain code, no Claude)."""
+    role = (job.get("title") or "the role").strip()
+    company = (job.get("company") or "your company").strip().rstrip(".")
+    e = job.get("event") or {}
+    first = re.split(r"[,(\-–]", contact or "")[0].strip().split(" ")[0] if (contact or "").strip() else ""
+    what = "call" if e.get("kind") == "call" else "interview"
+    body = (
+        f"Dear {first or company + ' team'},\n\n"
+        f"Thank you for the {what} about the {role} position. I enjoyed our conversation and learning more "
+        f"about the team and the work at {company}.\n\n"
+        "The role sounds like a very good match for what I want to do next, and I would be glad to continue "
+        "in the process. If you need anything else from me, please let me know.\n\n"
+        "Kind regards,\n"
+        f"{name or '[Your name]'}"
+    )
+    return {"subject": f"Thank you: {role}", "body": body}
+
+
+def mark_thanked(job: dict[str, Any], today: date | None = None) -> None:
+    day = (today or date.today()).isoformat()
+    job["thanked_for"] = (job.get("event") or {}).get("date", day)
+    job["last_update"] = day
+    job["notes"] = (f"[{day}] Sent a thank-you note.\n" + (job.get("notes") or "")).strip()

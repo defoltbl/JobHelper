@@ -18,6 +18,6 @@ echo "--- job search ---" >> "$LOG"
 "$PY" run.py --reuse-profile >> "$LOG" 2>&1
 
 echo "--- email analysis ---" >> "$LOG"
-"$PY" status.py sync --days 10 >> "$LOG" 2>&1
+"$PY" status.py sync --days 10 --summary >> "$LOG" 2>&1
 
 echo "" >> "$LOG"

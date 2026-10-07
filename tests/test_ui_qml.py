@@ -234,7 +234,7 @@ def test_dialogs_open_and_close(ui, name):
     assert ui.warnings == []
 
 
-@pytest.mark.parametrize("view, rows", [("new", 1), ("app", 1), ("resp", 0), ("ana", 14)])
+@pytest.mark.parametrize("view, rows", [("new", 1), ("app", 1), ("resp", 0), ("ana", 21)])       # 2 headings + 5 lines for the last 7 days + 14 all-time rows
 def test_views_list_the_data(ui, view, rows):
     ui.js(f'openView("{view}")')
     ui.wait(450)
@@ -553,7 +553,7 @@ def test_analytics_rows_add_up(ui):
     ui.wait(450)
     rows = {r["primary"]: int(r["value"]) for r in [
         {"primary": ui.js(f"listView.model[{i}].primary"), "value": ui.js(f"listView.model[{i}].value")}
-        for i in range(ui.find("listView").property("count"))]}
+        for i in range(ui.find("listView").property("count"))] if str(r["value"]).strip() != ""}
     assert rows["Applications"] == rows["↳ waiting for an answer"] + rows["↳ in interviews now"] + rows["↳ offers"] + rows["↳ rejected"]
     assert rows["Reply emails"] == (rows["↳ confirmations"] + rows["↳ interview emails"] + rows["↳ tests and tasks"]
                                     + rows["↳ rejections"] + rows["↳ other"])
@@ -1067,4 +1067,64 @@ def test_bring_back_button_in_the_filtered_out_list(ui):
     store.save_jobs(jobs)
     agent2_search.save_dropped([])
     ui.js("countsData = bridge.counts()")
+    assert ui.warnings == []
+
+
+# ── calendar file, thank-you note, answers, the last 7 days ─────────────────
+def test_thank_you_card_appears_after_the_interview_day(ui, monkeypatch):
+    opened = []
+    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(str(target)))
+    today = date.today().isoformat()
+    _open_job(ui)
+    assert ui.find("thanksCard").property("visible") is False and ui.find("evCalendar").property("visible") is False
+    ui.js(f'evDate.text = "{today}"; evTime.text = "10:00"; detailDialog.eventKind = "interview"; detailDialog.saveEvent()')
+    assert ui.find("thanksCard").property("visible") is True and ui.find("evCalendar").property("visible") is True
+    assert ui.js("bridge.exportEvent(detailDialog.job.id).ok") is True and opened[-1].endswith(".ics")
+    ui.js("detailDialog.thanks = bridge.thanksDraft(detailDialog.job.id)")
+    ui.wait(100)
+    body = ui.find("thanksBody").property("text")
+    assert "Thank you for the interview about the QA Engineer position" in body and "Beta" in body
+    assert ui.js("bridge.markThanked(detailDialog.job.id)") is True
+    ui.js("detailDialog.refresh()")
+    assert ui.find("thanksCard").property("visible") is False                      # not offered twice for the same day
+    ui.js("bridge.clearEvent(detailDialog.job.id); detailDialog.refresh(); upcomingData = bridge.upcoming(); detailDialog.close()")
+    ui.wait(350)
+    assert ui.warnings == []
+
+
+def test_answers_window_saves_and_copies_with_the_job_filled_in(ui, monkeypatch):
+    from jobhelper import answers
+    copied = []
+    monkeypatch.setattr(qt_bridge.Bridge, "copyText", lambda self, text: copied.append(text) or True)
+    dialog = ui.find("answersDialog")
+    ui.js('answersDialog.show("app")')
+    ui.wait(450)
+    assert dialog.property("opened") is True
+    assert ui.js("answersDialog.all().length") == len(answers.STARTERS) and ui.js("answersDialog.all()[0].answer") == ""
+    ui.js("answersDialog.copy(0)")
+    assert "still empty" in ui.js("answersDialog.info") and copied == []
+    ui.js('answersModel.setProperty(2, "answer", "I like what {company} builds, and the {role} role fits my skills."); answersDialog.dirty = true')
+    ui.js('answersModel.append({ question: "", answer: "dropped: it has no question" }); answersDialog.save()')
+    assert ui.js("answersDialog.info") == "Saved." and ui.js("answersDialog.dirty") is False
+    saved = answers.load()
+    assert len(saved) == len(answers.STARTERS) and saved[2]["answer"].startswith("I like what {company}")
+    ui.js("answersDialog.copy(2)")
+    assert copied == ["I like what Beta builds, and the QA Engineer role fits my skills."]
+    assert "company and role filled in" in ui.js("answersDialog.info")
+    ui.js("answersDialog.close()")
+    ui.wait(350)
+    answers.save([])
+    (config.DATA_DIR / "answers.json").unlink()
+    assert ui.warnings == []
+
+
+def test_analytics_start_with_the_last_seven_days(ui):
+    ui.js('openView("ana")')
+    ui.wait(450)
+    assert ui.js("listView.model[0].primary") == "The last 7 days" and ui.js("listView.model[0].heading") is True
+    labels = [ui.js(f"listView.model[{i}].primary") for i in range(1, 6)]
+    assert labels == ["New jobs found", "Ready to send", "Applications sent", "Replies received", "Follow-ups due"]
+    assert ui.js("listView.model[6].primary") == "All time"
+    ui.js("tableDialog.close()")
+    ui.wait(350)
     assert ui.warnings == []
