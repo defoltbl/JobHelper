@@ -1,0 +1,134 @@
+"""config: the app manages .env and its saved Options itself — never the real files here."""
+import json
+
+import pytest
+
+from jobhelper import config, vault
+
+
+@pytest.fixture
+def env_file(tmp_path, monkeypatch):
+    path = tmp_path / ".env"
+    monkeypatch.setattr(config, "ENV_PATH", path)
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    for name in ("IMAP_USER", "IMAP_PASSWORD", "IMAP_LOOKBACK_DAYS"):
+        monkeypatch.setattr(config, name, getattr(config, name))   # restored after the test
+    for key in ("IMAP_USER", "IMAP_PASSWORD", "IMAP_LOOKBACK_DAYS", "JOBHELPER_TEST_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    return path
+
+
+def test_update_env_creates_file(env_file):
+    config.update_env({"JOBHELPER_TEST_KEY": "one"})
+    assert env_file.read_text(encoding="utf-8") == "JOBHELPER_TEST_KEY=one\n"
+
+
+def test_update_env_replaces_key_and_keeps_other_lines(env_file):
+    env_file.write_text("# my notes\nOTHER=keep\nJOBHELPER_TEST_KEY=old\n", encoding="utf-8")
+    config.update_env({"JOBHELPER_TEST_KEY": "new"})
+    lines = env_file.read_text(encoding="utf-8").splitlines()
+    assert lines == ["# my notes", "OTHER=keep", "JOBHELPER_TEST_KEY=new"]
+
+
+def test_set_imap_keeps_the_password_out_of_env(env_file):
+    env_file.write_text("IMAP_USER=old@example.com\nIMAP_PASSWORD=oldoldoldoldoldo\nOTHER=keep\n", encoding="utf-8")
+    config.set_imap("  me@example.com ", " abcdabcdabcdabcd ")
+    text = env_file.read_text(encoding="utf-8")
+    assert "IMAP_USER=me@example.com" in text and "OTHER=keep" in text
+    assert "IMAP_PASSWORD" not in text and "abcdabcdabcdabcd" not in text
+    assert vault.get_secret(vault.IMAP_ACCOUNT) == "abcdabcdabcdabcd"
+    assert config.IMAP_USER == "me@example.com" and config.has_imap()
+
+
+def test_set_imap_blank_password_keeps_the_stored_one(env_file):
+    config.set_imap("me@example.com", "abcdabcdabcdabcd")
+    config.set_imap("other@example.com", "")
+    assert vault.get_secret(vault.IMAP_ACCOUNT) == "abcdabcdabcdabcd"
+
+
+def test_set_imap_without_a_keychain_falls_back_to_env(env_file):
+    vault.use_keychain(vault.NoKeychain())
+    config.set_imap("me@example.com", "abcdabcdabcdabcd")
+    assert "IMAP_PASSWORD=abcdabcdabcdabcd" in env_file.read_text(encoding="utf-8")
+
+
+def test_old_password_is_moved_from_env_to_keychain(env_file):
+    env_file.write_text("# notes\nIMAP_USER=me@example.com\nIMAP_PASSWORD=abcdabcdabcdabcd\n", encoding="utf-8")
+    assert config.move_password_to_keychain() is True
+    assert env_file.read_text(encoding="utf-8") == "# notes\nIMAP_USER=me@example.com\n"
+    assert vault.get_secret(vault.IMAP_ACCOUNT) == "abcdabcdabcdabcd"
+    assert config.IMAP_PASSWORD == "abcdabcdabcdabcd"
+    assert config.move_password_to_keychain() is False          # nothing left to move
+
+
+def test_password_stays_in_env_if_the_keychain_refuses_it(env_file, monkeypatch):
+    env_file.write_text("IMAP_PASSWORD=abcdabcdabcdabcd\n", encoding="utf-8")
+    monkeypatch.setattr(vault, "get_secret", lambda account: "")      # read-back fails
+    assert config.move_password_to_keychain() is False
+    assert "IMAP_PASSWORD=abcdabcdabcdabcd" in env_file.read_text(encoding="utf-8")
+
+
+def test_remove_env_only_drops_the_named_keys(env_file):
+    env_file.write_text("A=1\nB=2\nC=3\n", encoding="utf-8")
+    config.remove_env(["B"])
+    assert env_file.read_text(encoding="utf-8") == "A=1\nC=3\n"
+
+
+def test_ui_settings_missing_or_broken_is_empty(env_file):
+    assert config.ui_settings() == {}
+    (env_file.parent / "ui_settings.json").write_text("{not json", encoding="utf-8")
+    assert config.ui_settings() == {}
+    (env_file.parent / "ui_settings.json").write_text("[1, 2]", encoding="utf-8")
+    assert config.ui_settings() == {}
+
+
+def test_apply_ui_settings_sets_model_and_lead_floor(env_file, monkeypatch):
+    monkeypatch.setattr(config, "MODEL", "sonnet")
+    monkeypatch.setattr(config, "MIN_LEAD_SCORE", 0)
+    (env_file.parent / "ui_settings.json").write_text(
+        json.dumps({"model": "opus", "min_lead_score": 55}), encoding="utf-8")
+    config.apply_ui_settings()
+    assert config.MODEL == "opus"
+    assert config.MIN_LEAD_SCORE == 55
+
+
+def test_apply_ui_settings_ignores_bad_values(env_file, monkeypatch):
+    monkeypatch.setattr(config, "MODEL", "sonnet")
+    monkeypatch.setattr(config, "MIN_LEAD_SCORE", 10)
+    config.apply_ui_settings({"model": "  ", "min_lead_score": "abc"})
+    assert (config.MODEL, config.MIN_LEAD_SCORE) == ("sonnet", 10)
+    config.apply_ui_settings({"min_lead_score": 250})
+    assert config.MIN_LEAD_SCORE == 100          # clamped
+
+
+# ── nothing about one particular person is built into the app ───────────────
+def test_candidate_facts_come_from_the_cv_and_options(env_file):
+    cv = "Jane Doe\nJunior Data Analyst\njane@example.com"
+    assert config.candidate_facts(cv) == {"name": "Jane Doe", "first_name": "Jane", "location": "", "right_to_work": "", "start": ""}
+    block = config.facts_block(cv)
+    assert "do not mention the right to work" in block and "do not mention a start date" in block
+    (env_file.parent / "ui_settings.json").write_text(json.dumps({
+        "where": "Berlin", "about_right_to_work": "EU citizen", "about_start": "one month"}), encoding="utf-8")
+    facts = config.candidate_facts(cv)
+    assert (facts["location"], facts["right_to_work"], facts["start"]) == ("Berlin", "EU citizen", "one month")
+    assert "Right to work: EU citizen" in config.facts_block(cv) and "Can start: one month" in config.facts_block(cv)
+
+
+def test_placeholders_in_rule_files_are_filled_for_whoever_uses_the_app(env_file):
+    (env_file.parent / "ui_settings.json").write_text(json.dumps({"where": "Brno", "about_start": "two weeks"}), encoding="utf-8")
+    text = "Write as {{first_name}} ({{ NAME }}), based in {{location}}. Start: {{start}}. Work: {{right_to_work}}. Keep {{unknown_word}}."
+    out = config.fill_placeholders(text, "Jane Doe\nAnalyst")
+    assert out == "Write as Jane (Jane Doe), based in Brno. Start: two weeks. Work: (not stated). Keep {{unknown_word}}."
+
+
+def test_no_personal_name_in_code_or_docs():
+    import re
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    owner = re.compile("(?i)" + "andr" + "ii|maksy" + "menko")           # built in pieces so this file passes too
+    files = [*root.glob("*.py"), *root.glob("*.md"), *root.glob("*.sh"), *(root / "jobhelper").glob("*.py"),
+             *(root / "ui_qt").glob("*.qml"), *(root / "tests").glob("*.py"), *(root / "scripts").glob("*.py"),
+             root / ".env.example", root / "requirements.txt"]
+    found = [f"{f.relative_to(root)}:{n}" for f in files if f.is_file()
+             for n, line in enumerate(f.read_text(encoding="utf-8", errors="ignore").splitlines(), 1) if owner.search(line)]
+    assert found == [], "a personal name is written into: " + ", ".join(found[:8])

@@ -1,0 +1,12 @@
+# JobHelper dependencies
+claude-agent-sdk>=0.1.0   # drives the Claude Code CLI -> uses your subscription
+requests>=2.31            # Adzuna job search API
+openpyxl>=3.1             # Excel tracking table
+pypdf>=4.0                # read CV from PDF
+python-docx>=1.1          # read .docx CV + write .docx cover letters
+python-dotenv>=1.0        # load .env config
+beautifulsoup4>=4.12      # parse jobs.cz / prace.cz search pages
+lxml>=5.0                 # fast HTML parser backend for BeautifulSoup
+cryptography>=42.0        # AES-256-GCM encryption of data files and backups
+pytest>=8.0               # unit tests (dev)
+PySide6>=6.6              # native desktop app (Qt Quick / QML) -> python app_qt.py

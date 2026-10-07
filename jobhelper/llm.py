@@ -1,0 +1,162 @@
+"""Thin wrapper around the Claude Agent SDK.
+
+We use the SDK purely as an inference engine: a focused system prompt + user
+prompt in, plain text out, with no autonomous tool use. This keeps behaviour
+predictable and subscription usage proportional to the work.
+
+Authentication: the SDK talks to the Claude Code CLI, which uses whatever
+you're logged in with. If ANTHROPIC_API_KEY is unset (recommended), that's
+your subscription.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import re
+import time
+from datetime import datetime, timedelta
+from typing import Any
+
+from claude_agent_sdk import ClaudeAgentOptions, query
+
+from . import config, usage
+
+
+async def _ask_async(prompt: str, system: str | None, model: str) -> tuple[str, dict[str, Any]]:
+    options = ClaudeAgentOptions(
+        system_prompt=system or "You are a precise, concise assistant.",
+        tools=[],                  # offer the model no tools at all — inference only
+        allowed_tools=[],          # (and pre-approve nothing)
+        permission_mode="default",
+        model=model,
+        # Headroom so long replies (e.g. a full cover letter inside JSON) aren't
+        # cut off with "Reached maximum number of turns". No tools are allowed,
+        # so this won't cause tool-loop iterations.
+        max_turns=6,
+    )
+    parts: list[str] = []
+    result_text = ""
+    rec: dict[str, Any] = {"model": model}
+    async for message in query(prompt=prompt, options=options):
+        content = getattr(message, "content", None)
+        if isinstance(content, list):
+            for block in content:
+                text = getattr(block, "text", None)
+                if isinstance(text, str):
+                    parts.append(text)
+        # ResultMessage carries usage + cost + the final result text.
+        u = getattr(message, "usage", None)
+        if isinstance(u, dict):
+            for f in ("input_tokens", "output_tokens", "cache_read_input_tokens",
+                      "cache_creation_input_tokens"):
+                rec[f] = u.get(f, rec.get(f, 0))
+        if getattr(message, "total_cost_usd", None) is not None:
+            rec["cost_usd"] = message.total_cost_usd
+        if isinstance(getattr(message, "result", None), str):
+            result_text = message.result
+        # RateLimitEvent reports subscription-window utilization; keep the
+        # structured `.raw` dict (has unifiedWindows) when available.
+        rli = getattr(message, "rate_limit_info", None)
+        if rli is not None:
+            raw = getattr(rli, "raw", None)
+            if isinstance(raw, dict):
+                rec["rate_limit_info"] = raw
+            elif isinstance(rli, (dict, list, str)):
+                rec["rate_limit_info"] = rli
+            else:
+                rec["rate_limit_info"] = str(rli)
+    text = ("".join(parts).strip() or result_text).strip()
+    return text, rec
+
+
+class LimitReached(RuntimeError):
+    """The subscription limit is used up; nothing more can be asked until it resets."""
+
+    def __init__(self, message: str, resets_at: float = 0.0, window: str = "") -> None:
+        super().__init__(message)
+        self.resets_at, self.window = resets_at, window
+
+
+_LIMIT_TEXT = re.compile(r"hit your [a-z -]*limit|usage limit|limit reached|rate limit", re.IGNORECASE)
+_RESET_TEXT = re.compile(r"resets\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", re.IGNORECASE)
+
+
+def reset_time_from(message: str, now: float | None = None) -> float:
+    """Epoch of the "resets 1:20pm" in Claude's limit message (next such time), or 0."""
+    m = _RESET_TEXT.search(message or "")
+    if not m:
+        return 0.0
+    hour, minute, half = int(m.group(1)), int(m.group(2) or 0), (m.group(3) or "").lower()
+    if half == "pm" and hour < 12:
+        hour += 12
+    if half == "am" and hour == 12:
+        hour = 0
+    if hour > 23 or minute > 59:
+        return 0.0
+    base = datetime.fromtimestamp(time.time() if now is None else now)
+    when = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if when <= base:
+        when += timedelta(days=1)
+    return when.timestamp()
+
+
+def limit_message(status: dict[str, Any]) -> str:
+    window = {"five_hour": "5-hour", "seven_day": "7-day"}.get(status.get("window", ""), "usage")
+    when = datetime.fromtimestamp(status["resets_at"]).strftime("%H:%M on %d %b") if status.get("resets_at") else "later"
+    return f"Claude's {window} limit is used up ({round(status.get('used', 1) * 100)}%). It resets at {when}."
+
+
+def ask(prompt: str, system: str | None = None, model: str | None = None, tag: str = "general",
+        force: bool = False) -> str:
+    """Synchronous single-shot call. Returns the assistant's text and records usage.
+
+    Raises LimitReached instead of calling when the subscription limit is used
+    up (99% of a window), and when Claude itself answers that the limit is hit,
+    so a run can pause instead of failing job after job. `force` skips the
+    check (the usage refresh needs to ask in order to learn the new state)."""
+    if not force:
+        status = usage.limit_status()
+        if status["blocked"]:
+            raise LimitReached(limit_message(status), status["resets_at"], status["window"])
+    try:
+        text, rec = asyncio.run(_ask_async(prompt, system, model or config.MODEL))
+    except Exception as e:  # noqa: BLE001
+        if _LIMIT_TEXT.search(str(e)):
+            until = reset_time_from(str(e)) or (time.time() + 30 * 60)
+            usage.note_limit(until, str(e)[:300])
+            status = usage.limit_status()
+            raise LimitReached(limit_message(status), status["resets_at"] or until, status["window"]) from e
+        raise
+    usage.record(rec, tag=tag)
+    return text
+
+
+def ask_json(prompt: str, system: str | None = None, model: str | None = None, tag: str = "general") -> Any:
+    """Call the model and parse a JSON object/array from its reply.
+
+    Tolerant of surrounding prose or ```json fences.
+    """
+    raw = ask(prompt, system=system, model=model, tag=tag)
+    return _extract_json(raw)
+
+
+def _extract_json(raw: str) -> Any:
+    raw = raw.strip()
+    # Strip code fences if present.
+    fence = re.search(r"```(?:json)?\s*(.*?)```", raw, re.DOTALL)
+    if fence:
+        raw = fence.group(1).strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+    # Fall back to the widest {...} or [...] span.
+    for open_c, close_c in (("{", "}"), ("[", "]")):
+        start = raw.find(open_c)
+        end = raw.rfind(close_c)
+        if start != -1 and end > start:
+            try:
+                return json.loads(raw[start : end + 1])
+            except json.JSONDecodeError:
+                continue
+    raise ValueError(f"Could not parse JSON from model reply:\n{raw[:500]}")

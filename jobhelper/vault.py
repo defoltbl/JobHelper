@@ -1,0 +1,414 @@
+"""Secrets and encryption at rest.
+
+* Secrets (the Gmail app password, the data key) live in the macOS Keychain,
+  never in a file inside the project.
+* Data files (jobs, profile, options, the responses database) and everything
+  under ``data/backups/`` are stored AES-256-GCM encrypted with the data key.
+
+Reading is transparent: a file that is not encrypted yet is returned as is, so
+old data keeps working and is encrypted the next time it is saved (or right
+away by ``protect_all``). Documents you open in Word or Excel (CVs, letters,
+trackers) are not encrypted here - protect those with an encrypted drive.
+
+Without a Keychain (not macOS) or with ``JOBHELPER_ENCRYPT=0`` everything falls
+back to plain files.
+"""
+from __future__ import annotations
+
+import base64
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+SERVICE = os.getenv("JOBHELPER_VAULT_SERVICE", "JobHelper")
+MAGIC = b"JHENC1\n"                 # start of every encrypted file
+BACKUP_SUFFIX = ".enc"
+
+KEY_ACCOUNT = "data_key"
+IMAP_ACCOUNT = "imap_password"
+IMAP_ACCOUNT_2 = "imap_password_2"
+LABELS = {
+    KEY_ACCOUNT: "JobHelper: data encryption key",
+    IMAP_ACCOUNT: "JobHelper: Gmail app password",
+    IMAP_ACCOUNT_2: "JobHelper: Gmail app password (second mailbox)",
+    "integrity_baseline": "JobHelper: tamper-check baseline",
+}
+
+
+class VaultError(RuntimeError):
+    """The data cannot be protected or opened (missing or wrong key, damaged file)."""
+
+
+# ── where secrets are kept ──────────────────────────────────────────────────
+class MemoryKeychain:
+    """In-process store, used by the tests instead of the real Keychain."""
+    available = True
+
+    def __init__(self, items: dict[str, str] | None = None) -> None:
+        self.items = dict(items or {})
+
+    def get(self, account: str) -> str | None:
+        return self.items.get(account)
+
+    def set(self, account: str, value: str) -> None:
+        self.items[account] = value
+
+    def delete(self, account: str) -> None:
+        self.items.pop(account, None)
+
+
+class NoKeychain(MemoryKeychain):
+    """No secure store on this system: nothing is kept, encryption stays off."""
+    available = False
+
+    def set(self, account: str, value: str) -> None:
+        raise VaultError("No Keychain is available on this system.")
+
+
+class MacKeychain:
+    """The login Keychain, through the system ``security`` tool."""
+    available = True
+
+    def get(self, account: str) -> str | None:
+        r = subprocess.run(["security", "find-generic-password", "-s", SERVICE, "-a", account, "-w"],
+                           capture_output=True, text=True, timeout=20)
+        if r.returncode != 0:
+            return None
+        return r.stdout.rstrip("\n")
+
+    def set(self, account: str, value: str) -> None:
+        if not value or any(ord(c) < 32 or ord(c) == 127 for c in value):
+            raise VaultError("That value cannot be stored in the Keychain.")
+        # Sent on stdin (interactive mode), so the secret never shows up in the
+        # process list the way a command-line argument would.
+        cmd = "add-generic-password -U -s %s -a %s -l %s -w %s\n" % (
+            _quote(SERVICE), _quote(account), _quote(LABELS.get(account, "JobHelper: " + account)), _quote(value))
+        r = subprocess.run(["security", "-i"], input=cmd, capture_output=True, text=True, timeout=20)
+        if r.returncode != 0 or self.get(account) != value:
+            raise VaultError("Could not save to the Keychain. " + (r.stderr or "").strip())
+
+    def delete(self, account: str) -> None:
+        subprocess.run(["security", "delete-generic-password", "-s", SERVICE, "-a", account],
+                       capture_output=True, text=True, timeout=20)
+
+
+def _quote(text: str) -> str:
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+_keychain = None
+
+
+def keychain():
+    global _keychain
+    if _keychain is None:
+        kind = os.getenv("JOBHELPER_VAULT_BACKEND", "").lower()
+        if kind == "memory":
+            _keychain = MemoryKeychain()
+        elif kind == "none" or sys.platform != "darwin":
+            _keychain = NoKeychain()
+        else:
+            _keychain = MacKeychain()
+    return _keychain
+
+
+def use_keychain(backend) -> None:
+    """Swap the secret store (tests) and forget any cached key."""
+    global _keychain, _key
+    _keychain, _key = backend, None
+
+
+def get_secret(account: str) -> str:
+    try:
+        return keychain().get(account) or ""
+    except Exception:  # noqa: BLE001 - a broken Keychain must not crash a read
+        return ""
+
+
+def set_secret(account: str, value: str) -> None:
+    keychain().set(account, value)
+
+
+def delete_secret(account: str) -> None:
+    keychain().delete(account)
+
+
+# ── the data key ────────────────────────────────────────────────────────────
+_key: bytes | None = None
+
+
+def enabled() -> bool:
+    return os.getenv("JOBHELPER_ENCRYPT", "1") != "0" and keychain().available
+
+
+def _marker() -> Path:
+    from . import config
+    return config.DATA_DIR / "vault.json"
+
+
+def _key_id(key: bytes) -> str:
+    return hashlib.sha256(b"jobhelper-key-id" + key).hexdigest()[:16]
+
+
+def _read_marker() -> dict:
+    try:
+        data = json.loads(_marker().read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _decode_key(text: str) -> bytes:
+    try:
+        key = base64.urlsafe_b64decode(text.strip().encode("ascii"))
+    except Exception as e:  # noqa: BLE001
+        raise VaultError("That is not a valid JobHelper key.") from e
+    if len(key) != 32:
+        raise VaultError("That is not a valid JobHelper key.")
+    return key
+
+
+def data_key() -> bytes:
+    """The 256-bit key for this data folder; created on first use.
+
+    A new key is only ever created for a folder that has never been encrypted.
+    If the folder was encrypted with a key that is no longer in the Keychain
+    (new Mac, Keychain reset) this raises instead of silently starting over.
+    """
+    global _key
+    if _key is not None:
+        return _key
+    if not enabled():
+        raise VaultError("Encryption is not available on this system.")
+    marker = _read_marker()
+    stored = keychain().get(KEY_ACCOUNT)
+    if stored:
+        key = _decode_key(stored)
+        if marker.get("key_id") and marker["key_id"] != _key_id(key):
+            raise VaultError("The key in the Keychain does not match this data. "
+                             "Run: python status.py security restore-key")
+    else:
+        if marker.get("key_id"):
+            raise VaultError("This data is encrypted, but its key is not in the Keychain. "
+                             "Run: python status.py security restore-key")
+        key = os.urandom(32)
+        keychain().set(KEY_ACCOUNT, base64.urlsafe_b64encode(key).decode("ascii"))
+    if not marker.get("key_id"):
+        from . import config
+        config.ensure_dirs()
+        _marker().write_text(json.dumps({"key_id": _key_id(key), "created": datetime.now().isoformat(timespec="seconds")},
+                                        indent=2), encoding="utf-8")
+    _key = key
+    return key
+
+
+def recovery_key() -> str:
+    """The key as text, for the user to keep somewhere safe."""
+    return base64.urlsafe_b64encode(data_key()).decode("ascii")
+
+
+def restore_key(text: str) -> None:
+    """Put a saved recovery key back into the Keychain (new Mac, Keychain reset)."""
+    global _key
+    key = _decode_key(text)
+    marker = _read_marker()
+    if marker.get("key_id") and marker["key_id"] != _key_id(key):
+        raise VaultError("That key does not belong to this data.")
+    keychain().set(KEY_ACCOUNT, base64.urlsafe_b64encode(key).decode("ascii"))
+    _key = None
+    data_key()
+
+
+def state() -> str:
+    """'ok' (encrypting), 'off' (no Keychain / switched off) or 'locked' (key problem)."""
+    if not enabled():
+        return "off"
+    try:
+        data_key()
+        return "ok"
+    except VaultError:
+        return "locked"
+
+
+# ── bytes ───────────────────────────────────────────────────────────────────
+def is_encrypted(data: bytes) -> bool:
+    return data.startswith(MAGIC)
+
+
+def encrypt(data: bytes) -> bytes:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    nonce = os.urandom(12)
+    return MAGIC + nonce + AESGCM(data_key()).encrypt(nonce, data, MAGIC)
+
+
+def decrypt(blob: bytes) -> bytes:
+    from cryptography.exceptions import InvalidTag
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    if not is_encrypted(blob):
+        return blob
+    body = blob[len(MAGIC):]
+    try:
+        return AESGCM(data_key()).decrypt(body[:12], body[12:], MAGIC)
+    except InvalidTag as e:
+        raise VaultError("An encrypted file is damaged or was written with a different key.") from e
+
+
+# ── files ───────────────────────────────────────────────────────────────────
+def _write_atomic(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes(data)
+    try:
+        os.chmod(tmp, 0o600)             # readable by this user only
+    except OSError:
+        pass
+    os.replace(tmp, path)
+
+
+def read_bytes(path: Path) -> bytes:
+    return decrypt(Path(path).read_bytes())
+
+
+def write_bytes(path: Path, data: bytes) -> None:
+    _write_atomic(Path(path), encrypt(data) if enabled() else data)
+
+
+def read_text(path: Path) -> str:
+    return read_bytes(path).decode("utf-8")
+
+
+def write_text(path: Path, text: str) -> None:
+    write_bytes(path, text.encode("utf-8"))
+
+
+def file_is_encrypted(path: Path) -> bool:
+    try:
+        with Path(path).open("rb") as f:
+            return f.read(len(MAGIC)) == MAGIC
+    except OSError:
+        return False
+
+
+def data_files() -> list[Path]:
+    """The files that are kept encrypted."""
+    from . import config
+    return [config.JOBS_JSON, config.PROFILE_JSON, config.DATA_DIR / "ui_settings.json", config.RESPONSES_DB,
+            config.DATA_DIR / "last_run.json", config.DATA_DIR / "company_notes.json",
+            config.DATA_DIR / "filtered_out.json"]
+
+
+def encrypt_file(path: Path) -> bool:
+    """Encrypt one file in place, after proving it decrypts back. True if it changed."""
+    path = Path(path)
+    if not path.is_file() or file_is_encrypted(path):
+        return False
+    plain = path.read_bytes()
+    blob = encrypt(plain)
+    if decrypt(blob) != plain:
+        raise VaultError(f"Self-check failed while encrypting {path.name}; it was left untouched.")
+    _write_atomic(path, blob)
+    return True
+
+
+# ── backups ─────────────────────────────────────────────────────────────────
+def backups_dir() -> Path:
+    from . import config
+    return config.DATA_DIR / "backups"
+
+
+def encrypt_tree(root: Path) -> int:
+    """Encrypt every plain file under root (name gets '.enc'). Returns how many."""
+    root, done = Path(root), 0
+    if not root.is_dir():
+        return 0
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        if path.name == ".DS_Store" or path.name.endswith(".tmp"):
+            continue
+        if path.suffix == BACKUP_SUFFIX and file_is_encrypted(path):
+            continue
+        plain = path.read_bytes()
+        blob = plain if is_encrypted(plain) else encrypt(plain)
+        if decrypt(blob) != decrypt(plain):
+            raise VaultError(f"Self-check failed while encrypting {path.name}; it was left untouched.")
+        _write_atomic(path.with_name(path.name + BACKUP_SUFFIX), blob)
+        path.unlink()
+        done += 1
+    return done
+
+
+def make_backup(label: str, paths: list[Path] | None = None) -> Path:
+    """Copy the given files (default: the data files) into an encrypted backup folder."""
+    dest = backups_dir() / f"{label}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    dest.mkdir(parents=True, exist_ok=True)
+    for src in (paths if paths is not None else data_files()):
+        src = Path(src)
+        if src.is_file():
+            plain = read_bytes(src)
+            _write_atomic(dest / (src.name + (BACKUP_SUFFIX if enabled() else "")),
+                          encrypt(plain) if enabled() else plain)
+    return dest
+
+
+def keep_copy(path: Path, folder: str) -> Path | None:
+    """Put an encrypted copy of one file into backups/<folder>/ (time-stamped name).
+    Used before the app overwrites or removes a document."""
+    path = Path(path)
+    if not path.is_file():
+        return None
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dest = backups_dir() / folder / f"{path.stem}.{stamp}{path.suffix}{BACKUP_SUFFIX if enabled() else ''}"
+    plain = path.read_bytes()
+    _write_atomic(dest, encrypt(plain) if enabled() else plain)
+    return dest
+
+
+def stash(paths, folder: str) -> int:
+    """Move files out of the working folders into backups/<folder>/ (encrypted). Returns how many."""
+    moved = 0
+    for path in paths:
+        path = Path(path)
+        if keep_copy(path, folder):
+            path.unlink()
+            moved += 1
+    return moved
+
+
+def restore_backup(src: Path, dest: Path) -> int:
+    """Decrypt a backup file or folder into dest (plain, openable files)."""
+    src, dest, done = Path(src), Path(dest), 0
+    files = [src] if src.is_file() else sorted(p for p in src.rglob("*") if p.is_file())
+    base = src.parent if src.is_file() else src
+    for path in files:
+        if path.name == ".DS_Store":
+            continue
+        rel = path.relative_to(base)
+        name = rel.name[:-len(BACKUP_SUFFIX)] if rel.name.endswith(BACKUP_SUFFIX) else rel.name
+        out = dest / rel.parent / name
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(read_bytes(path))
+        done += 1
+    return done
+
+
+# ── one call that brings a data folder up to date ───────────────────────────
+def protect_all() -> dict:
+    """Move secrets to the Keychain, encrypt data files and backups, and take the
+    first tamper-check baseline. Safe to call on every start: it only does what
+    is still missing. Returns what it did."""
+    from . import config, integrity
+    report = {"state": state(), "password_moved": False, "files": [], "backups": 0, "baseline": False}
+    if report["state"] != "ok":
+        return report
+    report["password_moved"] = config.move_password_to_keychain()
+    for path in data_files():
+        if encrypt_file(path):
+            report["files"].append(path.name)
+    report["backups"] = encrypt_tree(backups_dir())
+    report["baseline"] = integrity.ensure_baseline()
+    from . import housekeeping
+    report["housekeeping"] = housekeeping.run()      # old backups and long logs
+    return report

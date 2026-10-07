@@ -1,0 +1,15 @@
+[
+  {"name": "Bloomreach", "ats": "greenhouse", "token": "bloomreach"},
+  {"name": "GitLab", "ats": "greenhouse", "token": "gitlab"},
+  {"name": "Datadog", "ats": "greenhouse", "token": "datadog"},
+
+  {"_comment": "Add your target companies below. `token` is the slug in the career-site URL."},
+  {"_comment": "greenhouse  -> boards.greenhouse.io/<token>        (token = <token>)"},
+  {"_comment": "lever       -> jobs.lever.co/<token>               (token = <token>)"},
+  {"_comment": "smartrecruiters -> jobs.smartrecruiters.com/<token> (token = <token>)"},
+  {"_comment": "recruitee   -> <token>.recruitee.com               (token = <token>)"},
+
+  {"name": "Some Company", "ats": "lever", "token": "somecompany"},
+  {"name": "Another Co", "ats": "smartrecruiters", "token": "AnotherCo"},
+  {"name": "Third Co", "ats": "recruitee", "token": "thirdco"}
+]
