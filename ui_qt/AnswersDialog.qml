@@ -22,9 +22,19 @@ Dialog {
     property string jobId: ""             // the job whose company and role fill {company} and {role}
     property string info: ""
     property bool dirty: false
+    property string query: ""            // what is typed in the search field
+    function matches(question, answer) {
+        var q = query.trim().toLowerCase();
+        return q === "" || ("" + question).toLowerCase().indexOf(q) >= 0 || ("" + answer).toLowerCase().indexOf(q) >= 0;
+    }
+    readonly property int shown: {
+        var n = 0, q = query;                                   // re-counted when the text or the list changes
+        for (var i = 0; i < answersModel.count; i++) if (matches(answersModel.get(i).question, answersModel.get(i).answer)) n++;
+        return n;
+    }
     ListModel { id: answersModel }
     function show(job) {
-        jobId = job || ""; info = ""; dirty = false;
+        jobId = job || ""; info = ""; dirty = false; query = "";
         answersModel.clear();
         var list = bridge.answers();
         for (var i = 0; i < list.length; i++) answersModel.append({ question: list[i].question, answer: list[i].answer });
@@ -68,9 +78,18 @@ Dialog {
             ColumnLayout {
                 id: ansCol
                 x: 16; y: 14; width: ansFlick.width - 32; spacing: 12
+                TextField { id: ansSearch; objectName: "ansSearch"; Layout.fillWidth: true; implicitHeight: 30; visible: answersModel.count > 4
+                    text: answersDialog.query; color: theme.ink; font.pixelSize: 12; selectByMouse: true
+                    placeholderText: "Search your questions and answers…"; placeholderTextColor: theme.faint
+                    background: Rectangle { radius: 8; color: theme.inset; border.width: 1; border.color: ansSearch.activeFocus ? theme.accent : theme.line }
+                    onTextEdited: answersDialog.query = text }
+                Text { objectName: "ansNone"; visible: answersDialog.query.trim() !== "" && answersDialog.shown === 0
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 13
+                    text: "Nothing matches \"" + answersDialog.query.trim() + "\". Clear the search to see all your answers." }
                 Repeater {
                     model: answersModel
                     Rectangle { Layout.fillWidth: true; radius: 12; color: theme.surface2; border.color: theme.line; border.width: 1
+                        visible: answersDialog.matches(model.question, model.answer)
                         implicitHeight: ansItem.implicitHeight + 24
                         ColumnLayout { id: ansItem; x: 12; y: 12; width: parent.width - 24; spacing: 6
                             RowLayout { Layout.fillWidth: true; spacing: 6
