@@ -34,6 +34,35 @@ Dialog {
     property string replyInfo: ""
     property string replyErr: ""
     property string replyJob: ""
+    // the apply checklist: only the steps this job has something for
+    readonly property var applySteps: {
+        var j = job, out = [];
+        if (j.url) out.push({ key: "posting", label: "Read the posting and open its application form", button: "Open posting ↗" });
+        if (j.cv) out.push({ key: "cv", label: "Check your adapted CV", button: j.cv_pdf === true ? "Open CV PDF" : "Open CV" });
+        if (j.letter) out.push({ key: "letter", label: "Check your cover letter", button: j.letter_pdf === true ? "Open letter PDF" : "Open letter" });
+        if (j.can_combine === true) out.push({ key: "combined", label: "If the form takes one file: letter and CV as a single PDF", button: "Make one PDF" });
+        out.push({ key: "answers", label: "Copy your answers for the form's questions", button: "Answers" });
+        return out;
+    }
+    readonly property int stepsDone: {
+        var done = job.apply_steps || [], n = 0;
+        for (var i = 0; i < applySteps.length; i++) if (done.indexOf(applySteps[i].key) >= 0) n++;
+        return n;
+    }
+    function onePdf() {
+        var r = bridge.combinedPdf(job.id);
+        ticker.text = (r && r.ok) ? "Opened one PDF with the letter and the CV (" + r.pages + " pages)." : ((r && r.msg) || "Couldn't make the single PDF.");
+        return !!(r && r.ok);
+    }
+    function doStep(key) {
+        var ok = true;
+        if (key === "posting") { var r = bridge.openUrl(job.id); ok = !!(r && r.ok); ticker.text = ok ? "Opened the job posting in your browser." : "No link for this job."; }
+        else if (key === "cv") bridge.openDoc(job.cv_pdf === true ? "cv_pdf" : "cv", job.cv);
+        else if (key === "letter") bridge.openDoc(job.letter_pdf === true ? "letter_pdf" : "letter", job.letter);
+        else if (key === "combined") ok = onePdf();
+        else if (key === "answers") answersDialog.show(job.id);
+        if (ok) { bridge.applyStep(job.id, key); refresh(); }
+    }
     property var thanks: ({})
     property string thanksNote: ""
     function saveEvent() {
@@ -153,6 +182,31 @@ Dialog {
                                       : Math.round(detailDialog.job.pay.low / 1000) + "–" + Math.round(detailDialog.job.pay.high / 1000) + "k") + " CZK/mo") : "",
                              detailDialog.job.letter_old_format === true ? "letter: older format, open in Word" : ""
                            ].filter(function (t) { return t !== ""; })
+                }
+
+                // everything needed to apply, in order; ticks are kept with the job
+                DetailCard { heading: "Before you apply"; objectName: "applyCard"
+                    visible: detailDialog.job.is_lead === true && (!!detailDialog.job.cv || !!detailDialog.job.letter)
+                    border.color: theme.accent
+                    Repeater {
+                        model: detailDialog.applySteps
+                        RowLayout { Layout.fillWidth: true; spacing: 10
+                            readonly property bool ticked: (detailDialog.job.apply_steps || []).indexOf(modelData.key) >= 0
+                            Rectangle { implicitWidth: 20; implicitHeight: 20; radius: 10
+                                color: parent.ticked ? theme.good : "transparent"; border.width: 1; border.color: parent.ticked ? theme.good : theme.line
+                                Text { anchors.centerIn: parent; text: parent.parent.ticked ? "✓" : ""; color: "#ffffff"; font.pixelSize: 12; font.bold: true } }
+                            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 13
+                                color: parent.ticked ? theme.soft : theme.ink; text: modelData.label }
+                            SmallButton { text: modelData.button; onClicked: detailDialog.doStep(modelData.key) }
+                        }
+                    }
+                    RowLayout { Layout.fillWidth: true; spacing: 10
+                        Text { objectName: "applyCount"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
+                            text: detailDialog.stepsDone + " of " + detailDialog.applySteps.length + " done. Then send your application and press Mark applied." }
+                        PillButton { objectName: "applyNow"; primaryStyle: true; text: "Mark applied"
+                            onClicked: { bridge.applyJob(detailDialog.job.id); ticker.text = "Moved to Applications (waiting).";
+                                         detailDialog.close(); tableDialog.close(); win.reloadAll(); } }
+                    }
                 }
 
                 DetailCard { heading: "Why this score"
@@ -288,7 +342,7 @@ Dialog {
                     Text { objectName: "eventErr"; visible: detailDialog.eventErr !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
                         color: theme.crit; font.pixelSize: 11; font.bold: true; text: detailDialog.eventErr }
                     Text { visible: detailDialog.eventErr === ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
-                        text: "Shown on the main screen. A notification comes the day before and on the day." }
+                        text: "Shown on the main screen. A notification comes the day before and on the day; with a time, also about three hours and one hour before." }
                 }
 
                 DetailCard { heading: "After the " + ((detailDialog.job.event && detailDialog.job.event.kind) || "interview"); objectName: "thanksCard"
@@ -475,6 +529,8 @@ Dialog {
             SmallButton { visible: detailDialog.job.cv_pdf === true; text: "CV PDF"; onClicked: bridge.openDoc("cv_pdf", detailDialog.job.cv) }
             SmallButton { visible: !!detailDialog.job.letter; text: "Letter"; onClicked: bridge.openDoc("letter", detailDialog.job.letter) }
             SmallButton { visible: detailDialog.job.letter_pdf === true; text: "Letter PDF"; onClicked: bridge.openDoc("letter_pdf", detailDialog.job.letter) }
+            SmallButton { objectName: "onePdf"; visible: detailDialog.job.can_combine === true; text: "One PDF"
+                onClicked: detailDialog.onePdf() }
             SmallButton { objectName: "compareCv"; visible: detailDialog.job.can_compare === true; text: "Compare CV"
                 onClicked: compareDialog.show(detailDialog.job.id) }
             SmallButton { objectName: "editLetter"; visible: detailDialog.job.letter_editable === true; text: "Edit letter"

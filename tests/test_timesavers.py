@@ -182,3 +182,70 @@ def test_no_thank_you_before_todays_interview_has_started():
     assert planner.thanks_due(job, TODAY, now=datetime(2026, 10, 7, 9, 0)) is False
     assert planner.thanks_due(job, TODAY, now=datetime(2026, 10, 7, 14, 30)) is True
     assert planner.thanks_due(job, TODAY + timedelta(days=1), now=datetime(2026, 10, 8, 8, 0)) is True
+
+
+# ── letter and CV in one PDF, and the apply checklist ───────────────────────
+def _pdf(path, pages=1):
+    from pypdf import PdfWriter
+    w = PdfWriter()
+    for _ in range(pages):
+        w.add_blank_page(width=200, height=200)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as f:
+        w.write(f)
+    return path
+
+
+def test_combine_joins_pdfs_in_order(tmp_path):
+    from jobhelper import pdf
+    out = pdf.combine([_pdf(tmp_path / "letter.pdf", 1), _pdf(tmp_path / "cv.pdf", 2)], tmp_path / "out" / "both.pdf")
+    assert out is not None and pdf.page_count(out) == 3
+    assert pdf.combine([tmp_path / "letter.pdf", tmp_path / "missing.pdf"], tmp_path / "x.pdf") is None
+    (tmp_path / "bad.pdf").write_bytes(b"not a pdf")
+    assert pdf.combine([tmp_path / "bad.pdf"], tmp_path / "y.pdf") is None and pdf.combine([], tmp_path / "z.pdf") is None
+
+
+def _lead(**kw):
+    return store.new_job(id="lead", title="Junior Developer", company="Acme", status="letter_ready",
+                         cover_letter_file="Letter_lead.docx", tailored_cv_file="Alex_Novak_CV_Acme_Junior_Developer.docx", **kw)
+
+
+def test_one_pdf_from_the_existing_copies(api):
+    _pdf(config.LETTERS_DIR / "Letter_lead.pdf", 1)
+    _pdf(config.TAILORED_CV_DIR / "Alex_Novak_CV_Acme_Junior_Developer.pdf", 2)
+    store.save_jobs([_lead(), store.new_job(id="bare", title="T", company="C")])
+    assert api.job_detail("lead")["can_combine"] is True and api.job_detail("bare")["can_combine"] is False
+    got = api.combined_pdf("lead")
+    out = config.DATA_DIR / "combined" / "Alex_Novak_Application_Acme_Junior_Developer.pdf"
+    assert got == {"ok": True, "file": out.name, "pages": 3} and api.opened == [out]
+    assert api.combined_pdf("bare")["ok"] is False and api.combined_pdf("zzz")["ok"] is False
+
+
+def test_one_pdf_is_not_offered_without_pdf_copies_or_libreoffice(api):
+    (config.LETTERS_DIR / "Letter_lead.docx").write_bytes(b"x")
+    (config.TAILORED_CV_DIR / "Alex_Novak_CV_Acme_Junior_Developer.docx").write_bytes(b"x")
+    store.save_jobs([_lead()])
+    assert api.job_detail("lead")["can_combine"] is False                 # tests run without LibreOffice
+    got = api.combined_pdf("lead")
+    assert got["ok"] is False and "LibreOffice" in got["msg"] and api.opened == []
+
+
+def test_one_pdf_makes_the_missing_copies_when_libreoffice_is_there(api, monkeypatch):
+    from jobhelper import pdf
+    (config.LETTERS_DIR / "Letter_lead.docx").write_bytes(b"x")
+    (config.TAILORED_CV_DIR / "Alex_Novak_CV_Acme_Junior_Developer.docx").write_bytes(b"x")
+    store.save_jobs([_lead()])
+    monkeypatch.setattr(pdf, "find_soffice", lambda: "/fake/soffice")
+    monkeypatch.setattr(pdf, "to_pdf", lambda docx, timeout=120: _pdf(docx.with_suffix(".pdf")))
+    assert api.job_detail("lead")["can_combine"] is True
+    assert api.combined_pdf("lead")["pages"] == 2
+
+
+def test_apply_steps_are_kept_with_the_job(api):
+    store.save_jobs([_lead()])
+    assert api.job_detail("lead")["apply_steps"] == []
+    assert api.apply_step("lead", "cv") == {"ok": True} and api.apply_step("lead", "posting") == {"ok": True}
+    assert api.apply_step("lead", "cv") == {"ok": True}                    # ticking twice changes nothing
+    assert api.job_detail("lead")["apply_steps"] == ["cv", "posting"]
+    assert api.apply_step("lead", "format-disk") == {"ok": False} and api.apply_step("zzz", "cv") == {"ok": False}
+    assert ui_api.Api().job_detail("lead")["apply_steps"] == ["cv", "posting"]      # after a restart too

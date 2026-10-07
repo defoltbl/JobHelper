@@ -57,7 +57,8 @@ Dialog {
             "<b>Notes</b> are kept for the company, not the job: who you spoke to, the salary mentioned, what they asked. They show again when you apply there later.",
             "<b>Compare CV</b> puts your <b>master CV</b> next to the adapted one and shows only the paragraphs that differ.",
             "<b>Add to calendar</b> opens a saved date in Calendar, so your phone reminds you too. From the day of an interview the window offers a <b>thank-you</b> draft.",
-            "<b>Answers</b> keeps your replies to questions forms repeat (salary, start date, why this company) ready to copy." ] },
+            "<b>Answers</b> keeps your replies to questions forms repeat (salary, start date, why this company) ready to copy.",
+            "For a new job, <b>Before you apply</b> lists the steps in order and ticks off what you have done. <b>One PDF</b> joins the letter and the CV when a form takes a single file." ] },
         { title: "Your CV and letters", lines: [
             "The app <b>never invents experience</b>. An adapted CV changes only the Profile and Key Skills parts of your <b>master CV</b>, and a letter may only use what your CV shows.",
             "Change your <b>master CV</b> in the <b>Account card</b>. The rules the app follows are in two files in the data folder; if you edit them by hand, approve the change in the <b>Account</b> card." ] },

@@ -5,6 +5,10 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 8 October 2026
 
+- **Before you apply**: a checklist at the top of a new job's window (posting, CV, letter, one PDF, answers) that remembers what you have done, ending with Mark applied.
+- **One PDF**: the letter followed by the CV as a single file, for forms that take only one.
+- **Search in Answers**: find a question or an answer by typing.
+- **Reminders by the hour**: a date with a time is also announced about three hours and one hour before.
 - **Upkeep**: the window's code is split into one file per window (no visible change), so later changes are safer.
 - **Start-up check**: when the app opens it checks that your data opens, the rules are unchanged, the CV and template are there and Claude is signed in. You see one line only when something is wrong.
 - **Restore test**: `python status.py security test-restore` makes a backup, restores it into a temporary folder and compares it with the live data, then checks that every older backup can still be decrypted.

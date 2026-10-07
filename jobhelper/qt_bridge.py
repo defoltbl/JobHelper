@@ -491,6 +491,14 @@ class Bridge(QObject):
             self._post("replyReady", result)
         threading.Thread(target=work, daemon=True).start()
 
+    @Slot(str, str, result="QVariantMap")
+    def applyStep(self, job_id, step):
+        return self._api.apply_step(job_id, step)
+
+    @Slot(str, result="QVariantMap")
+    def combinedPdf(self, job_id):
+        return self._api.combined_pdf(job_id)
+
     @Slot(str, result="QVariantMap")
     def exportEvent(self, job_id):
         return self._api.export_event(job_id)

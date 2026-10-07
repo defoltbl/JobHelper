@@ -129,7 +129,8 @@ Inside the window:
 - **A date to remember** (job window of an application) — an interview, deadline, test task or call with a
   date (`YYYY-MM-DD`), an optional time and a note. The next ones are listed under
   **Coming up** on the main screen; a macOS notification comes the day before and on the
-  day (once each; the app must be open, and Notifications must be on).
+  day (once each; the app must be open, and Notifications must be on). With a time set it
+  also comes about three hours and one hour before.
 - **Paste a reply** (job window of an application) — for an answer that came on LinkedIn or in a company
   portal. It is filed like an email: one Claude call reads it, or the app's own wording
   rules when the limit is used up. The same text cannot be added twice.
@@ -161,6 +162,11 @@ Inside the window:
   of experience from which a posting is skipped (0 = never). Both start from the level in
   your CV: the usual list and 4 years for a junior, 7 for mid, nothing for a senior. Change
   them freely; a title that itself says junior or graduate is never skipped by a level word.
+- **Before you apply** (top of a new job's window) — the steps in order: open the posting,
+  check the CV, check the letter, make one PDF, copy your answers. Each step you do gets a
+  tick that is kept with the job; **Mark applied** is at the end.
+- **One PDF** (job window) — the letter followed by the adapted CV as one file, written to
+  `data/combined/` and opened. Needs the PDF copies (LibreOffice makes them).
 - **Add to calendar** (job window, next to a saved date) — writes `data/calendar/<company>-<kind>-<date>.ics`
   and opens it; confirm it in Calendar and it syncs to your phone with its own reminders
   (a day and an hour before; for a date without a time, 9:00 the day before and on the day).
@@ -409,6 +415,7 @@ Or just open the app (`python app_qt.py`) and use **Run search** / **Scan email*
 | `data/filtered_out.json` | What the last search filtered out, with reasons (encrypted) |
 | `data/answers.json` | Your answers to repeated form questions (encrypted) |
 | `data/calendar/` | Calendar files made by **Add to calendar** |
+| `data/combined/` | Letter and CV joined into one PDF by **One PDF** |
 | `data/backups/` | Timestamped backups, encrypted (`*.enc`) |
 | `data/vault.json` | Which key this data belongs to (no secret inside) |
 | `data/integrity.json` | Signatures for the tamper check |

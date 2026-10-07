@@ -69,3 +69,21 @@ def pdf_for(docx: Path) -> Path | None:
     """The existing PDF copy of a document, if there is one."""
     pdf = Path(docx).with_suffix(".pdf")
     return pdf if pdf.is_file() else None
+
+
+def combine(parts: list[Path], out: Path) -> Path | None:
+    """Join PDF files into one, in the given order. None if any part is missing or unreadable."""
+    from pypdf import PdfReader, PdfWriter
+    try:
+        writer = PdfWriter()
+        for part in parts:
+            for page in PdfReader(str(part)).pages:
+                writer.add_page(page)
+        if not len(writer.pages):
+            return None
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with open(out, "wb") as f:
+            writer.write(f)
+        return out
+    except Exception:  # noqa: BLE001 - a missing or damaged part: no combined file
+        return None

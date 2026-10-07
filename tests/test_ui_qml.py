@@ -1229,3 +1229,79 @@ def test_start_up_check_still_runs_when_the_sign_in_check_is_slow(ui):
     ui.wait(150)
     assert ui.js("healthData.checks.length") == 0
     assert ui.warnings == []
+
+
+# ── apply checklist, one PDF, search in Answers ─────────────────────────────
+def test_apply_checklist_ticks_steps_and_marks_applied(ui, monkeypatch):
+    opened = []
+    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(str(target)))
+    monkeypatch.setattr(ui_api.Api, "combined_pdf", lambda self, job_id: {"ok": True, "file": "both.pdf", "pages": 3})
+    monkeypatch.setattr(ui_api.Api, "_can_combine", lambda self, j: bool(j.get("tailored_cv_file")))
+    for folder, name in ((config.TAILORED_CV_DIR, "cv_lead.docx"), (config.LETTERS_DIR, "L_lead.docx")):
+        (folder / name).write_bytes(b"x")
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
+                                                             url="https://example.com/job", apply_steps=[]), render=False)
+    _open_job(ui, "lead")
+    assert ui.find("applyCard").property("visible") is True and ui.find("onePdf").property("visible") is True
+    assert ui.js("detailDialog.applySteps.map(function (s) { return s.key; }).join(',')") == "posting,cv,letter,combined,answers"
+    assert ui.find("applyCount").property("text").startswith("0 of 5 done")
+    ui.js('detailDialog.doStep("posting"); detailDialog.doStep("cv"); detailDialog.doStep("combined")')
+    assert opened[0] == "https://example.com/job" and "cv_lead." in opened[1]
+    assert ui.js("detailDialog.stepsDone") == 3 and ui.js("detailDialog.job.apply_steps.join(',')") == "posting,cv,combined"
+    ui.js('detailDialog.doStep("answers")')
+    ui.wait(450)
+    assert ui.find("answersDialog").property("opened") is True and ui.js("answersDialog.jobId") == "lead"
+    ui.js("answersDialog.close()")
+    ui.wait(350)
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    _open_job(ui, "lead")                                                         # the ticks are still there
+    assert ui.find("applyCount").property("text").startswith("4 of 5 done")
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    _open_job(ui, "app")
+    assert ui.find("applyCard").property("visible") is False                      # already applied: no checklist
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="", cover_letter_file="", url="", apply_steps=[]), render=False)
+    assert ui.warnings == []
+
+
+def test_a_failed_step_is_not_ticked(ui, monkeypatch):
+    monkeypatch.setattr(ui_api.Api, "combined_pdf", lambda self, job_id: {"ok": False, "msg": "The two PDF files could not be joined."})
+    (config.TAILORED_CV_DIR / "cv_lead.docx").write_bytes(b"x")
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", url="", apply_steps=[]), render=False)
+    _open_job(ui, "lead")
+    ui.js('detailDialog.doStep("combined"); detailDialog.doStep("posting")')      # no single PDF, and this job has no link
+    assert ui.js("detailDialog.stepsDone") == 0 and ui.js("(detailDialog.job.apply_steps || []).length") == 0
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="", apply_steps=[]), render=False)
+    assert ui.warnings == []
+
+
+def test_search_in_the_answers_window(ui):
+    from jobhelper import answers
+    answers.save([{"question": "Salary expectation", "answer": "60 000 CZK gross"}, {"question": "Notice period", "answer": "Two weeks"},
+                  {"question": "Why {company}?", "answer": "I like the product."}, {"question": "Strengths", "answer": "Python and testing"},
+                  {"question": "Work permit", "answer": "Not needed"}])
+    ui.js('answersDialog.show("")')
+    ui.wait(450)
+    assert ui.find("ansSearch").property("visible") is True and ui.js("answersDialog.shown") == 5
+    ui.js('answersDialog.query = "PYTHON"')
+    assert ui.js("answersDialog.shown") == 1                                      # found in an answer, any letter case
+    ui.js('answersDialog.query = "salary"')
+    assert ui.js("answersDialog.shown") == 1 and ui.find("ansNone").property("visible") is False
+    ui.js('answersDialog.query = "zzz"')
+    assert ui.js("answersDialog.shown") == 0 and "Nothing matches" in ui.find("ansNone").property("text")
+    ui.js("answersDialog.save()")                                                 # saving while a search hides rows keeps them all
+    assert len(answers.load()) == 5 and ui.js("answersDialog.query") == ""
+    ui.js("answersDialog.close()")
+    ui.wait(350)
+    (config.DATA_DIR / "answers.json").unlink()
+    ui.js('answersDialog.show("")')
+    ui.wait(400)
+    assert ui.find("ansSearch").property("visible") is True                       # six starter questions
+    ui.js("answersDialog.close()")
+    ui.wait(350)
+    assert ui.warnings == []

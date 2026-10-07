@@ -33,6 +33,11 @@ def _guarded(default):
     return wrap
 
 
+def _stem(name: str) -> str:
+    """A stored document name without its extension."""
+    return os.path.splitext(os.path.basename(name))[0]
+
+
 def _claude_auth_status():
     """Ask the Claude CLI who is signed in (tests replace this, so they never run the real CLI)."""
     return subprocess.run(["claude", "auth", "status"], capture_output=True, text=True, timeout=8)
@@ -192,6 +197,8 @@ class Api:
             "letter_old_format": self._old_format_letter(j),
             "event": dict(j.get("event") or {}),
             "thanks_due": planner.thanks_due(j),
+            "apply_steps": list(j.get("apply_steps") or []),
+            "can_combine": self._can_combine(j),
             "company_notes": planner.company_notes(j.get("company", "")),
             "pay": salary.stated(j) or {},
             "can_compare": self._comparable(j),
@@ -310,6 +317,7 @@ class Api:
                 saved = store.find(jobs, item["id"])
                 if twin is not None and saved is not None:
                     twin["event_notified"] = saved.get("event_notified")
+                    twin["event_marks"] = list(saved.get("event_marks") or [])
         return due
 
     def export_event(self, job_id):
@@ -793,6 +801,62 @@ class Api:
             agent2_search.prune_applied_leads(jobs)
         result = self._change(job_id, go)
         return {"ok": bool(result.get("ok"))}
+
+    # ── the steps before "Mark applied" ─────────────────────────
+    APPLY_STEPS = ("posting", "cv", "letter", "answers", "combined")
+
+    def apply_step(self, job_id, step):
+        """Tick one step of the apply checklist (kept with the job, so it survives closing the window)."""
+        if step not in self.APPLY_STEPS:
+            return {"ok": False}
+
+        def go(jobs, j):
+            done = [s for s in (j.get("apply_steps") or []) if s in self.APPLY_STEPS]
+            if step not in done:
+                j["apply_steps"] = done + [step]
+        result = self._change(job_id, go, render=False)
+        return {"ok": bool(result.get("ok"))}
+
+    # ── letter and CV in one PDF ────────────────────────────────
+    def _pdf_parts(self, j, make: bool = False):
+        """[letter.pdf, cv.pdf] for a job, or None when a single PDF is not possible.
+        A missing PDF copy is made from the Word file when make=True; with make=False
+        it is enough that it could be made (LibreOffice is installed)."""
+        parts = []
+        for base, name in ((config.LETTERS_DIR, (j or {}).get("cover_letter_file", "")),
+                           (config.TAILORED_CV_DIR, (j or {}).get("tailored_cv_file", ""))):
+            if not name:
+                return None
+            docx = (base / name).with_suffix(".docx")
+            found = pdf.pdf_for(docx)
+            if found is None and docx.is_file():
+                if make:
+                    found = pdf.to_pdf(docx)
+                elif pdf.available():
+                    found = docx                       # can be made when asked for
+            if found is None:
+                return None
+            parts.append(found)
+        return parts
+
+    def _can_combine(self, j) -> bool:
+        return self._pdf_parts(j) is not None
+
+    def combined_pdf(self, job_id):
+        """Write the letter followed by the CV as one PDF (data/combined/) and open it."""
+        j = store.find(store.load_jobs(), job_id)
+        parts = self._pdf_parts(j, make=True) if j else None
+        if not parts:
+            return {"ok": False, "msg": "A single PDF needs both a letter and an adapted CV as PDF. "
+                                        "Install LibreOffice so the app can make the PDF copies."}
+        stem = _stem(j["tailored_cv_file"]).replace("_CV_", "_Application_")
+        if "_Application_" not in stem:
+            stem += "_application"
+        out = pdf.combine(parts, config.DATA_DIR / "combined" / f"{stem}.pdf")
+        if out is None:
+            return {"ok": False, "msg": "The two PDF files could not be joined."}
+        self._open(out)
+        return {"ok": True, "file": out.name, "pages": pdf.page_count(out)}
 
     def open_doc(self, kind, name):
         want_pdf = kind.endswith("_pdf")
