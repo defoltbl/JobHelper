@@ -51,6 +51,14 @@ ApplicationWindow {
     property bool usageBusy: false
     property var schedData: ({})
     property bool connChecked: false  // first connection check has come back
+    property var healthData: ({ ok: true, checks: [], problems: 0, message: "" })   // the start-up self-check
+    property bool healthHidden: false
+    function showHealth() {
+        var rows = (healthData.checks || []).map(function (c) {
+            return { primary: c.name, secondary: c.ok ? "fine" : c.problem, badge: c.ok ? "" : "weak", value: c.ok ? "✓" : "!", actions: [],
+                     group: c.ok ? "fine" : "needs attention" }; });
+        tableDialog.show("Start-up check", rows, "", []);
+    }
 
     // ── run progress (drives the status bar, the stepper and the gates) ──
     property string runMode: ""          // "search" | "scan" | "" (idle)
@@ -211,7 +219,11 @@ ApplicationWindow {
             if (key !== win.stageKey) return;
             win.stageDone = done; win.stageTotal = total; win.updateProgress();
         }
-        function onConnectionsReady(info) { win.connData = info; win.connChecked = true; }
+        function onConnectionsReady(info) {
+            win.connData = info;
+            if (!win.connChecked || !win.healthData.ok) win.healthData = bridge.selfCheck(info.claude === true);   // at start, and again until it is clean
+            win.connChecked = true;
+        }
         function onUsageReady() { win.usageData = bridge.usageInfo(); win.usageBusy = false; }
     }
 
@@ -806,6 +818,17 @@ ApplicationWindow {
                 color: theme.inset
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 16; spacing: 14
+                    // one clear line when the start-up check found something; nothing when all is well
+                    Rectangle { objectName: "healthBanner"; visible: win.healthData.ok === false && !win.healthHidden
+                        Layout.fillWidth: true; radius: 10; color: theme.critbg; border.color: theme.crit; border.width: 1
+                        implicitHeight: hbRow.implicitHeight + 16
+                        RowLayout { id: hbRow; x: 12; y: 8; width: parent.width - 24; spacing: 10
+                            Text { objectName: "healthText"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 12
+                                text: win.healthData.message || "" }
+                            SmallButton { visible: (win.healthData.problems || 0) > 1; text: "Show all"; onClicked: win.showHealth() }
+                            SmallButton { text: "Hide"; onClicked: win.healthHidden = true }
+                        }
+                    }
                     RowLayout {
                         Layout.fillWidth: true; spacing: 10
                         Text { text: "Assembly line"; color: theme.ink; font.pixelSize: 17; font.bold: true }

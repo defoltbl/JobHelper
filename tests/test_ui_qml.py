@@ -1131,3 +1131,27 @@ def test_analytics_start_with_the_last_seven_days(ui):
     ui.js("tableDialog.close()")
     ui.wait(350)
     assert ui.warnings == []
+
+
+def test_start_up_check_shows_one_line_only_when_something_is_wrong(ui):
+    banner = ui.find("healthBanner")
+    assert ui.js("healthData.checks.length") > 5                                  # the check ran when the window started
+    start = ui.js("healthData.problems")
+    ui.js('healthData = { ok: true, checks: [], problems: 0, message: "" }')
+    assert banner.property("visible") is False
+    ui.js('healthData = { ok: false, problems: 2, message: "2 things need your attention. The first: No master CV yet.", '
+          'checks: [{ name: "Master CV", ok: false, problem: "No master CV yet." }, { name: "Claude", ok: false, problem: "Not signed in." }, '
+          '{ name: "Job list", ok: true, problem: "" }] }')
+    assert banner.property("visible") is True and "No master CV yet" in ui.find("healthText").property("text")
+    ui.js("showHealth()")
+    ui.wait(450)
+    assert ui.find("listView").property("count") == 3
+    assert ui.js("listView.model[0].secondary") == "No master CV yet." and ui.js("listView.model[2].secondary") == "fine"
+    ui.js("tableDialog.close()")
+    ui.wait(350)
+    ui.js("healthHidden = true")
+    assert banner.property("visible") is False
+    ui.js("healthHidden = false; healthData = bridge.selfCheck(true)")
+    assert ui.js("healthData.problems") <= max(start, 3)
+    ui.js('healthData = { ok: true, checks: [], problems: 0, message: "" }')
+    assert ui.warnings == []

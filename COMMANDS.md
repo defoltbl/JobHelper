@@ -173,6 +173,10 @@ Inside the window:
 - **The last 7 days** (top of Analytics) — new jobs, ready to send, applications sent, replies,
   follow-ups due, thank-you notes, dates coming up. `python status.py sync --summary` prints
   the same and sends it as one notification; the weekly run does this.
+- **Start-up check** — at launch the app checks the data key, the job list, the replies
+  database, saved Options, the rule files and template, the master CV, write access to its
+  folders and the Claude sign-in. All well: you see nothing. Otherwise one red line above the
+  assembly line says what is wrong and what to do (**Show all** lists every check).
 - **Follow-up reminders** — an application still *waiting* with no reply for N days
   (Options → *Remind me after*, default 10, 0 = never; counted from the day you applied,
   the company's last email or your last follow-up; never for applications whose date is

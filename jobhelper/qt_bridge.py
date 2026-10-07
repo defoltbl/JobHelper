@@ -520,6 +520,11 @@ class Bridge(QObject):
     def weekSummary(self):
         return self._api.week_summary()
 
+    @Slot(bool, result="QVariantMap")
+    def selfCheck(self, claude_signed_in):
+        """The start-up check; the window passes what its connection check found about Claude."""
+        return self._api.self_check(bool(claude_signed_in))
+
     @Slot(result="QVariantList")
     def changelog(self):
         return self._api.changelog()

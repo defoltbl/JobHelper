@@ -14,7 +14,7 @@ import subprocess
 import sys
 from datetime import date
 
-from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, answers, filters, summary,
+from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, answers, filters, health, summary,
                compare, config, cover_letter, db, followup, housekeeping, insights, integrity, interview_prep, keywords, merge, pdf,
                planner, salary, store, usage, vault)
 
@@ -383,6 +383,10 @@ class Api:
                     agent2_search.prune_applied_leads(current)
             self._change(job_id, go)
         return result
+
+    # ── the check made when the app starts ──────────────────────
+    def self_check(self, claude_signed_in=None):
+        return health.run(claude_signed_in)
 
     # ── what changed (CHANGELOG.md, shown in Help) ──────────────
     @_guarded(list)
