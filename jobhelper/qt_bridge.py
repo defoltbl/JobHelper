@@ -491,6 +491,14 @@ class Bridge(QObject):
             self._post("replyReady", result)
         threading.Thread(target=work, daemon=True).start()
 
+    @Slot(result="QVariantMap")
+    def myLetters(self):
+        return self._api.my_letters()
+
+    @Slot(result="QVariantMap")
+    def openMyLetters(self):
+        return self._api.open_my_letters()
+
     @Slot(str, str, result="QVariantMap")
     def applyStep(self, job_id, step):
         return self._api.apply_step(job_id, step)

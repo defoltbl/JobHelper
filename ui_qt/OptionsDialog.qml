@@ -72,7 +72,9 @@ Dialog {
                   "köln": "Cologne", "warszawa": "Warsaw", "kraków": "Kraków" };
         return m[(c || "").toLowerCase()] || c || "Prague";
     }
+    property var myLetters: ({})          // where your own letters are, and how many
     function load() {
+        myLetters = bridge.myLetters();
         var o = win.optsData;
         cityCombo.editText = cityDisplay(o.where);
         srcCombo.currentIndex = Math.max(0, srcCombo.indexOfValue(o.source || "czech"));
@@ -302,6 +304,14 @@ Dialog {
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 60
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
                                     border.color: startField.activeFocus ? theme.accent : theme.line } } }
+                        Sep {}
+                        SRow { label: "Your own letters"
+                            hint: (optDialog.myLetters.count || 0) + " in the " + (optDialog.myLetters.name || "my_letters")
+                                  + " folder · never changed by the app"
+                            SmallButton { objectName: "myLettersOpen"; text: "Open folder"
+                                onClicked: { var r = bridge.openMyLetters();
+                                    ticker.text = (r && r.ok) ? "Put letters you wrote yourself there, named like Name_CoverLetter_Company.docx."
+                                                              : "Couldn't open the folder."; } } }
                     }
                 }
 

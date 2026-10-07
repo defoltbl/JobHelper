@@ -81,6 +81,7 @@ def ui(qapp, tmp_path_factory):
     for name, value in {
         "DATA_DIR": data, "CV_DIR": data / "cv", "LETTERS_DIR": data / "cover_letters",
         "TAILORED_CV_DIR": data / "tailored_cvs", "JOBS_JSON": data / "jobs.json",
+        "MY_LETTERS_DIR": data / "my_letters", "COVER_LETTERS_DIR": data / "my_letters",
         "EXCEL_PATH": data / "applications.xlsx", "NEW_JOBS_EXCEL": data / "new_jobs.xlsx",
         "PROFILE_JSON": data / "profile.json", "USAGE_JSON": data / "usage.json",
         "RESPONSES_DB": data / "responses.db", "RESPONSES_REPORT": data / "responses_report.xlsx",
@@ -1304,4 +1305,22 @@ def test_search_in_the_answers_window(ui):
     assert ui.find("ansSearch").property("visible") is True                       # six starter questions
     ui.js("answersDialog.close()")
     ui.wait(350)
+    assert ui.warnings == []
+
+
+def test_options_show_your_own_letters_folder(ui, monkeypatch):
+    opened = []
+    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(target))
+    config.COVER_LETTERS_DIR.mkdir(parents=True, exist_ok=True)
+    (config.COVER_LETTERS_DIR / "Alex_Novak_CoverLetter_Acme.docx").write_bytes(b"mine")
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    assert ui.js("optDialog.myLetters.count") == 1 and ui.js("optDialog.myLetters.name") == config.COVER_LETTERS_DIR.name
+    assert ui.find("myLettersOpen").property("text") == "Open folder"
+    assert ui.js("bridge.openMyLetters().ok") is True and opened == [config.COVER_LETTERS_DIR]
+    ui.js("close()", dialog)
+    ui.wait(350)
+    (config.COVER_LETTERS_DIR / "Alex_Novak_CoverLetter_Acme.docx").unlink()
     assert ui.warnings == []

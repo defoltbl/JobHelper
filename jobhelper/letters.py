@@ -1,6 +1,6 @@
 """Import your own pre-written cover letters into the tracker.
 
-Scans a folder of cover letters (default ~/Documents/CV/Letter) named like
+Scans your own cover letters (data/my_letters/, or COVER_LETTERS_DIR in .env) named like
 `<Name>_CoverLetter_<Company>.docx`, links each to a tracked job by
 company name, and seeds a job record for companies you applied to that aren't
 tracked yet — so their email history and interview progress show up too.
@@ -58,16 +58,25 @@ def scan(letters_dir: Path | None = None) -> list[dict[str, str]]:
 
 
 def _match(company: str, jobs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The job this letter's company belongs to. The names must be the same company:
+    equal once spacing, accents and legal suffixes are ignored ("TDSYNNEX" = "TD SYNNEX"),
+    or one name's words all inside the other ("ESET" in "ESET Research"). One shared
+    word is not enough: "Good Data" is not "NTT DATA"."""
+    key = email_client.norm_company(company)
     toks = email_client.company_tokens(company)
-    if not toks:
+    if not key and not toks:
         return None
     best, best_score = None, 0
     for job in jobs:
-        jtoks = email_client.company_tokens(job.get("company", ""))
-        score = len(toks & jtoks)
-        if score > best_score:
-            best, best_score = job, score
-    return best if best_score > 0 else None
+        name = job.get("company", "")
+        if key and email_client.norm_company(name) == key:
+            return job
+        jtoks = email_client.company_tokens(name)
+        if toks and jtoks and (toks <= jtoks or jtoks <= toks):
+            score = len(toks & jtoks)
+            if score > best_score:
+                best, best_score = job, score
+    return best
 
 
 def import_letters(
@@ -79,7 +88,10 @@ def import_letters(
     stats = {"linked": 0, "seeded": 0, "scanned": 0}
     for rec in scan(letters_dir):
         stats["scanned"] += 1
-        match = _match(rec["company"], jobs)
+        # a job that already carries this very file is its job, whatever the company is called now
+        # (you may have merged or renamed it); never seed a second application for the same letter
+        match = next((j for j in jobs if j.get("cover_letter_file") == rec["file_name"]), None) \
+            or _match(rec["company"], jobs)
         if match:
             match["cover_letter_file"] = rec["file_name"]
             if match.get("status") in (None, "", "found"):

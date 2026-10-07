@@ -280,7 +280,7 @@ python status.py apply <job-id>                     # applied a lead → status 
 python status.py apply <job-id> --note "sent via LinkedIn"
 python status.py update <job-id> interview --note "call Fri 10:00"
 python status.py prune                              # drop new_jobs leads you've already applied to
-python status.py letters                            # import your own cover letters from ~/Documents/CV/Letter
+python status.py letters                            # import your own cover letters from data/my_letters/
 python status.py rebuild                            # regenerate both Excel files
 python status.py followups                          # applications with no reply for N days
 python status.py followups --days 21                # ...with a different N
@@ -405,6 +405,7 @@ Or just open the app (`python app_qt.py`) and use **Run search** / **Scan email*
 | `data/excel_reports/responses_report.xlsx` | Rejection / response analytics |
 | `data/cover_letters/` | Generated cover letters (`.docx` + `.pdf`) |
 | `data/cv/` | Your master CV(s) |
+| `data/my_letters/` | Cover letters you wrote yourself (`..._CoverLetter_<Company>.docx`); never changed by the app |
 | `data/tailored_cvs/` | Per-application adapted CVs (`.docx` + `.pdf`) |
 | `data/responses.db` | Response database (encrypted) |
 | `data/jobs.json` | Underlying job database, source of truth (encrypted) |
@@ -471,7 +472,8 @@ emojis, no gap admissions ("not yet", "although", "limited", "lack" ...), and no
 technology outside the master CV presented as experience (it may be named as the
 employer's platform or as something you want to work with). Files are named
 `<Name>_CoverLetter_<Company>_<RoleShort>.docx` in `data/cover_letters/`.
-Your own letters (the folder set as `COVER_LETTERS_DIR` in `.env`, by default `~/Documents/CV/Letter`) are never rewritten.
+Your own letters live in `data/my_letters/` (Options → **Your own letters** → *Open folder*; another
+place can be set as `COVER_LETTERS_DIR` in `.env`). They are never rewritten.
 
 ## 9. Weekly automation (macOS LaunchAgent)
 

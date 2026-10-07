@@ -37,6 +37,9 @@ def safe_environment(tmp_path_factory, monkeypatch):
     assert not isinstance(vault.keychain(), vault.MacKeychain)
     _fresh_keychain()
     monkeypatch.setattr(config, "ENV_PATH", tmp_path_factory.mktemp("env") / ".env")
+    own = tmp_path_factory.mktemp("own_letters")              # never your real letters folder, even without isolate_data
+    monkeypatch.setattr(config, "MY_LETTERS_DIR", own)
+    monkeypatch.setattr(config, "COVER_LETTERS_DIR", own)
     from jobhelper import pdf
     monkeypatch.setattr(pdf, "find_soffice", lambda: "")      # tests do not depend on LibreOffice (pdf tests opt in)
     from jobhelper import llm, usage
@@ -83,6 +86,8 @@ def isolate_data(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
     monkeypatch.setattr(config, "CV_DIR", tmp_path / "cv")
     monkeypatch.setattr(config, "LETTERS_DIR", tmp_path / "cover_letters")
+    monkeypatch.setattr(config, "MY_LETTERS_DIR", tmp_path / "my_letters")
+    monkeypatch.setattr(config, "COVER_LETTERS_DIR", tmp_path / "my_letters")
     monkeypatch.setattr(config, "TAILORED_CV_DIR", tmp_path / "tailored_cvs")
     monkeypatch.setattr(config, "LETTER_TEMPLATE", tmp_path / "cover_letter_template.docx")
     monkeypatch.setattr(config, "JOBS_JSON", tmp_path / "jobs.json")

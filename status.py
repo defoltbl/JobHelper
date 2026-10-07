@@ -374,7 +374,7 @@ def main() -> int:
     p_resp.add_argument("--days", type=int, default=None, help="With --scan: how many days back to scan")
     p_resp.set_defaults(func=cmd_responses)
 
-    sub.add_parser("letters", help="Import cover letters from your ~/Documents/CV/Letter folder").set_defaults(func=cmd_letters)
+    sub.add_parser("letters", help="Import your own cover letters (data/my_letters/)").set_defaults(func=cmd_letters)
 
     p_re = sub.add_parser("retailor", help="Generate cover letter + tailored CV on demand")
     p_re.add_argument("job_id", nargs="?", default=None, help="A specific job id (default: all letter-ready leads missing a tailored CV)")

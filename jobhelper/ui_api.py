@@ -869,7 +869,29 @@ class Api:
         if target.exists():
             self._open(target)
             return {"ok": True}
+        own = config.COVER_LETTERS_DIR / os.path.basename(name)   # a letter you wrote yourself
+        if kind == "letter" and own.is_file():
+            self._open(own)
+            return {"ok": True}
         return {"ok": False}
+
+    def my_letters(self):
+        """Where your own letters go, and how many are there."""
+        folder = config.COVER_LETTERS_DIR
+        try:
+            count = sum(1 for p in folder.iterdir() if p.is_file() and p.suffix.lower() in (".docx", ".pdf"))
+        except OSError:
+            count = 0
+        return {"folder": str(folder), "name": folder.name, "count": count, "inside_app": folder == config.MY_LETTERS_DIR}
+
+    def open_my_letters(self):
+        folder = config.COVER_LETTERS_DIR
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return {"ok": False}
+        self._open(folder)
+        return {"ok": True}
 
     def open_excel(self, which):
         p = {"leads": config.NEW_JOBS_EXCEL, "apps": config.EXCEL_PATH,

@@ -39,9 +39,16 @@ ENV_PATH = ROOT / ".env"
 load_dotenv(ENV_PATH)
 
 # Folder of your own, pre-written cover letters (imported into the tracker).
-COVER_LETTERS_DIR = Path(
-    os.getenv("COVER_LETTERS_DIR", str(Path.home() / "Documents" / "CV" / "Letter"))
-).expanduser()
+# Inside the app's data folder unless .env names another place.
+MY_LETTERS_DIR = DATA_DIR / "my_letters"
+
+
+def own_letters_dir(setting: str | None) -> Path:
+    """The folder for your own letters: the COVER_LETTERS_DIR setting if it names one, else data/my_letters."""
+    return Path(setting).expanduser() if (setting or "").strip() else MY_LETTERS_DIR
+
+
+COVER_LETTERS_DIR = own_letters_dir(os.getenv("COVER_LETTERS_DIR"))
 
 # Model -------------------------------------------------------------------
 # "sonnet" | "opus" | "haiku". Uses your Claude subscription via the CLI as
@@ -119,7 +126,7 @@ def using_paid_api() -> bool:
 
 def ensure_dirs() -> None:
     for d in (DATA_DIR, CV_DIR, TAILORED_CV_DIR, LETTERS_DIR,
-              APPLICATIONS_DIR, LEADS_DIR, REPORTS_DIR):
+              APPLICATIONS_DIR, LEADS_DIR, REPORTS_DIR, COVER_LETTERS_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
 

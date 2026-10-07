@@ -36,7 +36,7 @@ def main() -> int:
     parser.add_argument("--max-age-days", type=int, default=config.MAX_JOB_AGE_DAYS,
                         help=f"Only keep jobs posted within N days (default {config.MAX_JOB_AGE_DAYS}; 0 = no limit)")
     parser.add_argument("--no-letters-import", action="store_true",
-                        help="Don't import cover letters from your ~/Documents/CV/Letter folder")
+                        help="Don't import your own cover letters (data/my_letters/)")
     parser.add_argument("--no-tailor-cv", action="store_true",
                         help="Don't generate keyword-tailored CVs for strong matches")
     parser.add_argument("--reuse-profile", action="store_true", help="Reuse last CV analysis instead of re-running Agent 1")
