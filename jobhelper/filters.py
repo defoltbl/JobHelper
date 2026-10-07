@@ -141,7 +141,12 @@ _YEARS_LIMIT = {"junior": 4, "entry": 4, "graduate": 4, "mid": 7, "medior": 7}
 
 def years_required(text: str) -> int:
     """The largest 'N years of experience' the posting asks for (0 if none)."""
-    found = [int(m.group(1)) for m in _YEARS.finditer(text or "")]
+    found = []
+    for m in _YEARS.finditer(text or ""):
+        # "5 years of experience is an advantage" is a wish, not a requirement
+        sentence = re.split(r"[.\n;•|]", (text or "")[m.start():])[0]
+        if not _LANG_OPTIONAL.search(sentence):
+            found.append(int(m.group(1)))
     return max([n for n in found if n <= 30], default=0)
 
 

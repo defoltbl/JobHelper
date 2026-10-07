@@ -35,3 +35,10 @@ def test_requires_czech_ignores_optional_and_location():
     assert not filters.requires_czech("Czech would be an advantage.")
     assert not filters.requires_czech("English is required; Czech nice to have.")
     assert not filters.requires_czech("We build backend services in Python.")
+
+
+def test_years_that_are_only_a_wish_do_not_count():
+    assert filters.years_required("5 years of experience in a similar position is an advantage.") == 0
+    assert filters.years_required("Ideally 6+ years of experience would be nice to have. 2 years of experience with Python.") == 2
+    assert filters.years_required("You have 5+ years of experience with Java.") == 5
+    assert filters.years_required("Requirements: 4+ years of commercial experience in software development") == 4

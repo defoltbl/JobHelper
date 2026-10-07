@@ -56,8 +56,11 @@ def is_english(text: str) -> bool:
     if non_latin >= 8 and non_latin > (latin + non_latin) * 0.2:
         return False
 
+    # Czech text has an accented letter every few words. A long English ad with a
+    # few of them (a company or city name: "ČSOB", "Plzeň") is still English, so
+    # the letters must also be a real share of the text, not just three of them.
     czech_char_hits = sum(1 for ch in text if ch in _CZECH_CHARS)
-    if czech_char_hits >= 3:
+    if czech_char_hits >= 3 and czech_char_hits >= len(text) * 0.01:
         return False
 
     words = _words(text)
