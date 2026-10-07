@@ -54,6 +54,7 @@ ApplicationWindow {
     property bool connChecked: false  // first connection check has come back
     property var healthData: ({ ok: true, checks: [], problems: 0, message: "" })   // the start-up self-check
     property bool healthHidden: false
+    property bool healthRan: false
     function showHealth() {
         var rows = (healthData.checks || []).map(function (c) {
             return { primary: c.name, secondary: c.ok ? "fine" : c.problem, badge: c.ok ? "" : "weak", value: c.ok ? "✓" : "!", actions: [],
@@ -222,7 +223,9 @@ ApplicationWindow {
         }
         function onConnectionsReady(info) {
             win.connData = info;
-            if (!win.connChecked || !win.healthData.ok) win.healthData = bridge.selfCheck(info.claude === true);   // at start, and again until it is clean
+            // once per launch, and again until it is clean. Its own flag: the splash stops waiting after
+            // 6 seconds and sets connChecked itself, and a slow sign-in check must not skip this.
+            if (!win.healthRan || !win.healthData.ok) { win.healthData = bridge.selfCheck(info.claude === true); win.healthRan = true; }
             win.connChecked = true;
         }
         function onUsageReady() { win.usageData = bridge.usageInfo(); win.usageBusy = false; }
