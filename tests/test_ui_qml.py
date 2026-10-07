@@ -1042,3 +1042,29 @@ def test_help_has_a_what_changed_tab(ui):
     ui.js('helpDialog.tab = "how"; helpDialog.close()')
     ui.wait(350)
     assert ui.warnings == []
+
+
+def test_bring_back_button_in_the_filtered_out_list(ui):
+    from jobhelper import agent2_search
+    posting = store.new_job(id="back1", title="Senior Tester", company="Gamma", url="https://example.com/b")
+    agent2_search.save_dropped([
+        {"title": "Senior Tester", "company": "Gamma", "source": "linkedin", "url": "https://example.com/b",
+         "group": "level", "reason": 'The title has a level you skip ("senior").', "job": posting},
+        {"title": "Twin", "company": "Gamma", "source": "jobs.cz", "url": "", "group": "duplicate", "reason": "R.",
+         "job": store.new_job(id="twin", title="Twin", company="Gamma")}])
+    before = ui.js("bridge.counts().leads")
+    ui.js('openView("skip")')
+    ui.wait(450)
+    assert [ui.js(f"listView.model[0].actions[{i}].label") for i in range(2)] == ["open ↗", "bring back"]
+    assert ui.js("listView.model[1].actions.length") == 0                        # a duplicate would be removed again
+    assert ui.js("bridge.bringBack(0).ok") is True
+    ui.js("countsData = bridge.counts(); refreshOpenView()")
+    ui.wait(300)
+    assert ui.find("listView").property("count") == 1 and ui.js("countsData.leads") == before + 1
+    ui.js("tableDialog.close()")
+    ui.wait(350)
+    jobs = [j for j in store.load_jobs() if j["id"] != "back1"]
+    store.save_jobs(jobs)
+    agent2_search.save_dropped([])
+    ui.js("countsData = bridge.counts()")
+    assert ui.warnings == []

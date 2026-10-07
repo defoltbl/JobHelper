@@ -356,8 +356,46 @@ class Api:
     # ── what the last search filtered out ───────────────────────
     @_guarded(dict)
     def filtered_out(self):
-        """Postings the last search removed before scoring, each with its reason."""
-        return agent2_search.load_dropped()
+        """Postings the last search removed before scoring, each with its reason.
+        The stored posting itself is left out: the window only needs to know whether it can come back."""
+        data = agent2_search.load_dropped()
+        rows = [{**{k: v for k, v in r.items() if k != "job"},
+                 "can_return": isinstance(r.get("job"), dict) and bool(r["job"].get("id"))
+                               and r.get("group") not in agent2_search.NO_BRING_BACK}
+                for r in data["rows"]]
+        return {"when": data["when"], "total": data["total"], "rows": rows}
+
+    def bring_back(self, index):
+        """Put a filtered-out posting into New Jobs; the next search run scores it like any other."""
+        data = agent2_search.load_dropped()
+        rows = data["rows"]
+        if not 0 <= int(index) < len(rows):
+            return {"ok": False, "msg": "That posting is not in the list any more."}
+        row = rows[int(index)]
+        posting = row.get("job")
+        if not isinstance(posting, dict) or not posting.get("id"):
+            return {"ok": False, "msg": "This posting was saved without its details. Run a search, then bring it back."}
+        if row.get("group") in agent2_search.NO_BRING_BACK:
+            return {"ok": False, "msg": "The next search would remove it again for the same reason."}
+        jobs = store.load_jobs()
+        if store.find(jobs, posting["id"]):
+            return {"ok": False, "msg": "This posting is already in your lists."}
+        job = store.normalise(dict(posting))
+        job["status"] = "found"
+        job["brought_back"] = row.get("reason", "")       # why it was filtered, for the record
+        job["prefilter_override"] = True                  # you chose it: the free pre-filter must not skip it
+        if not job.get("desired_monthly_czk"):
+            level = (agent1_cv.load_profile() or {}).get("seniority", "junior")
+            job["desired_monthly_czk"], job["desired_annual_czk"] = salary.estimate(job.get("title", ""), level)
+        store.upsert(jobs, [job])
+        store.save_jobs(jobs)
+        agent4_tracker.render_all(jobs)
+        live = self.live
+        if live is not None and not store.find(live, job["id"]):
+            live.append(dict(job))                        # a run in progress must not lose it
+        del rows[int(index)]
+        agent2_search.save_dropped(rows, when=data["when"])
+        return {"ok": True, "title": job.get("title", "")}
 
     def open_filtered(self, index):
         rows = agent2_search.load_dropped()["rows"]

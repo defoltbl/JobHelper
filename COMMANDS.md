@@ -148,7 +148,8 @@ Inside the window:
 - **Filtered out · see why** (Last run card) — every posting the last search removed before
   scoring, each with its reason (located in the United States, asks for 6+ years, a word you
   skip, part-time, duplicate, senior title, needs Czech, too old, already applied, closed).
-  Filter by reason, search, and open the posting to check a rule. The list is replaced by
+  Filter by reason, search, and open the posting to check a rule. **bring back** adds a posting to New Jobs so
+  the next search run scores it (not offered for duplicates, closed postings and roles you already applied for). The list is replaced by
   each search (`data/filtered_out.json`, encrypted, at most 600 rows).
 - **Skip levels above yours** and **Skip jobs asking for … years** (Options) — the title
   words that mark a role above your level (senior, lead, manager, …) and the number of years

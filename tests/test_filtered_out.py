@@ -173,3 +173,55 @@ def test_options_start_from_the_cv_level_and_keep_what_you_save(isolate_data, mo
     assert "senior" in o["level_words"] and o["max_years"] == 4
     api.save_options({**o, "level_words": ["senior"], "max_years": 6})
     assert (api.options()["level_words"], api.options()["max_years"]) == (["senior"], 6)
+
+
+# ── bringing a filtered-out posting back ────────────────────────────────────
+@pytest.fixture
+def filtered(isolate_data, boards, monkeypatch):
+    from jobhelper import agent4_tracker
+    config.ensure_dirs()
+    monkeypatch.setattr(agent4_tracker, "render_all", lambda jobs: None)
+    dropped = []
+    agent2_search.search(["python"], skip_words=["intern"], max_age_days=10, dropped=dropped)
+    agent2_search.save_dropped(dropped)
+    return ui_api.Api()
+
+
+def _index(api, group):
+    return next(i for i, r in enumerate(api.filtered_out()["rows"]) if r["group"] == group)
+
+
+def test_a_posting_can_be_brought_back_and_will_be_scored(filtered):
+    api = filtered
+    rows = api.filtered_out()["rows"]
+    assert all("job" not in r for r in rows)                                    # the window does not get whole postings
+    assert {r["group"]: r["can_return"] for r in rows}["duplicate"] is False
+    i = _index(api, "level")
+    when = agent2_search.load_dropped()["when"]
+    assert api.bring_back(i) == {"ok": True, "title": "Senior Python Engineer"}
+    job = store.find(store.load_jobs(), "senior")
+    assert job["status"] == "found" and job["prefilter_override"] is True and job["desired_monthly_czk"]
+    assert "level you skip" in job["brought_back"] and job["url"] == "https://example.com/senior"
+    left = agent2_search.load_dropped()
+    assert "Senior Python Engineer" not in [r["title"] for r in left["rows"]] and left["when"] == when
+    assert len(left["rows"]) == len(rows) - 1
+
+
+def test_bring_back_refuses_what_cannot_last_or_is_already_there(filtered):
+    api = filtered
+    assert "same reason" in api.bring_back(_index(api, "duplicate"))["msg"]
+    assert "same reason" in api.bring_back(_index(api, "closed"))["msg"]
+    assert api.bring_back(99)["ok"] is False and api.bring_back(-1)["ok"] is False
+    i = _index(api, "part-time")
+    store.save_jobs([store.new_job(id="part", title="Junior Developer (part-time)", company="Co part")])
+    assert "already in your lists" in api.bring_back(i)["msg"]
+    agent2_search.save_dropped([{"title": "Old", "company": "C", "url": "", "group": "level", "reason": "R."}])
+    assert api.filtered_out()["rows"][0]["can_return"] is False               # saved before postings were kept whole
+    assert "without its details" in api.bring_back(0)["msg"]
+
+
+def test_a_posting_brought_back_during_a_run_reaches_that_run(filtered):
+    api = filtered
+    api.live = []
+    assert api.bring_back(_index(api, "too many years"))["ok"] is True
+    assert [j["id"] for j in api.live] == ["years"]

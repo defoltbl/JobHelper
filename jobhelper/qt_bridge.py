@@ -500,6 +500,10 @@ class Bridge(QObject):
         return self._api.filtered_out()
 
     @Slot(int, result="QVariantMap")
+    def bringBack(self, index):
+        return self._api.bring_back(index)
+
+    @Slot(int, result="QVariantMap")
     def openFiltered(self, index):
         return self._api.open_filtered(index)
 

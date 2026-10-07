@@ -296,21 +296,26 @@ def note_dropped(dropped: list | None, job: dict[str, Any], group: str, reason: 
     if dropped is not None:
         dropped.append({"title": job.get("title", ""), "company": job.get("company", ""),
                         "location": job.get("location", ""), "source": job.get("source", ""),
-                        "url": job.get("url", ""), "group": group, "reason": reason})
+                        "url": job.get("url", ""), "group": group, "reason": reason,
+                        "job": dict(job)})          # the whole posting, so it can be brought back
 
 
 def _dropped_path():
     return config.DATA_DIR / "filtered_out.json"
 
 
-def save_dropped(rows: list[dict[str, Any]]) -> None:
+# Reasons a later run would apply again at once, so bringing the posting back would not last.
+NO_BRING_BACK = {"duplicate", "already applied", "closed"}
+
+
+def save_dropped(rows: list[dict[str, Any]], when: str = "") -> None:
     """Keep what the latest search filtered out (replaces the previous search's list)."""
     import json
     from datetime import datetime
     from . import vault
     config.ensure_dirs()
     vault.write_text(_dropped_path(), json.dumps(
-        {"when": datetime.now().strftime("%d %b %H:%M"), "total": len(rows), "rows": rows[:MAX_DROPPED]},
+        {"when": when or datetime.now().strftime("%d %b %H:%M"), "total": len(rows), "rows": rows[:MAX_DROPPED]},
         ensure_ascii=False, indent=1))
 
 

@@ -1205,7 +1205,8 @@ ApplicationWindow {
             var skipped = (fo.rows || []).map(function (r, i) {
                 return { primary: r.title + "  ·  " + (r.company || "unknown company"), badge: "", value: "", id: "", flag: "",
                          secondary: r.reason + (r.source ? "   ·  " + r.source : ""),
-                         actions: r.url ? [{ label: "open ↗", kind: "skiplink", arg: i }] : [],
+                         actions: (r.url ? [{ label: "open ↗", kind: "skiplink", arg: i }] : [])
+                                  .concat(r.can_return ? [{ label: "bring back", kind: "bringback", arg: i }] : []),
                          group: r.group, company: r.company || "", score: 0, date: "",
                          hay: (r.title + " " + r.company + " " + r.reason + " " + (r.location || "")).toLowerCase() };
             });
@@ -1467,6 +1468,11 @@ ApplicationWindow {
                                         var back = bridge.restoreJob(modelData.arg);
                                         ticker.text = (back && back.ok) ? "Back in New Jobs." : "Couldn't restore that job.";
                                         win.countsData = bridge.counts(); win.refreshOpenView();
+                                    } else if (modelData.kind === "bringback") {
+                                        var bb = bridge.bringBack(modelData.arg);
+                                        ticker.text = (bb && bb.ok) ? "Added to New Jobs. The next search run will score it."
+                                                                    : ((bb && bb.msg) || "Couldn't bring that posting back.");
+                                        if (bb && bb.ok) { win.countsData = bridge.counts(); win.refreshOpenView(); }
                                     } else if (modelData.kind === "skiplink") {
                                         var o = bridge.openFiltered(modelData.arg);
                                         ticker.text = (o && o.ok) ? "Opened the job posting in your browser." : "No link for this posting.";
