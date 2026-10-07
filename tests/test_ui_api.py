@@ -19,7 +19,7 @@ def _seed(*jobs):
 
 def test_options_defaults_then_saved_values_win(api):
     opts = api.options()
-    assert opts["where"] == "Prague" and opts["source"] == "czech" and opts["queries"] == []
+    assert opts["where"] == "" and opts["source"] == "czech" and opts["queries"] == []       # no city is assumed
     api.save_options({"where": "Brno", "threshold": 70, "queries": ["qa engineer"]})
     opts = api.options()
     assert (opts["where"], opts["threshold"], opts["queries"]) == ("Brno", 70, ["qa engineer"])

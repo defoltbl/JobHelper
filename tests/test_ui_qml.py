@@ -300,7 +300,7 @@ def test_both_themes_render_without_warnings(ui):
     ('isSlug("proton-ag")', True),
     ('isSlug("no spaces")', False),
     ('cityEN("Praha")', "Prague"),
-    ('cityEN("")', "Prague"),
+    ('cityEN("")', ""),
     ('cityEN("Berlin")', "Berlin"),
 ])
 def test_validators(ui, code, expected):
@@ -1323,4 +1323,23 @@ def test_options_show_your_own_letters_folder(ui, monkeypatch):
     ui.js("close()", dialog)
     ui.wait(350)
     (config.COVER_LETTERS_DIR / "Alex_Novak_CoverLetter_Acme.docx").unlink()
+    assert ui.warnings == []
+
+
+def test_without_a_city_the_search_does_not_start_and_options_open(ui):
+    start = ui.bridge.options()
+    ui.bridge.saveOptions({**start, "where": ""})
+    ui.js("optsData = bridge.options()")
+    ui.wait(100)
+    assert ui.js('cityEN(optsData.where) || "No city yet"') == "No city yet"
+    ui.js("startRun()")
+    ui.wait(500)
+    assert ui.win.property("appRunning") is False                                 # nothing was started
+    assert ui.find("optDialog").property("opened") is True                        # straight to where the city is set
+    assert "city" in ui.js("ticker.text").lower()
+    assert ui.js("cityCombo.editText") == ""                                      # and no city is filled in for you
+    ui.js("optDialog.close()")
+    ui.wait(350)
+    ui.bridge.saveOptions(start)
+    ui.js("optsData = bridge.options()")
     assert ui.warnings == []

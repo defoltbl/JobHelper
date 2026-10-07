@@ -746,7 +746,7 @@ class Api:
             level = profile.get("seniority", "junior")
         except Exception:
             seed_queries, level = [], "junior"
-        defaults = {"where": "Prague", "source": "czech", "include_remote": False, "full_time_only": True,
+        defaults = {"where": "", "source": "czech", "include_remote": False, "full_time_only": True,
                     "all_languages": False, "max_age_days": config.MAX_JOB_AGE_DAYS,
                     "threshold": config.DEFAULT_THRESHOLD, "min_lead_score": config.MIN_LEAD_SCORE,
                     "model": config.MODEL, "per_query": 15, "queries": list(seed_queries),

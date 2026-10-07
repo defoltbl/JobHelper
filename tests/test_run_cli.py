@@ -42,9 +42,9 @@ def cli(isolate_data, monkeypatch):
 
 
 def test_defaults_without_saved_options(cli):
-    seen = cli()
+    seen = cli("--where", "Brno")
     first = seen["searches"][0]
-    assert (first["where"], first["source"], first["queries"]) == ("Praha", "czech", ["from the cv"])
+    assert (first["where"], first["source"], first["queries"]) == ("Brno", "czech", ["from the cv"])
     assert seen["threshold"] == config.DEFAULT_THRESHOLD
     assert len(seen["searches"]) == 1
 
@@ -70,3 +70,19 @@ def test_skip_search_does_not_search(cli):
     seen = cli("--skip-search")
     assert "searches" not in seen
     assert store.load_jobs() == []
+
+
+def test_no_city_anywhere_stops_with_a_clear_message(cli, monkeypatch, capsys):
+    config.ensure_dirs()
+    monkeypatch.setattr("sys.argv", ["run.py", "--reuse-profile"])
+    assert run.main() == 1
+    assert "No city to search in" in capsys.readouterr().out
+    monkeypatch.setattr("sys.argv", ["run.py", "--reuse-profile", "--skip-search"])     # nothing to search: no city needed
+    assert run.main() == 0
+
+
+def test_the_city_saved_in_options_is_used_and_none_is_built_in(cli):
+    from pathlib import Path
+    seen = cli(settings={"where": "Vienna"})
+    assert seen["searches"][0]["where"] == "Vienna"
+    assert "Praha" not in Path(run.__file__).read_text(encoding="utf-8")

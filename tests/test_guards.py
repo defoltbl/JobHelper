@@ -127,14 +127,14 @@ def test_search_reports_progress_per_request(monkeypatch):
 
     monkeypatch.setattr(agent2_search, "active_providers", lambda source, max_age_days=0: [("one", provider), ("two", provider)])
     seen = []
-    found = agent2_search.search(["a", "b", "c"], progress=lambda done, total: seen.append((done, total)))
+    found = agent2_search.search(["a", "b", "c"], where="Prague", progress=lambda done, total: seen.append((done, total)))
     assert seen == [(i, 6) for i in range(6)]
     assert {j["id"] for j in found} == {"p-a", "p-b", "p-c"}
 
 
 def test_search_without_progress_callback_still_works(monkeypatch):
     monkeypatch.setattr(agent2_search, "active_providers", lambda source, max_age_days=0: [("one", lambda q, w, n: [])])
-    assert agent2_search.search(["a"]) == []
+    assert agent2_search.search(["a"], where="Prague") == []
 
 
 def test_scoring_reports_progress_only_for_jobs_it_processes(isolate_data, monkeypatch):
@@ -192,7 +192,7 @@ def test_search_drops_us_jobs_heavy_experience_and_duplicates(monkeypatch):
         ]
 
     monkeypatch.setattr(agent2_search, "active_providers", lambda source, max_age_days=0: [("one", provider)])
-    found = agent2_search.search(["python"])
+    found = agent2_search.search(["python"], where="Prague")
     assert [j["id"] for j in found] == ["dup"]            # of the two copies, the fuller description wins
 
 
@@ -235,8 +235,8 @@ def test_search_hides_part_time_roles_unless_allowed(monkeypatch):
                 store.new_job(id="part", title="Python Intern (part time)", company="Beta", location="Prague", description=ENGLISH_AD)]
 
     monkeypatch.setattr(agent2_search, "active_providers", lambda source, max_age_days=0: [("one", provider)])
-    assert [j["id"] for j in agent2_search.search(["python"])] == ["full"]
-    assert [j["id"] for j in agent2_search.search(["python"], full_time_only=False)] == ["full", "part"]
+    assert [j["id"] for j in agent2_search.search(["python"], where="Prague")] == ["full"]
+    assert [j["id"] for j in agent2_search.search(["python"], where="Prague", full_time_only=False)] == ["full", "part"]
 
 
 def test_one_to_two_years_of_experience_is_not_filtered_out():
@@ -300,14 +300,14 @@ def test_search_leaves_out_skipped_titles(monkeypatch):
                 store.new_job(id="internal", title="Internal Tools Engineer", company="Alma", location="Prague", description=ENGLISH_AD)]
 
     monkeypatch.setattr(agent2_search, "active_providers", lambda source, max_age_days=0: [("one", provider)])
-    assert [j["id"] for j in agent2_search.search(["x"], skip_words=["intern"])] == ["dev", "internal"]
-    assert [j["id"] for j in agent2_search.search(["x"], skip_words=["intern"], keep_words=["graduate program"])] == ["dev", "grad", "internal"]
-    assert len(agent2_search.search(["x"])) == 4
+    assert [j["id"] for j in agent2_search.search(["x"], where="Prague", skip_words=["intern"])] == ["dev", "internal"]
+    assert [j["id"] for j in agent2_search.search(["x"], where="Prague", skip_words=["intern"], keep_words=["graduate program"])] == ["dev", "grad", "internal"]
+    assert len(agent2_search.search(["x"], where="Prague")) == 4
 
 
 def test_roles_requiring_czech_are_only_dropped_with_english_only(monkeypatch):
     czech_role = ENGLISH_AD + " Fluent Czech is required for this role."
     monkeypatch.setattr(agent2_search, "active_providers", lambda source, max_age_days=0: [
         ("one", lambda q, w, n: [store.new_job(id="cz", title="IT Support Specialist", company="Acme", location="Prague", description=czech_role)])])
-    assert agent2_search.search(["x"]) == []                                      # English only (the default)
-    assert [j["id"] for j in agent2_search.search(["x"], english_only=False)] == ["cz"]     # for someone who speaks Czech
+    assert agent2_search.search(["x"], where="Prague") == []                                      # English only (the default)
+    assert [j["id"] for j in agent2_search.search(["x"], where="Prague", english_only=False)] == ["cz"]     # for someone who speaks Czech

@@ -33,11 +33,18 @@ _TIMEOUT = 20
 _DELAY = 0.4
 
 
+_CZECH_CITIES = {"praha": "Prague", "prague": "Prague", "brno": "Brno", "ostrava": "Ostrava", "plzeň": "Pilsen",
+                 "plzen": "Pilsen", "pilsen": "Pilsen", "olomouc": "Olomouc", "liberec": "Liberec",
+                 "české budějovice": "České Budějovice", "ceske budejovice": "České Budějovice", "budweis": "České Budějovice",
+                 "hradec králové": "Hradec Králové", "hradec kralove": "Hradec Králové", "pardubice": "Pardubice", "zlín": "Zlín", "zlin": "Zlín"}
+
+
 def _location(where: str) -> str:
-    w = where.lower()
-    if "praha" in w or "prague" in w:
-        return "Prague, Czechia"
-    return f"{where}, Czechia" if "czech" not in w else where
+    """The place as LinkedIn wants it. A Czech city gets its country; any other city
+    (the Options offer Vienna, Berlin, Warsaw …) or a "City, Country" is passed as written."""
+    w = (where or "").strip()
+    known = _CZECH_CITIES.get(w.lower())
+    return f"{known}, Czechia" if known else w
 
 
 def parse_linkedin(html_text: str, where: str, limit: int = 1000) -> list[dict[str, Any]]:

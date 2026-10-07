@@ -41,14 +41,14 @@ def _no_thread(monkeypatch):
 # ── start guards ────────────────────────────────────────────────────────────
 def test_run_search_starts_when_everything_is_connected(bridge, monkeypatch):
     started = _no_thread(monkeypatch)
-    assert bridge.runSearch({}) == {"ok": True}
+    assert bridge.runSearch({"where": "Brno"}) == {"ok": True}
     assert started == ["_pipeline"] and bridge.running is True
 
 
 def test_run_search_refuses_a_second_run(bridge, monkeypatch):
     _no_thread(monkeypatch)
-    bridge.runSearch({})
-    again = bridge.runSearch({})
+    bridge.runSearch({"where": "Brno"})
+    again = bridge.runSearch({"where": "Brno"})
     assert again["ok"] is False and "already" in again["msg"]
 
 
@@ -56,7 +56,7 @@ def test_run_search_refuses_a_second_run(bridge, monkeypatch):
 def test_run_search_points_at_what_is_missing(bridge, monkeypatch, change, fix):
     started = _no_thread(monkeypatch)
     bridge.conn.update(change)
-    result = bridge.runSearch({})
+    result = bridge.runSearch({"where": "Brno"})
     assert result["ok"] is False and result["fix"] == fix
     assert started == [] and bridge.running is False
 
@@ -64,7 +64,7 @@ def test_run_search_points_at_what_is_missing(bridge, monkeypatch, change, fix):
 def test_run_search_refuses_the_paid_api(bridge, monkeypatch):
     started = _no_thread(monkeypatch)
     bridge.conn["paid_api"] = True
-    result = bridge.runSearch({})
+    result = bridge.runSearch({"where": "Brno"})
     assert result["ok"] is False and "ANTHROPIC_API_KEY" in result["msg"]
     assert started == []
 
@@ -208,14 +208,14 @@ def test_save_email_writes_to_env(bridge, tmp_path, monkeypatch):
 def test_run_search_refuses_while_the_data_is_locked(bridge, monkeypatch):
     started = _no_thread(monkeypatch)
     bridge.conn["vault"] = "locked"
-    result = bridge.runSearch({})
+    result = bridge.runSearch({"where": "Brno"})
     assert result["ok"] is False and result["fix"] == "vault" and started == []
 
 
 def test_run_search_refuses_files_changed_outside_the_app(bridge, monkeypatch):
     started = _no_thread(monkeypatch)
     bridge.conn["changed_files"] = ["CV rules"]
-    result = bridge.runSearch({})
+    result = bridge.runSearch({"where": "Brno"})
     assert result["ok"] is False and result["fix"] == "integrity" and "CV rules" in result["msg"]
     assert started == []
 
@@ -310,7 +310,7 @@ def test_stop_during_email_scan_saves_progress(bridge, monkeypatch):
 def test_a_new_run_clears_an_old_stop_request(bridge, monkeypatch):
     _no_thread(monkeypatch)
     bridge._stop.set()
-    assert bridge.runSearch({}) == {"ok": True}
+    assert bridge.runSearch({"where": "Brno"}) == {"ok": True}
     assert not bridge._stop.is_set()
 
 
@@ -467,3 +467,12 @@ def test_pipeline_passes_level_words_and_years_from_options(bridge, monkeypatch)
     bridge._pipeline({"level_words": [], "max_years": 0})
     assert "senior" in seen[0][0] and seen[0][1] == 4                 # a junior CV: the usual words and limit
     assert seen[1] == ([], 0)
+
+
+def test_run_search_needs_a_city(bridge, monkeypatch):
+    _no_thread(monkeypatch)
+    got = bridge.runSearch({})
+    assert got == {"ok": False, "fix": "city", "msg": "Choose the city to search in first (Options)."}
+    assert bridge.runSearch({"where": "   "})["fix"] == "city"
+    bridge._api.save_options({"where": "Vienna"})                        # a saved city is enough
+    assert bridge.runSearch({}) == {"ok": True}

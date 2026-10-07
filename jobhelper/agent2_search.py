@@ -333,7 +333,7 @@ def load_dropped() -> dict[str, Any]:
 
 def search(
     queries: list[str],
-    where: str = "Praha",
+    where: str = "",
     per_query: int = 15,
     source: str = "czech",
     english_only: bool = True,
@@ -360,6 +360,8 @@ def search(
     level_words / max_years come from Options ("Skip levels above yours", "Skip jobs
     asking for … years"). None means: decide from the level in the CV.
     """
+    if not str(where or "").strip():
+        raise RuntimeError("No city to search in. Choose one in the app's Options (or pass --where to run.py).")
     providers = active_providers(source, max_age_days=max_age_days)
     if not providers:
         raise RuntimeError(

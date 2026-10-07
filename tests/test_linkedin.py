@@ -21,3 +21,12 @@ def test_location_mapping():
     assert scrapers_intl._location("Praha") == "Prague, Czechia"
     assert scrapers_intl._location("Prague") == "Prague, Czechia"
     assert scrapers_intl._location("Brno") == "Brno, Czechia"
+
+
+def test_only_czech_cities_get_the_country_added():
+    from jobhelper import scrapers_intl
+    assert scrapers_intl._location("Praha") == "Prague, Czechia" == scrapers_intl._location("prague")
+    assert scrapers_intl._location("Brno") == "Brno, Czechia" and scrapers_intl._location("Plzeň") == "Pilsen, Czechia"
+    assert scrapers_intl._location("Vienna") == "Vienna"                      # not "Vienna, Czechia"
+    assert scrapers_intl._location("Berlin, Germany") == "Berlin, Germany"
+    assert scrapers_intl._location(" Warsaw ") == "Warsaw"

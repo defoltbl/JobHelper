@@ -38,7 +38,7 @@ def boards(monkeypatch):
 
 def test_every_removed_posting_has_a_reason(boards):
     dropped = []
-    kept = agent2_search.search(["python"], skip_words=["intern"], max_age_days=10, dropped=dropped)
+    kept = agent2_search.search(["python"], where="Prague", skip_words=["intern"], max_age_days=10, dropped=dropped)
     assert [j["id"] for j in kept] == ["ok"]
     assert len(dropped) == len(POSTINGS) - 1                                   # nothing disappears without a note
     by = {d["url"].rsplit("/", 1)[-1]: d for d in dropped}
@@ -56,7 +56,7 @@ def test_every_removed_posting_has_a_reason(boards):
 
 
 def test_search_works_without_asking_for_reasons(boards):
-    assert [j["id"] for j in agent2_search.search(["python"], skip_words=["intern"], max_age_days=10)] == ["ok"]
+    assert [j["id"] for j in agent2_search.search(["python"], where="Prague", skip_words=["intern"], max_age_days=10)] == ["ok"]
 
 
 def test_a_role_you_already_applied_for_is_noted_too():
@@ -149,7 +149,7 @@ def test_years_limit_from_options():
 
 def test_a_senior_user_keeps_senior_titles_and_long_experience(boards):
     dropped = []
-    kept = agent2_search.search(["python"], skip_words=["intern"], max_age_days=10, dropped=dropped,
+    kept = agent2_search.search(["python"], where="Prague", skip_words=["intern"], max_age_days=10, dropped=dropped,
                                 level_words=[], max_years=0)
     assert {"ok", "senior", "years"} <= {j["id"] for j in kept}
     assert not [d for d in dropped if d["group"] in ("level", "too many years")]
@@ -182,7 +182,7 @@ def filtered(isolate_data, boards, monkeypatch):
     config.ensure_dirs()
     monkeypatch.setattr(agent4_tracker, "render_all", lambda jobs: None)
     dropped = []
-    agent2_search.search(["python"], skip_words=["intern"], max_age_days=10, dropped=dropped)
+    agent2_search.search(["python"], where="Prague", skip_words=["intern"], max_age_days=10, dropped=dropped)
     agent2_search.save_dropped(dropped)
     return ui_api.Api()
 

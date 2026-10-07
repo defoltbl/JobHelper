@@ -164,7 +164,7 @@ ApplicationWindow {
     function cityEN(c) {
         var m = { "praha": "Prague", "plzeň": "Pilsen", "plzen": "Pilsen", "wien": "Vienna",
                   "münchen": "Munich", "köln": "Cologne", "warszawa": "Warsaw" };
-        return m[(c || "").toLowerCase()] || c || "Prague";
+        return m[(c || "").toLowerCase()] || c || "";
     }
     function resetRobots() { [a1, a2, a3, a4, a5].forEach(function (r) { r.active = false; r.done = false; r.count = ""; }); }
     function setAgent(key, status, info) {
@@ -182,6 +182,7 @@ ApplicationWindow {
             return;
         }
         ticker.text = (r && r.msg) ? r.msg : "Couldn't start.";
+        if (r && r.fix === "city") { optsData = bridge.options(); optDialog.open(); }     // straight to where the city is set
         if (r && r.fix) welcome.openCard();   // jump to the fix
     }
     function noScore(v) { return v === null || v === undefined; }
@@ -404,7 +405,7 @@ ApplicationWindow {
                     Flow {
                         Layout.fillWidth: true; spacing: 6
                         Repeater {
-                            model: [ win.cityEN(optsData.where),
+                            model: [ win.cityEN(optsData.where) || "No city yet",
                                      (optsData.all_languages === true) ? "All languages" : "English only",
                                      (optsData.include_remote === true) ? "+ Remote" : "",
                                      (optsData.full_time_only === false) ? "Part-time too" : "Full-time only",

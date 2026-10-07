@@ -101,3 +101,11 @@ def test_relative_date_handles_years():
     assert d, "should parse 'years ago'"
     age = (datetime.date.today() - datetime.date.fromisoformat(d)).days
     assert age > 600   # ~2 years
+
+
+def test_search_refuses_to_run_without_a_city():
+    import pytest
+    with pytest.raises(RuntimeError, match="No city to search in"):
+        agent2_search.search(["python"])
+    with pytest.raises(RuntimeError, match="No city"):
+        agent2_search.search(["python"], where="  ")

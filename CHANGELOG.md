@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 8 October 2026
 
+- **No built-in city**: the search uses the city from Options; a new user is asked to choose one before the first search.
+- **Cities outside Czechia** are sent to LinkedIn as written (Vienna is no longer searched as "Vienna, Czechia").
 - **Your own letters live in the app's folder**: `data/my_letters/`, with an Open folder button in Options. The app can open them and never changes them.
 - **Own letters are matched to the right company**: one shared word ("Data") no longer links a letter to another company, and a letter already on a job never creates a second application.
 - **Weekly run works from any folder**: the weekly script finds the project by its own location and takes the scan period from Options, so nothing in it is tied to one computer.

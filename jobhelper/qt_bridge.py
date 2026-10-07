@@ -256,6 +256,9 @@ class Bridge(QObject):
         if conn.get("changed_files"):
             return {"ok": False, "fix": "integrity",
                     "msg": "Changed outside the app: %s. Review and approve in Account." % ", ".join(conn["changed_files"])}
+        chosen = dict(self._api.options(), **dict(opts or {}))
+        if not str(chosen.get("where") or "").strip():
+            return {"ok": False, "fix": "city", "msg": "Choose the city to search in first (Options)."}
         self._stop.clear()
         self._resume.clear()
         self._partial = None

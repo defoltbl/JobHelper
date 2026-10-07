@@ -77,7 +77,7 @@ def test_search_remembers_which_keyword_found_a_job(monkeypatch):
           "You will work with the backend team and write clean, tested code every day.")
     monkeypatch.setattr(agent2_search, "active_providers", lambda source, max_age_days=0: [
         ("one", lambda q, w, n: [store.new_job(id="x-" + q, title="Dev " + q, company="Acme " + q, location="Prague", description=ad)])])
-    found = agent2_search.search(["python developer", "qa tester"])
+    found = agent2_search.search(["python developer", "qa tester"], where="Prague")
     assert {j["query"] for j in found} == {"python developer", "qa tester"}
 
 

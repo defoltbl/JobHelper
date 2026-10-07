@@ -228,7 +228,7 @@ python run.py                         # default: Prague, English-only, jobs.cz+p
 
 ```bash
 python run.py --include-remote        # also add RemoteOK + We Work Remotely
-python run.py --where Brno            # search a different city
+python run.py --where Brno            # search a different city (default: the city saved in Options; there is no built-in one)
 python run.py --threshold 60          # only write letters for stronger matches (default 50)
 python run.py --per-query 20          # more results per search query (default 15)
 python run.py --max-age-days 14       # how recent a job must be (default 10; 0 = off)

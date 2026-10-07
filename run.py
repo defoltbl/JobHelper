@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """JobHelper — run the full 4-agent pipeline.
 
-    python run.py                 # analyze CV → search Prague → letters → Excel
+    python run.py                 # analyze CV → search your city (Options, or --where) → letters → Excel
     python run.py --where Brno    # search a different city
     python run.py --threshold 70  # only write letters for stronger matches
     python run.py --reuse-profile # skip Agent 1, reuse the last CV analysis
@@ -22,7 +22,7 @@ DEFAULT_SKIP = ["intern", "internship"]      # same default as the app's Options
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the JobHelper pipeline.")
-    parser.add_argument("--where", default="Praha", help="City/region to search (default: Praha)")
+    parser.add_argument("--where", default="", help="City to search in (default: the city saved in the app's Options)")
     parser.add_argument("--source", default="czech",
                         choices=["czech", "linkedin", "remote", "adzuna", "jooble", "all"],
                         help="Job source: czech=jobs.cz+prace.cz+LinkedIn (default), or linkedin/remote/adzuna/jooble/all")
@@ -63,6 +63,9 @@ def main() -> int:
               "  Nothing was generated. Check the files, then approve them in the app's\n"
               "  Account card or with:  python status.py security approve")
         return 2
+    if not args.skip_search and not str(args.where or "").strip():
+        print("✗ No city to search in. Choose one in the app's Options, or pass it: python run.py --where Brno")
+        return 1
     if config.using_paid_api():
         print("⚠️  ANTHROPIC_API_KEY is set — you'll be billed for the PAID API, "
               "not your subscription. Unset it to use your subscription.\n")

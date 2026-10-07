@@ -70,7 +70,7 @@ Dialog {
         var m = { "praha": "Prague", "plzeň": "Pilsen", "plzen": "Pilsen",
                   "české budějovice": "Budweis", "wien": "Vienna", "münchen": "Munich",
                   "köln": "Cologne", "warszawa": "Warsaw", "kraków": "Kraków" };
-        return m[(c || "").toLowerCase()] || c || "Prague";
+        return m[(c || "").toLowerCase()] || c || "";
     }
     property var myLetters: ({})          // where your own letters are, and how many
     function load() {
