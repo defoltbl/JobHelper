@@ -348,3 +348,62 @@ def test_api_writes_and_opens_the_sheet(isolate_data, monkeypatch):
     path = config.DATA_DIR / "interview_prep" / "Candidate_Brightline_Prep.docx"
     assert got == {"ok": True, "file": path.name} and opened == [path] and path.is_file()
     assert api.prep_document("a", reveal=True)["ok"] and shown == [path] and len(opened) == 1
+
+
+# ── work experience, told for the role ──────────────────────────────────────
+WORK = [{"job": "Software Developer Intern, Acme, Feb-Aug 2026", "story": "I worked on the import service in Python. I added its tests.",
+         "gained": ["Working in a team's codebase"], "if_true": ["Did you review other people's code?"], "thin": "The CV gives no results for this job."},
+        {"job": "", "story": "dropped: no job named"}, {"job": "Tutor", "story": ""}, "junk"]
+
+
+def test_experience_is_kept_per_job_with_reminders_not_claims(monkeypatch):
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(FULL, experience=WORK))
+    prep = interview_prep.generate({"title": "ML Engineer", "company": "BRIGHTLINE"}, CV)
+    assert prep["experience"] == [WORK[0]]
+    assert "one entry for EVERY job and internship in the CV" in prompts[0] and "do not add duties, tools, team sizes or results" in prompts[0]
+    assert "(nothing written yet)" in prompts[0]                                  # no notes: said so, not left blank
+
+
+def test_what_you_wrote_about_your_work_counts_like_the_cv(monkeypatch):
+    story = dict(WORK[0], story="I ran our services on Kubernetes and wrote the deployment scripts.")
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(FULL, experience=[story]))
+    without = interview_prep.generate({"title": "T", "company": "C"}, CV)
+    assert len(prompts) == 2 and "the story about Software Developer Intern" in prompts[1]      # not in the CV: sent back, then flagged
+    assert without["checks"] == ["The story about Software Developer Intern, Acme, Feb-Aug 2026 mentions Kubernetes as experience, which is not in your CV."]
+    prompts.clear()
+    notes = "At Acme I deployed our services to Kubernetes and wrote the deployment scripts."
+    with_notes = interview_prep.generate({"title": "T", "company": "C"}, CV, notes=notes)
+    assert len(prompts) == 1 and notes in prompts[0] and with_notes["checks"] == []            # you said it is true: accepted
+
+
+def test_the_sheet_has_the_work_experience_section(tmp_path):
+    import docx
+
+    from jobhelper import prep_doc
+    prep = dict(FULL, experience=[WORK[0]], made="2026-10-08", checks=[])
+    lines = [p.text for p in docx.Document(str(prep_doc.build({"title": "ML Engineer", "company": "BRIGHTLINE"}, prep, tmp_path / "x.docx"))).paragraphs if p.text.strip()]
+    start = lines.index("Your work experience, told for this role")
+    assert lines.index("Your fit – lead with these") < start < lines.index("The honest gap (own it, don't hide it)")
+    block = lines[start:start + 12]
+    assert "Software Developer Intern, Acme, Feb-Aug 2026" in block and "“I worked on the import service in Python. I added its tests.”" in block
+    assert "Ask yourself, and add it only if it is true:" in block and "Did you review other people's code?" in block
+    assert any(x.startswith("Thin spot: The CV gives no results for this job.") and "More about your work" in x for x in block)
+
+
+def test_experience_notes_come_from_options_and_reach_both_drafts(isolate_data, monkeypatch):
+    from jobhelper import form_answers
+    config.ensure_dirs()
+    api = ui_api.Api()
+    assert config.experience_notes() == "" and api.options()["about_experience"] == ""
+    api.save_options({"about_experience": "  At Acme I wrote the import service.  " + "x" * 5000})
+    assert config.experience_notes().startswith("At Acme I wrote the import service.") and len(config.experience_notes()) == config.MAX_EXPERIENCE_NOTES
+    api.save_options({"about_experience": "At Acme I wrote the import service."})
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="waiting")])
+    seen = {}
+    monkeypatch.setattr(interview_prep, "generate", lambda j, cv, emails, notes="": seen.update(prep=notes) or dict(FULL, made="x", checks=[], experience=[]))
+    monkeypatch.setattr(form_answers, "generate", lambda j, cv, qs, notes="": seen.update(form=notes) or [{"question": "Q?", "answer": "A.", "check": ""}])
+    assert api.make_interview_prep("a")["ok"] and api.make_form_answers("a", "Why us?")["ok"]
+    assert seen == {"prep": "At Acme I wrote the import service.", "form": "At Acme I wrote the import service."}

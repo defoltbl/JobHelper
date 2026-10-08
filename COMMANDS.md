@@ -119,6 +119,10 @@ Inside the window:
   normal week, scores and labels, the limit, privacy, what to do when something looks wrong).
 - **Last run card, cost rows** — *You paid: $0 · subscription* and *Same work via API: ≈ $…*,
   the estimated price of the same work with pay-per-use API billing (running total).
+- **More about your work** (Options → About you) — what you really did in each job beyond the
+  CV: tasks, tools, team, results (up to 4,000 characters, in English). Interview preparation
+  and form answers treat it like the CV, so the work-experience part of the interview sheet
+  gets as detailed as what you write here. Nothing is invented for you.
 - **About you** (Options) — *Right to work* and *You can start*: the only personal facts,
   besides your CV, that letters and interview answers may state. Left empty, they are not mentioned.
 - **Show in folder** (job window) — selects the CV, the letter or the single PDF in Finder (the

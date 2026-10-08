@@ -127,19 +127,21 @@ def _salary_line(job: dict[str, Any]) -> str:
             "give it as the expectation and add that it is open to discussion)").replace(",", " ")
 
 
-def generate(job: dict[str, Any], cv_text: str, questions: list[str]) -> list[dict[str, str]]:
+def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str = "") -> list[dict[str, str]]:
     """[{question, answer, check}] for the given questions. `check` is '' or what you must look at.
     Raises ValueError if there is nothing to answer or the reply is unusable."""
     questions = [q.strip()[:MAX_QUESTION] for q in questions if q and q.strip()][:MAX_QUESTIONS]
     if not questions:
         raise ValueError("Paste at least one question from the form.")
-    unverified = cover_letter.unverified_terms(cv_text)
+    notes = (notes or "").strip()
+    unverified = cover_letter.unverified_terms(cv_text + "\n" + notes)
     first_name = cover_letter.candidate_first_name(cv_text)
     numbered = "\n".join(f"{n}. {q}" for n, q in enumerate(questions, 1))
     feedback, items = "", []
     for _attempt in range(2):
         data = llm.ask_json(PROMPT.format(
-            cv_text=cv_text[:12000], title=job.get("title", ""), company=job.get("company", ""),
+            cv_text=cv_text[:12000] + (f"\n\nMore about the candidate's work, in their own words (true; use it like the CV):\n{notes}" if notes else ""),
+            title=job.get("title", ""), company=job.get("company", ""),
             location=job.get("location", ""),
             description=(job.get("description") or "").strip()[:4000] or "(No posting text was saved; use the title and the CV.)",
             facts=config.facts_block(cv_text), salary=_salary_line(job), questions=numbered, feedback=feedback),

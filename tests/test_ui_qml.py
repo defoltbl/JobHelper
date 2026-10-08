@@ -1522,3 +1522,23 @@ def test_show_in_folder_buttons_and_the_laid_out_description(ui, monkeypatch):
     ui.wait(350)
     ui.bridge._api._change("app", lambda jobs, j: j.update(tailored_cv_file="", description="We use Python, Docker and Kubernetes."), render=False)
     assert ui.warnings == []
+
+
+def test_more_about_your_work_is_saved_and_checked(ui):
+    dialog = ui.find("optDialog")
+    start = ui.bridge.options()
+    ui.bridge.saveOptions({**start, "where": "Prague", "about_experience": "At Acme I wrote the import service in Python."})
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    field = ui.find("expField")
+    assert field.property("text") == "At Acme I wrote the import service in Python."
+    assert ui.find("expCount").property("text") == "45 of 4000 characters"
+    ui.js('expField.text = "' + "x" * 4010 + '"')
+    assert ui.find("expCount").property("text") == "10 characters too long (the limit is 4000)"
+    source = qml_source()
+    assert "characters too long. Shorten it, then save." in source and "about_experience: expField.text.trim()" in source
+    ui.js("close()", dialog)
+    ui.wait(350)
+    ui.bridge.saveOptions(start)
+    assert ui.warnings == []

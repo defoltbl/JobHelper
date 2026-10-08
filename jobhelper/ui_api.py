@@ -417,7 +417,7 @@ class Api:
         if not cv_text.strip():
             return {"ok": False, "msg": "Your master CV could not be read, so answers cannot be built from it."}
         try:
-            items = form_answers.generate(j, cv_text, questions)
+            items = form_answers.generate(j, cv_text, questions, config.experience_notes())
         except Exception as e:  # noqa: BLE001 - shown to the user as the reason
             return {"ok": False, "msg": str(e)}
         kept = {"made": form_answers.stamp(), "items": items}
@@ -584,7 +584,7 @@ class Api:
             return {"ok": False, "msg": "Your master CV could not be read, so answers cannot be built from it."}
         emails = [r for r in db.all_responses() if r.get("job_id") == job_id]
         try:
-            prep = interview_prep.generate(j, cv_text, emails)
+            prep = interview_prep.generate(j, cv_text, emails, config.experience_notes())
         except Exception as e:  # noqa: BLE001 - shown to the user as the reason
             return {"ok": False, "msg": str(e)}
         # saved through _change: the call took a while, so re-read instead of writing an old copy back
@@ -847,7 +847,7 @@ class Api:
                     "skip_words": ["intern", "internship"], "keep_words": [],
                     # start from the level in the CV; the user can change both in Options
                     "level_words": filters.default_level_words(level), "max_years": filters.default_max_years(level),
-                    "about_right_to_work": "", "about_start": "", "notifications": True, "scan_all_folders": False,
+                    "about_right_to_work": "", "about_start": "", "about_experience": "", "notifications": True, "scan_all_folders": False,
                     "keep_backups": housekeeping.DEFAULT_KEEP}
         try:
             if p.exists():

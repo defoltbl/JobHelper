@@ -29,6 +29,11 @@ Master CV (the only source of truth about the candidate):
 {cv_text}
 ---
 
+More about the candidate's work, in their own words (true; use it exactly like the CV; may be empty):
+---
+{notes}
+---
+
 Job:
 - Title: {title}
 - Company: {company}
@@ -56,6 +61,16 @@ Besides the questions, write the sheet the candidate reads before the call:
 - "company": only what the posting and the emails above say about the company. Do NOT add facts from
   memory (founding year, size, clients, people): they may be wrong and the candidate would repeat them.
 - "fit", "pitch" and "key_question": only what the CV shows, like the answers.
+- "experience": one entry for EVERY job and internship in the CV (not the projects), newest first. This is how
+  the candidate talks about their work history in this interview, so write it in full, for THIS role:
+  "story" is 5-8 spoken sentences in the first person: what the place was, what they were there to do, what they
+  actually did, with what, and what came of it, told so that it leads towards this role. Use everything the CV and
+  the candidate's own words above give you, and nothing else: do not add duties, tools, team sizes or results that
+  are not written there. Where they say little, the story is shorter; say so in "thin".
+  "gained" is what that work gave them that matters for this role.
+  "if_true" is 3-5 questions TO THE CANDIDATE about things people in such a position usually do and that this
+  interviewer would value, e.g. "Did you write the tests for it yourself?". They are reminders to recall real
+  details, never statements about the candidate.
 - "concepts": terms from the posting worth being able to explain. Explain each in plain words; where the
   CV has related experience, say how it connects. Never say the candidate has used something the CV lacks.
 
@@ -70,6 +85,9 @@ Return JSON with exactly these keys:
   "gap": "<the honest gap between this posting and the CV, and how to frame it, to the candidate as 'you'>",
   "key_question": {{"question": "<the hardest question this interviewer will almost certainly ask THIS candidate>", "answer": "<the answer, first person>"}},
   "pitch": "<the opening pitch, about 45 seconds spoken, first person, from the CV only>",
+  "experience": [{{"job": "<title, employer and dates as the CV gives them>", "story": "<5-8 sentences, first person>",
+                  "gained": ["<2-4 things it gave them for this role>"], "if_true": ["<3-5 questions to the candidate>"],
+                  "thin": "<'' or one sentence: what the CV does not say about this job that would help here>"}}],
   "concepts": [{{"term": "<a term from the posting>", "meaning": "<1-2 plain sentences>"}}],
   "reminders": ["<4-6 practical reminders for this interview: what to lead with, what not to bluff, what to ask at the end>"],
   "questions": [
@@ -100,9 +118,11 @@ def _unbacked(answer: str, unverified: list[str]) -> str:
     return ""
 
 
-def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """Questions and answers for this job. Raises ValueError if the reply is unusable."""
-    unverified = cover_letter.unverified_terms(cv_text)
+def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | None = None, notes: str = "") -> dict[str, Any]:
+    """Questions and answers for this job. `notes` is what the person wrote about their work
+    beyond the CV: true, so it counts like the CV. Raises ValueError if the reply is unusable."""
+    notes = (notes or "").strip()
+    unverified = cover_letter.unverified_terms(cv_text + "\n" + notes)
     first_name = cover_letter.candidate_first_name(cv_text)
     mail_lines = "\n".join(f"- {m.get('stage', '')}: {m.get('summary', '')}" for m in (emails or [])[:6]) or "(nothing yet)"
     feedback, prep = "", {}
@@ -111,7 +131,8 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
             cv_text=cv_text[:12000], title=job.get("title", ""), company=job.get("company", ""),
             location=job.get("location", ""),
             description=(job.get("description") or "").strip()[:4000] or "(No posting text was saved; use the title and the CV.)",
-            emails=mail_lines, feedback=feedback, n=QUESTIONS, facts=config.facts_block(cv_text)),
+            emails=mail_lines, feedback=feedback, n=QUESTIONS, facts=config.facts_block(cv_text),
+            notes=notes[:config.MAX_EXPERIENCE_NOTES] or "(nothing written yet)"),
             system=SYSTEM, tag="interview_prep")
         prep = _clean(data)
         if not prep["questions"]:
@@ -119,7 +140,8 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
         # everything said in the candidate's own voice is held to the CV: the answers, the pitch, the fit list
         spoken = [(q["question"], q["answer"]) for q in prep["questions"]] + [
             ("the opening pitch", prep["pitch"]), ("the key question", prep["key_question"]["answer"]),
-            ("what to say about the company", prep["company_say"])] + [("your fit", point) for point in prep["fit"]]
+            ("what to say about the company", prep["company_say"])] + [("your fit", point) for point in prep["fit"]] + [
+            (f"the story about {e['job'][:50]}", e["story"]) for e in prep["experience"]]
         bad = [(label, _unbacked(said, unverified)) for label, said in spoken if said]
         bad = [(q, term) for q, term in bad if term]
         third = [label for label, said in spoken if said and first_name and re.search(rf"\b{re.escape(first_name)}\b", said)]
@@ -134,7 +156,8 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
         q["check"] = _unbacked(q["answer"], unverified)
     checks = []
     for label, said in [("The opening pitch", prep["pitch"]), ("The answer to the key question", prep["key_question"]["answer"])] \
-            + [("A point under your fit", point) for point in prep["fit"]]:
+            + [("A point under your fit", point) for point in prep["fit"]] \
+            + [(f"The story about {e['job'][:50]}", e["story"]) for e in prep["experience"]]:
         term = _unbacked(said, unverified)
         if term:
             checks.append(f"{label} mentions {term} as experience, which is not in your CV.")
@@ -161,7 +184,17 @@ def _clean(data: Any) -> dict[str, Any]:
     key_q = data.get("key_question") if isinstance(data.get("key_question"), dict) else {}
     concepts = [{"term": cover_letter.clean(str(c.get("term", ""))).strip(), "meaning": cover_letter.clean(str(c.get("meaning", ""))).strip()}
                 for c in (data.get("concepts") or []) if isinstance(c, dict)]
-    return {"summary": text("summary"), "questions": questions,
+    experience = []
+    for e in data.get("experience") or []:
+        if not isinstance(e, dict):
+            continue
+        entry = {"job": cover_letter.clean(str(e.get("job", "") or "")).strip(), "story": cover_letter.clean(str(e.get("story", "") or "")).strip(),
+                 "gained": [cover_letter.clean(str(x)).strip() for x in (e.get("gained") or []) if str(x).strip()][:5],
+                 "if_true": [cover_letter.clean(str(x)).strip() for x in (e.get("if_true") or []) if str(x).strip()][:6],
+                 "thin": cover_letter.clean(str(e.get("thin", "") or "")).strip()}
+        if entry["job"] and entry["story"]:
+            experience.append(entry)
+    return {"summary": text("summary"), "questions": questions, "experience": experience[:6],
             "ask_them": texts("ask_them", 6), "revise": texts("revise", 6),
             "company": texts("company", 7), "company_say": text("company_say"),
             "role": texts("role", 8), "role_plain": text("role_plain"),

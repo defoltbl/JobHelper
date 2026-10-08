@@ -273,6 +273,15 @@ def candidate_facts(cv_text: str = "") -> dict[str, str]:
             "start": str(o.get("about_start") or "").strip()}
 
 
+MAX_EXPERIENCE_NOTES = 4000
+
+
+def experience_notes() -> str:
+    """What the person wrote in Options about their real work beyond the CV (tasks, tools,
+    team, results). It is theirs and true, so it may be used like the CV itself."""
+    return str(ui_settings().get("about_experience") or "").strip()[:MAX_EXPERIENCE_NOTES]
+
+
 def facts_block(cv_text: str = "") -> str:
     """The same facts as lines for a prompt. Facts that were not entered are
     named as unknown, so the model leaves them out instead of inventing them."""

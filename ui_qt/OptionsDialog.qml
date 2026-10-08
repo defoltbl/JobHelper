@@ -73,6 +73,7 @@ Dialog {
         return m[(c || "").toLowerCase()] || c || "";
     }
     property var myLetters: ({})          // where your own letters are, and how many
+    readonly property int expMax: 4000    // the same limit the app applies when it reads the text
     function load() {
         myLetters = bridge.myLetters();
         var o = win.optsData;
@@ -92,6 +93,7 @@ Dialog {
         fuSpin.value = o.followup_days !== undefined ? o.followup_days : 10;
         scanSpin.value = o.scan_days !== undefined ? o.scan_days : 30;
         rightField.text = o.about_right_to_work || ""; startField.text = o.about_start || "";
+        expField.text = o.about_experience || "";
         notifySw.checked = o.notifications !== false;
         foldersSw.checked = o.scan_all_folders === true;
         keepSpin.value = o.keep_backups !== undefined ? o.keep_backups : 10;
@@ -305,6 +307,27 @@ Dialog {
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
                                     border.color: startField.activeFocus ? theme.accent : theme.line } } }
                         Sep {}
+                        // what you really did in each job beyond the CV: used for interview preparation and form answers
+                        ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 10; Layout.bottomMargin: 10; spacing: 5
+                            Text { text: "More about your work"; color: theme.ink; font.pixelSize: 13 }
+                            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
+                                text: "What you really did in each job beyond what the CV says: tasks, tools, team, results. In English. Interview preparation and form answers use it like your CV, so write only what is true." }
+                            Rectangle { Layout.fillWidth: true; radius: 8; color: theme.surface; border.width: 1
+                                border.color: expField.text.length > optDialog.expMax ? theme.crit : (expField.activeFocus ? theme.accent : theme.line)
+                                implicitHeight: Math.max(96, expField.implicitHeight + 16)
+                                TextEdit { id: expField; objectName: "expField"; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap
+                                    selectByMouse: true; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
+                                    onTextChanged: if (activeFocus) optDialog.optErr = ""
+                                    Text { visible: expField.text === ""; width: parent.width; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 12
+                                        text: "e.g. At Acme (Feb–Aug 2026) I was in a team of four. I wrote the import service in Python, added its tests, and fixed about thirty tickets." } } }
+                            Text { objectName: "expCount"; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; font.pixelSize: 11
+                                color: expField.text.length > optDialog.expMax ? theme.crit : theme.faint
+                                font.bold: expField.text.length > optDialog.expMax
+                                text: expField.text.length > optDialog.expMax
+                                      ? (expField.text.length - optDialog.expMax) + " characters too long (the limit is " + optDialog.expMax + ")"
+                                      : expField.text.length + " of " + optDialog.expMax + " characters" }
+                        }
+                        Sep {}
                         SRow { label: "Your own letters"
                             hint: (optDialog.myLetters.count || 0) + " in the " + (optDialog.myLetters.name || "my_letters")
                                   + " folder · never changed by the app"
@@ -370,6 +393,12 @@ Dialog {
                     }
                     var qs = [];
                     for (var i = 0; i < rolesModel.count; i++) qs.push("" + rolesModel.get(i).text);
+                    if (expField.text.length > optDialog.expMax) {
+                        optDialog.optErr = "“More about your work” is " + (expField.text.length - optDialog.expMax) + " characters too long. Shorten it, then save."; return;
+                    }
+                    if (win.hasNonLatin(expField.text)) {
+                        optDialog.optErr = "Write “More about your work” in English (Latin letters): it is used for English interviews and forms."; return;
+                    }
                     if (win.hasNonLatin(rightField.text) || win.hasNonLatin(startField.text)) {
                         optDialog.optErr = "Write “About you” in English (Latin letters): it goes into English letters."; return;
                     }
@@ -384,6 +413,7 @@ Dialog {
                         threshold: thrSpin.value, min_lead_score: minSpin.value,
                         followup_days: fuSpin.value, scan_days: scanSpin.value,
                         about_right_to_work: rightField.text.trim(), about_start: startField.text.trim(),
+                        about_experience: expField.text.trim(),
                         notifications: notifySw.checked, keep_backups: keepSpin.value,
                         scan_all_folders: foldersSw.checked,
                         model: modelCombo.currentText, queries: qs };

@@ -92,6 +92,22 @@ def build(job: dict[str, Any], prep: dict[str, Any], out_path: Path, contact: st
     if prep.get("fit"):
         heading("Your fit – lead with these")
         bullets(prep["fit"])
+    if prep.get("experience"):
+        heading("Your work experience, told for this role")
+        para("How to talk about each job here. The stories use only your CV and what you wrote in Options under "
+             "“More about your work”.", after=4)
+        for e in prep["experience"]:
+            para(e["job"], 11, bold=True, after=2, before=6).paragraph_format.keep_with_next = True
+            para(f"“{e['story']}”", after=3)
+            if e.get("gained"):
+                para("What it gave you for this role:", bold=True, after=1)
+                bullets(e["gained"])
+            if e.get("if_true"):
+                para("Ask yourself, and add it only if it is true:", bold=True, after=1, before=3)
+                bullets(e["if_true"])
+            if e.get("thin"):
+                para(f"Thin spot: {e['thin']} Write the real details in Options → About you → More about your work, "
+                     "then prepare again.", size=9.5, italic=True, before=2)
     if prep.get("gap"):
         para("The honest gap (own it, don't hide it)", 11, bold=True, after=2, before=8)
         para(prep["gap"])
