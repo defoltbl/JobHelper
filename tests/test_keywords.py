@@ -56,3 +56,15 @@ def test_node_js_does_not_count_as_javascript():
 def test_empty_inputs():
     assert keywords.compare("", CV) == {"matched": [], "missing": []}
     assert keywords.compare("Python", "") == {"matched": [], "missing": ["Python"]}
+
+
+def test_extract_remembers_a_text_and_hands_out_fresh_lists():
+    from jobhelper import keywords
+    text = "We use Python, Docker and Kubernetes every day."
+    first = keywords.extract(text)
+    first.append("changed by the caller")
+    again = keywords.extract(text)
+    assert again == ["Python", "Docker", "Kubernetes"] and keywords.extract("") == [] and keywords.extract(None) == []
+    before = keywords._extract.cache_info().hits
+    keywords.extract(text)
+    assert keywords._extract.cache_info().hits == before + 1

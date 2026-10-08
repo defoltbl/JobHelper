@@ -6,6 +6,7 @@ the job detail view. It is only ever shown - nothing here is added to a CV.
 """
 from __future__ import annotations
 
+import functools
 import re
 
 # canonical name -> spellings to look for (the canonical name is always included)
@@ -76,13 +77,17 @@ _PATTERNS = {name: _pattern(name, alts) for name, alts in VOCABULARY.items()}
 
 def extract(text: str) -> list[str]:
     """Vocabulary items mentioned in text, in order of first appearance."""
-    text = text or ""
+    return list(_extract(text or ""))
+
+
+@functools.lru_cache(maxsize=4096)          # the same descriptions are read again on every Insights view
+def _extract(text: str) -> tuple[str, ...]:
     hits = []
     for name, pattern in _PATTERNS.items():
         m = pattern.search(text)
         if m:
             hits.append((m.start(), name))
-    return [name for _pos, name in sorted(hits)]
+    return tuple(name for _pos, name in sorted(hits))
 
 
 def compare(description: str, cv_text: str) -> dict[str, list[str]]:
