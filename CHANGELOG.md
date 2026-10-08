@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 9 October 2026
 
+- **Every text field says when it is full or too long**: company notes, a date's note, a pasted reply, form answers, the preparation lists and the About you fields now show the limit in red, and nothing you typed is cut silently when saved.
 - **Edit the preparation in the app**: every part of the interview sheet can be changed and saved; "Make again" asks before replacing your changes.
 
 ## 8 October 2026

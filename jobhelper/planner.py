@@ -18,6 +18,9 @@ from . import config, email_client, vault
 
 KINDS = ["interview", "deadline", "test task", "call", "other"]
 NOTE_FIELDS = ["contact", "salary", "asked", "notes"]
+NOTE_LIMITS = {"contact": 200, "salary": 200, "asked": 400, "notes": 2000}
+NOTE_LABELS = {"contact": "Who you spoke to", "salary": "Salary mentioned", "asked": "What they asked", "notes": "Notes"}
+MAX_EVENT_NOTE = 200
 _OVER = {"rejected", "not_interested"}
 
 
@@ -48,7 +51,10 @@ def set_event(job: dict[str, Any], day_text: str, time_text: str = "", kind: str
     day, problem = check_event(day_text, time_text, kind)
     if problem:
         return problem
-    job["event"] = {"date": day, "time": (time_text or "").strip(), "kind": kind, "note": (note or "").strip()[:200]}
+    note = (note or "").strip()
+    if len(note) > MAX_EVENT_NOTE:
+        return f"The note is {len(note)} characters long; the most is {MAX_EVENT_NOTE}. Shorten it."
+    job["event"] = {"date": day, "time": (time_text or "").strip(), "kind": kind, "note": note}
     job.pop("event_notified", None)
     job.pop("event_marks", None)
     return ""
@@ -166,12 +172,21 @@ def company_notes(company: str) -> dict[str, str]:
                                                               "name": str(saved.get("name", company or ""))}
 
 
+def check_company_notes(fields: dict[str, Any]) -> str:
+    """'' or which field is too long (nothing is cut silently)."""
+    for field, limit in NOTE_LIMITS.items():
+        length = len(str((fields or {}).get(field, "") or "").strip())
+        if length > limit:
+            return f"“{NOTE_LABELS[field]}” is {length} characters long; the most is {limit}. Shorten it."
+    return ""
+
+
 def save_company_notes(company: str, fields: dict[str, Any]) -> bool:
     key = company_key(company)
-    if not key or key == "unknown":
+    if not key or key == "unknown" or check_company_notes(fields):
         return False
     data = _load()
-    entry = {f: str(fields.get(f, "") or "").strip()[:2000] for f in NOTE_FIELDS}
+    entry = {f: str(fields.get(f, "") or "").strip() for f in NOTE_FIELDS}
     if any(entry.values()):
         entry.update(name=company, updated=date.today().isoformat())
         data[key] = entry

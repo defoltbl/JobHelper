@@ -1623,3 +1623,47 @@ def test_the_preparation_can_be_edited_and_wrong_steps_are_explained(ui, monkeyp
     ui.wait(250)
     assert dialog.property("visible") is False and "Prepare the interview first" in ui.js("ticker.text")
     assert ui.warnings == []
+
+
+# ── every text field says when it is full or too long ───────────────────────
+def test_text_fields_in_the_job_window_explain_their_limits(ui):
+    _open_job(ui, "app")
+    line = ui.find("notesLine")
+    ui.js('cnContact.text = "' + "c" * 200 + '"; detailDialog.notesInfo = detailDialog.full(cnContact, "“Who you spoke to”"); detailDialog.notesBad = true')
+    assert line.property("text") == "“Who you spoke to” takes up to 200 characters."
+    ui.js('cnContact.text = "Jana"; cnNotes.text = "' + "n" * 2010 + '"')
+    assert ui.find("notesOver").property("visible") is True and ui.find("notesOver").property("text") == "10 characters too long (the limit is 2000)"
+    ui.js("detailDialog.saveNotes()")
+    assert "10 characters too long" in line.property("text") and ui.js("detailDialog.notesBad") is True      # refused, in red
+    from jobhelper import planner
+    assert planner.company_notes("Beta")["updated"] == ""                                                    # and not saved cut
+    ui.js('cnNotes.text = "Short note."; detailDialog.saveNotes()')
+    assert line.property("text") == "Saved for Beta." and ui.js("detailDialog.notesBad") is False
+    ui.js('evNote.text = "' + "e" * 200 + '"; detailDialog.eventErr = detailDialog.full(evNote, "The note")')
+    assert ui.find("eventErr").property("text") == "The note takes up to 200 characters."
+    ui.js('detailDialog.eventErr = ""; detailDialog.replyOpen = true; replyText.text = "' + "r" * 8005 + '"')
+    assert ui.find("replyHint").property("text").startswith("5 characters too long: paste only the message itself")
+    ui.js("detailDialog.fileReply()")
+    assert "Paste only the message itself" in ui.js("detailDialog.replyErr") and ui.js("detailDialog.replyBusy") is False
+    ui.js('replyText.text = ""; detailDialog.replyOpen = false; cnNotes.text = ""; cnContact.text = ""; detailDialog.saveNotes(); detailDialog.close()')
+    ui.wait(350)
+    assert ui.warnings == []
+
+
+def test_form_answers_and_preparation_lists_explain_their_limits(ui, monkeypatch):
+    ui.bridge.saveFormAnswers("app", [{"question": "Why us?", "answer": "Because.", "check": ""}])
+    ui.js('formDialog.show("app")')
+    ui.wait(450)
+    ui.js('fmModel.setProperty(0, "answer", "' + "a" * 3004 + '"); formDialog.dirty = true; formDialog.save()')
+    assert "is longer than 3000 characters" in ui.find("fmNote").property("text")
+    assert ui.bridge.formAnswers("app")["items"][0]["answer"] == "Because."       # the long version was not saved
+    ui.js("formDialog.dirty = false; formDialog.close()")
+    ui.wait(350)
+    assert ui.js("prepEditDialog.listProblem('one\\ntwo')") == ""
+    many = "\\n".join(f"line {i}" for i in range(13))
+    assert ui.js(f"prepEditDialog.listProblem('{many}')") == "13 lines; the most is 12. Remove some."
+    assert ui.js("prepEditDialog.listProblem('" + "q" * 401 + "')") == "Line 1 is 401 characters long; the most is 400."
+    ui.bridge.saveFormAnswers("app", [])
+    source = qml_source()
+    assert "“Right to work” takes up to" in source and "“You can start” takes up to" in source
+    assert ui.warnings == []

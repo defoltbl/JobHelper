@@ -170,6 +170,9 @@ _RULE_STAGES = [
 ]
 
 
+MAX_PASTED = 8000        # a pasted reply longer than this is a whole page, not a message
+
+
 def classify_by_rules(text: str) -> dict[str, Any]:
     """A reply's kind from its wording alone, for when Claude cannot be asked.
     Rejection wording is checked first; an unclear text is filed as 'other'."""
@@ -198,6 +201,9 @@ def add_pasted_reply(jobs: list[dict[str, Any]], job_id: str, text: str, use_mod
         return {"ok": False, "msg": "That job is not in the list any more."}
     if len(text) < 20:
         return {"ok": False, "msg": "Paste the whole message: that is too short to read."}
+    if len(text) > MAX_PASTED:
+        return {"ok": False, "msg": f"That is {len(text)} characters. Paste only the message itself, not the whole page "
+                                    f"(up to {MAX_PASTED} characters)."}
     msg_id = "pasted-" + hashlib.sha1((job_id + "\n" + text).encode("utf-8")).hexdigest()[:16]
     if db.has_response(msg_id):
         return {"ok": False, "msg": "This exact message was already added to this application."}

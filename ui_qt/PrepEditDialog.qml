@@ -46,10 +46,26 @@ Dialog {
             if (peModel.get(i).kind !== "list" && peModel.get(i).text.length > maxPart) return peModel.get(i).label;
         return "";
     }
+    readonly property int maxLines: 12
+    readonly property int maxLine: 400
+    function listProblem(text) {    // what is wrong with a list, while it is typed ("" if nothing)
+        var lines = ("" + text).split("\n").filter(function (l) { return l.trim() !== ""; });
+        if (lines.length > maxLines) return lines.length + " lines; the most is " + maxLines + ". Remove some.";
+        for (var i = 0; i < lines.length; i++)
+            if (lines[i].trim().length > maxLine) return "Line " + (i + 1) + " is " + lines[i].trim().length + " characters long; the most is " + maxLine + ".";
+        return "";
+    }
+    function badList() {
+        for (var i = 0; i < peModel.count; i++)
+            if (peModel.get(i).kind === "list" && listProblem(peModel.get(i).text) !== "") return peModel.get(i).label + ": " + listProblem(peModel.get(i).text);
+        return "";
+    }
     function save() {
         err = ""; note = ""; confirmClose = false;
         var long = tooLong();
         if (long !== "") { err = "“" + long.substring(0, 60) + "” is longer than " + maxPart + " characters. Shorten it, then save."; return; }
+        var list = badList();
+        if (list !== "") { err = list; return; }
         var r = bridge.savePrepParts(jobId, all());
         if (!(r && r.ok)) { err = (r && r.msg) ? r.msg : "The changes could not be saved."; return; }
         dirty = false;
@@ -93,16 +109,19 @@ Dialog {
                     model: peModel
                     ColumnLayout { Layout.fillWidth: true; spacing: 4
                         readonly property bool over: model.kind !== "list" && peText.text.length > prepEditDialog.maxPart
+                        readonly property string listSays: model.kind === "list" ? prepEditDialog.listProblem(peText.text) : ""
                         Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; font.bold: true; text: model.label }
                         Text { visible: model.kind === "list"; color: theme.faint; font.pixelSize: 11; text: "One per line. Delete a line to remove it." }
                         Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
-                            border.color: parent.over ? theme.crit : (peText.activeFocus ? theme.accent : theme.line)
+                            border.color: parent.over || parent.listSays !== "" ? theme.crit : (peText.activeFocus ? theme.accent : theme.line)
                             implicitHeight: Math.max(44, peText.implicitHeight + 16)
                             TextEdit { id: peText; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap; selectByMouse: true
                                 color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                                 Component.onCompleted: text = model.text
                                 onTextChanged: if (activeFocus) { peModel.setProperty(index, "text", text); prepEditDialog.dirty = true
                                                                   prepEditDialog.err = ""; prepEditDialog.note = ""; prepEditDialog.confirmClose = false; } } }
+                        Text { visible: parent.listSays !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit
+                            font.pixelSize: 11; font.bold: true; text: parent.listSays }
                         Text { visible: parent.over; Layout.fillWidth: true; color: theme.crit; font.pixelSize: 11; font.bold: true
                             text: (peText.text.length - prepEditDialog.maxPart) + " characters too long (the limit is " + prepEditDialog.maxPart + ")" }
                     }

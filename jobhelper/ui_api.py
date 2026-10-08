@@ -427,7 +427,13 @@ class Api:
         return {"ok": bool(saved.get("ok")), "count": len(items), "to_check": sum(1 for i in items if i["check"])}
 
     def save_form_answers(self, job_id, items):
-        """Keep the answers as you edited them."""
+        """Keep the answers as you edited them. An answer over the limit is refused, not cut."""
+        for item in items or []:
+            answer = str((item or {}).get("answer", "") or "").strip() if isinstance(item, dict) else ""
+            if len(answer) > form_answers.MAX_ANSWER:
+                question = str(item.get("question", ""))[:60]
+                return {"ok": False, "msg": f"The answer to “{question}” is {len(answer)} characters long; "
+                                            f"the most is {form_answers.MAX_ANSWER}. Shorten it."}
         clean = form_answers.tidy(list(items or []))
 
         def go(jobs, j):
@@ -447,6 +453,9 @@ class Api:
 
     # ── notes per company ───────────────────────────────────────
     def save_company_notes(self, company, fields):
+        problem = planner.check_company_notes(dict(fields or {}))
+        if problem:
+            return {"ok": False, "msg": problem}
         ok = planner.save_company_notes(company, dict(fields or {}))
         return {"ok": ok} if ok else {"ok": False, "msg": "Notes need a company name."}
 

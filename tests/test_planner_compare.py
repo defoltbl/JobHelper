@@ -40,7 +40,9 @@ def test_check_event(day, time, kind, problem):
 def test_set_and_clear_event():
     job = _job(event_notified="2026-10-01:1")
     day = (date.today() + timedelta(days=3)).isoformat()
-    assert planner.set_event(job, day, " 09:00 ", "test task", "  " + "x" * 300) == ""
+    assert "300 characters long; the most is 200" in planner.set_event(job, day, "09:00", "test task", "x" * 300)     # refused, not cut
+    assert "event" not in job
+    assert planner.set_event(job, day, " 09:00 ", "test task", "  " + "x" * 200) == ""
     assert job["event"] == {"date": day, "time": "09:00", "kind": "test task", "note": "x" * 200}
     assert "event_notified" not in job                                # a new date is announced again
     assert "YYYY-MM-DD" in planner.set_event(job, "soon") and job["event"]["date"] == day   # a bad date changes nothing
@@ -477,3 +479,28 @@ def test_old_single_mark_is_understood_and_a_new_date_starts_fresh():
                                            (95, "In 1 hour 35 min"), (180, "In 3 hours")])
 def test_time_left_wording(minutes, text):
     assert planner._in(minutes) == text
+
+
+# ── nothing the user typed is cut silently ──────────────────────────────────
+@pytest.mark.parametrize("fields, problem", [
+    ({"contact": "c" * 201}, "“Who you spoke to” is 201 characters long; the most is 200."),
+    ({"asked": "a" * 401}, "“What they asked” is 401 characters long; the most is 400."),
+    ({"notes": "n" * 2001}, "“Notes” is 2001 characters long; the most is 2000."),
+    ({"contact": "c" * 200, "notes": "n" * 2000}, ""), ({}, ""), (None, ""),
+])
+def test_company_notes_over_the_limit_are_refused_with_the_reason(isolate_data, fields, problem):
+    assert planner.check_company_notes(fields).startswith(problem) and (problem != "" or planner.check_company_notes(fields) == "")
+    if problem:
+        assert planner.save_company_notes("Acme", fields) is False and planner.company_notes("Acme")["updated"] == ""
+
+
+def test_api_says_why_notes_answers_and_a_pasted_reply_were_refused(api, monkeypatch):
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: pytest.fail("must not ask Claude"))
+    store.save_jobs([_job("a")])
+    got = api.save_company_notes("Acme", {"notes": "n" * 2500})
+    assert got["ok"] is False and "2500 characters long; the most is 2000" in got["msg"]
+    got = api.save_form_answers("a", [{"question": "Why us?", "answer": "a" * 3001}])
+    assert got["ok"] is False and "The answer to “Why us?” is 3001 characters long; the most is 3000" in got["msg"]
+    assert api.form_answers("a")["items"] == []                                  # not saved in a cut form
+    got = api.add_reply("a", "x" * 8001)
+    assert got["ok"] is False and "Paste only the message itself" in got["msg"] and "8001 characters" in got["msg"]

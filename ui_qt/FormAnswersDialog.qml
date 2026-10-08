@@ -27,6 +27,11 @@ Dialog {
     property string err: ""
     property string note: ""
     property var checked: ({ count: 0, problem: "", note: "" })     // what the pasted text holds, judged as you type
+    readonly property int maxAnswer: 3000
+    function tooLong() {            // the first answer over the limit, to say it before anything is sent
+        for (var i = 0; i < fmModel.count; i++) if (fmModel.get(i).answer.length > maxAnswer) return fmModel.get(i).question;
+        return "";
+    }
     property bool confirmDraft: false     // "Draft again" was pressed once and would replace answers
     property bool confirmClose: false     // Close was pressed once with unsaved edits
     function recheck() { checked = bridge.checkQuestions(fmQuestions.text); confirmDraft = false; }
@@ -78,14 +83,16 @@ Dialog {
         bridge.draftAnswers(jobId, fmQuestions.text);
     }
     function save() {
-        err = ""; confirmClose = false; confirmDraft = false;
+        err = ""; note = ""; confirmClose = false; confirmDraft = false;
+        var long = tooLong();
+        if (long !== "") { err = "The answer to “" + long.substring(0, 60) + "” is longer than " + maxAnswer + " characters. Shorten it, then save."; return; }
         var empty = 0, open = 0;
         for (var i = 0; i < fmModel.count; i++) {
             var a = fmModel.get(i).answer;
             if (a.trim() === "") empty++; else if (/\[[^\]]+\]/.test(a)) open++;
         }
         var r = bridge.saveFormAnswers(jobId, all());
-        if (!(r && r.ok)) { err = "The answers could not be saved. The job may have been removed from the list."; return; }
+        if (!(r && r.ok)) { err = (r && r.msg) ? r.msg : "The answers could not be saved. The job may have been removed from the list."; return; }
         dirty = false; detailDialog.refresh();
         note = "Saved with this job." + (empty > 0 ? " " + empty + (empty === 1 ? " answer is" : " answers are") + " still empty." : "")
                + (open > 0 ? " " + open + (open === 1 ? " answer still has" : " answers still have") + " a part in [square brackets] to fill in." : "");
@@ -183,7 +190,7 @@ Dialog {
                             Text { visible: model.check !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
                                 color: theme.warn; font.pixelSize: 11; font.bold: true; text: "Check: " + model.check }
                             Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
-                                border.color: fmAns.activeFocus ? theme.accent : theme.line
+                                border.color: fmAns.text.length > formDialog.maxAnswer ? theme.crit : (fmAns.activeFocus ? theme.accent : theme.line)
                                 implicitHeight: Math.max(52, fmAns.implicitHeight + 16)
                                 TextEdit { id: fmAns; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap; selectByMouse: true
                                     color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
@@ -191,6 +198,8 @@ Dialog {
                                     onTextChanged: if (activeFocus) { fmModel.setProperty(index, "answer", text); formDialog.dirty = true
                                                                       formDialog.note = ""; formDialog.err = ""; formDialog.confirmClose = false; }
                                     Text { visible: fmAns.text === ""; text: "Write this answer yourself"; color: theme.faint; font.pixelSize: 12 } } }
+                            Text { visible: fmAns.text.length > formDialog.maxAnswer; Layout.fillWidth: true; color: theme.crit; font.pixelSize: 11; font.bold: true
+                                text: (fmAns.text.length - formDialog.maxAnswer) + " characters too long (the limit is " + formDialog.maxAnswer + ")" }
                         }
                     }
                 }

@@ -68,6 +68,11 @@ Dialog {
         if (ok) { bridge.applyStep(job.id, key); refresh(); }
     }
     property bool confirmRemake: false
+    property bool notesBad: false         // the line under the company notes is a problem, not a confirmation
+    readonly property int notesMax: 2000
+    readonly property int replyMax: 8000
+    // a single-line field stops taking letters at its limit: say so instead of going silent
+    function full(field, what) { return field.text.length >= field.maximumLength ? what + " takes up to " + field.maximumLength + " characters." : ""; }
     property var thanks: ({})
     property string thanksNote: ""
     function saveEvent() {
@@ -77,13 +82,22 @@ Dialog {
         else eventErr = (r && r.msg) ? r.msg : "Couldn't save that date.";
     }
     function saveNotes() {
+        if (cnNotes.text.length > notesMax) {
+            notesBad = true; notesInfo = "The notes are " + (cnNotes.text.length - notesMax) + " characters too long (the limit is " + notesMax + "). Shorten them, then save.";
+            return;
+        }
         var r = bridge.saveCompanyNotes(job.company || "", { contact: cnContact.text, salary: cnSalary.text, asked: cnAsked.text, notes: cnNotes.text });
+        notesBad = !(r && r.ok);
         notesInfo = (r && r.ok) ? "Saved for " + (job.company || "this company") + "." : ((r && r.msg) || "Couldn't save the notes.");
         if (r && r.ok) refresh();
     }
     function fileReply() {
         replyErr = ""; replyInfo = "";
         if (replyText.text.trim().length < 20) { replyErr = "Paste the whole message: that is too short to read."; return; }
+        if (replyText.text.length > replyMax) {
+            replyErr = "That is " + replyText.text.length + " characters. Paste only the message itself, not the whole page (up to " + replyMax + ").";
+            return;
+        }
         replyBusy = true; replyJob = job.id;
         bridge.addReply(job.id, replyText.text);
     }
@@ -136,7 +150,7 @@ Dialog {
         if (!d || !d.id) { ticker.text = "That job could not be opened."; return; }
         confirmRemake = false;
         job = d; draft = ({}); note = ""; dateErr = ""; if (!prepBusy) prepErr = "";
-        eventErr = ""; notesInfo = ""; replyErr = ""; replyInfo = ""; replyOpen = false; thanks = ({}); thanksNote = "";
+        eventErr = ""; notesInfo = ""; notesBad = false; replyErr = ""; replyInfo = ""; replyOpen = false; thanks = ({}); thanksNote = "";
         detailFlick.contentY = 0;
         open();
     }
@@ -340,7 +354,8 @@ Dialog {
                         TextField { id: evNote; objectName: "evNote"; Layout.fillWidth: true; implicitHeight: 28; placeholderText: "note, e.g. Teams call with the team lead"
                             placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 200
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1
-                                border.color: evNote.activeFocus ? theme.accent : theme.line } }
+                                border.color: evNote.activeFocus ? theme.accent : theme.line }
+                            onTextEdited: detailDialog.eventErr = detailDialog.full(evNote, "The note") }
                         SmallButton { objectName: "evSave"; primaryStyle: true; text: "Save"; onClicked: detailDialog.saveEvent() }
                         SmallButton { objectName: "evCalendar"; visible: !!(detailDialog.job.event && detailDialog.job.event.date)
                             text: "Add to calendar"
@@ -405,14 +420,19 @@ Dialog {
                     }
                     ColumnLayout { visible: detailDialog.replyOpen; Layout.fillWidth: true; spacing: 6
                         Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
-                            border.color: replyText.activeFocus ? theme.accent : theme.line; implicitHeight: 110; clip: true
+                            border.color: replyText.text.length > detailDialog.replyMax ? theme.crit : (replyText.activeFocus ? theme.accent : theme.line)
+                            implicitHeight: 110; clip: true
                             Flickable { anchors.fill: parent; anchors.margins: 8; contentHeight: replyText.implicitHeight; clip: true
                                 TextEdit { id: replyText; objectName: "replyText"; width: parent.width; wrapMode: TextEdit.Wrap; selectByMouse: true
                                     color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                                     Text { visible: replyText.text === ""; text: "Paste the message text here"; color: theme.faint; font.pixelSize: 12 } } } }
                         RowLayout { Layout.fillWidth: true
-                            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
-                                text: "Claude reads it (one call). If the limit is used up, the app's own rules decide." }
+                            Text { objectName: "replyHint"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
+                                color: replyText.text.length > detailDialog.replyMax ? theme.crit : theme.faint
+                                font.bold: replyText.text.length > detailDialog.replyMax
+                                text: replyText.text.length > detailDialog.replyMax
+                                      ? (replyText.text.length - detailDialog.replyMax) + " characters too long: paste only the message itself (up to " + detailDialog.replyMax + ")"
+                                      : "Claude reads it (one call). If the limit is used up, the app's own rules decide." }
                             SmallButton { objectName: "replyFile"; primaryStyle: true; enabled: !detailDialog.replyBusy
                                 text: detailDialog.replyBusy ? "Reading…" : "File it"; onClicked: detailDialog.fileReply() } }
                     }
@@ -429,27 +449,32 @@ Dialog {
                         TextField { id: cnContact; objectName: "cnContact"; Layout.fillWidth: true; implicitHeight: 28; color: theme.ink; font.pixelSize: 12
                             selectByMouse: true; maximumLength: 200; placeholderText: "name, role"; placeholderTextColor: theme.faint
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1; border.color: cnContact.activeFocus ? theme.accent : theme.line }
-                            onTextEdited: detailDialog.notesInfo = "" }
+                            onTextEdited: { detailDialog.notesInfo = detailDialog.full(cnContact, "“Who you spoke to”"); detailDialog.notesBad = detailDialog.notesInfo !== ""; } }
                         Text { text: "Salary mentioned"; color: theme.soft; font.pixelSize: 12 }
                         TextField { id: cnSalary; objectName: "cnSalary"; Layout.fillWidth: true; implicitHeight: 28; color: theme.ink; font.pixelSize: 12
                             selectByMouse: true; maximumLength: 200; placeholderText: "what they said, what you said"; placeholderTextColor: theme.faint
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1; border.color: cnSalary.activeFocus ? theme.accent : theme.line }
-                            onTextEdited: detailDialog.notesInfo = "" }
+                            onTextEdited: { detailDialog.notesInfo = detailDialog.full(cnSalary, "“Salary mentioned”"); detailDialog.notesBad = detailDialog.notesInfo !== ""; } }
                         Text { text: "What they asked"; color: theme.soft; font.pixelSize: 12 }
                         TextField { id: cnAsked; objectName: "cnAsked"; Layout.fillWidth: true; implicitHeight: 28; color: theme.ink; font.pixelSize: 12
                             selectByMouse: true; maximumLength: 400; placeholderText: "questions, tasks"; placeholderTextColor: theme.faint
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1; border.color: cnAsked.activeFocus ? theme.accent : theme.line }
-                            onTextEdited: detailDialog.notesInfo = "" }
+                            onTextEdited: { detailDialog.notesInfo = detailDialog.full(cnAsked, "“What they asked”"); detailDialog.notesBad = detailDialog.notesInfo !== ""; } }
                     }
                     Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
-                        border.color: cnNotes.activeFocus ? theme.accent : theme.line; implicitHeight: Math.max(54, cnNotes.implicitHeight + 16)
+                        border.color: cnNotes.text.length > detailDialog.notesMax ? theme.crit : (cnNotes.activeFocus ? theme.accent : theme.line)
+                        implicitHeight: Math.max(54, cnNotes.implicitHeight + 16)
                         TextEdit { id: cnNotes; objectName: "cnNotes"; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap; selectByMouse: true
                             color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
-                            onTextChanged: if (activeFocus) detailDialog.notesInfo = ""
+                            onTextChanged: if (activeFocus) { detailDialog.notesInfo = ""; detailDialog.notesBad = false; }
                             Text { visible: cnNotes.text === ""; text: "Anything else worth remembering"; color: theme.faint; font.pixelSize: 12 } } }
+                    Text { objectName: "notesOver"; visible: cnNotes.text.length > detailDialog.notesMax; Layout.fillWidth: true
+                        color: theme.crit; font.pixelSize: 11; font.bold: true
+                        text: (cnNotes.text.length - detailDialog.notesMax) + " characters too long (the limit is " + detailDialog.notesMax + ")" }
                     RowLayout { Layout.fillWidth: true; spacing: 6
                         Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
-                            color: detailDialog.notesInfo !== "" ? theme.good : theme.faint
+                            objectName: "notesLine"; font.bold: detailDialog.notesBad
+                            color: detailDialog.notesInfo === "" ? theme.faint : (detailDialog.notesBad ? theme.crit : theme.good)
                             text: detailDialog.notesInfo !== "" ? detailDialog.notesInfo
                                 : "Kept for the company, so they show again on every job there"
                                   + ((detailDialog.job.company_notes && detailDialog.job.company_notes.updated) ? " · last changed " + detailDialog.job.company_notes.updated : "") + "." }
