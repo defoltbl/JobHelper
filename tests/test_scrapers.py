@@ -182,3 +182,24 @@ def test_an_ordinary_page_with_its_text_asks_nothing_more(monkeypatch):
         raise scrapers_cz.requests.ConnectionError("down")
     monkeypatch.setattr(scrapers_cz, "_get", gone)
     assert scrapers_cz._fetch_detail("https://www.jobs.cz/rpd/1/") == ("", "")
+
+
+INLINE_PAGE = ('<html><head><meta property="og:title" content="Mechanical Designer | Example Works">'
+               '<meta property="og:description" content="' + "A short summary that says little about the role itself. " * 2 + '"></head><body>'
+               '<div id="widget_container"></div><script>window.__LMC_CAREER_WIDGET__.push({"apiKey":"KEY-IN-PAGE","widgetId":"w-page",'
+               '"selector":"#widget_container","shareJobAdUrlTemplate":"https:\\/\\/example.jobs.cz\\/share\\/__jobAdId__","gtm":{"id":"G","insertScript":false}});</script>'
+               '<script src="/assets/js/script.min.js?av=2"></script></body></html>')
+
+
+def test_a_branded_page_that_carries_its_own_settings(monkeypatch):
+    assert scrapers_cz.widget_in_page(INLINE_PAGE) == {"id": "w-page", "key": "KEY-IN-PAGE"}
+    assert scrapers_cz.widget_in_page(BRANDED_PAGE) == {} and scrapers_cz.widget_in_page("<script>window.__LMC_CAREER_WIDGET__.push({broken});</script>") == {}
+    assert scrapers_cz.widget_in_page('<script>window.__LMC_CAREER_WIDGET__.push({"widgetId":"w"});</script>') == {}
+    asked, posted = [], []
+    monkeypatch.setattr(scrapers_cz, "_get", lambda url, params=None: asked.append(url) or _Page(INLINE_PAGE, "https://example.jobs.cz/vacancy-detail?r=detail&id=2001408263&rps=0"))
+    monkeypatch.setattr(scrapers_cz.requests, "post", lambda url, **kw: posted.append(kw) or _Answer(_answer(FULL_HTML, company="Example Works s.r.o.")))
+    description, company = scrapers_cz._fetch_detail("https://www.jobs.cz/rpd/2001408263/")
+    assert len(description) > 800 and company == "Example Works"
+    assert asked == ["https://www.jobs.cz/rpd/2001408263/"]                                # no second page needed
+    assert posted[0]["headers"]["X-API-KEY"] == "KEY-IN-PAGE" and posted[0]["json"]["variables"]["widgetId"] == "w-page"
+    assert posted[0]["json"]["variables"]["jobAdId"] == "2001408263"

@@ -125,6 +125,20 @@ def widget_of(page_html: str, script_text: str) -> dict[str, str]:
     return {"id": str(one["id"]), "key": str(one["apiKey"])} if one.get("id") and one.get("apiKey") else {}
 
 
+def widget_in_page(page_html: str) -> dict[str, str]:
+    """{id, key} when a branded page carries its widget's settings in the page itself ({} otherwise)."""
+    found = re.search(r"__LMC_CAREER_WIDGET__\.push\(\s*(\{.*?\})\s*\)\s*;", page_html, re.S)
+    if not found:
+        return {}
+    try:
+        one = json.loads(found.group(1))
+    except ValueError:
+        return {}
+    if not isinstance(one, dict) or not one.get("widgetId") or not one.get("apiKey"):
+        return {}
+    return {"id": str(one["widgetId"]), "key": str(one["apiKey"])}
+
+
 def widget_text(answer: Any) -> tuple[str, str]:
     """(description, company) from the answer of a branded page's source."""
     try:
@@ -146,11 +160,14 @@ def _posting_number(url: str) -> str:
 
 def _fetch_widget(page_html: str, page_url: str) -> tuple[str, str]:
     """The full posting of a branded page, read from the page's own source. ('', '') if it cannot be."""
-    script, number = widget_script(page_html), _posting_number(page_url)
-    if not script or not number:
+    number = _posting_number(page_url)
+    if not number:
         return "", ""
     try:
-        widget = widget_of(page_html, _get(urljoin(page_url, script)).text)
+        widget = widget_in_page(page_html)
+        if not widget:
+            script = widget_script(page_html)
+            widget = widget_of(page_html, _get(urljoin(page_url, script)).text) if script else {}
         if not widget:
             return "", ""
         # the key belongs to the page and is only used for this one question; it is never stored or shown
