@@ -783,9 +783,7 @@ class Bridge(QObject):
             self._api.note_run(scan="%s · %d new" % (datetime.now().strftime("%d %b"), stats["new_responses"]))
             from . import email_client
             warning = (" " + " ".join(email_client.last_warnings)) if email_client.last_warnings else ""
-            self.runFinished.emit("scan",
-                                  "Scanned %d emails · %d new (%d rejections).%s"
-                                  % (stats["scanned"], stats["new_responses"], stats["rejections"], warning))
+            self.runFinished.emit("scan", agent5_responses.scan_summary(stats) + warning)
             invites = notify.invites_text(stats.get("invites") or [])
             if invites:
                 notify.send(invites, "Open JobHelper to prepare")          # worth an alert even with the app in front

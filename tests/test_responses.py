@@ -154,3 +154,82 @@ def test_inbox_scan_reports_progress_per_email(isolate_data, monkeypatch):
     stats = agent5_responses.process_inbox([], progress=lambda done, total: seen.append((done, total)))
     assert seen == [(0, 3), (1, 3), (2, 3)]
     assert stats["scanned"] == 3 and stats["skipped_unrelated"] == 3
+
+
+# ── found on a real interview invitation ────────────────────────────────────
+def _brightline():
+    from jobhelper import store
+    return [store.new_job(id="ros", title="Junior Robotics Software Engineer (ROS)", company="BRIGHTLINE", status="waiting", last_update="2026-09-30"),
+            store.new_job(id="ml", title="Machine Learning Engineer", company="BRIGHTLINE", status="interview", last_update="2026-10-08"),
+            store.new_job(id="cv", title="Computer Vision Engineer", company="BRIGHTLINE", status="found", last_update="2026-10-08"),
+            store.new_job(id="old", title="Data Engineer", company="BRIGHTLINE", status="rejected", last_update="2026-10-09")]
+
+
+def test_an_email_without_a_role_goes_to_the_open_application_furthest_along():
+    from jobhelper import email_client
+    jobs = _brightline()
+    got = email_client.match_job("Petra <petra@brightlinerobotics.com>", "Invitation: Interview with Brightline Robotics", "When: Tuesday", jobs)
+    assert got["id"] == "ml"                                           # not the first Brightline job in the list
+    named = email_client.match_job("petra@brightlinerobotics.com", "Brightline Robotics - Junior Robotics Software Engineer - update", "", jobs)
+    assert named["id"] == "ros"                                        # a role in the subject still decides
+    assert email_client.best_job_for_company_role("Brightline Robotics", "Interview", jobs)["id"] == "ml"
+    only_leads = [j for j in jobs if j["id"] == "cv"]
+    assert email_client.match_job("x@brightlinerobotics.com", "Hello from Brightline", "", only_leads)["id"] == "cv"
+
+
+def test_scan_summary_names_invitations_first():
+    from jobhelper import agent5_responses as a5
+    assert a5.scan_summary({"scanned": 12, "new_responses": 3, "rejections": 1, "invites": ["Brightline", "Brightline"]}) == \
+        "Scanned 12 emails · 3 new: 2 invitations, 1 rejection."
+    assert a5.scan_summary({"scanned": 1, "new_responses": 1, "rejections": 1, "invites": []}) == "Scanned 1 email · 1 new: 1 rejection."
+    assert a5.scan_summary({"scanned": 9, "new_responses": 4, "rejections": 1, "invites": ["A"]}) == \
+        "Scanned 9 emails · 4 new: 1 invitation, 1 rejection, 2 other."
+    assert a5.scan_summary({"scanned": 5, "new_responses": 2, "rejections": 0, "invites": []}) == "Scanned 5 emails · 2 new."
+    assert a5.scan_summary({"scanned": 0, "new_responses": 0, "rejections": 0, "invites": []}) == "Scanned 0 emails · 0 new."
+    assert a5.scan_summary({"scanned": 3, "new_responses": 1, "rejections": 0, "invites": ["Brightline"], "dates": ["13 Oct 11:30 · BRIGHTLINE"]}) == \
+        "Scanned 3 emails · 1 new: 1 invitation. Date saved: 13 Oct 11:30 · BRIGHTLINE."
+
+
+def _soon(days=5):
+    from datetime import date, timedelta
+    return (date.today() + timedelta(days=days)).isoformat()
+
+
+def test_the_interview_day_in_an_email_becomes_the_date_to_remember():
+    from datetime import date
+
+    from jobhelper import agent5_responses as a5, store
+    job = store.new_job(id="ml", title="ML Engineer", company="BRIGHTLINE", status="interview")
+    day = _soon()
+    saved = a5._save_date(job, {"when": f"{day} 9:30", "next_step": "Join the Google Meet call."}, "interview")
+    when = date.fromisoformat(day)
+    assert saved == f"{when.day} {when:%b} 09:30 · BRIGHTLINE"
+    assert job["event"] == {"date": day, "time": "09:30", "kind": "interview", "note": "Join the Google Meet call."}
+    assert a5._save_date(job, {"when": day}, "interview") != "" and job["event"]["time"] == ""      # the same day again: updated
+    other = _soon(9)
+    assert a5._save_date(job, {"when": other}, "interview") == "" and job["event"]["date"] == day   # your date is not overwritten
+    for nothing in ("", None, "next Tuesday", "2020-01-01 10:00", "13.10.2026"):
+        fresh = store.new_job(id="x", title="T", company="C")
+        assert a5._save_date(fresh, {"when": nothing}, "interview") == "" and "event" not in fresh
+
+
+def test_a_scan_files_both_emails_under_one_application_and_saves_the_date(isolate_data, monkeypatch):
+    from jobhelper import agent5_responses as a5, email_client, llm
+    day = _soon()
+    mails = [{"msg_id": "<1>", "date": "Thu, 8 Oct 2026 17:24:00 +0200", "sender": "Petra <petra@brightlinerobotics.com>",
+              "subject": "Brightline Robotics - Junior Machine Learning Engineer - Next Steps", "body": "We'd like to move to the next step. Book a time."},
+             {"msg_id": "<2>", "date": "Thu, 8 Oct 2026 18:10:00 +0200", "sender": "Petra <petra@brightlinerobotics.com>",
+              "subject": "Invitation from an unknown sender: Interview with Brightline Robotics", "body": f"When: {day} 11:30am"}]
+    replies = [{"is_response": True, "stage": "interview", "company": "Brightline Robotics", "role": "Junior Machine Learning Engineer", "summary": "Invited.", "when": ""},
+               {"is_response": True, "stage": "interview", "company": "Brightline Robotics", "role": "", "summary": "Scheduled.", "when": f"{day} 11:30",
+                "next_step": "Attend on Google Meet."}]
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: mails)
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: replies.pop(0))
+    jobs = _brightline()
+    jobs[1]["status"] = "found"                                        # the ML job was still a lead when the first email came
+    stats = a5.process_inbox(jobs)
+    by = {j["id"]: j for j in jobs}
+    assert by["ml"]["status"] == "interview" and by["ros"]["status"] == "waiting"       # the other application is left alone
+    assert by["ml"]["event"]["date"] == day and by["ml"]["event"]["time"] == "11:30" and "event" not in by["ros"]
+    assert len(stats["invites"]) == 2 and len(stats["dates"]) == 1
+    assert a5.scan_summary(stats).startswith("Scanned 2 emails · 2 new: 2 invitations. Date saved: ")

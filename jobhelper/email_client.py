@@ -336,6 +336,17 @@ def _role_tokens(text: str) -> set[str]:
     return {t for t in re.findall(r"[a-z0-9]{3,}", (text or "").lower()) if t not in _ROLE_STOP}
 
 
+def _likelier(job: dict[str, Any]) -> tuple[int, int, str]:
+    """When an email names no role and the company has several postings in the list, which one
+    it is most likely about: a job you applied to before one you did not; among those, the one
+    still open and furthest along (the company's next email continues that conversation, not a
+    different application); then the one touched most recently. A rejected one comes last."""
+    status = job.get("status", "found")
+    applied = status in store.APPLICATION_STATUSES
+    open_rank = 0 if status == "rejected" else RANK.get(status, 0)
+    return (1 if applied else 0, open_rank if applied else 0, str(job.get("last_update") or ""))
+
+
 def match_job(sender: str, subject: str, body: str, jobs: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Best-effort match an email to a tracked job.
 
@@ -348,8 +359,11 @@ def match_job(sender: str, subject: str, body: str, jobs: list[dict[str, Any]]) 
     """
     strong = set(re.findall(r"[a-z0-9]{3,}", f"{sender} {subject}".lower()))
     weak = set(re.findall(r"[a-z0-9]{3,}", (body or "")[:1500].lower()))
-    subj_role = _role_tokens(subject)
-    best, best_key = None, (0, 0, 0)
+    # words of the company's own name are not role words: "Interview with Brightline Robotics" must not
+    # pick the company's "Robotics Software Engineer" posting. The sender's address shows the name.
+    domain = re.sub(r"[^a-z0-9]", "", (sender or "").lower().split("@")[-1].split(">")[0].rsplit(".", 1)[0])
+    subj_role = {t for t in _role_tokens(subject) if t not in domain}
+    best, best_key = None, (0, 0, 0, (0, 0, ""))
     for job in jobs:
         toks = company_tokens(job.get("company", ""))
         if not toks:
@@ -360,7 +374,7 @@ def match_job(sender: str, subject: str, body: str, jobs: list[dict[str, Any]]) 
             continue
         company_score = in_strong * 3 + in_weak
         role_score = len(_role_tokens(job.get("title", "")) & subj_role)
-        key = (1 if in_strong else 0, company_score, role_score)
+        key = (1 if in_strong else 0, company_score, role_score, _likelier(job))
         if key > best_key:
             best, best_key = job, key
     return best
@@ -379,5 +393,5 @@ def best_job_for_company_role(company: str, subject: str, jobs: list[dict[str, A
     cands = [j for j in jobs if ctoks & company_tokens(j.get("company", ""))]
     if not cands:
         return None
-    subj_role = _role_tokens(subject)
-    return max(cands, key=lambda j: len(_role_tokens(j.get("title", "")) & subj_role))
+    subj_role = _role_tokens(subject) - ctoks        # the company's own name is not a role word
+    return max(cands, key=lambda j: (len(_role_tokens(j.get("title", "")) & subj_role), _likelier(j)))

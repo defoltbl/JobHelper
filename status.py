@@ -147,7 +147,7 @@ def cmd_sync(args) -> int:
     agent5_responses.build_report(jobs)
     from jobhelper import notify
     notify.send(notify.invites_text(stats.get("invites") or [])
-                or "%d new replies, %d of them rejections." % (stats["new_responses"], stats["rejections"]), "Email scan finished")
+                or agent5_responses.scan_summary(stats), "Email scan finished")
     print(f"\nScanned {stats['scanned']} emails ({stats.get('skipped_unrelated', 0)} unrelated skipped) "
           f"→ {stats['new_responses']} new responses ({stats['rejections']} rejections), "
           f"{stats['status_updates']} status updates.")

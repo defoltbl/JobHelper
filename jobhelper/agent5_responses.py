@@ -39,6 +39,7 @@ Return JSON:
   "rejection_category": "one of: {categories}",
   "sentiment": "positive | neutral | negative",
   "next_step": "<any next step requested of the candidate, or ''>",
+  "when": "<only if the email fixes the day of an interview, call, test or deadline: 'YYYY-MM-DD HH:MM' in the time zone the email gives (leave out HH:MM if no time is given); otherwise ''>",
   "summary": "<one short sentence>"
 }}
 If stage is not 'rejection', set rejection_reason='' and rejection_category='no_reason_given'."""
@@ -86,6 +87,10 @@ def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, An
         stats["invites"].append(str(result.get("company") or (guess["company"] if guess else "") or "a company"))
     if stage == "rejection":
         stats["rejections"] += 1
+    if guess and stage in ("interview", "assessment"):
+        saved = _save_date(guess, result, "interview" if stage == "interview" else "test task")
+        if saved:
+            stats.setdefault("dates", []).append(saved)
 
     # Update the matched job's status (forward-only; rejection from anywhere).
     if guess:
@@ -105,6 +110,46 @@ def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, An
                 guess["notes"] = (f"[{date.today().isoformat()}] {note}\n" + guess.get("notes", "")).strip()
             stats["status_updates"] += 1
     return stage
+
+
+def _save_date(job: dict[str, Any], result: dict[str, Any], kind: str) -> str:
+    """Put the day an email fixes (an interview, a test) on the job as its date to remember,
+    unless you already set a later or equal one yourself. Returns "13 Oct 11:30 · Company" or ''."""
+    from . import planner
+    m = re.fullmatch(r"\s*(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}:\d{2}))?.*", str(result.get("when") or ""))
+    if not m:
+        return ""
+    day, clock = m.group(1), (m.group(2) or "")
+    if clock and len(clock) == 4:
+        clock = "0" + clock
+    current = (job.get("event") or {}).get("date", "")
+    if current and current >= date.today().isoformat() and current != day:
+        return ""                                   # you have your own date on this job: it is not overwritten
+    note = str(result.get("next_step") or result.get("summary") or "").strip()[:200]
+    if planner.set_event(job, day, clock, kind, note):
+        return ""                                   # a past or unreadable date: nothing saved
+    when = date.fromisoformat(day)
+    return f"{when.day} {when:%b}" + (f" {clock}" if clock else "") + f" · {job.get('company') or job.get('title', '')}"
+
+
+def scan_summary(stats: dict[str, Any]) -> str:
+    """One line about a finished scan: what arrived, invitations first."""
+    n, invites, rejections = stats.get("new_responses", 0), len(stats.get("invites") or []), stats.get("rejections", 0)
+    plural = lambda k, one, many: f"{k} {one if k == 1 else many}"                       # noqa: E731
+    text = f"Scanned {plural(stats.get('scanned', 0), 'email', 'emails')} · {n} new"
+    parts = []
+    if invites:
+        parts.append(plural(invites, "invitation", "invitations"))
+    if rejections:
+        parts.append(plural(rejections, "rejection", "rejections"))
+    other = n - invites - rejections
+    if other > 0 and parts:
+        parts.append(f"{other} other")
+    text += (": " + ", ".join(parts)) if parts else ""
+    text += "."
+    if stats.get("dates"):
+        text += " Date saved: " + "; ".join(stats["dates"]) + "."
+    return text
 
 
 _RULE_STAGES = [
@@ -216,6 +261,9 @@ def process_inbox(jobs: list[dict[str, Any]], lookback_days: int | None = None,
         db.mark_seen(msg["msg_id"])  # spent the call — don't reclassify next time
         if not result.get("is_response"):
             continue
+        if guess and str(result.get("role") or "").strip():
+            # the model read the role from the body: pick that posting among the company's, not just any of them
+            guess = email_client.best_job_for_company_role(guess["company"], str(result["role"]), jobs) or guess
 
         _file_reply(msg, result, guess, stats)
 

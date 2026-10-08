@@ -5,6 +5,9 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 8 October 2026
 
+- **Scan result names invitations**: the line after an email scan says "3 new: 2 invitations, 1 rejection" instead of counting only rejections.
+- **Interview date saved from the email**: when a reply fixes a day and time, it becomes the job's date to remember (shown under Coming up), unless you already set your own.
+- **Right application at a company with several**: an email that names no role goes to the open application that is furthest along, and the company's own name ("Robotics") is no longer read as a role word.
 - **No letter without a company name**: a posting that gives no company gets a score but no letter or CV, and the job window says why. The name is taken from the posting text when it is there.
 - **API keys never appear in error messages** or log files.
 - **A command-line or weekly search updates the Last run card** too.
