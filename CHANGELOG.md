@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 9 October 2026
 
+- **Score again**: a new job can be scored again from its window with your current Options (one Claude call), and the New Jobs list has "Score all again". Only scores change; the old score stays visible.
+- **The older windows explain wrong input too**: the letter editor (empty paragraphs, closing with unsaved changes), the career-site name, and number fields, which now say what they accept instead of ignoring a wrong number.
 - **Every text field says when it is full or too long**: company notes, a date's note, a pasted reply, form answers, the preparation lists and the About you fields now show the limit in red, and nothing you typed is cut silently when saved.
 - **Edit the preparation in the app**: every part of the interview sheet can be changed and saved; "Make again" asks before replacing your changes.
 

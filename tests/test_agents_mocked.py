@@ -225,3 +225,60 @@ def test_scoring_is_told_what_you_are_looking_for(isolate_data, monkeypatch):
     agent3_letters.process(job(), {"target_roles": ["backend developer"]}, threshold=60)
     assert "looking for these kinds of role" not in prompts[-1]                                               # emptied on purpose: eligibility only
     assert agent3_letters.direction_rules(None, None) == "" and agent3_letters.direction_rules(["  "], []) == ""
+
+
+# ── score again ─────────────────────────────────────────────────────────────
+def _scored(id, score, **kw):
+    return store.new_job(id=id, title=kw.pop("title", f"Role {id}"), company=f"Co {id}", match_score=score, match_reason="old reason",
+                         description=kw.pop("description", "We use Python."), **kw)
+
+
+def test_rescore_changes_only_the_score_and_remembers_the_old_one(isolate_data, monkeypatch):
+    jobs = [_scored("e", 80, title="Associate Economist", status="letter_ready", cover_letter_file="L_e.docx", tailored_cv_file="CV_e.docx", match_tier="strong"),
+            _scored("d", 68, title="Python Developer"), _scored("same", 50), _scored("skip", 40), store.new_job(id="none", title="T", company="C")]
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or {"scores": [
+        {"id": "J1", "match_score": 30, "match_reason": "Another field."}, {"id": "J2", "match_score": 75, "match_reason": "Good fit."},
+        {"id": "J3", "match_score": 50, "match_reason": "Same as before."}]})
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: pytest.fail("no letter or CV may be written here"))
+    seen = []
+    stats = agent3_letters.rescore(jobs, ["e", "d", "same", "missing-id"], {"target_roles": ["Python developer"]}, CV_UA,
+                                   progress=lambda d, t: seen.append((d, t)))
+    e, d, same, skip, none = jobs
+    assert (e["match_score"], e["score_before"], e["match_reason"]) == (30, 80, "Another field.")
+    assert e["cover_letter_file"] == "L_e.docx" and e["status"] == "letter_ready" and e["match_tier"] == "stretch"   # documents stay, the tier follows
+    assert (d["match_score"], d["score_before"]) == (75, 68) and "score_before" not in same and same["match_reason"] == "Same as before."
+    assert skip["match_score"] == 40 and skip["match_reason"] == "old reason" and none["match_score"] is None      # not asked for: untouched
+    assert stats["scored"] == 3 and stats["failed"] == 0
+    assert [(c["id"], c["before"], c["after"]) for c in stats["changed"]] == [("e", 80, 30), ("d", 68, 75)]
+    assert len(prompts) == 1 and "looking for these kinds of role: Python developer" in prompts[0] and seen[-1] == (3, 3)
+
+
+def test_rescore_asks_alone_for_what_a_batch_left_out_and_applies_the_language_check(isolate_data, monkeypatch):
+    jobs = [_scored("a", 60), _scored("b", 60, description="Excellent communication skills in Czech or Slovak and English.")]
+    replies = [{"scores": [{"id": "J1", "match_score": 62, "match_reason": "ok"}, {"id": "J9", "match_score": 99, "match_reason": "not ours"}]},
+               {"match_score": 58, "match_reason": "Meets the bar."}]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: replies.pop(0))
+    stats = agent3_letters.rescore(jobs, ["a", "b"], {}, CV_UA)
+    assert jobs[0]["match_score"] == 62 and jobs[1]["match_score"] == agent3_letters.LANGUAGE_CAP and jobs[1]["score_before"] == 60
+    assert jobs[1]["match_reason"].startswith("Requires Czech or Slovak") and stats["scored"] == 2 and replies == []
+
+
+def test_rescore_counts_what_could_not_be_scored_and_stops_on_the_limit(isolate_data, monkeypatch):
+    jobs = [_scored("a", 60)]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": "high", "match_reason": "?"})
+    stats = agent3_letters.rescore(jobs, ["a"], {}, "")
+    assert stats == {"scored": 0, "changed": [], "failed": 1} and jobs[0]["match_score"] == 60 and jobs[0]["match_reason"] == "old reason"
+
+    def limit(*a, **k):
+        raise llm.LimitReached("Claude's 5-hour limit is used up (99%).")
+    monkeypatch.setattr(llm, "ask_json", limit)
+    with pytest.raises(llm.LimitReached):
+        agent3_letters.rescore(jobs, ["a"], {}, "")
+    waited = []
+
+    def on_limit(error):
+        waited.append(str(error))
+        monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": 44, "match_reason": "after the pause"})
+    agent3_letters.rescore(jobs, ["a"], {}, "", on_limit=on_limit)
+    assert len(waited) == 1 and jobs[0]["match_score"] == 44                    # paused, then the same job was asked again

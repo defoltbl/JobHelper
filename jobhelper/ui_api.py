@@ -221,6 +221,8 @@ class Api:
             "source": j.get("source", ""), "url": j.get("url", ""), "posted": j.get("date_posted", ""),
             "status": j["status"], "is_lead": j["status"] in store.LEAD_STATUSES,
             "score": j.get("match_score"), "tier": j.get("match_tier", ""),
+            "score_before": j.get("score_before") if isinstance(j.get("score_before"), int) and j.get("score_before") != j.get("match_score") else None,
+            "can_rescore": j["status"] in store.LEAD_STATUSES and j.get("match_score") is not None,
             "reason": j.get("match_reason", ""), "description": description[:8000],
             "description_text": textfmt.readable(description[:8000]),
             "prefilter": j.get("prefilter", "") if j.get("match_score") is None else "",
@@ -317,6 +319,45 @@ class Api:
                 j["date_found"] = ""               # so it is not mistaken for an import day
             j["last_update"] = date.today().isoformat()
         return self._change(job_id, go)
+
+    def rescore_ids(self, job_id=""):
+        """Which jobs "Score again" covers: the one given, or every new job that has a score."""
+        jobs = store.load_jobs()
+        if job_id:
+            j = store.find(jobs, job_id)
+            return [j["id"]] if j and j.get("status") in store.LEAD_STATUSES and j.get("match_score") is not None else []
+        return [j["id"] for j in jobs if j.get("status") in store.LEAD_STATUSES and j.get("match_score") is not None]
+
+    def rescore_plan(self):
+        """How much "Score all again" would ask: {jobs, calls}."""
+        n = len(self.rescore_ids())
+        return {"jobs": n, "calls": -(-n // max(1, int(config.SCORE_BATCH)))}
+
+    def rescore_one(self, job_id):
+        """Score one new job again now (one Claude call). Only the score and its reason change."""
+        ids = self.rescore_ids(job_id)
+        if not ids:
+            return {"ok": False, "msg": "Only a new job that already has a score can be scored again."}
+        profile = agent1_cv.load_profile() or {}
+        jobs = store.load_jobs()
+        try:
+            stats = agent3_letters.rescore(jobs, ids, profile, self._cv_text())
+        except Exception as e:  # noqa: BLE001 - shown to the user as the reason (the limit, no connection)
+            return {"ok": False, "msg": str(e)}
+        if not stats["scored"]:
+            return {"ok": False, "msg": "Claude gave no usable score. Try again in a moment."}
+        fresh = store.find(jobs, job_id)
+        keys = ("match_score", "match_reason", "score_before", "score_capped", "match_tier", "last_update")
+
+        def go(current, j):          # put on a fresh copy: the call took a few seconds
+            for k in keys:
+                if k in fresh:
+                    j[k] = fresh[k]
+                else:
+                    j.pop(k, None)
+        self._change(job_id, go)
+        change = stats["changed"][0] if stats["changed"] else None
+        return {"ok": True, "score": fresh["match_score"], "before": change["before"] if change else fresh["match_score"]}
 
     def score_anyway(self, job_id):
         """Send a job the free pre-filter skipped to scoring on the next run."""

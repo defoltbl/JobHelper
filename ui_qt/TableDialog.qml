@@ -20,6 +20,9 @@ Dialog {
     width: Math.min(700, win.width - 80); height: Math.min(640, win.height - 80)
     padding: 0
     property string excelKey: ""
+    property bool confirmRescore: false
+    property int rescoreJobs: 0
+    onClosed: confirmRescore = false
     property string baseTitle: ""
     property var allRows: []
     property var sorts: []                // [[key, label], ...]; empty = a plain list without the toolbar
@@ -69,6 +72,22 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true; Layout.margins: 16
             Text { id: titleTxt; color: theme.ink; font.pixelSize: 16; font.bold: true; Layout.fillWidth: true }
+            // New Jobs only: score every scored job again with the rules as they are now. Asked twice, it uses the limit.
+            SmallButton { objectName: "rescoreAll"; visible: tableDialog.excelKey === "leads" && !win.appRunning
+                text: tableDialog.confirmRescore ? "Yes, score " + tableDialog.rescoreJobs + " again" : "Score all again"
+                primaryStyle: tableDialog.confirmRescore
+                onClicked: {
+                    if (!tableDialog.confirmRescore) {
+                        var plan = bridge.rescorePlan();
+                        if ((plan.jobs || 0) === 0) { ticker.text = "There are no scored new jobs to score again."; return; }
+                        tableDialog.rescoreJobs = plan.jobs; tableDialog.confirmRescore = true;
+                        ticker.text = "This asks Claude about " + plan.jobs + " jobs, in about " + plan.calls + (plan.calls === 1 ? " call" : " calls")
+                                      + ". Only scores change; no letter is written or removed. Press again to start.";
+                        return;
+                    }
+                    tableDialog.confirmRescore = false;
+                    if (win.startRescore()) tableDialog.close();
+                } }
             SmallButton { text: "open Excel"; visible: tableDialog.excelKey !== ""; onClicked: bridge.openExcel(tableDialog.excelKey) }
             Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
                 Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }

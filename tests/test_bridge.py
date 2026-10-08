@@ -505,3 +505,51 @@ def test_draft_answers_reports_through_the_signal(bridge, monkeypatch, qapp):
             break
     assert got[1] == {"ok": False, "msg": "disk full", "job_id": "a"}
     assert bridge.formAnswers("a")["company"] == "Acme" and bridge.saveFormAnswers("a", [{"question": "Q?", "answer": "A."}])["count"] == 1
+
+
+# ── score again ─────────────────────────────────────────────────────────────
+def test_score_all_again_runs_like_a_search_and_reports(bridge, monkeypatch):
+    from jobhelper import llm, store
+    monkeypatch.setattr(agent1_cv, "load_profile", lambda current_only=False: {"target_roles": ["Python developer"]})
+    monkeypatch.setattr(agent4_tracker, "render_all", lambda jobs: None)
+    store.save_jobs([store.new_job(id="e", title="Economist", company="A", match_score=80, description="x"),
+                     store.new_job(id="d", title="Developer", company="B", match_score=60, description="y"),
+                     store.new_job(id="app", title="QA", company="C", status="waiting", match_score=70)])
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"scores": [{"id": "J1", "match_score": 30, "match_reason": "Another field."},
+                                                                   {"id": "J2", "match_score": 72, "match_reason": "Fits."}]})
+    events = _record(bridge)
+    assert bridge.rescorePlan() == {"jobs": 2, "calls": 1}
+    bridge._rescore()
+    saved = {j["id"]: j["match_score"] for j in store.load_jobs()}
+    assert saved == {"e": 30, "d": 72, "app": 70}                              # an application is never rescored
+    finished = [e for e in events if e[0] == "finished"]
+    assert finished[-1][1:] == ("rescore", "Scored 2 jobs again: 2 changed (1 lower, 1 higher).")
+    assert ("agent", "a3", "done") in [e[:3] for e in events] and bridge._api.live is None
+
+
+def test_score_all_again_refuses_when_there_is_nothing_or_no_sign_in(bridge, monkeypatch):
+    from jobhelper import store
+    _no_thread(monkeypatch)
+    assert bridge.rescoreAll() == {"ok": False, "msg": "There are no scored new jobs to score again."}
+    store.save_jobs([store.new_job(id="e", title="Economist", company="A", match_score=80)])
+    bridge.conn["claude"] = False
+    assert bridge.rescoreAll()["fix"] == "claude"
+    bridge.conn["claude"] = True
+    assert bridge.rescoreAll() == {"ok": True}
+    assert bridge.rescoreAll() == {"ok": False, "msg": "A run is already in progress."}
+
+
+def test_score_again_for_one_job_answers_through_the_signal(bridge, monkeypatch, qapp):
+    import time
+
+    from jobhelper import ui_api as api_module
+    got = []
+    bridge.rescoreReady.connect(got.append)
+    monkeypatch.setattr(api_module.Api, "rescore_one", lambda self, job_id: {"ok": True, "score": 30, "before": 80})
+    bridge.rescoreJob("e")
+    for _ in range(200):
+        time.sleep(0.01)
+        qapp.processEvents()
+        if got:
+            break
+    assert got == [{"ok": True, "score": 30, "before": 80, "job_id": "e"}]

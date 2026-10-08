@@ -1740,3 +1740,79 @@ def test_letter_editor_explains_wrong_steps(ui, monkeypatch):
     ui.wait(450)
     assert dialog.property("visible") is False                                                           # saved: closes at once
     assert ui.warnings == []
+
+
+# ── score again ─────────────────────────────────────────────────────────────
+def test_score_again_from_the_job_window(ui, monkeypatch):
+    import time
+
+    from jobhelper import llm
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython.")
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": 35, "match_reason": "Another field."})
+    _open_job(ui, "lead")
+    assert ui.find("scoreAgain").property("text") == "Score again" and ui.js("detailDialog.job.can_rescore") is True
+    ui.js("detailDialog.scoreAgain()")
+    assert ui.js("detailDialog.scoreBusy") is True and ui.find("scoreAgain").property("enabled") is False
+    for _ in range(200):
+        time.sleep(0.02)
+        ui.wait(10)
+        if ui.js("detailDialog.scoreBusy") is False:
+            break
+    assert ui.find("scoreNote").property("text") == "Scored again: 80 before, 35 now."
+    assert ui.js("detailDialog.job.score") == 35 and ui.js("detailDialog.job.score_before") == 80
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    _open_job(ui, "lead")                                                       # later it still says what it was
+    assert ui.find("scoreNote").property("text") == "It was 80 before it was scored again."
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    _open_job(ui, "app")
+    assert ui.js("detailDialog.job.can_rescore") is False                         # an application is not scored again
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(match_score=80, match_reason="", score_before=None), render=False)
+    assert ui.warnings == []
+
+
+def test_score_again_says_why_it_failed_and_keeps_the_score(ui, monkeypatch):
+    import time
+
+    from jobhelper import llm
+
+    def limit(*a, **k):
+        raise llm.LimitReached("Claude's 7-day limit is used up (99%). It resets at 18:00.")
+    monkeypatch.setattr(llm, "ask_json", limit)
+    _open_job(ui, "lead")
+    ui.js("detailDialog.scoreAgain()")
+    for _ in range(200):
+        time.sleep(0.02)
+        ui.wait(10)
+        if ui.js("detailDialog.scoreBusy") is False:
+            break
+    assert "Not scored again: Claude's 7-day limit is used up" in ui.find("scoreNote").property("text") and ui.js("detailDialog.scoreBad") is True
+    assert ui.js("detailDialog.job.score") == 80
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    assert ui.warnings == []
+
+
+def test_score_all_again_asks_before_spending_the_limit(ui, monkeypatch):
+    started = []
+    monkeypatch.setattr(qt_bridge.Bridge, "rescoreAll", lambda self: started.append(1) or {"ok": False, "msg": "A run is already in progress."})
+    ui.js('openView("new")')
+    ui.wait(450)
+    button = ui.find("rescoreAll")
+    assert button.property("visible") is True and button.property("text") == "Score all again"
+    source = qml_source()
+    assert "Only scores change; no letter is written or removed. Press again to start." in source
+    ui.js("tableDialog.confirmRescore = true; tableDialog.rescoreJobs = 1")
+    assert button.property("text") == "Yes, score 1 again"
+    ui.js("tableDialog.close()")
+    ui.wait(350)
+    assert ui.js("tableDialog.confirmRescore") is False and started == []         # closing takes the confirmation back; nothing started
+    ui.js('openView("app")')
+    ui.wait(400)
+    assert button.property("visible") is False                                    # only in New Jobs
+    ui.js("tableDialog.close()")
+    ui.wait(350)
+    assert ui.warnings == []

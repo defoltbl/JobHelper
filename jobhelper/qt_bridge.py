@@ -43,6 +43,7 @@ class Bridge(QObject):
     prepReady = Signal("QVariantMap")          # interview preparation finished (or why it failed)
     replyReady = Signal("QVariantMap")         # a pasted reply was filed (or why not)
     answersReady = Signal("QVariantMap")       # answers for a job's form were drafted (or why not)
+    rescoreReady = Signal("QVariantMap")       # one job was scored again (or why not)
 
     def __init__(self) -> None:
         super().__init__()
@@ -289,6 +290,76 @@ class Bridge(QObject):
         self._set_running(True)
         threading.Thread(target=self._scan, daemon=True).start()
         return {"ok": True}
+
+    @Slot(result="QVariantMap")
+    def rescorePlan(self):
+        return self._api.rescore_plan()
+
+    @Slot(str)
+    def rescoreJob(self, job_id):
+        """Score one job again in the background (one Claude call); the answer arrives as rescoreReady."""
+        def work():
+            try:
+                result = self._api.rescore_one(job_id)
+            except Exception as e:  # noqa: BLE001 - the window must always get an answer
+                result = {"ok": False, "msg": str(e) or type(e).__name__}
+            result["job_id"] = job_id
+            self._post("rescoreReady", result)
+        threading.Thread(target=work, daemon=True).start()
+
+    @Slot(result="QVariantMap")
+    def rescoreAll(self):
+        """Score every new job that has a score again, as a run: it shows progress, can be stopped,
+        and pauses on the limit like a search."""
+        if self._running:
+            return {"ok": False, "msg": "A run is already in progress."}
+        conn = self._api.connections()
+        if conn.get("paid_api"):
+            return {"ok": False, "msg": "Unset ANTHROPIC_API_KEY to use your subscription."}
+        if not conn.get("claude"):
+            return {"ok": False, "msg": "Log in to Claude first (open Account).", "fix": "claude"}
+        if not self._api.rescore_ids():
+            return {"ok": False, "msg": "There are no scored new jobs to score again."}
+        self._stop.clear()
+        self._resume.clear()
+        self._partial = None
+        self._set_running(True)
+        threading.Thread(target=self._rescore, daemon=True).start()
+        return {"ok": True}
+
+    def _rescore(self):
+        jobs = None
+        try:
+            self.agentChanged.emit("a3", "running", "")
+            profile = agent1_cv.load_profile() or {}
+            jobs = self._partial = self._api.live = store.load_jobs()
+            ids = [j["id"] for j in jobs if j.get("status") in store.LEAD_STATUSES and j.get("match_score") is not None]
+            self.logChanged.emit("Scoring %d new jobs again…" % len(ids))
+
+            def tick(done, total):
+                self._checkpoint()                              # Stop is honoured between calls
+                self._tick("a3", done, total)
+            stats = agent3_letters.rescore(jobs, ids, profile, self._api._cv_text(), progress=tick,
+                                           on_limit=self._on_limit, status=self.logChanged.emit)
+            store.save_jobs(jobs)
+            agent4_tracker.render_all(jobs)
+            changed = stats["changed"]
+            lower = sum(1 for c in changed if (c["before"] or 0) > c["after"])
+            self.agentChanged.emit("a3", "done", "%d rescored" % stats["scored"])
+            text = "Scored %d jobs again: %d changed (%d lower, %d higher)." % (stats["scored"], len(changed), lower, len(changed) - lower)
+            if stats["failed"]:
+                text += " %d could not be scored and keep their old score." % stats["failed"]
+            self.runFinished.emit("rescore", text)
+            self._notify(text, "Scoring finished")
+        except RunCancelled:
+            self._save_partial(jobs)
+            self.runFinished.emit("rescore", "Stopped. The jobs scored before that keep their new score.")
+        except Exception as e:  # noqa: BLE001
+            self._save_partial(jobs)
+            self.runFinished.emit("rescore", "Couldn't finish scoring again: %s" % (str(e) or type(e).__name__))
+        finally:
+            self._api.live = None
+            self._set_running(False)
 
     # ── answers from short background jobs ──────────────────────
     def _post(self, signal_name: str, payload: dict) -> None:

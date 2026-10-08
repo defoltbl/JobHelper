@@ -356,3 +356,28 @@ def test_job_window_gets_the_description_laid_out(api):
     detail = api.job_detail("a")
     assert detail["description_text"] == "We build tools.\n\nREQUIREMENTS\nStrong Python\n\nBENEFITS\nFlexible hours"
     assert detail["description"].endswith("Show more Show less")           # the stored text itself is untouched
+
+
+# ── score again ─────────────────────────────────────────────────────────────
+def test_score_again_for_one_job(api, monkeypatch):
+    from jobhelper import llm
+    store.save_jobs([store.new_job(id="e", title="Associate Economist", company="Acme", match_score=80, match_reason="old", description="Economics."),
+                     store.new_job(id="app", title="Dev", company="B", status="waiting", match_score=70),
+                     store.new_job(id="none", title="Dev", company="C")])
+    assert api.rescore_ids() == ["e"] and api.rescore_plan() == {"jobs": 1, "calls": 1}
+    assert api.job_detail("e")["can_rescore"] is True and api.job_detail("app")["can_rescore"] is False and api.job_detail("none")["can_rescore"] is False
+    for job_id in ("app", "none", "zzz"):
+        assert "Only a new job that already has a score" in api.rescore_one(job_id)["msg"]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": 30, "match_reason": "Another field."})
+    assert api.rescore_one("e") == {"ok": True, "score": 30, "before": 80}
+    detail = ui_api.Api().job_detail("e")                                      # saved
+    assert (detail["score"], detail["score_before"], detail["reason"]) == (30, 80, "Another field.")
+    assert api.rescore_one("e") == {"ok": True, "score": 30, "before": 30}
+
+    def limit(*a, **k):
+        raise llm.LimitReached("Claude's 5-hour limit is used up (99%). It resets at 22:50.")
+    monkeypatch.setattr(llm, "ask_json", limit)
+    got = api.rescore_one("e")
+    assert got["ok"] is False and "limit is used up" in got["msg"] and api.job_detail("e")["score"] == 30      # nothing lost
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": None})
+    assert "no usable score" in api.rescore_one("e")["msg"]

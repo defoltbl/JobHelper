@@ -68,6 +68,26 @@ Dialog {
         if (ok) { bridge.applyStep(job.id, key); refresh(); }
     }
     property bool confirmRemake: false
+    property bool scoreBusy: false
+    property string scoreJob: ""
+    property string scoreNote: ""
+    property bool scoreBad: false
+    function scoreAgain() {
+        scoreNote = ""; scoreBad = false; scoreBusy = true; scoreJob = job.id;
+        bridge.rescoreJob(job.id);
+    }
+    Connections { target: bridge
+        function onRescoreReady(res) {
+            if (res.job_id !== detailDialog.scoreJob) return;
+            detailDialog.scoreBusy = false;
+            var here = res.job_id === detailDialog.job.id;
+            var text = res.ok ? (res.before === res.score ? "Scored again: still " + res.score + "."
+                                                          : "Scored again: " + res.before + " before, " + res.score + " now.")
+                              : ("Not scored again: " + (res.msg || "unknown reason"));
+            if (here) { detailDialog.scoreBad = !res.ok; detailDialog.scoreNote = text; if (res.ok) detailDialog.refresh(); }
+            else ticker.text = text;
+            if (res.ok) { win.countsData = bridge.counts(); win.refreshOpenView(); }
+        } }
     property bool notesBad: false         // the line under the company notes is a problem, not a confirmation
     readonly property int notesMax: 2000
     readonly property int replyMax: 8000
@@ -148,7 +168,7 @@ Dialog {
     function show(jobId) {
         var d = bridge.jobDetail(jobId);
         if (!d || !d.id) { ticker.text = "That job could not be opened."; return; }
-        confirmRemake = false;
+        confirmRemake = false; if (!scoreBusy) { scoreNote = ""; scoreBad = false; }
         job = d; draft = ({}); note = ""; dateErr = ""; if (!prepBusy) prepErr = "";
         eventErr = ""; notesInfo = ""; notesBad = false; replyErr = ""; replyInfo = ""; replyOpen = false; thanks = ({}); thanksNote = "";
         detailFlick.contentY = 0;
@@ -233,6 +253,18 @@ Dialog {
                 }
 
                 DetailCard { heading: "Why this score"
+                    RowLayout { visible: detailDialog.job.can_rescore === true; Layout.fillWidth: true; spacing: 10
+                        Text { objectName: "scoreNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 12
+                            font.bold: detailDialog.scoreBad
+                            color: detailDialog.scoreNote === "" ? theme.faint : (detailDialog.scoreBad ? theme.crit : theme.good)
+                            text: detailDialog.scoreBusy ? "Asking Claude…"
+                                : detailDialog.scoreNote !== "" ? detailDialog.scoreNote
+                                : (detailDialog.job.score_before !== null && detailDialog.job.score_before !== undefined)
+                                    ? "It was " + detailDialog.job.score_before + " before it was scored again."
+                                    : "Scored with the rules of that day. Score again to apply your current Options (one Claude call)." }
+                        SmallButton { objectName: "scoreAgain"; enabled: !detailDialog.scoreBusy && !win.appRunning
+                            text: detailDialog.scoreBusy ? "Scoring…" : "Score again"; onClicked: detailDialog.scoreAgain() }
+                    }
                     Text { objectName: "holdNote"; visible: !!detailDialog.job.hold; Layout.fillWidth: true; wrapMode: Text.WordWrap
                         color: theme.warn; font.pixelSize: 13; font.bold: true; lineHeight: 1.25; text: detailDialog.job.hold || "" }
                     RowLayout { visible: !!detailDialog.job.prefilter; Layout.fillWidth: true; spacing: 10

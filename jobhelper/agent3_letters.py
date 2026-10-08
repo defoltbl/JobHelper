@@ -283,6 +283,112 @@ def direction_rules(wanted, unwanted) -> str:
     return ("\n" + "\n".join(lines) + "\n") if lines else ""
 
 
+def apply_score(job: dict[str, Any], result: Any, cv_text: str = "") -> bool:
+    """Put one answer from the scorer on a job, then run the app's own check on it.
+    False if the answer has no usable number."""
+    try:
+        job["match_score"] = max(0, min(100, int(result.get("match_score"))))
+    except (AttributeError, TypeError, ValueError):
+        return False
+    job["match_reason"] = str(result.get("match_reason", ""))
+    job.pop("score_capped", None)
+    # a required language the CV does not show is a hard stop, whatever the model said
+    missing = filters.unmet_language(job.get("description") or "", cv_text) if cv_text.strip() else ""
+    if missing and job["match_score"] > LANGUAGE_CAP:
+        job["score_capped"] = f"Requires {missing}, which your CV does not show."
+        job["match_reason"] = (f"{job['score_capped']} The app lowered the score from {job['match_score']} to {LANGUAGE_CAP}. "
+                               + job["match_reason"]).strip()
+        job["match_score"] = LANGUAGE_CAP
+    job["last_update"] = date.today().isoformat()
+    return True
+
+
+def scoring_rules(profile: dict[str, Any]) -> str:
+    """The scoring rules plus the direction from Options (or, when nothing was saved, from the CV)."""
+    saved = config.ui_settings()
+    wanted = saved.get("wanted_roles")
+    return _SCORE_RULES + direction_rules(profile.get("target_roles") if wanted is None else wanted, saved.get("unwanted_roles"))
+
+
+def rescore(jobs: list[dict[str, Any]], ids: list[str], profile: dict[str, Any], cv_text: str = "",
+            progress=None, on_limit=None, status=None) -> dict[str, Any]:
+    """Score the given jobs again with the rules as they are now (your direction, the
+    language check). Only the score and its reason change: no letter or CV is written
+    or removed here. The earlier score is kept as `score_before` so the change shows.
+    {scored, changed: [{id, title, company, before, after}], failed}"""
+    wanted = [j for j in jobs if j.get("id") in set(ids)]
+    profile_blurb = json.dumps({k: profile.get(k) for k in ("summary", "seniority", "years_experience", "internships", "key_skills", "strengths")},
+                               ensure_ascii=False)
+    rules = scoring_rules(profile)
+    stats: dict[str, Any] = {"scored": 0, "changed": [], "failed": 0}
+
+    def ask(prompt):
+        while True:
+            try:
+                return llm.ask_json(prompt, system=SYSTEM, tag="agent3_letters")
+            except llm.LimitReached as e:
+                if on_limit is None:
+                    raise
+                on_limit(e)
+
+    def fields(job, limit):
+        description = (job.get("description") or "").strip()[:limit] or "(No description was available: judge from the title alone.)"
+        return dict(title=job.get("title", ""), company=job.get("company", ""), location=job.get("location", ""), description=description)
+
+    def store(job, result) -> bool:
+        before = job.get("match_score")
+        if not apply_score(job, result, cv_text):
+            return False
+        stats["scored"] += 1
+        if job["match_score"] != before:
+            job["score_before"] = before
+            stats["changed"].append({"id": job["id"], "title": job.get("title", ""), "company": job.get("company", ""),
+                                     "before": before, "after": job["match_score"]})
+        if job.get("cover_letter_file"):
+            job["match_tier"] = _tier(job["match_score"])
+        return True
+
+    size = max(1, int(config.SCORE_BATCH))
+    for start in range(0, len(wanted), size):
+        chunk = wanted[start:start + size]
+        if progress:
+            progress(start, len(wanted))
+        if status:
+            status(f"Scoring again {start + 1}–{start + len(chunk)} of {len(wanted)}…")
+        done: set[str] = set()
+        if len(chunk) > 1:
+            postings = "\n\n".join(
+                "### J{n}\n- Title: {title}\n- Company: {company}\n- Location: {location}\n- Description: {description}".format(
+                    n=n, **fields(job, 3000)) for n, job in enumerate(chunk, 1))
+            try:
+                data = ask(SCORE_BATCH_PROMPT.format(profile=profile_blurb, postings=postings, rules=rules, n=len(chunk)))
+            except llm.LimitReached:
+                raise
+            except Exception:  # noqa: BLE001 - the ones it missed are asked alone below
+                data = None
+            items = data.get("scores") if isinstance(data, dict) else data
+            for item in items if isinstance(items, list) else []:
+                m = re.fullmatch(r"J(\d+)", str(item.get("id", "")).strip()) if isinstance(item, dict) else None
+                if m and 1 <= int(m.group(1)) <= len(chunk):
+                    job = chunk[int(m.group(1)) - 1]
+                    if job["id"] not in done and store(job, item):
+                        done.add(job["id"])
+        for job in chunk:
+            if job["id"] in done:
+                continue
+            try:
+                result = ask(SCORE_PROMPT.format(profile=profile_blurb, rules=rules, **fields(job, 4000)))
+            except llm.LimitReached:
+                raise
+            except Exception:  # noqa: BLE001
+                result = None
+            if not store(job, result):
+                stats["failed"] += 1
+    if progress:
+        progress(len(wanted), len(wanted))
+    return stats
+
+
 NO_COMPANY = "The posting has no company name, so no letter or CV was written. Open the posting to see who it is."
 
 
@@ -387,9 +493,7 @@ def process(
     )
 
     stats = {"scored": 0, "letters": 0, "tailored_cvs": 0, "skipped": 0, "prefiltered": 0}
-    saved = config.ui_settings()
-    wanted = saved.get("wanted_roles")
-    rules = _SCORE_RULES + direction_rules(profile.get("target_roles") if wanted is None else wanted, saved.get("unwanted_roles"))
+    rules = scoring_rules(profile)
 
     # Free first look: postings that are plainly another profession are marked
     # and never sent to the model (see prefilter.py).
@@ -436,21 +540,10 @@ def process(
             status(text)
 
     def _store_score(job, result) -> bool:
-        try:
-            job["match_score"] = max(0, min(100, int(result.get("match_score"))))
-        except (AttributeError, TypeError, ValueError):
+        if not apply_score(job, result, cv_text):
             return False
-        job["match_reason"] = str(result.get("match_reason", ""))
-        job.pop("score_capped", None)
-        # the app's own check: a required language the CV does not show is a hard stop, whatever the model said
-        missing = filters.unmet_language(job.get("description") or "", cv_text) if cv_text.strip() else ""
-        if missing and job["match_score"] > LANGUAGE_CAP:
-            job["score_capped"] = f"Requires {missing}, which your CV does not show."
-            job["match_reason"] = (f"{job['score_capped']} The app lowered the score from {job['match_score']} to {LANGUAGE_CAP}. "
-                                   + job["match_reason"]).strip()
-            job["match_score"] = LANGUAGE_CAP
+        if job.get("score_capped"):
             stats["capped"] = stats.get("capped", 0) + 1
-        job["last_update"] = date.today().isoformat()
         stats["scored"] += 1
         return True
 

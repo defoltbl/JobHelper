@@ -168,6 +168,11 @@ Inside the window:
 - **Kinds of role you want / do not want** (Options) — tells the scorer your direction. The list
   you want starts from the roles read from your CV. A role in another field that merely accepts
   your degree scores 40 at most; a kind you do not want scores 20 at most (it stays in the list).
+- **Score again** (job window) and **Score all again** (New Jobs list) — scores a new job, or every
+  scored new job, again with the rules as they are now (your direction, the language check).
+  One Claude call per job, or one per five when all are done; "all" runs like a search (progress,
+  Stop, pause on the limit). Only the score and its reason change; the job window keeps showing
+  what the score was before.
 - **Required-language check** — after scoring, the app itself looks for a required language your CV
   does not show at a working level (basic, A1 and A2 do not count) and lowers the score to 25,
   with the reason in the job window. A language named as a plus is ignored.

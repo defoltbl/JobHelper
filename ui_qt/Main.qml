@@ -79,7 +79,7 @@ ApplicationWindow {
         a5: { name: "Postman", color: theme.a5 } })
     readonly property color stageColor: stageKey !== "" ? agentInfo[stageKey].color : theme.steel
     function updateProgress() {
-        if (runMode === "scan") {                 // one stage: emails read so far
+        if (runMode === "scan" || runMode === "rescore") {   // one stage: emails read, or jobs scored again, so far
             if (stageTotal > 0) runProgress = Math.max(runProgress, Math.min(1, stageDone / stageTotal));
             return;
         }
@@ -203,6 +203,7 @@ ApplicationWindow {
     function stopRun() { if (win.appRunning && !win.stopping && bridge.stopRun()) win.stopping = true; }
     function startRun() { if (win.appRunning) return; handleStart(bridge.runSearch(optsData), "Starting…", "search"); }
     function startScan() { if (win.appRunning) return; handleStart(bridge.scanEmail(), "Reading inbox…", "scan"); }
+    function startRescore() { if (win.appRunning) return false; var r = bridge.rescoreAll(); handleStart(r, "Scoring again…", "rescore"); return !!(r && r.ok); }
 
     Timer { interval: 60; running: true; repeat: false
         onTriggered: { win.reloadAll(); win.usageBusy = true; bridge.refreshUsage(); } }
