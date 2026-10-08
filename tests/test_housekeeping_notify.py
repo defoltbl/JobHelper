@@ -190,3 +190,66 @@ def test_tests_cannot_show_a_real_notification(monkeypatch):
     monkeypatch.setattr(notify.sys, "platform", "darwin")
     monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: pytest.fail("a test reached osascript"))
     assert notify.send("made-up result", "Search finished") is True
+
+
+# ── the app's own notifier (its name and icon) ──────────────────────────────
+def test_with_the_helper_app_a_message_goes_through_its_queue(isolate_data, monkeypatch):
+    calls = []
+    app = isolate_data / "notifier" / "JobHelper.app"
+    monkeypatch.setattr(notify.sys, "platform", "darwin")
+    monkeypatch.setattr(notify, "ensure_app", lambda: app)
+    monkeypatch.setattr(notify, "_run", calls.append)
+    assert notify.send('Tomorrow at 11:30:\ninterview · "BRIGHTLINE"', "Reminder") is True
+    assert calls == [["open", "-g", "-n", str(app)]]
+    queued = list((isolate_data / "notifier" / "queue").glob("*.txt"))
+    assert len(queued) == 1 and queued[0].read_text(encoding="utf-8") == 'Reminder\nTomorrow at 11:30: interview · "BRIGHTLINE"'
+    notify.send("No headline given")
+    texts = sorted(p.read_text(encoding="utf-8") for p in (isolate_data / "notifier" / "queue").glob("*.txt"))
+    assert "JobHelper\nNo headline given" in texts                        # the app's name stands in for a headline
+
+
+def test_the_helper_app_is_built_once_with_the_icon_and_name(isolate_data, monkeypatch):
+    import plistlib
+    built = []
+
+    def fake_build(cmd):
+        built.append(cmd[0])
+        if cmd[0] == "osacompile":                                        # what the real tool leaves behind
+            app = Path(cmd[2])
+            (app / "Contents" / "Resources").mkdir(parents=True)
+            (app / "Contents" / "Info.plist").write_bytes(plistlib.dumps({"CFBundleName": "applet"}))
+            (app / "Contents" / "Resources" / "applet.icns").write_bytes(b"default icon")
+        return True
+    monkeypatch.undo()                                                    # this test needs the real ensure_app …
+    monkeypatch.setattr(config, "DATA_DIR", isolate_data)
+    monkeypatch.setattr(notify.sys, "platform", "darwin")
+    monkeypatch.setattr(notify, "_build", fake_build)                     # … but never the real build tools
+    monkeypatch.setattr(notify, "_run", lambda cmd: None)
+    app = notify.ensure_app()
+    assert app == isolate_data / "notifier" / "JobHelper.app" and built == ["osacompile", "codesign"]
+    info = plistlib.loads((app / "Contents" / "Info.plist").read_bytes())
+    assert info["CFBundleName"] == "JobHelper" and info["LSUIElement"] is True
+    assert (app / "Contents" / "Resources" / "applet.icns").read_bytes() == (ROOT / "ui_qt" / "icon.icns").read_bytes()
+    script = (isolate_data / "notifier" / "notifier.applescript").read_text(encoding="utf-8")
+    assert str(isolate_data / "notifier" / "queue") in script and "display notification" in script
+    assert notify.ensure_app() == app and built == ["osacompile", "codesign"]      # not rebuilt on the next message
+    monkeypatch.setattr(notify, "_build", lambda cmd: False)
+    monkeypatch.setattr(config, "DATA_DIR", isolate_data / "elsewhere")
+    assert notify.ensure_app() is None                                    # a failed build: the plain way is used instead
+    monkeypatch.setattr(notify.sys, "platform", "linux")
+    assert notify.ensure_app() is None
+
+
+@pytest.mark.parametrize("new, ready, text", [
+    (0, 0, "Nothing new this time. Your list is up to date."),
+    (1, 0, "1 new job found. None scored high enough for a CV and letter."),
+    (1, 1, "1 new job found. 1 is ready to send, with a CV and letter."),
+    (40, 20, "40 new jobs found. 20 are ready to send, with a CV and letter."),
+])
+def test_search_notification_wording(new, ready, text):
+    assert notify.search_text(new, ready) == text
+
+
+def test_icon_files_exist_and_the_app_uses_them():
+    assert (ROOT / "ui_qt" / "icon.png").stat().st_size > 10_000 and (ROOT / "ui_qt" / "icon.icns").read_bytes()[:4] == b"icns"
+    assert "setWindowIcon" in (ROOT / "app_qt.py").read_text(encoding="utf-8")

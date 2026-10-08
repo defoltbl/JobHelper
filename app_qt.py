@@ -24,6 +24,10 @@ QML = Path(__file__).resolve().parent / "ui_qt" / "Main.qml"
 def main() -> int:
     app = QGuiApplication(sys.argv)
     app.setApplicationName("JobHelper")
+    icon = Path(__file__).resolve().parent / "ui_qt" / "icon.png"
+    if icon.is_file():
+        from PySide6.QtGui import QIcon
+        app.setWindowIcon(QIcon(str(icon)))          # the Dock and the window show the app's own icon
     app.setOrganizationName("JobHelper")
 
     try:
