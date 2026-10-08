@@ -178,8 +178,9 @@ Inside the window:
   "scored from a short summary". A search tries each empty or short posting again before scoring
   (three searches at most per job), and **Read it again** in the job window does the same for one
   job. Company-branded pages (`company.jobs.cz`) are read in full from the page's own source. If the
-  site still gives nothing, **paste the posting's text** there (200 to 20,000 characters). Then
-  **Score again**. A job that was scored again shows "was 55" under its score in the list.
+  site still gives nothing, **paste the posting's text** there (200 to 20,000 characters). Either
+  way the job is then scored again by itself (one Claude call); if a search is running, press
+  **Score again** when it has finished. A job that was scored again shows "was 55" under its score.
 - **Documents from a higher score** — a new job that now scores below "Write letters above" but still
   has a letter and CV is marked in the list. **Move documents to backup** (job window) puts the files
   the app wrote into `data/backups/below_your_limit/`; a letter of your own is never moved.

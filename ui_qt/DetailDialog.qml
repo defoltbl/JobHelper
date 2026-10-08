@@ -81,7 +81,23 @@ Dialog {
         var r = bridge.setDescription(job.id, pastedText.text);
         if (!(r && r.ok)) { pasteErr = (r && r.msg) || "The text could not be saved."; return; }
         pastedText.text = ""; pasteOpen = false; refresh(); win.refreshOpenView();
-        scoreBad = false; scoreNote = "The posting's text is saved. Press Score again to score it on the full text.";
+        scoreAfterText("The posting's text is saved.");
+    }
+    function readAgain() {
+        var r = bridge.rereadPosting(job.id);
+        if (r && r.ok) { refresh(); win.refreshOpenView(); scoreAfterText("Read " + r.chars + " characters of the posting."); }
+        else { scoreBad = true; scoreNote = (r && r.msg) || "The posting could not be read.";
+               if (job.can_rescore !== true) ticker.text = scoreNote; }
+    }
+    // New text for a posting makes its old score out of date: score it again at once (one Claude call),
+    // or say plainly why that has to wait.
+    property string scoreLead: ""         // what just happened, said before the result of the scoring
+    function scoreAfterText(what) {
+        scoreBad = false; scoreLead = "";
+        if (job.can_rescore !== true) { scoreNote = what + " The next search will score it."; ticker.text = scoreNote; return; }
+        if (win.appRunning) { scoreNote = what + " A search or scan is running: press Score again when it has finished."; return; }
+        if (scoreBusy) { scoreNote = what + " Another job is being scored: press Score again when it has finished."; return; }
+        scoreAgain(); scoreLead = what + " ";
     }
     // documents written when the score was higher than your limit is now
     property bool confirmShelve: false
@@ -104,7 +120,7 @@ Dialog {
     property string scoreNote: ""
     property bool scoreBad: false
     function scoreAgain() {
-        scoreNote = ""; scoreBad = false; scoreBusy = true; scoreJob = job.id;
+        scoreNote = ""; scoreBad = false; scoreLead = ""; scoreBusy = true; scoreJob = job.id;
         bridge.rescoreJob(job.id);
     }
     Connections { target: bridge
@@ -112,9 +128,10 @@ Dialog {
             if (res.job_id !== detailDialog.scoreJob) return;
             detailDialog.scoreBusy = false;
             var here = res.job_id === detailDialog.job.id;
-            var text = res.ok ? (res.before === res.score ? "Scored again: still " + res.score + "."
+            var lead = detailDialog.scoreLead; detailDialog.scoreLead = "";
+            var text = lead + (res.ok ? (res.before === res.score ? "Scored again: still " + res.score + "."
                                                           : "Scored again: " + res.before + " before, " + res.score + " now.")
-                              : ("Not scored again: " + (res.msg || "unknown reason"));
+                              : ("Not scored again: " + (res.msg || "unknown reason")));
             if (here) { detailDialog.scoreBad = !res.ok; detailDialog.scoreNote = text; if (res.ok) detailDialog.refresh(); }
             else ticker.text = text;
             if (res.ok) { win.countsData = bridge.counts(); win.refreshOpenView(); }
@@ -292,7 +309,7 @@ Dialog {
                         Text { objectName: "scoreNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 12
                             font.bold: detailDialog.scoreBad
                             color: detailDialog.scoreNote === "" ? theme.faint : (detailDialog.scoreBad ? theme.crit : theme.good)
-                            text: detailDialog.scoreBusy ? "Asking Claude…"
+                            text: detailDialog.scoreBusy ? (detailDialog.scoreJob === detailDialog.job.id ? detailDialog.scoreLead : "") + "Asking Claude…"
                                 : detailDialog.scoreNote !== "" ? detailDialog.scoreNote
                                 : (detailDialog.job.score_before !== null && detailDialog.job.score_before !== undefined)
                                     ? "It was " + detailDialog.job.score_before + " before it was scored again."
@@ -320,10 +337,7 @@ Dialog {
                                   ? "The app could not read this posting, so the score rests on the title alone and is kept at 40 or below."
                                   : "The app got only a short summary of this posting, so the score rests on little text." }
                         SmallButton { objectName: "rereadPosting"; visible: !!detailDialog.job.url && !detailDialog.pasteOpen; text: "Read it again"
-                            onClicked: { var r = bridge.rereadPosting(detailDialog.job.id);
-                                if (r && r.ok) { detailDialog.refresh(); win.refreshOpenView(); detailDialog.scoreBad = false;
-                                                 detailDialog.scoreNote = "Read " + r.chars + " characters of the posting. Press Score again to score it on the full text."; }
-                                else { detailDialog.scoreBad = true; detailDialog.scoreNote = (r && r.msg) || "The posting could not be read."; } } }
+                            enabled: !detailDialog.scoreBusy; onClicked: detailDialog.readAgain() }
                         SmallButton { objectName: "pasteToggle"; text: detailDialog.pasteOpen ? "Cancel" : "Paste the posting's text"
                             onClicked: { detailDialog.pasteOpen = !detailDialog.pasteOpen; detailDialog.pasteErr = ""; } }
                     }

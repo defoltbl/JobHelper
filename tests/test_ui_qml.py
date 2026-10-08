@@ -1852,8 +1852,21 @@ def test_options_ask_once_before_discarding_changes(ui):
     assert ui.warnings == []
 
 
+def _wait_scored(ui):
+    import time
+    for _ in range(300):
+        time.sleep(0.02)
+        ui.wait(10)
+        if ui.js("detailDialog.scoreBusy") is False:
+            return
+    raise AssertionError("the score never came back")
+
+
 # ── what a score rests on, pasted text, documents left from a higher score ──
-def test_a_title_only_score_is_marked_and_the_posting_can_be_pasted(ui):
+def test_a_title_only_score_is_marked_and_the_posting_can_be_pasted(ui, monkeypatch):
+    from jobhelper import llm
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython.")
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": 65, "match_reason": "Fits."})
     start = store.find(store.load_jobs(), "lead")
     ui.bridge._api._change("lead", lambda jobs, j: j.update(description="", match_score=40), render=False)
     ui.js('openView("new")')
@@ -1872,7 +1885,11 @@ def test_a_title_only_score_is_marked_and_the_posting_can_be_pasted(ui):
     ui.js('pastedText.text = "' + "We build internal tools in Python and test them well. " * 10 + '"; detailDialog.savePasted()')
     assert ui.js("detailDialog.pasteOpen") is False and ui.js("detailDialog.job.basis") == ""
     assert ui.find("basisRow").property("visible") is False
-    assert ui.find("scoreNote").property("text") == "The posting's text is saved. Press Score again to score it on the full text."
+    assert ui.js("detailDialog.scoreBusy") is True                                   # the new text is scored at once, unasked
+    assert ui.find("scoreNote").property("text") == "The posting's text is saved. Asking Claude…"
+    _wait_scored(ui)
+    assert ui.find("scoreNote").property("text") == "The posting's text is saved. Scored again: 40 before, 65 now."
+    assert ui.js("detailDialog.job.score") == 65 and ui.js("detailDialog.scoreLead") == ""
     ui.js("detailDialog.close()")
     ui.wait(350)
     ui.bridge._api._change("lead", lambda jobs, j: j.update(description=start.get("description", ""), match_score=80, description_by_hand=False), render=False)
@@ -1911,10 +1928,34 @@ def test_read_it_again_button_reports_both_outcomes(ui, monkeypatch):
     assert ui.find("rereadPosting").property("visible") is True
     got = ui.js("bridge.rereadPosting(detailDialog.job.id)")
     assert got["ok"] is False and "paste its text instead" in got["msg"]
-    monkeypatch.setattr(agent2_search, "refetch_description", lambda job: "We build internal tools in Python and test them well. " * 10)
-    assert ui.js("bridge.rereadPosting(detailDialog.job.id).ok") is True
+    ui.js("detailDialog.readAgain()")                                                # the button: nothing new to read
+    assert "paste its text instead" in ui.find("scoreNote").property("text") and ui.js("detailDialog.scoreBad") is True
+    assert ui.js("detailDialog.scoreBusy") is False
+    text = "We build internal tools in Python and test them well. " * 10
+    monkeypatch.setattr(agent2_search, "refetch_description", lambda job: text)
+    ui.js("win.appRunning = true; detailDialog.readAgain()")                         # read, but a search is running: no scoring now
+    assert ui.find("scoreNote").property("text") == f"Read {len(text)} characters of the posting. A search or scan is running: press Score again when it has finished."
+    assert ui.js("detailDialog.scoreBusy") is False and ui.js("detailDialog.job.basis") == "" and ui.find("basisRow").property("visible") is False
+    ui.js("win.appRunning = false")
+
+    from jobhelper import llm
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython.")
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(description="", match_score=40), render=False)
     ui.js("detailDialog.refresh()")
-    assert ui.js("detailDialog.job.basis") == "" and ui.find("basisRow").property("visible") is False
+
+    def limit(*a, **k):
+        raise llm.LimitReached("Claude's 7-day limit is used up.")
+    monkeypatch.setattr(llm, "ask_json", limit)
+    ui.js("detailDialog.readAgain()")
+    assert ui.find("rereadPosting").property("enabled") is False
+    _wait_scored(ui)
+    note = ui.find("scoreNote").property("text")                                     # the text is kept, and the reason it was not scored is said
+    assert note.startswith(f"Read {len(text)} characters of the posting. Not scored again:") and ui.js("detailDialog.scoreBad") is True
+    assert store.find(store.load_jobs(), "lead")["description"] == text and ui.js("detailDialog.job.score") == 40
+
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(description="", match_score=None), render=False)   # a job with no score yet
+    ui.js("detailDialog.refresh(); detailDialog.readAgain()")
+    assert ui.js("detailDialog.scoreBusy") is False and ui.js("ticker.text") == f"Read {len(text)} characters of the posting. The next search will score it."
     ui.js("detailDialog.close()")
     ui.wait(350)
     ui.bridge._api._change("lead", lambda jobs, j: j.update(description=start.get("description", ""), match_score=80, url=""), render=False)
