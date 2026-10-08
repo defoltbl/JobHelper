@@ -107,3 +107,57 @@ def test_a_letter_already_on_a_job_never_seeds_a_second_application(tmp_path):
     for _ in range(2):                                                                   # every search runs the import
         assert letters.import_letters(jobs, tmp_path) == {"linked": 1, "seeded": 0, "scanned": 1}
     assert len(jobs) == 1 and jobs[0]["status"] == "rejected"
+
+
+# ── a letter belongs to the application it was written for ──────────────────
+def _letter(folder, name, days_old):
+    import os
+    import time
+    path = folder / name
+    path.write_text("x")
+    when = time.time() - days_old * 86400
+    os.utime(path, (when, when))
+    return path
+
+
+def _days_ago(n):
+    from datetime import date, timedelta
+    return (date.today() - timedelta(days=n)).isoformat()
+
+
+def test_an_old_letter_is_not_put_on_a_new_job_at_the_same_company(tmp_path):
+    from jobhelper import agent3_letters
+    _letter(tmp_path, "AlexNovak_CoverLetter_Acme.docx", days_old=60)
+    jobs = [store.new_job(id="new", title="Data Engineer", company="Acme", status="found", date_found=_days_ago(2))]
+    stats = letters.import_letters(jobs, tmp_path)
+    lead = jobs[0]
+    assert lead["cover_letter_file"] == "" and lead["status"] == "found" and "own_letter" not in lead      # the app will write a fresh one
+    assert stats == {"linked": 0, "seeded": 1, "scanned": 1}
+    assert jobs[1]["title"] == "(existing application)" and jobs[1]["cover_letter_file"].endswith("_Acme.docx")
+    assert letters.import_letters(jobs, tmp_path) == {"linked": 1, "seeded": 0, "scanned": 1}              # and it stays that way
+    assert agent3_letters._generated_letter(jobs[1]) is False                                              # your letter is never replaced
+
+
+def test_a_letter_written_after_the_job_was_found_is_for_that_job(tmp_path):
+    from jobhelper import agent3_letters
+    _letter(tmp_path, "AlexNovak_CoverLetter_Acme.docx", days_old=1)
+    jobs = [store.new_job(id="new", title="Data Engineer", company="Acme", status="found", date_found=_days_ago(5))]
+    assert letters.import_letters(jobs, tmp_path) == {"linked": 1, "seeded": 0, "scanned": 1}
+    assert jobs[0]["cover_letter_file"].endswith("_Acme.docx") and jobs[0]["status"] == "letter_ready" and jobs[0]["own_letter"] is True
+    assert agent3_letters._generated_letter(jobs[0]) is False and len(jobs) == 1
+
+
+def test_an_application_at_the_company_gets_the_letter_before_any_lead(tmp_path):
+    _letter(tmp_path, "AlexNovak_CoverLetter_Acme.docx", days_old=1)
+    jobs = [store.new_job(id="lead", title="Data Engineer", company="Acme", status="found", date_found=_days_ago(5)),
+            store.new_job(id="app", title="Python Developer", company="Acme s.r.o.", status="rejected")]
+    assert letters.import_letters(jobs, tmp_path) == {"linked": 1, "seeded": 0, "scanned": 1}
+    assert jobs[1]["cover_letter_file"].endswith("_Acme.docx") and jobs[0]["cover_letter_file"] == ""
+
+
+def test_a_lead_that_already_has_a_letter_keeps_it(tmp_path):
+    _letter(tmp_path, "AlexNovak_CoverLetter_Acme.docx", days_old=0)
+    jobs = [store.new_job(id="lead", title="Data Engineer", company="Acme", status="letter_ready", date_found=_days_ago(5),
+                          cover_letter_file="Alex_Novak_CoverLetter_Acme_Data_Engineer.docx")]
+    letters.import_letters(jobs, tmp_path)
+    assert jobs[0]["cover_letter_file"] == "Alex_Novak_CoverLetter_Acme_Data_Engineer.docx" and len(jobs) == 2

@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 8 October 2026
 
+- **Your own letter stays with its application**: a new job at a company you once wrote to no longer gets that old letter; the app writes a fresh one for the new role.
 - **Clear messages for wrong steps in Form answers**: unusable pasted text, too many questions, replacing answers, closing with unsaved changes and copying an unfinished answer are each explained in red, and nothing is cut or lost silently.
 - **Messages on top of open windows**: a result or an error that used to appear only in the status line behind a window now also shows above it, in red when something went wrong.
 - **Form answers, per job**: the general Answers window is replaced. Paste the questions of a job's application form and Claude drafts the answers for that job from your CV and the posting; they are kept with the job, and what it cannot know is marked for you.

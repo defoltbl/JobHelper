@@ -79,19 +79,48 @@ def _match(company: str, jobs: list[dict[str, Any]]) -> dict[str, Any] | None:
     return best
 
 
+def _written_for(lead: dict[str, Any], file_path: str) -> bool:
+    """True if a letter of your own was written for this lead: the lead has no
+    letter yet and the file is newer than the day the job was found. A letter that
+    is older was written for an earlier application at that company."""
+    if lead.get("cover_letter_file"):
+        return False
+    try:
+        written = date.fromtimestamp(Path(file_path).stat().st_mtime)
+        found = date.fromisoformat((lead.get("date_found") or "")[:10])
+    except (OSError, ValueError):
+        return False
+    return written >= found
+
+
 def import_letters(
     jobs: list[dict[str, Any]],
     letters_dir: Path | None = None,
     mark_applied: bool = True,
 ) -> dict[str, int]:
-    """Link cover letters to jobs and seed past applications. Mutates `jobs`."""
+    """Link your own cover letters to jobs and seed past applications. Mutates `jobs`.
+
+    A letter belongs to the application it was written for. It is never put on a
+    new job at the same company just because the company matches: that job gets a
+    fresh letter from the app. Order: the job that already carries the file; an
+    application at that company; a lead the letter was clearly written for (see
+    _written_for); otherwise a new "(existing application)" record."""
     stats = {"linked": 0, "seeded": 0, "scanned": 0}
     for rec in scan(letters_dir):
         stats["scanned"] += 1
         # a job that already carries this very file is its job, whatever the company is called now
         # (you may have merged or renamed it); never seed a second application for the same letter
-        match = next((j for j in jobs if j.get("cover_letter_file") == rec["file_name"]), None) \
-            or _match(rec["company"], jobs)
+        if any(j.get("cover_letter_file") == rec["file_name"] for j in jobs):
+            stats["linked"] += 1
+            continue
+        match = _match(rec["company"], [j for j in jobs if j.get("status") in store.APPLICATION_STATUSES])
+        if match is None:
+            lead = _match(rec["company"], [j for j in jobs if j.get("status") in store.LEAD_STATUSES])
+            if lead is not None and _written_for(lead, rec["file_path"]):
+                match = lead
+                match["own_letter"] = True              # yours: the app never replaces it
+        if match is None:
+            match = store.find(jobs, f"letter-{store.slugify(rec['company'])}")     # seeded before, letter name changed
         if match:
             match["cover_letter_file"] = rec["file_name"]
             if match.get("status") in (None, "", "found"):
