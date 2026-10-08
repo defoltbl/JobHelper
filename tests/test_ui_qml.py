@@ -1391,3 +1391,93 @@ def test_form_answers_show_the_reason_when_claude_cannot_be_asked(ui, monkeypatc
     ui.js("formDialog.close()")
     ui.wait(350)
     assert ui.warnings == []
+
+
+def test_form_answers_explain_every_wrong_step(ui, monkeypatch):
+    """Whatever the user does wrong in this window gets a clear message, and nothing is lost silently."""
+    monkeypatch.setattr(ui_api.Api, "make_form_answers", lambda self, job_id, text: pytest.fail("nothing may be drafted here"))
+    ui.bridge.saveFormAnswers("app", [{"question": "Why us?", "answer": "Because of your product.", "check": ""},
+                                      {"question": "Notice period?", "answer": "My notice period is [your notice period].", "check": "Fill it in"},
+                                      {"question": "Anything else?", "answer": "", "check": ""}])
+    ui.js('formDialog.show("app")')
+    ui.wait(450)
+    note = ui.find("fmNote")
+    # pasted text that cannot be used: said while typing, in red, and Draft does nothing
+    ui.js('fmQuestions.text = "' + "\\n".join(f"Question number {i}?" for i in range(18)) + '"')
+    assert "That is 18 questions" in ui.find("fmHint").property("text")
+    ui.js("formDialog.draft()")
+    assert "one draft takes up to 15" in ui.find("fmHint").property("text") and ui.js("formDialog.busy") is False
+    assert ui.js("formDialog.err") == ""                                           # said once, under the box, not twice
+    ui.js('fmQuestions.text = "' + "x" * 320 + '"')
+    assert "characters long" in ui.find("fmHint").property("text")
+    ui.js('fmQuestions.text = "Why us?\\nwhy us?\\nSalary?"')
+    assert ui.find("fmHint").property("text") == "2 questions found · 1 repeated line was left out · one Claude call"
+    # drafting again would replace answers: asked first, never done on one click
+    ui.js("formDialog.draft()")
+    assert "replaces the 3 answers below" in note.property("text") and ui.js("formDialog.busy") is False
+    ui.js('fmQuestions.text = "Why us?"')                                         # changing the text takes the confirmation back
+    assert ui.js("formDialog.confirmDraft") is False
+    # copying something unfinished
+    ui.js("formDialog.copy(2)")
+    assert "still empty" in note.property("text")
+    ui.js("formDialog.copy(1)")
+    assert "square brackets" in note.property("text")
+    ui.js("formDialog.copy(0)")
+    assert note.property("text") == "Copied."
+    # saving says what is still open
+    ui.js("formDialog.save()")
+    assert note.property("text") == "Saved with this job. 1 answer is still empty. 1 answer still has a part in [square brackets] to fill in."
+    # closing with an unsaved change: one warning, then it closes
+    ui.js('fmModel.setProperty(0, "answer", "Changed and not saved."); formDialog.dirty = true; formDialog.tryClose()')
+    ui.wait(250)
+    dialog = ui.find("formDialog")
+    assert dialog.property("visible") is True and "did not save" in note.property("text")
+    assert ui.js("formDialog.closePolicy === 0") is True                           # Esc cannot throw the change away either
+    ui.js("formDialog.tryClose()")
+    ui.wait(450)
+    assert dialog.property("visible") is False
+    assert ui.bridge.formAnswers("app")["items"][0]["answer"] == "Because of your product."      # the discarded change was not saved
+    # closing while Claude is working
+    ui.js('formDialog.show("app"); formDialog.busy = true; formDialog.tryClose()')
+    ui.wait(300)
+    assert dialog.property("visible") is True and "still drafting" in note.property("text")
+    ui.js("formDialog.busy = false; formDialog.tryClose()")
+    ui.wait(450)
+    ui.bridge.saveFormAnswers("app", [])
+    assert ui.warnings == []
+
+
+def test_a_message_behind_an_open_window_is_shown_on_top_of_it(ui):
+    """The status line is hidden by any open window, so results and errors must also appear above it."""
+    toast = ui.find("toast")
+    ui.js('ticker.text = "said with no window open"')
+    ui.wait(250)
+    assert toast.property("visible") is False                                      # the status line itself is in view
+    _open_job(ui, "app")
+    ui.js('ticker.text = "No link for this job."')
+    ui.wait(300)
+    assert toast.property("visible") is True and ui.find("toastText").property("text") == "No link for this job."
+    assert ui.js("toastBad") is True
+    ui.js('ticker.text = "Opened the job posting in your browser."')
+    ui.wait(250)
+    assert ui.js("toastBad") is False and ui.find("toastText").property("text").startswith("Opened")
+    ui.bridge.logChanged.emit("Scoring 3 of 14 jobs…")                             # a run's progress does not pop up
+    ui.wait(250)
+    assert ui.find("toastText").property("text").startswith("Opened")
+    ui.js("toastTimer.interval = 150; toastTimer.restart()")
+    ui.wait(600)
+    assert toast.property("visible") is False                                      # and it goes away by itself
+    ui.js("toastTimer.interval = 4200; detailDialog.close()")
+    ui.wait(350)
+    assert ui.warnings == []
+
+
+@pytest.mark.parametrize("text, bad", [
+    ("Couldn't make the single PDF.", True), ("No link for this job.", True), ("That job could not be opened.", True),
+    ("These CVs cannot be compared.", True), ("The pasted reply could not be filed.", True), ("That answer is still empty.", True),
+    ("Choose the city to search in first (Options).", True), ("Not prepared: the limit is used up", True),
+    ("Date saved. You will be reminded the day before.", False), ("Moved to Applications (waiting).", False),
+    ("Opened one PDF with the letter and the CV (2 pages).", False), ("Merged into one application.", False),
+])
+def test_which_messages_are_shown_as_errors(ui, text, bad):
+    assert ui.js("looksBad(" + repr(text).replace("\\'", "'") + ")") is bad

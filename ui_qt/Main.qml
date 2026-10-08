@@ -187,6 +187,15 @@ ApplicationWindow {
         if (r && r.fix) welcome.openCard();   // jump to the fix
     }
     function noScore(v) { return v === null || v === undefined; }
+    // The status line is behind any open window, so a message written there while a window is
+    // open is also shown on top of it for a few seconds: red when it says something went wrong.
+    property bool quietTicker: false
+    property string toastText: ""
+    property bool toastBad: false
+    function looksBad(t) {
+        return /^(Couldn't|Could not|No |Not |Nothing |That |Choose |Paste |Enter |Unset |Log in |Add your )|could not|cannot|can't|isn't|not in the list|is missing|failed|still empty/i.test(t || "");
+    }
+    function showToast(t) { toastText = t; toastBad = looksBad(t); toastTimer.restart(); }
     // The same colour, fully see-through. A colour that fades to plain "transparent" fades
     // through black on the way, which leaves a dark shadow behind on a quick mouse move.
     function clearOf(c) { return Qt.rgba(c.r, c.g, c.b, 0); }
@@ -200,7 +209,7 @@ ApplicationWindow {
     Connections {
         target: bridge
         function onAgentChanged(key, status, info) { win.setAgent(key, status, info); }
-        function onLogChanged(t) { ticker.text = t; }
+        function onLogChanged(t) { win.quietTicker = true; ticker.text = t; win.quietTicker = false; }     // a run's own progress: no pop-up
         function onRunningChanged(r) { win.appRunning = r; }
         function onRunFinished(mode, summary) {
             ticker.text = summary; win.reloadAll();
@@ -1007,6 +1016,25 @@ ApplicationWindow {
 
     // ───────────────────────── answers to repeated form questions ─────────────────────────
     FormAnswersDialog { id: formDialog }
+
+    // ───────────────────────── a message on top of an open window ─────────────────────────
+    Connections { target: ticker
+        function onTextChanged() { if (win.dialogOpen && !win.quietTicker && ticker.text !== "") win.showToast(ticker.text); } }
+    Timer { id: toastTimer; interval: 4200; onTriggered: win.toastText = "" }
+    Rectangle {
+        id: toast; objectName: "toast"
+        parent: Overlay.overlay; z: 10000
+        visible: opacity > 0; opacity: win.toastText !== "" && win.dialogOpen ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 160 } }
+        width: Math.min(620, win.width - 80); height: toastT.implicitHeight + 22
+        x: (win.width - width) / 2; y: win.height - height - 26
+        radius: 11; color: win.toastBad ? theme.critbg : theme.surface2
+        border.width: 1; border.color: win.toastBad ? theme.crit : theme.steel
+        Text { id: toastT; objectName: "toastText"; x: 14; y: 11; width: parent.width - 28; wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter; color: theme.ink; font.pixelSize: 12; font.bold: win.toastBad
+            text: win.toastText }
+        TapHandler { onTapped: win.toastText = "" }
+    }
 
     // ───────────────────────── help ─────────────────────────
     HelpDialog { id: helpDialog }
