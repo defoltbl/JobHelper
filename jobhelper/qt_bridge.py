@@ -227,6 +227,16 @@ class Bridge(QObject):
 
     # ── usage refresh (a tiny ping fetches current rate-limit windows) ──
     @Slot()
+    def warmUp(self):
+        """Read every posting's keywords once, in the background, so the first Insights view opens at once."""
+        def work():
+            try:
+                self._api.insights()
+            except Exception:  # noqa: BLE001 - only a head start; the view computes it itself if this failed
+                pass
+        threading.Thread(target=work, daemon=True).start()
+
+    @Slot()
     def refreshUsage(self):
         threading.Thread(target=self._ping_usage, daemon=True).start()
 

@@ -5,6 +5,9 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 8 October 2026
 
+- **Back up everything**: `python status.py security backup-all` writes one encrypted backup with the app's data and your documents (master CV, your own letters, the app's letters and CVs, rule files, template).
+- **Smoother list on the left**: moving the mouse quickly no longer leaves a dark shadow on the row you left.
+- **Insights opens at once**: the slow part is prepared in the background when the app starts.
 - **No built-in city**: the search uses the city from Options; a new user is asked to choose one before the first search.
 - **Cities outside Czechia** are sent to LinkedIn as written (Vienna is no longer searched as "Vienna, Czechia").
 - **Your own letters live in the app's folder**: `data/my_letters/`, with an Open folder button in Options. The app can open them and never changes them.

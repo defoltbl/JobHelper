@@ -124,6 +124,7 @@ ApplicationWindow {
         lastRunData = bridge.lastRun();
         upcomingData = bridge.upcoming();
         bridge.checkConnections();          // answers through onConnectionsReady
+        bridge.warmUp();                    // in the background: makes the first Insights view open at once
     }
     // ── input validation helpers ──
     function hasNonLatin(s) {
@@ -186,6 +187,9 @@ ApplicationWindow {
         if (r && r.fix) welcome.openCard();   // jump to the fix
     }
     function noScore(v) { return v === null || v === undefined; }
+    // The same colour, fully see-through. A colour that fades to plain "transparent" fades
+    // through black on the way, which leaves a dark shadow behind on a quick mouse move.
+    function clearOf(c) { return Qt.rgba(c.r, c.g, c.b, 0); }
     function daysText(n) { return n + (n === 1 ? " day" : " days"); }
     function stopRun() { if (win.appRunning && !win.stopping && bridge.stopRun()) win.stopping = true; }
     function startRun() { if (win.appRunning) return; handleStart(bridge.runSearch(optsData), "Starting…", "search"); }
@@ -311,8 +315,9 @@ ApplicationWindow {
                         ]
                         Rectangle {
                             Layout.fillWidth: true; implicitHeight: 40; radius: 10
-                            color: navMouse.containsMouse ? theme.surface2 : "transparent"
-                            Behavior on color { ColorAnimation { duration: 140 } }
+                            objectName: "navRow_" + modelData.k
+                            color: navMouse.containsMouse ? theme.surface2 : win.clearOf(theme.surface2)
+                            Behavior on color { ColorAnimation { duration: 90 } }
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 11; anchors.rightMargin: 11; spacing: 10
                                 Rectangle { implicitWidth: 9; implicitHeight: 9; radius: 3; color: modelData.dot }
@@ -459,7 +464,7 @@ ApplicationWindow {
                             visible: win.paused
                             implicitHeight: 34; implicitWidth: resumeRow.implicitWidth + 28; radius: 10
                             color: win.canResume ? (resumeMa.containsMouse ? Qt.lighter(theme.a1, 1.1) : theme.a1) : theme.inset
-                            border.width: 1; border.color: win.canResume ? "transparent" : theme.line
+                            border.width: 1; border.color: win.canResume ? win.clearOf(theme.line) : theme.line
                             scale: resumeMa.pressed && win.canResume ? 0.96 : 1
                             Behavior on color { ColorAnimation { duration: win.motion } }
                             Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }

@@ -1343,3 +1343,32 @@ def test_without_a_city_the_search_does_not_start_and_options_open(ui):
     ui.bridge.saveOptions(start)
     ui.js("optsData = bridge.options()")
     assert ui.warnings == []
+
+
+# ── hover that fades out cleanly ────────────────────────────────────────────
+def test_hover_fades_to_the_same_colour_not_through_black(ui):
+    """A colour animated to plain "transparent" passes through black and leaves a dark shadow behind."""
+    assert ui.js('var c = clearOf(Qt.rgba(0.2, 0.4, 0.6, 1)); Math.round(c.r * 10) + "," + Math.round(c.g * 10) + "," + Math.round(c.b * 10) + "," + c.a') == "2,4,6,0"
+    import re
+    for path in sorted((ROOT / "ui_qt").glob("*.qml")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            nearby = " ".join(lines[i:i + 3])
+            if '"transparent"' in line and re.search(r"Behavior on (color|border\.color)", nearby) and "containsMouse" in line:
+                raise AssertionError(f"{path.name}:{i + 1} fades a hover colour to plain transparent")
+
+
+def test_insights_are_warmed_up_in_the_background(ui, monkeypatch):
+    import time
+    calls = []
+    monkeypatch.setattr(ui_api.Api, "insights", lambda self: calls.append(1) or {})
+    ui.js("bridge.warmUp()")
+    for _ in range(100):
+        time.sleep(0.01)
+        if calls:
+            break
+    assert calls == [1]
+    monkeypatch.setattr(ui_api.Api, "insights", lambda self: (_ for _ in ()).throw(RuntimeError("no data yet")))
+    ui.js("bridge.warmUp()")                                   # a failure in the head start is not shown to anyone
+    time.sleep(0.05)
+    assert "bridge.warmUp()" in qml_source() and ui.warnings == []

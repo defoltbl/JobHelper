@@ -578,9 +578,18 @@ live data and checks that it opens (the JSON parses, the database passes its int
 check), then tries to decrypt every older backup. The live data is only read, and the
 temporary folder is removed afterwards. Run it after moving to a new Mac or restoring a key.
 
-Backups hold the app's data files (jobs, responses, settings, notes, answers). Your master
-CV, the letters, the adapted CVs, the two rule files and the letter template are ordinary
-files in `data/`: keep those safe with Time Machine or a copy of the `data/` folder.
+The ordinary backups hold the app's data files (jobs, responses, settings, notes). For
+your documents as well, make a full backup:
+
+```bash
+python status.py security backup-all
+```
+
+It writes one encrypted folder (`data/backups/everything_<date>/`) with the data files, your
+master CV, your own letters, the letters and CVs the app wrote, the two rule files, the
+letter template and the career-site list. Restore it with `security restore <that folder>
+<an empty folder>`. It stays on the same disk as the data, so copy the folder somewhere
+else from time to time (it is encrypted; you need the recovery key to open it).
 
 ### All security commands
 
