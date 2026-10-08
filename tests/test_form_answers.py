@@ -16,12 +16,10 @@ def _reply(*answers):
 # ── reading the pasted questions ────────────────────────────────────────────
 def test_questions_are_read_one_per_line_without_list_marks():
     text = "1. What are your salary expectations? *\n\n- Why do you want to work with us?\n(3) When can you start?\n" \
-           "• Why do you want to work with us?\nok\n   \nDo you need a visa"
+           "• Why do you want to work with us?\n   \nDo you need a visa"
     assert form_answers.parse_questions(text) == ["What are your salary expectations?", "Why do you want to work with us?",
                                                   "When can you start?", "Do you need a visa"]
     assert form_answers.parse_questions("") == [] and form_answers.parse_questions(None) == []
-    assert len(form_answers.parse_questions("\n".join(f"Question number {i}?" for i in range(40)))) == form_answers.MAX_QUESTIONS
-    assert len(form_answers.parse_questions("Q" * 900)[0]) == form_answers.MAX_QUESTION
 
 
 def test_common_questions_name_the_company():
@@ -179,3 +177,34 @@ def test_the_old_answers_bank_is_gone():
     root = Path(ui_api.__file__).resolve().parent.parent
     assert not (root / "jobhelper" / "answers.py").exists() and not (root / "ui_qt" / "AnswersDialog.qml").exists()
     assert not hasattr(ui_api.Api, "save_answers") and not hasattr(ui_api.Api, "fill_answer")
+
+
+# ── what was pasted is judged before anything is asked ──────────────────────
+@pytest.mark.parametrize("text, problem", [
+    ("", "Paste the questions"), ("   \n\n", "Paste the questions"),
+    ("12345\n?!\n--", "No question found"),
+    ("Why us?\n" + "word " * 100, "Line 2 is 499 characters long"),
+    ("\n".join(f"Question number {i}?" for i in range(20)), "That is 20 questions; one draft takes up to 15"),
+])
+def test_bad_pasted_text_is_explained_not_cut_silently(text, problem):
+    got = form_answers.check_questions(text)
+    assert problem in got["problem"] and got["questions"] == []
+    assert form_answers.parse_questions(text) == []
+
+
+def test_good_text_says_what_was_left_out():
+    got = form_answers.check_questions("1. Why us?\n- why us?\n???\nWhen can you start?\n42")
+    assert got["questions"] == ["Why us?", "When can you start?"] and got["problem"] == ""
+    assert got["note"] == "1 repeated line was left out; 2 lines with no words were left out"
+    assert form_answers.check_questions("Why us?") == {"questions": ["Why us?"], "problem": "", "note": ""}
+    exactly = form_answers.check_questions("\n".join(f"Question number {i}?" for i in range(15)))
+    assert len(exactly["questions"]) == 15 and exactly["problem"] == ""
+
+
+def test_api_refuses_bad_text_with_the_same_words_and_asks_no_one(api, monkeypatch):
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: pytest.fail("must not ask Claude"))
+    many = "\n".join(f"Question number {i}?" for i in range(16))
+    assert api.check_questions(many)["problem"] == api.make_form_answers("a", many)["msg"]
+    assert "one draft takes up to 15" in api.make_form_answers("a", many)["msg"]
+    assert api.check_questions("Why us?\nSalary?") == {"count": 2, "problem": "", "note": ""}
+    assert "characters long" in api.make_form_answers("a", "x" * 400)["msg"]

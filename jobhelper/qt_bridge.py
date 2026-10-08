@@ -537,6 +537,10 @@ class Bridge(QObject):
     def formAnswers(self, job_id):
         return self._api.form_answers(job_id)
 
+    @Slot(str, result="QVariantMap")
+    def checkQuestions(self, questions_text):
+        return self._api.check_questions(questions_text)
+
     @Slot(str, str)
     def draftAnswers(self, job_id, questions_text):
         """Runs in the background (it asks Claude); the answer arrives as answersReady."""

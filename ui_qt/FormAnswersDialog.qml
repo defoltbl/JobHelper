@@ -9,7 +9,8 @@ import QtQuick.Effects
 
 Dialog {
     id: formDialog; objectName: "formDialog"
-    modal: true; anchors.centerIn: parent; closePolicy: Popup.CloseOnEscape
+    modal: true; anchors.centerIn: parent
+    closePolicy: dirty ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits
     enter: Transition { ParallelAnimation {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
         NumberAnimation { property: "scale"; from: 0.92; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 0.7 } } }
@@ -25,6 +26,19 @@ Dialog {
     property bool dirty: false            // an answer was edited and not saved
     property string err: ""
     property string note: ""
+    property var checked: ({ count: 0, problem: "", note: "" })     // what the pasted text holds, judged as you type
+    property bool confirmDraft: false     // "Draft again" was pressed once and would replace answers
+    property bool confirmClose: false     // Close was pressed once with unsaved edits
+    function recheck() { checked = bridge.checkQuestions(fmQuestions.text); confirmDraft = false; }
+    function tryClose() {
+        if (busy) { err = "Claude is still drafting. Wait for the answers, then close."; return; }
+        if (dirty && !confirmClose) {
+            confirmClose = true; note = "";
+            err = "You changed an answer and did not save it. Press Save, or Close once more to discard the change.";
+            return;
+        }
+        dirty = false; close();
+    }
     ListModel { id: fmModel }
     function fill(d) {
         info = d || {};
@@ -36,9 +50,10 @@ Dialog {
     function show(job) {
         var d = bridge.formAnswers(job);
         if (!d || !d.id) { ticker.text = "That job is not in the list any more."; return; }
-        jobId = job; err = ""; note = ""; busy = false;
+        jobId = job; err = ""; note = ""; busy = false; confirmClose = false;
         fill(d);
         fmQuestions.text = (d.items || []).map(function (i) { return i.question; }).join("\n");
+        recheck();
         fmFlick.contentY = 0; open();
     }
     function all() {
@@ -47,19 +62,39 @@ Dialog {
         return out;
     }
     function draft() {
-        err = ""; note = "";
-        if (fmQuestions.text.trim() === "") { err = "Paste the questions from the form first, one per line."; return; }
-        busy = true;
+        err = ""; note = ""; confirmClose = false;
+        checked = bridge.checkQuestions(fmQuestions.text);
+        if (checked.problem !== "") {               // said once, in red, right under the box (and below only when the box is empty)
+            if (fmQuestions.text.trim() === "") err = checked.problem;
+            confirmDraft = false; return;
+        }
+        if (fmModel.count > 0 && !confirmDraft) {       // never replace answers (and edits) without saying so
+            confirmDraft = true;
+            err = "Drafting again replaces the " + fmModel.count + (fmModel.count === 1 ? " answer" : " answers") + " below"
+                  + (dirty ? ", including the changes you have not saved" : "") + ". Press Draft again once more to go on.";
+            return;
+        }
+        confirmDraft = false; busy = true;
         bridge.draftAnswers(jobId, fmQuestions.text);
     }
     function save() {
+        err = ""; confirmClose = false; confirmDraft = false;
+        var empty = 0, open = 0;
+        for (var i = 0; i < fmModel.count; i++) {
+            var a = fmModel.get(i).answer;
+            if (a.trim() === "") empty++; else if (/\[[^\]]+\]/.test(a)) open++;
+        }
         var r = bridge.saveFormAnswers(jobId, all());
-        if (r && r.ok) { dirty = false; note = "Saved with this job."; detailDialog.refresh(); }
-        else err = "Couldn't save the answers.";
+        if (!(r && r.ok)) { err = "The answers could not be saved. The job may have been removed from the list."; return; }
+        dirty = false; detailDialog.refresh();
+        note = "Saved with this job." + (empty > 0 ? " " + empty + (empty === 1 ? " answer is" : " answers are") + " still empty." : "")
+               + (open > 0 ? " " + open + (open === 1 ? " answer still has" : " answers still have") + " a part in [square brackets] to fill in." : "");
     }
     function copy(i) {
         var text = fmModel.get(i).answer;
-        if (text.trim() === "") { note = ""; err = "That answer is still empty."; return; }
+        note = ""; confirmClose = false; confirmDraft = false;
+        if (text.trim() === "") { err = "That answer is still empty. Write it first, then copy."; return; }
+        if (/\[[^\]]+\]/.test(text)) { err = "This answer still has a part in [square brackets]. Replace it with your own words, then copy."; return; }
         err = "";
         bridge.copyText(text);
         note = fmModel.get(i).check !== "" ? "Copied. Check it first: " + fmModel.get(i).check : "Copied.";
@@ -87,7 +122,7 @@ Dialog {
             Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
                 Layout.alignment: Qt.AlignTop
                 Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: formDialog.close() } }
+                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: formDialog.tryClose() } }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         Flickable {
@@ -102,25 +137,37 @@ Dialog {
                     Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
                         text: "Every form asks something different. Paste this form's questions here, one per line." }
                     Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
-                        border.color: fmQuestions.activeFocus ? theme.accent : (formDialog.err !== "" && fmQuestions.text.trim() === "" ? theme.crit : theme.line)
+                        border.color: (formDialog.err !== "" && fmQuestions.text.trim() === "") || (fmQuestions.text.trim() !== "" && formDialog.checked.problem !== "")
+                              ? theme.crit : (fmQuestions.activeFocus ? theme.accent : theme.line)
                         implicitHeight: Math.max(96, fmQuestions.implicitHeight + 16)
                         TextEdit { id: fmQuestions; objectName: "fmQuestions"; x: 8; y: 8; width: parent.width - 16
                             wrapMode: TextEdit.Wrap; selectByMouse: true; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                             readOnly: formDialog.busy
-                            onTextChanged: if (activeFocus) { formDialog.err = ""; formDialog.note = ""; }
+                            onTextChanged: { formDialog.recheck(); if (activeFocus) { formDialog.err = ""; formDialog.note = ""; } }
                             Text { visible: fmQuestions.text === ""; color: theme.faint; font.pixelSize: 12
                                 text: "What are your salary expectations?\nWhy do you want to work with us?" } } }
                     RowLayout { Layout.fillWidth: true; spacing: 6
-                        Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
-                            text: "Claude drafts the answers in one call, from your CV, this posting and About you in Options. Nothing outside your CV is claimed." }
+                        Text { objectName: "fmHint"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
+                            // what the text holds, as you type: a problem in red, otherwise the count
+                            color: fmQuestions.text.trim() !== "" && formDialog.checked.problem !== "" ? theme.crit : theme.faint
+                            font.bold: fmQuestions.text.trim() !== "" && formDialog.checked.problem !== ""
+                            text: fmQuestions.text.trim() === "" ? "Claude drafts the answers in one call, from your CV, this posting and About you in Options. Nothing outside your CV is claimed."
+                                : formDialog.checked.problem !== "" ? formDialog.checked.problem
+                                : formDialog.checked.count + (formDialog.checked.count === 1 ? " question" : " questions") + " found"
+                                  + (formDialog.checked.note !== "" ? " · " + formDialog.checked.note : "") + " · one Claude call" }
                         SmallButton { objectName: "fmCommon"; enabled: !formDialog.busy; text: "Common questions"
-                            onClicked: { fmQuestions.text = (formDialog.info.common || []).join("\n"); formDialog.err = ""; formDialog.note = ""; } }
+                            onClicked: {
+                                formDialog.note = "";
+                                if (fmQuestions.text.trim() !== "" && fmQuestions.text.trim() !== (formDialog.info.common || []).join("\n")) {
+                                    // do not throw away what was pasted: add the common ones below it
+                                    fmQuestions.text = fmQuestions.text.replace(/\s+$/, "") + "\n" + (formDialog.info.common || []).join("\n");
+                                    formDialog.note = "Added below what you pasted.";
+                                } else fmQuestions.text = (formDialog.info.common || []).join("\n");
+                                formDialog.err = ""; } }
                         SmallButton { objectName: "fmDraft"; primaryStyle: true; enabled: !formDialog.busy
                             text: formDialog.busy ? "Asking Claude…" : (fmModel.count > 0 ? "Draft again" : "Draft answers")
                             onClicked: formDialog.draft() }
                     }
-                    Text { objectName: "fmErr"; visible: formDialog.err !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
-                        color: theme.crit; font.pixelSize: 12; font.bold: true; text: formDialog.err }
                 }
                 Repeater {
                     model: fmModel
@@ -141,7 +188,8 @@ Dialog {
                                 TextEdit { id: fmAns; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap; selectByMouse: true
                                     color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                                     Component.onCompleted: text = model.answer
-                                    onTextChanged: if (activeFocus) { fmModel.setProperty(index, "answer", text); formDialog.dirty = true; formDialog.note = ""; }
+                                    onTextChanged: if (activeFocus) { fmModel.setProperty(index, "answer", text); formDialog.dirty = true
+                                                                      formDialog.note = ""; formDialog.err = ""; formDialog.confirmClose = false; }
                                     Text { visible: fmAns.text === ""; text: "Write this answer yourself"; color: theme.faint; font.pixelSize: 12 } } }
                         }
                     }
@@ -150,13 +198,16 @@ Dialog {
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         RowLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 6
-            Text { objectName: "fmNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
-                color: formDialog.note !== "" ? theme.good : theme.faint
-                text: formDialog.note !== "" ? formDialog.note
+            // always in view, wherever the list is scrolled: what went wrong (red) or what was done (green)
+            Text { objectName: "fmNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                font.pixelSize: formDialog.err !== "" ? 12 : 11; font.bold: formDialog.err !== ""
+                color: formDialog.err !== "" ? theme.crit : (formDialog.note !== "" ? theme.good : theme.faint)
+                text: formDialog.err !== "" ? formDialog.err
+                    : formDialog.note !== "" ? formDialog.note
                     : formDialog.dirty ? "Edited, not saved yet."
                     : fmModel.count > 0 ? "Kept with this job" + (formDialog.info.made ? " · drafted " + formDialog.info.made : "") + ". Read every answer before you send it."
                     : "The answers are kept with this job, so you can come back to them." }
-            SmallButton { text: "Close"; onClicked: formDialog.close() }
+            SmallButton { objectName: "fmClose"; text: "Close"; onClicked: formDialog.tryClose() }
             PillButton { objectName: "fmSave"; visible: fmModel.count > 0; primaryStyle: true; text: "Save"; onClicked: formDialog.save() }
         }
     }

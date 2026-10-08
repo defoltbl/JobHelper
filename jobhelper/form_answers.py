@@ -60,16 +60,53 @@ Return JSON with exactly this shape, one entry per question, in the same order:
 {{"answers": [{{"n": <question number>, "answer": "<the answer>", "needs_you": "<'' or what the candidate must fill in or check>"}}]}}"""
 
 
-def parse_questions(text: str) -> list[str]:
-    """The questions in pasted text: one per line, list marks and numbering removed, repeats dropped."""
-    out, seen = [], set()
+def _lines(text: str) -> list[str]:
+    """Pasted lines with list marks and numbering removed (empty lines dropped)."""
+    out = []
     for line in (text or "").splitlines():
         q = re.sub(r"^\s*(?:[-*•·]+|\(?\d{1,2}[.)])\s*", "", line).strip().rstrip("*").strip()
-        key = q.lower()
-        if len(q) >= 3 and key not in seen:
-            seen.add(key)
-            out.append(q[:MAX_QUESTION])
-    return out[:MAX_QUESTIONS]
+        if q:
+            out.append(q)
+    return out
+
+
+def check_questions(text: str) -> dict[str, Any]:
+    """What was pasted, judged before anything is sent to Claude:
+    {questions, problem, note}. `problem` says what to change (nothing is drafted
+    while it is set); `note` only tells what was left out."""
+    lines = _lines(text)
+    if not lines:
+        return {"questions": [], "note": "", "problem": "Paste the questions from the form first, one per line."}
+    for n, line in enumerate(lines, 1):
+        if len(line) > MAX_QUESTION:
+            return {"questions": [], "note": "",
+                    "problem": f"Line {n} is {len(line)} characters long. Paste only the questions, one per line, "
+                               f"not the whole page (a question can be up to {MAX_QUESTION} characters)."}
+    real = [q for q in lines if len(q) >= 3 and re.search(r"[^\W\d_]{2}", q)]
+    if not real:
+        return {"questions": [], "note": "", "problem": "No question found in that text. Write each question as a line of words."}
+    out, seen, repeats = [], set(), 0
+    for q in real:
+        if q.lower() in seen:
+            repeats += 1
+            continue
+        seen.add(q.lower())
+        out.append(q)
+    if len(out) > MAX_QUESTIONS:
+        return {"questions": [], "note": "",
+                "problem": f"That is {len(out)} questions; one draft takes up to {MAX_QUESTIONS}. Remove some and draft the rest afterwards."}
+    notes = []
+    if repeats:
+        notes.append(f"{repeats} repeated line{'s were' if repeats != 1 else ' was'} left out")
+    if len(lines) - len(real):
+        skipped = len(lines) - len(real)
+        notes.append(f"{skipped} line{'s' if skipped != 1 else ''} with no words {'were' if skipped != 1 else 'was'} left out")
+    return {"questions": out, "problem": "", "note": "; ".join(notes)}
+
+
+def parse_questions(text: str) -> list[str]:
+    """The questions in pasted text ([] when check_questions finds a problem)."""
+    return check_questions(text)["questions"]
 
 
 def common_questions(job: dict[str, Any]) -> list[str]:

@@ -364,14 +364,20 @@ class Api:
                 "items": form_answers.tidy(kept.get("items")), "made": str(kept.get("made", "")),
                 "common": form_answers.common_questions(j)}
 
+    def check_questions(self, questions_text):
+        """What the pasted text holds, before anything is asked: {count, problem, note}."""
+        checked = form_answers.check_questions(questions_text)
+        return {"count": len(checked["questions"]), "problem": checked["problem"], "note": checked["note"]}
+
     def make_form_answers(self, job_id, questions_text):
         """Draft answers to the pasted questions with Claude (one call, one retry) and keep them with the job."""
         j = store.find(store.load_jobs(), job_id)
         if not j:
             return {"ok": False, "msg": "That job is not in the list any more."}
-        questions = form_answers.parse_questions(questions_text)
-        if not questions:
-            return {"ok": False, "msg": "Paste the questions from the form first, one per line."}
+        checked = form_answers.check_questions(questions_text)
+        if checked["problem"]:
+            return {"ok": False, "msg": checked["problem"]}
+        questions = checked["questions"]
         cv_text = self._cv_text()
         if not cv_text.strip():
             return {"ok": False, "msg": "Your master CV could not be read, so answers cannot be built from it."}
