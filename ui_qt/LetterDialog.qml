@@ -35,18 +35,37 @@ Dialog {
         meta = d; original = d.paragraphs.slice(); texts = d.paragraphs.slice();
         paraModel.clear();
         for (var i = 0; i < texts.length; i++) paraModel.append({ body: texts[i] });
-        busyIndex = -1; err = ""; warnings = []; info = ""; hintField.text = "";
+        busyIndex = -1; err = ""; warnings = []; info = ""; hintField.text = ""; confirmClose = false;
         letterFlick.contentY = 0;
         open();
     }
-    function setText(i, t) { var c = texts.slice(); c[i] = t; texts = c; }
+    property bool confirmClose: false     // Close was pressed once with changes that are not saved
+    readonly property int hintMax: 300
+    function setText(i, t) { var c = texts.slice(); c[i] = t; texts = c; confirmClose = false; }
+    function emptyOnes() {                // which paragraphs are empty, as "2 and 4"
+        var out = [];
+        for (var i = 0; i < texts.length; i++) if (("" + texts[i]).trim() === "") out.push(i + 1);
+        return out.length === 0 ? "" : out.join(" and ");
+    }
+    function tryClose() {
+        if (busyIndex >= 0) { info = ""; err = "Claude is still rewriting paragraph " + (busyIndex + 1) + ". Wait for it, then close."; return; }
+        if (dirty && !confirmClose) {
+            confirmClose = true; info = "";
+            err = "You changed the letter and did not save it. Press Save, or Close once more to discard the changes.";
+            return;
+        }
+        close();
+    }
     function rewrite(i) {
         if (busyIndex >= 0) return;
+        if (("" + texts[i]).trim() === "") { info = ""; err = "Paragraph " + (i + 1) + " is empty. Write something for Claude to rewrite, or undo your changes."; return; }
         err = ""; info = ""; busyIndex = i;
         bridge.rewriteParagraph(meta.id, texts, i, hintField.text);
     }
     function save() {
-        err = ""; info = "";
+        err = ""; info = ""; confirmClose = false;
+        var empty = emptyOnes();
+        if (empty !== "") { err = "Paragraph " + empty + (empty.indexOf("and") > 0 ? " are" : " is") + " empty. A letter needs all " + texts.length + " paragraphs."; return; }
         var r = bridge.saveLetter(meta.id, texts);
         if (!r || !r.ok) { err = (r && r.msg) ? r.msg : "The letter could not be saved."; return; }
         original = texts.slice(); warnings = r.warnings || [];
@@ -99,8 +118,8 @@ Dialog {
                                 enabled: letterDialog.busyIndex < 0; onClicked: letterDialog.rewrite(index) }
                         }
                         Rectangle { Layout.fillWidth: true; radius: 9; color: theme.inset; border.width: 1
-                            border.color: pEdit.activeFocus ? theme.accent : theme.line
-                            implicitHeight: pEdit.implicitHeight + 20
+                            border.color: pEdit.text.trim() === "" ? theme.crit : (pEdit.activeFocus ? theme.accent : theme.line)
+                            implicitHeight: Math.max(44, pEdit.implicitHeight + 20)
                             opacity: letterDialog.busyIndex === index ? 0.5 : 1
                             TextEdit { id: pEdit; x: 10; y: 10; width: parent.width - 20
                                 text: model.body; wrapMode: TextEdit.Wrap; selectByMouse: true
@@ -115,8 +134,12 @@ Dialog {
                     TextField { id: hintField; objectName: "hintField"; Layout.fillWidth: true; implicitHeight: 30
                         placeholderText: "Optional: what should change? e.g. shorter, more about my main project"
                         placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true
+                        maximumLength: letterDialog.hintMax
                         background: Rectangle { radius: 8; color: theme.inset; border.width: 1
-                            border.color: hintField.activeFocus ? theme.accent : theme.line } }
+                            border.color: hintField.activeFocus ? theme.accent : theme.line }
+                        // a single-line field stops taking letters at its limit: say so instead of going silent
+                        onTextEdited: { letterDialog.info = "";
+                                        letterDialog.err = text.length >= maximumLength ? "The note for a rewrite takes up to " + maximumLength + " characters." : ""; } }
                 }
                 Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                     text: "A rewrite asks Claude once or twice and uses your limit. It follows your letter rules and your CV; nothing is saved until you press Save." }
@@ -137,7 +160,7 @@ Dialog {
                              letterDialog.err = ""; letterDialog.info = ""; } }
             Item { Layout.fillWidth: true }
             Text { visible: letterDialog.dirty; text: "not saved"; color: theme.warn; font.pixelSize: 11; font.bold: true }
-            SmallButton { text: "Close"; onClicked: letterDialog.close() }
+            SmallButton { objectName: "letterClose"; text: "Close"; onClicked: letterDialog.tryClose() }
             PillButton { objectName: "letterSave"; primaryStyle: true; text: "Save"
                 enabled: letterDialog.dirty && letterDialog.busyIndex < 0; onClicked: letterDialog.save() }
         }

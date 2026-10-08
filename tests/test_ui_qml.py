@@ -1667,3 +1667,76 @@ def test_form_answers_and_preparation_lists_explain_their_limits(ui, monkeypatch
     source = qml_source()
     assert "“Right to work” takes up to" in source and "“You can start” takes up to" in source
     assert ui.warnings == []
+
+
+# ── the older windows: every text field explains itself too ─────────────────
+def test_number_fields_say_what_they_accept_instead_of_going_silent(ui):
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    spin = ui.find("scanSpin")                                                   # 1 to 365
+    start = spin.property("value")
+    ui.js('scanSpin.contentItem.text = "999"; scanSpin.contentItem.textEdited()')
+    assert ui.js("scanSpin.note") == "Between 1 and 365" and ui.js("scanSpin.noteBad") is True
+    assert spin.property("value") == start                                        # a wrong number is not taken
+    ui.js("scanSpin.contentItem.editingFinished()")
+    assert spin.property("value") == 365 and ui.js("scanSpin.note") == "Changed to 365, the highest allowed"
+    assert ui.js("scanSpin.contentItem.text") == "365"
+    ui.js('scanSpin.contentItem.text = "0"; scanSpin.contentItem.textEdited(); scanSpin.contentItem.editingFinished()')
+    assert spin.property("value") == 1 and ui.js("scanSpin.note") == "Changed to 1, the lowest allowed"
+    ui.js('scanSpin.contentItem.text = "45"; scanSpin.contentItem.textEdited()')
+    assert spin.property("value") == 45 and ui.js("scanSpin.note") == ""           # a good number: taken at once, nothing said
+    ui.js('scanSpin.contentItem.text = ""; scanSpin.contentItem.textEdited(); scanSpin.contentItem.editingFinished()')
+    assert spin.property("value") == 45 and ui.js("scanSpin.note") == "Left at 45"
+    ui.js(f"scanSpin.value = {start}; scanSpin.note = ''")
+    ui.js("close()", dialog)
+    ui.wait(350)
+    assert ui.warnings == []
+
+
+def test_career_site_name_is_checked(ui):
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    assert ui.js('optDialog.addCompany("' + "n" * 61 + '", "greenhouse", "acme")') is False
+    assert ui.js("optDialog.coErr") == "The company name is 61 characters long; the most is 60."
+    assert ui.js('optDialog.addCompany("Компания", "greenhouse", "acme")') is False and "Latin letters" in ui.js("optDialog.coErr")
+    assert ui.js('optDialog.addCompany("Acme", "greenhouse", "")') is False and "token" in ui.js("optDialog.coErr")
+    assert ui.find("coName").property("maximumLength") == 60
+    ui.js("close()", dialog)
+    ui.wait(350)
+    assert ui.warnings == []
+
+
+def test_letter_editor_explains_wrong_steps(ui, monkeypatch):
+    from jobhelper import cover_letter
+    paras = ["First paragraph of the letter.", "Second one.", "Third one.", "Fourth one.", "Fifth one."]
+    monkeypatch.setattr(ui_api.Api, "letter_for_edit", lambda self, job_id: {"ok": True, "id": "lead", "company": "Acme", "title": "Dev",
+                        "title_line": "Dev", "date_text": "", "paragraphs": list(paras), "min_words": cover_letter.MIN_WORDS, "max_words": cover_letter.MAX_WORDS})
+    saved = []
+    monkeypatch.setattr(ui_api.Api, "save_letter", lambda self, job_id, texts: saved.append(list(texts)) or {"ok": True, "warnings": []})
+    ui.js('letterDialog.show("lead")')
+    ui.wait(450)
+    dialog, err = ui.find("letterDialog"), ui.find("letterErr")
+    assert dialog.property("opened") is True
+    ui.js('letterDialog.setText(1, "   "); letterDialog.setText(3, "")')
+    ui.js("letterDialog.save()")
+    assert err.property("text") == "Paragraph 2 and 4 are empty. A letter needs all 5 paragraphs." and saved == []
+    ui.js("letterDialog.rewrite(1)")
+    assert "Paragraph 2 is empty" in err.property("text") and ui.js("letterDialog.busyIndex") == -1      # nothing to rewrite: Claude is not asked
+    ui.js('letterDialog.setText(1, "Second one, changed."); letterDialog.setText(3, "Fourth one."); letterDialog.tryClose()')
+    ui.wait(200)
+    assert dialog.property("visible") is True and "did not save" in err.property("text")                 # changes are not thrown away on one click
+    ui.js("letterDialog.busyIndex = 2; letterDialog.tryClose()")
+    assert "still rewriting paragraph 3" in err.property("text") and dialog.property("visible") is True
+    ui.js("letterDialog.busyIndex = -1; letterDialog.save()")
+    assert saved and saved[0][1] == "Second one, changed."
+    assert ui.find("hintField").property("maximumLength") == 300
+    ui.js('hintField.text = "' + "h" * 300 + '"; hintField.textEdited()')
+    assert err.property("text") == "The note for a rewrite takes up to 300 characters."
+    ui.js('hintField.text = ""; letterDialog.err = ""; letterDialog.tryClose()')
+    ui.wait(450)
+    assert dialog.property("visible") is False                                                           # saved: closes at once
+    assert ui.warnings == []

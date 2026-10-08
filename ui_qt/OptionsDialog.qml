@@ -57,6 +57,8 @@ Dialog {
     function addCompany(name, ats, token) {
         var tok = (token || "").trim();
         coErr = "";
+        if (win.hasNonLatin(name)) { coErr = "Write the company name in Latin letters."; return false; }
+        if ((name || "").trim().length > 60) { coErr = "The company name is " + (name || "").trim().length + " characters long; the most is 60."; return false; }
         if (!tok) { coErr = "Enter the company's token (the slug in its career-site URL)."; return false; }
         if (!win.isSlug(tok)) { coErr = "Token looks wrong — use the URL slug only (letters, digits, - or _), no spaces or https://."; return false; }
         for (var i = 0; i < companiesModel.count; i++)
@@ -257,8 +259,9 @@ Dialog {
                             text: "No companies yet. Add one below."; color: theme.faint; font.pixelSize: 12 }
                         // add form
                         RowLayout { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; spacing: 6
-                            TextField { id: coName; Layout.fillWidth: true; placeholderText: "Company name"
-                                color: theme.ink; font.pixelSize: 12; selectByMouse: true
+                            TextField { id: coName; objectName: "coName"; Layout.fillWidth: true; placeholderText: "Company name"
+                                color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 60
+                                onTextEdited: optDialog.coErr = text.length >= maximumLength ? "The company name takes up to " + maximumLength + " characters." : ""
                                 background: Rectangle { radius: 7; color: theme.surface; border.color: parent.activeFocus ? theme.accent : theme.line; border.width: 1 } }
                             ThemedCombo { id: coAts; implicitWidth: 128; plainText: true
                                 model: ["greenhouse", "lever", "smartrecruiters", "recruitee"] }
