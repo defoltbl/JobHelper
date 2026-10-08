@@ -1816,3 +1816,37 @@ def test_score_all_again_asks_before_spending_the_limit(ui, monkeypatch):
     ui.js("tableDialog.close()")
     ui.wait(350)
     assert ui.warnings == []
+
+
+# ── Options: changes are not thrown away unasked ────────────────────────────
+def test_options_ask_once_before_discarding_changes(ui):
+    dialog = ui.find("optDialog")
+    start = ui.bridge.options()
+    ui.bridge.saveOptions({**start, "where": "Prague"})
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    assert ui.js("optDialog.changed()") is False
+    ui.js("optDialog.tryClose()")                                               # nothing changed: closes at once
+    ui.wait(450)
+    assert dialog.property("visible") is False
+    ui.js("open()", dialog)
+    ui.wait(450)
+    ui.js("thrSpin.value = thrSpin.value + 5")
+    assert ui.js("optDialog.changed()") is True
+    ui.js("optDialog.tryClose()")
+    ui.wait(250)
+    assert dialog.property("visible") is True and "did not save" in ui.js("optDialog.optErr")
+    assert ui.find("optCancel").property("text") == "Discard changes"
+    ui.js("thrSpin.value = thrSpin.value - 5")                                  # put back by hand: nothing to lose any more
+    assert ui.js("optDialog.changed()") is False
+    ui.js('skipTags.add("contractor"); optDialog.confirmClose = false; optDialog.tryClose()')
+    ui.wait(200)
+    assert dialog.property("visible") is True                                     # a tag counts as a change too
+    ui.js("optDialog.tryClose()")                                               # the second time it goes
+    ui.wait(450)
+    assert dialog.property("visible") is False and "contractor" not in ui.bridge.options()["skip_words"]
+    assert ui.js("optDialog.closePolicy === 0") is True                           # Esc cannot bypass the question
+    ui.bridge.saveOptions(start)
+    ui.js("optsData = bridge.options()")
+    assert ui.warnings == []

@@ -9,7 +9,9 @@ import QtQuick.Effects
 
 Dialog {
     id: optDialog; objectName: "optDialog"
-    modal: true; anchors.centerIn: parent; closePolicy: Popup.CloseOnEscape
+    modal: true; anchors.centerIn: parent
+    closePolicy: Popup.NoAutoClose        // Esc goes through tryClose, so changes are never thrown away unasked
+    Shortcut { sequence: "Escape"; enabled: optDialog.visible; onActivated: optDialog.tryClose() }
     enter: Transition { ParallelAnimation {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
         NumberAnimation { property: "scale"; from: 0.92; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 0.7 } } }
@@ -76,6 +78,42 @@ Dialog {
     }
     property var myLetters: ({})          // where your own letters are, and how many
     readonly property int expMax: 4000    // the same limit the app applies when it reads the text
+    property string loaded: ""            // everything in the window as it was when it opened, to tell if it changed
+    property bool confirmClose: false
+    function collect() {                  // what Save would store, as plain values
+        var qs = [];
+        for (var i = 0; i < rolesModel.count; i++) qs.push("" + rolesModel.get(i).text);
+        var cs = [];                      // plain objects: a ListModel row cannot cross the bridge
+        for (var k = 0; k < companiesModel.count; k++) {
+            var c = companiesModel.get(k);
+            cs.push({ name: "" + c.name, ats: "" + c.ats, token: "" + c.token });
+        }
+        return { options: { where: cityCombo.editText, source: srcCombo.currentValue,
+                            include_remote: remoteSw.checked, all_languages: !engSw.checked,
+                            full_time_only: fullSw.checked,
+                            skip_words: skipTags.all(), keep_words: keepTags.all(),
+                            level_words: levelTags.all(), max_years: yearsSpin.value,
+                            wanted_roles: wantedTags.all(), unwanted_roles: unwantedTags.all(),
+                            max_age_days: ageSpin.value, per_query: pqSpin.value,
+                            threshold: thrSpin.value, min_lead_score: minSpin.value,
+                            followup_days: fuSpin.value, scan_days: scanSpin.value,
+                            about_right_to_work: rightField.text.trim(), about_start: startField.text.trim(),
+                            about_experience: expField.text.trim(),
+                            notifications: notifySw.checked, keep_backups: keepSpin.value,
+                            scan_all_folders: foldersSw.checked,
+                            model: modelCombo.currentText, queries: qs },
+                 companies: cs };
+    }
+    function changed() { return loaded !== "" && JSON.stringify(collect()) !== loaded; }
+    function tryClose() {                 // the ✕ and the Esc key: ask once before throwing changes away
+        if (changed() && !confirmClose) {
+            confirmClose = true;
+            optErr = "You changed Options and did not save. Press Save, or close once more to discard the changes.";
+            return;
+        }
+        close();
+    }
+    onClosed: { confirmClose = false; loaded = ""; }
     function load() {
         myLetters = bridge.myLetters();
         var o = win.optsData;
@@ -108,7 +146,8 @@ Dialog {
         var cs = bridge.companies();
         for (var k = 0; k < cs.length; k++)
             companiesModel.append({ name: cs[k].name, ats: cs[k].ats, token: cs[k].token });
-        coErr = ""; optErr = ""; roleErr = "";
+        coErr = ""; optErr = ""; roleErr = ""; confirmClose = false;
+        loaded = JSON.stringify(collect());
         optSink.forceActiveFocus();                    // no field is pre-selected when the window opens
         if (optScroll && optScroll.contentItem) {      // always open at the top
             optScroll.contentItem.cancelFlick(); optScroll.contentItem.contentY = 0;
@@ -126,7 +165,7 @@ Dialog {
             Text { text: "Options"; color: theme.ink; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
             Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
                 Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: optDialog.close() } } }
+                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: optDialog.tryClose() } } }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
 
         ScrollView {
@@ -394,11 +433,11 @@ Dialog {
             Text { Layout.fillWidth: true; visible: optDialog.optErr !== ""; wrapMode: Text.WordWrap
                 color: theme.crit; font.pixelSize: 12; font.bold: true; text: optDialog.optErr }
             Item { Layout.fillWidth: optDialog.optErr === "" }
-            SmallButton { text: "Cancel"; onClicked: optDialog.close() }
+            SmallButton { objectName: "optCancel"; text: optDialog.confirmClose ? "Discard changes" : "Cancel"; onClicked: optDialog.close() }
             PillButton { primaryStyle: true; text: "Save"
                 onClicked: {
                     optSink.forceActiveFocus();        // finish any field that is still being edited
-                    optDialog.optErr = "";
+                    optDialog.optErr = ""; optDialog.confirmClose = false;
                     if ((cityCombo.editText || "").trim() === "") {
                         optDialog.optErr = "Enter a city (e.g. Prague) before saving."; return;
                     }
@@ -422,29 +461,9 @@ Dialog {
                     }
                     var clash = optDialog.roleClash(qs, skipTags.all(), keepTags.all());
                     if (clash !== "") { optDialog.optErr = clash; return; }
-                    var out = { where: cityCombo.editText, source: srcCombo.currentValue,
-                        include_remote: remoteSw.checked, all_languages: !engSw.checked,
-                        full_time_only: fullSw.checked,
-                        skip_words: skipTags.all(), keep_words: keepTags.all(),
-                        level_words: levelTags.all(), max_years: yearsSpin.value,
-                        wanted_roles: wantedTags.all(), unwanted_roles: unwantedTags.all(),
-                        max_age_days: ageSpin.value, per_query: pqSpin.value,
-                        threshold: thrSpin.value, min_lead_score: minSpin.value,
-                        followup_days: fuSpin.value, scan_days: scanSpin.value,
-                        about_right_to_work: rightField.text.trim(), about_start: startField.text.trim(),
-                        about_experience: expField.text.trim(),
-                        notifications: notifySw.checked, keep_backups: keepSpin.value,
-                        scan_all_folders: foldersSw.checked,
-                        model: modelCombo.currentText, queries: qs };
-                    bridge.saveOptions(out);
-                    // build PLAIN objects (ListModel.get() returns a QObject that
-                    // can't cross the bridge directly)
-                    var cs = [];
-                    for (var k = 0; k < companiesModel.count; k++) {
-                        var c = companiesModel.get(k);
-                        cs.push({ name: "" + c.name, ats: "" + c.ats, token: "" + c.token });
-                    }
-                    bridge.saveCompanies(cs);
+                    var all = optDialog.collect();
+                    bridge.saveOptions(all.options);
+                    bridge.saveCompanies(all.companies);
                     win.optsData = bridge.options();
                     win.countsData = bridge.counts();      // the follow-up count depends on the new setting
                     ticker.text = "✓ Options saved.";
