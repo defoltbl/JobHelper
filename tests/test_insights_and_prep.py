@@ -522,3 +522,73 @@ def test_generate_applies_the_check_to_both_lists(isolate_data, monkeypatch):
     prep = interview_prep.generate({"title": "ML Engineer", "company": "BRIGHTLINE"}, CV)
     assert prep["ask_hr"] == ["What are the next steps?"] and prep["ask_technical"] == ["What would I own first?"]
     assert "never one that points at the candidate's own weak spot" in prompts[0]
+
+
+# ── editing the saved preparation by hand ───────────────────────────────────
+def _saved():
+    return dict(interview_prep._clean(dict(ASK, experience=TWO["experience"])), made="2026-10-08", checks=[])
+
+
+def test_parts_follow_the_order_of_the_sheet():
+    got = interview_prep.parts(_saved())
+    keys = [p["key"] for p in got]
+    assert keys[:6] == ["summary", "company", "company_say", "role", "role_plain", "fit"]
+    assert keys.index("experience.0.story") < keys.index("gap") < keys.index("key_question.question") < keys.index("pitch") \
+        < keys.index("questions.0.answer") < keys.index("ask_hr") < keys.index("reminders")
+    by = {p["key"]: p for p in got}
+    assert by["fit"]["kind"] == "list" and by["fit"]["text"].count("\n") == 1
+    assert by["questions.0.answer"]["label"] == "HR asks: Tell me about your last project."
+    assert by["experience.0.plain"]["label"].startswith("The same for HR, in plain words: Software Developer Intern")
+    assert interview_prep.parts({"questions": FULL["questions"]})[0]["key"] == "questions.0.answer"      # an older, smaller preparation
+
+
+def test_edits_are_put_in_and_everything_else_is_kept():
+    prep = _saved()
+    new, problem = interview_prep.apply_parts(prep, [
+        {"key": "pitch", "text": "  I finished my MSc and I build things that work — carefully.  "},
+        {"key": "fit", "text": "• Python in my research project\n\n- A FastAPI service\n"},
+        {"key": "questions.0.answer", "text": "I taught a program to play a game."},
+        {"key": "ask_hr", "text": "What are the next steps?"},
+        {"key": "made_up.key", "text": "ignored"}, "junk"], CV)
+    assert problem == "" and new["pitch"] == "I finished my MSc and I build things that work – carefully."      # em dash cleaned
+    assert new["fit"] == ["Python in my research project", "A FastAPI service"] and new["ask_hr"] == ["What are the next steps?"]
+    assert new["questions"][0]["answer"] == "I taught a program to play a game." and new["questions"][1]["answer"] == prep["questions"][1]["answer"]
+    assert new["gap"] == prep["gap"] and new["edited"] and "edited" not in prep                                 # the old one is untouched
+
+
+@pytest.mark.parametrize("edit, problem", [
+    ({"key": "questions.0.answer", "text": "   "}, "is empty. Write it, or leave the draft as it was."),
+    ({"key": "experience.0.story", "text": ""}, "is empty"),
+    ({"key": "key_question.answer", "text": ""}, "“Your answer to the key question” is empty"),
+    ({"key": "pitch", "text": "x" * 3001}, "is 3001 characters long; the most is 3000. Shorten it."),
+    ({"key": "fit", "text": "\n".join(f"point {i}" for i in range(13))}, "has 13 lines; the most is 12. Remove some."),
+    ({"key": "ask_hr", "text": "q" * 401}, "is 401 characters long; the most is 400. Shorten it."),
+])
+def test_a_wrong_edit_is_refused_with_the_reason_and_nothing_changes(edit, problem):
+    prep = _saved()
+    new, said = interview_prep.apply_parts(prep, [{"key": "gap", "text": "A good change that must not be half-saved."}, edit], CV)
+    assert problem in said and new is prep and prep["gap"] == FULL["gap"]
+
+
+def test_an_optional_part_may_be_emptied_and_a_claim_you_add_is_flagged():
+    prep = _saved()
+    new, problem = interview_prep.apply_parts(prep, [{"key": "company_say", "text": ""}, {"key": "revise", "text": ""},
+                                                    {"key": "pitch", "text": "I ran production Kubernetes clusters for two years."}], CV)
+    assert problem == "" and new["company_say"] == "" and new["revise"] == []
+    assert new["checks"] == ["The opening pitch mentions Kubernetes as experience, which is not in your CV."]   # saved, but marked for you
+
+
+def test_api_edits_the_saved_preparation(isolate_data, monkeypatch):
+    config.ensure_dirs()
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
+    store.save_jobs([store.new_job(id="a", title="ML Engineer", company="BRIGHTLINE", status="interview"), store.new_job(id="b", title="T", company="C", status="waiting")])
+    api = ui_api.Api()
+    assert "Prepare the interview first" in api.prep_parts("b")["msg"] and api.save_prep_parts("b", [])["ok"] is False
+    api._change("a", lambda jobs, j: j.update(interview_prep=_saved()), render=False)
+    got = api.prep_parts("a")
+    assert got["ok"] and got["company"] == "BRIGHTLINE" and got["edited"] == "" and api.job_detail("a")["prep_edited"] is False
+    refused = api.save_prep_parts("a", [{"key": "questions.0.answer", "text": ""}])
+    assert refused["ok"] is False and "is empty" in refused["msg"]
+    assert api.save_prep_parts("a", [{"key": "pitch", "text": "My own pitch."}]) == {"ok": True, "to_check": 0}
+    assert ui_api.Api().interview_prep("a")["pitch"] == "My own pitch." and api.job_detail("a")["prep_edited"] is True
+    assert api.prep_parts("a")["edited"] != ""

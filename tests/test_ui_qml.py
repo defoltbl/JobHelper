@@ -38,7 +38,7 @@ class Ui:
         return obj
 
     # each window lives in its own file; names inside a window are only known in that window's context
-    WINDOWS = ["tableDialog", "detailDialog", "compareDialog", "formDialog", "helpDialog", "prepDialog", "letterDialog",
+    WINDOWS = ["tableDialog", "detailDialog", "compareDialog", "formDialog", "prepEditDialog", "helpDialog", "prepDialog", "letterDialog",
                "responseDialog", "limitDialog", "welcome", "optDialog", "schedDialog"]
 
     def _inside(self, obj):
@@ -1580,4 +1580,46 @@ def test_wanted_and_unwanted_roles_are_edited_in_options(ui):
     ui.js("close()", dialog)
     ui.wait(350)
     ui.bridge.saveOptions(start)
+    assert ui.warnings == []
+
+
+def test_the_preparation_can_be_edited_and_wrong_steps_are_explained(ui, monkeypatch):
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython, Docker.")
+    prep = {"made": "2026-10-08", "summary": "They will ask about Python.", "pitch": "I am a junior developer.", "fit": ["Python", "Docker"],
+            "questions": [{"audience": "hr", "kind": "about you", "question": "Tell me about yourself.", "why": "", "answer": "I am a junior developer.", "check": ""}],
+            "ask_hr": ["What are the next steps?"], "ask_technical": [], "ask_them": [], "checks": []}
+    ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep=dict(prep)), render=False)
+    ui.js('prepEditDialog.show("app")')
+    ui.wait(450)
+    dialog, note = ui.find("prepEditDialog"), ui.find("peNote")
+    assert dialog.property("opened") is True and ui.js("peModel.count") == 5
+    keys = [ui.js(f"peModel.get({i}).key") for i in range(5)]
+    assert keys == ["summary", "fit", "pitch", "questions.0.answer", "ask_hr"]
+    # an empty answer is refused, in red, and the window stays open
+    ui.js('peModel.setProperty(3, "text", ""); prepEditDialog.dirty = true; prepEditDialog.save()')
+    assert "is empty" in note.property("text") and dialog.property("visible") is True
+    # too long is said before anything is sent
+    ui.js('peModel.setProperty(3, "text", "I am a junior developer."); peModel.setProperty(2, "text", "' + "x" * 3010 + '"); prepEditDialog.save()')
+    assert "longer than 3000 characters" in note.property("text")
+    # closing with changes asks once
+    ui.js('peModel.setProperty(2, "text", "My own pitch."); prepEditDialog.dirty = true; prepEditDialog.tryClose()')
+    ui.wait(200)
+    assert dialog.property("visible") is True and "did not save" in note.property("text") and ui.js("prepEditDialog.closePolicy === 0") is True
+    ui.js("prepEditDialog.save()")
+    assert note.property("text") == "Saved." and ui.js("prepEditDialog.dirty") is False
+    assert ui.bridge.interviewPrep("app")["pitch"] == "My own pitch."
+    ui.js("prepEditDialog.tryClose()")
+    ui.wait(450)
+    assert dialog.property("visible") is False
+    # "Make again" would replace the edit: asked first
+    _open_job(ui, "app")
+    assert ui.js("detailDialog.job.prep_edited") is True
+    source = qml_source()
+    assert "Making it again replaces the changes you made in the sheet." in source and 'objectName: "prepEdit"' in source
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
+    ui.js('prepEditDialog.show("app")')                                          # nothing to edit: said, no empty window
+    ui.wait(250)
+    assert dialog.property("visible") is False and "Prepare the interview first" in ui.js("ticker.text")
     assert ui.warnings == []

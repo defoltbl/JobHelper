@@ -67,6 +67,7 @@ Dialog {
         else if (key === "answers") { formDialog.show(job.id); return; }      // ticked there, once an answer is drafted or copied
         if (ok) { bridge.applyStep(job.id, key); refresh(); }
     }
+    property bool confirmRemake: false
     property var thanks: ({})
     property string thanksNote: ""
     function saveEvent() {
@@ -133,6 +134,7 @@ Dialog {
     function show(jobId) {
         var d = bridge.jobDetail(jobId);
         if (!d || !d.id) { ticker.text = "That job could not be opened."; return; }
+        confirmRemake = false;
         job = d; draft = ({}); note = ""; dateErr = ""; if (!prepBusy) prepErr = "";
         eventErr = ""; notesInfo = ""; replyErr = ""; replyInfo = ""; replyOpen = false; thanks = ({}); thanksNote = "";
         detailFlick.contentY = 0;
@@ -473,8 +475,16 @@ Dialog {
                                          ticker.text = (r && r.ok) ? "Opened " + r.file + "." : ((r && r.msg) || "Couldn't write the document."); } }
                         SmallButton { objectName: "prepMake"; enabled: !detailDialog.prepBusy
                             text: detailDialog.prepBusy ? "Preparing…" : (detailDialog.job.has_prep ? "Make again" : "Prepare")
-                            onClicked: { detailDialog.prepErr = ""; detailDialog.prepBusy = true; detailDialog.prepJob = detailDialog.job.id;
-                                         bridge.prepareInterview(detailDialog.job.id); } }
+                            onClicked: {
+                                // making it again replaces what you changed by hand: say so first, never on one click
+                                if (detailDialog.job.prep_edited === true && !detailDialog.confirmRemake) {
+                                    detailDialog.confirmRemake = true;
+                                    detailDialog.prepErr = "Making it again replaces the changes you made in the sheet. Press Make again once more to go on.";
+                                    return;
+                                }
+                                detailDialog.confirmRemake = false;
+                                detailDialog.prepErr = ""; detailDialog.prepBusy = true; detailDialog.prepJob = detailDialog.job.id;
+                                bridge.prepareInterview(detailDialog.job.id); } }
                     }
                     Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                         text: "Asks Claude once or twice (uses your limit). You get a sheet to read before the call: the company, the role, your fit, the honest gap, an opening pitch and likely questions with answers. Only what your CV shows is claimed." }

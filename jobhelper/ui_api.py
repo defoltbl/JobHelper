@@ -239,6 +239,7 @@ class Api:
             "pay": salary.stated(j) or {},
             "can_compare": self._comparable(j),
             "has_prep": bool((j.get("interview_prep") or {}).get("questions")),
+            "prep_edited": bool((j.get("interview_prep") or {}).get("edited")),
             "prep_made": (j.get("interview_prep") or {}).get("made", ""),
             "duplicate": self._duplicate_of(jobs, j),
             "matched": words["matched"], "missing": words["missing"],
@@ -592,6 +593,34 @@ class Api:
                                         render=False).get("ok"))}
 
     @_guarded(str)
+    @_guarded(dict)
+    def prep_parts(self, job_id):
+        """The saved preparation as a list of parts to edit (see interview_prep.parts)."""
+        j = store.find(store.load_jobs(), job_id)
+        prep = (j or {}).get("interview_prep") or {}
+        if not prep.get("questions"):
+            return {"ok": False, "msg": "Prepare the interview first, then it can be edited."}
+        return {"ok": True, "id": j["id"], "company": j.get("company", ""), "title": j.get("title", ""),
+                "parts": interview_prep.parts(prep), "edited": str(prep.get("edited", "")),
+                "max_part": interview_prep.MAX_PART}
+
+    def save_prep_parts(self, job_id, edited):
+        """Put the user's edits into the saved preparation. Refused with the reason when a part is empty or too long."""
+        cv_text, notes = self._cv_text(), config.experience_notes()
+        outcome = {}
+
+        def go(jobs, j):
+            prep = j.get("interview_prep") or {}
+            if not prep.get("questions"):
+                return {"ok": False, "msg": "There is no saved preparation for this job any more."}
+            new, problem = interview_prep.apply_parts(prep, list(edited or []), cv_text, notes)
+            if problem:
+                return {"ok": False, "msg": problem}
+            j["interview_prep"] = new
+            outcome["to_check"] = len(new.get("checks") or []) + sum(1 for q in new["questions"] if q.get("check"))
+        result = self._change(job_id, go, render=False)
+        return {"ok": True, **outcome} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "The changes could not be saved."}
+
     def _prep_file(self, j):
         cv = agent1_cv.find_cv()
         prefix = cv_tailor.name_prefix(cv) if cv else "Candidate"

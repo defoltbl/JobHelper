@@ -606,6 +606,14 @@ class Bridge(QObject):
             self._post("prepReady", result)
         threading.Thread(target=work, daemon=True).start()
 
+    @Slot(str, result="QVariantMap")
+    def prepParts(self, job_id):
+        return self._api.prep_parts(job_id)
+
+    @Slot(str, "QVariantList", result="QVariantMap")
+    def savePrepParts(self, job_id, parts):
+        return self._api.save_prep_parts(job_id, [dict(p) for p in (parts or [])])
+
     @Slot(str, bool, result="QVariantMap")
     def prepDocument(self, job_id, reveal):
         return self._api.prep_document(job_id, bool(reveal))

@@ -111,6 +111,7 @@ Dialog {
                 color: prepDialog.note !== "" ? theme.good : theme.faint
                 text: prepDialog.note !== "" ? prepDialog.note
                     : "Answers are a starting point built from your CV. Say them in your own words." }
+            SmallButton { objectName: "prepEdit"; text: "Edit"; onClicked: prepEditDialog.show(prepDialog.prep.id) }
             SmallButton { objectName: "prepDoc"; primaryStyle: true; text: "Open as document"
                 onClicked: { var r = bridge.prepDocument(prepDialog.prep.id, false);
                     prepDialog.note = (r && r.ok) ? "Opened " + r.file + " in Word." : "";

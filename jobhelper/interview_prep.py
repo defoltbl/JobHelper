@@ -276,3 +276,91 @@ def as_text(job: dict[str, Any], prep: dict[str, Any]) -> str:
     if prep.get("revise"):
         lines += ["REVISE BEFORE THE INTERVIEW", ""] + [f"- {x}" for x in prep["revise"]]
     return "\n".join(lines).strip() + "\n"
+
+
+# ── editing the saved preparation by hand ───────────────────────────────────
+MAX_PART, MAX_ITEMS, MAX_ITEM = 3000, 12, 400
+_LISTS = {"company": "About the company", "role": "The role: what the work is", "fit": "Your fit: lead with these",
+          "ask_hr": "What you can ask HR or the recruiter", "ask_technical": "What you can ask the engineer or the hiring manager",
+          "revise": "Worth revising before the call", "reminders": "Practical reminders"}
+_TEXTS = {"summary": "What to expect", "company_say": "What you can say about the company", "role_plain": "The role in plain terms",
+          "gap": "The honest gap", "pitch": "Your opening pitch"}
+_ORDER = ["summary", "company", "company_say", "role", "role_plain", "fit", "experience", "gap", "key_question", "pitch",
+          "questions", "ask_hr", "ask_technical", "revise", "reminders"]
+
+
+def parts(prep: dict[str, Any]) -> list[dict[str, str]]:
+    """The saved preparation as a flat list of things to edit, in the order of the sheet:
+    {key, label, text, kind}. kind 'list' is one item per line."""
+    out: list[dict[str, str]] = []
+
+    def add(key: str, label: str, text: str, kind: str = "text") -> None:
+        out.append({"key": key, "label": label, "text": text, "kind": kind})
+
+    for name in _ORDER:
+        if name in _TEXTS and prep.get(name):
+            add(name, _TEXTS[name], prep[name])
+        elif name in _LISTS and prep.get(name):
+            add(name, _LISTS[name], "\n".join(prep[name]), "list")
+        elif name == "experience":
+            for i, e in enumerate(prep.get("experience") or []):
+                add(f"experience.{i}.story", f"Your work: {e['job']}", e.get("story", ""))
+                if e.get("plain"):
+                    add(f"experience.{i}.plain", f"The same for HR, in plain words: {e['job']}", e["plain"])
+        elif name == "key_question" and (prep.get("key_question") or {}).get("question"):
+            add("key_question.question", "The key question", prep["key_question"]["question"])
+            add("key_question.answer", "Your answer to the key question", prep["key_question"].get("answer", ""))
+        elif name == "questions":
+            for i, q in enumerate(prep.get("questions") or []):
+                who = "HR asks" if (q.get("audience") or ("technical" if q.get("kind") in ("technical", "your projects") else "hr")) == "hr" \
+                    else "The engineer asks"
+                add(f"questions.{i}.answer", f"{who}: {q['question']}", q.get("answer", ""))
+    return out
+
+
+def apply_parts(prep: dict[str, Any], edited: list[dict[str, Any]], cv_text: str = "", notes: str = "") -> tuple[dict[str, Any], str]:
+    """The preparation with the user's edits put in. Returns (new preparation, '') or
+    (the old one untouched, what is wrong). Nothing is cut silently: text that is too long is refused."""
+    import copy
+    new = copy.deepcopy(prep)
+    labels = {p["key"]: p["label"] for p in parts(prep)}
+    for item in edited if isinstance(edited, list) else []:
+        if not isinstance(item, dict) or item.get("key") not in labels:
+            continue                                         # not a part of this preparation
+        key, text = item["key"], cover_letter.clean(str(item.get("text", "") or "")).strip()
+        label = labels[key]
+        if key in _LISTS:
+            lines = [ln.strip().lstrip("•-– ").strip() for ln in text.split("\n") if ln.strip().lstrip("•-– ").strip()]
+            if len(lines) > MAX_ITEMS:
+                return prep, f"“{label}” has {len(lines)} lines; the most is {MAX_ITEMS}. Remove some."
+            long = next((ln for ln in lines if len(ln) > MAX_ITEM), None)
+            if long:
+                return prep, f"A line under “{label}” is {len(long)} characters long; the most is {MAX_ITEM}. Shorten it."
+            new[key] = lines
+            continue
+        if len(text) > MAX_PART:
+            return prep, f"“{label[:60]}” is {len(text)} characters long; the most is {MAX_PART}. Shorten it."
+        if key in _TEXTS:
+            new[key] = text
+        elif key.startswith("key_question."):
+            if not text:
+                return prep, f"“{label}” is empty. Write it, or leave the draft as it was."
+            new["key_question"][key.split(".")[1]] = text
+        else:
+            section, index, field = key.split(".")
+            if not text and field in ("answer", "story"):
+                return prep, f"“{label[:70]}” is empty. Write it, or leave the draft as it was."
+            new[section][int(index)][field] = text
+    unverified = cover_letter.unverified_terms(cv_text + "\n" + (notes or "")) if cv_text.strip() else []
+    for q in new.get("questions") or []:
+        q["check"] = _unbacked(q.get("answer", ""), unverified)
+    checks = []
+    for label, said in [("The opening pitch", new.get("pitch", "")), ("The answer to the key question", (new.get("key_question") or {}).get("answer", ""))] \
+            + [("A point under your fit", point) for point in new.get("fit") or []] \
+            + [(f"The story about {e['job'][:50]}", e.get("story", "")) for e in new.get("experience") or []]:
+        term = _unbacked(said, unverified)
+        if term:
+            checks.append(f"{label} mentions {term} as experience, which is not in your CV.")
+    new["checks"] = checks
+    new["edited"] = date.today().isoformat()
+    return new, ""
