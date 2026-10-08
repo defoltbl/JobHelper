@@ -484,10 +484,10 @@ def test_one_job_that_cannot_be_moved_does_not_stop_the_others(api, monkeypatch)
     api.save_options({"threshold": 50})
     store.save_jobs([_with_docs("a", 30), _with_docs("b", 20)])
     real = api.shelve_docs
-    monkeypatch.setattr(api, "shelve_docs", lambda job_id: {"ok": False, "msg": "no"} if job_id == "a" else real(job_id))
+    monkeypatch.setattr(api, "shelve_docs", lambda job_id, batch="": {"ok": False, "msg": "no"} if job_id == "a" else real(job_id, batch))
     got = api.shelve_all_docs(2)
     assert got["ok"] is True and got["jobs"] == 1 and got["files"] == 2 and len(got["failed"]) == 1
-    monkeypatch.setattr(api, "shelve_docs", lambda job_id: {"ok": False, "msg": "no"})
+    monkeypatch.setattr(api, "shelve_docs", lambda job_id, batch="": {"ok": False, "msg": "no"})
     assert api.shelve_all_docs()["msg"] == "Couldn't move the documents."
 
 
@@ -500,3 +500,111 @@ def test_the_list_shows_what_a_job_scored_before(api):
     store.save_jobs([changed, same, never, odd, waiting])
     assert {r["id"]: r["before"] for r in api.leads()} == {"changed": 55, "same": None, "never": None, "odd": None, "waiting": 40}
     assert api.job_detail("changed")["score_before"] == 55 and api.job_detail("same")["score_before"] is None
+
+
+# ── documents moved to the backup can be put back ───────────────────────────
+def test_moved_documents_can_be_put_back_for_one_job(api):
+    config.ensure_dirs()
+    api.save_options({"threshold": 50})
+    job = _with_docs("low", 30)
+    job["match_tier"], job["apply_steps"] = "possible", ["cv"]
+    store.save_jobs([job, _with_docs("ok", 70)])
+    assert api.job_detail("low")["can_unshelve"] is False and "No documents of this job" in api.unshelve_docs("low")["msg"]
+    assert api.shelve_docs("low") == {"ok": True, "moved": 2}
+    shelf = vault.backups_dir() / "below_your_limit"
+    detail = api.job_detail("low")
+    assert detail["can_unshelve"] is True and detail["shelved_when"][:4].isdigit() and len(list(shelf.iterdir())) == 2
+    assert api.unshelve_docs("low") == {"ok": True, "restored": 2}
+    back = store.find(store.load_jobs(), "low")
+    assert (back["cover_letter_file"], back["tailored_cv_file"], back["status"], back["match_tier"], back["apply_steps"]) \
+        == ("L_low.docx", "CV_low.docx", "letter_ready", "possible", ["cv"]) and "shelved" not in back
+    assert (config.LETTERS_DIR / "L_low.docx").read_bytes() == b"letter" and (config.TAILORED_CV_DIR / "CV_low.docx").read_bytes() == b"cv"
+    assert list(shelf.iterdir()) == [] and api.job_detail("low")["docs_stale"] is True and api.job_detail("low")["can_unshelve"] is False
+    assert api.unshelve_docs("low")["ok"] is False and api.unshelve_docs("zzz")["ok"] is False
+
+
+def test_putting_back_changes_nothing_unless_all_of_it_can_be(api):
+    config.ensure_dirs()
+    api.save_options({"threshold": 50})
+    shelf = vault.backups_dir() / "below_your_limit"
+
+    def moved(job_id):
+        store.save_jobs([_with_docs(job_id, 30)])
+        for old in list(shelf.iterdir()) if shelf.exists() else []:
+            old.unlink()
+        assert api.shelve_docs(job_id)["ok"] is True
+        return sorted(shelf.iterdir())
+
+    copies = moved("a")                                             # a file with that name is there again
+    (config.LETTERS_DIR / "L_a.docx").write_bytes(b"newer")
+    assert "A file named L_a.docx is already in its folder" in api.unshelve_docs("a")["msg"]
+    assert (config.LETTERS_DIR / "L_a.docx").read_bytes() == b"newer" and not (config.TAILORED_CV_DIR / "CV_a.docx").exists() and sorted(shelf.iterdir()) == copies
+    (config.LETTERS_DIR / "L_a.docx").unlink()
+
+    copies = moved("b")                                             # a backup copy is gone
+    copies[0].unlink()
+    assert "is missing, so nothing was put back" in api.unshelve_docs("b")["msg"]
+    assert not (config.LETTERS_DIR / "L_b.docx").exists() and not (config.TAILORED_CV_DIR / "CV_b.docx").exists() and len(list(shelf.iterdir())) == 1
+
+    moved("c")                                                      # the app wrote other documents since
+    jobs = store.load_jobs(); store.find(jobs, "c").update(tailored_cv_file="CV_new.docx", cover_letter_file="L_new.docx", status="letter_ready"); store.save_jobs(jobs)
+    assert api.job_detail("c")["can_unshelve"] is False and "Other documents were written for this job since" in api.unshelve_docs("c")["msg"]
+    assert store.find(store.load_jobs(), "c")["cover_letter_file"] == "L_new.docx" and len(list(shelf.iterdir())) == 2
+
+    moved("d")                                                      # it became an application
+    jobs = store.load_jobs(); store.find(jobs, "d")["status"] = "waiting"; store.save_jobs(jobs)
+    assert api.unshelve_docs("d")["ok"] is False and api.job_detail("d")["can_unshelve"] is False
+
+    moved("e")                                                      # a note that points outside the folders is not followed
+    jobs = store.load_jobs(); record = store.find(jobs, "e")["shelved"]
+    record["files"][0]["name"] = "../../escaped.docx"; store.save_jobs(jobs)
+    assert api.unshelve_docs("e") == {"ok": True, "restored": 2}
+    assert not (config.DATA_DIR / "escaped.docx").exists() and not (config.DATA_DIR.parent / "escaped.docx").exists()
+
+    moved("f")
+    jobs = store.load_jobs(); store.find(jobs, "f")["shelved"]["files"] = ["broken"]; store.save_jobs(jobs)
+    assert "note of what was moved is damaged" in api.unshelve_docs("f")["msg"]
+
+
+def test_a_letter_of_your_own_is_untouched_by_moving_and_putting_back(api):
+    config.ensure_dirs()
+    api.save_options({"threshold": 50})
+    (config.LETTERS_DIR / "Mine.docx").write_bytes(b"my own letter")
+    (config.TAILORED_CV_DIR / "CV_own.docx").write_bytes(b"cv")
+    store.save_jobs([store.new_job(id="own", title="Dev", company="Z", match_score=10, source="manual", status="letter_ready",
+                                   cover_letter_file="Mine.docx", tailored_cv_file="CV_own.docx")])
+    assert api.shelve_docs("own") == {"ok": True, "moved": 1}
+    job = store.find(store.load_jobs(), "own")
+    assert job["cover_letter_file"] == "Mine.docx" and job["shelved"]["cover_letter_file"] == "" and (config.LETTERS_DIR / "Mine.docx").read_bytes() == b"my own letter"
+    assert api.job_detail("own")["can_unshelve"] is True and api.unshelve_docs("own") == {"ok": True, "restored": 1}
+    job = store.find(store.load_jobs(), "own")
+    assert (job["cover_letter_file"], job["tailored_cv_file"]) == ("Mine.docx", "CV_own.docx") and (config.LETTERS_DIR / "Mine.docx").read_bytes() == b"my own letter"
+
+
+def test_the_last_batch_is_put_back_together(api, monkeypatch):
+    from datetime import datetime, timedelta
+    config.ensure_dirs()
+    api.save_options({"threshold": 50})
+    assert api.last_shelved() == {} and "No moved documents are left" in api.unshelve_last()["msg"]
+    store.save_jobs([_with_docs("a", 30), _with_docs("b", 20), _with_docs("c", 10), _with_docs("ok", 70)])
+    assert api.shelve_docs("c")["ok"] is True                        # moved alone, earlier
+    jobs = store.load_jobs(); store.find(jobs, "c")["shelved"]["when"] = (datetime.now() - timedelta(hours=2)).isoformat(timespec="seconds"); store.save_jobs(jobs)
+    assert api.shelve_all_docs(2)["ok"] is True
+    last = api.last_shelved()
+    assert sorted(r["id"] for r in last["jobs"]) == ["a", "b"] and set(last["jobs"][0]) == {"id", "title", "company"} and last["batch"]
+    refused = api.unshelve_last("another-batch")
+    assert refused["ok"] is False and refused["changed"] is True and not (config.LETTERS_DIR / "L_a.docx").exists()
+    assert api.unshelve_last(last["batch"]) == {"ok": True, "jobs": 2, "files": 4, "failed": []}
+    assert (config.LETTERS_DIR / "L_a.docx").exists() and (config.TAILORED_CV_DIR / "CV_b.docx").exists() and not (config.LETTERS_DIR / "L_c.docx").exists()
+    assert [r["id"] for r in api.last_shelved()["jobs"]] == ["c"]     # the earlier one is now the last
+    assert sorted(r["id"] for r in api.stale_docs_list()) == ["a", "b"]
+
+    jobs = store.load_jobs(); store.find(jobs, "c")["shelved"]["when"] = (datetime.now() - timedelta(days=api.UNDO_DAYS + 1)).isoformat(timespec="seconds"); store.save_jobs(jobs)
+    assert api.last_shelved() == {} and api.job_detail("c")["can_unshelve"] is True      # no longer offered in the list, still possible in the job window
+    assert api.unshelve_docs("c")["ok"] is True
+
+    assert api.shelve_all_docs(3)["ok"] is True                      # one of the three cannot come back: the others still do
+    last = api.last_shelved()
+    (config.LETTERS_DIR / "L_a.docx").write_bytes(b"in the way")
+    got = api.unshelve_last(last["batch"])
+    assert got["ok"] is True and got["jobs"] == 2 and len(got["failed"]) == 1 and "already in its folder" in got["failed"][0]

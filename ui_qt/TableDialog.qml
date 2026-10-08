@@ -29,6 +29,24 @@ Dialog {
     property string staleNote: ""
     property bool staleBad: false
     property bool anyWas: false           // some row shows its earlier score: every row keeps room for it
+    property var lastShelved: ({})        // the last batch moved to the backup, while it can still be put back
+    readonly property int shelvedCount: (lastShelved.jobs || []).length
+    function dayTime(iso) { return (iso || "").replace("T", " ").slice(0, 16); }
+    function putBack() {
+        confirmStale = false;
+        if (win.appRunning) { staleBad = true; staleNote = "A search or scan is running. Put the documents back when it has finished."; return; }
+        var r = bridge.unshelveLast(lastShelved.batch || "");
+        if (r && r.ok) {
+            var msg = "Documents of " + staleWord(r.jobs) + " are back in place (" + r.files + (r.files === 1 ? " file" : " files") + ")."
+                      + ((r.failed || []).length ? " Not put back: " + r.failed.join("; ") : "");
+            ticker.text = msg;
+            win.countsData = bridge.counts(); win.refreshOpenView();
+            staleBad = (r.failed || []).length > 0; staleNote = staleBad ? msg : "";
+        } else {
+            staleBad = true; staleNote = (r && r.msg) || "Couldn't put the documents back.";
+            lastShelved = bridge.lastShelved();
+        }
+    }
     function staleWord(n) { return n + (n === 1 ? " job" : " jobs"); }
     function shelveAll() {
         if (win.appRunning) { staleBad = true; staleNote = "A search or scan is running. Move the documents when it has finished."; return; }
@@ -66,6 +84,7 @@ Dialog {
         allRows = rows;
         anyWas = rows.some(function (r) { return !!r.was; });
         staleRows = excel === "leads" ? bridge.staleDocs() : [];
+        lastShelved = excel === "leads" ? bridge.lastShelved() : ({});
         if (staleRows.length === 0) confirmStale = false;
         if (!sameView) { confirmStale = false; staleNote = ""; staleBad = false; }
         var seen = {}, list = [];
@@ -163,7 +182,7 @@ Dialog {
         // documents left from a higher score, for all such jobs at once: asked once, with the names
         ColumnLayout {
             objectName: "staleBar"
-            visible: tableDialog.excelKey === "leads" && (tableDialog.staleRows.length > 0 || tableDialog.staleNote !== "")
+            visible: tableDialog.excelKey === "leads" && (tableDialog.staleRows.length > 0 || tableDialog.staleNote !== "" || tableDialog.shelvedCount > 0)
             Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.bottomMargin: 12; spacing: 6
             RowLayout { Layout.fillWidth: true; spacing: 8; visible: tableDialog.staleRows.length > 0
                 Text { objectName: "staleBarText"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.warn; font.pixelSize: 12
@@ -183,6 +202,12 @@ Dialog {
                 clip: true; boundsBehavior: Flickable.StopAtBounds; ScrollBar.vertical: ScrollBar {}
                 Text { id: staleNames; objectName: "staleNames"; textFormat: Text.PlainText; width: parent.width - 12; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12; lineHeight: 1.25
                     text: tableDialog.staleRows.map(function (r) { return r.score + "   " + r.title + "  ·  " + r.company; }).join("\n") } }
+            // the last batch moved to the backup can be put back for a week
+            RowLayout { objectName: "undoRow"; Layout.fillWidth: true; spacing: 8; visible: tableDialog.shelvedCount > 0 && !tableDialog.confirmStale
+                Text { objectName: "undoText"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
+                    text: "Documents of " + tableDialog.staleWord(tableDialog.shelvedCount) + " were moved to the backup on "
+                          + tableDialog.dayTime(tableDialog.lastShelved.when) + "." }
+                SmallButton { objectName: "putBack"; text: "Put them back"; onClicked: tableDialog.putBack() } }
             Text { objectName: "staleNote"; visible: tableDialog.staleNote !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
                 font.pixelSize: 12; color: tableDialog.staleBad ? theme.crit : theme.good; text: tableDialog.staleNote }
         }

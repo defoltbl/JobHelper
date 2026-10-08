@@ -2006,15 +2006,58 @@ def test_documents_below_the_limit_are_moved_together_only_after_asking(ui, monk
     ui.js("tableDialog.shelveAll()")
     assert not (config.LETTERS_DIR / "L_lead.docx").exists() and not (config.TAILORED_CV_DIR / "cv_lead.docx").exists()
     assert "Documents of 1 job moved to the backup (2 files)." in ui.js("ticker.text")
-    assert bar.property("visible") is False and "documents from a higher score" not in ui.js("listView.model[0].secondary")
+    assert "documents from a higher score" not in ui.js("listView.model[0].secondary")
+    assert ui.find("staleBarText").property("visible") is False                     # nothing left to move …
+
+    undo = ui.find("undoRow")                                                       # … and what was moved can be put back
+    assert bar.property("visible") is True and undo.property("visible") is True
+    assert ui.find("undoText").property("text").startswith("Documents of 1 job were moved to the backup on 20")
+    ui.js("win.appRunning = true; tableDialog.putBack()")
+    assert "A search or scan is running. Put the documents back" in ui.find("staleNote").property("text") and not (config.LETTERS_DIR / "L_lead.docx").exists()
+    ui.js("win.appRunning = false")
+    ui.bridge._running = True
+    try:
+        assert "A search or scan is running" in ui.bridge.unshelveLast("")["msg"] and "A search or scan is running" in ui.bridge.unshelveDocs("lead")["msg"]
+    finally:
+        ui.bridge._running = False
+    ui.js("tableDialog.lastShelved = {batch: 'gone', when: '2026-01-01T10:00:00', jobs: [{id: 'lead'}]}; tableDialog.putBack()")
+    assert "The list changed. Look at it again" in ui.find("staleNote").property("text") and ui.js("tableDialog.staleBad") is True
+    assert ui.js("tableDialog.lastShelved.batch") != "gone" and not (config.LETTERS_DIR / "L_lead.docx").exists()      # the real batch is shown again
+    ui.js("tableDialog.putBack()")
+    assert (config.LETTERS_DIR / "L_lead.docx").exists() and (config.TAILORED_CV_DIR / "cv_lead.docx").exists()
+    assert "Documents of 1 job are back in place (2 files)." in ui.js("ticker.text")
+    assert undo.property("visible") is False and ui.find("staleBarText").property("visible") is True                    # below the limit again, so offered again
+    assert "documents from a higher score" in ui.js("listView.model[0].secondary")
     ui.js("tableDialog.close()")
     ui.wait(350)
+
+    _open_job(ui, "lead")                                                           # the same for one job, in its window
+    ui.js("detailDialog.shelve(); detailDialog.shelve()")
+    assert not (config.LETTERS_DIR / "L_lead.docx").exists() and ui.find("unshelveDocs").property("visible") is True
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    _open_job(ui, "lead")
+    assert ui.find("staleRow").property("visible") is True and ui.find("staleText").property("text").startswith("The documents the app wrote for this job were moved to the backup on 20")
+    ui.js("win.appRunning = true; detailDialog.unshelve()")
+    assert "A search or scan is running" in ui.find("staleText").property("text") and ui.js("detailDialog.shelveBad") is True
+    ui.js("win.appRunning = false")
+    (config.LETTERS_DIR / "L_lead.docx").write_bytes(b"in the way")
+    ui.js("detailDialog.unshelve()")
+    assert "A file named L_lead.docx is already in its folder" in ui.find("staleText").property("text") and ui.js("detailDialog.shelveBad") is True
+    (config.LETTERS_DIR / "L_lead.docx").unlink()
+    ui.js("detailDialog.unshelve()")
+    assert ui.find("staleText").property("text") == "2 files are back in place." and ui.js("detailDialog.shelveBad") is False
+    assert (config.LETTERS_DIR / "L_lead.docx").read_bytes() == b"x" and ui.find("unshelveDocs").property("visible") is False
+    assert ui.find("shelveDocs").property("visible") is True
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+
     ui.js('openView("app")')
     ui.wait(400)
     assert bar.property("visible") is False                                         # only in New Jobs
     ui.js("tableDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(match_score=80, status="found"), render=False)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(match_score=80, status="letter_ready"), render=False)
     assert ui.warnings == []
 
 

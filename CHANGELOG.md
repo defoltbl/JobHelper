@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 9 October 2026
 
+- **Put moved documents back**: for a week New Jobs offers "Put them back" for the last batch moved to the backup, and a job's own window offers it for that job at any time. Nothing is put back if a file is in the way or a backup copy is missing.
 - **Scored at once on the new text**: after "Read it again" or pasting a posting's text, the job is scored again by itself (one Claude call). If a search is running or Claude cannot be asked, the window says so and keeps the text.
 - **Move all documents below your limit at once**: New Jobs shows how many jobs still have a letter and CV from a higher score, and one button moves them to the backup after naming the jobs and asking.
 - **Full text for company-branded job pages**: postings on pages like `company.jobs.cz` used to give only a short summary; the app now reads the whole posting, in a search and with "Read it again".

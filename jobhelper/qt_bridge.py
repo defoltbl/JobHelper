@@ -303,6 +303,22 @@ class Bridge(QObject):
     def shelveDocs(self, job_id):
         return self._api.shelve_docs(job_id)
 
+    @Slot(str, result="QVariantMap")
+    def unshelveDocs(self, job_id):
+        if self._running:
+            return {"ok": False, "msg": "A search or scan is running. Put the documents back when it has finished."}
+        return self._api.unshelve_docs(job_id)
+
+    @Slot(result="QVariantMap")
+    def lastShelved(self):
+        return self._api.last_shelved()
+
+    @Slot(str, result="QVariantMap")
+    def unshelveLast(self, batch):
+        if self._running:
+            return {"ok": False, "msg": "A search or scan is running. Put the documents back when it has finished."}
+        return self._api.unshelve_last(batch)
+
     @Slot(result="QVariantList")
     def staleDocs(self):
         return self._api.stale_docs_list()

@@ -12,7 +12,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, cv_tailor, filters, form_answers, health, prep_doc, summary, textfmt,
                compare, config, cover_letter, db, followup, housekeeping, insights, integrity, interview_prep, keywords, merge, pdf,
@@ -239,6 +239,7 @@ class Api:
             "basis": agent3_letters.text_basis(j),
             "can_paste_text": j["status"] in store.LEAD_STATUSES and agent3_letters.text_basis(j) != "",
             "docs_stale": self._stale_docs(j), "threshold": self._threshold(),
+            "can_unshelve": bool(self._shelved(j)), "shelved_when": (self._shelved(j) or {}).get("when", ""),
             "reason": j.get("match_reason", ""), "description": description[:8000],
             "description_text": textfmt.readable(description[:8000]),
             "prefilter": j.get("prefilter", "") if j.get("match_score") is None else "",
@@ -375,8 +376,9 @@ class Api:
             return {"ok": False, "changed": True, "msg": f"The list changed: it is now {len(rows)} "
                     f"{'job' if len(rows) == 1 else 'jobs'}. Check the names and confirm again."}
         done, files, failed = 0, 0, []
+        batch = datetime.now().strftime("%Y%m%d_%H%M%S_%f")          # one name for all of them, so they can be put back together
         for row in rows:
-            got = self.shelve_docs(row["id"])
+            got = self.shelve_docs(row["id"], batch)
             if got.get("ok"):
                 done, files = done + 1, files + int(got.get("moved") or 0)
             else:
@@ -421,10 +423,15 @@ class Api:
         saved = self._change(job_id, go, render=False)
         return {"ok": bool(saved.get("ok")), "chars": len(text)}
 
-    def shelve_docs(self, job_id):
+    SHELF = "below_your_limit"        # the folder in backups/ that documents below your limit go to
+    UNDO_DAYS = 7                     # how long New Jobs offers to put the last moved batch back
+
+    def shelve_docs(self, job_id, batch=""):
         """Move the letter and CV the app wrote for a new job into an encrypted backup (never a letter of your own).
-        The job stays in the list; documents are written again only if its score reaches your limit."""
+        The job stays in the list; documents are written again only if its score reaches your limit.
+        What was moved is noted on the job (`shelved`), so unshelve_docs can put it back."""
         moved = {}
+        now = datetime.now()
 
         def go(jobs, j):
             if j["status"] not in store.LEAD_STATUSES:
@@ -433,7 +440,18 @@ class Api:
             if not files:
                 return {"ok": False, "msg": "This job has no documents written by the app."}
             app_wrote_it = agent3_letters._generated_letter(j)
-            moved["n"] = vault.stash(files, "below_your_limit")
+            record = {"when": now.isoformat(timespec="seconds"), "batch": batch or now.strftime("%Y%m%d_%H%M%S_%f"), "files": [],
+                      "cover_letter_file": j.get("cover_letter_file", "") if app_wrote_it else "",
+                      "tailored_cv_file": j.get("tailored_cv_file", ""), "match_tier": j.get("match_tier", ""),
+                      "status": j["status"], "apply_steps": list(j.get("apply_steps") or [])}
+            for path in files:
+                copy = vault.keep_copy(path, self.SHELF)
+                if copy:
+                    record["files"].append({"backup": copy.name, "name": path.name,
+                                            "folder": "cv" if path.parent == config.TAILORED_CV_DIR else "letter"})
+                    path.unlink()
+            moved["n"] = len(record["files"])
+            j["shelved"] = record
             if app_wrote_it:
                 j["cover_letter_file"] = ""
             j["tailored_cv_file"], j["match_tier"] = "", ""
@@ -443,6 +461,92 @@ class Api:
             j["last_update"] = date.today().isoformat()
         result = self._change(job_id, go)
         return {"ok": True, "moved": moved.get("n", 0)} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "Couldn't move the documents."}
+
+    @staticmethod
+    def _shelved(j):
+        """The note of documents moved to the backup for a new job, while they can still be put back
+        (the job is still a new job and no other documents were written for it since)."""
+        record = j.get("shelved")
+        if not isinstance(record, dict) or not isinstance(record.get("files"), list) or not record["files"]:
+            return None
+        if j.get("status") not in store.LEAD_STATUSES or j.get("tailored_cv_file"):
+            return None
+        if record.get("cover_letter_file") and j.get("cover_letter_file"):
+            return None
+        return record
+
+    def unshelve_docs(self, job_id):
+        """Put the documents moved by shelve_docs back where they were. Nothing is changed unless all of it can be."""
+        done = {}
+
+        def go(jobs, j):
+            record = self._shelved(j)
+            if not record:
+                if isinstance(j.get("shelved"), dict) and j.get("status") in store.LEAD_STATUSES:
+                    return {"ok": False, "msg": "Other documents were written for this job since. The earlier ones stay in the backup."}
+                return {"ok": False, "msg": "No documents of this job are in the backup to put back."}
+            plan = []
+            for item in record["files"]:
+                if not isinstance(item, dict):
+                    return {"ok": False, "msg": "The note of what was moved is damaged. The files are still in the backup."}
+                name, backup = os.path.basename(str(item.get("name") or "")), os.path.basename(str(item.get("backup") or ""))
+                source = vault.backups_dir() / self.SHELF / backup
+                target = (config.TAILORED_CV_DIR if item.get("folder") == "cv" else config.LETTERS_DIR) / name
+                if not name or not backup or not source.is_file():
+                    return {"ok": False, "msg": f"The backup copy of {name or 'a document'} is missing, so nothing was put back."}
+                if target.exists():
+                    return {"ok": False, "msg": f"A file named {name} is already in its folder, so nothing was put back."}
+                plan.append((source, target))
+            try:
+                contents = [(source, target, vault.read_bytes(source)) for source, target in plan]
+            except Exception as e:  # noqa: BLE001 - a damaged backup: say so, change nothing
+                return {"ok": False, "msg": f"A backup copy could not be read ({e}), so nothing was put back."}
+            for source, target, data in contents:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+                source.unlink()
+            if record.get("cover_letter_file"):
+                j["cover_letter_file"] = record["cover_letter_file"]
+            j["tailored_cv_file"], j["match_tier"] = record.get("tailored_cv_file", ""), record.get("match_tier", "")
+            if record.get("status") in store.LEAD_STATUSES:
+                j["status"] = record["status"]
+            j["apply_steps"] = list(record.get("apply_steps") or [])
+            j["last_update"] = date.today().isoformat()
+            j.pop("shelved", None)
+            done["n"] = len(contents)
+        result = self._change(job_id, go)
+        return {"ok": True, "restored": done.get("n", 0)} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "Couldn't put the documents back."}
+
+    @_guarded(dict)
+    def last_shelved(self):
+        """The most recent batch of documents moved to the backup that can still be put back, for
+        UNDO_DAYS: {when, batch, jobs: [{id, title, company}]} ({} when there is none)."""
+        oldest = (datetime.now() - timedelta(days=self.UNDO_DAYS)).isoformat(timespec="seconds")
+        rows = [(r, j) for j in store.load_jobs() for r in [self._shelved(j)]
+                if r and isinstance(r.get("when"), str) and r["when"] >= oldest and isinstance(r.get("batch"), str)]
+        if not rows:
+            return {}
+        newest = max(rows, key=lambda pair: pair[0]["when"])[0]
+        return {"when": newest["when"], "batch": newest["batch"],
+                "jobs": [{"id": j["id"], "title": j["title"], "company": j["company"]} for r, j in rows if r["batch"] == newest["batch"]]}
+
+    def unshelve_last(self, batch=""):
+        """Put back every job's documents of the batch last_shelved() names (`batch` is the one the button showed)."""
+        last = self.last_shelved()
+        if not last:
+            return {"ok": False, "msg": "No moved documents are left to put back."}
+        if batch and batch != last["batch"]:
+            return {"ok": False, "changed": True, "msg": "The list changed. Look at it again and press once more."}
+        done, files, failed = 0, 0, []
+        for row in last["jobs"]:
+            got = self.unshelve_docs(row["id"])
+            if got.get("ok"):
+                done, files = done + 1, files + int(got.get("restored") or 0)
+            else:
+                failed.append(f"{row['title']} ({row['company']}): {got.get('msg') or 'not put back'}")
+        if not done:
+            return {"ok": False, "msg": failed[0] if failed else "Couldn't put the documents back."}
+        return {"ok": True, "jobs": done, "files": files, "failed": failed}
 
     def rescore_ids(self, job_id=""):
         """Which jobs "Score again" covers: the one given, or every new job that has a score."""

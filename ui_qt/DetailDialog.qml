@@ -115,6 +115,16 @@ Dialog {
         shelveNote = (r && r.ok) ? r.moved + (r.moved === 1 ? " file" : " files") + " moved to the backup." : ((r && r.msg) || "Couldn't move the documents.");
         if (r && r.ok) { refresh(); win.countsData = bridge.counts(); win.refreshOpenView(); }
     }
+    function unshelve() {
+        confirmShelve = false;
+        if (win.appRunning) { shelveBad = true; shelveNote = "A search or scan is running. Put the documents back when it has finished."; return; }
+        var r = bridge.unshelveDocs(job.id);
+        shelveBad = !(r && r.ok);
+        shelveNote = (r && r.ok) ? r.restored + (r.restored === 1 ? " file is" : " files are") + " back in place."
+                                 : ((r && r.msg) || "Couldn't put the documents back.");
+        if (r && r.ok) { refresh(); win.countsData = bridge.counts(); win.refreshOpenView(); }
+    }
+    function dayTime(iso) { return (iso || "").replace("T", " ").slice(0, 16); }
     property bool scoreBusy: false
     property string scoreJob: ""
     property string scoreNote: ""
@@ -318,17 +328,22 @@ Dialog {
                             text: detailDialog.scoreBusy ? "Scoring…" : "Score again"; onClicked: detailDialog.scoreAgain() }
                     }
                     // documents left over from a higher score
-                    RowLayout { objectName: "staleRow"; visible: detailDialog.job.docs_stale === true || detailDialog.shelveNote !== ""
+                    RowLayout { objectName: "staleRow"
+                        visible: detailDialog.job.docs_stale === true || detailDialog.job.can_unshelve === true || detailDialog.shelveNote !== ""
                         Layout.fillWidth: true; spacing: 10
                         Text { objectName: "staleText"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 12
                             font.bold: detailDialog.shelveBad
                             color: detailDialog.shelveBad ? theme.crit : (detailDialog.shelveNote !== "" && !detailDialog.confirmShelve ? theme.good : theme.warn)
                             text: detailDialog.shelveNote !== "" ? detailDialog.shelveNote
+                                : detailDialog.job.can_unshelve === true
+                                  ? "The documents the app wrote for this job were moved to the backup on " + detailDialog.dayTime(detailDialog.job.shelved_when) + "."
                                 : "The letter and CV were written when this job scored higher. It is now below your limit of "
                                   + (detailDialog.job.threshold || 0) + ", so check before you use them." }
                         SmallButton { objectName: "shelveDocs"; visible: detailDialog.job.docs_stale === true
                             primaryStyle: detailDialog.confirmShelve
                             text: detailDialog.confirmShelve ? "Yes, move them" : "Move documents to backup"; onClicked: detailDialog.shelve() }
+                        SmallButton { objectName: "unshelveDocs"; visible: detailDialog.job.can_unshelve === true
+                            text: "Put them back"; onClicked: detailDialog.unshelve() }
                     }
                     // a score that rests on little text: say so, and let the posting's text be pasted in
                     RowLayout { objectName: "basisRow"; visible: detailDialog.job.can_paste_text === true; Layout.fillWidth: true; spacing: 10

@@ -185,6 +185,8 @@ Inside the window:
   has a letter and CV is marked in the list. **Move documents to backup** (job window) puts the files
   the app wrote into `data/backups/below_your_limit/`; a letter of your own is never moved.
   **Move them to backup** at the top of New Jobs does it for all such jobs at once, after naming them.
+  **Put them back** undoes it: in New Jobs for the last batch (offered for 7 days), in a job's
+  window for that job. The files return to their folders and leave the backup.
 - **Required-language check** — after scoring, the app itself looks for a required language your CV
   does not show at a working level (basic, A1 and A2 do not count) and lowers the score to 25,
   with the reason in the job window. A language named as a plus is ignored.
