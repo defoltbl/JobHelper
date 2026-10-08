@@ -54,6 +54,10 @@ Dialog {
         ticker.text = (r && r.ok) ? "Opened one PDF with the letter and the CV (" + r.pages + " pages)." : ((r && r.msg) || "Couldn't make the single PDF.");
         return !!(r && r.ok);
     }
+    function showFile(kind) {       // select the file in Finder, ready to drag into an application form
+        var r = bridge.showInFolder(kind, job.id);
+        ticker.text = (r && r.ok) ? "Shown in its folder: " + r.file : ((r && r.msg) || "Couldn't show that file.");
+    }
     function doStep(key) {
         var ok = true;
         if (key === "posting") { var r = bridge.openUrl(job.id); ok = !!(r && r.ok); ticker.text = ok ? "Opened the job posting in your browser." : "No link for this job."; }
@@ -197,6 +201,9 @@ Dialog {
                                 Text { anchors.centerIn: parent; text: parent.parent.ticked ? "✓" : ""; color: "#ffffff"; font.pixelSize: 12; font.bold: true } }
                             Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 13
                                 color: parent.ticked ? theme.soft : theme.ink; text: modelData.label }
+                            SmallButton { visible: modelData.key === "cv" || modelData.key === "letter"
+                                               || (modelData.key === "combined" && parent.ticked)
+                                text: "Show in folder"; onClicked: detailDialog.showFile(modelData.key) }
                             SmallButton { text: modelData.button; onClicked: detailDialog.doStep(modelData.key) }
                         }
                     }
@@ -516,8 +523,11 @@ Dialog {
                         text: (detailDialog.job.next_step ? "Next step: " + detailDialog.job.next_step + "\n" : "") + (detailDialog.job.notes || "") } }
 
                 DetailCard { heading: "Description"; visible: !!detailDialog.job.description
-                    TextEdit { Layout.fillWidth: true; readOnly: true; selectByMouse: true; wrapMode: TextEdit.Wrap
-                        text: detailDialog.job.description || ""; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent } }
+                    // laid out for reading: headings on their own lines, list items marked (no word is changed)
+                    TextEdit { objectName: "descText"; Layout.fillWidth: true; Layout.maximumWidth: 660; readOnly: true; selectByMouse: true
+                        wrapMode: TextEdit.Wrap; text: detailDialog.job.description_text || detailDialog.job.description || ""
+                        color: theme.ink; font.pixelSize: 13; selectionColor: theme.accent
+                        textFormat: TextEdit.PlainText } }
             }
         }
 
@@ -531,6 +541,8 @@ Dialog {
             SmallButton { visible: detailDialog.job.cv_pdf === true; text: "CV PDF"; onClicked: bridge.openDoc("cv_pdf", detailDialog.job.cv) }
             SmallButton { visible: !!detailDialog.job.letter; text: "Letter"; onClicked: bridge.openDoc("letter", detailDialog.job.letter) }
             SmallButton { visible: detailDialog.job.letter_pdf === true; text: "Letter PDF"; onClicked: bridge.openDoc("letter_pdf", detailDialog.job.letter) }
+            SmallButton { objectName: "showCv"; visible: !!detailDialog.job.cv && detailDialog.job.is_lead !== true; text: "CV in folder"; onClicked: detailDialog.showFile("cv") }
+            SmallButton { objectName: "showLetter"; visible: !!detailDialog.job.letter && detailDialog.job.is_lead !== true; text: "Letter in folder"; onClicked: detailDialog.showFile("letter") }
             SmallButton { objectName: "onePdf"; visible: detailDialog.job.can_combine === true; text: "One PDF"
                 onClicked: detailDialog.onePdf() }
             SmallButton { objectName: "compareCv"; visible: detailDialog.job.can_compare === true; text: "Compare CV"

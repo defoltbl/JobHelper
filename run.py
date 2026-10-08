@@ -155,7 +155,7 @@ def main() -> int:
     except llm.LimitReached as e:
         store.save_jobs(jobs)
         agent4_tracker.render_all(jobs)
-        notify.send("Paused: Claude's limit is used up. Run it again after the reset.", "Search stopped early")
+        notify.send(notify.PAUSED + " Run it again after the reset.", "Search stopped early")
         print(f"\n⏸  {e}\n   What was finished is saved. Run again after the reset: the remaining jobs\n"
               "   are scored then, and nothing that is done is repeated.")
         return 3
@@ -184,7 +184,7 @@ def main() -> int:
 
     print()
     print(usage.format_report())
-    notify.send("%d jobs tracked, %d with a CV and letter ready." % (len(jobs), ready), "Search finished")
+    notify.send(notify.search_text(added if not args.skip_search else 0, stats["letters"]), "Search finished")
     return 0
 
 

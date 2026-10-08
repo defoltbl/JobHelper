@@ -14,7 +14,7 @@ import subprocess
 import sys
 from datetime import date
 
-from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, filters, form_answers, health, summary,
+from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, filters, form_answers, health, summary, textfmt,
                compare, config, cover_letter, db, followup, housekeeping, insights, integrity, interview_prep, keywords, merge, pdf,
                planner, salary, store, usage, vault)
 
@@ -55,6 +55,39 @@ class Api:
                 subprocess.Popen(["xdg-open", str(path)])
         except Exception:
             pass
+
+    def _reveal(self, path):
+        """Show a file in its folder (selected in Finder), so it is easy to drag into a form."""
+        try:
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", str(path)])
+            else:
+                self._open(os.path.dirname(str(path)))
+        except Exception:
+            pass
+
+    def show_in_folder(self, kind, job_id):
+        """Reveal a job's CV, letter or single PDF in its folder. The PDF copy when there is one."""
+        j = store.find(store.load_jobs(), job_id)
+        if not j:
+            return {"ok": False, "msg": "That job is not in the list any more."}
+        if kind == "combined":
+            name = _stem(j.get("tailored_cv_file", "")).replace("_CV_", "_Application_")
+            target = config.DATA_DIR / "combined" / f"{name if '_Application_' in name else name + '_application'}.pdf"
+        else:
+            base = {"cv": config.TAILORED_CV_DIR, "letter": config.LETTERS_DIR}.get(kind)
+            name = j.get("tailored_cv_file" if kind == "cv" else "cover_letter_file", "")
+            if base is None or not name:
+                return {"ok": False, "msg": "There is no such document for this job yet."}
+            docx = (base / name).with_suffix(".docx")
+            target = pdf.pdf_for(docx) or (docx if docx.is_file() else base / name)
+            if not target.is_file() and kind == "letter":
+                target = config.COVER_LETTERS_DIR / os.path.basename(name)      # a letter of your own
+        if not target.is_file():
+            return {"ok": False, "msg": "That file is not on the disk any more." if kind != "combined"
+                    else "Make the single PDF first, then it can be shown in its folder."}
+        self._reveal(target)
+        return {"ok": True, "file": target.name}
 
     # ── read: status / data ─────────────────────────────────────
     def connections(self):
@@ -189,6 +222,7 @@ class Api:
             "status": j["status"], "is_lead": j["status"] in store.LEAD_STATUSES,
             "score": j.get("match_score"), "tier": j.get("match_tier", ""),
             "reason": j.get("match_reason", ""), "description": description[:8000],
+            "description_text": textfmt.readable(description[:8000]),
             "prefilter": j.get("prefilter", "") if j.get("match_score") is None else "",
             "hold": j.get("hold", "") if not j.get("cover_letter_file") else "",
             "score_queued": bool(j.get("prefilter_override")) and j.get("match_score") is None,

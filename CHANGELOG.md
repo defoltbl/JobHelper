@@ -5,6 +5,10 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 8 October 2026
 
+- **Show in folder**: the CV, the letter and the single PDF can be shown in Finder with the file selected, ready to drag into an application form.
+- **Readable descriptions**: a posting's text is laid out with headings on their own lines and list items marked. No word is changed.
+- **Notifications with the app's own icon and name**, and clearer wording ("40 new jobs found. 20 are ready to send, with a CV and letter.").
+- **App icon** in the Dock and the window.
 - **Postings on company-branded jobs.cz pages are read properly**: those pages load their text by script, so the app got no company and no text, could not see that an ad was in Czech, and scored it from the title. It now reads the company and a summary from the page.
 - **The same posting is no longer listed twice**: ids made from a link changed on every run; the same link now counts as one posting.
 - **Scan result names invitations**: the line after an email scan says "3 new: 2 invitations, 1 rejection" instead of counting only rejections.

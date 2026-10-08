@@ -325,3 +325,34 @@ def test_job_window_says_why_a_good_score_has_no_documents(api):
     jobs[0]["cover_letter_file"] = "L.docx"                          # once a letter exists the note is gone
     store.save_jobs(jobs)
     assert api.job_detail("h")["hold"] == ""
+
+
+# ── show a document in its folder ───────────────────────────────────────────
+def test_show_in_folder_reveals_the_pdf_when_there_is_one(api, monkeypatch):
+    shown = []
+    monkeypatch.setattr(ui_api.Api, "_reveal", lambda self, target: shown.append(target))
+    config.ensure_dirs()
+    (config.TAILORED_CV_DIR / "CV_a.docx").write_bytes(b"cv")
+    (config.TAILORED_CV_DIR / "CV_a.pdf").write_bytes(b"%PDF")
+    (config.LETTERS_DIR / "Letter_a.docx").write_bytes(b"letter")
+    config.COVER_LETTERS_DIR.mkdir(parents=True, exist_ok=True)
+    (config.COVER_LETTERS_DIR / "Mine_CoverLetter_Beta.docx").write_bytes(b"mine")
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", tailored_cv_file="CV_a.docx", cover_letter_file="Letter_a.docx"),
+                     store.new_job(id="own", title="Dev", company="Beta", status="waiting", source="manual", cover_letter_file="Mine_CoverLetter_Beta.docx"),
+                     store.new_job(id="bare", title="Dev", company="C")])
+    assert api.show_in_folder("cv", "a") == {"ok": True, "file": "CV_a.pdf"} and shown[-1] == config.TAILORED_CV_DIR / "CV_a.pdf"
+    assert api.show_in_folder("letter", "a") == {"ok": True, "file": "Letter_a.docx"}          # no PDF copy: the Word file
+    assert api.show_in_folder("letter", "own")["file"] == "Mine_CoverLetter_Beta.docx"         # a letter of your own
+    assert "no such document" in api.show_in_folder("cv", "bare")["msg"]
+    assert "Make the single PDF first" in api.show_in_folder("combined", "a")["msg"]
+    assert "not in the list" in api.show_in_folder("cv", "zzz")["msg"] and api.show_in_folder("wrong", "a")["ok"] is False
+    (config.TAILORED_CV_DIR / "CV_a.docx").unlink(); (config.TAILORED_CV_DIR / "CV_a.pdf").unlink()
+    assert "not on the disk" in api.show_in_folder("cv", "a")["msg"] and len(shown) == 3
+
+
+def test_job_window_gets_the_description_laid_out(api):
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme",
+                                   description="We build tools. Requirements Strong Python Benefits Flexible hours Show more Show less")])
+    detail = api.job_detail("a")
+    assert detail["description_text"] == "We build tools.\n\nREQUIREMENTS\nStrong Python\n\nBENEFITS\nFlexible hours"
+    assert detail["description"].endswith("Show more Show less")           # the stored text itself is untouched

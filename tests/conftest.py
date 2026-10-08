@@ -50,10 +50,12 @@ def safe_environment(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(llm, "_ask_async", no_claude)         # never spend the subscription from a test
     from jobhelper import notify
     monkeypatch.setattr(notify, "_run", lambda cmd: None)     # never show a real notification from a test
+    monkeypatch.setattr(notify, "ensure_app", lambda: None)   # nor build the helper app
     import types
 
     from jobhelper import ui_api
     monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: None)   # never open a real file, folder or web page
+    monkeypatch.setattr(ui_api.Api, "_reveal", lambda self, target: None)  # nor a real Finder window
     monkeypatch.setattr(ui_api, "_claude_auth_status",        # never ask the real Claude CLI who is signed in
                         lambda: types.SimpleNamespace(stdout="{}", returncode=1))
     monkeypatch.setattr(config, "USAGE_JSON", tmp_path_factory.mktemp("usage") / "usage.json")

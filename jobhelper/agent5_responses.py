@@ -152,6 +152,15 @@ def scan_summary(stats: dict[str, Any]) -> str:
     return text
 
 
+def replies_text(stats: dict[str, Any]) -> str:
+    """The same news as scan_summary, as a notification: only what arrived."""
+    n = stats.get("new_responses", 0)
+    if n <= 0:
+        return "No new replies."
+    tail = scan_summary(stats).split(" new", 1)[1]              # ": 2 invitations, 1 rejection. Date saved: …" or "."
+    return ("1 new reply" if n == 1 else f"{n} new replies") + tail
+
+
 _RULE_STAGES = [
     ("interview", r"\b(interview|pohovor|schedule (?:a|your) (?:call|meeting)|invite you to|book a (?:slot|time)|video call)\b"),
     ("assessment", r"\b(assessment|test task|coding (?:test|challenge)|take-home|online test|hackerrank|codility)\b"),

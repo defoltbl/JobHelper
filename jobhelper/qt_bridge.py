@@ -360,7 +360,7 @@ class Bridge(QObject):
         self._paused, self._can_resume = True, False
         self._resume.clear()
         self.logChanged.emit("Paused: %s Everything done so far is saved." % error)
-        self._notify("Paused: Claude's limit is used up. Everything done so far is saved.", "Run paused")
+        self._notify(notify.PAUSED + " The run continues when you press Resume.", "Run paused")
         self.limitChanged.emit(self._limit_state(str(error)))
         try:
             while True:
@@ -370,7 +370,7 @@ class Bridge(QObject):
                 if free and not self._can_resume:
                     self._can_resume = True
                     self.logChanged.emit("The limit is back. Press Resume to continue.")
-                    self._notify("The limit is back. Press Resume to continue.", "Ready to resume")
+                    self._notify(notify.RESUME, "Ready to resume")
                     self.limitChanged.emit(self._limit_state(str(error)))
                 elif not free and self._can_resume:
                     self._can_resume = False
@@ -512,6 +512,10 @@ class Bridge(QObject):
     @Slot(result="QVariantMap")
     def openMyLetters(self):
         return self._api.open_my_letters()
+
+    @Slot(str, str, result="QVariantMap")
+    def showInFolder(self, kind, job_id):
+        return self._api.show_in_folder(kind, job_id)
 
     @Slot(str, str, result="QVariantMap")
     def applyStep(self, job_id, step):
@@ -741,13 +745,13 @@ class Bridge(QObject):
 
             self.runFinished.emit("search",
                                   "Done · +%d new jobs, %d letters + CVs ready." % (added, stats["letters"]))
-            self._notify("%d new jobs, %d with a CV and letter ready." % (added, stats["letters"]), "Search finished")
+            self._notify(notify.search_text(added, stats["letters"]), "Search finished")
         except RunCancelled:
             self._save_partial(jobs)
             self.runFinished.emit("search", "Stopped. Everything finished before that is saved.")
         except Exception as e:  # noqa: BLE001
             self.runFinished.emit("search", "Error: %s" % e)
-            self._notify("The search stopped with an error. Open the app to see it.", "Search stopped")
+            self._notify(notify.FAILED, "Search stopped")
         finally:
             self._set_running(False)
 
@@ -786,10 +790,9 @@ class Bridge(QObject):
             self.runFinished.emit("scan", agent5_responses.scan_summary(stats) + warning)
             invites = notify.invites_text(stats.get("invites") or [])
             if invites:
-                notify.send(invites, "Open JobHelper to prepare")          # worth an alert even with the app in front
+                notify.send(invites + ". Open JobHelper to prepare for it.", "Interview invitation")   # worth an alert even with the app in front
             else:
-                self._notify("%d new replies, %d of them rejections." % (stats["new_responses"], stats["rejections"]),
-                             "Email scan finished")
+                self._notify(agent5_responses.replies_text(stats), "Email scan finished")
         except RunCancelled:
             self._save_partial(jobs)
             self.runFinished.emit("scan", "Stopped. Emails read before that are saved.")

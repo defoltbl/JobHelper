@@ -233,3 +233,11 @@ def test_a_scan_files_both_emails_under_one_application_and_saves_the_date(isola
     assert by["ml"]["event"]["date"] == day and by["ml"]["event"]["time"] == "11:30" and "event" not in by["ros"]
     assert len(stats["invites"]) == 2 and len(stats["dates"]) == 1
     assert a5.scan_summary(stats).startswith("Scanned 2 emails · 2 new: 2 invitations. Date saved: ")
+
+
+def test_reply_notification_wording():
+    from jobhelper import agent5_responses as a5
+    assert a5.replies_text({"new_responses": 0}) == "No new replies."
+    assert a5.replies_text({"scanned": 12, "new_responses": 3, "rejections": 1, "invites": ["A", "A"]}) == "3 new replies: 2 invitations, 1 rejection."
+    assert a5.replies_text({"scanned": 4, "new_responses": 1, "rejections": 1, "invites": []}) == "1 new reply: 1 rejection."
+    assert a5.replies_text({"scanned": 4, "new_responses": 2, "rejections": 0, "invites": []}) == "2 new replies."

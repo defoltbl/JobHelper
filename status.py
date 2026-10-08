@@ -146,8 +146,11 @@ def cmd_sync(args) -> int:
     agent4_tracker.render_excel(jobs)
     agent5_responses.build_report(jobs)
     from jobhelper import notify
-    notify.send(notify.invites_text(stats.get("invites") or [])
-                or agent5_responses.scan_summary(stats), "Email scan finished")
+    invited = notify.invites_text(stats.get("invites") or [])
+    if invited:
+        notify.send(invited + ". Open JobHelper to prepare for it.", "Interview invitation")
+    else:
+        notify.send(agent5_responses.replies_text(stats), "Email scan finished")
     print(f"\nScanned {stats['scanned']} emails ({stats.get('skipped_unrelated', 0)} unrelated skipped) "
           f"→ {stats['new_responses']} new responses ({stats['rejections']} rejections), "
           f"{stats['status_updates']} status updates.")
