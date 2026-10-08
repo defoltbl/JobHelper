@@ -99,9 +99,16 @@ def build(job: dict[str, Any], prep: dict[str, Any], out_path: Path, contact: st
         for e in prep["experience"]:
             para(e["job"], 11, bold=True, after=2, before=6).paragraph_format.keep_with_next = True
             para(f"“{e['story']}”", after=3)
+            if e.get("plain"):
+                para("For HR, in plain words:", bold=True, after=1)
+                para(f"“{e['plain']}”", after=3)
             if e.get("gained"):
                 para("What it gave you for this role:", bold=True, after=1)
                 bullets(e["gained"])
+            if e.get("typical"):
+                para("What people in this kind of position usually do (general knowledge about the role, not your record):",
+                     bold=True, after=1, before=3)
+                bullets(e["typical"])
             if e.get("if_true"):
                 para("Ask yourself, and add it only if it is true:", bold=True, after=1, before=3)
                 bullets(e["if_true"])
@@ -120,13 +127,16 @@ def build(job: dict[str, Any], prep: dict[str, Any], out_path: Path, contact: st
         heading("Your opening pitch (about 45 seconds)")
         para(f"“{prep['pitch']}”")
 
-    by_kind: dict[str, list[dict[str, Any]]] = {}
-    for q in prep.get("questions") or []:
-        by_kind.setdefault(q.get("kind", "about you"), []).append(q)
-    for kind, title in KIND_TITLES.items():
-        if by_kind.get(kind):
+    from . import interview_prep
+    notes = {"hr": "They usually do not know the technology. Plain words, no jargon; what you did, how you work, why this job.",
+             "technical": "Precise answers: the real tools, methods and numbers. Say plainly what you have not used."}
+    for audience, title in interview_prep.AUDIENCE_TITLES.items():
+        asked = [q for q in prep.get("questions") or []
+                 if (q.get("audience") or ("technical" if q.get("kind") in ("technical", "your projects") else "hr")) == audience]
+        if asked:
             heading(title)
-            for q in by_kind[kind]:
+            para(notes[audience], size=9.5, italic=True, after=3)
+            for q in sorted(asked, key=lambda q: list(KIND_TITLES).index(q.get("kind", "about you")) if q.get("kind") in KIND_TITLES else 0):
                 qa(q["question"], q["answer"], q.get("check", ""))
     if prep.get("concepts"):
         heading("Concepts to be able to explain")

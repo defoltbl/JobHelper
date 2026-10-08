@@ -171,7 +171,9 @@ def test_prep_text_for_copying():
     prep = interview_prep._clean(GOOD)
     text = interview_prep.as_text(_job(), prep)
     assert text.startswith("Interview preparation: Junior Python Developer at Acme")
-    assert "ABOUT YOU" in text and "TECHNICAL" in text and "QUESTIONS TO ASK THEM" in text and "REVISE BEFORE THE INTERVIEW" in text
+    assert "IF YOU SPEAK WITH HR OR A RECRUITER" in text and "IF YOU SPEAK WITH AN ENGINEER OR THE HIRING MANAGER" in text
+    assert text.index("IF YOU SPEAK WITH HR") < text.index("IF YOU SPEAK WITH AN ENGINEER")
+    assert "QUESTIONS TO ASK THEM" in text and "REVISE BEFORE THE INTERVIEW" in text
     assert "—" not in text
 
 
@@ -317,7 +319,8 @@ def test_the_sheet_is_a_word_document_in_the_order_you_read_it(tmp_path):
     assert lines[2] == "Tuesday 13 October 2026, 11:30 · Google Meet · with Petra"
     order = ["About BRIGHTLINE (if they ask what you know)", "The role – what the work actually is", "Your fit – lead with these",
              "The honest gap (own it, don't hide it)", "The key question: “This role asks for 3+ years. Why you?”",
-             "Your opening pitch (about 45 seconds)", "About you", "Technical questions", "Concepts to be able to explain",
+             "Your opening pitch (about 45 seconds)", "If you speak with HR or a recruiter",
+             "If you speak with an engineer or the hiring manager", "Concepts to be able to explain",
              "Worth revising before the call", "Questions to ask them", "Practical reminders"]
     assert [lines.index(h) for h in order] == sorted(lines.index(h) for h in order)
     assert "Imitation learning: Learning a policy from demonstrations." in lines and prep_doc.COMPANY_NOTE in lines
@@ -360,7 +363,7 @@ def test_experience_is_kept_per_job_with_reminders_not_claims(monkeypatch):
     prompts = []
     monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(FULL, experience=WORK))
     prep = interview_prep.generate({"title": "ML Engineer", "company": "BRIGHTLINE"}, CV)
-    assert prep["experience"] == [WORK[0]]
+    assert prep["experience"] == [dict(WORK[0], plain="", typical=[])]
     assert "one entry for EVERY job and internship in the CV" in prompts[0] and "do not add duties, tools, team sizes or results" in prompts[0]
     assert "(nothing written yet)" in prompts[0]                                  # no notes: said so, not left blank
 
@@ -407,3 +410,51 @@ def test_experience_notes_come_from_options_and_reach_both_drafts(isolate_data, 
     monkeypatch.setattr(form_answers, "generate", lambda j, cv, qs, notes="": seen.update(form=notes) or [{"question": "Q?", "answer": "A.", "check": ""}])
     assert api.make_interview_prep("a")["ok"] and api.make_form_answers("a", "Why us?")["ok"]
     assert seen == {"prep": "At Acme I wrote the import service.", "form": "At Acme I wrote the import service."}
+
+
+# ── two audiences: HR in plain words, the engineer in detail ────────────────
+TWO = dict(FULL, questions=[
+    {"audience": "technical", "kind": "technical", "question": "How does PPO work?", "why": "", "answer": "It clips the policy update."},
+    {"audience": "hr", "kind": "about you", "question": "Tell me about your last project.", "why": "", "answer": "I taught a program to play a game by copying good players."},
+    {"audience": "technical", "kind": "your projects", "question": "Tell me about your last project.", "why": "", "answer": "A route planner for delivery vans in Python."},
+    {"audience": "nobody", "kind": "practical", "question": "When can you start?", "why": "", "answer": "In two weeks."},
+    {"kind": "technical", "question": "What is a policy?", "why": "", "answer": "A mapping from states to actions."}],
+    experience=[dict(WORK[0], plain="I helped build a tool that loads data, and I checked that it works.",
+                     typical=["An intern in this kind of role usually fixes small bugs.", "Usually writes tests for their own changes."])])
+
+
+def test_questions_are_split_by_who_asks(monkeypatch):
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(TWO))
+    prep = interview_prep.generate({"title": "ML Engineer", "company": "BRIGHTLINE"}, CV)
+    assert [(q["audience"], q["question"]) for q in prep["questions"]] == [
+        ("hr", "Tell me about your last project."), ("hr", "When can you start?"),                 # an unknown audience: by its kind
+        ("technical", "How does PPO work?"), ("technical", "What is a policy?"), ("technical", "Tell me about your last project.")]
+    assert "They usually do not know the technology" in prompts[0] and "about 7 questions a recruiter" in prompts[0]
+    assert "it is never written as something this candidate did" in prompts[0]
+    assert prep["experience"][0]["typical"][0].startswith("An intern in this kind of role usually")
+
+
+def test_the_sheet_has_both_sets_and_marks_usual_tasks_as_general(tmp_path):
+    import docx
+
+    from jobhelper import prep_doc
+    prep = dict(interview_prep._clean(TWO), made="2026-10-08", checks=[])
+    lines = [p.text for p in docx.Document(str(prep_doc.build({"title": "ML Engineer", "company": "BRIGHTLINE"}, prep, tmp_path / "x.docx"))).paragraphs if p.text.strip()]
+    hr, tech = lines.index("If you speak with HR or a recruiter"), lines.index("If you speak with an engineer or the hiring manager")
+    assert hr < tech
+    assert "I taught a program to play a game by copying good players." in lines[hr:tech]             # the plain answer is in the HR set
+    assert "A route planner for delivery vans in Python." in lines[tech:] and "It clips the policy update." in lines[tech:]
+    assert lines[hr + 1].startswith("They usually do not know the technology")
+    assert "For HR, in plain words:" in lines and "“I helped build a tool that loads data, and I checked that it works.”" in lines
+    general = lines.index("What people in this kind of position usually do (general knowledge about the role, not your record):")
+    assert lines[general + 1] == "An intern in this kind of role usually fixes small bugs."
+    assert general < lines.index("Ask yourself, and add it only if it is true:")
+
+
+def test_a_plain_story_is_held_to_the_cv_too(monkeypatch):
+    bad = dict(TWO, experience=[dict(TWO["experience"][0], plain="I ran the company's Kubernetes clusters.")])
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(bad))
+    interview_prep.generate({"title": "T", "company": "C"}, CV)
+    assert len(prompts) == 2 and "the plain story about Software Developer Intern" in prompts[1]

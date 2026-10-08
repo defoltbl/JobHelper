@@ -21,6 +21,10 @@ Dialog {
     padding: 0
     property var prep: ({})
     property string note: ""
+    function who(q) {       // older saved preparations have no audience: technical kinds go to the engineer
+        if (q && (q.audience === "hr" || q.audience === "technical")) return q.audience;
+        return q && (q.kind === "technical" || q.kind === "your projects") ? "technical" : "hr";
+    }
     function show(jobId) {
         var d = bridge.interviewPrep(jobId);
         if (!d || !d.id) { ticker.text = "No interview preparation is saved for this job yet."; return; }
@@ -54,7 +58,14 @@ Dialog {
                 Repeater {
                     model: prepDialog.prep.questions || []
                     ColumnLayout { Layout.fillWidth: true; spacing: 6
+                        // the questions come in two groups: what HR asks, and what an engineer asks
+                        Text { visible: index === 0 || (prepDialog.who(prepDialog.prep.questions[index - 1]) !== prepDialog.who(modelData))
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap; Layout.topMargin: index === 0 ? 0 : 10
+                            text: prepDialog.who(modelData) === "hr" ? "If you speak with HR or a recruiter: plain words, no jargon"
+                                                                     : "If you speak with an engineer or the hiring manager: precise answers"
+                            color: theme.ink; font.pixelSize: 14; font.bold: true }
                         Text { visible: index === 0 || (prepDialog.prep.questions[index - 1].kind !== modelData.kind)
+                                        || (prepDialog.who(prepDialog.prep.questions[index - 1]) !== prepDialog.who(modelData))
                             text: modelData.kind; color: theme.accent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.4
                             font.capitalization: Font.AllUppercase; Layout.topMargin: index === 0 ? 0 : 6 }
                         Rectangle { Layout.fillWidth: true; radius: 12; color: theme.surface2; border.width: 1

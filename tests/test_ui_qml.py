@@ -1542,3 +1542,11 @@ def test_more_about_your_work_is_saved_and_checked(ui):
     ui.wait(350)
     ui.bridge.saveOptions(start)
     assert ui.warnings == []
+
+
+def test_preparation_window_groups_questions_by_who_asks(ui):
+    assert ui.js('prepDialog.who({ audience: "hr", kind: "technical" })') == "hr"
+    assert ui.js('prepDialog.who({ kind: "technical" })') == "technical" and ui.js('prepDialog.who({ kind: "practical" })') == "hr"   # older saved ones
+    source = qml_source()
+    assert "If you speak with HR or a recruiter: plain words, no jargon" in source
+    assert "If you speak with an engineer or the hiring manager: precise answers" in source

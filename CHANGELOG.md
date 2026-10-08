@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 8 October 2026
 
+- **Two sets of interview questions**: what HR or a recruiter asks, answered in plain words without jargon, and what an engineer asks, answered precisely.
+- **Each job told two ways**: the full story and a plain-words version for HR, plus what people in that kind of position usually do, marked as general knowledge about the role.
 - **Your work experience, told for the role**: the interview sheet now has a section per job from your CV: how to tell it for this role, what it gave you, and questions that help you recall real details.
 - **More about your work** (Options → About you): describe what you really did in each job beyond the CV. Interview preparation and form answers use it like your CV.
 - **Interview preparation as a document**: preparing an interview now gives a sheet to read before the call: the company, the role, your fit, the honest gap, the key question, an opening pitch, likely questions with answers, concepts to explain, questions to ask and reminders. "Open as document" writes it as a Word file.

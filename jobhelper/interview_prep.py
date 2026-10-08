@@ -43,9 +43,16 @@ Job:
 What the company has written so far (may be empty):
 {emails}
 {feedback}
-Write {n} questions this interviewer is likely to ask, most likely first, across these kinds:
+Write {n} questions, most likely first, across these kinds:
 "about you", "technical", "your projects", "behavioural", "the role and company", "practical".
-Technical questions must come from the posting's stack and the candidate's own projects.
+The candidate may meet two different people, so write for both and mark each question with its "audience":
+- "hr": about {hr} questions a recruiter or HR person asks. They usually do not know the technology, so
+  the answers are in plain words: no jargon, and any technical term that cannot be avoided is explained in
+  a few words. They want to hear motivation, how the candidate works with people, reliability, what the
+  candidate actually did day to day, and the practical facts.
+- "technical": about {tech} questions an engineer or the hiring manager asks. Precise answers, with the
+  real tools, methods and numbers. They must come from the posting's stack and the candidate's own work.
+A question both may ask ("Tell me about your last project") appears once for each, answered differently.
 
 For each answer:
 - use only what the CV shows; name the real project, tool or result;
@@ -68,9 +75,12 @@ Besides the questions, write the sheet the candidate reads before the call:
   the candidate's own words above give you, and nothing else: do not add duties, tools, team sizes or results that
   are not written there. Where they say little, the story is shorter; say so in "thin".
   "gained" is what that work gave them that matters for this role.
-  "if_true" is 3-5 questions TO THE CANDIDATE about things people in such a position usually do and that this
-  interviewer would value, e.g. "Did you write the tests for it yourself?". They are reminders to recall real
-  details, never statements about the candidate.
+  "plain" is the same story in 2-3 sentences for an HR person who does not know the technology.
+  "typical" is 3-5 things people in that kind of position usually do day to day, stated in general ("An ML
+  research intern usually …"). This is general knowledge about the role, for the candidate to compare with
+  what they really did; it is never written as something this candidate did.
+  "if_true" is 3-5 questions TO THE CANDIDATE that turn those usual tasks into reminders, e.g. "Did you write
+  the tests for it yourself?". Never statements about the candidate.
 - "concepts": terms from the posting worth being able to explain. Explain each in plain words; where the
   CV has related experience, say how it connects. Never say the candidate has used something the CV lacks.
 
@@ -86,20 +96,25 @@ Return JSON with exactly these keys:
   "key_question": {{"question": "<the hardest question this interviewer will almost certainly ask THIS candidate>", "answer": "<the answer, first person>"}},
   "pitch": "<the opening pitch, about 45 seconds spoken, first person, from the CV only>",
   "experience": [{{"job": "<title, employer and dates as the CV gives them>", "story": "<5-8 sentences, first person>",
-                  "gained": ["<2-4 things it gave them for this role>"], "if_true": ["<3-5 questions to the candidate>"],
+                  "plain": "<2-3 sentences for HR, no jargon, first person>",
+                  "gained": ["<2-4 things it gave them for this role>"],
+                  "typical": ["<3-5 usual tasks in that kind of position, stated in general>"],
+                  "if_true": ["<3-5 questions to the candidate>"],
                   "thin": "<'' or one sentence: what the CV does not say about this job that would help here>"}}],
   "concepts": [{{"term": "<a term from the posting>", "meaning": "<1-2 plain sentences>"}}],
   "reminders": ["<4-6 practical reminders for this interview: what to lead with, what not to bluff, what to ask at the end>"],
   "questions": [
-    {{"kind": "<one of the kinds above>", "question": "<the question>",
+    {{"audience": "hr | technical", "kind": "<one of the kinds above>", "question": "<the question>",
       "why": "<one short sentence: why they ask it>", "answer": "<the answer, first person>"}}
   ],
   "ask_them": ["<5 good questions the candidate can ask the interviewer>"],
   "revise": ["<up to 5 topics from the posting worth revising before the interview>"]
 }}"""
 
+AUDIENCE_TITLES = {"hr": "If you speak with HR or a recruiter", "technical": "If you speak with an engineer or the hiring manager"}
 KINDS = ["about you", "technical", "your projects", "behavioural", "the role and company", "practical"]
-QUESTIONS = 12
+AUDIENCES = ["hr", "technical"]
+QUESTIONS, HR_QUESTIONS = 14, 7
 
 
 # An honest bridge names the missing thing on purpose; that is not a claim.
@@ -131,7 +146,8 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
             cv_text=cv_text[:12000], title=job.get("title", ""), company=job.get("company", ""),
             location=job.get("location", ""),
             description=(job.get("description") or "").strip()[:4000] or "(No posting text was saved; use the title and the CV.)",
-            emails=mail_lines, feedback=feedback, n=QUESTIONS, facts=config.facts_block(cv_text),
+            emails=mail_lines, feedback=feedback, n=QUESTIONS, hr=HR_QUESTIONS, tech=QUESTIONS - HR_QUESTIONS,
+            facts=config.facts_block(cv_text),
             notes=notes[:config.MAX_EXPERIENCE_NOTES] or "(nothing written yet)"),
             system=SYSTEM, tag="interview_prep")
         prep = _clean(data)
@@ -141,7 +157,8 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
         spoken = [(q["question"], q["answer"]) for q in prep["questions"]] + [
             ("the opening pitch", prep["pitch"]), ("the key question", prep["key_question"]["answer"]),
             ("what to say about the company", prep["company_say"])] + [("your fit", point) for point in prep["fit"]] + [
-            (f"the story about {e['job'][:50]}", e["story"]) for e in prep["experience"]]
+            (f"the story about {e['job'][:50]}", e["story"]) for e in prep["experience"]] + [
+            (f"the plain story about {e['job'][:50]}", e["plain"]) for e in prep["experience"]]
         bad = [(label, _unbacked(said, unverified)) for label, said in spoken if said]
         bad = [(q, term) for q, term in bad if term]
         third = [label for label, said in spoken if said and first_name and re.search(rf"\b{re.escape(first_name)}\b", said)]
@@ -176,9 +193,13 @@ def _clean(data: Any) -> dict[str, Any]:
         if not question or not answer:
             continue
         kind = str(item.get("kind", "")).strip().lower()
-        questions.append({"kind": kind if kind in KINDS else "about you", "question": question,
+        kind = kind if kind in KINDS else "about you"
+        audience = str(item.get("audience", "")).strip().lower()
+        if audience not in AUDIENCES:               # an older or careless reply: technical kinds go to the engineer
+            audience = "technical" if kind in ("technical", "your projects") else "hr"
+        questions.append({"audience": audience, "kind": kind, "question": question,
                           "why": cover_letter.clean(str(item.get("why", ""))).strip(), "answer": answer})
-    questions.sort(key=lambda q: KINDS.index(q["kind"]))
+    questions.sort(key=lambda q: (AUDIENCES.index(q["audience"]), KINDS.index(q["kind"])))
     texts = lambda key, n: [cover_letter.clean(str(x)).strip() for x in (data.get(key) or []) if str(x).strip()][:n]   # noqa: E731
     text = lambda key: cover_letter.clean(str(data.get(key, "") or "")).strip()                                        # noqa: E731
     key_q = data.get("key_question") if isinstance(data.get("key_question"), dict) else {}
@@ -189,7 +210,9 @@ def _clean(data: Any) -> dict[str, Any]:
         if not isinstance(e, dict):
             continue
         entry = {"job": cover_letter.clean(str(e.get("job", "") or "")).strip(), "story": cover_letter.clean(str(e.get("story", "") or "")).strip(),
+                 "plain": cover_letter.clean(str(e.get("plain", "") or "")).strip(),
                  "gained": [cover_letter.clean(str(x)).strip() for x in (e.get("gained") or []) if str(x).strip()][:5],
+                 "typical": [cover_letter.clean(str(x)).strip() for x in (e.get("typical") or []) if str(x).strip()][:6],
                  "if_true": [cover_letter.clean(str(x)).strip() for x in (e.get("if_true") or []) if str(x).strip()][:6],
                  "thin": cover_letter.clean(str(e.get("thin", "") or "")).strip()}
         if entry["job"] and entry["story"]:
@@ -209,11 +232,12 @@ def as_text(job: dict[str, Any], prep: dict[str, Any]) -> str:
     lines = [f"Interview preparation: {job.get('title', '')} at {job.get('company', '')}", ""]
     if prep.get("summary"):
         lines += [prep["summary"], ""]
-    kind = None
+    who = None
     for n, q in enumerate(prep.get("questions") or [], 1):
-        if q["kind"] != kind:
-            kind = q["kind"]
-            lines += [kind.upper(), ""]
+        audience = q.get("audience") or ("technical" if q["kind"] in ("technical", "your projects") else "hr")
+        if audience != who:
+            who = audience
+            lines += [AUDIENCE_TITLES[who].upper(), ""]
         lines += [f"{n}. {q['question']}", q["answer"], ""]
     if prep.get("ask_them"):
         lines += ["QUESTIONS TO ASK THEM", ""] + [f"- {x}" for x in prep["ask_them"]] + [""]
