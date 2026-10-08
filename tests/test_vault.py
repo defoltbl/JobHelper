@@ -312,3 +312,76 @@ def test_restore_test_needs_protection_to_be_on(isolate_data, monkeypatch):
     monkeypatch.setattr(vault, "state", lambda: "off")
     with _pytest.raises(vault.VaultError, match="not active"):
         vault.restore_test()
+
+
+# ── one backup of everything ────────────────────────────────────────────────
+def _everything(isolate_data):
+    from jobhelper import config
+    _seed(isolate_data)
+    docs = {config.CV_DIR / "Alex_Novak_CV.docx": b"master cv", config.COVER_LETTERS_DIR / "Alex_Novak_CoverLetter_Acme.docx": b"my own letter",
+            config.LETTERS_DIR / "Letter_a.docx": b"app letter", config.LETTERS_DIR / "Letter_a.pdf": b"%PDF app letter",
+            config.TAILORED_CV_DIR / "CV_a.docx": b"adapted cv", config.CV_INSTRUCTION: b"cv rules",
+            config.LETTER_INSTRUCTION: b"letter rules", config.LETTER_TEMPLATE: b"template",
+            config.DATA_DIR / "companies.json": b"[]"}
+    for path, data in docs.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    (config.LETTERS_DIR / "Letter_a.editing.docx").write_bytes(b"half-finished edit")
+    (config.CV_DIR / ".DS_Store").write_bytes(b"junk")
+    return docs
+
+
+def test_backup_everything_holds_documents_and_data_encrypted(isolate_data):
+    from jobhelper import vault
+    docs = _everything(isolate_data)
+    done = vault.backup_everything()
+    names = sorted(p.relative_to(done["folder"]).as_posix() for p in done["folder"].rglob("*") if p.is_file())
+    assert names == ["companies.json.enc", "cover_letter_instruction.md.enc", "cover_letter_template.docx.enc",
+                     "cover_letters/Letter_a.docx.enc", "cover_letters/Letter_a.pdf.enc", "cv/Alex_Novak_CV.docx.enc",
+                     "cv_adaptation_instruction.md.enc", "jobs.json.enc", "my_letters/Alex_Novak_CoverLetter_Acme.docx.enc",
+                     "responses.db.enc", "tailored_cvs/CV_a.docx.enc"]
+    assert done["files"] == len(names) and done["bytes"] > 0
+    for path in done["folder"].rglob("*.enc"):
+        assert path.read_bytes().startswith(b"JHENC1\n") and b"master cv" not in path.read_bytes()
+    assert all(path.read_bytes() == data for path, data in docs.items())            # the originals were only read
+
+
+def test_backup_everything_restores_to_the_same_content(isolate_data, tmp_path):
+    import json
+
+    from jobhelper import vault
+    docs = _everything(isolate_data)
+    done = vault.backup_everything()
+    out = tmp_path / "restored"
+    assert vault.restore_backup(done["folder"], out) == done["files"]
+    assert (out / "cv" / "Alex_Novak_CV.docx").read_bytes() == b"master cv"
+    assert (out / "my_letters" / "Alex_Novak_CoverLetter_Acme.docx").read_bytes() == b"my own letter"
+    assert (out / "cover_letter_template.docx").read_bytes() == b"template"
+    assert json.loads((out / "jobs.json").read_text())[0]["company"] == "Acme"       # plain and readable again
+    assert not list(out.rglob("*.editing.*")) and not list(out.rglob(".DS_Store"))
+    assert len(docs) + 2 == done["files"]
+
+
+def test_own_letters_kept_outside_the_app_are_backed_up_too(isolate_data, tmp_path, monkeypatch):
+    from jobhelper import config, vault
+    _seed(isolate_data)
+    elsewhere = tmp_path / "Documents" / "Letters"
+    elsewhere.mkdir(parents=True)
+    (elsewhere / "Mine_CoverLetter_Beta.docx").write_bytes(b"kept elsewhere")
+    monkeypatch.setattr(config, "COVER_LETTERS_DIR", elsewhere)
+    done = vault.backup_everything()
+    assert vault.read_bytes(done["folder"] / "my_letters" / "Mine_CoverLetter_Beta.docx.enc") == b"kept elsewhere"
+
+
+def test_backup_everything_refuses_when_the_key_is_missing(isolate_data, monkeypatch):
+    import pytest as _pytest
+
+    from jobhelper import vault
+
+    def no_key():
+        raise vault.VaultError("the key is missing")
+    monkeypatch.setattr(vault, "state", lambda: "locked")
+    monkeypatch.setattr(vault, "data_key", no_key)
+    with _pytest.raises(vault.VaultError, match="key is missing"):
+        vault.backup_everything()
+    assert not list(vault.backups_dir().glob("everything_*")) if vault.backups_dir().is_dir() else True

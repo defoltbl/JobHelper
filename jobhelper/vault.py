@@ -475,3 +475,44 @@ def restore_test() -> dict:
             older["unreadable"].append(str(path.relative_to(backups_dir())))
     return {"ok": bool(files) and all(f["ok"] for f in files) and not older["unreadable"],
             "backup": backup.name, "files": files, "older": older}
+
+
+# ── one backup of everything: the data files and your documents ─────────────
+def everything() -> list[tuple[Path, str]]:
+    """Every file worth keeping, with the name it gets inside a backup:
+    the app's data files, your master CV, your own letters, the letters and CVs
+    the app wrote, the two rule files, the letter template and the career-site list."""
+    from . import config
+    found: dict[str, Path] = {}
+
+    def add(path: Path, name: str) -> None:
+        if path.is_file() and path.name != ".DS_Store" and ".editing." not in path.name:
+            found.setdefault(name, path)
+
+    for path in data_files():
+        add(Path(path), Path(path).name)
+    for path in (config.CV_INSTRUCTION, config.LETTER_INSTRUCTION, config.LETTER_TEMPLATE, config.DATA_DIR / "companies.json"):
+        add(path, path.name)
+    for folder, name in ((config.CV_DIR, "cv"), (config.COVER_LETTERS_DIR, "my_letters"),
+                         (config.LETTERS_DIR, "cover_letters"), (config.TAILORED_CV_DIR, "tailored_cvs")):
+        if folder.is_dir():
+            for path in sorted(folder.rglob("*")):
+                add(path, f"{name}/{path.relative_to(folder).as_posix()}")
+    return [(path, name) for name, path in sorted(found.items())]
+
+
+def backup_everything() -> dict:
+    """Write one encrypted backup folder holding everything (see `everything`).
+    Restore it with restore_backup(folder, destination). {folder, files, bytes}"""
+    if state() == "locked":
+        data_key()                                  # raises with the reason and the way out
+    dest = backups_dir() / f"everything_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    files = size = 0
+    for path, name in everything():
+        plain = read_bytes(path)                    # data files are decrypted first, documents are read as they are
+        out = dest / (name + (BACKUP_SUFFIX if enabled() else ""))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        _write_atomic(out, encrypt(plain) if enabled() else plain)
+        files += 1
+        size += len(plain)
+    return {"folder": dest, "files": files, "bytes": size}

@@ -320,6 +320,12 @@ def cmd_security(args) -> int:
             print("Key restored to the Keychain.")
         elif args.action == "backup":
             print(f"Encrypted backup written to {vault.make_backup('manual')}")
+        elif args.action == "backup-all":
+            done = vault.backup_everything()
+            print(f"Everything backed up: {done['files']} files, {done['bytes'] / 1_048_576:.1f} MB, encrypted, in\n  {done['folder']}")
+            print("It holds the app's data, your master CV, your own letters, the letters and CVs the app wrote,\n"
+                  "the rule files and the letter template. To get it back:\n"
+                  f"  python status.py security restore \"{done['folder']}\" <an empty folder>")
         elif args.action == "test-restore":
             report = vault.restore_test()
             print(f"Backup made: {report['backup']}, restored into a temporary folder and compared with the live data:")
@@ -396,7 +402,7 @@ def main() -> int:
     p_fu.set_defaults(func=cmd_followups)
 
     p_sec = sub.add_parser("security", help="Encryption, Keychain and tamper-check tools")
-    p_sec.add_argument("action", choices=["status", "protect", "approve", "recovery-key", "restore-key", "backup", "restore", "test-restore"])
+    p_sec.add_argument("action", choices=["status", "protect", "approve", "recovery-key", "restore-key", "backup", "backup-all", "restore", "test-restore"])
     p_sec.add_argument("paths", nargs="*", help="restore: <backup> <destination>")
     p_sec.set_defaults(func=cmd_security)
 
