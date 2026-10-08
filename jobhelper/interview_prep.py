@@ -68,7 +68,8 @@ QUESTIONS = 12
 
 
 # An honest bridge names the missing thing on purpose; that is not a claim.
-_HONEST = re.compile(r"\b(have not|haven't|not (?:yet )?(?:used|worked)|no (?:professional|production|hands-on) experience|"
+_HONEST = re.compile(r"\b(have not|haven't|do not have|don't have|not (?:yet )?(?:used|worked)|"
+                     r"no (?:(?:professional|production|hands-on|commercial|prior|direct) )?experience|"
                      r"closest|would (?:get|learn|pick)|new to me|only (?:read|studied))\b", re.IGNORECASE)
 
 

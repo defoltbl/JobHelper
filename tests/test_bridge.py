@@ -476,3 +476,32 @@ def test_run_search_needs_a_city(bridge, monkeypatch):
     assert bridge.runSearch({"where": "   "})["fix"] == "city"
     bridge._api.save_options({"where": "Vienna"})                        # a saved city is enough
     assert bridge.runSearch({}) == {"ok": True}
+
+
+def test_draft_answers_reports_through_the_signal(bridge, monkeypatch, qapp):
+    import time
+
+    from jobhelper import store, ui_api as api_module
+    store.save_jobs([store.new_job(id="a", title="Developer", company="Acme")])
+    got = []
+    bridge.answersReady.connect(got.append)
+    monkeypatch.setattr(api_module.Api, "make_form_answers", lambda self, job_id, text: {"ok": True, "count": 2, "to_check": 1})
+    bridge.draftAnswers("a", "Why us?\nSalary?")
+    for _ in range(200):
+        time.sleep(0.01)
+        qapp.processEvents()
+        if got:
+            break
+    assert got == [{"ok": True, "count": 2, "to_check": 1, "job_id": "a"}]
+
+    def boom(self, job_id, text):
+        raise RuntimeError("disk full")
+    monkeypatch.setattr(api_module.Api, "make_form_answers", boom)
+    bridge.draftAnswers("a", "Why us?")
+    for _ in range(200):
+        time.sleep(0.01)
+        qapp.processEvents()
+        if len(got) == 2:
+            break
+    assert got[1] == {"ok": False, "msg": "disk full", "job_id": "a"}
+    assert bridge.formAnswers("a")["company"] == "Acme" and bridge.saveFormAnswers("a", [{"question": "Q?", "answer": "A."}])["count"] == 1

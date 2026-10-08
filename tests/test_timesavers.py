@@ -1,10 +1,10 @@
-"""Calendar file, thank-you note, answers bank and the weekly summary."""
+"""Calendar file, thank-you note, one PDF, the apply checklist and the weekly summary."""
 from datetime import date, datetime, timedelta
 from email.utils import format_datetime
 
 import pytest
 
-from jobhelper import answers, config, db, planner, store, summary, ui_api, vault
+from jobhelper import config, db, planner, store, summary, ui_api
 
 TODAY = date(2026, 10, 7)
 
@@ -75,31 +75,6 @@ def test_thank_you_draft_and_marking_it_sent():
     assert planner.thanks_due(job, TODAY) is False
 
 
-# ── answers bank ────────────────────────────────────────────────────────────
-def test_answers_start_with_questions_only_and_are_saved_encrypted(isolate_data):
-    start = answers.load()
-    assert [e["question"] for e in start] == answers.STARTERS and all(e["answer"] == "" for e in start)
-    saved = answers.save([{"question": " Salary expectation ", "answer": " 60 000 CZK gross "},
-                          {"question": "", "answer": "no question: dropped"}, "not a dict",
-                          {"question": "Q" * 500, "answer": "A" * 9000}])
-    assert saved[0] == {"question": "Salary expectation", "answer": "60 000 CZK gross"}
-    assert len(saved) == 2 and len(saved[1]["question"]) == answers.MAX_QUESTION and len(saved[1]["answer"]) == answers.MAX_ANSWER
-    assert answers.load() == saved
-    raw = (isolate_data / "answers.json").read_bytes()
-    assert raw.startswith(b"JHENC1\n") and b"60 000" not in raw
-    assert isolate_data / "answers.json" in vault.data_files()
-    assert answers.save([]) == [] and answers.load() == []                    # an emptied list stays empty
-    (isolate_data / "answers.json").write_text("{broken")
-    assert len(answers.load()) == len(answers.STARTERS)
-
-
-def test_placeholders_are_filled_from_the_job():
-    job = {"company": " Acme ", "title": "QA Engineer"}
-    assert answers.fill("I like {company}; the {role} role fits. {company}!", job) == "I like Acme; the QA Engineer role fits. Acme!"
-    assert answers.fill("At {company} as {role}", None) == "At {company} as {role}"          # no job open: left to see
-    assert answers.fill("At {company}", {"company": "", "title": "X"}) == "At {company}"
-
-
 # ── the last seven days ─────────────────────────────────────────────────────
 def _reply(msg_id, job_id, when, stage):
     db.upsert_response({"msg_id": msg_id, "job_id": job_id, "stage": stage, "company": "C", "subject": "s",
@@ -161,7 +136,7 @@ def test_api_calendar_file_is_written_and_opened(api):
     assert b"\r\n" in path.read_bytes() and api.export_event("zzz")["ok"] is False
 
 
-def test_api_thank_you_flow_and_answers(api, monkeypatch):
+def test_api_thank_you_flow_and_week_summary(api, monkeypatch):
     monkeypatch.setattr(ui_api.Api, "_my_name", lambda self: "Alex Novak")
     store.save_jobs([_app(event=_event(date.today().isoformat()))])
     planner.save_company_notes("Acme", {"contact": "Jana"})
@@ -169,10 +144,6 @@ def test_api_thank_you_flow_and_answers(api, monkeypatch):
     assert api.thanks_draft("a")["body"].startswith("Dear Jana,") and api.thanks_draft("zzz") == {}
     assert api.mark_thanked("a") is True and api.job_detail("a")["thanks_due"] is False
     assert api.mark_thanked("zzz") is False
-    assert api.save_answers([{"question": "Why {company}?", "answer": "Because {company} hires {role}s."}]) == {"ok": True, "count": 1}
-    assert api.answers()[0]["question"] == "Why {company}?"
-    assert api.fill_answer("Because {company} hires {role}s.", "a") == "Because Acme hires QA Engineers."
-    assert api.fill_answer("Because {company}.", "") == "Because {company}."
     week = api.week_summary()
     assert week["lines"][0]["label"] == "New jobs found" and week["headline"].endswith(".")
 

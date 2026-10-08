@@ -38,7 +38,7 @@ class Ui:
         return obj
 
     # each window lives in its own file; names inside a window are only known in that window's context
-    WINDOWS = ["tableDialog", "detailDialog", "compareDialog", "answersDialog", "helpDialog", "prepDialog", "letterDialog",
+    WINDOWS = ["tableDialog", "detailDialog", "compareDialog", "formDialog", "helpDialog", "prepDialog", "letterDialog",
                "responseDialog", "limitDialog", "welcome", "optDialog", "schedDialog"]
 
     def _inside(self, obj):
@@ -1127,32 +1127,6 @@ def test_thank_you_card_appears_after_the_interview_day(ui, monkeypatch):
     assert ui.warnings == []
 
 
-def test_answers_window_saves_and_copies_with_the_job_filled_in(ui, monkeypatch):
-    from jobhelper import answers
-    copied = []
-    monkeypatch.setattr(qt_bridge.Bridge, "copyText", lambda self, text: copied.append(text) or True)
-    dialog = ui.find("answersDialog")
-    ui.js('answersDialog.show("app")')
-    ui.wait(450)
-    assert dialog.property("opened") is True
-    assert ui.js("answersDialog.all().length") == len(answers.STARTERS) and ui.js("answersDialog.all()[0].answer") == ""
-    ui.js("answersDialog.copy(0)")
-    assert "still empty" in ui.js("answersDialog.info") and copied == []
-    ui.js('answersModel.setProperty(2, "answer", "I like what {company} builds, and the {role} role fits my skills."); answersDialog.dirty = true')
-    ui.js('answersModel.append({ question: "", answer: "dropped: it has no question" }); answersDialog.save()')
-    assert ui.js("answersDialog.info") == "Saved." and ui.js("answersDialog.dirty") is False
-    saved = answers.load()
-    assert len(saved) == len(answers.STARTERS) and saved[2]["answer"].startswith("I like what {company}")
-    ui.js("answersDialog.copy(2)")
-    assert copied == ["I like what Beta builds, and the QA Engineer role fits my skills."]
-    assert "company and role filled in" in ui.js("answersDialog.info")
-    ui.js("answersDialog.close()")
-    ui.wait(350)
-    answers.save([])
-    (config.DATA_DIR / "answers.json").unlink()
-    assert ui.warnings == []
-
-
 def test_analytics_start_with_the_last_seven_days(ui):
     ui.js('openView("ana")')
     ui.wait(450)
@@ -1192,7 +1166,7 @@ def test_start_up_check_shows_one_line_only_when_something_is_wrong(ui):
 # ── the window is split into one file per window ────────────────────────────
 def test_every_window_has_its_own_file_and_main_stays_small():
     folder = ROOT / "ui_qt"
-    for name in ("TableDialog", "DetailDialog", "CompareDialog", "AnswersDialog", "HelpDialog", "PrepDialog", "LetterDialog",
+    for name in ("TableDialog", "DetailDialog", "CompareDialog", "FormAnswersDialog", "HelpDialog", "PrepDialog", "LetterDialog",
                  "ResponseDialog", "LimitDialog", "WelcomeOverlay", "OptionsDialog", "ScheduleDialog", "SmallButton", "DetailCard"):
         assert (folder / f"{name}.qml").is_file(), name
     main = (folder / "Main.qml").read_text(encoding="utf-8")
@@ -1212,7 +1186,7 @@ def test_every_window_opens_from_the_main_file_without_warnings(ui):
     for name in Ui.WINDOWS:
         assert ui.win.findChild(QObject, name) is not None, name
     for code in ('openView("new")', "tableDialog.close()", "helpDialog.open()", "helpDialog.close()", "limitDialog.open()", "limitDialog.close()",
-                 "schedDialog.open()", "schedDialog.close()", 'answersDialog.show("")', "answersDialog.close()"):
+                 "schedDialog.open()", "schedDialog.close()", 'formDialog.show("app")', "formDialog.close()"):
         ui.js(code)
         ui.wait(380)
     assert ui.warnings == []
@@ -1251,8 +1225,11 @@ def test_apply_checklist_ticks_steps_and_marks_applied(ui, monkeypatch):
     assert ui.js("detailDialog.stepsDone") == 3 and ui.js("detailDialog.job.apply_steps.join(',')") == "posting,cv,combined"
     ui.js('detailDialog.doStep("answers")')
     ui.wait(450)
-    assert ui.find("answersDialog").property("opened") is True and ui.js("answersDialog.jobId") == "lead"
-    ui.js("answersDialog.close()")
+    assert ui.find("formDialog").property("opened") is True and ui.js("formDialog.jobId") == "lead"
+    assert ui.js("detailDialog.stepsDone") == 3                                   # opening is not doing: no tick yet
+    ui.js('formDialog.fill({ items: [{ question: "Why us?", answer: "Because of your product.", check: "" }] }); formDialog.copy(0)')
+    assert ui.js("detailDialog.stepsDone") == 4                                   # an answer was copied
+    ui.js("formDialog.close()")
     ui.wait(350)
     ui.js("detailDialog.close()")
     ui.wait(350)
@@ -1278,33 +1255,6 @@ def test_a_failed_step_is_not_ticked(ui, monkeypatch):
     ui.js("detailDialog.close()")
     ui.wait(350)
     ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="", apply_steps=[]), render=False)
-    assert ui.warnings == []
-
-
-def test_search_in_the_answers_window(ui):
-    from jobhelper import answers
-    answers.save([{"question": "Salary expectation", "answer": "60 000 CZK gross"}, {"question": "Notice period", "answer": "Two weeks"},
-                  {"question": "Why {company}?", "answer": "I like the product."}, {"question": "Strengths", "answer": "Python and testing"},
-                  {"question": "Work permit", "answer": "Not needed"}])
-    ui.js('answersDialog.show("")')
-    ui.wait(450)
-    assert ui.find("ansSearch").property("visible") is True and ui.js("answersDialog.shown") == 5
-    ui.js('answersDialog.query = "PYTHON"')
-    assert ui.js("answersDialog.shown") == 1                                      # found in an answer, any letter case
-    ui.js('answersDialog.query = "salary"')
-    assert ui.js("answersDialog.shown") == 1 and ui.find("ansNone").property("visible") is False
-    ui.js('answersDialog.query = "zzz"')
-    assert ui.js("answersDialog.shown") == 0 and "Nothing matches" in ui.find("ansNone").property("text")
-    ui.js("answersDialog.save()")                                                 # saving while a search hides rows keeps them all
-    assert len(answers.load()) == 5 and ui.js("answersDialog.query") == ""
-    ui.js("answersDialog.close()")
-    ui.wait(350)
-    (config.DATA_DIR / "answers.json").unlink()
-    ui.js('answersDialog.show("")')
-    ui.wait(400)
-    assert ui.find("ansSearch").property("visible") is True                       # six starter questions
-    ui.js("answersDialog.close()")
-    ui.wait(350)
     assert ui.warnings == []
 
 
@@ -1372,3 +1322,72 @@ def test_insights_are_warmed_up_in_the_background(ui, monkeypatch):
     ui.js("bridge.warmUp()")                                   # a failure in the head start is not shown to anyone
     time.sleep(0.05)
     assert "bridge.warmUp()" in qml_source() and ui.warnings == []
+
+
+# ── answers for one job's form ──────────────────────────────────────────────
+def test_form_answers_are_drafted_per_job_edited_and_kept(ui, monkeypatch):
+    import time
+
+    from jobhelper import llm
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython, Docker.")
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"answers": [
+        {"n": 1, "answer": "I like how Beta tests its products.", "needs_you": ""},
+        {"n": 2, "answer": "I expect [your figure] CZK gross per month.", "needs_you": "Your salary figure"}]})
+    source = qml_source()
+    assert 'objectName: "answersButton"' not in source and "answersDialog" not in source      # the general Answers button is gone
+    ui.js('formDialog.show("app")')
+    ui.wait(450)
+    dialog = ui.find("formDialog")
+    assert dialog.property("opened") is True and ui.find("formFor").property("text") == "Beta  ·  QA Engineer"
+    ui.js("formDialog.draft()")
+    assert "Paste the questions" in ui.js("formDialog.err") and ui.js("formDialog.busy") is False     # red message, nothing asked
+    ui.js('fmQuestions.text = (formDialog.info.common || []).join("\\n")')
+    assert "Why do you want to work at Beta?" in ui.js("fmQuestions.text")
+    ui.js('fmQuestions.text = "Why do you want to work at Beta?\\nWhat are your salary expectations?"; formDialog.draft()')
+    assert ui.js("formDialog.busy") is True and ui.find("fmDraft").property("text") == "Asking Claude…"
+    for _ in range(200):
+        time.sleep(0.02)                                  # let the background worker run
+        ui.wait(10)
+        if ui.js("formDialog.busy") is False:
+            break
+    assert ui.js("formDialog.err") == "", ui.js("formDialog.err")
+    assert ui.js("fmModel.count") == 2 and "1 need your attention" in ui.js("formDialog.note")
+    assert ui.js("fmModel.get(1).check") == "Your salary figure" and ui.find("fmDraft").property("text") == "Draft again"
+    ui.js('fmModel.setProperty(1, "answer", "I expect 60 000 CZK gross per month."); formDialog.dirty = true; formDialog.save()')
+    assert ui.js("formDialog.note") == "Saved with this job." and ui.js("formDialog.dirty") is False
+    ui.js("formDialog.close()")
+    ui.wait(350)
+    ui.js('formDialog.show("app")')                        # they are still there, and only for this job
+    ui.wait(400)
+    assert ui.js("fmModel.get(1).answer") == "I expect 60 000 CZK gross per month."
+    ui.js("formDialog.close()")
+    ui.wait(350)
+    ui.js('formDialog.show("lead")')
+    ui.wait(400)
+    assert ui.js("fmModel.count") == 0 and ui.js("fmQuestions.text") == ""
+    ui.js("formDialog.close()")
+    ui.wait(350)
+    ui.bridge.saveFormAnswers("app", [])
+    assert ui.warnings == []
+
+
+def test_form_answers_show_the_reason_when_claude_cannot_be_asked(ui, monkeypatch):
+    import time
+
+    from jobhelper import llm
+
+    def limit(*a, **k):
+        raise llm.LimitReached("Claude's 7-day limit is used up (99%). It resets at 18:00 on 08 Oct.")
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython.")
+    monkeypatch.setattr(llm, "ask_json", limit)
+    ui.js('formDialog.show("app"); fmQuestions.text = "Why us?"; formDialog.draft()')
+    for _ in range(200):
+        time.sleep(0.02)
+        ui.wait(10)
+        if ui.js("formDialog.busy") is False:
+            break
+    assert "limit is used up" in ui.js("formDialog.err") and ui.find("formDialog").property("visible") is True    # stays open
+    assert ui.js("fmQuestions.text") == "Why us?"                                 # what you pasted is not lost
+    ui.js("formDialog.close()")
+    ui.wait(350)
+    assert ui.warnings == []

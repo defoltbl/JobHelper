@@ -100,7 +100,7 @@ ApplicationWindow {
     // ── shared motion (same feel in the welcome screen, dialogs and buttons) ──
     readonly property int motion: 260
     readonly property color dimColor: Qt.rgba(0, 0, 0, dark ? 0.42 : 0.22)
-    readonly property bool dialogOpen: tableDialog.visible || optDialog.visible || schedDialog.visible || detailDialog.visible || limitDialog.visible || responseDialog.visible || letterDialog.visible || prepDialog.visible || helpDialog.visible || compareDialog.visible || answersDialog.visible
+    readonly property bool dialogOpen: tableDialog.visible || optDialog.visible || schedDialog.visible || detailDialog.visible || limitDialog.visible || responseDialog.visible || letterDialog.visible || prepDialog.visible || helpDialog.visible || compareDialog.visible || formDialog.visible
     property bool stopping: false        // Stop was pressed; waiting for the current step to end
     property bool paused: false          // the run waits because Claude's limit is used up
     property bool canResume: false       // ...and the limit has reset, so Resume works
@@ -768,7 +768,6 @@ ApplicationWindow {
                     }
                     Item { Layout.fillHeight: true }
                     PillButton { Layout.fillWidth: true; text: "Options"; glyph: "gear"; onClicked: optDialog.open() }
-                    PillButton { objectName: "answersButton"; Layout.fillWidth: true; text: "Answers"; onClicked: answersDialog.show("") }
                     PillButton { objectName: "helpButton"; Layout.fillWidth: true; text: "Help"; glyph: "help"; onClicked: helpDialog.open() }
                 }
             }
@@ -1007,7 +1006,7 @@ ApplicationWindow {
     CompareDialog { id: compareDialog }
 
     // ───────────────────────── answers to repeated form questions ─────────────────────────
-    AnswersDialog { id: answersDialog }
+    FormAnswersDialog { id: formDialog }
 
     // ───────────────────────── help ─────────────────────────
     HelpDialog { id: helpDialog }

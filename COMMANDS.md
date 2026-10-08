@@ -163,7 +163,7 @@ Inside the window:
   your CV: the usual list and 4 years for a junior, 7 for mid, nothing for a senior. Change
   them freely; a title that itself says junior or graduate is never skipped by a level word.
 - **Before you apply** (top of a new job's window) — the steps in order: open the posting,
-  check the CV, check the letter, make one PDF, copy your answers. Each step you do gets a
+  check the CV, check the letter, make one PDF, draft the answers for the form. Each step you do gets a
   tick that is kept with the job; **Mark applied** is at the end.
 - **One PDF** (job window) — the letter followed by the adapted CV as one file, written to
   `data/combined/` and opened. Needs the PDF copies (LibreOffice makes them).
@@ -173,9 +173,11 @@ Inside the window:
 - **Thank-you draft** (job window) — offered from the day of an interview or call, for an
   application that is still open. Plain template, no Claude; copy it, add one real detail,
   send it yourself, then **Mark as sent**.
-- **Answers** (right panel and job window) — your answers to questions forms keep asking.
-  `{company}` and `{role}` in an answer are replaced when you copy it from a job window.
-  Stored encrypted in `data/answers.json`.
+- **Form answers** (job window, and the last step of **Before you apply**) — paste the questions
+  of that job's application form, one per line, and Claude drafts the answers in one call from
+  your master CV, the posting and *About you* in Options. They are kept with the job and can be
+  edited and copied. What the app cannot know (a notice period, a reference) is written in
+  square brackets and marked **Check**; a claim your CV does not back is marked too.
 - **The last 7 days** (top of Analytics) — new jobs, ready to send, applications sent, replies,
   follow-ups due, thank-you notes, dates coming up. `python status.py sync --summary` prints
   the same and sends it as one notification; the weekly run does this.
@@ -414,7 +416,6 @@ Or just open the app (`python app_qt.py`) and use **Run search** / **Scan email*
 | `data/ui_settings.json` | Desktop-app Options: city, source, thresholds, model (encrypted) |
 | `data/company_notes.json` | Your notes per company (encrypted) |
 | `data/filtered_out.json` | What the last search filtered out, with reasons (encrypted) |
-| `data/answers.json` | Your answers to repeated form questions (encrypted) |
 | `data/calendar/` | Calendar files made by **Add to calendar** |
 | `data/combined/` | Letter and CV joined into one PDF by **One PDF** |
 | `data/backups/` | Timestamped backups, encrypted (`*.enc`) |

@@ -42,6 +42,7 @@ class Bridge(QObject):
     paragraphReady = Signal("QVariantMap")     # a rewritten letter paragraph (or why it failed)
     prepReady = Signal("QVariantMap")          # interview preparation finished (or why it failed)
     replyReady = Signal("QVariantMap")         # a pasted reply was filed (or why not)
+    answersReady = Signal("QVariantMap")       # answers for a job's form were drafted (or why not)
 
     def __init__(self) -> None:
         super().__init__()
@@ -532,18 +533,25 @@ class Bridge(QObject):
     def markThanked(self, job_id):
         return self._api.mark_thanked(job_id)
 
-    @Slot(result="QVariantList")
-    def answers(self):
-        return self._api.answers()
+    @Slot(str, result="QVariantMap")
+    def formAnswers(self, job_id):
+        return self._api.form_answers(job_id)
 
-    @Slot("QVariantList", result="QVariantMap")
-    def saveAnswers(self, entries):
-        return self._api.save_answers([dict(e) for e in (entries or [])])
+    @Slot(str, str)
+    def draftAnswers(self, job_id, questions_text):
+        """Runs in the background (it asks Claude); the answer arrives as answersReady."""
+        def work():
+            try:
+                result = self._api.make_form_answers(job_id, questions_text)
+            except Exception as e:  # noqa: BLE001 - the window must always get an answer
+                result = {"ok": False, "msg": str(e) or type(e).__name__}
+            result["job_id"] = job_id
+            self._post("answersReady", result)
+        threading.Thread(target=work, daemon=True).start()
 
-    @Slot(str, str, result=bool)
-    def copyAnswer(self, text, job_id):
-        """Copy an answer, with {company} and {role} filled in from the open job."""
-        return self.copyText(self._api.fill_answer(text, job_id))
+    @Slot(str, "QVariantList", result="QVariantMap")
+    def saveFormAnswers(self, job_id, items):
+        return self._api.save_form_answers(job_id, [dict(i) for i in (items or [])])
 
     @Slot(result="QVariantMap")
     def weekSummary(self):

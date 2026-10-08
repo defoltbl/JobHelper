@@ -41,7 +41,7 @@ Dialog {
         if (j.cv) out.push({ key: "cv", label: "Check your adapted CV", button: j.cv_pdf === true ? "Open CV PDF" : "Open CV" });
         if (j.letter) out.push({ key: "letter", label: "Check your cover letter", button: j.letter_pdf === true ? "Open letter PDF" : "Open letter" });
         if (j.can_combine === true) out.push({ key: "combined", label: "If the form takes one file: letter and CV as a single PDF", button: "Make one PDF" });
-        out.push({ key: "answers", label: "Copy your answers for the form's questions", button: "Answers" });
+        out.push({ key: "answers", label: "Answers for this job's form, drafted from your CV", button: j.has_answers === true ? "Open answers" : "Form answers" });
         return out;
     }
     readonly property int stepsDone: {
@@ -60,7 +60,7 @@ Dialog {
         else if (key === "cv") bridge.openDoc(job.cv_pdf === true ? "cv_pdf" : "cv", job.cv);
         else if (key === "letter") bridge.openDoc(job.letter_pdf === true ? "letter_pdf" : "letter", job.letter);
         else if (key === "combined") ok = onePdf();
-        else if (key === "answers") answersDialog.show(job.id);
+        else if (key === "answers") { formDialog.show(job.id); return; }      // ticked there, once an answer is drafted or copied
         if (ok) { bridge.applyStep(job.id, key); refresh(); }
     }
     property var thanks: ({})
@@ -536,7 +536,8 @@ Dialog {
             SmallButton { objectName: "editLetter"; visible: detailDialog.job.letter_editable === true; text: "Edit letter"
                 onClicked: letterDialog.show(detailDialog.job.id) }
             }
-            SmallButton { objectName: "answersOpen"; text: "Answers"; onClicked: answersDialog.show(detailDialog.job.id) }
+            SmallButton { objectName: "answersOpen"; visible: detailDialog.job.is_dismissed !== true
+                text: "Form answers"; onClicked: formDialog.show(detailDialog.job.id) }
             SmallButton { objectName: "notInterested"; visible: detailDialog.job.is_lead === true; text: "Not interested"
                 onClicked: { var r = bridge.dismissJob(detailDialog.job.id);
                              if (r && r.ok) { ticker.text = "Removed. It will not come back in later searches (see the “not interested” filter to undo).";

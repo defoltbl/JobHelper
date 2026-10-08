@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 8 October 2026
 
+- **Form answers, per job**: the general Answers window is replaced. Paste the questions of a job's application form and Claude drafts the answers for that job from your CV and the posting; they are kept with the job, and what it cannot know is marked for you.
 - **Back up everything**: `python status.py security backup-all` writes one encrypted backup with the app's data and your documents (master CV, your own letters, the app's letters and CVs, rule files, template).
 - **Smoother list on the left**: moving the mouse quickly no longer leaves a dark shadow on the row you left.
 - **Insights opens at once**: the slow part is prepared in the background when the app starts.
@@ -15,7 +16,6 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 - **Weekly run works from any folder**: the weekly script finds the project by its own location and takes the scan period from Options, so nothing in it is tied to one computer.
 - **Before you apply**: a checklist at the top of a new job's window (posting, CV, letter, one PDF, answers) that remembers what you have done, ending with Mark applied.
 - **One PDF**: the letter followed by the CV as a single file, for forms that take only one.
-- **Search in Answers**: find a question or an answer by typing.
 - **Reminders by the hour**: a date with a time is also announced about three hours and one hour before.
 - **Upkeep**: the window's code is split into one file per window (no visible change), so later changes are safer.
 - **Start-up check**: when the app opens it checks that your data opens, the rules are unchanged, the CV and template are there and Claude is signed in. You see one line only when something is wrong.
@@ -28,7 +28,6 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 - **Add to calendar**: a date to remember can be opened as a calendar file, so Calendar (and your phone) reminds you when the app is closed.
 - **Thank-you draft**: on and after the day of an interview or call, the job window offers a short note to copy and send yourself.
-- **Answers**: write your answers to repeated form questions once and copy them; {company} and {role} are filled in from the open job.
 - **The last 7 days**: Analytics starts with new jobs, replies, follow-ups due and dates coming up; the weekly run sends the same as one notification.
 - **Bring back**: a posting in the filtered-out list can be added to New Jobs with one button; the next search run scores it.
 - **English ads are no longer mistaken for Czech**: a long English posting with a few Czech letters (a bank or city name) was removed as "written in Czech"; 12 such postings were lost in one search.

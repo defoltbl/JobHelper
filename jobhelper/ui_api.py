@@ -14,7 +14,7 @@ import subprocess
 import sys
 from datetime import date
 
-from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, answers, filters, health, summary,
+from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, filters, form_answers, health, summary,
                compare, config, cover_letter, db, followup, housekeeping, insights, integrity, interview_prep, keywords, merge, pdf,
                planner, salary, store, usage, vault)
 
@@ -198,6 +198,7 @@ class Api:
             "event": dict(j.get("event") or {}),
             "thanks_due": planner.thanks_due(j),
             "apply_steps": list(j.get("apply_steps") or []),
+            "has_answers": bool((j.get("form_answers") or {}).get("items")),
             "can_combine": self._can_combine(j),
             "company_notes": planner.company_notes(j.get("company", "")),
             "pay": salary.stated(j) or {},
@@ -351,17 +352,50 @@ class Api:
     def mark_thanked(self, job_id):
         return bool(self._change(job_id, lambda jobs, j: planner.mark_thanked(j), render=False).get("ok"))
 
-    # ── answers to the questions forms keep asking ──────────────
-    @_guarded(list)
-    def answers(self):
-        return answers.load()
+    # ── answers for one job's application form ──────────────────
+    @_guarded(dict)
+    def form_answers(self, job_id):
+        """What is stored for this job's form, plus the questions forms ask most often to start from."""
+        j = store.find(store.load_jobs(), job_id)
+        if not j:
+            return {}
+        kept = j.get("form_answers") or {}
+        return {"id": j["id"], "company": j.get("company", ""), "title": j.get("title", ""),
+                "items": form_answers.tidy(kept.get("items")), "made": str(kept.get("made", "")),
+                "common": form_answers.common_questions(j)}
 
-    def save_answers(self, entries):
-        return {"ok": True, "count": len(answers.save(list(entries or [])))}
+    def make_form_answers(self, job_id, questions_text):
+        """Draft answers to the pasted questions with Claude (one call, one retry) and keep them with the job."""
+        j = store.find(store.load_jobs(), job_id)
+        if not j:
+            return {"ok": False, "msg": "That job is not in the list any more."}
+        questions = form_answers.parse_questions(questions_text)
+        if not questions:
+            return {"ok": False, "msg": "Paste the questions from the form first, one per line."}
+        cv_text = self._cv_text()
+        if not cv_text.strip():
+            return {"ok": False, "msg": "Your master CV could not be read, so answers cannot be built from it."}
+        try:
+            items = form_answers.generate(j, cv_text, questions)
+        except Exception as e:  # noqa: BLE001 - shown to the user as the reason
+            return {"ok": False, "msg": str(e)}
+        kept = {"made": form_answers.stamp(), "items": items}
+        # saved through _change: the call took a while, so re-read instead of writing an old copy back
+        saved = self._change(job_id, lambda jobs, job: job.__setitem__("form_answers", kept), render=False)
+        return {"ok": bool(saved.get("ok")), "count": len(items), "to_check": sum(1 for i in items if i["check"])}
 
-    def fill_answer(self, text, job_id=""):
-        """An answer with {company} and {role} replaced by the open job's."""
-        return answers.fill(str(text or ""), store.find(store.load_jobs(), job_id) if job_id else None)
+    def save_form_answers(self, job_id, items):
+        """Keep the answers as you edited them."""
+        clean = form_answers.tidy(list(items or []))
+
+        def go(jobs, j):
+            made = (j.get("form_answers") or {}).get("made") or form_answers.stamp()
+            if clean:
+                j["form_answers"] = {"made": made, "items": clean}
+            else:
+                j.pop("form_answers", None)
+        saved = self._change(job_id, go, render=False)
+        return {"ok": bool(saved.get("ok")), "count": len(clean)}
 
     # ── the last seven days ─────────────────────────────────────
     @_guarded(dict)
