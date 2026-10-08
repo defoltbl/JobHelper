@@ -368,6 +368,25 @@ class Api:
             j["doc_attempts"] = 0
         return self._change(job_id, go, render=False)
 
+    def reread_posting(self, job_id):
+        """Try to read a posting's text from its board again (no Claude). Score it again afterwards."""
+        j = store.find(store.load_jobs(), job_id)
+        if not j or j["status"] not in store.LEAD_STATUSES:
+            return {"ok": False, "msg": "Only a new job's posting can be read again."}
+        if not j.get("url"):
+            return {"ok": False, "msg": "This job has no link, so there is nothing to read. Paste the posting's text instead."}
+        text = agent2_search.refetch_description(j)
+        if len(text.strip()) <= len((j.get("description") or "").strip()):
+            return {"ok": False, "msg": "The posting still cannot be read from its site. Open it and paste its text instead."}
+
+        def go(jobs, job):
+            job["description"] = text
+            if job.get("hold") == agent3_letters.NO_TEXT:
+                job.pop("hold", None)
+            job["doc_attempts"] = 0
+        saved = self._change(job_id, go, render=False)
+        return {"ok": bool(saved.get("ok")), "chars": len(text)}
+
     def shelve_docs(self, job_id):
         """Move the letter and CV the app wrote for a new job into an encrypted backup (never a letter of your own).
         The job stays in the list; documents are written again only if its score reaches your limit."""

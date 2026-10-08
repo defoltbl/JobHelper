@@ -116,9 +116,10 @@ def main() -> int:
         # Skip only the SAME role at a company you've already applied to /
         # been rejected by. Different roles at the same company are kept.
         new_jobs, dropped_known = agent2_search.drop_known_applications(new_jobs, jobs, dropped=filtered)
-        agent2_search.save_dropped(filtered)
         added, skipped = store.upsert(jobs, new_jobs)
         added -= len(agent2_search.prune_duplicate_leads(jobs))
+        added -= agent2_search.reread_missing(jobs, english_only=not args.all_languages, dropped=filtered)["removed"]
+        agent2_search.save_dropped(filtered)
         msg = f"   found {len(new_jobs)} listings — {added} new, {skipped} already tracked"
         if dropped_known:
             msg += f"; skipped {dropped_known} you've already applied to (same role & company)"

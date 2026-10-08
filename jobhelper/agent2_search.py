@@ -305,6 +305,49 @@ def _is_recent(job: dict[str, Any], max_age_days: int) -> bool:
         return True
 
 
+def refetch_description(job: dict[str, Any]) -> str:
+    """Read one posting's text again from its board ('' if it still cannot be read).
+    A first read can fail for a moment (the board answers too many requests with nothing)."""
+    url, source = job.get("url") or "", (job.get("source") or "").split("/")[0]
+    try:
+        if source == "linkedin" or "linkedin.com" in url:
+            from . import scrapers_intl
+            digits = re.search(r"(\d{6,})", job.get("id", "") + " " + url)
+            return scrapers_intl._fetch_detail(digits.group(1))[0] if digits else ""
+        if "jobs.cz" in url or "prace.cz" in url:
+            from . import scrapers_cz
+            return scrapers_cz._fetch_detail(url)[0]
+    except Exception:  # noqa: BLE001 - no text is an answer too
+        return ""
+    return ""
+
+
+def reread_missing(jobs: list[dict[str, Any]], english_only: bool = True, dropped: list | None = None, pause: float = 0.5) -> dict[str, int]:
+    """Try once more to read every new job that has no posting text. With english_only, a
+    posting that turns out to be written in another language leaves the list (noted in
+    `dropped`, like any filtered posting). Mutates `jobs`. {read, removed}"""
+    import time
+    stats, gone = {"read": 0, "removed": 0}, []
+    for job in jobs:
+        if job.get("status") not in store.LEAD_STATUSES or (job.get("description") or "").strip() or not job.get("url"):
+            continue
+        text = refetch_description(job)
+        if pause:
+            time.sleep(pause)
+        if not text:
+            continue
+        job["description"] = text
+        stats["read"] += 1
+        fill_company(job)
+        if english_only and not job.get("cover_letter_file") and not is_english_job(job):
+            note_dropped(dropped, job, "needs Czech", "The ad is written in Czech.")
+            gone.append(id(job))
+    if gone:
+        jobs[:] = [j for j in jobs if id(j) not in gone]
+        stats["removed"] = len(gone)
+    return stats
+
+
 def safe_error(error) -> str:
     """An error's text without the address's query part: API keys travel there
     (…?app_id=…&app_key=…) and must never reach a log file or the screen."""

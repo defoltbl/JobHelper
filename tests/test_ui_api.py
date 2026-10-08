@@ -437,3 +437,18 @@ def test_documents_left_from_a_higher_score_are_marked_and_can_be_put_away(api):
     assert "not for an application you sent" in api.shelve_docs("app")["msg"] and (config.LETTERS_DIR / "L_app.docx").exists()
     assert "no documents written by the app" in api.shelve_docs("own")["msg"] and (config.LETTERS_DIR / "Mine.docx").read_bytes() == b"my own letter"
     assert api.shelve_docs("bare")["ok"] is False and api.shelve_docs("zzz")["ok"] is False
+
+
+def test_read_a_posting_again_from_the_job_window(api, monkeypatch):
+    from jobhelper import agent2_search, agent3_letters
+    config.ensure_dirs()
+    job = store.new_job(id="t", title="Tester", company="C", match_score=40, url="https://x/t")
+    job["hold"] = agent3_letters.NO_TEXT
+    store.save_jobs([job, store.new_job(id="nolink", title="T", company="C", match_score=40),
+                     store.new_job(id="app", title="T", company="C", status="waiting", url="https://x/a")])
+    assert "still cannot be read" in api.reread_posting("t")["msg"]                       # the board gave nothing again
+    assert "no link" in api.reread_posting("nolink")["msg"] and "Only a new job" in api.reread_posting("app")["msg"]
+    monkeypatch.setattr(agent2_search, "refetch_description", lambda j: LONG_AD)
+    assert api.reread_posting("t") == {"ok": True, "chars": len(LONG_AD)}
+    saved = store.find(store.load_jobs(), "t")
+    assert saved["description"] == LONG_AD and "hold" not in saved and api.job_detail("t")["basis"] == ""

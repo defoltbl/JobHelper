@@ -319,6 +319,11 @@ Dialog {
                             text: detailDialog.job.basis === "title"
                                   ? "The app could not read this posting, so the score rests on the title alone and is kept at 40 or below."
                                   : "The app got only a short summary of this posting, so the score rests on little text." }
+                        SmallButton { objectName: "rereadPosting"; visible: !!detailDialog.job.url && !detailDialog.pasteOpen; text: "Read it again"
+                            onClicked: { var r = bridge.rereadPosting(detailDialog.job.id);
+                                if (r && r.ok) { detailDialog.refresh(); win.refreshOpenView(); detailDialog.scoreBad = false;
+                                                 detailDialog.scoreNote = "Read " + r.chars + " characters of the posting. Press Score again to score it on the full text."; }
+                                else { detailDialog.scoreBad = true; detailDialog.scoreNote = (r && r.msg) || "The posting could not be read."; } } }
                         SmallButton { objectName: "pasteToggle"; text: detailDialog.pasteOpen ? "Cancel" : "Paste the posting's text"
                             onClicked: { detailDialog.pasteOpen = !detailDialog.pasteOpen; detailDialog.pasteErr = ""; } }
                     }

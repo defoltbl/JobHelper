@@ -1901,3 +1901,21 @@ def test_documents_from_a_higher_score_are_marked_and_moved_only_after_asking(ui
     ui.wait(350)
     ui.bridge._api._change("lead", lambda jobs, j: j.update(match_score=80, status="letter_ready"), render=False)
     assert ui.warnings == []
+
+
+def test_read_it_again_button_reports_both_outcomes(ui, monkeypatch):
+    from jobhelper import agent2_search
+    start = store.find(store.load_jobs(), "lead")
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(description="", match_score=40, url="https://example.com/job"), render=False)
+    _open_job(ui, "lead")
+    assert ui.find("rereadPosting").property("visible") is True
+    got = ui.js("bridge.rereadPosting(detailDialog.job.id)")
+    assert got["ok"] is False and "paste its text instead" in got["msg"]
+    monkeypatch.setattr(agent2_search, "refetch_description", lambda job: "We build internal tools in Python and test them well. " * 10)
+    assert ui.js("bridge.rereadPosting(detailDialog.job.id).ok") is True
+    ui.js("detailDialog.refresh()")
+    assert ui.js("detailDialog.job.basis") == "" and ui.find("basisRow").property("visible") is False
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(description=start.get("description", ""), match_score=80, url=""), render=False)
+    assert ui.warnings == []

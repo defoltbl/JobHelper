@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 9 October 2026
 
+- **A second try at reading a posting**: when a job board returns no text, the app tries once more before scoring, and the job window has "Read it again".
 - **Scores say what they rest on**: a job scored from its title only, or from a short summary, is marked in the list and in its window. A title alone scores 40 at most and gets no letter.
 - **Paste the posting's text**: when the app could not read a posting, you can paste its text in the job window and score it again.
 - **Documents from a higher score are marked**: a job that now scores below your limit but still has a letter and CV says so, and "Move documents to backup" puts them away.

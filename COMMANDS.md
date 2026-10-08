@@ -175,8 +175,9 @@ Inside the window:
   what the score was before.
 - **What a score rests on** — a job the app could only read the title of is marked "scored from the
   title only", scores 40 at most and gets no letter or CV; one with only a short summary is marked
-  "scored from a short summary". **Paste the posting's text** in the job window (200 to 20,000
-  characters), then **Score again**.
+  "scored from a short summary". A search tries each empty posting once more before scoring, and
+  **Read it again** in the job window does the same for one job. If the site still gives nothing,
+  **paste the posting's text** there (200 to 20,000 characters). Then **Score again**.
 - **Documents from a higher score** — a new job that now scores below "Write letters above" but still
   has a letter and CV is marked in the list. **Move documents to backup** (job window) puts the files
   the app wrote into `data/backups/below_your_limit/`; a letter of your own is never moved.

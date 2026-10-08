@@ -296,6 +296,10 @@ class Bridge(QObject):
         return self._api.set_description(job_id, text)
 
     @Slot(str, result="QVariantMap")
+    def rereadPosting(self, job_id):
+        return self._api.reread_posting(job_id)
+
+    @Slot(str, result="QVariantMap")
     def shelveDocs(self, job_id):
         return self._api.shelve_docs(job_id)
 
@@ -805,9 +809,11 @@ class Bridge(QObject):
                     progress=lambda d, t: self._tick(
                         "a2", int((share + (1 - share) * d / max(1, t)) * 1000), 1000), **kw)
             found, _ = agent2_search.drop_known_applications(found, jobs, dropped=dropped)
-            agent2_search.save_dropped(dropped)
             added, _ = store.upsert(jobs, found)
             added -= len(agent2_search.prune_duplicate_leads(jobs))     # same role already listed from another board
+            # a posting whose text could not be read gets one more try before it is scored from its title
+            added -= agent2_search.reread_missing(jobs, english_only=not o["all_languages"], dropped=dropped)["removed"]
+            agent2_search.save_dropped(dropped)
             store.save_jobs(jobs)
             self.agentChanged.emit("a2", "done", "+%d new" % added)
 

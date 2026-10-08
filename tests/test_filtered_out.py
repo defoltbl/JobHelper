@@ -262,3 +262,48 @@ def test_company_is_taken_from_the_posting_text_when_the_listing_has_none(descri
     named = store.new_job(id="y", title="T", company="Real Name", description="Firma: Other ( zaměstnavatel )")
     agent2_search.fill_company(named)
     assert named["company"] == "Real Name"                            # a name the listing gave is never replaced
+
+
+# ── a second try at reading a posting that came back empty ──────────────────
+def test_postings_without_text_are_read_once_more(monkeypatch):
+    texts = {"en": EN * 6, "cz": "Hledáme vývojáře do našeho týmu. Nabízíme zajímavou práci a přátelský kolektiv. " * 5, "still": ""}
+    monkeypatch.setattr(agent2_search, "refetch_description", lambda job: texts.get(job["id"], "must not be asked"))
+    jobs = [store.new_job(id="en", title="Python Developer", company="A", url="https://x/en"),
+            store.new_job(id="cz", title="IT Support Administrator", company="B", url="https://x/cz"),
+            store.new_job(id="still", title="Tester", company="C", url="https://x/still"),
+            store.new_job(id="has", title="QA", company="D", url="https://x/has", description="Already read."),
+            store.new_job(id="nolink", title="QA", company="E"),
+            store.new_job(id="app", title="QA", company="F", url="https://x/app", status="waiting")]
+    dropped = []
+    stats = agent2_search.reread_missing(jobs, english_only=True, dropped=dropped, pause=0)
+    assert stats == {"read": 2, "removed": 1}
+    by = {j["id"]: j for j in jobs}
+    assert by["en"]["description"].startswith("We are hiring") and "cz" not in by            # the Czech ad leaves the list …
+    assert dropped[0]["title"] == "IT Support Administrator" and dropped[0]["reason"] == "The ad is written in Czech."   # … with its reason
+    assert by["still"]["description"] == "" and by["has"]["description"] == "Already read." and by["app"]["description"] == ""
+
+
+def test_a_czech_ad_stays_when_you_read_czech_or_already_have_its_documents(monkeypatch):
+    czech = "Hledáme vývojáře do našeho týmu. Nabízíme zajímavou práci a přátelský kolektiv. " * 5
+    monkeypatch.setattr(agent2_search, "refetch_description", lambda job: czech)
+    jobs = [store.new_job(id="a", title="Vývojář", company="A", url="https://x/a")]
+    assert agent2_search.reread_missing(jobs, english_only=False, pause=0) == {"read": 1, "removed": 0} and len(jobs) == 1
+    kept = [store.new_job(id="b", title="Tester", company="B", url="https://x/b", cover_letter_file="L.docx")]
+    assert agent2_search.reread_missing(kept, english_only=True, pause=0)["removed"] == 0 and len(kept) == 1
+
+
+def test_refetch_knows_where_each_board_keeps_the_text(monkeypatch):
+    from jobhelper import scrapers_cz, scrapers_intl
+    monkeypatch.undo()                                    # the real function, with the network replaced below
+    asked = []
+    monkeypatch.setattr(scrapers_intl, "_fetch_detail", lambda job_id: asked.append(("linkedin", job_id)) or ("LinkedIn text", False, ""))
+    monkeypatch.setattr(scrapers_cz, "_fetch_detail", lambda url: asked.append(("cz", url)) or ("Czech board text", ""))
+    assert agent2_search.refetch_description({"id": "linkedin-4455367720", "source": "linkedin", "url": "https://cz.linkedin.com/jobs/view/x-4455367720"}) == "LinkedIn text"
+    assert agent2_search.refetch_description({"id": "jobscz-1", "source": "jobs.cz", "url": "https://www.jobs.cz/rpd/1/"}) == "Czech board text"
+    assert agent2_search.refetch_description({"id": "x", "source": "remoteok", "url": "https://remoteok.com/1"}) == ""
+    assert asked == [("linkedin", "4455367720"), ("cz", "https://www.jobs.cz/rpd/1/")]
+
+    def broken(job_id):
+        raise OSError("no network")
+    monkeypatch.setattr(scrapers_intl, "_fetch_detail", broken)
+    assert agent2_search.refetch_description({"id": "linkedin-1234567", "source": "linkedin", "url": ""}) == ""
