@@ -1499,7 +1499,7 @@ def test_preparation_opens_as_a_document_from_both_windows(ui, monkeypatch):
     ui.wait(350)
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("app", lambda jobs, j: j.pop("interview_prep", None), render=False)
+    ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
     _open_job(ui, "app")
     assert ui.find("prepDocument").property("visible") is False                 # nothing prepared yet: no document button
     ui.js("detailDialog.close()")
