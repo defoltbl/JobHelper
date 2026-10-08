@@ -322,23 +322,32 @@ def refetch_description(job: dict[str, Any]) -> str:
     return ""
 
 
+REREAD_TRIES = 3          # how many searches try to get more of a posting's text before leaving it be
+
+
 def reread_missing(jobs: list[dict[str, Any]], english_only: bool = True, dropped: list | None = None, pause: float = 0.5) -> dict[str, int]:
-    """Try once more to read every new job that has no posting text. With english_only, a
+    """Try once more to read every new job that has no posting text or only a short summary
+    of it (REREAD_TRIES times at most per job, counted in `text_tries`). With english_only, a
     posting that turns out to be written in another language leaves the list (noted in
-    `dropped`, like any filtered posting). A job scored earlier from its title alone loses that
+    `dropped`, like any filtered posting). A job scored earlier on less text loses that
     score (kept as score_before) so this run scores it from the text; one that already has
     documents keeps its score until "Score again". Mutates `jobs`. {read, removed}"""
     import time
     from . import agent3_letters
     stats, gone = {"read": 0, "removed": 0}, []
     for job in jobs:
-        if job.get("status") not in store.LEAD_STATUSES or (job.get("description") or "").strip() or not job.get("url"):
+        had = len((job.get("description") or "").strip())
+        tries = job.get("text_tries") if isinstance(job.get("text_tries"), int) else 0
+        if (job.get("status") not in store.LEAD_STATUSES or had >= agent3_letters.SHORT_TEXT or not job.get("url")
+                or tries >= REREAD_TRIES):
             continue
-        text = refetch_description(job)
+        text = (refetch_description(job) or "").strip()
         if pause:
             time.sleep(pause)
-        if not text:
+        if len(text) <= had:
+            job["text_tries"] = tries + 1
             continue
+        job.pop("text_tries", None)
         job["description"] = text
         stats["read"] += 1
         fill_company(job)

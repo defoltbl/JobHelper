@@ -303,6 +303,16 @@ class Bridge(QObject):
     def shelveDocs(self, job_id):
         return self._api.shelve_docs(job_id)
 
+    @Slot(result="QVariantList")
+    def staleDocs(self):
+        return self._api.stale_docs_list()
+
+    @Slot(int, result="QVariantMap")
+    def shelveAllDocs(self, expected):
+        if self._running:
+            return {"ok": False, "msg": "A search or scan is running. Move the documents when it has finished."}
+        return self._api.shelve_all_docs(expected)
+
     @Slot(result="QVariantMap")
     def rescorePlan(self):
         return self._api.rescore_plan()

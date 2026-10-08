@@ -22,7 +22,36 @@ Dialog {
     property string excelKey: ""
     property bool confirmRescore: false
     property int rescoreJobs: 0
-    onClosed: confirmRescore = false
+    onClosed: { confirmRescore = false; confirmStale = false; staleNote = ""; }
+    // New Jobs only: jobs that still have a letter or CV from a score that is now below the limit
+    property var staleRows: []
+    property bool confirmStale: false
+    property string staleNote: ""
+    property bool staleBad: false
+    property bool anyWas: false           // some row shows its earlier score: every row keeps room for it
+    function staleWord(n) { return n + (n === 1 ? " job" : " jobs"); }
+    function shelveAll() {
+        if (win.appRunning) { staleBad = true; staleNote = "A search or scan is running. Move the documents when it has finished."; return; }
+        if (!confirmStale) {
+            staleRows = bridge.staleDocs();          // the names asked about are the ones on disk right now
+            if (staleRows.length === 0) { win.refreshOpenView(); return; }
+            confirmStale = true; staleNote = ""; staleBad = false;
+            return;
+        }
+        var r = bridge.shelveAllDocs(staleRows.length);
+        confirmStale = false;
+        if (r && r.ok) {
+            var msg = "Documents of " + staleWord(r.jobs) + " moved to the backup (" + r.files + (r.files === 1 ? " file" : " files") + ")."
+                      + ((r.failed || []).length ? " Not moved: " + r.failed.join(", ") + "." : "");
+            ticker.text = msg;
+            win.countsData = bridge.counts(); win.refreshOpenView();
+            staleBad = (r.failed || []).length > 0; staleNote = staleBad ? msg : "";
+        } else {
+            staleBad = true; staleNote = (r && r.msg) || "Couldn't move the documents.";
+            staleRows = bridge.staleDocs();
+            if (r && r.changed && staleRows.length > 0) confirmStale = true;     // new names: asked again, with the new list
+        }
+    }
     property string baseTitle: ""
     property var allRows: []
     property var sorts: []                // [[key, label], ...]; empty = a plain list without the toolbar
@@ -35,6 +64,10 @@ Dialog {
         baseTitle = title; excelKey = excel; sorts = sortOptions || [];
         for (var i = 0; i < rows.length; i++) rows[i].order = i;
         allRows = rows;
+        anyWas = rows.some(function (r) { return !!r.was; });
+        staleRows = excel === "leads" ? bridge.staleDocs() : [];
+        if (staleRows.length === 0) confirmStale = false;
+        if (!sameView) { confirmStale = false; staleNote = ""; staleBad = false; }
         var seen = {}, list = [];
         rows.forEach(function (r) {
             if (r.group === undefined || r.group === "") return;
@@ -127,6 +160,32 @@ Dialog {
                 }
             }
         }
+        // documents left from a higher score, for all such jobs at once: asked once, with the names
+        ColumnLayout {
+            objectName: "staleBar"
+            visible: tableDialog.excelKey === "leads" && (tableDialog.staleRows.length > 0 || tableDialog.staleNote !== "")
+            Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.bottomMargin: 12; spacing: 6
+            RowLayout { Layout.fillWidth: true; spacing: 8; visible: tableDialog.staleRows.length > 0
+                Text { objectName: "staleBarText"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.warn; font.pixelSize: 12
+                    text: tableDialog.confirmStale
+                          ? "Move the letter and CV the app wrote for " + (tableDialog.staleRows.length === 1 ? "this job" : "these " + tableDialog.staleRows.length + " jobs")
+                            + " to an encrypted backup? The jobs stay in the list. A letter of your own is never moved."
+                          : tableDialog.staleWord(tableDialog.staleRows.length) + (tableDialog.staleRows.length === 1 ? " has" : " have")
+                            + " documents from a score that is now below your limit." }
+                SmallButton { objectName: "shelveAll"; primaryStyle: tableDialog.confirmStale
+                    text: tableDialog.confirmStale ? "Yes, move documents of " + tableDialog.staleWord(tableDialog.staleRows.length) : "Move them to backup"
+                    onClicked: tableDialog.shelveAll() }
+                SmallButton { objectName: "shelveAllCancel"; visible: tableDialog.confirmStale; text: "Cancel"
+                    onClicked: { tableDialog.confirmStale = false; tableDialog.staleNote = ""; } }
+            }
+            Flickable { visible: tableDialog.confirmStale && tableDialog.staleRows.length > 0
+                Layout.fillWidth: true; implicitHeight: Math.min(staleNames.implicitHeight, 112); contentHeight: staleNames.implicitHeight
+                clip: true; boundsBehavior: Flickable.StopAtBounds; ScrollBar.vertical: ScrollBar {}
+                Text { id: staleNames; objectName: "staleNames"; textFormat: Text.PlainText; width: parent.width - 12; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12; lineHeight: 1.25
+                    text: tableDialog.staleRows.map(function (r) { return r.score + "   " + r.title + "  ·  " + r.company; }).join("\n") } }
+            Text { objectName: "staleNote"; visible: tableDialog.staleNote !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                font.pixelSize: 12; color: tableDialog.staleBad ? theme.crit : theme.good; text: tableDialog.staleNote }
+        }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         ListView {
             id: listView; objectName: "listView"; Layout.fillWidth: true; Layout.fillHeight: true; clip: true
@@ -143,8 +202,10 @@ Dialog {
                     onClicked: modelData.rid ? responseDialog.show(modelData.rid) : detailDialog.show(modelData.id) }
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 10
-                    Text { visible: modelData.value !== ""; text: modelData.value; color: theme.ink; font.pixelSize: 14; font.bold: true
-                        Layout.preferredWidth: 28 }
+                    ColumnLayout { visible: modelData.value !== ""; spacing: 0; Layout.preferredWidth: tableDialog.anyWas ? 42 : 28
+                        Text { text: modelData.value; color: theme.ink; font.pixelSize: 14; font.bold: true }
+                        // the score it had before it was scored again
+                        Text { visible: !!modelData.was; text: modelData.was || ""; color: theme.faint; font.pixelSize: 10 } }
                     ColumnLayout { spacing: 1; Layout.fillWidth: true
                         Text { text: modelData.primary; color: modelData.heading === true ? theme.accent : theme.ink
                             font.pixelSize: 13; font.bold: modelData.heading === true; Layout.fillWidth: true; elide: Text.ElideRight }

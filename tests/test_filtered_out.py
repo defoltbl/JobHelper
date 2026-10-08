@@ -271,7 +271,7 @@ def test_postings_without_text_are_read_once_more(monkeypatch):
     jobs = [store.new_job(id="en", title="Python Developer", company="A", url="https://x/en"),
             store.new_job(id="cz", title="IT Support Administrator", company="B", url="https://x/cz"),
             store.new_job(id="still", title="Tester", company="C", url="https://x/still"),
-            store.new_job(id="has", title="QA", company="D", url="https://x/has", description="Already read."),
+            store.new_job(id="has", title="QA", company="D", url="https://x/has", description="Already read. " * 40),
             store.new_job(id="nolink", title="QA", company="E"),
             store.new_job(id="app", title="QA", company="F", url="https://x/app", status="waiting")]
     dropped = []
@@ -280,7 +280,7 @@ def test_postings_without_text_are_read_once_more(monkeypatch):
     by = {j["id"]: j for j in jobs}
     assert by["en"]["description"].startswith("We are hiring") and "cz" not in by            # the Czech ad leaves the list …
     assert dropped[0]["title"] == "IT Support Administrator" and dropped[0]["reason"] == "The ad is written in Czech."   # … with its reason
-    assert by["still"]["description"] == "" and by["has"]["description"] == "Already read." and by["app"]["description"] == ""
+    assert by["still"]["description"] == "" and by["has"]["description"] == "Already read. " * 40 and by["app"]["description"] == ""
 
 
 def test_a_czech_ad_stays_when_you_read_czech_or_already_have_its_documents(monkeypatch):
@@ -324,3 +324,26 @@ def test_a_title_only_score_is_not_kept_once_the_text_arrives(monkeypatch):
     assert other_hold["hold"] == agent3_letters.NO_COMPANY and other_hold["match_score"] is None    # another reason to hold stays
     assert with_docs["match_score"] == 55 and "score_before" not in with_docs                        # its documents rest on this score
     assert fresh["match_score"] is None and "score_before" not in fresh
+
+
+def test_a_short_summary_gets_a_second_read_and_then_is_left_be(monkeypatch):
+    from jobhelper import agent3_letters
+    summary = "A short summary of the role, much less than the posting says."
+    answers = {"grows": EN * 6, "same": summary, "less": "tiny", "empty": ""}
+    monkeypatch.setattr(agent2_search, "refetch_description", lambda job: answers[job["id"]])
+    jobs = [store.new_job(id=i, title="Python Developer", company=i.upper(), url="https://x/" + i, description=summary, match_score=45) for i in answers]
+    jobs.append(store.new_job(id="long", title="Dev", company="L", url="https://x/long", description="x" * agent3_letters.SHORT_TEXT))
+    assert agent2_search.reread_missing(jobs, pause=0) == {"read": 1, "removed": 0}
+    by = {j["id"]: j for j in jobs}
+    assert by["grows"]["description"] == (EN * 6).strip() and by["grows"]["match_score"] is None and by["grows"]["score_before"] == 45
+    assert "text_tries" not in by["grows"] and "text_tries" not in by["long"]
+    for name in ("same", "less", "empty"):
+        assert by[name]["description"] == summary and by[name]["match_score"] == 45 and by[name]["text_tries"] == 1   # never replaced by less
+    asked = []
+    monkeypatch.setattr(agent2_search, "refetch_description", lambda job: asked.append(job["id"]) or "")
+    for _ in range(agent2_search.REREAD_TRIES + 2):
+        agent2_search.reread_missing(jobs, pause=0)
+    assert sorted(asked) == sorted(["same", "less", "empty"] * (agent2_search.REREAD_TRIES - 1))             # then the board is left alone
+    by["same"]["text_tries"] = "many"                                                                       # a damaged count starts again
+    agent2_search.reread_missing(jobs, pause=0)
+    assert by["same"]["text_tries"] == 1

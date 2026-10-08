@@ -10,10 +10,12 @@ fetches. If a board changes its markup, the selectors here are what to update.
 """
 from __future__ import annotations
 
+import json
 import re
 import time
 import unicodedata
 from typing import Any
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -85,11 +87,95 @@ def parse_detail(html_text: str) -> tuple[str, str]:
     return description, company
 
 
+# Company-branded pages (name.jobs.cz) show the posting through a script that asks this
+# address for it, with the page's own public key. The app asks the same way a browser does.
+_WIDGET_API = "https://api.capybara.lmc.cz/api/graphql/widget"
+_WIDGET_QUERY = """query DETAIL_QUERY($widgetId: ID!, $jobAdId: ID!, $host: String, $isNotLoggableToSessionLog: Boolean) {
+  widget(id: $widgetId, host: $host, isNotLoggableToSessionLog: $isNotLoggableToSessionLog) {
+    jobAd(id: $jobAdId, isNotLoggableToSessionLog: $isNotLoggableToSessionLog) {
+      title content { htmlContent sections { title text } } employer { companyName } } } }"""
+_FULL_ENOUGH = 400        # a shorter text is only a summary: worth asking the page's own source
+
+
+def widget_script(page_html: str) -> str:
+    """Address of the script that holds a branded page's settings ('' on an ordinary page)."""
+    if 'id="vacancy-detail"' not in page_html:
+        return ""
+    found = re.search(r'<script[^>]*src="([^"]*/assets/js/script\.min\.js[^"]*)"', page_html)
+    return found.group(1) if found else ""
+
+
+def widget_of(page_html: str, script_text: str) -> dict[str, str]:
+    """{id, key} of the posting widget a branded page uses ({} if the script has none)."""
+    found = re.search(r'"widgets":(\{.*?\}\})\s*,\s*"', script_text)
+    if not found:
+        return {}
+    widgets = None
+    for raw in (found.group(1), found.group(1).replace("\\'", "'").replace('\\\\', '\\')):
+        try:
+            widgets = json.loads(raw)
+            break
+        except ValueError:
+            continue
+    if not isinstance(widgets, dict) or not widgets:
+        return {}
+    named = re.search(r'data-widget="([^"]+)"', page_html)
+    one = widgets.get(named.group(1)) if named else None
+    one = one if isinstance(one, dict) else next((w for w in widgets.values() if isinstance(w, dict)), {})
+    return {"id": str(one["id"]), "key": str(one["apiKey"])} if one.get("id") and one.get("apiKey") else {}
+
+
+def widget_text(answer: Any) -> tuple[str, str]:
+    """(description, company) from the answer of a branded page's source."""
+    try:
+        ad = answer["data"]["widget"]["jobAd"] or {}
+    except (KeyError, TypeError):
+        return "", ""
+    content = ad.get("content") or {}
+    text = BeautifulSoup(content.get("htmlContent") or "", "lxml").get_text(" ", strip=True)
+    if not text:
+        text = " ".join(f"{part.get('title') or ''} {BeautifulSoup(part.get('text') or '', 'lxml').get_text(' ', strip=True)}"
+                        for part in content.get("sections") or [] if isinstance(part, dict))
+    return re.sub(r"\s+", " ", text).strip()[:6000], ((ad.get("employer") or {}).get("companyName") or "").strip()
+
+
+def _posting_number(url: str) -> str:
+    found = re.search(r"[?&]id=(\d+)", url) or re.search(r"/r?pd/(\d+)", url)
+    return found.group(1) if found else ""
+
+
+def _fetch_widget(page_html: str, page_url: str) -> tuple[str, str]:
+    """The full posting of a branded page, read from the page's own source. ('', '') if it cannot be."""
+    script, number = widget_script(page_html), _posting_number(page_url)
+    if not script or not number:
+        return "", ""
+    try:
+        widget = widget_of(page_html, _get(urljoin(page_url, script)).text)
+        if not widget:
+            return "", ""
+        # the key belongs to the page and is only used for this one question; it is never stored or shown
+        resp = requests.post(_WIDGET_API, timeout=_TIMEOUT,
+                             headers={**_HEADERS, "Content-Type": "application/json", "X-API-KEY": widget["key"]},
+                             json={"query": _WIDGET_QUERY, "variables": {
+                                 "widgetId": widget["id"], "jobAdId": number, "host": urlparse(page_url).netloc,
+                                 "isNotLoggableToSessionLog": True}})
+        resp.raise_for_status()
+        return widget_text(resp.json())
+    except (requests.RequestException, ValueError):
+        return "", ""
+
+
 def _fetch_detail(url: str) -> tuple[str, str]:
     try:
-        return parse_detail(_get(url).text)
+        page = _get(url)
     except requests.RequestException:
         return "", ""
+    description, company = parse_detail(page.text)
+    if len(description) < _FULL_ENOUGH:
+        full, employer = _fetch_widget(page.text, page.url)
+        if len(full) > len(description):
+            description, company = full, company or employer
+    return description, company
 
 
 def _fetch_description(url: str) -> str:

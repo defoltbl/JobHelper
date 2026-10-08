@@ -452,3 +452,51 @@ def test_read_a_posting_again_from_the_job_window(api, monkeypatch):
     assert api.reread_posting("t") == {"ok": True, "chars": len(LONG_AD)}
     saved = store.find(store.load_jobs(), "t")
     assert saved["description"] == LONG_AD and "hold" not in saved and api.job_detail("t")["basis"] == ""
+
+
+def test_all_documents_below_the_limit_are_moved_in_one_go(api):
+    config.ensure_dirs()
+    api.save_options({"threshold": 50})
+    (config.LETTERS_DIR / "Mine.docx").write_bytes(b"my own letter")
+    assert api.stale_docs_list() == [] and "No new job has documents" in api.shelve_all_docs()["msg"]
+    store.save_jobs([_with_docs("low", 30), _with_docs("lower", 10), _with_docs("ok", 70), _with_docs("app", 20),
+                     store.new_job(id="own", title="Dev", company="Z", match_score=10, source="manual", status="letter_ready", cover_letter_file="Mine.docx")])
+    jobs = store.load_jobs(); store.find(jobs, "app")["status"] = "waiting"; store.save_jobs(jobs)
+    rows = api.stale_docs_list()
+    assert [r["id"] for r in rows] == ["low", "lower"] and set(rows[0]) == {"id", "title", "company", "score"} and rows[0]["score"] == 30
+    refused = api.shelve_all_docs(5)                                    # the confirmation named another number of jobs
+    assert refused["ok"] is False and refused["changed"] is True and "it is now 2 jobs" in refused["msg"]
+    assert (config.LETTERS_DIR / "L_low.docx").exists()
+    assert api.shelve_all_docs(2) == {"ok": True, "jobs": 2, "files": 4, "failed": []}
+    for name in ("low", "lower"):
+        job = store.find(store.load_jobs(), name)
+        assert (job["cover_letter_file"], job["tailored_cv_file"], job["status"]) == ("", "", "found")
+        assert not (config.LETTERS_DIR / f"L_{name}.docx").exists()
+    assert len(list((vault.backups_dir() / "below_your_limit").iterdir())) == 4
+    for name in ("ok", "app"):                                          # above the limit, and an application: untouched
+        assert (config.LETTERS_DIR / f"L_{name}.docx").exists() and store.find(store.load_jobs(), name)["cover_letter_file"]
+    assert (config.LETTERS_DIR / "Mine.docx").read_bytes() == b"my own letter" and store.find(store.load_jobs(), "own")["cover_letter_file"] == "Mine.docx"
+    assert api.stale_docs_list() == [] and api.shelve_all_docs()["ok"] is False
+
+
+def test_one_job_that_cannot_be_moved_does_not_stop_the_others(api, monkeypatch):
+    config.ensure_dirs()
+    api.save_options({"threshold": 50})
+    store.save_jobs([_with_docs("a", 30), _with_docs("b", 20)])
+    real = api.shelve_docs
+    monkeypatch.setattr(api, "shelve_docs", lambda job_id: {"ok": False, "msg": "no"} if job_id == "a" else real(job_id))
+    got = api.shelve_all_docs(2)
+    assert got["ok"] is True and got["jobs"] == 1 and got["files"] == 2 and len(got["failed"]) == 1
+    monkeypatch.setattr(api, "shelve_docs", lambda job_id: {"ok": False, "msg": "no"})
+    assert api.shelve_all_docs()["msg"] == "Couldn't move the documents."
+
+
+def test_the_list_shows_what_a_job_scored_before(api):
+    config.ensure_dirs()
+    changed, same, never, odd = (store.new_job(id=i, title="Dev", company=i, match_score=s) for i, s in (("changed", 25), ("same", 60), ("never", 50), ("odd", 40)))
+    changed["score_before"], same["score_before"], odd["score_before"] = 55, 60, "55"
+    waiting = store.new_job(id="waiting", title="Dev", company="w")
+    waiting["score_before"] = 40                                        # its text arrived; the new score is still to come
+    store.save_jobs([changed, same, never, odd, waiting])
+    assert {r["id"]: r["before"] for r in api.leads()} == {"changed": 55, "same": None, "never": None, "odd": None, "waiting": 40}
+    assert api.job_detail("changed")["score_before"] == 55 and api.job_detail("same")["score_before"] is None

@@ -175,12 +175,15 @@ Inside the window:
   what the score was before.
 - **What a score rests on** — a job the app could only read the title of is marked "scored from the
   title only", scores 40 at most and gets no letter or CV; one with only a short summary is marked
-  "scored from a short summary". A search tries each empty posting once more before scoring, and
-  **Read it again** in the job window does the same for one job. If the site still gives nothing,
-  **paste the posting's text** there (200 to 20,000 characters). Then **Score again**.
+  "scored from a short summary". A search tries each empty or short posting again before scoring
+  (three searches at most per job), and **Read it again** in the job window does the same for one
+  job. Company-branded pages (`company.jobs.cz`) are read in full from the page's own source. If the
+  site still gives nothing, **paste the posting's text** there (200 to 20,000 characters). Then
+  **Score again**. A job that was scored again shows "was 55" under its score in the list.
 - **Documents from a higher score** — a new job that now scores below "Write letters above" but still
   has a letter and CV is marked in the list. **Move documents to backup** (job window) puts the files
   the app wrote into `data/backups/below_your_limit/`; a letter of your own is never moved.
+  **Move them to backup** at the top of New Jobs does it for all such jobs at once, after naming them.
 - **Required-language check** — after scoring, the app itself looks for a required language your CV
   does not show at a working level (basic, A1 and A2 do not count) and lowers the score to 25,
   with the reason in the job window. A language named as a plus is ignored.

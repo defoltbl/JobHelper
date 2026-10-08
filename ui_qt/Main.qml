@@ -873,12 +873,14 @@ ApplicationWindow {
                 if (j.cv) acts.push({ label: "CV", kind: "cv", arg: j.cv });
                 acts.push({ label: "mark applied", kind: "apply", arg: j.id });
                 return { primary: j.title + "  ·  " + j.company,
-                         secondary: (j.posted || "") + (j.desired ? "   " + Number(j.desired).toLocaleString() + " CZK/mo" : "")
-                                    // what the score rests on, and documents left from a higher score: said in the row itself
-                                    + (j.basis === "title" ? "   ·   scored from the title only" : j.basis === "summary" ? "   ·   scored from a short summary" : "")
-                                    + (j.stale_docs === true ? "   ·   documents from a higher score" : ""),
+                         // what the score rests on, and documents left from a higher score: said in the row itself
+                         secondary: [[j.posted || "", j.desired ? Number(j.desired).toLocaleString() + " CZK/mo" : ""]
+                                         .filter(function (part) { return part !== ""; }).join("   "),
+                                     j.basis === "title" ? "scored from the title only" : j.basis === "summary" ? "scored from a short summary" : "",
+                                     j.stale_docs === true ? "documents from a higher score" : ""]
+                                    .filter(function (part) { return part !== ""; }).join("   ·   "),
                          badge: j.tier || "", value: win.noScore(j.score) ? "–" : "" + j.score, actions: acts,
-                         id: j.id, flag: "",
+                         id: j.id, flag: "", was: win.noScore(j.before) ? "" : "was " + j.before, stale: j.stale_docs === true,
                          group: j.tier || (win.noScore(j.score) ? "not scored" : "no documents"),
                          company: j.company || "", score: win.noScore(j.score) ? -1 : j.score, date: j.posted || "",
                          hay: (j.title + " " + j.company + " " + (j.location || "") + " " + (j.source || "")).toLowerCase() };

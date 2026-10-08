@@ -1919,3 +1919,78 @@ def test_read_it_again_button_reports_both_outcomes(ui, monkeypatch):
     ui.wait(350)
     ui.bridge._api._change("lead", lambda jobs, j: j.update(description=start.get("description", ""), match_score=80, url=""), render=False)
     assert ui.warnings == []
+
+
+# ── New Jobs: all documents below the limit at once, and the score a job had before ──
+def test_documents_below_the_limit_are_moved_together_only_after_asking(ui, monkeypatch):
+    for folder, name in ((config.TAILORED_CV_DIR, "cv_lead.docx"), (config.LETTERS_DIR, "L_lead.docx")):
+        (folder / name).write_bytes(b"x")
+    monkeypatch.setattr(ui_api.Api, "_threshold", lambda self: 50)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
+                                                             status="letter_ready", match_score=30), render=False)
+    ui.js('openView("new")')
+    ui.wait(450)
+    bar, button, text = ui.find("staleBar"), ui.find("shelveAll"), ui.find("staleBarText")
+    assert bar.property("visible") is True and button.property("text") == "Move them to backup"
+    assert text.property("text") == "1 job has documents from a score that is now below your limit."
+    ui.js("tableDialog.shelveAll()")                                                # first press only asks, and names the jobs
+    assert button.property("text") == "Yes, move documents of 1 job" and "A letter of your own is never moved." in text.property("text")
+    title = store.find(store.load_jobs(), "lead")["title"]
+    assert ui.find("staleNames").property("visible") is True and title in ui.find("staleNames").property("text")
+    assert (config.LETTERS_DIR / "L_lead.docx").exists()
+    ui.js('tableDialog.confirmStale = false')                                       # Cancel
+    assert button.property("text") == "Move them to backup" and (config.LETTERS_DIR / "L_lead.docx").exists()
+    ui.js("tableDialog.close()")
+    ui.wait(350)
+    ui.js('openView("new")')
+    ui.wait(450)
+    assert ui.js("tableDialog.confirmStale") is False                               # a closed window forgets the question
+
+    ui.js("tableDialog.shelveAll()")
+    ui.js("win.appRunning = true; tableDialog.shelveAll()")                         # a search started meanwhile
+    assert "A search or scan is running" in ui.find("staleNote").property("text") and ui.js("tableDialog.staleBad") is True
+    assert (config.LETTERS_DIR / "L_lead.docx").exists()
+    ui.js("win.appRunning = false")
+
+    ui.bridge._running = True                                                       # the bridge refuses too, whatever the window thinks
+    try:
+        assert "A search or scan is running" in ui.bridge.shelveAllDocs(1)["msg"] and (config.LETTERS_DIR / "L_lead.docx").exists()
+    finally:
+        ui.bridge._running = False
+
+    ui.js("tableDialog.staleRows = [{id: 'x', title: 'T', company: 'C', score: 1}, {id: 'y', title: 'T', company: 'C', score: 1}]; tableDialog.confirmStale = true")
+    ui.js("tableDialog.shelveAll()")                                                # the list is not what was asked about
+    assert "The list changed: it is now 1 job" in ui.find("staleNote").property("text") and (config.LETTERS_DIR / "L_lead.docx").exists()
+    assert ui.js("tableDialog.confirmStale") is True and ui.js("tableDialog.staleRows.length") == 1
+    ui.js("tableDialog.shelveAll()")
+    assert not (config.LETTERS_DIR / "L_lead.docx").exists() and not (config.TAILORED_CV_DIR / "cv_lead.docx").exists()
+    assert "Documents of 1 job moved to the backup (2 files)." in ui.js("ticker.text")
+    assert bar.property("visible") is False and "documents from a higher score" not in ui.js("listView.model[0].secondary")
+    ui.js("tableDialog.close()")
+    ui.wait(350)
+    ui.js('openView("app")')
+    ui.wait(400)
+    assert bar.property("visible") is False                                         # only in New Jobs
+    ui.js("tableDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(match_score=80, status="found"), render=False)
+    assert ui.warnings == []
+
+
+def test_the_list_shows_the_score_before(ui):
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(score_before=55, match_score=30), render=False)
+    ui.js('openView("new")')
+    ui.wait(450)
+    row = ui.js("(function(){ var m = listView.model; for (var i = 0; i < m.length; i++) if (m[i].id === 'lead') return m[i]; return {}; })()")
+    assert row["was"] == "was 55" and row["value"] == "30" and ui.js("tableDialog.anyWas") is True
+    assert not row["secondary"].startswith(" ") and "·   ·" not in row["secondary"]      # no separator before the first note
+    ui.js("tableDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(score_before=80, match_score=80), render=False)
+    ui.js('openView("new")')
+    ui.wait(450)
+    assert ui.js("tableDialog.anyWas") is False and ui.js("listView.model.map(function (r) { return r.was || ''; }).join('')") == ""
+    ui.js("tableDialog.close()")
+    ui.wait(350)
+    assert "the score it had before it was scored again" in qml_source()
+    assert ui.warnings == []

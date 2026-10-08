@@ -165,6 +165,7 @@ class Api:
                  "url": j.get("url", ""),
                  "basis": agent3_letters.text_basis(j) if j.get("match_score") is not None else "",
                  "stale_docs": self._stale_docs(j, threshold),
+                 "before": self._score_before(j),
                  "letter": j.get("cover_letter_file", ""), "cv": j.get("tailored_cv_file", "")}
                 for j in rows]
 
@@ -233,7 +234,7 @@ class Api:
             "source": j.get("source", ""), "url": j.get("url", ""), "posted": j.get("date_posted", ""),
             "status": j["status"], "is_lead": j["status"] in store.LEAD_STATUSES,
             "score": j.get("match_score"), "tier": j.get("match_tier", ""),
-            "score_before": j.get("score_before") if isinstance(j.get("score_before"), int) and j.get("score_before") != j.get("match_score") else None,
+            "score_before": self._score_before(j),
             "can_rescore": j["status"] in store.LEAD_STATUSES and j.get("match_score") is not None,
             "basis": agent3_letters.text_basis(j),
             "can_paste_text": j["status"] in store.LEAD_STATUSES and agent3_letters.text_basis(j) != "",
@@ -350,6 +351,39 @@ class Api:
             return False
         threshold = self._threshold() if threshold is None else threshold
         return j["match_score"] < threshold and (agent3_letters._generated_letter(j) or bool(j.get("tailored_cv_file")))
+
+    @staticmethod
+    def _score_before(j):
+        """The score a job had before it was scored again (None if it never changed)."""
+        before = j.get("score_before")
+        return before if isinstance(before, int) and not isinstance(before, bool) and before != j.get("match_score") else None
+
+    @_guarded(list)
+    def stale_docs_list(self):
+        """New jobs that still have a letter or CV from a score that was above your limit: [{id, title, company, score}]."""
+        threshold = self._threshold()
+        return [{"id": j["id"], "title": j["title"], "company": j["company"], "score": j["match_score"]}
+                for j in store.load_jobs() if self._stale_docs(j, threshold)]
+
+    def shelve_all_docs(self, expected=-1):
+        """Move the documents of every job in stale_docs_list() to the backup. `expected` is how many
+        jobs the confirmation named; if the list changed since, nothing moves and the question is asked again."""
+        rows = self.stale_docs_list()
+        if not rows:
+            return {"ok": False, "msg": "No new job has documents from a higher score."}
+        if isinstance(expected, int) and expected >= 0 and expected != len(rows):
+            return {"ok": False, "changed": True, "msg": f"The list changed: it is now {len(rows)} "
+                    f"{'job' if len(rows) == 1 else 'jobs'}. Check the names and confirm again."}
+        done, files, failed = 0, 0, []
+        for row in rows:
+            got = self.shelve_docs(row["id"])
+            if got.get("ok"):
+                done, files = done + 1, files + int(got.get("moved") or 0)
+            else:
+                failed.append(f"{row['title']} ({row['company']})")
+        if not done:
+            return {"ok": False, "msg": "Couldn't move the documents."}
+        return {"ok": True, "jobs": done, "files": files, "failed": failed}
 
     def set_description(self, job_id, text):
         """Keep the posting's text you pasted for a job the app could not read. Score it again afterwards."""
