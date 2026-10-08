@@ -160,6 +160,12 @@ def main() -> int:
               "   are scored then, and nothing that is done is repeated.")
         return 3
     store.save_jobs(jobs)
+    if not args.skip_search:                # the app's Last run card shows a command-line or weekly run too
+        from datetime import datetime
+        from jobhelper import ui_api
+        ui_api.Api().note_run(when=datetime.now().strftime("%d %b %H:%M"), found="+%d new" % added, filtered=len(filtered),
+                              letters=stats["letters"], cvs=stats.get("tailored_cvs", 0),
+                              scored=stats.get("scored", 0), prefiltered=stats.get("prefiltered", 0))
     print(f"   scored {stats['scored']}, wrote {stats['letters']} letters, "
           f"{stats['tailored_cvs']} tailored CVs, skipped {stats['skipped']} already-scored")
 

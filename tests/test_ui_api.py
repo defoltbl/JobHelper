@@ -313,3 +313,15 @@ def test_the_real_changelog_is_well_formed():
     for entry in got:
         for item in entry["items"]:
             assert item.count("<b>") == item.count("</b>") and "**" not in item and "—" not in item
+
+
+def test_job_window_says_why_a_good_score_has_no_documents(api):
+    from jobhelper import agent3_letters
+    store.save_jobs([store.new_job(id="h", title="Junior AI Engineer", company="", match_score=75, hold=agent3_letters.NO_COMPANY)])
+    jobs = store.load_jobs()
+    jobs[0]["hold"] = agent3_letters.NO_COMPANY
+    store.save_jobs(jobs)
+    assert "no company name" in api.job_detail("h")["hold"]
+    jobs[0]["cover_letter_file"] = "L.docx"                          # once a letter exists the note is gone
+    store.save_jobs(jobs)
+    assert api.job_detail("h")["hold"] == ""

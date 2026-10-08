@@ -288,6 +288,25 @@ def _is_recent(job: dict[str, Any], max_age_days: int) -> bool:
         return True
 
 
+def safe_error(error) -> str:
+    """An error's text without the address's query part: API keys travel there
+    (…?app_id=…&app_key=…) and must never reach a log file or the screen."""
+    return re.sub(r"(https?://[^\s?'\"]+)\?[^\s'\"]*", r"\1", str(error))
+
+
+_COMPANY_IN_TEXT = re.compile(r"\b(?:Firma|Společnost|Zaměstnavatel|Company|Employer)\s*:\s*(.{2,80}?)\s*(?:\(|Místo pracoviště|Adresa|Location|\||\n|$)")
+
+
+def fill_company(job: dict[str, Any]) -> None:
+    """Some board pages give the company only inside the posting text ("Firma: X ( zaměstnavatel )").
+    Take it from there when the listing itself had none."""
+    if (job.get("company") or "").strip():
+        return
+    m = _COMPANY_IN_TEXT.search(job.get("description") or "")
+    if m and re.search(r"[^\W\d_]{2}", m.group(1)):
+        job["company"] = m.group(1).strip(" .,;:-")
+
+
 # ── what the filters removed, and why ───────────────────────────────────────
 MAX_DROPPED = 600
 
@@ -386,12 +405,14 @@ def search(
                         found[job["id"]] = job
                         got += 1
             except requests.HTTPError as e:
-                print(f"  ! {name} error for '{q}': {e}")
+                print(f"  ! {name} error for '{q}': {safe_error(e)}")
             except requests.RequestException as e:
-                print(f"  ! {name} network error for '{q}': {e}")
+                print(f"  ! {name} network error for '{q}': {safe_error(e)}")
         print(f"  · {name}: +{got} new listings")
 
     results = list(found.values())
+    for job in results:
+        fill_company(job)
 
     def sift(group: str, why, label: str) -> None:
         """Keep the postings `why` has nothing against; note the others with the reason."""

@@ -262,6 +262,9 @@ def _make_letter(job: dict[str, Any], cv_text: str, cv_path, fields: dict[str, A
     return name
 
 
+NO_COMPANY = "The posting has no company name, so no letter or CV was written. Open the posting to see who it is."
+
+
 def _tier(score: int) -> str:
     """For a job that got a letter: strong (60+) | moderate (50-59) | stretch
     (below 50 - written because the user set a lower "write letters above")."""
@@ -481,6 +484,15 @@ def process(
         if job["match_score"] < threshold:
             print(f"  ·  {job['match_score']:>3}  {job['title']} @ {job['company']}  (below {threshold})")
             continue
+        if not (job.get("company") or "").strip():
+            from . import agent2_search
+            agent2_search.fill_company(job)             # an older record: the name may be in the posting text
+        if not (job.get("company") or "").strip():
+            # a letter is written to a company; with no name it would be addressed to nobody
+            job["hold"] = NO_COMPANY
+            print(f"  ?  {job['match_score']:>3}  {job['title']}  (no company name in the posting: no letter written)")
+            continue
+        job.pop("hold", None)
         _say(f"Writing CV and letter {writing.index(job) + 1} of {len(writing)}: {job['company'] or job['title']}…")
         fields = _fields(job)
         job["doc_attempts"] = job.get("doc_attempts", 0) + 1

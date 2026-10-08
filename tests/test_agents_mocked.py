@@ -160,3 +160,31 @@ def test_letters_below_fifty_are_written_when_the_threshold_allows_and_marked_st
 def test_tiers():
     assert [agent3_letters._tier(s) for s in (95, 60, 59, 50, 49, 30)] == \
         ["strong", "strong", "moderate", "moderate", "stretch", "stretch"]
+
+
+# ── no company name: no letter addressed to nobody ──────────────────────────
+def test_no_documents_are_written_for_a_posting_without_a_company(isolate_data, monkeypatch, capsys):
+    jobs = [store.new_job(id="p1", title="Junior AI Engineer", company="", location="Praha", description=""),
+            store.new_job(id="p2", title="UX Designer", company=" ", location="Praha",
+                          description="Detail nabídky UX Designer Firma: Thales DIS s.r.o. ( zaměstnavatel ) Místo pracoviště: Praha")]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"scores": [{"id": "J1", "match_score": 75, "match_reason": "from the title"},
+                                                                   {"id": "J2", "match_score": 70, "match_reason": "fits"}]})
+    wrote = []
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: wrote.append(1) or "Dear team,\n\nI am excited to apply.\n\nRegards, Alex")
+    stats = agent3_letters.process(jobs, {"seniority": "junior"}, threshold=60)
+    nameless, named = jobs
+    assert nameless["cover_letter_file"] == "" and nameless["status"] == "found" and nameless["match_score"] == 75
+    assert nameless["hold"] == agent3_letters.NO_COMPANY and nameless.get("doc_attempts", 0) == 0
+    assert named["company"] == "Thales DIS s.r.o" and named["status"] == "letter_ready" and "hold" not in named   # name found in the text
+    assert stats["letters"] == 1 and len(wrote) == 1
+    assert "no company name in the posting" in capsys.readouterr().out
+
+
+def test_the_hold_is_lifted_once_the_company_is_known(isolate_data, monkeypatch):
+    job = store.new_job(id="p1", title="Junior AI Engineer", company="", match_score=75)
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: "Dear team,\n\nI am excited to apply.\n\nRegards, Alex")
+    agent3_letters.process([job], {}, threshold=60)
+    assert job["hold"] and job["cover_letter_file"] == ""
+    job["company"] = "Acme"                                           # you filled it in, or a later search found it
+    agent3_letters.process([job], {}, threshold=60)
+    assert "hold" not in job and job["status"] == "letter_ready"

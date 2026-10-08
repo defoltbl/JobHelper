@@ -86,3 +86,10 @@ def test_the_city_saved_in_options_is_used_and_none_is_built_in(cli):
     seen = cli(settings={"where": "Vienna"})
     assert seen["searches"][0]["where"] == "Vienna"
     assert "Praha" not in Path(run.__file__).read_text(encoding="utf-8")
+
+
+def test_a_command_line_run_updates_the_last_run_card(cli):
+    from jobhelper import ui_api
+    cli(settings={"where": "Brno"})
+    saved = ui_api.Api().last_run()
+    assert saved["found"] == "+0 new" and saved["filtered"] == 0 and saved["letters"] == 0 and saved["when"]

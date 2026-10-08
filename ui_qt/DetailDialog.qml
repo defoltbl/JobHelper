@@ -210,6 +210,8 @@ Dialog {
                 }
 
                 DetailCard { heading: "Why this score"
+                    Text { objectName: "holdNote"; visible: !!detailDialog.job.hold; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        color: theme.warn; font.pixelSize: 13; font.bold: true; lineHeight: 1.25; text: detailDialog.job.hold || "" }
                     RowLayout { visible: !!detailDialog.job.prefilter; Layout.fillWidth: true; spacing: 10
                         Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; lineHeight: 1.25
                             text: "Not scored, to save a Claude call. " + (detailDialog.job.prefilter || "") }

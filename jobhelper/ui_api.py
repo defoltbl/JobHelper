@@ -190,6 +190,7 @@ class Api:
             "score": j.get("match_score"), "tier": j.get("match_tier", ""),
             "reason": j.get("match_reason", ""), "description": description[:8000],
             "prefilter": j.get("prefilter", "") if j.get("match_score") is None else "",
+            "hold": j.get("hold", "") if not j.get("cover_letter_file") else "",
             "score_queued": bool(j.get("prefilter_override")) and j.get("match_score") is None,
             "is_application": j["status"] in store.APPLICATION_STATUSES,
             "is_dismissed": j["status"] == store.NOT_INTERESTED,

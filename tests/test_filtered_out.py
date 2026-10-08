@@ -225,3 +225,40 @@ def test_a_posting_brought_back_during_a_run_reaches_that_run(filtered):
     api.live = []
     assert api.bring_back(_index(api, "too many years"))["ok"] is True
     assert [j["id"] for j in api.live] == ["years"]
+
+
+# ── found by the first real search after these changes ──────────────────────
+def test_an_error_never_shows_the_api_key():
+    text = ("503 Server Error: Service Temporarily Unavailable for url: "
+            "https://api.adzuna.com/v1/api/jobs/pl/search/1?app_id=abc123&app_key=SECRETKEY99&what=python")
+    safe = agent2_search.safe_error(Exception(text))
+    assert safe == "503 Server Error: Service Temporarily Unavailable for url: https://api.adzuna.com/v1/api/jobs/pl/search/1"
+    assert "SECRETKEY99" not in safe and "app_id" not in safe
+    assert agent2_search.safe_error("no address here") == "no address here"
+
+
+def test_a_failing_board_prints_no_key(monkeypatch, capsys):
+    import requests
+
+    def failing(q, where, n):
+        raise requests.HTTPError("503 for url: https://api.example.com/search?app_key=SECRETKEY99&q=x")
+    monkeypatch.setattr(agent2_search, "active_providers", lambda source, max_age_days=0: [("example", failing)])
+    assert agent2_search.search(["python"], where="Prague") == []
+    out = capsys.readouterr().out
+    assert "example error for 'python'" in out and "SECRETKEY99" not in out and "app_key" not in out
+
+
+@pytest.mark.parametrize("description, company", [
+    ("Nabídky práce Detail nabídky UX Designer Plat neuveden Odpovědět Firma: Thales DIS Czech Republic s.r.o. ( zaměstnavatel ) Místo pracoviště: Praha",
+     "Thales DIS Czech Republic s.r.o"),
+    ("About the role\nCompany: Acme Robotics\nLocation: Prague", "Acme Robotics"),
+    ("We are a company: fast, friendly and growing.", ""),            # a sentence, not a label
+    ("Firma: 12345 (", ""), ("", ""),
+])
+def test_company_is_taken_from_the_posting_text_when_the_listing_has_none(description, company):
+    job = store.new_job(id="x", title="UX Designer", company="", description=description)
+    agent2_search.fill_company(job)
+    assert job["company"] == company
+    named = store.new_job(id="y", title="T", company="Real Name", description="Firma: Other ( zaměstnavatel )")
+    agent2_search.fill_company(named)
+    assert named["company"] == "Real Name"                            # a name the listing gave is never replaced
