@@ -325,8 +325,11 @@ def refetch_description(job: dict[str, Any]) -> str:
 def reread_missing(jobs: list[dict[str, Any]], english_only: bool = True, dropped: list | None = None, pause: float = 0.5) -> dict[str, int]:
     """Try once more to read every new job that has no posting text. With english_only, a
     posting that turns out to be written in another language leaves the list (noted in
-    `dropped`, like any filtered posting). Mutates `jobs`. {read, removed}"""
+    `dropped`, like any filtered posting). A job scored earlier from its title alone loses that
+    score (kept as score_before) so this run scores it from the text; one that already has
+    documents keeps its score until "Score again". Mutates `jobs`. {read, removed}"""
     import time
+    from . import agent3_letters
     stats, gone = {"read": 0, "removed": 0}, []
     for job in jobs:
         if job.get("status") not in store.LEAD_STATUSES or (job.get("description") or "").strip() or not job.get("url"):
@@ -339,6 +342,11 @@ def reread_missing(jobs: list[dict[str, Any]], english_only: bool = True, droppe
         job["description"] = text
         stats["read"] += 1
         fill_company(job)
+        if job.get("hold") == agent3_letters.NO_TEXT:
+            job.pop("hold", None)
+            job["doc_attempts"] = 0
+        if job.get("match_score") is not None and not job.get("cover_letter_file"):
+            job["score_before"], job["match_score"] = job["match_score"], None
         if english_only and not job.get("cover_letter_file") and not is_english_job(job):
             note_dropped(dropped, job, "needs Czech", "The ad is written in Czech.")
             gone.append(id(job))

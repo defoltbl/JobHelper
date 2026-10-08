@@ -307,3 +307,20 @@ def test_refetch_knows_where_each_board_keeps_the_text(monkeypatch):
         raise OSError("no network")
     monkeypatch.setattr(scrapers_intl, "_fetch_detail", broken)
     assert agent2_search.refetch_description({"id": "linkedin-1234567", "source": "linkedin", "url": ""}) == ""
+
+
+def test_a_title_only_score_is_not_kept_once_the_text_arrives(monkeypatch):
+    from jobhelper import agent3_letters
+    monkeypatch.setattr(agent2_search, "refetch_description", lambda job: EN * 6)
+    held = store.new_job(id="held", title="Python Developer", company="A", url="https://x/h", match_score=40)
+    held["hold"], held["doc_attempts"] = agent3_letters.NO_TEXT, 2
+    other_hold = store.new_job(id="other", title="Python Developer", company="B", url="https://x/o", match_score=20)
+    other_hold["hold"] = agent3_letters.NO_COMPANY
+    with_docs = store.new_job(id="docs", title="Tester", company="C", url="https://x/d", match_score=55, cover_letter_file="L.docx")
+    fresh = store.new_job(id="fresh", title="QA", company="D", url="https://x/f")
+    jobs = [held, other_hold, with_docs, fresh]
+    assert agent2_search.reread_missing(jobs, pause=0)["read"] == 4
+    assert held["match_score"] is None and held["score_before"] == 40 and "hold" not in held and held["doc_attempts"] == 0
+    assert other_hold["hold"] == agent3_letters.NO_COMPANY and other_hold["match_score"] is None    # another reason to hold stays
+    assert with_docs["match_score"] == 55 and "score_before" not in with_docs                        # its documents rest on this score
+    assert fresh["match_score"] is None and "score_before" not in fresh
