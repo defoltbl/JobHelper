@@ -210,7 +210,7 @@ def test_duplicate_leads_keep_the_copy_with_a_letter_and_never_touch_application
 
 
 def test_scoring_prompt_forbids_guessing_requirements():
-    prompt = agent3_letters.SCORE_PROMPT
+    prompt = agent3_letters.SCORE_PROMPT.replace("{rules}", agent3_letters._SCORE_RULES)
     assert "Do not assume a requirement" in prompt and "English-speaking role" in prompt
     assert "do not invent requirements" in prompt
 

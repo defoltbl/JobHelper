@@ -165,6 +165,12 @@ Inside the window:
   Filter by reason, search, and open the posting to check a rule. **bring back** adds a posting to New Jobs so
   the next search run scores it (not offered for duplicates, closed postings and roles you already applied for). The list is replaced by
   each search (`data/filtered_out.json`, encrypted, at most 600 rows).
+- **Kinds of role you want / do not want** (Options) — tells the scorer your direction. The list
+  you want starts from the roles read from your CV. A role in another field that merely accepts
+  your degree scores 40 at most; a kind you do not want scores 20 at most (it stays in the list).
+- **Required-language check** — after scoring, the app itself looks for a required language your CV
+  does not show at a working level (basic, A1 and A2 do not count) and lowers the score to 25,
+  with the reason in the job window. A language named as a plus is ignored.
 - **Skip levels above yours** and **Skip jobs asking for … years** (Options) — the title
   words that mark a role above your level (senior, lead, manager, …) and the number of years
   of experience from which a posting is skipped (0 = never). Both start from the level in

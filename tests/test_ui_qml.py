@@ -1564,3 +1564,20 @@ def test_preparation_window_shows_what_you_can_ask_each_listener(ui):
     ui.wait(350)
     ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
     assert ui.warnings == []
+
+
+def test_wanted_and_unwanted_roles_are_edited_in_options(ui):
+    dialog = ui.find("optDialog")
+    start = ui.bridge.options()
+    ui.bridge.saveOptions({**start, "where": "Prague", "wanted_roles": ["backend developer"], "unwanted_roles": ["economist"]})
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    assert ui.js("wantedTags.all().join(',')") == "backend developer" and ui.js("unwantedTags.all().join(',')") == "economist"
+    assert ui.js('unwantedTags.add("x")') is False and "job title" in ui.js("unwantedTags.err")       # wrong input is explained
+    source = qml_source()
+    assert "is under both the roles you want and the roles you do not want" in source
+    ui.js("close()", dialog)
+    ui.wait(350)
+    ui.bridge.saveOptions(start)
+    assert ui.warnings == []

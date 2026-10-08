@@ -188,3 +188,40 @@ def test_the_hold_is_lifted_once_the_company_is_known(isolate_data, monkeypatch)
     job["company"] = "Acme"                                           # you filled it in, or a later search found it
     agent3_letters.process([job], {}, threshold=60)
     assert "hold" not in job and job["status"] == "letter_ready"
+
+
+# ── the app's own checks on a score ─────────────────────────────────────────
+CV_UA = "Alex Novak\nNative Polish speaker, B2 English.\nLANGUAGES\nPolish – Native · English – B2 · Czech – Beginner\nPython, SQL."
+
+
+def test_a_required_language_the_cv_lacks_caps_the_score(isolate_data, monkeypatch):
+    jobs = [store.new_job(id="q", title="Junior Quality Engineer", company="Acme",
+                          description="Excellent communication skills in Czech or Slovak and English (B2+). Testing experience welcome."),
+            store.new_job(id="ok", title="Python Developer", company="Beta", description="Fluent English is required. We use Python.")]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"scores": [{"id": "J1", "match_score": 55, "match_reason": "Meets the experience bar."},
+                                                                   {"id": "J2", "match_score": 70, "match_reason": "Good fit."}]})
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: "Dear team,\n\nI am excited to apply.\n\nRegards, Alex")
+    stats = agent3_letters.process(jobs, {}, threshold=30, cv_text=CV_UA)
+    capped, fine = jobs
+    assert capped["match_score"] == agent3_letters.LANGUAGE_CAP and capped["cover_letter_file"] == "" and capped["status"] == "found"
+    assert capped["score_capped"] == "Requires Czech or Slovak, which your CV does not show."
+    assert capped["match_reason"].startswith("Requires Czech or Slovak, which your CV does not show. The app lowered the score from 55 to 25.")
+    assert fine["match_score"] == 70 and "score_capped" not in fine and stats["capped"] == 1
+
+
+def test_scoring_is_told_what_you_are_looking_for(isolate_data, monkeypatch):
+    from jobhelper import ui_api
+    config.ensure_dirs()
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or {"match_score": 10, "match_reason": "r"})
+    job = lambda: [store.new_job(id="e", title="Associate Economist", company="Acme", description="Economics.")]   # noqa: E731
+    agent3_letters.process(job(), {"target_roles": ["backend developer", "ML engineer"]}, threshold=60)
+    assert "looking for these kinds of role: backend developer, ML engineer" in prompts[-1] and "scores at most 40" in prompts[-1]
+    ui_api.Api().save_options({"wanted_roles": ["data engineer"], "unwanted_roles": ["economist", "sales"]})
+    agent3_letters.process(job(), {"target_roles": ["backend developer"]}, threshold=60)
+    assert "kinds of role: data engineer." in prompts[-1] and "backend developer" not in prompts[-1]            # your list replaces the CV's
+    assert "does NOT want these kinds of role: economist, sales" in prompts[-1] and "at most 20" in prompts[-1]
+    ui_api.Api().save_options({"wanted_roles": [], "unwanted_roles": []})
+    agent3_letters.process(job(), {"target_roles": ["backend developer"]}, threshold=60)
+    assert "looking for these kinds of role" not in prompts[-1]                                               # emptied on purpose: eligibility only
+    assert agent3_letters.direction_rules(None, None) == "" and agent3_letters.direction_rules(["  "], []) == ""

@@ -84,6 +84,7 @@ Dialog {
         skipTags.setAll(o.skip_words !== undefined ? o.skip_words : ["intern", "internship"]);
         keepTags.setAll(o.keep_words || []);
         levelTags.setAll(o.level_words || []);
+        wantedTags.setAll(o.wanted_roles || []); unwantedTags.setAll(o.unwanted_roles || []);
         yearsSpin.value = o.max_years !== undefined ? o.max_years : 4;
         engSw.checked = !(o.all_languages === true);
         ageSpin.value = o.max_age_days !== undefined ? o.max_age_days : 10;
@@ -194,6 +195,14 @@ Dialog {
                         TagEditor { id: keepTags; objectName: "keepTags"; chipTone: theme.good
                             label: "…but keep titles with"; hint: "exceptions: these words beat a skip word"
                             placeholder: "e.g. graduate program" }
+                        Sep {}
+                        TagEditor { id: wantedTags; objectName: "wantedTags"; chipTone: theme.good
+                            label: "Kinds of role you want"; hint: "the score measures fit for these · another field scores 40 at most"
+                            placeholder: "e.g. backend developer" }
+                        Sep {}
+                        TagEditor { id: unwantedTags; objectName: "unwantedTags"; chipTone: theme.crit
+                            label: "Kinds of role you do not want"; hint: "still listed, but scored 20 at most"
+                            placeholder: "e.g. economist" }
                         Sep {}
                         TagEditor { id: levelTags; objectName: "levelTags"; chipTone: theme.warn
                             label: "Skip levels above yours"; hint: "title words · empty the list if you are senior"
@@ -402,6 +411,10 @@ Dialog {
                     if (win.hasNonLatin(rightField.text) || win.hasNonLatin(startField.text)) {
                         optDialog.optErr = "Write “About you” in English (Latin letters): it goes into English letters."; return;
                     }
+                    var both = wantedTags.all().filter(function (w) { return unwantedTags.all().indexOf(w) >= 0; });
+                    if (both.length > 0) {
+                        optDialog.optErr = "“" + both[0] + "” is under both the roles you want and the roles you do not want. Remove it from one."; return;
+                    }
                     var clash = optDialog.roleClash(qs, skipTags.all(), keepTags.all());
                     if (clash !== "") { optDialog.optErr = clash; return; }
                     var out = { where: cityCombo.editText, source: srcCombo.currentValue,
@@ -409,6 +422,7 @@ Dialog {
                         full_time_only: fullSw.checked,
                         skip_words: skipTags.all(), keep_words: keepTags.all(),
                         level_words: levelTags.all(), max_years: yearsSpin.value,
+                        wanted_roles: wantedTags.all(), unwanted_roles: unwantedTags.all(),
                         max_age_days: ageSpin.value, per_query: pqSpin.value,
                         threshold: thrSpin.value, min_lead_score: minSpin.value,
                         followup_days: fuSpin.value, scan_days: scanSpin.value,

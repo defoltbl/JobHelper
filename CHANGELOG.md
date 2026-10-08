@@ -3,6 +3,12 @@
 The newest changes are first. The Help window in the app shows this file under "What changed".
 Format: a `## date` line, then one `- ` line per change; `**words**` are shown in bold.
 
+## 9 October 2026
+
+- **A required language is checked by the app itself**: when a posting requires a language your CV does not show (for example "Czech or Slovak"), the score is lowered to 25 and the reason says so, whatever the model scored.
+- **Kinds of role you want and do not want** (Options): the score now measures fit for your direction. A role in another field scores 40 at most; a kind you do not want, 20 at most.
+- **Questions to ask that fit you**: the interview sheet no longer suggests asking about visa or relocation when your right to work is known, or questions that point at your own weak spot.
+
 ## 8 October 2026
 
 - **What you can ask them**: the interview sheet lists questions for you to ask, separately for HR and for the engineer, under each set.

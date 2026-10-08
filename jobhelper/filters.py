@@ -178,3 +178,80 @@ def skipped_word(title: str, skip_words, keep_words=()) -> str:
     if any(_word_in(title, k) for k in (keep_words or ())):
         return ""
     return next((w for w in (skip_words or ()) if _word_in(title, w)), "")
+
+
+# ── a required language the CV does not show ────────────────────────────────
+# Checked in plain code after the model has scored a posting: the model sometimes lets a
+# required language slide ("excellent communication skills in Czech or Slovak" got 55).
+_LANGUAGES = ["english", "czech", "slovak", "german", "french", "dutch", "polish", "italian", "spanish", "portuguese",
+              "hungarian", "russian", "ukrainian", "swedish", "danish", "norwegian", "finnish", "turkish", "romanian"]
+_LANG_WORD = re.compile(r"\b(" + "|".join(_LANGUAGES) + r")\b(?!\s+(?:republic|market|office|team|company|customers?|clients?|branch|"
+                        r"law|legislation|crown|koruna|entity|subsidiar\w*|bank|government|citizens?|nationals?|border|economy|"
+                        r"region|capital|culture|cuisine|beer))", re.IGNORECASE)
+_LANG_CUE = re.compile(r"\b(fluen\w+|native|proficien\w+|require[sd]?|requirement|must|mandatory|essential|necessary|excellent|advanced|"
+                       r"business[- ]level|professional[- ]level|working[- ]level|[bc][12]|speak\w*|communicat\w+|written and spoken|"
+                       r"spoken and written|command of|knowledge of)\b", re.IGNORECASE)
+_LANG_NOT = re.compile(r"\b(not|no|isn't|is not|without)\b[^.]{0,30}\b(require[sd]?|needed|necessary|mandatory)\b", re.IGNORECASE)
+_LANG_WEAK = re.compile(r"\b(basic|beginner|elementary|a1|a2|learning|improving|limited)\b", re.IGNORECASE)
+
+
+def required_languages(text: str) -> list[list[str]]:
+    """The languages a posting requires. Each entry is a group of alternatives:
+    "German and English" gives [["german"], ["english"]], "Czech or Slovak" gives [["czech", "slovak"]].
+    A language named as a plus, or said not to be required, is left out."""
+    groups: list[list[str]] = []
+    for sentence in re.split(r"[.\n;•|!?]", text or ""):
+        if not _LANG_CUE.search(sentence) or _LANG_OPTIONAL.search(sentence) or _LANG_NOT.search(sentence) \
+                or re.search(r"\bif you (?:are|speak|have|know)\b|\bmultilingual\b|\bother languages?\b", sentence, re.IGNORECASE):
+            continue                                    # a wish, a negation or an "if you also speak …" offer
+        found = list(_LANG_WORD.finditer(sentence))
+        current: list[str] = []
+        for i, m in enumerate(found):
+            name = m.group(1).lower()
+            joined = i > 0 and re.search(r"\bor\b|/", sentence[found[i - 1].end():m.start()])
+            if current and not joined:
+                groups.append(current)
+                current = []
+            if name not in current:
+                current.append(name)
+        if current:
+            groups.append(current)
+    unique = []
+    for group in groups:
+        if sorted(group) not in [sorted(g) for g in unique]:
+            unique.append(group)
+    return unique
+
+
+_LANG_LEVEL = re.compile(r"\b(native|fluent|fluency|proficient|advanced|intermediate|upper[- ]intermediate|professional|"
+                         r"working|[bc][12]|speaker|speaking|mother tongue)\b", re.IGNORECASE)
+
+
+def cv_languages(cv_text: str) -> set[str]:
+    """The languages a CV shows at a working level. English is assumed for a CV written in
+    English. A language counts when the CV states a level for it ("German – B2", "native
+    Ukrainian speaker"); "Czech Master's degree" is not a language, and a language marked
+    basic, beginner, A1 or A2 does not count."""
+    text = cv_text or ""
+    strong, weak = set(), set()
+    for m in _LANG_WORD.finditer(text):
+        name = m.group(1).lower()
+        after = text[m.end(): m.end() + 28].split("\n")[0]
+        before = text[max(0, m.start() - 28): m.start()].split("\n")[-1]
+        # only the nearest words count: "Russian – Native · English – B2" must not give English "native"
+        after_own = re.split(r"[·•|;,]", after)[0]
+        before_own = re.split(r"[·•|;,]", before)[-1]
+        if _LANG_WEAK.search(after_own):
+            weak.add(name)
+        elif _LANG_LEVEL.search(after_own) or _LANG_LEVEL.search(before_own) or re.search(r"\band\s*$", before_own):
+            strong.add(name)
+    return {"english"} | (strong - weak)
+
+
+def unmet_language(description: str, cv_text: str) -> str:
+    """"Czech or Slovak" if the posting requires a language the CV does not show, else ''."""
+    known = cv_languages(cv_text)
+    for group in required_languages(description):
+        if not known & set(group):
+            return " or ".join(name.capitalize() for name in group)
+    return ""

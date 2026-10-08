@@ -11,7 +11,7 @@ import re
 from datetime import date
 from typing import Any
 
-from . import config, cover_letter, cv_tailor, llm, pdf, prefilter, store
+from . import config, cover_letter, cv_tailor, filters, llm, pdf, prefilter, store
 
 SYSTEM = (
     "You are an expert career coach who writes concise, specific, non-generic "
@@ -51,7 +51,7 @@ Job posting:
 - Location: {location}
 - Description: {description}
 
-""" + _SCORE_RULES + """
+{rules}
 Return a JSON object only:
 {{
   "match_score": <integer 0-100>,
@@ -262,6 +262,27 @@ def _make_letter(job: dict[str, Any], cv_text: str, cv_path, fields: dict[str, A
     return name
 
 
+LANGUAGE_CAP = 25         # the score a posting gets at most when it requires a language the CV does not show
+OTHER_FIELD_CAP, UNWANTED_CAP = 40, 20
+
+
+def direction_rules(wanted, unwanted) -> str:
+    """What the candidate is looking for, as lines for the scoring prompt ('' when nothing is known).
+    Without it the scorer rates eligibility only, and an economist role that accepts the degree gets 80."""
+    wanted = [str(w).strip() for w in (wanted or []) if str(w).strip()][:12]
+    unwanted = [str(w).strip() for w in (unwanted or []) if str(w).strip()][:12]
+    lines = []
+    if wanted:
+        lines.append(
+            f"The candidate is looking for these kinds of role: {', '.join(wanted)}. Fit means fit for THAT direction, not only "
+            f"eligibility: a role in another field that merely accepts their degree or general skills scores at most {OTHER_FIELD_CAP}, "
+            "even when no requirement is unmet. Say in the reason that it is another field.")
+    if unwanted:
+        lines.append(f"The candidate does NOT want these kinds of role: {', '.join(unwanted)}. A role of one of these kinds scores "
+                     f"at most {UNWANTED_CAP}; say so in the reason.")
+    return ("\n" + "\n".join(lines) + "\n") if lines else ""
+
+
 NO_COMPANY = "The posting has no company name, so no letter or CV was written. Open the posting to see who it is."
 
 
@@ -366,11 +387,13 @@ def process(
     )
 
     stats = {"scored": 0, "letters": 0, "tailored_cvs": 0, "skipped": 0, "prefiltered": 0}
+    saved = config.ui_settings()
+    wanted = saved.get("wanted_roles")
+    rules = _SCORE_RULES + direction_rules(profile.get("target_roles") if wanted is None else wanted, saved.get("unwanted_roles"))
 
     # Free first look: postings that are plainly another profession are marked
     # and never sent to the model (see prefilter.py).
     if only_new and cv_text.strip():
-        from . import filters
         level_words = config.ui_settings().get("level_words")
         if level_words is None:
             level_words = filters.default_level_words(profile.get("seniority", "junior"))
@@ -418,13 +441,22 @@ def process(
         except (AttributeError, TypeError, ValueError):
             return False
         job["match_reason"] = str(result.get("match_reason", ""))
+        job.pop("score_capped", None)
+        # the app's own check: a required language the CV does not show is a hard stop, whatever the model said
+        missing = filters.unmet_language(job.get("description") or "", cv_text) if cv_text.strip() else ""
+        if missing and job["match_score"] > LANGUAGE_CAP:
+            job["score_capped"] = f"Requires {missing}, which your CV does not show."
+            job["match_reason"] = (f"{job['score_capped']} The app lowered the score from {job['match_score']} to {LANGUAGE_CAP}. "
+                                   + job["match_reason"]).strip()
+            job["match_score"] = LANGUAGE_CAP
+            stats["capped"] = stats.get("capped", 0) + 1
         job["last_update"] = date.today().isoformat()
         stats["scored"] += 1
         return True
 
     def _score_one(job):
         try:
-            result = _ask(lambda: llm.ask_json(SCORE_PROMPT.format(**_fields(job)), system=SYSTEM, tag="agent3_letters"))
+            result = _ask(lambda: llm.ask_json(SCORE_PROMPT.format(rules=rules, **_fields(job)), system=SYSTEM, tag="agent3_letters"))
         except llm.LimitReached:
             raise
         except Exception as e:
@@ -441,7 +473,7 @@ def process(
                     n=n, **_fields(job, limit=3000)) for n, job in enumerate(chunk, 1))
             try:
                 data = _ask(lambda: llm.ask_json(
-                    SCORE_BATCH_PROMPT.format(profile=profile_blurb, postings=postings, rules=_SCORE_RULES, n=len(chunk)),
+                    SCORE_BATCH_PROMPT.format(profile=profile_blurb, postings=postings, rules=rules, n=len(chunk)),
                     system=SYSTEM, tag="agent3_letters"))
             except llm.LimitReached:
                 raise

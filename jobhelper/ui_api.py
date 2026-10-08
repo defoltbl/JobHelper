@@ -837,14 +837,17 @@ class Api:
             profile = agent1_cv.load_profile() or {}
             seed_queries = profile.get("search_queries") or profile.get("target_roles") or []
             level = profile.get("seniority", "junior")
+            target_roles = [str(r) for r in (profile.get("target_roles") or [])]
         except Exception:
-            seed_queries, level = [], "junior"
+            seed_queries, level, target_roles = [], "junior", []
         defaults = {"where": "", "source": "czech", "include_remote": False, "full_time_only": True,
                     "all_languages": False, "max_age_days": config.MAX_JOB_AGE_DAYS,
                     "threshold": config.DEFAULT_THRESHOLD, "min_lead_score": config.MIN_LEAD_SCORE,
                     "model": config.MODEL, "per_query": 15, "queries": list(seed_queries),
                     "followup_days": followup.DEFAULT_DAYS, "scan_days": config.IMAP_LOOKBACK_DAYS,
                     "skip_words": ["intern", "internship"], "keep_words": [],
+                    # what the scorer treats as your direction: starts from the roles read from your CV
+                    "wanted_roles": list(target_roles), "unwanted_roles": [],
                     # start from the level in the CV; the user can change both in Options
                     "level_words": filters.default_level_words(level), "max_years": filters.default_max_years(level),
                     "about_right_to_work": "", "about_start": "", "about_experience": "", "notifications": True, "scan_all_folders": False,
