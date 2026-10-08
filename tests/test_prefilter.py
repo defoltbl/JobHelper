@@ -9,6 +9,14 @@ CV = "Python, Kotlin, SQL, PostgreSQL, FastAPI, Docker, Azure, Git, Linux, React
 CV_KEYS = {"Python", "Kotlin", "SQL", "PostgreSQL", "FastAPI", "Docker", "Azure", "Git", "Linux", "React", "Android", "English"}
 
 
+TECH = ["software and IT"]                     # what fields_of() gives for a software candidate
+
+
+def _skip(job, **kw):
+    kw.setdefault("mine", TECH)
+    return prefilter.reason_to_skip(job, CV_KEYS, **kw)
+
+
 def _job(title, description="", **kw):
     return store.new_job(id=kw.pop("id", title), title=title, company="Acme", location="Prague", description=description, **kw)
 
@@ -26,23 +34,23 @@ def _job(title, description="", **kw):
     ("Projektant / Projektant junior tramvajových vozidel", "projektant"),
 ])
 def test_other_professions_are_skipped(title, word):
-    assert word in prefilter.reason_to_skip(_job(title), CV_KEYS).lower()
+    assert word in _skip(_job(title)).lower()
 
 
 @pytest.mark.parametrize("title", ["Customer Care Specialist (German)", "Technical Service Coordinator with German - Zličín",
                                    "Tier 1 Autoline Sales Support Analyst - Dutch Speaking", "Android Automotive Entwickler (m/w/d)"])
 def test_roles_needing_another_language_are_skipped(title):
-    assert "another language" in prefilter.reason_to_skip(_job(title), CV_KEYS)
+    assert "another language" in _skip(_job(title))
 
 
 @pytest.mark.parametrize("title", ["Quant AI/ML Model Developer VP", "Network managed service engineer (L3)"])
 def test_levels_far_above_a_graduate_are_skipped(title):
-    assert "senior level" in prefilter.reason_to_skip(_job(title), CV_KEYS)
+    assert "senior level" in _skip(_job(title))
 
 
 def test_posting_with_none_of_your_technologies_is_skipped():
     job = _job("Field IT Support", "Office 365, Active Directory, Networking and ServiceNow on site.")
-    assert "None of the technologies" in prefilter.reason_to_skip(job, CV_KEYS)
+    assert "None of the technologies" in _skip(job)
 
 
 # ── what must always reach the model (each scored 30+ in the first real runs) ──
@@ -59,7 +67,81 @@ def test_posting_with_none_of_your_technologies_is_skipped():
     ("IT Application Support Specialist", "SQL and ticketing tools. Jira."),
 ])
 def test_plausible_roles_are_never_skipped(title, description):
-    assert prefilter.reason_to_skip(_job(title, description), CV_KEYS) == ""
+    assert _skip(_job(title, description)) == ""
+
+
+# ── whose professions: they follow the roles you look for, not a list in the code ──
+def test_your_fields_come_from_the_roles_you_look_for():
+    assert prefilter.fields_of(["Junior Backend Developer", "ML Engineer", "Android Developer"]) == ["software and IT"]
+    assert prefilter.fields_of(["Registered Nurse", "Caregiver"]) == ["care and health"]
+    assert prefilter.fields_of(["Sales Engineer"]) == ["sales and marketing"]
+    assert sorted(prefilter.fields_of(["Data Analyst", "Marketing Specialist"])) == ["sales and marketing", "software and IT"]
+    assert prefilter.fields_of([]) == [] and prefilter.fields_of(None) == [] and prefilter.fields_of(["", "  "]) == []
+    assert prefilter.fields_of(["Beekeeper"]) == []                                   # a role this list does not know: nothing is assumed
+
+
+def test_without_roles_the_cv_names_the_field():
+    assert prefilter.fields_of([], CV) == ["software and IT"]
+    assert prefilter.fields_of(["Beekeeper"], "Nurse at a city hospital. Before that a nurse in a care home. I once helped a developer.") == ["care and health"]
+    assert prefilter.fields_of([], "I keep bees. One summer I helped a lawyer.") == []          # named once: not enough to go on
+    assert prefilter.fields_of(["Registered Nurse"], CV) == ["care and health"]                # roles win over the CV's words
+
+
+@pytest.mark.parametrize("mine, skipped, kept", [
+    (["care and health"], ["Junior Python Developer", "Account Executive", "Mechanical Designer"], ["Staff Nurse", "Nurse - Sales Clinic", "Ward Assistant"]),
+    (["sales and marketing"], ["Backend Developer", "Staff Nurse", "Tax Advisor"], ["Account Executive", "Marketing Specialist", "Sales Engineer"]),
+    (["finance", "law"], ["QA Tester", "Forklift Driver"], ["Junior Accountant", "Paralegal", "Legal Software Analyst"]),
+])
+def test_another_candidate_gets_other_skips(mine, skipped, kept):
+    for title in skipped:
+        assert "another profession" in prefilter.reason_to_skip(_job(title), set(), mine=mine), title
+    for title in kept:
+        assert prefilter.reason_to_skip(_job(title), set(), mine=mine) == "", title
+
+
+def test_no_title_is_skipped_for_its_profession_when_your_field_is_not_known():
+    for title in ("Major Account Executive", "Staff Nurse", "Junior Python Developer", "Forklift Operator"):
+        assert prefilter.reason_to_skip(_job(title), CV_KEYS) == "" and prefilter.reason_to_skip(_job(title), CV_KEYS, mine=["no such field"]) == ""
+    assert "senior level" in prefilter.reason_to_skip(_job("Head of Sales"), CV_KEYS)             # the other rules still hold
+
+
+def test_roles_you_do_not_want_are_skipped_by_name():
+    unwanted = ["Tester", "IT support", "C++ Developer"]
+    assert _skip(_job("Junior Tester"), unwanted=unwanted) == "You listed this kind of role as not wanted (Tester)."
+    assert "not wanted (IT support)" in _skip(_job("IT-Support Specialist"), unwanted=unwanted)
+    assert "not wanted (IT support)" in _skip(_job("Junior IT  Support / Admin"), unwanted=unwanted)
+    assert "not wanted (C++ Developer)" in _skip(_job("Embedded C++ Developer"), unwanted=unwanted)
+    for title in ("Protester Liaison", "Testers Lead", "Support Engineer for IT", "C Developer", "Junior Python Developer"):
+        assert _skip(_job(title), unwanted=unwanted) == "", title                                  # whole words, in that order
+    assert _skip(_job("Software Developer in Test / Tester"), unwanted=unwanted, wanted=["Software Developer"]) == ""   # also one you want
+    assert _skip(_job("Junior Tester"), unwanted=["", "  ", None, 7]) == ""                        # empty and odd entries are ignored
+
+
+def test_a_language_your_cv_shows_is_not_a_reason_to_skip():
+    for title in ("Customer Care Specialist (German)", "Android Automotive Entwickler (m/w/d)", "Support Analyst - German Speaking", "Developer with German"):
+        assert "another language" in _skip(_job(title)) and "another language" not in _skip(_job(title), languages={"english", "german"}), title
+    assert "another language" in _skip(_job("Sales Support Analyst - Dutch Speaking"), languages={"english", "german"})
+
+
+def test_apply_reads_the_field_and_languages_from_roles_and_cv():
+    nurse_cv = "Registered nurse, 3 years on a surgical ward. German - C1, English - B2."
+    jobs = [_job("Junior Python Developer", id="dev"), _job("Staff Nurse", id="nurse"), _job("Pflegefachkraft Nurse (m/w/d)", id="german"),
+            _job("Night Nurse", id="unwanted")]
+    assert prefilter.apply(jobs, nurse_cv, roles=["Registered Nurse"], unwanted=["Night Nurse"], wanted=["Registered Nurse"]) == 2
+    by = {j["id"]: j.get("prefilter", "") for j in jobs}
+    assert "another profession (python)" in by["dev"] and "not wanted (Night Nurse)" in by["unwanted"] and by["nurse"] == "" and by["german"] == ""
+
+
+def test_process_takes_the_roles_from_options_or_the_cv_analysis(isolate_data, monkeypatch):
+    seen = []
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": 10, "match_reason": "x"})
+    monkeypatch.setattr(prefilter, "apply", lambda jobs, cv_text, **kw: seen.append(kw) or 0)
+    profile = {"summary": "x", "target_roles": ["Backend Developer"], "adjacent_roles": ["QA Engineer"]}
+    agent3_letters.process([_job("Dev", id="1")], profile, threshold=60, cv_text=CV)
+    assert seen[-1]["roles"] == ["Backend Developer", "QA Engineer"] and seen[-1]["wanted"] == ["Backend Developer"] and seen[-1]["unwanted"] == []
+    monkeypatch.setattr(config, "ui_settings", lambda: {"wanted_roles": ["Data Analyst"], "unwanted_roles": ["Tester"]})
+    agent3_letters.process([_job("Dev", id="2")], profile, threshold=60, cv_text=CV)
+    assert seen[-1]["roles"] == ["Data Analyst", "QA Engineer"] and seen[-1]["wanted"] == ["Data Analyst"] and seen[-1]["unwanted"] == ["Tester"]
 
 
 def test_apply_marks_only_unscored_leads_and_respects_an_override():

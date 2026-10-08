@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 9 October 2026
 
+- **The free first look follows your profession**: which titles count as "another profession" now comes from the roles you look for (or your CV), not from a list written for software jobs. Options shows what the app takes as your profession. A title naming a role you listed as not wanted is skipped before scoring, and a language your CV shows is no longer a reason to skip.
 - **A second read for every board**: a posting from any other board or company page that came back empty or short is read from the copy the page itself publishes. A site that turns programs away (Jooble) is not asked again; paste its text instead.
 - **Put moved documents back**: for a week New Jobs offers "Put them back" for the last batch moved to the backup, and a job's own window offers it for that job at any time. Nothing is put back if a file is in the way or a backup copy is missing.
 - **Scored at once on the new text**: after "Read it again" or pasting a posting's text, the job is scored again by itself (one Claude call). If a search is running or Claude cannot be asked, the window says so and keeps the text.

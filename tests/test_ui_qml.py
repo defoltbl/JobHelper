@@ -1577,6 +1577,14 @@ def test_wanted_and_unwanted_roles_are_edited_in_options(ui):
     assert ui.js('unwantedTags.add("x")') is False and "job title" in ui.js("unwantedTags.err")       # wrong input is explained
     source = qml_source()
     assert "is under both the roles you want and the roles you do not want" in source
+    note = ui.find("fieldsNote")                                                                      # your profession follows the roles as typed
+    assert note.property("text").startswith("Your profession, as the app reads it from these roles: software and IT.")
+    assert ui.js('wantedTags.add("registered nurse")') is True
+    assert "these roles: software and IT, care and health." in note.property("text")
+    ui.js('wantedTags.setAll(["beekeeper"])')
+    assert note.property("text").startswith("The app cannot tell your profession from these roles or your CV") \
+        or "from your CV" in note.property("text")
+    assert "a title that names one is skipped before scoring" in source
     ui.js("close()", dialog)
     ui.wait(350)
     ui.bridge.saveOptions(start)

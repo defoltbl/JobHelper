@@ -41,7 +41,7 @@ Dialog {
         { title: "Scores and labels", lines: [
             "Each job gets a <b>score</b> from 0 to 100 for how well it fits your CV.",
             "<b>strong</b>: 60 or more. <b>moderate</b>: 50 to 59. <b>stretch</b>: below 50 but above your own <b>limit</b>; read \"<b>Why this score</b>\" before applying.",
-            "<b>skipped</b>: the app saw from the title that it is another profession and did not spend a Claude call on it. \"<b>Score it anyway</b>\" in the job window overrides that.",
+            "<b>skipped</b>: the app saw from the title that it is another profession than the roles you look for, or a kind of role you listed as not wanted, and did not spend a Claude call on it. \"<b>Score it anyway</b>\" in the job window overrides that.",
             "<b>Options</b>, \"<b>Write letters above</b>\", sets from which <b>score</b> a CV and a letter are written." ] },
         { title: "The lists on the left", lines: [
             "<b>New Jobs</b>: jobs you have not applied to. <b>Applications</b>: jobs you applied to, with their status. <b>Responses</b>: every reply email. <b>Analytics</b>: the numbers. <b>Insights</b>: what works, how each <b>search</b> keyword performs, skills worth learning, and what the postings say they pay next to your target.",

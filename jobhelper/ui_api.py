@@ -353,6 +353,19 @@ class Api:
         threshold = self._threshold() if threshold is None else threshold
         return j["match_score"] < threshold and (agent3_letters._generated_letter(j) or bool(j.get("tailored_cv_file")))
 
+    def profession_fields(self, wanted=None):
+        """Which professions the free first look treats as yours, for the roles given (the ones
+        typed in Options, before they are saved): {fields: [...], from_cv: bool}."""
+        from . import prefilter
+        try:
+            profile = agent1_cv.load_profile() or {}
+        except Exception:  # noqa: BLE001 - no CV analysis yet
+            profile = {}
+        wanted = [str(w).strip() for w in (wanted or []) if str(w).strip()] or list(profile.get("target_roles") or [])
+        roles = wanted + list(profile.get("adjacent_roles") or [])
+        from_roles = prefilter.fields_of(roles)
+        return {"fields": from_roles or prefilter.fields_of([], self._cv_text()), "from_cv": not from_roles}
+
     @staticmethod
     def _score_before(j):
         """The score a job had before it was scored again (None if it never changed)."""

@@ -84,7 +84,10 @@ Inside the window:
 - **Fewer Claude calls per search** — postings that are plainly another profession, need
   another language or a far higher level are skipped before scoring (shown as *skipped*
   with the reason; **Score it anyway** sends one to the next run), and the rest are scored
-  five postings per call.
+  five postings per call. What counts as "another profession" follows the roles you look for
+  (Options, or the roles read from your CV; if those say nothing, the CV's own words). Options
+  shows what the app takes as your profession; if it cannot tell, nothing is skipped for its
+  profession. A language your CV shows at a working level is not a reason to skip.
 - **Second mailbox (optional)** — Account card → *Job email* → **Add** under "Second
   mailbox". Its replies are read in the same scan; one mailbox is enough if you only use one.
 - **Skip words** — Options → Search → *Skip titles with*: jobs whose title contains one of
@@ -167,7 +170,8 @@ Inside the window:
   each search (`data/filtered_out.json`, encrypted, at most 600 rows).
 - **Kinds of role you want / do not want** (Options) — tells the scorer your direction. The list
   you want starts from the roles read from your CV. A role in another field that merely accepts
-  your degree scores 40 at most; a kind you do not want scores 20 at most (it stays in the list).
+  your degree scores 40 at most; a kind you do not want scores 20 at most. A posting whose title
+  names a kind you do not want (and none you want) is skipped before scoring, with that reason.
 - **Score again** (job window) and **Score all again** (New Jobs list) — scores a new job, or every
   scored new job, again with the rules as they are now (your direction, the language check).
   One Claude call per job, or one per five when all are done; "all" runs like a search (progress,

@@ -519,7 +519,11 @@ def process(
         level_words = config.ui_settings().get("level_words")
         if level_words is None:
             level_words = filters.default_level_words(profile.get("seniority", "junior"))
-        stats["prefiltered"] = prefilter.apply(jobs, cv_text, check_level=bool(level_words))
+        saved = config.ui_settings()
+        wanted = saved.get("wanted_roles") or profile.get("target_roles") or []
+        stats["prefiltered"] = prefilter.apply(
+            jobs, cv_text, check_level=bool(level_words), roles=list(wanted) + list(profile.get("adjacent_roles") or []),
+            unwanted=saved.get("unwanted_roles") or [], wanted=wanted)
 
     def _skip(job):
         # Applications and anything past the "found" stage are left alone. A found

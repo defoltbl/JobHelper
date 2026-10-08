@@ -240,9 +240,17 @@ Dialog {
                         TagEditor { id: wantedTags; objectName: "wantedTags"; chipTone: theme.good
                             label: "Kinds of role you want"; hint: "the score measures fit for these · another field scores 40 at most"
                             placeholder: "e.g. backend developer" }
+                        // which professions the free first look takes as yours: it follows the roles above as you type them
+                        Text { objectName: "fieldsNote"; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12
+                            wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
+                            text: { var n = wantedTags.tagCount; var f = optDialog.visible ? bridge.professionFields(wantedTags.all()) : ({ fields: [] });
+                                    return (f.fields || []).length === 0
+                                        ? "The app cannot tell your profession from these roles or your CV, so no job is skipped for its profession before scoring."
+                                        : "Your profession, as the app reads it from " + (f.from_cv ? "your CV" : "these roles") + ": " + f.fields.join(", ")
+                                          + ". A title that is plainly another profession is skipped before scoring, at no cost to your Claude limit; you can still send it to scoring from the list."; } }
                         Sep {}
                         TagEditor { id: unwantedTags; objectName: "unwantedTags"; chipTone: theme.crit
-                            label: "Kinds of role you do not want"; hint: "still listed, but scored 20 at most"
+                            label: "Kinds of role you do not want"; hint: "a title that names one is skipped before scoring · otherwise scored 20 at most"
                             placeholder: "e.g. economist" }
                         Sep {}
                         TagEditor { id: levelTags; objectName: "levelTags"; chipTone: theme.warn

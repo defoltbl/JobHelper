@@ -608,3 +608,21 @@ def test_the_last_batch_is_put_back_together(api, monkeypatch):
     (config.LETTERS_DIR / "L_a.docx").write_bytes(b"in the way")
     got = api.unshelve_last(last["batch"])
     assert got["ok"] is True and got["jobs"] == 2 and len(got["failed"]) == 1 and "already in its folder" in got["failed"][0]
+
+
+def test_options_can_say_which_professions_are_taken_as_yours(api, monkeypatch):
+    from jobhelper import agent1_cv
+    monkeypatch.setattr(agent1_cv, "load_profile", lambda: {"target_roles": ["Backend Developer"], "adjacent_roles": ["Data Analyst"]})
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Nurse on a ward, then a nurse in a clinic.")
+    assert api.profession_fields() == {"fields": ["software and IT"], "from_cv": False}                    # nothing typed: the CV analysis' roles
+    assert api.profession_fields(["registered nurse"]) == {"fields": ["software and IT", "care and health"], "from_cv": False}   # adjacent roles count too
+    monkeypatch.setattr(agent1_cv, "load_profile", lambda: {})
+    assert api.profession_fields(["registered nurse", "", "  "]) == {"fields": ["care and health"], "from_cv": False}
+    assert api.profession_fields(["beekeeper"]) == {"fields": ["care and health"], "from_cv": True}       # roles say nothing: the CV does
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "")
+    assert api.profession_fields(["beekeeper"]) == {"fields": [], "from_cv": True} and api.profession_fields(None)["fields"] == []
+
+    def broken():
+        raise OSError("no profile")
+    monkeypatch.setattr(agent1_cv, "load_profile", broken)
+    assert api.profession_fields(["sales manager"]) == {"fields": ["sales and marketing"], "from_cv": False}

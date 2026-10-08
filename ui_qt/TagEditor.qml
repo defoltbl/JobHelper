@@ -15,6 +15,7 @@ ColumnLayout {
     property color chipTone: theme.ink
     ListModel { id: teModel }
     function setAll(arr) { teModel.clear(); for (var i = 0; i < (arr || []).length; i++) teModel.append({ text: "" + arr[i] }); err = ""; }
+    readonly property int tagCount: teModel.count
     function all() { var out = []; for (var i = 0; i < teModel.count; i++) out.push("" + teModel.get(i).text); return out; }
     function add(txt) {
         var t = (txt || "").trim().toLowerCase();
