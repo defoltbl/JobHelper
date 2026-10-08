@@ -177,7 +177,10 @@ Inside the window:
   title only", scores 40 at most and gets no letter or CV; one with only a short summary is marked
   "scored from a short summary". A search tries each empty or short posting again before scoring
   (three searches at most per job), and **Read it again** in the job window does the same for one
-  job. Company-branded pages (`company.jobs.cz`) are read in full from the page's own source. If the
+  job. Company-branded pages (`company.jobs.cz`) are read in full from the page's own source; for any
+  other board or company page the app reads the copy of the posting that the page itself publishes
+  for search engines, and nothing else from it. A site that answers with a "prove you are a person"
+  page (Jooble) is left alone. If the
   site still gives nothing, **paste the posting's text** there (200 to 20,000 characters). Either
   way the job is then scored again by itself (one Claude call); if a search is running, press
   **Score again** when it has finished. A job that was scored again shows "was 55" under its score.

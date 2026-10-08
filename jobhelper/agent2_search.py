@@ -305,6 +305,11 @@ def _is_recent(job: dict[str, Any], max_age_days: int) -> bool:
         return True
 
 
+# Sites that answer a program with a "prove you are a person" page. That is a no, and the app
+# takes it as one: their postings keep the summary, and the job window offers pasting the text.
+_NO_SECOND_READ = ("jooble.org",)
+
+
 def refetch_description(job: dict[str, Any]) -> str:
     """Read one posting's text again from its board ('' if it still cannot be read).
     A first read can fail for a moment (the board answers too many requests with nothing)."""
@@ -317,9 +322,13 @@ def refetch_description(job: dict[str, Any]) -> str:
         if "jobs.cz" in url or "prace.cz" in url:
             from . import scrapers_cz
             return scrapers_cz._fetch_detail(url)[0]
+        if not url or any(host in url for host in _NO_SECOND_READ):
+            return ""
+        # any other board or company page: the copy of the posting the page itself publishes
+        from . import scrapers_page
+        return scrapers_page.posting_text(url)
     except Exception:  # noqa: BLE001 - no text is an answer too
         return ""
-    return ""
 
 
 REREAD_TRIES = 3          # how many searches try to get more of a posting's text before leaving it be

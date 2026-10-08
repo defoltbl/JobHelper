@@ -300,8 +300,13 @@ def test_refetch_knows_where_each_board_keeps_the_text(monkeypatch):
     monkeypatch.setattr(scrapers_cz, "_fetch_detail", lambda url: asked.append(("cz", url)) or ("Czech board text", ""))
     assert agent2_search.refetch_description({"id": "linkedin-4455367720", "source": "linkedin", "url": "https://cz.linkedin.com/jobs/view/x-4455367720"}) == "LinkedIn text"
     assert agent2_search.refetch_description({"id": "jobscz-1", "source": "jobs.cz", "url": "https://www.jobs.cz/rpd/1/"}) == "Czech board text"
-    assert agent2_search.refetch_description({"id": "x", "source": "remoteok", "url": "https://remoteok.com/1"}) == ""
-    assert asked == [("linkedin", "4455367720"), ("cz", "https://www.jobs.cz/rpd/1/")]
+    from jobhelper import scrapers_page
+    monkeypatch.setattr(scrapers_page, "posting_text", lambda url: asked.append(("page", url)) or "The page's own copy")
+    assert agent2_search.refetch_description({"id": "x", "source": "remoteok", "url": "https://remoteok.com/1"}) == "The page's own copy"
+    assert agent2_search.refetch_description({"id": "c", "source": "careers", "url": "https://careers.example.com/jobs/7"}) == "The page's own copy"
+    assert agent2_search.refetch_description({"id": "j", "source": "jooble/x", "url": "https://jooble.org/desc/123"}) == ""      # it turns programs away: not asked
+    assert agent2_search.refetch_description({"id": "n", "source": "manual", "url": ""}) == ""
+    assert asked == [("linkedin", "4455367720"), ("cz", "https://www.jobs.cz/rpd/1/"), ("page", "https://remoteok.com/1"), ("page", "https://careers.example.com/jobs/7")]
 
     def broken(job_id):
         raise OSError("no network")

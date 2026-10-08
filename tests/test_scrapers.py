@@ -203,3 +203,74 @@ def test_a_branded_page_that_carries_its_own_settings(monkeypatch):
     assert asked == ["https://www.jobs.cz/rpd/2001408263/"]                                # no second page needed
     assert posted[0]["headers"]["X-API-KEY"] == "KEY-IN-PAGE" and posted[0]["json"]["variables"]["widgetId"] == "w-page"
     assert posted[0]["json"]["variables"]["jobAdId"] == "2001408263"
+
+
+# ── any other posting page: only the copy the page itself publishes ─────────
+def _ld(data):
+    import json
+    return '<script type="application/ld+json">' + json.dumps(data) + "</script>"
+
+
+def test_a_page_s_own_copy_of_the_posting_is_read():
+    from jobhelper import scrapers_page
+    body = "<p>You will write Python services.</p><ul><li>Tests</li><li>Reviews</li></ul>"
+    plain = "You will write Python services. Tests Reviews"
+    assert scrapers_page.parse_posting("<html><head>" + _ld({"@type": "JobPosting", "title": "Dev", "description": body}) + "</head></html>") == plain
+    assert scrapers_page.parse_posting(_ld({"@graph": [{"@type": "Organization", "description": "About us"}, {"@type": ["Thing", "JobPosting"], "description": body}]})) == plain
+    assert scrapers_page.parse_posting(_ld([{"@type": "BreadcrumbList"}, {"@type": "JobPosting", "description": body.replace("<", "&lt;").replace(">", "&gt;")}])) == plain
+    two = _ld({"@type": "JobPosting", "description": "Short one."}) + _ld({"@type": "JobPosting", "description": body})
+    assert scrapers_page.parse_posting(two) == plain                                    # the longest wins
+    assert len(scrapers_page.parse_posting(_ld({"@type": "JobPosting", "description": "word " * 5000}))) == 6000
+    for nothing in ("<html><body><main>" + "Plenty of words on the page but no published copy. " * 30 + "</main></body></html>",
+                    '<script type="application/ld+json">{broken</script>', '<script type="application/ld+json"></script>',
+                    _ld({"@type": "Organization", "description": "We are a company."}), _ld({"@type": "JobPosting", "description": None}),
+                    _ld({"@type": "JobPosting"}), _ld("text"), ""):
+        assert scrapers_page.parse_posting(nothing) == ""
+    deep = {"@type": "JobPosting", "description": "found"}
+    for _ in range(10):
+        deep = {"@graph": [deep]}
+    assert scrapers_page.parse_posting(_ld(deep)) == ""                                 # nesting without end is not followed
+
+
+class _Stream:
+    def __init__(self, body=b"", status=200, kind="text/html; charset=utf-8", pieces=None):
+        self.status_code, self.headers, self.encoding = status, {"Content-Type": kind}, "utf-8"
+        self._pieces, self.read = pieces if pieces is not None else [body], 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def iter_content(self, size):
+        for piece in self._pieces:
+            self.read += len(piece)
+            yield piece
+
+
+def test_a_posting_page_is_read_with_care(monkeypatch):
+    from jobhelper import scrapers_page
+    page = ("<html>" + _ld({"@type": "JobPosting", "description": "<p>You will write Python services and test them.</p>"}) + "</html>").encode()
+    asked = []
+
+    def get(url, **kw):
+        asked.append((url, kw))
+        return answers.pop(0)
+    monkeypatch.setattr(scrapers_page.requests, "get", get)
+    answers = [_Stream(page)]
+    assert scrapers_page.posting_text("https://careers.example.com/jobs/1") == "You will write Python services and test them."
+    assert asked[0][1]["timeout"] and asked[0][1]["stream"] is True
+    answers = [_Stream(page, status=403), _Stream(page, status=404), _Stream(page, kind="application/pdf"), _Stream(page, kind="")]
+    assert [scrapers_page.posting_text("https://careers.example.com/jobs/1") for _ in range(4)] == ["", "", "", ""]   # a no is a no
+    for not_a_page in ("", "file:///etc/hosts", "ftp://example.com/x", "javascript:alert(1)", "careers.example.com/jobs/1", None):
+        assert scrapers_page.posting_text(not_a_page) == ""
+    assert len(asked) == 5                                                              # those were never asked for
+    endless = _Stream(pieces=[b"x" * 1_000_000] * 50)
+    answers = [endless]
+    assert scrapers_page.posting_text("https://careers.example.com/big") == "" and endless.read <= scrapers_page._MAX_PAGE + 1_000_000
+
+    def down(url, **kw):
+        raise scrapers_page.requests.ConnectionError("down")
+    monkeypatch.setattr(scrapers_page.requests, "get", down)
+    assert scrapers_page.posting_text("https://careers.example.com/jobs/1") == ""
