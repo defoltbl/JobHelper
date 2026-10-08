@@ -81,6 +81,10 @@ Besides the questions, write the sheet the candidate reads before the call:
   what they really did; it is never written as something this candidate did.
   "if_true" is 3-5 questions TO THE CANDIDATE that turn those usual tasks into reminders, e.g. "Did you write
   the tests for it yourself?". Never statements about the candidate.
+- "ask_hr" and "ask_technical": questions for the candidate to ask. Never one that the facts above already
+  answer (no visa, sponsorship or relocation question when the right to work or the location is stated), and
+  never one that points at the candidate's own weak spot (their years of experience, a skill they lack):
+  the interviewer may raise those; the candidate does not.
 - "concepts": terms from the posting worth being able to explain. Explain each in plain words; where the
   CV has related experience, say how it connects. Never say the candidate has used something the CV lacks.
 
@@ -134,6 +138,26 @@ def _unbacked(answer: str, unverified: list[str]) -> str:
     return ""
 
 
+_ASK_VISA = re.compile(r"\b(visa|sponsor\w*|work permit|right to work|relocat\w+)\b", re.IGNORECASE)
+_ASK_WEAK = re.compile(
+    r"\b(given|despite|although|even though|considering|since|as someone)\b[^?]*\b(\d+\s*\+?\s*years?|requirement|junior|"
+    r"limited experience|lack\w*|gap|not having|don't have|do not have|haven't|no (?:professional|prior|production) experience)\b"
+    r"|\b\d+\s*\+\s*years?\b[^?]*\b(requirement|required)\b|\bmy (?:lack|limited|missing)\b", re.IGNORECASE)
+
+
+def fit_questions(questions: list[str], facts: dict[str, str]) -> list[str]:
+    """The questions to ask, without the ones this candidate should not ask: what their own facts
+    already answer, and anything that puts their own weak spot on the table."""
+    kept = []
+    for q in questions:
+        if _ASK_WEAK.search(q):
+            continue
+        if _ASK_VISA.search(q) and (facts.get("right_to_work") or facts.get("location")):
+            continue
+        kept.append(q)
+    return kept
+
+
 def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | None = None, notes: str = "") -> dict[str, Any]:
     """Questions and answers for this job. `notes` is what the person wrote about their work
     beyond the CV: true, so it counts like the CV. Raises ValueError if the reply is unusable."""
@@ -172,6 +196,9 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
     # Whatever still claims unbacked experience after the retry is marked, not hidden: the user must see it.
     for q in prep["questions"]:
         q["check"] = _unbacked(q["answer"], unverified)
+    facts = config.candidate_facts(cv_text)
+    for key in ("ask_hr", "ask_technical", "ask_them"):       # the app's own check, whatever the model wrote
+        prep[key] = fit_questions(prep[key], facts)
     checks = []
     for label, said in [("The opening pitch", prep["pitch"]), ("The answer to the key question", prep["key_question"]["answer"])] \
             + [("A point under your fit", point) for point in prep["fit"]] \

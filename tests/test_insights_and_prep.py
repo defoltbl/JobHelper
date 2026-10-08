@@ -488,3 +488,37 @@ def test_the_sheet_puts_your_questions_under_each_set(tmp_path):
     old = dict(interview_prep._clean(dict(TWO, ask_them=["An older mixed question?"])), made="x", checks=[])
     old_lines = [p.text for p in docx.Document(str(prep_doc.build({"title": "T", "company": "C"}, old, tmp_path / "old.docx"))).paragraphs if p.text.strip()]
     assert "Questions to ask them" in old_lines and "An older mixed question?" in old_lines      # an older saved preparation still shows its list
+
+
+# ── questions to ask must fit the person asking ─────────────────────────────
+@pytest.mark.parametrize("question, kept", [
+    ("Who would this role report to, and how large is the team in Prague?", True),
+    ("What does the first project usually look like for a new engineer?", True),
+    ("How many years has the team been working on this product?", True),                       # years, but not about the candidate
+    ("What does the relocation and visa sponsorship process look like in practice?", False),   # the right to work is already stated
+    ("Do you help with the work permit?", False),
+    ("Given the 3+ years requirement, what level of autonomy would you expect?", False),       # points at the candidate's weak spot
+    ("Considering my limited experience with robots, how would you onboard me?", False),
+    ("Since I haven't used Isaac Sim, is training provided?", False),
+    ("How flexible is the 3+ years requirement?", False),
+])
+def test_questions_the_candidate_should_not_ask_are_removed(question, kept):
+    facts = {"right_to_work": "full right to work in the Czech Republic", "location": "Prague"}
+    assert (interview_prep.fit_questions([question], facts) == [question]) is kept
+
+
+def test_a_visa_question_stays_when_nothing_is_known_about_the_right_to_work():
+    q = "Do you sponsor a work permit for this role?"
+    assert interview_prep.fit_questions([q], {"right_to_work": "", "location": ""}) == [q]
+
+
+def test_generate_applies_the_check_to_both_lists(isolate_data, monkeypatch):
+    config.ensure_dirs()
+    ui_api.Api().save_options({"where": "Prague", "about_right_to_work": "full right to work in the Czech Republic"})
+    reply = dict(ASK, ask_hr=["What are the next steps?", "What does visa sponsorship look like?"],
+                 ask_technical=["Given the 3+ years requirement, how much autonomy would I have?", "What would I own first?"])
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(reply))
+    prep = interview_prep.generate({"title": "ML Engineer", "company": "BRIGHTLINE"}, CV)
+    assert prep["ask_hr"] == ["What are the next steps?"] and prep["ask_technical"] == ["What would I own first?"]
+    assert "never one that points at the candidate's own weak spot" in prompts[0]
