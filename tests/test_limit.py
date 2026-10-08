@@ -141,7 +141,7 @@ def test_with_a_pause_handler_the_same_job_is_retried(isolate_data, monkeypatch)
 
 def test_a_job_scored_before_the_limit_gets_its_documents_on_the_next_run(isolate_data, monkeypatch):
     jobs = [store.new_job(id="pwc", title="Data Analyst Intern", company="PwC", location="Prague", match_score=70,
-                          match_reason="Good fit")]
+                          match_reason="Good fit", description="We analyse data with SQL and Python.")]
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: pytest.fail("already scored: must not be scored again"))
     monkeypatch.setattr(llm, "ask", lambda *a, **k: "Dear team,\n\nI would like to apply.\n\nRegards")
     stats = agent3_letters.process(jobs, {"summary": "x"}, threshold=30)
@@ -150,7 +150,7 @@ def test_a_job_scored_before_the_limit_gets_its_documents_on_the_next_run(isolat
 
 
 def test_documents_are_not_retried_forever(isolate_data, monkeypatch):
-    jobs = [store.new_job(id="x", title="Dev", company="A", location="Prague", match_score=70)]
+    jobs = [store.new_job(id="x", title="Dev", company="A", location="Prague", match_score=70, description="We build tools in Python.")]
     monkeypatch.setattr(agent3_letters, "_make_letter", lambda *a, **k: (_ for _ in ()).throw(ValueError("checks failed")))
     for _ in range(4):
         agent3_letters.process(jobs, {"summary": "x"}, threshold=30)
@@ -158,7 +158,7 @@ def test_documents_are_not_retried_forever(isolate_data, monkeypatch):
 
 
 def test_a_limit_while_writing_does_not_use_up_an_attempt(isolate_data, monkeypatch):
-    jobs = [store.new_job(id="x", title="Dev", company="A", location="Prague", match_score=70)]
+    jobs = [store.new_job(id="x", title="Dev", company="A", location="Prague", match_score=70, description="We build tools in Python.")]
     monkeypatch.setattr(agent3_letters, "_make_letter", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("limit")))
     with pytest.raises(llm.LimitReached):
         agent3_letters.process(jobs, {"summary": "x"}, threshold=30)

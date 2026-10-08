@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from jobhelper import config, store, ui_api
+from jobhelper import config, store, ui_api, vault
 
 
 @pytest.fixture
@@ -381,3 +381,59 @@ def test_score_again_for_one_job(api, monkeypatch):
     assert got["ok"] is False and "limit is used up" in got["msg"] and api.job_detail("e")["score"] == 30      # nothing lost
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": None})
     assert "no usable score" in api.rescore_one("e")["msg"]
+
+
+# ── what a score rests on, pasted posting text, documents left from a higher score ──
+LONG_AD = "We are hiring a junior Python developer to build internal tools. " * 8
+
+
+def _with_docs(job_id, score, **kw):
+    (config.LETTERS_DIR / f"L_{job_id}.docx").write_bytes(b"letter")
+    (config.TAILORED_CV_DIR / f"CV_{job_id}.docx").write_bytes(b"cv")
+    return store.new_job(id=job_id, title="Dev", company=f"Co {job_id}", match_score=score, status="letter_ready",
+                         cover_letter_file=f"L_{job_id}.docx", tailored_cv_file=f"CV_{job_id}.docx", description=LONG_AD, **kw)
+
+
+def test_list_and_window_say_what_a_score_rests_on(api):
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="t", title="A", company="C", match_score=40), store.new_job(id="s", title="B", company="C", match_score=60, description="Short."),
+                     store.new_job(id="f", title="C", company="C", match_score=60, description=LONG_AD), store.new_job(id="u", title="D", company="C")])
+    assert {r["id"]: r["basis"] for r in api.leads()} == {"t": "title", "s": "summary", "f": "", "u": ""}       # unscored: nothing to qualify
+    assert api.job_detail("t")["basis"] == "title" and api.job_detail("t")["can_paste_text"] is True
+    assert api.job_detail("f")["can_paste_text"] is False
+
+
+def test_pasted_posting_text_is_checked_and_kept(api):
+    from jobhelper import agent3_letters
+    config.ensure_dirs()
+    job = store.new_job(id="t", title="A", company="C", match_score=40)
+    job["hold"], job["doc_attempts"] = agent3_letters.NO_TEXT, 2
+    store.save_jobs([job, store.new_job(id="app", title="B", company="C", status="waiting")])
+    assert "only 5 characters. Paste the whole posting (at least 200)" in api.set_description("t", "short")["msg"]
+    assert "20001 characters; the most is 20000" in api.set_description("t", "x" * 20001)["msg"]
+    assert "only be added to a new job" in api.set_description("app", LONG_AD)["msg"]
+    assert api.set_description("zzz", LONG_AD)["ok"] is False
+    assert api.set_description("t", "  " + LONG_AD + "\r\n\r\n\r\n\r\nSecond part.  ")["ok"] is True
+    saved = store.find(store.load_jobs(), "t")
+    assert saved["description"].startswith("We are hiring") and saved["description"].endswith("\n\nSecond part.") and saved["description_by_hand"] is True
+    assert "hold" not in saved and saved["doc_attempts"] == 0 and api.job_detail("t")["basis"] == ""
+
+
+def test_documents_left_from_a_higher_score_are_marked_and_can_be_put_away(api):
+    config.ensure_dirs()
+    api.save_options({"threshold": 50})
+    (config.LETTERS_DIR / "Mine.docx").write_bytes(b"my own letter")
+    store.save_jobs([_with_docs("low", 30), _with_docs("ok", 70), _with_docs("app", 20, ),
+                     store.new_job(id="own", title="Dev", company="Z", match_score=10, source="manual", status="letter_ready", cover_letter_file="Mine.docx"),
+                     store.new_job(id="bare", title="Dev", company="Y", match_score=10)])
+    jobs = store.load_jobs(); store.find(jobs, "app")["status"] = "waiting"; store.save_jobs(jobs)
+    assert {r["id"]: r["stale_docs"] for r in api.leads()} == {"ok": False, "low": True, "own": False, "bare": False}
+    assert api.job_detail("low")["docs_stale"] is True and api.job_detail("low")["threshold"] == 50 and api.job_detail("app")["docs_stale"] is False
+    assert api.shelve_docs("low") == {"ok": True, "moved": 2}
+    low = store.find(store.load_jobs(), "low")
+    assert (low["cover_letter_file"], low["tailored_cv_file"], low["status"], low["match_score"]) == ("", "", "found", 30)
+    assert not (config.LETTERS_DIR / "L_low.docx").exists() and len(list((vault.backups_dir() / "below_your_limit").iterdir())) == 2
+    assert api.job_detail("low")["docs_stale"] is False
+    assert "not for an application you sent" in api.shelve_docs("app")["msg"] and (config.LETTERS_DIR / "L_app.docx").exists()
+    assert "no documents written by the app" in api.shelve_docs("own")["msg"] and (config.LETTERS_DIR / "Mine.docx").read_bytes() == b"my own letter"
+    assert api.shelve_docs("bare")["ok"] is False and api.shelve_docs("zzz")["ok"] is False

@@ -38,6 +38,15 @@ def _stem(name: str) -> str:
     return os.path.splitext(os.path.basename(name))[0]
 
 
+def textfmt_clean(text) -> str:
+    """Pasted text with its line ends tidied (the words are left as they are)."""
+    lines = [ln.rstrip() for ln in str(text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    out = "\n".join(lines).strip()
+    while "\n\n\n" in out:
+        out = out.replace("\n\n\n", "\n\n")
+    return out
+
+
 def _claude_auth_status():
     """Ask the Claude CLI who is signed in (tests replace this, so they never run the real CLI)."""
     return subprocess.run(["claude", "auth", "status"], capture_output=True, text=True, timeout=8)
@@ -147,12 +156,15 @@ class Api:
                 and (j.get("match_score") is None or j["match_score"] >= config.MIN_LEAD_SCORE)]
         rows.sort(key=lambda j: (-(j.get("match_score") or 0), j.get("date_posted", "")))
         rows.sort(key=lambda j: bool(j.get("prefilter")) and j.get("match_score") is None)     # skipped ones last
+        threshold = self._threshold()
         return [{"id": j["id"], "score": j.get("match_score"),
                  "tier": j.get("match_tier", "") or ("skipped" if j.get("prefilter") and j.get("match_score") is None else ""),
                  "title": j["title"], "company": j["company"], "posted": j.get("date_posted", ""),
                  "location": j.get("location", ""), "source": (j.get("source") or "").split("/")[0],
                  "desired": j.get("desired_monthly_czk", ""), "status": j["status"],
                  "url": j.get("url", ""),
+                 "basis": agent3_letters.text_basis(j) if j.get("match_score") is not None else "",
+                 "stale_docs": self._stale_docs(j, threshold),
                  "letter": j.get("cover_letter_file", ""), "cv": j.get("tailored_cv_file", "")}
                 for j in rows]
 
@@ -223,6 +235,9 @@ class Api:
             "score": j.get("match_score"), "tier": j.get("match_tier", ""),
             "score_before": j.get("score_before") if isinstance(j.get("score_before"), int) and j.get("score_before") != j.get("match_score") else None,
             "can_rescore": j["status"] in store.LEAD_STATUSES and j.get("match_score") is not None,
+            "basis": agent3_letters.text_basis(j),
+            "can_paste_text": j["status"] in store.LEAD_STATUSES and agent3_letters.text_basis(j) != "",
+            "docs_stale": self._stale_docs(j), "threshold": self._threshold(),
             "reason": j.get("match_reason", ""), "description": description[:8000],
             "description_text": textfmt.readable(description[:8000]),
             "prefilter": j.get("prefilter", "") if j.get("match_score") is None else "",
@@ -319,6 +334,62 @@ class Api:
                 j["date_found"] = ""               # so it is not mistaken for an import day
             j["last_update"] = date.today().isoformat()
         return self._change(job_id, go)
+
+    # ── what a score rests on, and documents left over from a higher score ──
+    MIN_PASTED, MAX_PASTED = 200, 20000
+
+    def _threshold(self) -> int:
+        try:
+            return int(self.options().get("threshold") or config.DEFAULT_THRESHOLD)
+        except (TypeError, ValueError):
+            return config.DEFAULT_THRESHOLD
+
+    def _stale_docs(self, j, threshold=None) -> bool:
+        """A new job whose letter or CV was written by the app when the score was higher than your limit is now."""
+        if j.get("status") not in store.LEAD_STATUSES or not isinstance(j.get("match_score"), int):
+            return False
+        threshold = self._threshold() if threshold is None else threshold
+        return j["match_score"] < threshold and (agent3_letters._generated_letter(j) or bool(j.get("tailored_cv_file")))
+
+    def set_description(self, job_id, text):
+        """Keep the posting's text you pasted for a job the app could not read. Score it again afterwards."""
+        text = textfmt_clean(text)
+        if len(text) < self.MIN_PASTED:
+            return {"ok": False, "msg": f"That is only {len(text)} characters. Paste the whole posting (at least {self.MIN_PASTED})."}
+        if len(text) > self.MAX_PASTED:
+            return {"ok": False, "msg": f"That is {len(text)} characters; the most is {self.MAX_PASTED}. Paste only the posting itself."}
+
+        def go(jobs, j):
+            if j["status"] not in store.LEAD_STATUSES:
+                return {"ok": False, "msg": "The text can only be added to a new job."}
+            j["description"], j["description_by_hand"] = text, True
+            if j.get("hold") == agent3_letters.NO_TEXT:
+                j.pop("hold", None)
+            j["doc_attempts"] = 0
+        return self._change(job_id, go, render=False)
+
+    def shelve_docs(self, job_id):
+        """Move the letter and CV the app wrote for a new job into an encrypted backup (never a letter of your own).
+        The job stays in the list; documents are written again only if its score reaches your limit."""
+        moved = {}
+
+        def go(jobs, j):
+            if j["status"] not in store.LEAD_STATUSES:
+                return {"ok": False, "msg": "Documents are only put away for a new job, not for an application you sent."}
+            files = self._generated_docs(j)
+            if not files:
+                return {"ok": False, "msg": "This job has no documents written by the app."}
+            app_wrote_it = agent3_letters._generated_letter(j)
+            moved["n"] = vault.stash(files, "below_your_limit")
+            if app_wrote_it:
+                j["cover_letter_file"] = ""
+            j["tailored_cv_file"], j["match_tier"] = "", ""
+            if not j.get("cover_letter_file"):
+                j["status"] = "found"
+            j["apply_steps"] = []
+            j["last_update"] = date.today().isoformat()
+        result = self._change(job_id, go)
+        return {"ok": True, "moved": moved.get("n", 0)} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "Couldn't move the documents."}
 
     def rescore_ids(self, job_id=""):
         """Which jobs "Score again" covers: the one given, or every new job that has a score."""

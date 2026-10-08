@@ -291,6 +291,14 @@ class Bridge(QObject):
         threading.Thread(target=self._scan, daemon=True).start()
         return {"ok": True}
 
+    @Slot(str, str, result="QVariantMap")
+    def setDescription(self, job_id, text):
+        return self._api.set_description(job_id, text)
+
+    @Slot(str, result="QVariantMap")
+    def shelveDocs(self, job_id):
+        return self._api.shelve_docs(job_id)
+
     @Slot(result="QVariantMap")
     def rescorePlan(self):
         return self._api.rescore_plan()
@@ -349,6 +357,9 @@ class Bridge(QObject):
             text = "Scored %d jobs again: %d changed (%d lower, %d higher)." % (stats["scored"], len(changed), lower, len(changed) - lower)
             if stats["failed"]:
                 text += " %d could not be scored and keep their old score." % stats["failed"]
+            stale = sum(1 for j in jobs if self._api._stale_docs(j))
+            if stale:
+                text += " %d now below your limit still %s documents (marked in New Jobs)." % (stale, "has" if stale == 1 else "have")
             self.runFinished.emit("rescore", text)
             self._notify(text, "Scoring finished")
         except RunCancelled:

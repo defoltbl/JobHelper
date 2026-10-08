@@ -283,6 +283,18 @@ def direction_rules(wanted, unwanted) -> str:
     return ("\n" + "\n".join(lines) + "\n") if lines else ""
 
 
+SHORT_TEXT = 400          # a description shorter than this is a summary, not the posting
+NO_TEXT_CAP = 40          # the most a posting can score when only its title is known
+NO_TEXT = ("The posting's text could not be read, so no letter or CV was written. Open the posting; "
+           "you can paste its text in this window and score it again.")
+
+
+def text_basis(job: dict[str, Any]) -> str:
+    """What a score rests on: 'title' (no posting text at all), 'summary' (only a short one) or '' (the posting)."""
+    length = len((job.get("description") or "").strip())
+    return "title" if length == 0 else "summary" if length < SHORT_TEXT else ""
+
+
 def apply_score(job: dict[str, Any], result: Any, cv_text: str = "") -> bool:
     """Put one answer from the scorer on a job, then run the app's own check on it.
     False if the answer has no usable number."""
@@ -299,6 +311,12 @@ def apply_score(job: dict[str, Any], result: Any, cv_text: str = "") -> bool:
         job["match_reason"] = (f"{job['score_capped']} The app lowered the score from {job['match_score']} to {LANGUAGE_CAP}. "
                                + job["match_reason"]).strip()
         job["match_score"] = LANGUAGE_CAP
+    # a title alone says too little for a high score: such a job is listed, not recommended
+    if text_basis(job) == "title" and job["match_score"] > NO_TEXT_CAP:
+        job["score_capped"] = "Scored from the title alone: the posting's text could not be read."
+        job["match_reason"] = (f"{job['score_capped']} The app lowered the score from {job['match_score']} to {NO_TEXT_CAP}. "
+                               + job["match_reason"]).strip()
+        job["match_score"] = NO_TEXT_CAP
     job["last_update"] = date.today().isoformat()
     return True
 
@@ -616,6 +634,11 @@ def process(
             # a letter is written to a company; with no name it would be addressed to nobody
             job["hold"] = NO_COMPANY
             print(f"  ?  {job['match_score']:>3}  {job['title']}  (no company name in the posting: no letter written)")
+            continue
+        if text_basis(job) == "title":
+            # without the posting's text a letter can only be generic, and a CV cannot be adapted to anything
+            job["hold"] = NO_TEXT
+            print(f"  ?  {job['match_score']:>3}  {job['title']} @ {job['company']}  (no posting text: no letter written)")
             continue
         job.pop("hold", None)
         _say(f"Writing CV and letter {writing.index(job) + 1} of {len(writing)}: {job['company'] or job['title']}…")

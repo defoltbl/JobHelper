@@ -173,6 +173,13 @@ Inside the window:
   One Claude call per job, or one per five when all are done; "all" runs like a search (progress,
   Stop, pause on the limit). Only the score and its reason change; the job window keeps showing
   what the score was before.
+- **What a score rests on** — a job the app could only read the title of is marked "scored from the
+  title only", scores 40 at most and gets no letter or CV; one with only a short summary is marked
+  "scored from a short summary". **Paste the posting's text** in the job window (200 to 20,000
+  characters), then **Score again**.
+- **Documents from a higher score** — a new job that now scores below "Write letters above" but still
+  has a letter and CV is marked in the list. **Move documents to backup** (job window) puts the files
+  the app wrote into `data/backups/below_your_limit/`; a letter of your own is never moved.
 - **Required-language check** — after scoring, the app itself looks for a required language your CV
   does not show at a working level (basic, A1 and A2 do not count) and lowers the score to 25,
   with the reason in the job window. A language named as a plus is ignored.

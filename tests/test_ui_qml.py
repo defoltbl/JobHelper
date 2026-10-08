@@ -1850,3 +1850,54 @@ def test_options_ask_once_before_discarding_changes(ui):
     ui.bridge.saveOptions(start)
     ui.js("optsData = bridge.options()")
     assert ui.warnings == []
+
+
+# ── what a score rests on, pasted text, documents left from a higher score ──
+def test_a_title_only_score_is_marked_and_the_posting_can_be_pasted(ui):
+    start = store.find(store.load_jobs(), "lead")
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(description="", match_score=40), render=False)
+    ui.js('openView("new")')
+    ui.wait(450)
+    assert "scored from the title only" in ui.js("listView.model[0].secondary")
+    ui.js("tableDialog.close()")
+    ui.wait(350)
+    _open_job(ui, "lead")
+    assert ui.find("basisRow").property("visible") is True and ui.js("detailDialog.job.basis") == "title"
+    ui.js('detailDialog.pasteOpen = true; pastedText.text = "too short"; detailDialog.savePasted()')
+    assert ui.find("pasteHint").property("text") == "That is only 9 characters. Paste the whole posting (at least 200)."
+    ui.js('pastedText.text = "' + "x" * 20010 + '"; detailDialog.pasteErr = ""')
+    assert ui.find("pasteHint").property("text") == "10 characters too long (the limit is 20000)"
+    ui.js("detailDialog.savePasted()")
+    assert "the most is 20000" in ui.find("pasteHint").property("text") and ui.js("detailDialog.pasteOpen") is True      # refused, stays open
+    ui.js('pastedText.text = "' + "We build internal tools in Python and test them well. " * 10 + '"; detailDialog.savePasted()')
+    assert ui.js("detailDialog.pasteOpen") is False and ui.js("detailDialog.job.basis") == ""
+    assert ui.find("basisRow").property("visible") is False
+    assert ui.find("scoreNote").property("text") == "The posting's text is saved. Press Score again to score it on the full text."
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(description=start.get("description", ""), match_score=80, description_by_hand=False), render=False)
+    assert ui.warnings == []
+
+
+def test_documents_from_a_higher_score_are_marked_and_moved_only_after_asking(ui, monkeypatch):
+    for folder, name in ((config.TAILORED_CV_DIR, "cv_lead.docx"), (config.LETTERS_DIR, "L_lead.docx")):
+        (folder / name).write_bytes(b"x")
+    monkeypatch.setattr(ui_api.Api, "_threshold", lambda self: 50)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
+                                                             status="letter_ready", match_score=30), render=False)
+    ui.js('openView("new")')
+    ui.wait(450)
+    assert "documents from a higher score" in ui.js("listView.model[0].secondary")
+    ui.js("tableDialog.close()")
+    ui.wait(350)
+    _open_job(ui, "lead")
+    assert ui.find("staleRow").property("visible") is True and "below your limit of 50" in ui.find("staleText").property("text")
+    ui.js("detailDialog.shelve()")
+    assert ui.find("shelveDocs").property("text") == "Yes, move them" and (config.LETTERS_DIR / "L_lead.docx").exists()      # asked first
+    ui.js("detailDialog.shelve()")
+    assert ui.find("staleText").property("text").endswith("files moved to the backup.") and not (config.LETTERS_DIR / "L_lead.docx").exists()
+    assert ui.js("detailDialog.job.docs_stale") is False and ui.find("shelveDocs").property("visible") is False
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(match_score=80, status="letter_ready"), render=False)
+    assert ui.warnings == []

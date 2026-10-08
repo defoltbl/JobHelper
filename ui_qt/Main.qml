@@ -873,7 +873,10 @@ ApplicationWindow {
                 if (j.cv) acts.push({ label: "CV", kind: "cv", arg: j.cv });
                 acts.push({ label: "mark applied", kind: "apply", arg: j.id });
                 return { primary: j.title + "  ·  " + j.company,
-                         secondary: (j.posted || "") + (j.desired ? "   " + Number(j.desired).toLocaleString() + " CZK/mo" : ""),
+                         secondary: (j.posted || "") + (j.desired ? "   " + Number(j.desired).toLocaleString() + " CZK/mo" : "")
+                                    // what the score rests on, and documents left from a higher score: said in the row itself
+                                    + (j.basis === "title" ? "   ·   scored from the title only" : j.basis === "summary" ? "   ·   scored from a short summary" : "")
+                                    + (j.stale_docs === true ? "   ·   documents from a higher score" : ""),
                          badge: j.tier || "", value: win.noScore(j.score) ? "–" : "" + j.score, actions: acts,
                          id: j.id, flag: "",
                          group: j.tier || (win.noScore(j.score) ? "not scored" : "no documents"),

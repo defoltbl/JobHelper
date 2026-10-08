@@ -164,7 +164,8 @@ def test_tiers():
 
 # ── no company name: no letter addressed to nobody ──────────────────────────
 def test_no_documents_are_written_for_a_posting_without_a_company(isolate_data, monkeypatch, capsys):
-    jobs = [store.new_job(id="p1", title="Junior AI Engineer", company="", location="Praha", description=""),
+    jobs = [store.new_job(id="p1", title="Junior AI Engineer", company="", location="Praha",
+                          description="We are looking for a junior engineer who builds AI features in Python."),
             store.new_job(id="p2", title="UX Designer", company=" ", location="Praha",
                           description="Detail nabídky UX Designer Firma: Thales DIS s.r.o. ( zaměstnavatel ) Místo pracoviště: Praha")]
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"scores": [{"id": "J1", "match_score": 75, "match_reason": "from the title"},
@@ -181,7 +182,7 @@ def test_no_documents_are_written_for_a_posting_without_a_company(isolate_data, 
 
 
 def test_the_hold_is_lifted_once_the_company_is_known(isolate_data, monkeypatch):
-    job = store.new_job(id="p1", title="Junior AI Engineer", company="", match_score=75)
+    job = store.new_job(id="p1", title="Junior AI Engineer", company="", match_score=75, description="We build AI features in Python.")
     monkeypatch.setattr(llm, "ask", lambda *a, **k: "Dear team,\n\nI am excited to apply.\n\nRegards, Alex")
     agent3_letters.process([job], {}, threshold=60)
     assert job["hold"] and job["cover_letter_file"] == ""
@@ -282,3 +283,33 @@ def test_rescore_counts_what_could_not_be_scored_and_stops_on_the_limit(isolate_
         monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": 44, "match_reason": "after the pause"})
     agent3_letters.rescore(jobs, ["a"], {}, "", on_limit=on_limit)
     assert len(waited) == 1 and jobs[0]["match_score"] == 44                    # paused, then the same job was asked again
+
+
+# ── what a score rests on ───────────────────────────────────────────────────
+def test_text_basis():
+    assert agent3_letters.text_basis({"description": ""}) == "title" and agent3_letters.text_basis({}) == "title"
+    assert agent3_letters.text_basis({"description": "   \n "}) == "title"
+    assert agent3_letters.text_basis({"description": "A short summary of the ad."}) == "summary"
+    assert agent3_letters.text_basis({"description": "x" * agent3_letters.SHORT_TEXT}) == ""
+
+
+def test_a_title_alone_cannot_score_high_and_gets_no_documents(isolate_data, monkeypatch, capsys):
+    jobs = [store.new_job(id="t", title="Junior AI Engineer", company="Acme", description=""),
+            store.new_job(id="s", title="Python Developer", company="Beta", description="A short summary: Python, tests.")]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"scores": [{"id": "J1", "match_score": 75, "match_reason": "The title fits."},
+                                                                   {"id": "J2", "match_score": 70, "match_reason": "Fits."}]})
+    wrote = []
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: wrote.append(1) or "Dear team,\n\nI am excited to apply.\n\nRegards, Alex")
+    stats = agent3_letters.process(jobs, {}, threshold=30)
+    blind, short = jobs
+    assert blind["match_score"] == agent3_letters.NO_TEXT_CAP and blind["score_capped"].startswith("Scored from the title alone")
+    assert "lowered the score from 75 to 40" in blind["match_reason"]
+    assert blind["hold"] == agent3_letters.NO_TEXT and blind["cover_letter_file"] == "" and blind["status"] == "found"
+    assert short["match_score"] == 70 and short["status"] == "letter_ready"            # a short summary is marked, not capped
+    assert stats["letters"] == 1 and len(wrote) == 1 and "no posting text" in capsys.readouterr().out
+
+
+def test_a_low_title_only_score_is_left_as_it_is():
+    job = store.new_job(id="t", title="Economist", company="Acme")
+    assert agent3_letters.apply_score(job, {"match_score": 20, "match_reason": "Another field."}) is True
+    assert job["match_score"] == 20 and "score_capped" not in job and job["match_reason"] == "Another field."

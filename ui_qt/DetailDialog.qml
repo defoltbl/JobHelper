@@ -68,6 +68,37 @@ Dialog {
         if (ok) { bridge.applyStep(job.id, key); refresh(); }
     }
     property bool confirmRemake: false
+    // the posting's text, pasted by hand when the app could not read it
+    property bool pasteOpen: false
+    property string pasteErr: ""
+    readonly property int pasteMin: 200
+    readonly property int pasteMax: 20000
+    function savePasted() {
+        pasteErr = "";
+        var n = pastedText.text.trim().length;
+        if (n < pasteMin) { pasteErr = "That is only " + n + " characters. Paste the whole posting (at least " + pasteMin + ")."; return; }
+        if (n > pasteMax) { pasteErr = "That is " + n + " characters; the most is " + pasteMax + ". Paste only the posting itself."; return; }
+        var r = bridge.setDescription(job.id, pastedText.text);
+        if (!(r && r.ok)) { pasteErr = (r && r.msg) || "The text could not be saved."; return; }
+        pastedText.text = ""; pasteOpen = false; refresh(); win.refreshOpenView();
+        scoreBad = false; scoreNote = "The posting's text is saved. Press Score again to score it on the full text.";
+    }
+    // documents written when the score was higher than your limit is now
+    property bool confirmShelve: false
+    property string shelveNote: ""
+    property bool shelveBad: false
+    function shelve() {
+        if (!confirmShelve) {
+            confirmShelve = true; shelveBad = false;
+            shelveNote = "The letter and CV the app wrote go to an encrypted backup; the job stays in the list. Press once more to move them.";
+            return;
+        }
+        confirmShelve = false;
+        var r = bridge.shelveDocs(job.id);
+        shelveBad = !(r && r.ok);
+        shelveNote = (r && r.ok) ? r.moved + (r.moved === 1 ? " file" : " files") + " moved to the backup." : ((r && r.msg) || "Couldn't move the documents.");
+        if (r && r.ok) { refresh(); win.countsData = bridge.counts(); win.refreshOpenView(); }
+    }
     property bool scoreBusy: false
     property string scoreJob: ""
     property string scoreNote: ""
@@ -169,6 +200,7 @@ Dialog {
         var d = bridge.jobDetail(jobId);
         if (!d || !d.id) { ticker.text = "That job could not be opened."; return; }
         confirmRemake = false; if (!scoreBusy) { scoreNote = ""; scoreBad = false; }
+        pasteOpen = false; pasteErr = ""; pastedText.text = ""; confirmShelve = false; shelveNote = ""; shelveBad = false;
         job = d; draft = ({}); note = ""; dateErr = ""; if (!prepBusy) prepErr = "";
         eventErr = ""; notesInfo = ""; notesBad = false; replyErr = ""; replyInfo = ""; replyOpen = false; thanks = ({}); thanksNote = "";
         detailFlick.contentY = 0;
@@ -220,7 +252,10 @@ Dialog {
                                 ? ("posting says " + (detailDialog.job.pay.low === detailDialog.job.pay.high
                                       ? Math.round(detailDialog.job.pay.low / 1000) + "k"
                                       : Math.round(detailDialog.job.pay.low / 1000) + "–" + Math.round(detailDialog.job.pay.high / 1000) + "k") + " CZK/mo") : "",
-                             detailDialog.job.letter_old_format === true ? "letter: older format, open in Word" : ""
+                             detailDialog.job.letter_old_format === true ? "letter: older format, open in Word" : "",
+                             (detailDialog.job.score !== null && detailDialog.job.score !== undefined)
+                                ? (detailDialog.job.basis === "title" ? "scored from the title only"
+                                   : detailDialog.job.basis === "summary" ? "scored from a short summary" : "") : ""
                            ].filter(function (t) { return t !== ""; })
                 }
 
@@ -264,6 +299,49 @@ Dialog {
                                     : "Scored with the rules of that day. Score again to apply your current Options (one Claude call)." }
                         SmallButton { objectName: "scoreAgain"; enabled: !detailDialog.scoreBusy && !win.appRunning
                             text: detailDialog.scoreBusy ? "Scoring…" : "Score again"; onClicked: detailDialog.scoreAgain() }
+                    }
+                    // documents left over from a higher score
+                    RowLayout { objectName: "staleRow"; visible: detailDialog.job.docs_stale === true || detailDialog.shelveNote !== ""
+                        Layout.fillWidth: true; spacing: 10
+                        Text { objectName: "staleText"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 12
+                            font.bold: detailDialog.shelveBad
+                            color: detailDialog.shelveBad ? theme.crit : (detailDialog.shelveNote !== "" && !detailDialog.confirmShelve ? theme.good : theme.warn)
+                            text: detailDialog.shelveNote !== "" ? detailDialog.shelveNote
+                                : "The letter and CV were written when this job scored higher. It is now below your limit of "
+                                  + (detailDialog.job.threshold || 0) + ", so check before you use them." }
+                        SmallButton { objectName: "shelveDocs"; visible: detailDialog.job.docs_stale === true
+                            primaryStyle: detailDialog.confirmShelve
+                            text: detailDialog.confirmShelve ? "Yes, move them" : "Move documents to backup"; onClicked: detailDialog.shelve() }
+                    }
+                    // a score that rests on little text: say so, and let the posting's text be pasted in
+                    RowLayout { objectName: "basisRow"; visible: detailDialog.job.can_paste_text === true; Layout.fillWidth: true; spacing: 10
+                        Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.warn; font.pixelSize: 12
+                            text: detailDialog.job.basis === "title"
+                                  ? "The app could not read this posting, so the score rests on the title alone and is kept at 40 or below."
+                                  : "The app got only a short summary of this posting, so the score rests on little text." }
+                        SmallButton { objectName: "pasteToggle"; text: detailDialog.pasteOpen ? "Cancel" : "Paste the posting's text"
+                            onClicked: { detailDialog.pasteOpen = !detailDialog.pasteOpen; detailDialog.pasteErr = ""; } }
+                    }
+                    ColumnLayout { visible: detailDialog.pasteOpen && detailDialog.job.can_paste_text === true; Layout.fillWidth: true; spacing: 6
+                        Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1; implicitHeight: 130; clip: true
+                            border.color: detailDialog.pasteErr !== "" || pastedText.text.length > detailDialog.pasteMax ? theme.crit
+                                          : (pastedText.activeFocus ? theme.accent : theme.line)
+                            Flickable { anchors.fill: parent; anchors.margins: 8; contentHeight: pastedText.implicitHeight; clip: true
+                                TextEdit { id: pastedText; objectName: "pastedText"; width: parent.width; wrapMode: TextEdit.Wrap; selectByMouse: true
+                                    color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
+                                    onTextChanged: if (activeFocus) detailDialog.pasteErr = ""
+                                    Text { visible: pastedText.text === ""; width: parent.width; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 12
+                                        text: "Open the posting, copy its whole text and paste it here" } } } }
+                        RowLayout { Layout.fillWidth: true; spacing: 8
+                            Text { objectName: "pasteHint"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
+                                readonly property bool bad: detailDialog.pasteErr !== "" || pastedText.text.length > detailDialog.pasteMax
+                                color: bad ? theme.crit : theme.faint; font.bold: bad
+                                text: detailDialog.pasteErr !== "" ? detailDialog.pasteErr
+                                    : pastedText.text.length > detailDialog.pasteMax
+                                        ? (pastedText.text.length - detailDialog.pasteMax) + " characters too long (the limit is " + detailDialog.pasteMax + ")"
+                                    : pastedText.text.trim().length + " characters · at least " + detailDialog.pasteMin + " · then press Score again" }
+                            SmallButton { objectName: "pasteSave"; primaryStyle: true; text: "Save text"; onClicked: detailDialog.savePasted() }
+                        }
                     }
                     Text { objectName: "holdNote"; visible: !!detailDialog.job.hold; Layout.fillWidth: true; wrapMode: Text.WordWrap
                         color: theme.warn; font.pixelSize: 13; font.bold: true; lineHeight: 1.25; text: detailDialog.job.hold || "" }
