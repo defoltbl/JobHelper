@@ -130,7 +130,7 @@ def weworkremotely(keyword: str, where: str, limit: int, with_description: bool 
             if not _matches(keyword, role):  # match on role title only to reduce noise
                 continue
             m = re.search(r"/remote-jobs/([\w-]+)", it["link"])
-            jid = m.group(1) if m else str(abs(hash(it["link"])))
+            jid = m.group(1) if m else store.url_id(it["link"])
             out.append(store.new_job(
                 id=f"wwr-{jid}",
                 title=role,

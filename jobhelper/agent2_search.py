@@ -209,6 +209,23 @@ def prune_duplicate_leads(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     removed += [j for j in jobs if j.get("status", "found") in store.LEAD_STATUSES
                 and not _lead_key(j)[0] and len(_lead_key(j)[1]) >= 12 and _lead_key(j)[1] in titled]
     gone = {id(j) for j in removed}
+    # The same link twice is the same posting, whatever its id says (ids made from an
+    # address used to change on every run, so such a posting was listed again each time).
+    by_url: dict[str, dict[str, Any]] = {}
+    for j in jobs:
+        url = (j.get("url") or "").strip().rstrip("/")
+        if not url or id(j) in gone:
+            continue
+        if j.get("status", "found") not in store.LEAD_STATUSES:
+            by_url[url] = j                             # an application always stays
+            continue
+        other = by_url.get(url)
+        if other is None:
+            by_url[url] = j
+        elif other.get("status", "found") not in store.LEAD_STATUSES or worth(other) >= worth(j):
+            removed.append(j); gone.add(id(j))
+        else:
+            removed.append(other); gone.add(id(other)); by_url[url] = j
     jobs[:] = [j for j in jobs if id(j) not in gone]
     return removed
 

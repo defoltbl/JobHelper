@@ -60,7 +60,7 @@ def parse_linkedin(html_text: str, where: str, limit: int = 1000) -> list[dict[s
             continue
         href = a.get("href", "").split("?")[0]
         m = re.search(r"(\d{6,})", href)
-        jid = m.group(1) if m else str(abs(hash(href)))
+        jid = m.group(1) if m else store.url_id(href)
         t = li.select_one("time")
         date_posted = (t.get("datetime") or "").strip()[:10] if t else ""
         out.append(store.new_job(

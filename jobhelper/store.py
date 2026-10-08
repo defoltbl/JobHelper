@@ -108,6 +108,13 @@ def new_job(**fields: Any) -> dict[str, Any]:
     return job
 
 
+def url_id(url: str) -> str:
+    """A short id made from an address, the same on every run. (Python's own hash()
+    changes with every start, so a posting got a new id on each search and was listed again.)"""
+    import hashlib
+    return hashlib.sha1((url or "").encode("utf-8")).hexdigest()[:16]
+
+
 def slugify(text: str, max_len: int = 40) -> str:
     text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip()
     text = re.sub(r"[\s_-]+", "-", text)

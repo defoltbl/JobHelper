@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 8 October 2026
 
+- **Postings on company-branded jobs.cz pages are read properly**: those pages load their text by script, so the app got no company and no text, could not see that an ad was in Czech, and scored it from the title. It now reads the company and a summary from the page.
+- **The same posting is no longer listed twice**: ids made from a link changed on every run; the same link now counts as one posting.
 - **Scan result names invitations**: the line after an email scan says "3 new: 2 invitations, 1 rejection" instead of counting only rejections.
 - **Interview date saved from the email**: when a reply fixes a day and time, it becomes the job's date to remember (shown under Coming up), unless you already set your own.
 - **Right application at a company with several**: an email that names no role goes to the open application that is furthest along, and the company's own name ("Robotics") is no longer read as a role word.

@@ -109,3 +109,16 @@ def test_search_refuses_to_run_without_a_city():
         agent2_search.search(["python"])
     with pytest.raises(RuntimeError, match="No city"):
         agent2_search.search(["python"], where="  ")
+
+
+def test_the_same_link_twice_is_one_posting():
+    a = store.new_job(id="pracecz-111", title="Global HRIS Specialist", company="", url="https://www.prace.cz/nabidka/abc/", match_score=15)
+    b = store.new_job(id="pracecz-999", title="Global HRIS Specialist", company="", url="https://www.prace.cz/nabidka/abc")
+    c = store.new_job(id="other", title="Developer", company="Acme", url="https://example.com/1")
+    applied = store.new_job(id="app", title="QA", company="Beta", url="https://example.com/2", status="waiting")
+    again = store.new_job(id="lead", title="QA Engineer", company="Beta s.r.o.", url="https://example.com/2")
+    blank1, blank2 = store.new_job(id="n1", title="One", company="X"), store.new_job(id="n2", title="Two", company="Y")
+    jobs = [a, b, c, applied, again, blank1, blank2]
+    removed = agent2_search.prune_duplicate_leads(jobs)
+    assert sorted(j["id"] for j in removed) == ["lead", "pracecz-999"]            # the scored copy and the application stay
+    assert [j["id"] for j in jobs] == ["pracecz-111", "other", "app", "n1", "n2"]  # postings without a link are left alone
