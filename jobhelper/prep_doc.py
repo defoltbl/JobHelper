@@ -138,6 +138,12 @@ def build(job: dict[str, Any], prep: dict[str, Any], out_path: Path, contact: st
             para(notes[audience], size=9.5, italic=True, after=3)
             for q in sorted(asked, key=lambda q: list(KIND_TITLES).index(q.get("kind", "about you")) if q.get("kind") in KIND_TITLES else 0):
                 qa(q["question"], q["answer"], q.get("check", ""))
+        yours = prep.get("ask_hr" if audience == "hr" else "ask_technical") or []
+        if yours:                                   # your turn: right under the questions that person asks
+            if not asked:
+                heading(title)
+            para("What you can ask " + ("them" if audience == "hr" else "this person") + ":", bold=True, after=1, before=6)
+            bullets(yours)
     if prep.get("concepts"):
         heading("Concepts to be able to explain")
         para("Enough to speak sensibly about each. If one comes up that you do not know, say so and ask.", after=3)
@@ -145,7 +151,7 @@ def build(job: dict[str, Any], prep: dict[str, Any], out_path: Path, contact: st
     if prep.get("revise"):
         heading("Worth revising before the call")
         bullets(prep["revise"])
-    if prep.get("ask_them"):
+    if prep.get("ask_them") and not (prep.get("ask_hr") or prep.get("ask_technical")):
         heading("Questions to ask them")
         bullets(prep["ask_them"])
     reminders = list(prep.get("reminders") or []) + ["Test the call link beforehand and join a few minutes early: camera on, quiet room.",

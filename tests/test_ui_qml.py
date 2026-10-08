@@ -1550,3 +1550,17 @@ def test_preparation_window_groups_questions_by_who_asks(ui):
     source = qml_source()
     assert "If you speak with HR or a recruiter: plain words, no jargon" in source
     assert "If you speak with an engineer or the hiring manager: precise answers" in source
+
+
+def test_preparation_window_shows_what_you_can_ask_each_listener(ui):
+    ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep={"made": "2026-10-08", "summary": "s", "questions": [
+        {"audience": "hr", "kind": "about you", "question": "Tell me about yourself.", "why": "", "answer": "I am a junior developer.", "check": ""}],
+        "ask_hr": ["What are the next steps?"], "ask_technical": ["What would I own first?"], "ask_them": []}), render=False)
+    ui.js('prepDialog.show("app")')
+    ui.wait(450)
+    assert ui.find("askHr").property("visible") is True and ui.find("askTech").property("visible") is True
+    assert ui.js("prepDialog.prep.ask_hr[0]") == "What are the next steps?"
+    ui.js("prepDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
+    assert ui.warnings == []

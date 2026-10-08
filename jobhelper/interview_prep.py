@@ -107,7 +107,8 @@ Return JSON with exactly these keys:
     {{"audience": "hr | technical", "kind": "<one of the kinds above>", "question": "<the question>",
       "why": "<one short sentence: why they ask it>", "answer": "<the answer, first person>"}}
   ],
-  "ask_them": ["<5 good questions the candidate can ask the interviewer>"],
+  "ask_hr": ["<5 questions the candidate can ask HR or a recruiter: the process and next steps, the team, how the first months look, working arrangements; specific to this company and role, nothing a quick look at the posting already answers>"],
+  "ask_technical": ["<5 questions the candidate can ask an engineer or the hiring manager: the actual work, stack, how the team builds and reviews, what a junior would own first; specific to this posting>"],
   "revise": ["<up to 5 topics from the posting worth revising before the interview>"]
 }}"""
 
@@ -218,7 +219,9 @@ def _clean(data: Any) -> dict[str, Any]:
         if entry["job"] and entry["story"]:
             experience.append(entry)
     return {"summary": text("summary"), "questions": questions, "experience": experience[:6],
-            "ask_them": texts("ask_them", 6), "revise": texts("revise", 6),
+            "ask_hr": texts("ask_hr", 6), "ask_technical": texts("ask_technical", 6),
+            "ask_them": texts("ask_them", 6),          # one mixed list: what older saved preparations have
+            "revise": texts("revise", 6),
             "company": texts("company", 7), "company_say": text("company_say"),
             "role": texts("role", 8), "role_plain": text("role_plain"),
             "fit": texts("fit", 8), "gap": text("gap"), "pitch": text("pitch"),
@@ -239,8 +242,10 @@ def as_text(job: dict[str, Any], prep: dict[str, Any]) -> str:
             who = audience
             lines += [AUDIENCE_TITLES[who].upper(), ""]
         lines += [f"{n}. {q['question']}", q["answer"], ""]
-    if prep.get("ask_them"):
-        lines += ["QUESTIONS TO ASK THEM", ""] + [f"- {x}" for x in prep["ask_them"]] + [""]
+    for key, title in (("ask_hr", "QUESTIONS TO ASK HR OR THE RECRUITER"), ("ask_technical", "QUESTIONS TO ASK THE ENGINEER OR MANAGER"),
+                       ("ask_them", "QUESTIONS TO ASK THEM")):
+        if prep.get(key):
+            lines += [title, ""] + [f"- {x}" for x in prep[key]] + [""]
     if prep.get("revise"):
         lines += ["REVISE BEFORE THE INTERVIEW", ""] + [f"- {x}" for x in prep["revise"]]
     return "\n".join(lines).strip() + "\n"

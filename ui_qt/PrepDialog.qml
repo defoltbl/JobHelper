@@ -85,7 +85,19 @@ Dialog {
                         }
                     }
                 }
-                DetailCard { heading: "Questions to ask them"; visible: (prepDialog.prep.ask_them || []).length > 0
+                DetailCard { heading: "What you can ask HR or the recruiter"; objectName: "askHr"
+                    visible: (prepDialog.prep.ask_hr || []).length > 0
+                    Repeater { model: prepDialog.prep.ask_hr || []
+                        Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; lineHeight: 1.25
+                            text: "•  " + modelData } } }
+                DetailCard { heading: "What you can ask the engineer or the hiring manager"; objectName: "askTech"
+                    visible: (prepDialog.prep.ask_technical || []).length > 0
+                    Repeater { model: prepDialog.prep.ask_technical || []
+                        Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; lineHeight: 1.25
+                            text: "•  " + modelData } } }
+                DetailCard { heading: "Questions to ask them"
+                    visible: (prepDialog.prep.ask_them || []).length > 0 && (prepDialog.prep.ask_hr || []).length === 0
+                             && (prepDialog.prep.ask_technical || []).length === 0
                     Repeater { model: prepDialog.prep.ask_them || []
                         Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; text: "•  " + modelData } } }
                 DetailCard { heading: "Revise before the interview"; visible: (prepDialog.prep.revise || []).length > 0

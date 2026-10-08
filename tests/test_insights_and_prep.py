@@ -458,3 +458,33 @@ def test_a_plain_story_is_held_to_the_cv_too(monkeypatch):
     monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(bad))
     interview_prep.generate({"title": "T", "company": "C"}, CV)
     assert len(prompts) == 2 and "the plain story about Software Developer Intern" in prompts[1]
+
+
+# ── what you can ask them, per listener ─────────────────────────────────────
+ASK = dict(TWO, ask_hr=["What are the next steps after this call?", "How big is the team I would join?"],
+           ask_technical=["What would I own in the first three months?"], ask_them=[])
+
+
+def test_questions_to_ask_are_kept_for_each_listener(monkeypatch):
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(ASK))
+    prep = interview_prep.generate({"title": "ML Engineer", "company": "BRIGHTLINE"}, CV)
+    assert prep["ask_hr"] == ASK["ask_hr"] and prep["ask_technical"] == ASK["ask_technical"]
+    assert '"ask_hr"' in prompts[0] and '"ask_technical"' in prompts[0]
+    text = interview_prep.as_text({"title": "ML Engineer", "company": "BRIGHTLINE"}, prep)
+    assert "QUESTIONS TO ASK HR OR THE RECRUITER" in text and "QUESTIONS TO ASK THE ENGINEER OR MANAGER" in text
+
+
+def test_the_sheet_puts_your_questions_under_each_set(tmp_path):
+    import docx
+
+    from jobhelper import prep_doc
+    prep = dict(interview_prep._clean(ASK), made="2026-10-08", checks=[])
+    lines = [p.text for p in docx.Document(str(prep_doc.build({"title": "T", "company": "BRIGHTLINE"}, prep, tmp_path / "x.docx"))).paragraphs if p.text.strip()]
+    hr, tech = lines.index("If you speak with HR or a recruiter"), lines.index("If you speak with an engineer or the hiring manager")
+    assert hr < lines.index("What you can ask them:") < tech < lines.index("What you can ask this person:")
+    assert "What are the next steps after this call?" in lines[hr:tech] and "What would I own in the first three months?" in lines[tech:]
+    assert "Questions to ask them" not in lines                                     # no second, mixed list
+    old = dict(interview_prep._clean(dict(TWO, ask_them=["An older mixed question?"])), made="x", checks=[])
+    old_lines = [p.text for p in docx.Document(str(prep_doc.build({"title": "T", "company": "C"}, old, tmp_path / "old.docx"))).paragraphs if p.text.strip()]
+    assert "Questions to ask them" in old_lines and "An older mixed question?" in old_lines      # an older saved preparation still shows its list
