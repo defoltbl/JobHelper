@@ -271,7 +271,7 @@ Dialog {
                                 objectName: "status_" + modelData.s
                                 readonly property bool current: detailDialog.job.status === modelData.s
                                 implicitHeight: 26; implicitWidth: stT.implicitWidth + 20; radius: 13
-                                color: current ? win.badgeBg(modelData.s) : (stMa.containsMouse ? theme.inset : "transparent")
+                                color: current ? win.badgeBg(modelData.s) : (stMa.containsMouse ? theme.inset : win.clearOf(theme.inset))
                                 border.width: 1; border.color: current ? win.badgeColor(modelData.s) : theme.line
                                 Behavior on color { ColorAnimation { duration: 140 } }
                                 Text { id: stT; anchors.centerIn: parent; text: modelData.label; font.pixelSize: 11; font.bold: true

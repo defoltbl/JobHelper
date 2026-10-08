@@ -97,7 +97,7 @@ Dialog {
                         readonly property bool on: tableDialog.groupFilter === modelData.key
                         height: 24; radius: 12; width: gT.implicitWidth + 18
                         color: on ? theme.accent : (gMa.containsMouse ? theme.surface2 : theme.inset)
-                        border.width: 1; border.color: on ? "transparent" : theme.line
+                        border.width: 1; border.color: on ? win.clearOf(theme.line) : theme.line
                         Behavior on color { ColorAnimation { duration: 140 } }
                         Text { id: gT; anchors.centerIn: parent; font.pixelSize: 11; font.bold: parent.on
                             color: parent.on ? "#ffffff" : theme.soft
@@ -117,8 +117,8 @@ Dialog {
                 width: listView.width; implicitHeight: 54
                 readonly property bool openable: !!modelData.id || !!modelData.rid
                 readonly property bool heading: modelData.heading === true
-                color: heading ? theme.inset : rowMa.containsMouse && openable ? theme.inset : (index % 2 ? theme.surface2 : "transparent")
-                Behavior on color { ColorAnimation { duration: 120 } }
+                color: heading ? theme.inset : rowMa.containsMouse && openable ? theme.inset : (index % 2 ? theme.surface2 : win.clearOf(theme.surface2))
+                Behavior on color { ColorAnimation { duration: 90 } }
                 MouseArea { id: rowMa; anchors.fill: parent; hoverEnabled: true; enabled: parent.openable
                     cursorShape: parent.openable ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: modelData.rid ? responseDialog.show(modelData.rid) : detailDialog.show(modelData.id) }
