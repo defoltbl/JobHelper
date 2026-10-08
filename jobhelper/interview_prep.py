@@ -52,9 +52,26 @@ For each answer:
   prepare their own answer. For salary, give a way to answer, not a number.
 {facts}
 
+Besides the questions, write the sheet the candidate reads before the call:
+- "company": only what the posting and the emails above say about the company. Do NOT add facts from
+  memory (founding year, size, clients, people): they may be wrong and the candidate would repeat them.
+- "fit", "pitch" and "key_question": only what the CV shows, like the answers.
+- "concepts": terms from the posting worth being able to explain. Explain each in plain words; where the
+  CV has related experience, say how it connects. Never say the candidate has used something the CV lacks.
+
 Return JSON with exactly these keys:
 {{
-  "summary": "<2 sentences: what this interview will probably focus on, written to the candidate as 'you'>",
+  "summary": "<2-3 sentences: what this interview will probably focus on, written to the candidate as 'you'>",
+  "company": ["<4-6 short facts about the company itself (what it does, where, how it works), from the posting and emails only; nothing about this application or its dates>"],
+  "company_say": "<1-2 sentences the candidate can say about the company in their own words, first person, from those facts>",
+  "role": ["<4-7 points: what the work actually is, from the posting>"],
+  "role_plain": "<1-2 sentences: the role in plain terms, to the candidate as 'you'>",
+  "fit": ["<5-7 points: the candidate's real strengths for THIS role, each naming the project, tool or result from the CV>"],
+  "gap": "<the honest gap between this posting and the CV, and how to frame it, to the candidate as 'you'>",
+  "key_question": {{"question": "<the hardest question this interviewer will almost certainly ask THIS candidate>", "answer": "<the answer, first person>"}},
+  "pitch": "<the opening pitch, about 45 seconds spoken, first person, from the CV only>",
+  "concepts": [{{"term": "<a term from the posting>", "meaning": "<1-2 plain sentences>"}}],
+  "reminders": ["<4-6 practical reminders for this interview: what to lead with, what not to bluff, what to ask at the end>"],
   "questions": [
     {{"kind": "<one of the kinds above>", "question": "<the question>",
       "why": "<one short sentence: why they ask it>", "answer": "<the answer, first person>"}}
@@ -99,9 +116,13 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
         prep = _clean(data)
         if not prep["questions"]:
             raise ValueError("The model returned no questions.")
-        bad = [(q["question"], _unbacked(q["answer"], unverified)) for q in prep["questions"]]
+        # everything said in the candidate's own voice is held to the CV: the answers, the pitch, the fit list
+        spoken = [(q["question"], q["answer"]) for q in prep["questions"]] + [
+            ("the opening pitch", prep["pitch"]), ("the key question", prep["key_question"]["answer"]),
+            ("what to say about the company", prep["company_say"])] + [("your fit", point) for point in prep["fit"]]
+        bad = [(label, _unbacked(said, unverified)) for label, said in spoken if said]
         bad = [(q, term) for q, term in bad if term]
-        third = [q["question"] for q in prep["questions"] if first_name and re.search(rf"\b{re.escape(first_name)}\b", q["answer"])]
+        third = [label for label, said in spoken if said and first_name and re.search(rf"\b{re.escape(first_name)}\b", said)]
         if not bad and not third:
             break
         feedback = "\nYour previous version was rejected. Fix these problems:\n" + "\n".join(
@@ -111,6 +132,13 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
     # Whatever still claims unbacked experience after the retry is marked, not hidden: the user must see it.
     for q in prep["questions"]:
         q["check"] = _unbacked(q["answer"], unverified)
+    checks = []
+    for label, said in [("The opening pitch", prep["pitch"]), ("The answer to the key question", prep["key_question"]["answer"])] \
+            + [("A point under your fit", point) for point in prep["fit"]]:
+        term = _unbacked(said, unverified)
+        if term:
+            checks.append(f"{label} mentions {term} as experience, which is not in your CV.")
+    prep["checks"] = checks
     prep["made"] = date.today().isoformat()
     return prep
 
@@ -129,8 +157,18 @@ def _clean(data: Any) -> dict[str, Any]:
                           "why": cover_letter.clean(str(item.get("why", ""))).strip(), "answer": answer})
     questions.sort(key=lambda q: KINDS.index(q["kind"]))
     texts = lambda key, n: [cover_letter.clean(str(x)).strip() for x in (data.get(key) or []) if str(x).strip()][:n]   # noqa: E731
-    return {"summary": cover_letter.clean(str(data.get("summary", ""))).strip(), "questions": questions,
-            "ask_them": texts("ask_them", 6), "revise": texts("revise", 6)}
+    text = lambda key: cover_letter.clean(str(data.get(key, "") or "")).strip()                                        # noqa: E731
+    key_q = data.get("key_question") if isinstance(data.get("key_question"), dict) else {}
+    concepts = [{"term": cover_letter.clean(str(c.get("term", ""))).strip(), "meaning": cover_letter.clean(str(c.get("meaning", ""))).strip()}
+                for c in (data.get("concepts") or []) if isinstance(c, dict)]
+    return {"summary": text("summary"), "questions": questions,
+            "ask_them": texts("ask_them", 6), "revise": texts("revise", 6),
+            "company": texts("company", 7), "company_say": text("company_say"),
+            "role": texts("role", 8), "role_plain": text("role_plain"),
+            "fit": texts("fit", 8), "gap": text("gap"), "pitch": text("pitch"),
+            "key_question": {"question": cover_letter.clean(str(key_q.get("question", "") or "")).strip(),
+                             "answer": cover_letter.clean(str(key_q.get("answer", "") or "")).strip()},
+            "concepts": [c for c in concepts if c["term"] and c["meaning"]][:10], "reminders": texts("reminders", 7)}
 
 
 def as_text(job: dict[str, Any], prep: dict[str, Any]) -> str:

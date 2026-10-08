@@ -467,13 +467,17 @@ Dialog {
                             Binding on color { when: detailDialog.prepErr !== "" && !detailDialog.prepBusy; value: theme.crit } }
                         SmallButton { visible: detailDialog.job.has_prep === true && !detailDialog.prepBusy; text: "Open"
                             primaryStyle: true; objectName: "prepOpen"; onClicked: prepDialog.show(detailDialog.job.id) }
+                        SmallButton { objectName: "prepDocument"; visible: detailDialog.job.has_prep === true && !detailDialog.prepBusy
+                            text: "Document"
+                            onClicked: { var r = bridge.prepDocument(detailDialog.job.id, false);
+                                         ticker.text = (r && r.ok) ? "Opened " + r.file + "." : ((r && r.msg) || "Couldn't write the document."); } }
                         SmallButton { objectName: "prepMake"; enabled: !detailDialog.prepBusy
                             text: detailDialog.prepBusy ? "Preparing…" : (detailDialog.job.has_prep ? "Make again" : "Prepare")
                             onClicked: { detailDialog.prepErr = ""; detailDialog.prepBusy = true; detailDialog.prepJob = detailDialog.job.id;
                                          bridge.prepareInterview(detailDialog.job.id); } }
                     }
                     Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
-                        text: "Asks Claude once or twice (uses your limit). Answers use only what your CV shows." }
+                        text: "Asks Claude once or twice (uses your limit). You get a sheet to read before the call: the company, the role, your fit, the honest gap, an opening pitch and likely questions with answers. Only what your CV shows is claimed." }
                 }
 
                 DetailCard { heading: "Follow-up"; visible: detailDialog.job.status === "waiting"

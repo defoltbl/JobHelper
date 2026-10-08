@@ -422,6 +422,7 @@ Or just open the app (`python app_qt.py`) and use **Run search** / **Scan email*
 | `data/filtered_out.json` | What the last search filtered out, with reasons (encrypted) |
 | `data/calendar/` | Calendar files made by **Add to calendar** |
 | `data/combined/` | Letter and CV joined into one PDF by **One PDF** |
+| `data/interview_prep/` | Interview preparation sheets (`<Name>_<Company>_Prep.docx`) |
 | `data/backups/` | Timestamped backups, encrypted (`*.enc`) |
 | `data/vault.json` | Which key this data belongs to (no secret inside) |
 | `data/integrity.json` | Signatures for the tamper check |

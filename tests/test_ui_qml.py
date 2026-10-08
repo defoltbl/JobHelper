@@ -1481,3 +1481,44 @@ def test_a_message_behind_an_open_window_is_shown_on_top_of_it(ui):
 ])
 def test_which_messages_are_shown_as_errors(ui, text, bad):
     assert ui.js("looksBad(" + repr(text).replace("\\'", "'") + ")") is bad
+
+
+def test_preparation_opens_as_a_document_from_both_windows(ui, monkeypatch):
+    calls = []
+    monkeypatch.setattr(ui_api.Api, "prep_document", lambda self, job_id, reveal=False: calls.append((job_id, reveal)) or {"ok": True, "file": "Alex_Beta_Prep.docx"})
+    ui.bridge._api._change("app", lambda jobs, j: j.__setitem__("interview_prep", {"made": "2026-10-08", "summary": "s", "questions": [
+        {"kind": "about you", "question": "Tell me about yourself.", "why": "", "answer": "I am a junior developer.", "check": ""}]}), render=False)
+    _open_job(ui, "app")
+    assert ui.find("prepDocument").property("visible") is True
+    ui.js('prepDialog.show("app")')
+    ui.wait(450)
+    assert ui.find("prepDoc").property("text") == "Open as document" and ui.find("prepShow").property("text") == "Show in folder"
+    assert ui.js('bridge.prepDocument("app", false).file') == "Alex_Beta_Prep.docx" and ui.js('bridge.prepDocument("app", true).ok') is True
+    assert calls == [("app", False), ("app", True)]
+    ui.js("prepDialog.close()")
+    ui.wait(350)
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("app", lambda jobs, j: j.pop("interview_prep", None), render=False)
+    _open_job(ui, "app")
+    assert ui.find("prepDocument").property("visible") is False                 # nothing prepared yet: no document button
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    assert ui.warnings == []
+
+
+def test_show_in_folder_buttons_and_the_laid_out_description(ui, monkeypatch):
+    shown = []
+    monkeypatch.setattr(ui_api.Api, "show_in_folder", lambda self, kind, job_id: shown.append((kind, job_id)) or {"ok": True, "file": "CV.pdf"})
+    (config.TAILORED_CV_DIR / "cv_app.docx").write_bytes(b"x")
+    ui.bridge._api._change("app", lambda jobs, j: j.update(tailored_cv_file="cv_app.docx",
+                           description="We build tools. Requirements Strong Python Benefits Flexible hours"), render=False)
+    _open_job(ui, "app")
+    assert ui.find("showCv").property("visible") is True and ui.find("showLetter").property("visible") is False
+    ui.js('detailDialog.showFile("cv")')
+    assert shown == [("cv", "app")]
+    assert ui.find("descText").property("text") == "We build tools.\n\nREQUIREMENTS\nStrong Python\n\nBENEFITS\nFlexible hours"
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("app", lambda jobs, j: j.update(tailored_cv_file="", description="We use Python, Docker and Kubernetes."), render=False)
+    assert ui.warnings == []

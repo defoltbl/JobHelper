@@ -259,3 +259,92 @@ def test_low_score_reasons_are_read_from_the_explanations():
     assert got["rows"][0]["reason"] == "Technology you have not used" and got["rows"][-1]["reason"] == insights.LOW_OTHER
     assert got["technologies"] == [{"skill": "Java", "jobs": 2}]                    # named twice, and not in the CV
     assert insights.low_score_reasons([], "")["rows"] == []
+
+
+# ── the preparation as a sheet to read before the call ──────────────────────
+FULL = {
+    "summary": "They will test your Python and how you think about robots.",
+    "company": ["BRIGHTLINE builds humanoid robots.", "Engineering is in Prague."], "company_say": "From what I have read, BRIGHTLINE trains robots from human demonstrations.",
+    "role": ["Train and evaluate models.", "Build training pipelines."], "role_plain": "You train the models that run on the robot.",
+    "fit": ["Python and PyTorch in my reinforcement learning research.", "A FastAPI service deployed with Docker."],
+    "gap": "The posting asks for three years; you have internships. Say so and show how fast you learn.",
+    "key_question": {"question": "This role asks for 3+ years. Why you?", "answer": "I do not have three years, but I have built and shipped real projects."},
+    "pitch": "I recently finished my MSc and built a RAG assistant with FastAPI.",
+    "concepts": [{"term": "Imitation learning", "meaning": "Learning a policy from demonstrations."}, {"term": "", "meaning": "dropped"}],
+    "reminders": ["Lead with the RL project."],
+    "questions": [{"kind": "technical", "question": "How does PPO work?", "why": "Core RL.", "answer": "I used it in my research project."},
+                  {"kind": "about you", "question": "Tell me about yourself.", "why": "Opening.", "answer": "I am a junior developer."}],
+    "ask_them": ["What does the first month look like?"], "revise": ["Policy gradients"],
+}
+
+
+def test_generate_keeps_the_new_parts_and_checks_what_you_would_say(monkeypatch):
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(FULL))
+    prep = interview_prep.generate({"title": "Machine Learning Engineer", "company": "BRIGHTLINE", "description": "Robots."}, CV)
+    assert len(prompts) == 1 and "Do NOT add facts from" in prompts[0]             # company facts only from the posting
+    assert prep["company"] == FULL["company"] and prep["pitch"] == FULL["pitch"] and prep["key_question"]["question"].startswith("This role asks")
+    assert prep["concepts"] == [{"term": "Imitation learning", "meaning": "Learning a policy from demonstrations."}]
+    assert prep["checks"] == [] and prep["reminders"] == ["Lead with the RL project."]
+
+
+def test_a_pitch_that_claims_too_much_is_sent_back_and_then_flagged(monkeypatch):
+    prompts = []
+    bad = dict(FULL, pitch="I have three years of production experience with Kubernetes.")
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(bad))
+    prep = interview_prep.generate({"title": "ML Engineer", "company": "BRIGHTLINE"}, CV)
+    assert len(prompts) == 2 and "the opening pitch" in prompts[1] and "Kubernetes" in prompts[1]
+    assert prep["checks"] == ["The opening pitch mentions Kubernetes as experience, which is not in your CV."]
+
+
+def test_an_older_saved_preparation_without_the_new_parts_still_works(monkeypatch):
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"summary": "s", "questions": FULL["questions"]})
+    prep = interview_prep.generate({"title": "T", "company": "C"}, CV)
+    assert prep["company"] == [] and prep["pitch"] == "" and prep["key_question"] == {"question": "", "answer": ""}
+
+
+def test_the_sheet_is_a_word_document_in_the_order_you_read_it(tmp_path):
+    import docx
+
+    from jobhelper import prep_doc
+    job = {"title": "Machine Learning Engineer", "company": "BRIGHTLINE", "event": {"date": "2026-10-13", "time": "11:30", "kind": "interview", "note": "Google Meet"}}
+    prep = dict(FULL, made="2026-10-08", checks=["The opening pitch mentions X."])
+    prep["concepts"] = prep["concepts"][:1]
+    prep["questions"] = [dict(q, check="Kubernetes" if q["kind"] == "technical" else "") for q in FULL["questions"]]
+    path = prep_doc.build(job, prep, tmp_path / "out" / "x.docx", contact="Petra")
+    lines = [p.text for p in docx.Document(str(path)).paragraphs if p.text.strip()]
+    assert lines[0] == "BRIGHTLINE – Interview Prep" and lines[1] == "Machine Learning Engineer"
+    assert lines[2] == "Tuesday 13 October 2026, 11:30 · Google Meet · with Petra"
+    order = ["About BRIGHTLINE (if they ask what you know)", "The role – what the work actually is", "Your fit – lead with these",
+             "The honest gap (own it, don't hide it)", "The key question: “This role asks for 3+ years. Why you?”",
+             "Your opening pitch (about 45 seconds)", "About you", "Technical questions", "Concepts to be able to explain",
+             "Worth revising before the call", "Questions to ask them", "Practical reminders"]
+    assert [lines.index(h) for h in order] == sorted(lines.index(h) for h in order)
+    assert "Imitation learning: Learning a policy from demonstrations." in lines and prep_doc.COMPANY_NOTE in lines
+    assert "Check before you say it: this mentions Kubernetes, which is not in your CV." in lines
+    assert "Check: The opening pitch mentions X." in lines and "—" not in "\n".join(lines)
+    old = prep_doc.build({"title": "T", "company": "C"}, {"questions": FULL["questions"], "summary": "s"}, tmp_path / "old.docx")
+    old_lines = [p.text for p in docx.Document(str(old)).paragraphs if p.text.strip()]
+    assert old_lines[0] == "C – Interview Prep" and "Your fit – lead with these" not in old_lines and "Practical reminders" in old_lines
+
+
+def test_sheet_file_name_and_date_line():
+    from jobhelper import prep_doc
+    assert prep_doc.file_name("AlexNovak", "Actum Digital, a.s.") == "AlexNovak_ActumDigital_Prep.docx"
+    assert prep_doc.file_name("", "") == "Candidate_Company_Prep.docx"
+    assert prep_doc.when_text({"date": "2026-10-13", "time": ""}) == "Tuesday 13 October 2026" and prep_doc.when_text({}) == "" and prep_doc.when_text(None) == ""
+
+
+def test_api_writes_and_opens_the_sheet(isolate_data, monkeypatch):
+    config.ensure_dirs()
+    opened, shown = [], []
+    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(target))
+    monkeypatch.setattr(ui_api.Api, "_reveal", lambda self, target: shown.append(target))
+    store.save_jobs([store.new_job(id="a", title="ML Engineer", company="BRIGHTLINE", status="interview"), store.new_job(id="b", title="T", company="C", status="waiting")])
+    api = ui_api.Api()
+    assert "Prepare the interview first" in api.prep_document("b")["msg"] and api.prep_document("zzz")["ok"] is False
+    api._change("a", lambda jobs, j: j.__setitem__("interview_prep", dict(FULL, made="2026-10-08", checks=[])), render=False)
+    got = api.prep_document("a")
+    path = config.DATA_DIR / "interview_prep" / "Candidate_Brightline_Prep.docx"
+    assert got == {"ok": True, "file": path.name} and opened == [path] and path.is_file()
+    assert api.prep_document("a", reveal=True)["ok"] and shown == [path] and len(opened) == 1

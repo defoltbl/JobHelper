@@ -88,6 +88,14 @@ Dialog {
                 color: prepDialog.note !== "" ? theme.good : theme.faint
                 text: prepDialog.note !== "" ? prepDialog.note
                     : "Answers are a starting point built from your CV. Say them in your own words." }
+            SmallButton { objectName: "prepDoc"; primaryStyle: true; text: "Open as document"
+                onClicked: { var r = bridge.prepDocument(prepDialog.prep.id, false);
+                    prepDialog.note = (r && r.ok) ? "Opened " + r.file + " in Word." : "";
+                    if (!(r && r.ok)) ticker.text = (r && r.msg) || "Couldn't write the document."; } }
+            SmallButton { objectName: "prepShow"; text: "Show in folder"
+                onClicked: { var r = bridge.prepDocument(prepDialog.prep.id, true);
+                    prepDialog.note = (r && r.ok) ? "Shown in its folder: " + r.file : "";
+                    if (!(r && r.ok)) ticker.text = (r && r.msg) || "Couldn't write the document."; } }
             SmallButton { objectName: "prepCopy"; text: "Copy all"
                 onClicked: { bridge.copyText(bridge.prepText(prepDialog.prep.id)); prepDialog.note = "Copied. Paste it into Notes or a document."; } }
             PillButton { primaryStyle: true; text: "Close"; onClicked: prepDialog.close() }

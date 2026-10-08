@@ -14,7 +14,7 @@ import subprocess
 import sys
 from datetime import date
 
-from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, filters, form_answers, health, summary, textfmt,
+from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, cv_tailor, filters, form_answers, health, prep_doc, summary, textfmt,
                compare, config, cover_letter, db, followup, housekeeping, insights, integrity, interview_prep, keywords, merge, pdf,
                planner, salary, store, usage, vault)
 
@@ -592,6 +592,24 @@ class Api:
                                         render=False).get("ok"))}
 
     @_guarded(str)
+    def _prep_file(self, j):
+        cv = agent1_cv.find_cv()
+        prefix = cv_tailor.name_prefix(cv) if cv else "Candidate"
+        return config.DATA_DIR / "interview_prep" / prep_doc.file_name(prefix, j.get("company", ""))
+
+    def prep_document(self, job_id, reveal=False):
+        """Write the saved preparation as a Word document and open it (or show it in its folder)."""
+        j = store.find(store.load_jobs(), job_id)
+        if not j or not (j.get("interview_prep") or {}).get("questions"):
+            return {"ok": False, "msg": "Prepare the interview first, then it can be opened as a document."}
+        try:
+            contact = planner.company_notes(j.get("company", "")).get("contact", "")
+            path = prep_doc.build(j, j["interview_prep"], self._prep_file(j), contact)
+        except Exception as e:  # noqa: BLE001 - shown to the user as the reason
+            return {"ok": False, "msg": f"The document could not be written ({e})."}
+        (self._reveal if reveal else self._open)(path)
+        return {"ok": True, "file": path.name}
+
     def prep_text(self, job_id):
         j = store.find(store.load_jobs(), job_id) or {}
         return interview_prep.as_text(j, j["interview_prep"]) if j.get("interview_prep") else ""
