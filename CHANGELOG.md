@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 9 October 2026
 
+- **Fixed: documents moved while a search was running** came back as broken links when the search finished. The move (and putting back) now reaches the running search too.
+- **A handbook** (`HANDBOOK.md`): how to use the app, the rules it is built by, how the code is laid out, how a change is checked, and what is left to do.
 - **Dark theme is easier to read too**: the label on the orange buttons, picked chips and the green tick is now dark in the dark theme (white on light orange was hard to read), and hint text is a little brighter.
 - **Old moved documents go to the Trash**: "Remove" in Options no longer deletes them; it moves them to the Trash of their disk, and does nothing if that disk has no Trash.
 - **Fixed: "scored from a short summary" on applications**: the tag is only shown on a new job that has a score.

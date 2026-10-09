@@ -646,3 +646,25 @@ def test_what_a_score_rests_on_is_said_only_for_a_new_job_with_a_score(api):
                      store.new_job(id="rejected", title="Dev", company="D", match_score=64, status="rejected")])
     assert [api.job_detail(i)["basis"] for i in ("lead", "unscored", "app", "rejected")] == ["summary", "", "", ""]
     assert api.job_detail("unscored")["can_paste_text"] is True and api.job_detail("app")["can_paste_text"] is False
+
+
+def test_moving_and_putting_back_reach_a_running_search_s_own_list(api):
+    """A search holds its own copy of the jobs and saves it when it ends: an edit made meanwhile must be in that copy too."""
+    config.ensure_dirs()
+    api.save_options({"threshold": 50})
+    store.save_jobs([_with_docs("low", 30)])
+    api.live = store.load_jobs()                                   # what a running search holds
+    try:
+        assert api.shelve_docs("low") == {"ok": True, "moved": 2}
+        twin = store.find(api.live, "low")
+        assert (twin["cover_letter_file"], twin["tailored_cv_file"], twin["status"]) == ("", "", "found") and len(twin["shelved"]["files"]) == 2
+        store.save_jobs(api.live)                                  # the search ends and writes its copy
+        assert api.job_detail("low")["can_unshelve"] is True and not (config.LETTERS_DIR / "L_low.docx").exists()
+        api.live = store.load_jobs()
+        assert api.unshelve_docs("low") == {"ok": True, "restored": 2}
+        twin = store.find(api.live, "low")
+        assert (twin["cover_letter_file"], twin["tailored_cv_file"], twin["status"]) == ("L_low.docx", "CV_low.docx", "letter_ready") and "shelved" not in twin
+        store.save_jobs(api.live)
+        assert (config.LETTERS_DIR / "L_low.docx").exists() and api.job_detail("low")["docs_stale"] is True
+    finally:
+        api.live = None

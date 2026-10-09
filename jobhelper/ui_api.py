@@ -448,6 +448,9 @@ class Api:
         now = datetime.now()
 
         def go(jobs, j):
+            if "record" in moved:                 # the same edit on a running search's own list: the files are already moved
+                record, app_wrote_it = dict(moved["record"]), moved["app_wrote_it"]
+                return note(j, record, app_wrote_it)
             if j["status"] not in store.LEAD_STATUSES:
                 return {"ok": False, "msg": "Documents are only put away for a new job, not for an application you sent."}
             files = self._generated_docs(j)
@@ -465,6 +468,10 @@ class Api:
                                             "folder": "cv" if path.parent == config.TAILORED_CV_DIR else "letter"})
                     path.unlink()
             moved["n"] = len(record["files"])
+            moved["record"], moved["app_wrote_it"] = record, app_wrote_it
+            return note(j, dict(record), app_wrote_it)
+
+        def note(j, record, app_wrote_it):
             j["shelved"] = record
             if app_wrote_it:
                 j["cover_letter_file"] = ""
@@ -494,6 +501,8 @@ class Api:
         done = {}
 
         def go(jobs, j):
+            if "record" in done:                  # the same edit on a running search's own list: the files are already back
+                return back(j, done["record"])
             record = self._shelved(j)
             if not record:
                 if isinstance(j.get("shelved"), dict) and j.get("status") in store.LEAD_STATUSES:
@@ -519,6 +528,10 @@ class Api:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)
                 source.unlink()
+            done["record"], done["n"] = record, len(contents)
+            return back(j, record)
+
+        def back(j, record):
             if record.get("cover_letter_file"):
                 j["cover_letter_file"] = record["cover_letter_file"]
             j["tailored_cv_file"], j["match_tier"] = record.get("tailored_cv_file", ""), record.get("match_tier", "")
@@ -527,7 +540,6 @@ class Api:
             j["apply_steps"] = list(record.get("apply_steps") or [])
             j["last_update"] = date.today().isoformat()
             j.pop("shelved", None)
-            done["n"] = len(contents)
         result = self._change(job_id, go)
         return {"ok": True, "restored": done.get("n", 0)} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "Couldn't put the documents back."}
 

@@ -5,6 +5,8 @@ by **your Claude subscription** (via the Claude Code CLI — no paid API key, no
 per-token billing).
 
 > 📋 **All commands in one place:** see [COMMANDS.md](COMMANDS.md).
+>
+> **How to use it, the rules it is built by and what is left to do:** see [HANDBOOK.md](HANDBOOK.md).
 
 | # | Agent | What it does |
 |---|-------|--------------|
