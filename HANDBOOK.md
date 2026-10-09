@@ -284,9 +284,18 @@ found is fixed (see CHANGELOG, 10 October). Not read line by line: the visual ma
 8. **Closing the job window with "Mark applied" or "Not interested"** does not ask about unsaved text
    (✕ and Esc do).
 
+**Small, suggested after the scan of 9 October**
+
+- Last run card: say what the scan did ("45 read, 5 asked, 0 new"), so "0 new" explains itself.
+- A one-time "look further back" for the email scan, instead of changing the Options number and back.
+- Try the mailbox password for real when it is saved (today only its form is checked).
+- The usage card refreshes itself when a reset time passes.
+- 11 jobs still have documents from a higher score (the user's decision: New Jobs, Move them to backup).
+
 **Needs the user**
 
-9. **Second mailbox** has only been tested with stand-ins, never with a real second account.
+9. **Second mailbox**: read with a real second account on 9 October 2026 (29 messages, no errors). Its older
+   mail has not been scanned yet: one scan with "Scan emails from the last" at 60 to 90 days.
 10. **Score all again** has never been run on the whole list with the current rules (about 26 Claude calls).
 11. **Professions and keywords beyond software** were measured on a software candidate's postings only.
     The first user from another field should check what is skipped.
