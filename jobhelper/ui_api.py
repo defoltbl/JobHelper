@@ -18,13 +18,14 @@ import re
 import subprocess
 import sys
 from datetime import date, datetime
+from pathlib import Path
 
 from . import trouble  # noqa: I001
 from .api_base import _guarded, _stem
 from .api_documents import DocumentsApi
 from .api_interview import InterviewApi
 from .api_letters import LettersApi
-from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, filters, health, summary,
+from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, email_client, filters, health, summary,
                textfmt, compare, config, db, followup, housekeeping, insights, integrity, keywords, merge, pdf, places,
                planner, salary, store, usage, vault)
 
@@ -247,6 +248,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
             "pay": salary.stated(j, salary.asked(j)[1]) or {}, "pay_text": self._pay_text(j),
             "desired_text": self._asked_text(j, " target"),
             "can_compare": self._comparable(j),
+            "can_write_docs": self.can_write_documents(j) == "",
             "has_prep": bool((j.get("interview_prep") or {}).get("questions")),
             "prep_edited": bool((j.get("interview_prep") or {}).get("edited")),
             "prep_made": (j.get("interview_prep") or {}).get("made", ""),
@@ -378,6 +380,44 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
         self._change(job_id, go)
         change = stats["changed"][0] if stats["changed"] else None
         return {"ok": True, "score": fresh["match_score"], "before": change["before"] if change else fresh["match_score"]}
+
+    def can_write_documents(self, j) -> str:
+        """'' when a CV and a letter can be written for this new job now; otherwise why not."""
+        if not j or j.get("status") not in store.LEAD_STATUSES:
+            return "Documents are written for a new job only."
+        if j.get("tailored_cv_file") and j.get("cover_letter_file"):
+            return "This job already has its CV and its letter."
+        if agent3_letters.text_basis(j) == "title":
+            return "The posting's text is missing, and a letter written from a title alone would be generic. Read the posting again or paste its text first."
+        if not self._cv_text().strip():
+            return "Your master CV could not be read. Choose it in the Account card first."
+        return ""
+
+    def write_documents(self, job_id):
+        """Write the adapted CV and the cover letter for one new job now, whatever its score: the person
+        asked for them. A letter that is already there (their own, or an earlier one) is left as it is."""
+        j = store.find(store.load_jobs(), job_id)
+        why = self.can_write_documents(j)
+        if why:
+            return {"ok": False, "msg": why}
+        work = dict(j)
+        try:
+            cv_path = agent1_cv.find_cv()
+            done = agent3_letters.generate_for(work, self._cv_text(), cv_path)
+        except Exception as e:  # noqa: BLE001 - shown to the person as the reason (the limit, no connection)
+            return {"ok": False, "msg": str(e) or "The documents could not be written."}
+        if not done["cv"] and not done["letter"]:
+            return {"ok": False, "msg": "Nothing could be written this time. Try again in a moment."}
+        fresh = {k: v for k, v in work.items() if j.get(k) != v}
+
+        def go(jobs, current):          # on a fresh copy: the writing took a while
+            current.update(fresh)
+        self._change(job_id, go)
+        made = " and ".join(name for name, key in (("the CV", "cv"), ("the letter", "letter")) if done[key])
+        missing = [name for name, key, had in (("the CV", "cv", j.get("tailored_cv_file")), ("the letter", "letter", j.get("cover_letter_file")))
+                   if not done[key] and not had]
+        return {"ok": True, "cv": done["cv"], "letter": done["letter"],
+                "msg": f"Written: {made}." + (f" Not written: {' and '.join(missing)}; try again in a moment." if missing else "")}
 
     def score_anyway(self, job_id):
         """Send a job the free pre-filter skipped to scoring on the next run."""
@@ -599,6 +639,141 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
                         "company": r.get("company", ""),
                         "stage": r.get("stage", ""), "summary": r.get("summary", "")})
         return out
+
+    # ── what the app used, what went wrong, and backups: all without a terminal ──
+    USAGE_NAMES = {"agent1_cv": "Reading your CV", "agent3_letters": "Scoring jobs and writing letters", "agent3_cv": "Adapting CVs",
+                   "agent5_responses": "Reading replies", "form_answers": "Form answers", "interview_prep": "Interview preparation",
+                   "usage_ping": "Asking how much is left", "limit_check": "Asking how much is left", "general": "Other"}
+
+    def usage_overview(self):
+        """Everything the app has asked Claude so far: {calls, cost, kinds: [{name, calls, cost}]}, most used first.
+        The cost is what the same work would have cost through the paid API; nothing was billed."""
+        state = usage._load()
+        totals = state.get("totals", {})
+        kinds: dict[str, dict] = {}
+        for tag, d in (state.get("by_tag") or {}).items():
+            name = self.USAGE_NAMES.get(tag, "Trials and other work" if tag.endswith("_trial") else tag.replace("_", " ").capitalize())
+            row = kinds.setdefault(name, {"name": name, "calls": 0, "cost": 0.0})
+            row["calls"] += int(d.get("calls", 0) or 0)
+            row["cost"] += float(d.get("cost_usd", 0.0) or 0.0)
+        rows = sorted(kinds.values(), key=lambda r: -r["cost"])
+        for row in rows:
+            row["cost"] = round(row["cost"], 2)
+        return {"calls": int(totals.get("calls", 0) or 0), "cost": round(float(totals.get("cost_usd", 0.0) or 0.0), 2), "kinds": rows}
+
+    def trouble_log(self, most=25):
+        """The last lines of the log of errors the app carried on after, newest first: {lines, total, file}."""
+        path = config.DATA_DIR / trouble.LOG_NAME
+        try:
+            lines = [ln.strip() for ln in path.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()]
+        except OSError:
+            lines = []
+        return {"lines": list(reversed(lines[-int(most):])), "total": len(lines), "file": trouble.LOG_NAME}
+
+    def show_trouble_log(self):
+        path = config.DATA_DIR / trouble.LOG_NAME
+        if not path.is_file():
+            return {"ok": False, "msg": "There is no log yet: nothing has gone wrong."}
+        self._reveal(path)
+        return {"ok": True}
+
+    def backup_all(self):
+        """One encrypted backup of everything: the data, your CV, your letters, the documents, the rules."""
+        try:
+            done = vault.backup_everything()
+        except Exception as e:  # noqa: BLE001 - shown as the reason
+            return {"ok": False, "msg": f"The backup was not made: {trouble._safe(e)}"}
+        return {"ok": True, "folder": done["folder"].name,
+                "msg": f"Backed up {done['files']} files ({done['bytes'] / 1_048_576:.1f} MB), encrypted, in the folder {done['folder'].name} of the app's backups."}
+
+    def backup_check(self):
+        """Prove that backups can be restored: make one, restore it into a throwaway folder, compare."""
+        try:
+            report = vault.restore_test()
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "msg": f"The backups could not be checked: {trouble._safe(e)}"}
+        bad = [f["name"] for f in report["files"] if not f["ok"]] + list(report["older"]["unreadable"])
+        if report["ok"]:
+            return {"ok": True, "msg": f"Your backups can be restored: {len(report['files'])} files compared with the live data, "
+                                       f"{report['older']['readable']} of {report['older']['files']} older backup files can be opened."}
+        return {"ok": False, "msg": "Something is wrong with the backups: " + ", ".join(bad[:6]) + ("…" if len(bad) > 6 else "") + "."}
+
+    def backup_export(self, folder):
+        """Save a readable (not encrypted) copy of the newest full backup into an empty folder the person chose."""
+        text = str(folder or "")
+        if text.startswith("file://"):
+            from urllib.parse import unquote, urlparse
+            text = unquote(urlparse(text).path)
+        target = Path(text) if text else None
+        if target is None or not target.is_dir():
+            return {"ok": False, "msg": "Choose a folder that exists."}
+        if any(p for p in target.iterdir() if p.name != ".DS_Store"):
+            return {"ok": False, "msg": "Choose an empty folder, so that nothing in it is mixed up or replaced."}
+        data = config.DATA_DIR.resolve()
+        if target.resolve() == data or data in target.resolve().parents:
+            return {"ok": False, "msg": "Choose a folder outside the app's own data folder."}
+        fulls = sorted((p for p in vault.backups_dir().glob("everything_*") if p.is_dir()), key=lambda p: p.name)
+        if not fulls:
+            made = self.backup_all()
+            if not made.get("ok"):
+                return made
+            fulls = sorted((p for p in vault.backups_dir().glob("everything_*") if p.is_dir()), key=lambda p: p.name)
+        try:
+            count = vault.restore_backup(fulls[-1], target)
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "msg": f"The copy was not made: {trouble._safe(e)}"}
+        return {"ok": True, "msg": f"Saved {count} readable files from the backup {fulls[-1].name}. They are not encrypted: "
+                                   "keep that folder safe, and delete it when you no longer need it."}
+
+    def filing_targets(self, text=""):
+        """The applications a reply can be filed under, newest first: [{id, company, title, status, applied}].
+        `text` narrows them to those whose company or title contains every word typed."""
+        words = [w for w in str(text or "").lower().split() if w][:8]
+        rows = [j for j in store.load_jobs() if j.get("status") in store.APPLICATION_STATUSES]
+        rows = [j for j in rows if all(w in f"{j.get('company', '')} {j.get('title', '')}".lower() for w in words)]
+        rows.sort(key=lambda j: j.get("date_applied") or "", reverse=True)
+        return [{"id": j["id"], "company": j.get("company", ""), "title": j.get("title", ""), "status": j.get("status", ""),
+                 "applied": j.get("date_applied", "")} for j in rows[:40]]
+
+    def refile_response(self, msg_id, job_id):
+        """File a reply under another application, or under none (job_id ''). The reply itself is not
+        changed. The application it moves to follows the reply the usual way (an invitation makes it an
+        interview, a rejection closes it); the one it leaves keeps its status, which only you can judge."""
+        reply = next((x for x in db.all_responses() if x.get("msg_id") == msg_id), None)
+        if not reply:
+            return {"ok": False, "msg": "That reply is not on file any more."}
+        job_id, was = str(job_id or ""), reply.get("job_id") or ""
+        if job_id == was:
+            return {"ok": False, "msg": "It is already filed there." if job_id else "It is not filed under any application."}
+        jobs = store.load_jobs()
+        old = store.find(jobs, was) if was else None
+        if not job_id:
+            db.set_response_job(msg_id, "")
+            if old:
+                self._change(old["id"], lambda all_jobs, j: agent5_responses.annotate_progress(all_jobs))
+            return {"ok": True, "msg": "The reply is not filed under any application now."
+                                       + (f" {old['company']} keeps its status ({old['status']}): change it there if this reply had set it." if old else "")}
+        target = store.find(jobs, job_id)
+        if not target:
+            return {"ok": False, "msg": "That application is not in the list any more."}
+        if target.get("status") not in store.APPLICATION_STATUSES:
+            return {"ok": False, "msg": "A reply is filed under an application. Mark that job as applied first."}
+        db.set_response_job(msg_id, job_id)
+        new_status = email_client.STAGE_TO_STATUS.get(reply.get("stage", ""))
+        moved = {}
+
+        def go(all_jobs, j):
+            current = j.get("status", "")
+            if new_status and new_status != current and (new_status == "rejected" or email_client.RANK.get(new_status, 0) > email_client.RANK.get(current, 0)):
+                moved["from"], j["status"], j["last_update"] = current, new_status, date.today().isoformat()
+            agent5_responses.annotate_progress(all_jobs)
+        self._change(job_id, go)
+        text = f"Filed under {target.get('company', '')} · {target.get('title', '')}."
+        if moved:
+            text += f" Its status changed from {moved['from']} to {new_status}."
+        if old and old["id"] != job_id:
+            text += f" {old.get('company', '')} keeps its status ({old.get('status', '')}): change it there if this reply had set it."
+        return {"ok": True, "msg": text}
 
     @_guarded(dict)
     def response_detail(self, msg_id):

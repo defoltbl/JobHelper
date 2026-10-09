@@ -84,6 +84,19 @@ class RunSlots:
             self._post("rescoreReady", result)
         threading.Thread(target=work, daemon=True).start()
 
+    @Slot(str)
+    def writeDocuments(self, job_id):
+        """Write the CV and the letter of one job in the background; the answer arrives as docsReady."""
+        def work():
+            try:
+                result = self._api.write_documents(job_id)
+            except Exception as e:  # noqa: BLE001 - the window must always get an answer
+                trouble.note("writing the documents of one job", e)
+                result = {"ok": False, "msg": str(e) or type(e).__name__}
+            result["job_id"] = job_id
+            self._post("docsReady", result)
+        threading.Thread(target=work, daemon=True).start()
+
     @Slot(result="QVariantMap")
     def rescoreAll(self):
         """Score every new job that has a score again, as a run: it shows progress, can be stopped,

@@ -96,6 +96,59 @@ def problems() -> list[dict]:
     return [f for f in check() if f["state"] in ("changed", "missing", "untracked")]
 
 
+KEPT = "approved"        # backups/approved/: the text of each file as it was when approved, to show what changed later
+MAX_KEPT, MAX_SHOWN = 400_000, 40
+
+
+def _text_of(path: Path) -> str:
+    """What a watched file says, as lines of text (a Word or PDF file by its text)."""
+    from . import agent1_cv
+    try:
+        return agent1_cv.read_cv_text(Path(path))[:MAX_KEPT]
+    except Exception:  # noqa: BLE001 - a file that cannot be read has no text to compare
+        return ""
+
+
+def _kept_path(name: str) -> Path:
+    return vault.backups_dir() / KEPT / f"{name}.txt"
+
+
+def _keep(name: str, path: Path) -> None:
+    try:
+        target = _kept_path(name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        vault.write_text(target, _text_of(path))
+    except Exception as e:  # noqa: BLE001 - approving must not fail because the copy could not be kept
+        from . import trouble
+        trouble.note("keeping a copy of an approved file", e)
+
+
+def what_changed(name: str) -> dict:
+    """What is different in a watched file since it was last approved:
+    {title, file, known, added: [lines], removed: [lines], more}. `known` is False when no
+    earlier text was kept (approved before copies were kept): then only the file can be read."""
+    import difflib
+    path = protected_files().get(name)
+    out = {"title": TITLES.get(name, name), "file": Path(path).name if path else "", "known": False, "added": [], "removed": [], "more": 0}
+    if name not in TITLES or not path or not Path(path).is_file():
+        return out
+    try:
+        before = vault.read_text(_kept_path(name))
+    except Exception:  # noqa: BLE001 - no copy, or one that cannot be opened
+        return out
+    old = [line.strip() for line in before.splitlines() if line.strip()]
+    new = [line.strip() for line in _text_of(Path(path)).splitlines() if line.strip()]
+    added, removed = [], []
+    for line in difflib.ndiff(old, new):
+        if line.startswith("+ "):
+            added.append(line[2:][:300])
+        elif line.startswith("- "):
+            removed.append(line[2:][:300])
+    out.update(known=True, added=added[:MAX_SHOWN], removed=removed[:MAX_SHOWN],
+               more=max(0, len(added) - MAX_SHOWN) + max(0, len(removed) - MAX_SHOWN))
+    return out
+
+
 def approve(names: list[str] | None = None) -> list[str]:
     """Accept the current content of the given files (default: all) as trusted."""
     if vault.state() != "ok":
@@ -106,6 +159,7 @@ def approve(names: list[str] | None = None) -> list[str]:
             continue
         if path and Path(path).is_file():
             manifest[name] = {"file": Path(path).name, "mac": _signature(name, Path(path))}
+            _keep(name, Path(path))
         else:
             manifest.pop(name, None)
         done.append(name)

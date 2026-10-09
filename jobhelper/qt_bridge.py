@@ -57,6 +57,8 @@ class Bridge(RunSlots, JobSlots, QObject):
     replyReady = Signal("QVariantMap")         # a pasted reply was filed (or why not)
     answersReady = Signal("QVariantMap")       # answers for a job's form were drafted (or why not)
     rescoreReady = Signal("QVariantMap")       # one job was scored again (or why not)
+    docsReady = Signal("QVariantMap")          # the CV and letter of one job were written (or why not)
+    storageDone = Signal("QVariantMap")        # a backup was made, checked or copied out (or why not)
     emailSaved = Signal("QVariantMap")         # a mailbox was tried and saved (or why not)
 
     def __init__(self) -> None:
@@ -258,6 +260,15 @@ class Bridge(RunSlots, JobSlots, QObject):
         try:
             return integrity.approve()
         except Exception:  # noqa: BLE001
+            return []
+
+    @Slot(result="QVariantList")
+    def whatChanged(self):
+        """For each file changed outside the app: what was added and removed since it was approved."""
+        try:
+            return [integrity.what_changed(f["name"]) for f in integrity.problems() if f["state"] == "changed"]
+        except Exception as e:  # noqa: BLE001 - the card then only names the files
+            trouble.note("showing what changed in a watched file", e)
             return []
 
     # ── weekly schedule ─────────────────────────────────────────

@@ -123,6 +123,24 @@ Dialog {
     // documents moved to the backup: how many there are, and removing the old ones (asked first, with the count)
     property var shelf: ({})
     property bool confirmTidy: false
+    property string storageBusy: ""       // which backup action is running: "backup", "check", "export" or ""
+    property string storageNote: ""
+    property bool storageBad: false
+    function storage(action, folder) {
+        storageNote = ""; storageBad = false;
+        if (win.appRunning) { storageBad = true; storageNote = "A search or scan is running. Do this when it has finished."; return; }
+        if (storageBusy !== "") return;
+        storageBusy = action;
+        bridge.storage(action, folder);
+    }
+    Connections { target: bridge
+        function onStorageDone(res) {
+            optDialog.storageBusy = ""; optDialog.storageBad = !(res && res.ok);
+            optDialog.storageNote = (res && res.msg) || (optDialog.storageBad ? "That did not work." : "Done.");
+            if (res && res.ok) optDialog.readShelf();
+        } }
+    FolderDialog { id: exportDialog; title: "Choose an empty folder for the readable copy"
+        onAccepted: optDialog.storage("export", "" + selectedFolder) }
     // what is wrong with a typed country ('' = nothing): its English name in letters, as postings write it
     function countryProblem(text) {
         var t = (text || "").trim();
@@ -229,7 +247,7 @@ Dialog {
         }
     }
     onAboutToShow: load()      // fill + reset BEFORE the window is visible (not after the animation)
-    onOpened: { backNote = ""; backBad = false; confirmTidy = false; shelfNote = ""; shelfBad = false; shelfDone = false; shelfSpin.value = 30; readShelf(); }
+    onOpened: { storageNote = ""; storageBad = false; backNote = ""; backBad = false; confirmTidy = false; shelfNote = ""; shelfBad = false; shelfDone = false; shelfSpin.value = 30; readShelf(); }
     background: Rectangle {
         radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1
         MouseArea { anchors.fill: parent; onPressed: function (m) { optSink.forceActiveFocus(); m.accepted = false; } }
@@ -544,6 +562,20 @@ Dialog {
                             wrapMode: Text.WordWrap; font.pixelSize: 11; font.bold: optDialog.shelfBad
                             color: optDialog.shelfBad ? theme.crit : optDialog.confirmTidy ? theme.warn : optDialog.shelfDone ? theme.good : theme.faint
                             text: optDialog.shelfNote !== "" ? optDialog.shelfNote : optDialog.shelfSummary() }
+                        Sep {}
+                        // everything in one encrypted backup, a proof that backups restore, and a readable copy to take away
+                        SRow { label: "Back up everything"; hint: "data, CV, letters, documents, rules · encrypted"
+                            RowLayout { spacing: 6
+                                SmallButton { objectName: "backupNow"; enabled: optDialog.storageBusy === ""
+                                    text: optDialog.storageBusy === "backup" ? "Backing up…" : "Back up now"; onClicked: optDialog.storage("backup", "") }
+                                SmallButton { objectName: "backupCheck"; enabled: optDialog.storageBusy === ""
+                                    text: optDialog.storageBusy === "check" ? "Checking…" : "Check backups"; onClicked: optDialog.storage("check", "") }
+                                SmallButton { objectName: "backupExport"; enabled: optDialog.storageBusy === ""
+                                    text: optDialog.storageBusy === "export" ? "Copying…" : "Save a readable copy…"; onClicked: exportDialog.open() } } }
+                        Text { objectName: "storageNote"; visible: text !== ""
+                            Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12
+                            wrapMode: Text.WordWrap; font.pixelSize: 11; font.bold: optDialog.storageBad
+                            color: optDialog.storageBad ? theme.crit : theme.good; text: optDialog.storageNote }
                     }
                 }
 

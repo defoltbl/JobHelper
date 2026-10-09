@@ -19,6 +19,7 @@ Item {
     property string hostDraft: ""         // the IMAP server, typed for a provider the app does not know
     // the server is asked for only when the address does not tell it (its own flag: a field's `visible` also depends on what is around it)
     readonly property bool needsServer: win.isEmail(emailDraft) && bridge.mailServer(emailDraft, "").known !== true
+    property var changes: []              // what changed in each watched file, while the person looks at it
     property string keyText: ""           // the recovery key while it is shown; cleared when hidden, on a timer, and when the card closes
     property string keyErr: ""
     property bool keyCopied: false
@@ -35,7 +36,7 @@ Item {
         if (r && r.ok) { restoreErr = ""; bridge.checkConnections(); win.reloadAll(); }
         else restoreErr = (r && r.msg) || "The key could not be used.";
     }
-    onShownChanged: if (!shown) { keyText = ""; keyErr = ""; keyCopied = false; restoreErr = ""; }
+    onShownChanged: if (!shown) { changes = []; keyText = ""; keyErr = ""; keyCopied = false; restoreErr = ""; }
     Timer { interval: 60000; running: welcome.keyText !== ""; onTriggered: { welcome.keyText = ""; welcome.keyCopied = false; } }
     property bool emailBusy: false        // the mailbox is being tried with the address and password just entered
     property string emailNote: ""         // saved, but something to know (the server could not be reached)
@@ -317,10 +318,32 @@ Item {
                             ? ("Changed outside the app: " + welcome.changedFiles.join(", ") + ". Check them, then approve.")
                        : connData.vault === "ok" ? "Encrypted on disk · key and mailbox password in your Keychain"
                        : "Off: no Keychain on this system, files are stored plain."
+                    SmallButton { objectName: "seeChanges"; visible: welcome.changedFiles.length > 0 && connData.vault === "ok"
+                        text: welcome.changes.length > 0 ? "Hide changes" : "See what changed"
+                        onClicked: welcome.changes = welcome.changes.length > 0 ? [] : bridge.whatChanged() }
                     SmallButton { visible: welcome.changedFiles.length > 0 && connData.vault === "ok"; primaryStyle: true
-                        text: "Approve"; onClicked: { bridge.approveChanges(); bridge.checkConnections(); } }
+                        text: "Approve"; onClicked: { bridge.approveChanges(); welcome.changes = []; bridge.checkConnections(); } }
                     SmallButton { objectName: "keyShow"; visible: connData.vault === "ok" && welcome.changedFiles.length === 0
                         text: welcome.keyText !== "" ? "Hide key" : "Recovery key"; onClicked: welcome.toggleKey() }
+                }
+                // what is different in each changed file, so that approving is not done blind
+                ColumnLayout { objectName: "changesPanel"; visible: welcome.changes.length > 0 && welcome.changedFiles.length > 0
+                    Layout.fillWidth: true; Layout.leftMargin: 38; spacing: 8
+                    Repeater { model: welcome.changes
+                        ColumnLayout { Layout.fillWidth: true; spacing: 2
+                            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 12; font.bold: true
+                                text: modelData.title + (modelData.file ? " · " + modelData.file : "") }
+                            Text { visible: modelData.known !== true; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.warn; font.pixelSize: 11
+                                text: "No earlier copy of this file was kept, so the difference cannot be shown. Open the file and read it before you approve. From the next approval on, the app keeps a copy." }
+                            Text { visible: modelData.known === true && modelData.added.length === 0 && modelData.removed.length === 0
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 11
+                                text: "The words are the same. Only the layout, the spacing or the file itself changed." }
+                            Repeater { model: modelData.known === true ? modelData.removed : []
+                                Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.crit; font.pixelSize: 11; text: "− " + modelData } }
+                            Repeater { model: modelData.known === true ? modelData.added : []
+                                Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.good; font.pixelSize: 11; text: "+ " + modelData } }
+                            Text { visible: (modelData.more || 0) > 0; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
+                                text: "… and " + modelData.more + " more changed lines. Open the file to read all of it." } } }
                 }
                 // the recovery key, shown only when asked for, and put away again by itself
                 ColumnLayout { objectName: "keyPanel"; visible: welcome.keyText !== "" || welcome.keyErr !== ""

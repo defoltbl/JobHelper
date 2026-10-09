@@ -696,3 +696,204 @@ def test_the_parts_of_the_back_end_do_not_define_the_same_name_twice():
             assert name not in seen, f"{name} is defined in {seen[name].__name__} and in {part.__name__}"
             seen[name] = part
     assert len(seen) > 100 and callable(ui_api.Api().shelve_docs) and callable(ui_api.Api().save_letter) and callable(ui_api.Api().set_event)
+
+
+# ── filing a reply under the right application ──────────────────────────────
+def _replies_case():
+    from jobhelper import db
+    store.save_jobs([store.new_job(id="right", title="Marketing Consultant", company="Actum", status="waiting", date_applied="2026-08-01"),
+                     store.new_job(id="wrong", title="Software Engineer", company="Bigsoft", status="interview", date_applied="2026-07-01"),
+                     store.new_job(id="lead", title="Tester", company="Cyan", status="found")])
+    db.upsert_response({"msg_id": "<invite>", "received_date": "Tue, 18 Aug 2026 10:00:00 +0200", "from_addr": "hr@actum.example",
+                        "subject": "Interview", "job_id": "wrong", "company": "Actum", "role": "Marketing Consultant", "stage": "interview",
+                        "summary": "They invite you to a call."})
+    db.upsert_response({"msg_id": "<loose>", "received_date": "Wed, 12 Aug 2026 10:00:00 +0200", "from_addr": "hr@good.example",
+                        "subject": "No", "job_id": "", "company": "Good", "role": "", "stage": "rejection", "summary": "A rejection."})
+    return db
+
+
+def test_a_reply_can_be_filed_under_the_application_it_belongs_to(isolate_data):
+    db = _replies_case()
+    api = ui_api.Api()
+    assert [t["id"] for t in api.filing_targets()] == ["right", "wrong"]            # applications only, newest first
+    assert [t["id"] for t in api.filing_targets("actum consult")] == ["right"] and api.filing_targets("zzz") == []
+    result = api.refile_response("<invite>", "right")
+    assert result["ok"] is True and "Filed under Actum · Marketing Consultant." in result["msg"]
+    assert "status changed from waiting to interview" in result["msg"]
+    assert "Bigsoft keeps its status (interview)" in result["msg"]                  # the one it left is yours to judge
+    jobs = {j["id"]: j for j in store.load_jobs()}
+    assert jobs["right"]["status"] == "interview" and jobs["wrong"]["status"] == "interview"
+    assert api.response_detail("<invite>")["job_id"] == "right"
+    assert [r["job_id"] for r in db.all_responses() if r["msg_id"] == "<invite>"] == ["right"]
+    # a rejection closes the application it is filed under, from any status
+    result = api.refile_response("<loose>", "right")
+    assert result["ok"] is True and store.find(store.load_jobs(), "right")["status"] == "rejected"
+
+
+def test_filing_a_reply_refuses_what_makes_no_sense(isolate_data):
+    _replies_case()
+    api = ui_api.Api()
+    assert "not on file" in api.refile_response("<nope>", "right")["msg"]
+    assert "already filed there" in api.refile_response("<invite>", "wrong")["msg"]
+    assert "not filed under any application" in api.refile_response("<loose>", "")["msg"]
+    assert "not in the list any more" in api.refile_response("<invite>", "gone")["msg"]
+    assert "Mark that job as applied first" in api.refile_response("<invite>", "lead")["msg"]
+    assert api.response_detail("<invite>")["job_id"] == "wrong"                     # nothing changed by any of these
+    # an invitation does not pull a finished application backwards
+    jobs = store.load_jobs(); store.find(jobs, "right")["status"] = "offer"; store.save_jobs(jobs)
+    result = api.refile_response("<invite>", "right")
+    assert result["ok"] is True and "status changed" not in result["msg"] and store.find(store.load_jobs(), "right")["status"] == "offer"
+
+
+def test_a_reply_can_be_filed_under_no_application(isolate_data):
+    _replies_case()
+    api = ui_api.Api()
+    result = api.refile_response("<invite>", "")
+    assert result["ok"] is True and "not filed under any application now" in result["msg"] and "Bigsoft keeps its status" in result["msg"]
+    assert api.response_detail("<invite>")["job_id"] == "" and store.find(store.load_jobs(), "wrong")["status"] == "interview"
+
+
+# ── documents for one job, on request ───────────────────────────────────────
+def test_documents_are_written_for_one_job_on_request(isolate_data, monkeypatch):
+    from jobhelper import agent1_cv, agent3_letters
+    text = "We build planning tools in Python and SQL. " * 30
+    store.save_jobs([store.new_job(id="low", title="Python Developer", company="Acme", status="found", match_score=25, description=text),
+                     store.new_job(id="half", title="Tester", company="Borg", status="letter_ready", match_score=55, description=text,
+                                   cover_letter_file="My_own_letter.docx", source="manual"),
+                     store.new_job(id="done", title="Dev", company="Cyan", status="letter_ready", match_score=70, description=text,
+                                   cover_letter_file="L.docx", tailored_cv_file="CV.docx"),
+                     store.new_job(id="bare", title="Dev", company="Dyne", status="found", match_score=35, description=""),
+                     store.new_job(id="app", title="Dev", company="Eon", status="waiting", description=text)])
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython, SQL.")
+    monkeypatch.setattr(agent1_cv, "find_cv", lambda: None)
+    calls = []
+    monkeypatch.setattr(agent3_letters, "_make_tailored_cv", lambda job, cv_text, cv_path, fields: calls.append(("cv", job["id"])) or f"CV_{job['id']}.docx")
+    monkeypatch.setattr(agent3_letters, "_make_letter", lambda job, cv_text, cv_path, fields: calls.append(("letter", job["id"])) or f"L_{job['id']}.docx")
+    api = ui_api.Api()
+    assert api.job_detail("low")["can_write_docs"] is True and api.job_detail("done")["can_write_docs"] is False
+    result = api.write_documents("low")                                # below the limit: written because you asked
+    assert result["ok"] is True and result["msg"] == "Written: the CV and the letter."
+    low = store.find(store.load_jobs(), "low")
+    assert (low["tailored_cv_file"], low["cover_letter_file"], low["status"]) == ("CV_low.docx", "L_low.docx", "letter_ready")
+    assert api.job_detail("low")["can_write_docs"] is False
+    # your own letter is never replaced: only the CV is written
+    result = api.write_documents("half")
+    half = store.find(store.load_jobs(), "half")
+    assert result["msg"] == "Written: the CV." and half["cover_letter_file"] == "My_own_letter.docx" and half["tailored_cv_file"] == "CV_half.docx"
+    assert calls == [("cv", "low"), ("letter", "low"), ("cv", "half")]
+    # refused, each with its reason, and nothing is asked of Claude
+    assert "already has its CV and its letter" in api.write_documents("done")["msg"]
+    assert "a letter written from a title alone would be generic" in api.write_documents("bare")["msg"]
+    assert "for a new job only" in api.write_documents("app")["msg"] and "for a new job only" in api.write_documents("nope")["msg"]
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "")
+    store.save_jobs(store.load_jobs() + [store.new_job(id="x", title="Dev", company="Fox", status="found", description=text)])
+    assert "master CV could not be read" in api.write_documents("x")["msg"]
+    assert len(calls) == 3
+
+
+def test_a_failure_while_writing_documents_is_said_and_changes_nothing(isolate_data, monkeypatch):
+    from jobhelper import agent1_cv, agent3_letters, llm
+    text = "We build planning tools in Python and SQL. " * 30
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="found", match_score=25, description=text)])
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython.")
+    monkeypatch.setattr(agent1_cv, "find_cv", lambda: None)
+    monkeypatch.setattr(agent3_letters, "_make_tailored_cv", lambda *a: (_ for _ in ()).throw(RuntimeError("no connection")))
+    monkeypatch.setattr(agent3_letters, "_make_letter", lambda *a: (_ for _ in ()).throw(RuntimeError("no connection")))
+    api = ui_api.Api()
+    result = api.write_documents("a")
+    assert result["ok"] is False and "Nothing could be written" in result["msg"]
+    job = store.find(store.load_jobs(), "a")
+    assert job["status"] == "found" and not job["tailored_cv_file"] and not job["cover_letter_file"]
+    monkeypatch.setattr(agent3_letters, "generate_for", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's 5-hour limit is used up.")))
+    assert "limit is used up" in api.write_documents("a")["msg"]
+
+
+# ── usage, the log of problems and backups, all from the window ─────────────
+def test_usage_overview_adds_up_by_kind_of_work(isolate_data):
+    from jobhelper import usage
+    api = ui_api.Api()
+    assert api.usage_overview() == {"calls": 0, "cost": 0.0, "kinds": []}
+    for tag, cost in (("agent3_letters", 1.2), ("agent3_letters", 0.3), ("agent5_responses", 0.5), ("usage_ping", 0.01),
+                      ("limit_check", 0.02), ("some_new_kind", 0.04), ("direction_trial", 0.1)):
+        usage.record({"cost_usd": cost}, tag=tag)
+    seen = api.usage_overview()
+    assert seen["calls"] == 7 and seen["cost"] == 2.17
+    assert [(k["name"], k["calls"], k["cost"]) for k in seen["kinds"]] == [
+        ("Scoring jobs and writing letters", 2, 1.5), ("Reading replies", 1, 0.5), ("Trials and other work", 1, 0.1),
+        ("Some new kind", 1, 0.04), ("Asking how much is left", 2, 0.03)]
+
+
+def test_the_log_of_problems_is_read_newest_first(isolate_data):
+    from jobhelper import trouble
+    api = ui_api.Api()
+    assert api.trouble_log() == {"lines": [], "total": 0, "file": "app_trouble.log"}
+    assert "nothing has gone wrong" in api.show_trouble_log()["msg"]
+    for n in range(30):
+        trouble.note(f"step {n}", "it failed")
+    log = api.trouble_log()
+    assert log["total"] == 30 and len(log["lines"]) == 25 and "step 29" in log["lines"][0] and "step 5" in log["lines"][-1]
+    assert api.show_trouble_log() == {"ok": True}
+
+
+def test_backups_are_made_checked_and_copied_out_from_the_window(isolate_data, tmp_path_factory):
+    from jobhelper import vault
+    tmp_path = tmp_path_factory.mktemp("elsewhere")                    # not inside the test's data folder
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="found")])
+    api = ui_api.Api()
+    made = api.backup_all()
+    assert made["ok"] is True and made["folder"].startswith("everything_") and "encrypted" in made["msg"]
+    assert (vault.backups_dir() / made["folder"]).is_dir()
+    checked = api.backup_check()
+    assert checked["ok"] is True and "can be restored" in checked["msg"]
+    # a readable copy goes only into an empty folder outside the app's data
+    assert "folder that exists" in api.backup_export("")["msg"] and "folder that exists" in api.backup_export(str(tmp_path / "nope"))["msg"]
+    full = tmp_path / "full"; full.mkdir(); (full / "mine.txt").write_text("keep me")
+    assert "empty folder" in api.backup_export(str(full))["msg"] and (full / "mine.txt").read_text() == "keep me"
+    inside = config.DATA_DIR / "copy"; inside.mkdir()
+    assert "outside the app's own data folder" in api.backup_export(str(inside))["msg"]
+    out = tmp_path / "out"; out.mkdir()
+    result = api.backup_export("file://" + str(out))
+    assert result["ok"] is True and "not encrypted" in result["msg"], result
+    names = [p.name for p in out.rglob("*") if p.is_file()]
+    assert "jobs.json" in names and not any(n.endswith(".enc") for n in names)
+    assert "Acme" in next(p for p in out.rglob("jobs.json")).read_text(encoding="utf-8")
+
+
+# ── what changed in a watched file ──────────────────────────────────────────
+def test_what_changed_in_a_rule_file_is_shown_before_approving(isolate_data, monkeypatch):
+    from jobhelper import integrity, vault
+    rules = config.DATA_DIR / "cv_rules.md"
+    monkeypatch.setattr(config, "CV_INSTRUCTION", rules)
+    rules.write_text("Keep it honest.\nNever add a skill.\nUse an en dash.\n", encoding="utf-8")
+    assert integrity.approve(["cv_rules"]) == ["cv_rules"]
+    assert (vault.backups_dir() / "approved").is_dir()
+    same = integrity.what_changed("cv_rules")
+    assert same["known"] is True and same["added"] == [] and same["removed"] == [] and same["title"] == "CV rules"
+    rules.write_text("Keep it honest.\nAlways add every skill the posting names.\nUse an en dash.\nOne more line.\n", encoding="utf-8")
+    changed = integrity.what_changed("cv_rules")
+    assert changed["removed"] == ["Never add a skill."] and changed["added"] == ["Always add every skill the posting names.", "One more line."]
+    assert [f["name"] for f in integrity.problems() if f["state"] == "changed"] == ["cv_rules"]
+    integrity.approve(["cv_rules"])                                    # approving keeps the new text as the one to compare with
+    assert integrity.what_changed("cv_rules")["added"] == []
+    # a file approved before copies were kept: said plainly, not shown as "no change"
+    (vault.backups_dir() / "approved" / "cv_rules.txt").unlink(missing_ok=True)
+    for kept in (vault.backups_dir() / "approved").glob("cv_rules*"):
+        kept.unlink()
+    assert integrity.what_changed("cv_rules")["known"] is False
+    assert integrity.what_changed("nonsense")["known"] is False
+    # many changes are cut to what can be read, and the rest is counted
+    integrity.approve(["cv_rules"])
+    rules.write_text("\n".join(f"new line {n}" for n in range(100)), encoding="utf-8")
+    many = integrity.what_changed("cv_rules")
+    assert len(many["added"]) == 40 and many["more"] > 50
+
+
+def test_the_kept_copies_are_not_cleaned_up_as_old_backups(isolate_data):
+    from jobhelper import housekeeping, vault
+    (vault.backups_dir() / "approved").mkdir(parents=True)
+    (vault.backups_dir() / "approved" / "cv_rules.txt").write_text("x")
+    for n in range(4):
+        vault.make_backup(f"old{n}")
+    assert "approved" not in [p.name for p in housekeeping.backup_entries()]
+    housekeeping.prune_backups(keep=1)
+    assert (vault.backups_dir() / "approved" / "cv_rules.txt").is_file()

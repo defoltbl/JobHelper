@@ -19,9 +19,12 @@ Dialog {
     Overlay.modal: Rectangle { color: win.dimColor; Behavior on opacity { NumberAnimation { duration: 200 } } }
     width: Math.min(720, win.width - 60); height: Math.min(760, win.height - 50)
     padding: 0
-    property string tab: "how"            // how: how the app works | new: what changed
+    property string tab: "how"            // how: how the app works | new: what changed | use: usage and the log of problems
     property var changes: []
-    onAboutToShow: { helpFlick.contentY = 0; changes = bridge.changelog(); }
+    property var used: ({})
+    property var log: ({})
+    property string logNote: ""
+    onAboutToShow: { helpFlick.contentY = 0; changes = bridge.changelog(); used = bridge.usageOverview(); log = bridge.troubleLog(); logNote = ""; }
     onTabChanged: helpFlick.contentY = 0
     // Each topic: a title and short lines. Kept here so the help always matches this window.
     readonly property var topics: [
@@ -88,7 +91,7 @@ Dialog {
         RowLayout { Layout.fillWidth: true; Layout.margins: 16
             Text { text: "Help"; color: theme.ink; font.pixelSize: 17; font.bold: true }
             Row { Layout.leftMargin: 14; spacing: 6
-                Repeater { model: [["how", "How it works"], ["new", "What changed"]]
+                Repeater { model: [["how", "How it works"], ["new", "What changed"], ["use", "Usage and problems"]]
                     Rectangle {
                         readonly property bool on: helpDialog.tab === modelData[0]
                         objectName: "helpTab_" + modelData[0]
@@ -125,6 +128,28 @@ Dialog {
                                 Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; lineHeight: 1.3
                                     textFormat: Text.StyledText; text: modelData } } } }
                 }
+                DetailCard { heading: "What the app has asked Claude so far"; objectName: "usageCard"; visible: helpDialog.tab === "use"
+                    Text { objectName: "usageTotal"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; lineHeight: 1.3
+                        text: (helpDialog.used.calls || 0) === 0 ? "Nothing yet. The numbers appear after the first search."
+                              : (helpDialog.used.calls + " questions in all. Through the paid API the same work would have cost about $"
+                                 + Number(helpDialog.used.cost || 0).toFixed(2) + ". You paid for your subscription only.") }
+                    Repeater { model: helpDialog.used.kinds || []
+                        RowLayout { Layout.fillWidth: true; spacing: 8
+                            Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.ink; font.pixelSize: 12; text: modelData.name }
+                            Text { color: theme.soft; font.pixelSize: 12; text: modelData.calls + (modelData.calls === 1 ? " question" : " questions") }
+                            Text { color: theme.ink; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignRight
+                                Layout.preferredWidth: 64; text: "≈ $" + Number(modelData.cost).toFixed(2) } } } }
+                DetailCard { heading: "Problems the app carried on after"; objectName: "logCard"; visible: helpDialog.tab === "use"
+                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12; lineHeight: 1.3
+                        text: (helpDialog.log.total || 0) === 0 ? "Nothing has gone wrong so far."
+                              : "When something small fails (a sound, a folder that does not open, one posting that cannot be read), the app notes it here and carries on. "
+                                + "The newest are first" + (helpDialog.log.total > (helpDialog.log.lines || []).length ? ", " + helpDialog.log.lines.length + " of " + helpDialog.log.total + " shown." : ".") }
+                    Repeater { model: helpDialog.log.lines || []
+                        Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.ink; font.pixelSize: 11; font.family: "Menlo"; text: modelData } }
+                    RowLayout { Layout.fillWidth: true; spacing: 8; visible: (helpDialog.log.total || 0) > 0
+                        Text { objectName: "logNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true; text: helpDialog.logNote }
+                        SmallButton { objectName: "logShow"; text: "Show the file in Finder"
+                            onClicked: { var r = bridge.showTroubleLog(); helpDialog.logNote = (r && r.ok) ? "" : ((r && r.msg) || "The file could not be shown."); } } } }
                 Repeater {
                     model: helpDialog.tab === "how" ? helpDialog.topics : []
                     DetailCard { heading: modelData.title

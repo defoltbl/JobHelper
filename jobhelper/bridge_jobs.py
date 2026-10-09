@@ -421,6 +421,50 @@ class JobSlots:
     def responseDetail(self, msg_id):
         return self._api.response_detail(msg_id)
 
+    @Slot(result="QVariantMap")
+    def usageOverview(self):
+        return self._api.usage_overview()
+
+    @Slot(result="QVariantMap")
+    def troubleLog(self):
+        return self._api.trouble_log()
+
+    @Slot(result="QVariantMap")
+    def showTroubleLog(self):
+        return self._api.show_trouble_log()
+
+    @Slot(str, str)
+    def storage(self, action, folder):
+        """Make a full backup ("backup"), check that backups restore ("check") or save a readable copy
+        into a folder ("export"). In the background; the answer arrives as storageDone: {action, ok, msg}."""
+        def work():
+            if self._running:
+                result = {"ok": False, "msg": "A search or scan is running. Do this when it has finished."}
+            else:
+                try:
+                    result = {"backup": self._api.backup_all, "check": self._api.backup_check,
+                              "export": lambda: self._api.backup_export(folder)}.get(action, lambda: {"ok": False, "msg": "There is no such action."})()
+                except Exception as e:  # noqa: BLE001 - the window must always get an answer
+                    trouble.note("working with the backups", e)
+                    result = {"ok": False, "msg": "That did not work. Nothing was changed."}
+            result["action"] = action
+            self._post("storageDone", result)
+        threading.Thread(target=work, daemon=True).start()
+
+    @Slot(str, result="QVariantList")
+    def filingTargets(self, text):
+        return self._api.filing_targets(text)
+
+    @Slot(str, str, result="QVariantMap")
+    def refileResponse(self, msg_id, job_id):
+        if self._running:
+            return {"ok": False, "msg": "A search or scan is running. File the reply when it has finished."}
+        try:
+            return self._api.refile_response(msg_id, job_id)
+        except Exception as e:  # noqa: BLE001 - the window must always get an answer
+            trouble.note("filing a reply under another application", e)
+            return {"ok": False, "msg": "The reply could not be filed there."}
+
     @Slot(str, result=bool)
     def markFollowedUp(self, job_id):
         return bool(self._api.mark_followed_up(job_id).get("ok"))

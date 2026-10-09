@@ -88,6 +88,13 @@ def has_response(msg_id: str) -> bool:
         return cur.fetchone() is not None
 
 
+def set_response_job(msg_id: str, job_id: str) -> bool:
+    """File a stored reply under another application ('' = under none). True if the reply exists."""
+    with _connect(write=True) as conn:
+        cur = conn.execute("UPDATE responses SET job_id = ? WHERE msg_id = ?", (job_id or "", msg_id))
+        return cur.rowcount > 0
+
+
 def upsert_response(rec: dict[str, Any]) -> None:
     cols = ["msg_id", "received_date", "from_addr", "subject", "job_id", "company",
             "role", "stage", "rejection_reason", "rejection_category", "sentiment",

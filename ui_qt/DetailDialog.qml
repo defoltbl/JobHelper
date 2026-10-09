@@ -174,6 +174,26 @@ Dialog {
         if (r && r.ok) { refresh(); win.countsData = bridge.counts(); win.refreshOpenView(); }
     }
     function dayTime(iso) { return (iso || "").replace("T", " ").slice(0, 16); }
+    property bool docsBusy: false         // the CV and the letter of a job are being written
+    property string docsJob: ""
+    property string docsNote: ""
+    property bool docsBad: false
+    function writeDocs() {
+        docsNote = ""; docsBad = false;
+        if (win.appRunning) { docsBad = true; docsNote = "A search or scan is running. Write the documents when it has finished."; return; }
+        if (docsBusy) { docsBad = true; docsNote = "Documents of another job are being written. Try again when they are done."; return; }
+        docsBusy = true; docsJob = job.id;
+        bridge.writeDocuments(job.id);
+    }
+    Connections { target: bridge
+        function onDocsReady(res) {
+            if (res.job_id !== detailDialog.docsJob) return;
+            detailDialog.docsBusy = false;
+            var text = res.ok ? (res.msg || "Written.") : ("Not written: " + (res.msg || "unknown reason"));
+            if (res.job_id === detailDialog.job.id) { detailDialog.docsBad = !res.ok; detailDialog.docsNote = text; if (res.ok) detailDialog.refresh(); }
+            else ticker.text = text;
+            if (res.ok) { win.countsData = bridge.counts(); win.refreshOpenView(); }
+        } }
     property bool scoreBusy: false
     property string scoreJob: ""
     property string scoreNote: ""
@@ -276,7 +296,7 @@ Dialog {
         var d = bridge.jobDetail(jobId);
         if (!d || !d.id) { ticker.text = "That job could not be opened."; return; }
         confirmRemake = false; if (!scoreBusy) { scoreNote = ""; scoreBad = false; }
-        confirmClose = false; confirmAction = ""; closeNote = ""; replyText.text = "";
+        confirmClose = false; confirmAction = ""; closeNote = ""; replyText.text = ""; docsNote = ""; docsBad = false;
         pasteOpen = false; pasteErr = ""; pastedText.text = ""; confirmShelve = false; shelveNote = ""; shelveBad = false;
         job = d; draft = ({}); note = ""; dateErr = ""; if (!prepBusy) prepErr = "";
         eventErr = ""; notesInfo = ""; notesBad = false; replyErr = ""; replyInfo = ""; replyOpen = false; thanks = ({}); thanksNote = "";
@@ -373,6 +393,23 @@ Dialog {
                                     : "Scored with the rules of that day. Score again to apply your current Options (one Claude call)." }
                         SmallButton { objectName: "scoreAgain"; enabled: !detailDialog.scoreBusy && !win.appRunning
                             text: detailDialog.scoreBusy ? "Scoring…" : "Score again"; onClicked: detailDialog.scoreAgain() }
+                    }
+                    // a job the search wrote no documents for (below your limit, or scored again since): on request
+                    RowLayout { objectName: "writeDocsRow"; Layout.fillWidth: true; spacing: 10
+                        visible: detailDialog.job.can_write_docs === true || detailDialog.docsNote !== ""
+                                 || (detailDialog.docsBusy && detailDialog.docsJob === detailDialog.job.id)
+                        Text { objectName: "docsNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
+                            font.bold: detailDialog.docsBad
+                            color: detailDialog.docsNote === "" ? theme.faint : (detailDialog.docsBad ? theme.crit : theme.good)
+                            text: (detailDialog.docsBusy && detailDialog.docsJob === detailDialog.job.id) ? "Writing the CV and the letter. This takes about a minute…"
+                                : detailDialog.docsNote !== "" ? detailDialog.docsNote
+                                : (!detailDialog.job.cv && !detailDialog.job.letter)
+                                    ? "No CV or letter was written for this job. You can have them written now (a few Claude calls)."
+                                    : "One of the two documents is missing. You can have it written now." }
+                        SmallButton { objectName: "writeDocs"; visible: detailDialog.job.can_write_docs === true
+                            enabled: !detailDialog.docsBusy && !win.appRunning
+                            text: detailDialog.docsBusy ? "Writing…" : (!detailDialog.job.cv && !detailDialog.job.letter ? "Write CV and letter" : "Write what is missing")
+                            onClicked: detailDialog.writeDocs() }
                     }
                     // documents left over from a higher score
                     RowLayout { objectName: "staleRow"

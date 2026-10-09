@@ -19,11 +19,30 @@ Dialog {
     Overlay.modal: Rectangle { color: win.dimColor; Behavior on opacity { NumberAnimation { duration: 200 } } }
     width: Math.min(620, win.width - 80); padding: 0
     property var r: ({})
+    property bool picking: false          // the list of applications to file this reply under is open
+    property var targets: []
+    property string fileNote: ""
+    property bool fileBad: false
     function show(msgId) {
         var d = bridge.responseDetail(msgId);
         if (!d || !d.id) { ticker.text = "That reply could not be opened."; return; }
-        r = d; open();
+        r = d; picking = false; fileNote = ""; fileBad = false; open();
     }
+    function startPicking() {
+        fileNote = ""; fileBad = false;
+        if (win.appRunning) { fileBad = true; fileNote = "A search or scan is running. File the reply when it has finished."; return; }
+        pickFilter.text = ""; targets = bridge.filingTargets(""); picking = true; pickFilter.forceActiveFocus();
+    }
+    function fileUnder(jobId) {
+        var res = bridge.refileResponse(r.id, jobId);
+        fileBad = !(res && res.ok);
+        fileNote = (res && res.msg) || (fileBad ? "The reply could not be filed there." : "");
+        if (!fileBad) {
+            picking = false; r = bridge.responseDetail(r.id);
+            win.countsData = bridge.counts(); win.refreshOpenView();
+        }
+    }
+    onClosed: { picking = false; fileNote = ""; fileBad = false; }
     background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1 }
     contentItem: ColumnLayout {
         spacing: 0
@@ -65,8 +84,41 @@ Dialog {
                 text: responseDialog.r.job_id ? ("Belongs to: " + responseDialog.r.job_company + " · " + responseDialog.r.job_title
                                                  + " (" + responseDialog.r.job_status + ")")
                                               : "Not linked to an application in your list." }
+            SmallButton { objectName: "fileUnder"; text: responseDialog.picking ? "Cancel" : (responseDialog.r.job_id ? "File under another…" : "File under…")
+                onClicked: { if (responseDialog.picking) { responseDialog.picking = false; responseDialog.fileNote = ""; } else responseDialog.startPicking(); } }
             SmallButton { objectName: "openApplication"; visible: !!responseDialog.r.job_id; text: "Open the application"
                 onClicked: { var id = responseDialog.r.job_id; responseDialog.close(); detailDialog.show(id); } }
+        }
+        Text { objectName: "fileNote"; visible: responseDialog.fileNote !== ""
+            Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.bottomMargin: 10; wrapMode: Text.WordWrap
+            font.pixelSize: 11; font.bold: responseDialog.fileBad; color: responseDialog.fileBad ? theme.crit : theme.good; text: responseDialog.fileNote }
+        // choosing the application this reply belongs to
+        ColumnLayout { objectName: "filePicker"; visible: responseDialog.picking
+            Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.bottomMargin: 12; spacing: 6
+            TextField { id: pickFilter; objectName: "pickFilter"; Layout.fillWidth: true; implicitHeight: 30; maximumLength: 80
+                placeholderText: "Type a company or a role to narrow the list"; placeholderTextColor: theme.faint
+                color: theme.ink; font.pixelSize: 12; selectByMouse: true
+                background: Rectangle { radius: 8; color: theme.inset; border.width: 1; border.color: pickFilter.activeFocus ? theme.accent : theme.line }
+                onTextEdited: responseDialog.targets = bridge.filingTargets(text) }
+            Text { objectName: "pickEmpty"; visible: responseDialog.targets.length === 0; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                color: theme.warn; font.pixelSize: 11
+                text: pickFilter.text.trim() === "" ? "You have no applications yet. A reply is filed under an application: mark the job as applied first."
+                                                    : "No application matches “" + pickFilter.text.trim() + "”. Try fewer letters." }
+            ListView { id: pickList; objectName: "pickList"; Layout.fillWidth: true; clip: true
+                implicitHeight: Math.min(contentHeight, 190); model: responseDialog.targets; spacing: 4
+                ScrollBar.vertical: ScrollBar {}
+                delegate: Rectangle { width: pickList.width - 8; radius: 8; implicitHeight: pickRow.implicitHeight + 12
+                    readonly property bool here: modelData.id === responseDialog.r.job_id
+                    color: pickMouse.containsMouse && !here ? theme.surface2 : theme.inset; border.width: 1; border.color: theme.line
+                    RowLayout { id: pickRow; anchors.fill: parent; anchors.margins: 6; spacing: 8
+                        Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: parent.parent.here ? theme.faint : theme.ink; font.pixelSize: 12
+                            text: modelData.company + " · " + modelData.title }
+                        Text { color: theme.soft; font.pixelSize: 11
+                            text: parent.parent.here ? "filed here" : (modelData.status + (modelData.applied ? " · " + modelData.applied : "")) } }
+                    MouseArea { id: pickMouse; anchors.fill: parent; hoverEnabled: true; enabled: !parent.here
+                        cursorShape: Qt.PointingHandCursor; onClicked: responseDialog.fileUnder(modelData.id) } } }
+            SmallButton { objectName: "fileNowhere"; visible: !!responseDialog.r.job_id; text: "It belongs to none of my applications"
+                onClicked: responseDialog.fileUnder("") }
         }
     }
 }

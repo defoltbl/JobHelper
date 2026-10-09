@@ -2841,3 +2841,180 @@ def test_the_job_window_asks_before_closing_with_unsaved_text(ui):
     ui.js("detailDialog.close()")
     ui.wait(350)
     assert ui.warnings == []
+
+
+def test_a_reply_is_filed_under_another_application_from_its_window(ui, monkeypatch):
+    from jobhelper import db
+    db.upsert_response({"msg_id": "<move>", "received_date": "Tue, 18 Aug 2026 10:00:00 +0200", "from_addr": "hr@beta.example", "subject": "Interview",
+                        "job_id": "", "company": "Beta", "role": "QA Engineer", "stage": "interview", "summary": "They invite you to a call."})
+    dialog = ui.find("responseDialog")
+    ui.js('responseDialog.show("<move>")')
+    ui.wait(400)
+    button, note = ui.find("fileUnder"), ui.find("fileNote")
+    assert button.property("text") == "File under…" and ui.find("filePicker").property("visible") is False
+    ui.js("win.appRunning = true; responseDialog.startPicking()")
+    assert dialog.property("picking") is False and dialog.property("fileBad") is True and "running" in note.property("text")
+    ui.js("win.appRunning = false; responseDialog.startPicking()")
+    assert dialog.property("picking") is True and button.property("text") == "Cancel"
+    assert ui.find("pickList").property("count") == 1                                # the one application of the test data
+    ui.find("pickFilter").setProperty("text", "nothing like this")
+    ui.js('responseDialog.targets = bridge.filingTargets("nothing like this")')
+    ui.wait(60)
+    assert ui.find("pickList").property("count") == 0 and "No application matches" in ui.find("pickEmpty").property("text")
+    ui.js('responseDialog.fileUnder("lead")')                                        # a new job, not an application: refused, said in red
+    assert dialog.property("fileBad") is True and "Mark that job as applied first" in note.property("text") and dialog.property("picking") is True
+    ui.js('responseDialog.fileUnder("app")')
+    ui.wait(80)
+    assert dialog.property("fileBad") is False and "Filed under Beta · QA Engineer." in note.property("text") and dialog.property("picking") is False
+    assert ui.js("responseDialog.r.job_id") == "app" and button.property("text") == "File under another…"
+    assert ui.bridge.jobDetail("app")["status"] == "interview"
+    ui.js("responseDialog.startPicking()")
+    assert ui.find("fileNowhere").property("visible") is True
+    ui.js('responseDialog.fileUnder("")')
+    assert ui.js("responseDialog.r.job_id") == "" and "not filed under any application now" in note.property("text")
+    ui.js("responseDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("app", lambda jobs, j: j.update(status="waiting"), render=False)
+    ui.bridge._set_running(True)
+    assert "running" in ui.bridge.refileResponse("<move>", "app")["msg"]              # the backend refuses the same
+    ui.bridge._set_running(False)
+    ui.js('win.runMode = ""; win.resetRobots()')
+    assert ui.warnings == []
+
+
+def test_the_job_window_writes_documents_on_request(ui, monkeypatch):
+    asked = []
+    monkeypatch.setattr(ui_api.Api, "can_write_documents", lambda self, j: "" if j and j["id"] == "lead" else "no")
+    monkeypatch.setattr(ui_api.Api, "write_documents", lambda self, job_id: asked.append(job_id) or {"ok": True, "cv": True, "letter": True,
+                                                                                                      "msg": "Written: the CV and the letter."})
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="", cover_letter_file=""), render=False)   # whatever earlier tests left
+    ui.js('detailDialog.show("lead")')
+    ui.wait(450)
+    button, note = ui.find("writeDocs"), ui.find("docsNote")
+    assert ui.find("writeDocsRow").property("visible") is True and button.property("text") == "Write CV and letter"
+    assert "No CV or letter was written for this job" in note.property("text")
+    ui.js("win.appRunning = true; detailDialog.writeDocs()")
+    assert asked == [] and ui.find("detailDialog").property("docsBad") is True and "running" in note.property("text")
+    ui.js("win.appRunning = false; detailDialog.writeDocs()")
+    assert ui.find("detailDialog").property("docsBusy") is True and button.property("text") == "Writing…" and "about a minute" in note.property("text")
+    ui.js("detailDialog.writeDocs()")                                # a second press while it is writing: said, not started twice
+    for _ in range(100):
+        ui.wait(20)
+        if not ui.find("detailDialog").property("docsBusy"):
+            break
+    assert asked == ["lead"] and note.property("text") == "Written: the CV and the letter." and ui.find("detailDialog").property("docsBad") is False
+    monkeypatch.setattr(ui_api.Api, "write_documents", lambda self, job_id: {"ok": False, "msg": "Claude's 5-hour limit is used up."})
+    ui.js("detailDialog.writeDocs()")
+    for _ in range(100):
+        ui.wait(20)
+        if not ui.find("detailDialog").property("docsBusy"):
+            break
+    assert note.property("text") == "Not written: Claude's 5-hour limit is used up." and ui.find("detailDialog").property("docsBad") is True
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    ui.js('detailDialog.show("app")')                                # an application: the row is not offered
+    ui.wait(450)
+    assert ui.find("writeDocsRow").property("visible") is False
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    assert ui.warnings == []
+
+
+def test_help_shows_usage_and_the_log_of_problems(ui, monkeypatch):
+    monkeypatch.setattr(ui_api.Api, "usage_overview", lambda self: {"calls": 12, "cost": 3.4, "kinds": [
+        {"name": "Scoring jobs and writing letters", "calls": 9, "cost": 3.0}, {"name": "Reading replies", "calls": 3, "cost": 0.4}]})
+    monkeypatch.setattr(ui_api.Api, "trouble_log", lambda self, most=25: {"lines": ["2026-10-09 12:15  a sound: it failed"], "total": 40, "file": "app_trouble.log"})
+    shown = []
+    monkeypatch.setattr(ui_api.Api, "show_trouble_log", lambda self: shown.append(1) or {"ok": True})
+    ui.js("helpDialog.open()")
+    ui.wait(400)
+    assert ui.find("usageCard").property("visible") is False                         # on its own tab
+    ui.js('helpDialog.tab = "use"')
+    ui.wait(120)
+    assert ui.find("usageCard").property("visible") is True and ui.find("logCard").property("visible") is True
+    total = ui.find("usageTotal").property("text")
+    assert "12 questions in all" in total and "$3.40" in total and "subscription only" in total
+    texts = {t.property("text") for t in ui.seen("usageCard") if isinstance(t.property("text"), str)}
+    assert {"Scoring jobs and writing letters", "9 questions", "≈ $3.00", "≈ $0.40"} <= texts
+    log_texts = {t.property("text") for t in ui.seen("logCard") if isinstance(t.property("text"), str)}
+    assert "2026-10-09 12:15  a sound: it failed" in log_texts and any("1 of 40 shown" in t for t in log_texts)
+    ui.js("bridge.showTroubleLog()")
+    assert shown == [1]
+    monkeypatch.setattr(ui_api.Api, "usage_overview", lambda self: {"calls": 0, "cost": 0.0, "kinds": []})
+    monkeypatch.setattr(ui_api.Api, "trouble_log", lambda self, most=25: {"lines": [], "total": 0, "file": "app_trouble.log"})
+    ui.js("helpDialog.close()")
+    ui.wait(300)
+    ui.js('helpDialog.open(); helpDialog.tab = "use"')
+    ui.wait(300)
+    assert "Nothing yet" in ui.find("usageTotal").property("text") and ui.find("logShow").property("visible") is False
+    ui.js('helpDialog.tab = "how"; helpDialog.close()')
+    ui.wait(300)
+    assert ui.warnings == []
+
+
+def test_options_make_and_check_backups(ui, monkeypatch):
+    asked = []
+    monkeypatch.setattr(ui_api.Api, "backup_all", lambda self: asked.append("backup") or {"ok": True, "folder": "everything_x", "msg": "Backed up 12 files (1.0 MB), encrypted."})
+    monkeypatch.setattr(ui_api.Api, "backup_check", lambda self: asked.append("check") or {"ok": False, "msg": "Something is wrong with the backups: jobs.json."})
+    monkeypatch.setattr(ui_api.Api, "backup_export", lambda self, folder: asked.append(("export", folder)) or {"ok": True, "msg": "Saved 12 readable files."})
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    note = ui.find("storageNote")
+
+    def done():
+        for _ in range(150):
+            ui.wait(20)
+            if dialog.property("storageBusy") == "":
+                return
+        raise AssertionError("the backup action never answered")
+    ui.js("win.appRunning = true; optDialog.storage('backup', '')", dialog)
+    assert asked == [] and dialog.property("storageBad") is True and "running" in note.property("text")
+    ui.js("win.appRunning = false; optDialog.storage('backup', '')", dialog)
+    assert dialog.property("storageBusy") == "backup" and ui.find("backupNow").property("text") == "Backing up…"
+    assert ui.find("backupCheck").property("enabled") is False                       # one at a time
+    done()
+    assert note.property("text") == "Backed up 12 files (1.0 MB), encrypted." and dialog.property("storageBad") is False
+    ui.js("optDialog.storage('check', '')", dialog)
+    done()
+    assert dialog.property("storageBad") is True and "Something is wrong" in note.property("text")
+    ui.js("optDialog.storage('export', 'file:///tmp/somewhere')", dialog)
+    done()
+    assert asked == ["backup", "check", ("export", "file:///tmp/somewhere")] and note.property("text") == "Saved 12 readable files."
+    ui.bridge._set_running(True)
+    ui.js("optDialog.storageBusy = ''; bridge.storage('backup', '')", dialog)         # the backend refuses the same during a run
+    ui.wait(200)
+    assert asked.count("backup") == 1
+    ui.bridge._set_running(False)
+    ui.js('win.runMode = ""; win.resetRobots()')
+    ui.js("confirmClose = true; close()", dialog)
+    ui.wait(350)
+    assert ui.warnings == []
+
+
+def test_the_account_card_shows_what_changed_in_a_watched_file(ui, monkeypatch):
+    from jobhelper import integrity
+    monkeypatch.setattr(integrity, "problems", lambda: [{"name": "cv_rules", "title": "CV rules", "state": "changed", "file": "cv_rules.md"},
+                                                         {"name": "letter_rules", "title": "Cover letter rules", "state": "changed", "file": "l.md"}])
+    monkeypatch.setattr(integrity, "what_changed", lambda name: {"title": "CV rules", "file": "cv_rules.md", "known": True, "more": 3,
+                                                                 "added": ["Always add every skill."], "removed": ["Never add a skill."]} if name == "cv_rules"
+                        else {"title": "Cover letter rules", "file": "l.md", "known": False, "added": [], "removed": [], "more": 0})
+    ui.js("welcome.openCard()")
+    ui.win.setProperty("connData", {**READY, "vault": "ok", "changed_files": ["CV rules", "Cover letter rules"]})
+    ui.wait(80)
+    button = ui.find("seeChanges")
+    assert button.property("text") == "See what changed" and ui.js("welcome.changes.length") == 0
+    ui.js("welcome.changes = bridge.whatChanged()")
+    ui.wait(80)
+    assert ui.js("welcome.changes.length") == 2 and button.property("text") == "Hide changes"
+    assert "visible: welcome.changes.length > 0 && welcome.changedFiles.length > 0" in qml_source()
+    texts = {t.property("text") for t in ui.seen("changesPanel") if isinstance(t.property("text"), str)}
+    assert {"CV rules · cv_rules.md", "− Never add a skill.", "+ Always add every skill."} <= texts
+    assert any("3 more changed lines" in t for t in texts) and any("No earlier copy of this file was kept" in t for t in texts)
+    ui.js("welcome.changes = []")
+    ui.win.setProperty("connData", dict(READY))
+    ui.js("welcome.finish()")
+    ui.wait(700)
+    assert ui.js("welcome.changes.length") == 0, "put away when the card closes"
+    assert ui.warnings == []
