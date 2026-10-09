@@ -271,15 +271,23 @@ own salary figure and currency (`salary.asked`), any language (`language.detect`
 (`mailhosts`) and any profession (the interview wording, the remote board's lists). Still true: the built-in
 salary estimate and the job boards jobs.cz and prace.cz are Czech, and say so.
 
-- 11 jobs still have documents from a higher score (the user's decision: New Jobs, Move them to backup).
+**Done with the user's data on 9 October 2026** (app closed, backups `before-score-all-again` and `before-90-day-scan`)
 
-**Needs the user**
+- **Score all again**: 130 new jobs, 106 scores changed; 42 at or above the limit, 13 of them without documents
+  until the next search writes them.
+- **Documents from a higher score**: 19 jobs, 76 files moved to the encrypted backup (undo for a week); one of
+  them turned out to be an application and got its documents back.
+- **One scan over 90 days of both mailboxes**: 1224 messages, 43 sent to Claude, 10 new replies.
+- **Professions beyond software**, measured on real postings for a nurse, an accountant, a sales
+  representative, a warehouse operative and a graphic designer: titles of the profession go to scoring,
+  other languages and levels are left out with the right reason. Scoring and documents for another
+  profession have still never been run end to end with a real CV of that profession.
 
-9. **Second mailbox**: read with a real second account on 9 October 2026 (29 messages, no errors). Its older
-   mail has not been scanned yet: one scan with "Scan emails from the last" at 60 to 90 days.
-10. **Score all again** has never been run on the whole list with the current rules (about 26 Claude calls).
-11. **Professions and keywords beyond software** were measured on a software candidate's postings only.
-    The first user from another field should check what is skipped.
+**Seen in the data, for the user to look at**
+
+- A few older replies are filed to the wrong application (an interview invitation of one company under
+  another company's job). The matching is fixed for new mail; old entries are corrected by hand in the
+  application's window.
 
 **Then**
 

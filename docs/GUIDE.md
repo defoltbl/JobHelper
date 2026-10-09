@@ -658,7 +658,9 @@ an encrypted backup. The job stays in the list. **Put them back** returns them.
 
 ![Moving documents for several jobs at once](img/05_move_documents.png)
 
-For a week afterwards, **Put them back** in the same bar undoes the whole move.
+For a week afterwards, **Put them back** in the same bar undoes the whole move. For a single
+job, **Put them back** stays in its window, also when the job has become an application in the
+meantime (a reply showed that you had applied): those are the documents you sent.
 
 > **Note**
 > Nothing the app wrote for you is thrown away without a way back. You may have had a reason

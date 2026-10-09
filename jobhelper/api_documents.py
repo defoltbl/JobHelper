@@ -146,12 +146,13 @@ class DocumentsApi:
 
     @staticmethod
     def _shelved(j):
-        """The note of documents moved to the backup for a new job, while they can still be put back
-        (the job is still a new job and no other documents were written for it since)."""
+        """The note of documents moved to the backup for a job, while they can still be put back: no
+        other documents were written for it since, and it is a new job or one you applied to. (A reply
+        can show that you applied to a job whose documents were moved; those are the ones you sent.)"""
         record = j.get("shelved")
         if not isinstance(record, dict) or not isinstance(record.get("files"), list) or not record["files"]:
             return None
-        if j.get("status") not in store.LEAD_STATUSES or j.get("tailored_cv_file"):
+        if j.get("status") not in store.LEAD_STATUSES | store.APPLICATION_STATUSES or j.get("tailored_cv_file"):
             return None
         if record.get("cover_letter_file") and j.get("cover_letter_file"):
             return None
@@ -166,7 +167,7 @@ class DocumentsApi:
                 return back(j, done["record"])
             record = self._shelved(j)
             if not record:
-                if isinstance(j.get("shelved"), dict) and j.get("status") in store.LEAD_STATUSES:
+                if isinstance(j.get("shelved"), dict) and j.get("status") in store.LEAD_STATUSES | store.APPLICATION_STATUSES:
                     return {"ok": False, "msg": "Other documents were written for this job since. The earlier ones stay in the backup."}
                 return {"ok": False, "msg": "No documents of this job are in the backup to put back."}
             plan = []

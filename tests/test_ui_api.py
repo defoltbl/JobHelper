@@ -554,9 +554,13 @@ def test_putting_back_changes_nothing_unless_all_of_it_can_be(api):
     assert api.job_detail("c")["can_unshelve"] is False and "Other documents were written for this job since" in api.unshelve_docs("c")["msg"]
     assert store.find(store.load_jobs(), "c")["cover_letter_file"] == "L_new.docx" and len(list(shelf.iterdir())) == 2
 
-    moved("d")                                                      # it became an application
-    jobs = store.load_jobs(); store.find(jobs, "d")["status"] = "waiting"; store.save_jobs(jobs)
+    moved("d")                                                      # you said you are not interested: nothing to put back for
+    jobs = store.load_jobs(); store.find(jobs, "d")["status"] = store.NOT_INTERESTED; store.save_jobs(jobs)
     assert api.unshelve_docs("d")["ok"] is False and api.job_detail("d")["can_unshelve"] is False
+    # it turned out to be an application (a reply showed you had applied): those are the documents you sent
+    jobs = store.load_jobs(); store.find(jobs, "d")["status"] = "waiting"; store.save_jobs(jobs)
+    assert api.job_detail("d")["can_unshelve"] is True and api.unshelve_docs("d") == {"ok": True, "restored": 2}
+    assert store.find(store.load_jobs(), "d")["cover_letter_file"] == "L_d.docx"
 
     moved("e")                                                      # a note that points outside the folders is not followed
     jobs = store.load_jobs(); record = store.find(jobs, "e")["shelved"]

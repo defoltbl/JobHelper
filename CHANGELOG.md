@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Documents moved to the backup can be put back for an application too.** When a reply shows that you had applied to a job whose documents were moved (because its score fell), **Put them back** is offered in that application's window; before, it was offered for new jobs only.
 - **Interview preparation for any profession.** The second group of questions was written for "an engineer" about "the stack"; it is now for "someone who does this work or the hiring manager", about the specialist side of the role whatever the profession, and the first group avoids the jargon of your field rather than "the technology".
 - **Remote jobs by profession.** With "Include remote jobs" on, We Work Remotely was read from its programming lists only. The app now reads the lists of your profession (support, sales and marketing, design, finance and management, or the general ones), and the programming lists as before for software.
 - **Any mailbox, not only Gmail.** The Account card recognises Gmail, Yahoo, iCloud, Fastmail, Zoho, AOL, Seznam, GMX, WEB.DE and others by the address, says which server it reads from and what kind of password that provider wants, and asks for the **IMAP server** when it does not know the provider. The 16-letter rule now applies to Google addresses only. The two mailboxes can be at different providers. For Outlook.com, Hotmail and Proton Mail, which cannot be read with a password, the card says so at once and what to do instead.
