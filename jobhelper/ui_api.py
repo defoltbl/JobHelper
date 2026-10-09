@@ -16,7 +16,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime
 
 from . import trouble  # noqa: I001
 from .api_base import _guarded, _stem
@@ -117,18 +117,19 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
                 "duplicates": len(merge.find(jobs))}
 
     def usage_info(self):
+        """The usage card: how much of each limit is used now, and when a used one frees."""
         st = usage._load()
         totals = st.get("totals", {})
-        rl = (st.get("last_rate_limit") or {}).get("info")
-        five = seven = None
-        if isinstance(rl, dict):
-            w = rl.get("unifiedWindows") or {}
-            def pct(k):
-                x = (w.get(k) or {}).get("utilization")
-                return round(x * 100) if isinstance(x, (int, float)) else None
-            five, seven = pct("five_hour"), pct("seven_day")
-        return {"five_hour_used": five, "seven_day_used": seven, "model": config.MODEL,
-                "calls": totals.get("calls", 0), "cost": round(totals.get("cost_usd", 0.0), 2)}
+        now = datetime.now()
+        out = {"model": config.MODEL, "calls": totals.get("calls", 0), "cost": round(totals.get("cost_usd", 0.0), 2)}
+        for name, w in usage.windows(now.timestamp()).items():
+            out[name + "_used"] = None if w["used"] is None else min(100, max(0, round(w["used"] * 100)))
+            resets = ""
+            if w["resets_at"]:
+                when = datetime.fromtimestamp(w["resets_at"])
+                resets = when.strftime("%H:%M") if when.date() == now.date() else when.strftime("%d %b %H:%M")
+            out[name + "_resets"] = resets
+        return out
 
     @_guarded(list)
     def leads(self):
@@ -521,6 +522,11 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
                 "reply_times": insights.reply_times(jobs, db.all_responses()),
                 "low_scores": insights.low_score_reasons(jobs, self._cv_text(), threshold),
                 "threshold": threshold, "min_group": insights.MIN_GROUP}
+
+    def read_ahead(self):
+        """Prepare what the Insights view needs (the keywords of every posting and of the CV), gently:
+        for a background thread, so the first Insights view opens at once. Returns how many texts were read."""
+        return keywords.read_ahead([j.get("description") or "" for j in store.load_jobs()] + [self._cv_text()])
 
     def merge_jobs(self, keep_id, drop_id):
         def go(jobs, j):

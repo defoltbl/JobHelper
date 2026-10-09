@@ -169,7 +169,8 @@ def main() -> int:
         from jobhelper import ui_api
         ui_api.Api().note_run(when=datetime.now().strftime("%d %b %H:%M"), found="+%d new" % added, filtered=len(filtered),
                               letters=stats["letters"], cvs=stats.get("tailored_cvs", 0),
-                              scored=stats.get("scored", 0), prefiltered=stats.get("prefiltered", 0))
+                              scored=stats.get("scored", 0), prefiltered=stats.get("prefiltered", 0),
+                              cost=round(usage.session().get("cost_usd", 0.0), 2), cost_of="search")
     print(f"   scored {stats['scored']}, wrote {stats['letters']} letters, "
           f"{stats['tailored_cvs']} tailored CVs, skipped {stats['skipped']} already-scored")
 

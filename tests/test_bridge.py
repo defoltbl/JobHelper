@@ -7,7 +7,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 from jobhelper import (agent1_cv, agent2_search, agent3_letters, agent4_tracker,  # noqa: E402
-                       agent5_responses, config, integrity, letters, qt_bridge, store, ui_api, vault)
+                       agent5_responses, config, integrity, letters, qt_bridge, store, ui_api, usage, vault)
 
 READY = {"claude": True, "plan": "pro", "claude_email": "me@example.com", "paid_api": False,
          "email": True, "email_addr": "jobs@example.com", "cv": "cv.docx"}
@@ -125,6 +125,48 @@ def test_pipeline_runs_agents_in_order_and_reports_progress(bridge, monkeypatch)
     assert events[-1][0] == "finished" and events[-1][2].startswith("Done")
     assert bridge.running is False
     assert [j["id"] for j in store.load_jobs()] == ["n1"]
+
+
+def test_a_search_notes_what_it_alone_would_have_cost(bridge, monkeypatch):
+    """The Last run card shows the price of the last run, not of everything ever asked."""
+    _stub_agents(monkeypatch)
+    usage.record({"cost_usd": 33.5}, tag="earlier")
+
+    def process(jobs, profile, progress=None, **kw):
+        usage.record({"cost_usd": 0.4}, tag="score")
+        usage.record({"cost_usd": 0.014}, tag="letter")
+        return {"scored": 1, "letters": 1, "tailored_cvs": 1, "skipped": 0}
+
+    monkeypatch.setattr(agent3_letters, "process", process)
+    bridge._set_running(True)
+    bridge._pipeline({})
+    last = bridge.lastRun()
+    assert last["cost"] == 0.41 and last["cost_of"] == "search"
+
+
+def test_an_email_scan_notes_its_own_cost(bridge, monkeypatch):
+    usage.record({"cost_usd": 33.5}, tag="earlier")
+
+    def read(jobs, lookback_days=None, progress=None, on_limit=None):
+        usage.record({"cost_usd": 0.075}, tag="email")
+        return {"scanned": 5, "new_responses": 0, "rejections": 0}
+
+    monkeypatch.setattr(agent5_responses, "process_inbox", read)
+    for name in ("backfill_roles", "annotate_progress", "build_report"):
+        monkeypatch.setattr(agent5_responses, name, lambda jobs: None)
+    monkeypatch.setattr(agent4_tracker, "render_all", lambda jobs: None)
+    bridge._scan()
+    last = bridge.lastRun()
+    assert last["cost"] == 0.07 or last["cost"] == 0.08
+    assert last["cost_of"] == "email scan" and last["scan"].endswith("0 new")
+
+
+def test_a_run_that_asked_nothing_cost_nothing(bridge, monkeypatch):
+    _stub_agents(monkeypatch)
+    usage.record({"cost_usd": 12.0}, tag="earlier")
+    bridge._set_running(True)
+    bridge._pipeline({})
+    assert bridge.lastRun()["cost"] == 0.0
 
 
 def test_pipeline_uses_the_keywords_from_options(bridge, monkeypatch):

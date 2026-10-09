@@ -36,15 +36,17 @@ Rectangle {
         }
         Repeater {
             model: [
-                { label: "5-hour", used: usageData.five_hour_used, c1: theme.a2, c2: theme.accent },
-                { label: "7-day", used: usageData.seven_day_used, c1: theme.a1, c2: theme.a3 }
+                { key: "five_hour", label: "5-hour", used: usageData.five_hour_used, resets: usageData.five_hour_resets, c1: theme.a2, c2: theme.accent },
+                { key: "seven_day", label: "7-day", used: usageData.seven_day_used, resets: usageData.seven_day_resets, c1: theme.a1, c2: theme.a3 }
             ]
             ColumnLayout { Layout.fillWidth: true; spacing: 5
                 RowLayout { Layout.fillWidth: true
                     Text { text: modelData.label + " window"; color: theme.soft; font.pixelSize: 12 }
                     Item { Layout.fillWidth: true }
-                    Text { color: theme.soft; font.pixelSize: 11
-                        text: modelData.used === undefined || modelData.used === null ? "—" : (100 - modelData.used) + "% left" } }
+                    Text { objectName: "usageLeft_" + modelData.key; font.pixelSize: 11
+                        color: modelData.used >= 100 ? theme.crit : theme.soft; font.bold: modelData.used >= 100
+                        text: modelData.used === undefined || modelData.used === null ? "—"
+                              : (100 - modelData.used) + "% left" + (modelData.resets && modelData.used >= 80 ? " · resets " + modelData.resets : "") } }
                 Rectangle { Layout.fillWidth: true; implicitHeight: 8; radius: 4; color: theme.inset
                     Rectangle { height: parent.height; radius: 4
                         width: parent.width * ((modelData.used === undefined || modelData.used === null ? 0 : modelData.used) / 100)
@@ -65,8 +67,11 @@ Rectangle {
                              { k: "Letters", v: lastRunData.letters !== undefined ? "" + lastRunData.letters : "—" },
                              { k: "CVs", v: lastRunData.cvs !== undefined ? "" + lastRunData.cvs : "—" },
                              { k: "Email scan", v: lastRunData.scan || "—" },
-                             { k: "You paid", v: connData.paid_api === true ? "API billing" : "$0 · subscription" },
-                             { k: "Same work via API", v: "≈ $" + (usageData.cost !== undefined ? usageData.cost.toFixed(2) : "0.00") } ]
+                             { k: "You paid", v: connData.paid_api === true ? "API billing" : "your subscription only" },
+                             // of the last run alone (a search or an email scan), not of everything so far
+                             { k: "Same work via API", v: lastRunData.cost !== undefined
+                                 ? "≈ $" + Number(lastRunData.cost).toFixed(2) + (lastRunData.cost_of ? " · " + lastRunData.cost_of : "")
+                                 : "after next run" } ]
                     // the value takes the space that is left and shortens itself, so a
                     // long value can never run out of the card
                     RowLayout { Layout.fillWidth: true; spacing: 8

@@ -13,7 +13,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QMetaObject, Qt, Slot
 
-from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, config, letters, notify, store, trouble)
+from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, config, letters, notify, store, trouble, usage)
 
 
 class RunCancelled(Exception):
@@ -160,13 +160,18 @@ class RunSlots:
         self.logChanged.emit("Stopping after the current step…")
         return True
 
+    @staticmethod
+    def _spent(before: float) -> float:
+        """What the run that started at `before` would have cost through the paid API."""
+        return round(max(0.0, usage.total_cost() - before), 2)
+
     def _checkpoint(self) -> None:
         if self._stop.is_set():
             raise RunCancelled()
 
     # ── pausing on Claude's limit ───────────────────────────────
     def _limit_state(self, message: str = "") -> dict:
-        from . import llm, usage
+        from . import llm
         status = usage.limit_status()
         resets = status.get("resets_at") or 0
         return {"paused": self._paused, "can_resume": self._can_resume,
@@ -192,7 +197,6 @@ class RunSlots:
         """Called by an agent when Claude's limit is used up. Saves what is done,
         tells the window, and waits here until the limit is back AND the user
         presses Resume (or Stop). The agent then repeats the step it was on."""
-        from . import usage
         self._save_partial(self._partial)
         self._paused, self._can_resume = True, False
         self._resume.clear()
@@ -261,6 +265,7 @@ class RunSlots:
     # ── workers (emit signals; QML animates the robots live) ────
     def _pipeline(self, opts):
         jobs = None
+        before = usage.total_cost()
         try:
             o = self._api.options()
             o.update(opts or {})
@@ -329,7 +334,8 @@ class RunSlots:
             self.agentChanged.emit("a3", "done", documents)
             self._api.note_run(when=datetime.now().strftime("%d %b %H:%M"), found="+%d new" % added, filtered=len(dropped),
                                letters=stats["letters"], cvs=stats.get("tailored_cvs", 0),
-                               scored=stats.get("scored", 0), prefiltered=stats.get("prefiltered", 0))
+                               scored=stats.get("scored", 0), prefiltered=stats.get("prefiltered", 0),
+                               cost=self._spent(before), cost_of="search")
 
             self.agentChanged.emit("a4", "running", "")
             self.logChanged.emit("Building the tracker…")
@@ -364,6 +370,7 @@ class RunSlots:
 
     def _scan(self):
         jobs = None
+        before = usage.total_cost()
         try:
             self.agentChanged.emit("a5", "running", "")
             self.logChanged.emit("Reading inbox (read-only)…")
@@ -381,7 +388,8 @@ class RunSlots:
             agent4_tracker.render_all(jobs)
             agent5_responses.build_report(jobs)
             self.agentChanged.emit("a5", "done", "%d new" % stats["new_responses"])
-            self._api.note_run(scan="%s · %d new" % (datetime.now().strftime("%d %b"), stats["new_responses"]))
+            self._api.note_run(scan="%s · %d new" % (datetime.now().strftime("%d %b"), stats["new_responses"]),
+                               cost=self._spent(before), cost_of="email scan")
             from . import email_client
             warning = (" " + " ".join(email_client.last_warnings)) if email_client.last_warnings else ""
             self.runFinished.emit("scan", agent5_responses.scan_summary(stats) + warning)

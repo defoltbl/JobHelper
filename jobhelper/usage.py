@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 from datetime import datetime
 from typing import Any
@@ -94,15 +95,59 @@ def record(rec: dict[str, Any], tag: str = "general") -> None:
         "cost_usd": rec.get("cost_usd", 0.0),
     })
     state["runs"] = state["runs"][-500:]  # keep the log bounded
+    state.pop("limit_block", None)        # Claude answered, so an earlier refusal is over
     _save(state)
+
+
+_WINDOW_WORDS = (("seven_day", re.compile(r"week|7[- ]?day|seven[- ]day", re.IGNORECASE)),
+                 ("five_hour", re.compile(r"session|5[- ]?hour|five[- ]hour", re.IGNORECASE)))
+WINDOWS = ("five_hour", "seven_day")
+
+
+def window_named(message: str) -> str:
+    """Which limit Claude's refusal talks about: 'five_hour' ("session limit"), 'seven_day' ("weekly limit") or ''."""
+    for name, words in _WINDOW_WORDS:
+        if words.search(message or ""):
+            return name
+    return ""
 
 
 def note_limit(until: float, message: str = "") -> None:
     """Remember that Claude refused a call because a limit was hit, until `until` (epoch)."""
     state = _load()
-    state["limit_block"] = {"until": float(until), "message": message,
+    state["limit_block"] = {"until": float(until), "message": message, "window": window_named(message),
                             "at": datetime.now().isoformat(timespec="seconds")}
     _save(state)
+
+
+def windows(now: float | None = None) -> dict[str, dict[str, Any]]:
+    """Each limit as it stands now: {window: {used (0..1 or None = never reported), resets_at (epoch, 0 = unknown)}}.
+
+    The numbers Claude last reported, corrected by what is known since: a window
+    whose reset time has passed is empty again, and a window Claude refused a call
+    for is full until the reset it named, whatever the older numbers say."""
+    import time
+    now = time.time() if now is None else now
+    state = _load()
+    info = (state.get("last_rate_limit") or {}).get("info")
+    reported = info.get("unifiedWindows") if isinstance(info, dict) else None
+    out: dict[str, dict[str, Any]] = {}
+    for name in WINDOWS:
+        w = (reported or {}).get(name)
+        used, resets = (w.get("utilization"), float(w.get("resetsAt") or 0)) if isinstance(w, dict) else (None, 0.0)
+        if not isinstance(used, (int, float)) or isinstance(used, bool):
+            used, resets = None, 0.0
+        elif resets and resets <= now:
+            used, resets = 0.0, 0.0
+        out[name] = {"used": None if used is None else float(used), "resets_at": resets}
+    block = state.get("limit_block") or {}
+    until = float(block.get("until") or 0)
+    if until > now:
+        name = block.get("window") if block.get("window") in WINDOWS else ""
+        if not name:            # the refusal did not say which: the fuller one, the short window when neither is known
+            name = max(WINDOWS, key=lambda k: out[k]["used"] or 0.0) if any(out[k]["used"] for k in WINDOWS) else "five_hour"
+        out[name] = {"used": 1.0, "resets_at": until}
+    return out
 
 
 def limit_status(threshold: float = 0.99, now: float | None = None) -> dict[str, Any]:
@@ -111,27 +156,28 @@ def limit_status(threshold: float = 0.99, now: float | None = None) -> dict[str,
     {blocked, window ('five_hour' | 'seven_day' | ''), used (0..1), resets_at (epoch, 0 = unknown)}.
     Blocked when Claude said so (until the reset it named) or when the last
     reported utilisation of a window is at/above `threshold` and that window
-    has not reset yet. A window whose reset time has passed counts as free."""
-    import time
-    now = time.time() if now is None else now
-    state = _load()
+    has not reset yet. A window whose reset time has passed counts as free.
+    When both are used up, the one that frees later is the one to wait for."""
     best = {"blocked": False, "window": "", "used": 0.0, "resets_at": 0.0}
-    info = (state.get("last_rate_limit") or {}).get("info")
-    windows = info.get("unifiedWindows") if isinstance(info, dict) else None
-    for name, w in (windows or {}).items():
-        if not isinstance(w, dict):
-            continue
-        used, resets = w.get("utilization"), float(w.get("resetsAt") or 0)
-        if not isinstance(used, (int, float)) or (resets and resets <= now):
-            continue
+    full = []
+    for name, w in windows(now).items():
+        used = w["used"] or 0.0
+        if used >= threshold:
+            full.append((w["resets_at"], name, used))
         if used > best["used"]:
-            best.update(used=float(used), window=name, resets_at=resets)
-    best["blocked"] = best["used"] >= threshold
-    block = state.get("limit_block") or {}
-    if float(block.get("until") or 0) > now and not best["blocked"]:
-        best.update(blocked=True, resets_at=float(block["until"]), used=max(best["used"], 1.0),
-                    window=best["window"] or "five_hour")
+            best.update(used=used, window=name, resets_at=w["resets_at"])
+    if full:
+        resets, name, used = max(full)
+        best.update(blocked=True, window=name, used=used, resets_at=resets)
     return best
+
+
+def total_cost() -> float:
+    """What every call so far would have cost through the paid API (a run notes the difference)."""
+    try:
+        return float(_load().get("totals", {}).get("cost_usd", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def session() -> dict[str, Any]:

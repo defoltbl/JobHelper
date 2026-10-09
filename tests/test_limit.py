@@ -75,6 +75,92 @@ def test_claudes_limit_error_becomes_limit_reached_and_is_remembered(isolate_dat
     assert usage.limit_status()["blocked"] is True                      # the next call will not even try
 
 
+SESSION_REFUSAL = "Claude Code returned an error result: You've hit your session limit · resets 2pm (Europe/Prague) (exit code: 1)"
+
+
+def test_a_refusal_fills_the_window_it_names_whatever_the_older_numbers_say(isolate_data):
+    """Seen in use: Claude refused ("session limit"), and the card still said 13% left from an hour before."""
+    _windows(five=0.87, seven=0.34, five_reset=NOON + 600, seven_reset=NOON + 86400)
+    usage.note_limit(NOON + 7200, SESSION_REFUSAL)
+    now = usage.windows(NOON + 700)                     # the old reset time has passed, the refusal has not
+    assert now["five_hour"] == {"used": 1.0, "resets_at": NOON + 7200}
+    assert now["seven_day"] == {"used": 0.34, "resets_at": NOON + 86400}
+    status = usage.limit_status(now=NOON + 700)
+    assert status["blocked"] and status["window"] == "five_hour" and status["resets_at"] == NOON + 7200
+    assert llm.limit_message(status).startswith("Claude's 5-hour limit is used up (100%)")
+    assert usage.limit_status(now=NOON + 7201)["blocked"] is False
+
+
+@pytest.mark.parametrize("message, window", [
+    ("You've hit your session limit · resets 2pm", "five_hour"), ("5-hour limit reached", "five_hour"),
+    ("You've hit your weekly limit · resets 9am", "seven_day"), ("7-day usage limit reached", "seven_day"),
+    ("usage limit reached", ""), ("", "")])
+def test_which_limit_a_refusal_talks_about(message, window):
+    assert usage.window_named(message) == window
+
+
+def test_a_weekly_refusal_is_not_shown_as_the_short_window(isolate_data):
+    _windows(five=0.10, seven=0.95, five_reset=NOON + 600, seven_reset=NOON + 86400)
+    usage.note_limit(NOON + 86400, "You've hit your weekly limit · resets 9am")
+    status = usage.limit_status(now=NOON)
+    assert status["blocked"] and status["window"] == "seven_day"
+    assert usage.windows(NOON)["five_hour"]["used"] == 0.10
+
+
+def test_a_refusal_that_names_no_limit_is_put_on_the_fuller_window(isolate_data):
+    usage.note_limit(NOON + 1800, "usage limit reached")
+    assert usage.limit_status(now=NOON)["window"] == "five_hour"        # nothing known: the short one
+    _windows(five=0.10, seven=0.95, five_reset=NOON + 600, seven_reset=NOON + 86400)
+    usage.note_limit(NOON + 1800, "usage limit reached")
+    assert usage.limit_status(now=NOON)["window"] == "seven_day"
+
+
+def test_when_both_limits_are_used_up_the_one_that_frees_later_is_named(isolate_data):
+    _windows(five=1.0, seven=1.0, five_reset=NOON + 600, seven_reset=NOON + 86400)
+    status = usage.limit_status(now=NOON)
+    assert status["window"] == "seven_day" and status["resets_at"] == NOON + 86400
+
+
+def test_a_window_whose_reset_time_passed_is_empty_again(isolate_data):
+    _windows(five=0.87, seven=0.34, five_reset=NOON + 600, seven_reset=NOON + 86400)
+    assert usage.windows(NOON)["five_hour"] == {"used": 0.87, "resets_at": NOON + 600}
+    assert usage.windows(NOON + 601)["five_hour"] == {"used": 0.0, "resets_at": 0.0}
+    assert usage.windows(NOON + 601)["seven_day"]["used"] == 0.34
+
+
+def test_windows_never_reported_stay_unknown(isolate_data):
+    assert usage.windows() == {"five_hour": {"used": None, "resets_at": 0.0}, "seven_day": {"used": None, "resets_at": 0.0}}
+    state = usage._load()
+    state["last_rate_limit"] = {"at": "now", "info": {"unifiedWindows": {"five_hour": {"utilization": "a lot"}, "seven_day": "?"}}}
+    usage._save(state)
+    assert usage.windows()["five_hour"]["used"] is None and usage.windows()["seven_day"]["used"] is None
+
+
+def test_an_answer_from_claude_ends_a_remembered_refusal(isolate_data):
+    usage.note_limit(time.time() + 3600, SESSION_REFUSAL)
+    assert usage.limit_status()["blocked"] is True
+    usage.record({"input_tokens": 3, "output_tokens": 1, "cost_usd": 0.01}, tag="usage_ping")
+    assert usage.limit_status()["blocked"] is False and "limit_block" not in usage._load()
+
+
+def test_the_usage_card_says_nothing_is_left_while_claude_refuses(isolate_data):
+    in_an_hour = time.time() + 3600
+    _windows(five=0.87, seven=0.34, five_reset=time.time() - 60, seven_reset=time.time() + 86400)
+    card = ui_api.Api().usage_info()
+    assert card["five_hour_used"] == 0 and card["five_hour_resets"] == "" and card["seven_day_used"] == 34
+    usage.note_limit(in_an_hour, SESSION_REFUSAL)
+    card = ui_api.Api().usage_info()
+    assert card["five_hour_used"] == 100 and card["seven_day_used"] == 34
+    when = datetime.fromtimestamp(in_an_hour)
+    assert card["five_hour_resets"] in (when.strftime("%H:%M"), when.strftime("%d %b %H:%M"))
+    assert len(card["seven_day_resets"]) > 5                              # another day: the date is part of it
+
+
+def test_the_usage_card_without_any_numbers(isolate_data):
+    card = ui_api.Api().usage_info()
+    assert card["five_hour_used"] is None and card["seven_day_used"] is None and card["five_hour_resets"] == ""
+
+
 def test_other_errors_are_not_mistaken_for_the_limit(isolate_data, monkeypatch):
     async def broken(*a, **k):
         raise RuntimeError("Reached maximum number of turns (6)")
