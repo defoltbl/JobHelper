@@ -352,3 +352,17 @@ def test_a_reply_is_not_filed_to_a_company_by_a_word_many_companies_share():
     # between two companies, the one named by its own word wins over one that only shares a common word
     both = jobs + [{"id": "e", "company": "Kestrel International", "title": "Developer", "status": "waiting"}]
     assert match("careers@kestrel.example", "Kestrel International: your application", "", both)["id"] == "e"
+
+
+def test_a_word_of_a_job_title_in_a_company_name_does_not_match_a_reply():
+    """A rejection for an "IT Support Specialist" role at one company was filed under "Reed Specialist Recruitment"."""
+    jobs = [{"id": "reed", "company": "REED SPECIALIST RECRUITMENT", "title": "IT Application Support Specialist", "status": "waiting"},
+            {"id": "user", "company": "Usercentrics", "title": "Technical Support Specialist", "status": "waiting"},
+            {"id": "nn", "company": "NN Digital Hub", "title": "Analyst", "status": "waiting"},
+            {"id": "actum", "company": "Actum Digital", "title": "Consultant", "status": "waiting"}]
+    match = email_client.match_job
+    assert match("no-reply@usercentrics.example", "IT Support Specialist (m/f/d) - Usercentrics", "Thank you for applying.", jobs)["id"] == "user"
+    assert match("jobs@mail.example", "Your application: IT Support Specialist", "We regret to inform you.", jobs) is None
+    assert match("hr@nn.example", "Thank you for your application at NN Digital Hub", "", jobs)["id"] == "nn"       # all of a common-word name
+    assert match("hr@reed.example", "Your application at Reed", "", jobs)["id"] == "reed"
+    assert email_client.names_tracked_company("jobs@mail.example", "IT Support Specialist", jobs) is False

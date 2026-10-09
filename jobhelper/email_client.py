@@ -289,6 +289,9 @@ GENERIC_COMPANY_WORDS = {
     "management", "central", "eastern", "deutsche", "ceska", "national", "united", "first", "new", "one", "career", "careers",
     "jobs", "recruitment", "staffing", "personnel", "innovation", "innovations", "development", "business", "enterprise",
     "enterprises", "trading", "investments", "ventures", "aktiengesellschaft",
+    # words of job titles that also stand in company names ("Reed Specialist Recruitment", "NN Digital Hub"):
+    # a reply about an "IT Support Specialist" role is not from that company
+    "specialist", "specialists", "support", "hub", "academy", "talent", "people", "team", "experts", "professionals",
 }
 
 
