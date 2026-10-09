@@ -14,7 +14,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from . import config, store
+from . import config, salary, store
 
 # ── Excel ─────────────────────────────────────────────────────────────────
 COLUMNS = [
@@ -81,7 +81,7 @@ def _render_sheet(rows: list[dict[str, Any]], columns, path, title: str) -> None
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill("solid", fgColor="4472C4")
     for c, (label, _key, width) in enumerate(columns, start=1):
-        cell = ws.cell(row=1, column=c, value=label)
+        cell = ws.cell(row=1, column=c, value=label.replace("(CZK)", "(%s)" % salary.asked({"desired_monthly_czk": 1})[1]))
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = Alignment(vertical="center")
@@ -91,6 +91,9 @@ def _render_sheet(rows: list[dict[str, Any]], columns, path, title: str) -> None
     for r, job in enumerate(rows, start=2):
         for c, (_label, key, _w) in enumerate(columns, start=1):
             val = job.get(key, "")
+            if key in ("desired_monthly_czk", "desired_annual_czk"):      # what is asked for, which may be your own figure
+                amount = salary.asked(job)[0]
+                val = (amount * (12 if key == "desired_annual_czk" else 1)) or ""
             cell = ws.cell(row=r, column=c, value=val)
             cell.alignment = Alignment(vertical="top", wrap_text=key in _WRAP)
             if key == "url" and val:

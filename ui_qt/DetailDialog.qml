@@ -324,11 +324,8 @@ Dialog {
                              detailDialog.job.posted ? "posted " + detailDialog.job.posted : "",
                              detailDialog.job.applied ? (detailDialog.job.applied_from_email ? "first email " : "applied ") + detailDialog.job.applied : "",
                              detailDialog.job.source || "",
-                             detailDialog.job.desired ? Number(detailDialog.job.desired).toLocaleString() + " CZK/mo target" : "",
-                             (detailDialog.job.pay && detailDialog.job.pay.low)
-                                ? ("posting says " + (detailDialog.job.pay.low === detailDialog.job.pay.high
-                                      ? Math.round(detailDialog.job.pay.low / 1000) + "k"
-                                      : Math.round(detailDialog.job.pay.low / 1000) + "–" + Math.round(detailDialog.job.pay.high / 1000) + "k") + " CZK/mo") : "",
+                             detailDialog.job.desired_text || "",
+                             detailDialog.job.pay_text || "",
                              detailDialog.job.letter_old_format === true ? "letter: older format, open in Word" : "",
                              (detailDialog.job.score !== null && detailDialog.job.score !== undefined)
                                 ? (detailDialog.job.basis === "title" ? "scored from the title only"

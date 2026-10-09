@@ -267,8 +267,6 @@ found is fixed (see CHANGELOG, 10 October). Not read line by line: the visual ma
 
 **Assumptions that still fit one kind of user** (the app works for others, these parts just help less)
 
-1. **Money is Czech crowns and Prague rates.** The salary target per role (`salary.estimate`) is a table of
-   junior software pay in Prague, and the lists label it "CZK/mo".
 4. **The interview preparation is worded for technical roles** ("engineer", "stack"), and the remote boards
    read are the programming feeds.
 5. **The mailbox check expects a Gmail App Password** (16 letters), though another mail host can be set in `.env`.

@@ -97,28 +97,30 @@ def what_works(jobs: list[dict[str, Any]], responses: list[dict[str, Any]]) -> d
 
 
 def salaries(jobs: list[dict[str, Any]]) -> dict[str, Any]:
-    """What the postings in the list say they pay (gross CZK per month), next to the target."""
+    """What the postings in the list say they pay (gross per month, in your currency), next to what you ask."""
     from . import salary
     rows = []
+    currency = salary.currency_of()
     for j in jobs:
         if j.get("status") not in store.LEAD_STATUSES | store.APPLICATION_STATUSES:
             continue
-        pay = salary.stated(j)
+        target, asked_in, _yours = salary.asked(j)
+        if target:
+            currency = asked_in
+        pay = salary.stated(j, currency)
         if not pay:
             continue
-        target = j.get("desired_monthly_czk") or 0
-        try:
-            target = int(target)
-        except (TypeError, ValueError):
-            target = 0
         rows.append({"id": j["id"], "title": j.get("title", ""), "company": j.get("company", ""), "low": pay["low"],
                      "high": pay["high"], "text": pay["text"], "target": target, "score": j.get("match_score"),
+                     "top_text": salary.brief(pay["high"]), "range_text": salary.span(pay["low"], pay["high"], currency),
+                     "target_text": salary.brief(target) if target else "",
                      "verdict": "" if not target else "above your target" if pay["low"] >= target
                                 else "below your target" if pay["high"] < target else "around your target"})
     rows.sort(key=lambda r: (-(r["score"] or 0), -r["high"]))
     considered = sum(1 for j in jobs if j.get("status") in store.LEAD_STATUSES | store.APPLICATION_STATUSES)
     mids = sorted((r["low"] + r["high"]) // 2 for r in rows)
-    return {"rows": rows, "stated": len(rows), "postings": considered,
+    return {"rows": rows, "stated": len(rows), "postings": considered, "currency": currency,
+            "median_text": salary.brief(mids[len(mids) // 2]) if mids else "",
             "median": mids[len(mids) // 2] if mids else 0, "lowest": min((r["low"] for r in rows), default=0),
             "highest": max((r["high"] for r in rows), default=0)}
 

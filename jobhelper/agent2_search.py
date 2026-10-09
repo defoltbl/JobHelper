@@ -624,5 +624,5 @@ def search(
     # Add a Prague market-rate desired-salary estimate to each listing.
     for job in results:
         m, a = salary.estimate(job["title"], candidate_seniority)
-        job["desired_monthly_czk"], job["desired_annual_czk"] = m, a
+        job["desired_monthly_czk"], job["desired_annual_czk"] = m or "", a or ""
     return results

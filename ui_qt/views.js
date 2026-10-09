@@ -25,7 +25,7 @@ function open(k) {
             acts.push({ label: "mark applied", kind: "apply", arg: j.id });
             return { primary: j.title + "  ·  " + j.company,
                      // what the score rests on, and documents left from a higher score: said in the row itself
-                     secondary: [[j.posted || "", j.desired ? Number(j.desired).toLocaleString() + " CZK/mo" : ""]
+                     secondary: [[j.posted || "", j.desired || ""]
                                      .filter(function (part) { return part !== ""; }).join("   "),
                                  j.basis === "title" ? "scored from the title only" : j.basis === "summary" ? "scored from a short summary" : "",
                                  j.stale_docs === true ? "documents from a higher score" : "",
@@ -124,14 +124,13 @@ function open(k) {
             row("Named most often as missing", lows.technologies.length,
                 lows.technologies.map(function (t) { return t.skill + " in " + t.jobs; }).join("  ·  "));
         var pay = ins.salaries || {};
-        head("What the postings pay", (pay.stated || 0) + " of " + (pay.postings || 0) + " postings state it · gross CZK per month · the number is the top of the range"
-             + (pay.median ? " · middle value " + Math.round(pay.median / 1000) + "k" : ""));
+        head("What the postings pay", (pay.stated || 0) + " of " + (pay.postings || 0) + " postings state it · gross " + (pay.currency || "CZK") + " per month · the number is the top of the range"
+             + (pay.median ? " · middle value " + pay.median_text : ""));
         (pay.rows || []).forEach(function (r) {
             out.push({ primary: r.title + "  ·  " + r.company, badge: "", actions: [], id: r.id,
-                       value: Math.round(r.high / 1000) + "k",
-                       secondary: (r.low === r.high ? Math.round(r.low / 1000) + "k" : Math.round(r.low / 1000) + "–" + Math.round(r.high / 1000) + "k")
-                                  + " CZK  ·  written as \"" + r.text + "\""
-                                  + (r.target ? "  ·  your target " + Math.round(r.target / 1000) + "k: " + r.verdict : "") }); });
+                       value: r.top_text,
+                       secondary: r.range_text + "  ·  written as \"" + r.text + "\""
+                                  + (r.target ? "  ·  your target " + r.target_text + ": " + r.verdict : "") }); });
         tableDialog.show("Insights — what works, keywords, skills to learn", out, "", []);
     } else {
         var an = bridge.analytics();

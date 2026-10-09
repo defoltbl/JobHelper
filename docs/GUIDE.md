@@ -411,7 +411,7 @@ first.
 | **moderate** | 50 to 59. A CV and a letter were written |
 | No badge | Below your limit. Listed so that you can judge for yourself; no documents were written |
 | **skipped** | Not scored at all, to save a Claude call (section 4) |
-| The grey line | When it was posted, a salary estimate, and any warning about the score |
+| The grey line | When it was posted, the salary you ask for (section 14), and any warning about the score |
 | **closed** | The posting no longer accepts applications |
 | **scored from the title only**, **scored from a short summary** | The score rests on little text (section 8) |
 | **documents from a higher score** | The job fell below your limit after its documents were written (section 8) |
@@ -905,7 +905,7 @@ The posting goes to **New Jobs**, and the next search scores it.
 | **What is working** | Which kinds of role and which job boards led to interviews? |
 | **Week by week** | How many applications did I send, and what came back? |
 | **Skills to learn** | What do the postings ask for most that my CV does not show? |
-| **What the postings pay** | What salaries do the postings state? |
+| **What the postings pay** | What salaries do the postings state, in your currency, and how do they compare with what you ask? |
 | **How long companies take to answer** | When should I stop waiting? |
 | **Why jobs scored low** | What reasons come up most often? |
 
@@ -1000,6 +1000,7 @@ Some companies publish their openings on their own career site. To read one dire
 
 | Setting | What it does |
 |---|---|
+| **Salary you ask for** | Your expected pay, gross per month, with its currency. Form answers give it as your expectation, the job window and the lists show it, and Insights compares what postings pay with it. 0 = none given: the app then uses its own estimate, which it has for software roles in Czechia only, and otherwise leaves the figure for you to fill in |
 | **Right to work** | How letters and answers should say it. Empty = not mentioned |
 | **You can start** | When you can start. Empty = not mentioned |
 | **More about your work** | What you really did in each job beyond what the CV says, in your own words. The app may use it like the CV |

@@ -147,7 +147,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
                  "tier": j.get("match_tier", "") or ("skipped" if j.get("prefilter") and j.get("match_score") is None else ""),
                  "title": j["title"], "company": j["company"], "posted": j.get("date_posted", ""),
                  "location": j.get("location", ""), "source": (j.get("source") or "").split("/")[0],
-                 "desired": j.get("desired_monthly_czk", ""), "status": j["status"],
+                 "desired": self._asked_text(j), "status": j["status"],
                  "url": j.get("url", ""),
                  "basis": agent3_letters.text_basis(j) if j.get("match_score") is not None else "",
                  "stale_docs": self._stale_docs(j, threshold),
@@ -243,7 +243,8 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
             "has_answers": bool((j.get("form_answers") or {}).get("items")),
             "can_combine": self._can_combine(j),
             "company_notes": planner.company_notes(j.get("company", "")),
-            "pay": salary.stated(j) or {},
+            "pay": salary.stated(j, salary.asked(j)[1]) or {}, "pay_text": self._pay_text(j),
+            "desired_text": self._asked_text(j, " target"),
             "can_compare": self._comparable(j),
             "has_prep": bool((j.get("interview_prep") or {}).get("questions")),
             "prep_edited": bool((j.get("interview_prep") or {}).get("edited")),
@@ -471,7 +472,8 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
         job["prefilter_override"] = True                  # you chose it: the free pre-filter must not skip it
         if not job.get("desired_monthly_czk"):
             level = (agent1_cv.load_profile() or {}).get("seniority", "junior")
-            job["desired_monthly_czk"], job["desired_annual_czk"] = salary.estimate(job.get("title", ""), level)
+            monthly, annual = salary.estimate(job.get("title", ""), level)
+            job["desired_monthly_czk"], job["desired_annual_czk"] = monthly or "", annual or ""
         store.upsert(jobs, [job])
         store.save_jobs(jobs)
         agent4_tracker.render_all(jobs)
@@ -530,6 +532,29 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
         """Prepare what the Insights view needs (the keywords of every posting and of the CV), gently:
         for a background thread, so the first Insights view opens at once. Returns how many texts were read."""
         return keywords.read_ahead([j.get("description") or "" for j in store.load_jobs()] + [self._cv_text()])
+
+    @staticmethod
+    def _asked_text(j, suffix=""):
+        """"60 000 CZK/mo target": what to ask for in this job, or '' when there is no figure."""
+        amount, currency, _yours = salary.asked(j)
+        return f"{salary.money(amount, currency)}/mo{suffix}" if amount else ""
+
+    @staticmethod
+    def _pay_text(j):
+        """"posting says 55–65k CZK/mo", in the currency you ask in; '' when the posting names no pay."""
+        currency = salary.asked(j)[1]
+        pay = salary.stated(j, currency)
+        return f"posting says {salary.span(pay['low'], pay['high'], currency)}/mo" if pay else ""
+
+    def currencies(self):
+        return list(salary.CURRENCIES)
+
+    def salary_hint(self, where, country):
+        """What the app does when no figure is given, for the line under the field in Options."""
+        home = places.country_of(str(country or "")) or places.country_of(str(where or ""))
+        if home == "czechia" or not (str(where or "").strip() or str(country or "").strip()):
+            return "With 0 the app uses its own estimate, which it has for software roles in Czechia only."
+        return "With 0 no figure is given: the app has no estimate for this country. Answers then leave the salary for you to fill in."
 
     def country_of(self, city):
         """The country the app takes a city to be in ("Czechia"), or '' when it does not know the city."""
@@ -623,7 +648,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
             target_roles = [str(r) for r in (profile.get("target_roles") or [])]
         except Exception:
             seed_queries, level, target_roles = [], "junior", []
-        defaults = {"where": "", "country": "", "source": "czech", "include_remote": False, "full_time_only": True,
+        defaults = {"where": "", "country": "", "salary_target": 0, "salary_currency": "CZK", "source": "czech", "include_remote": False, "full_time_only": True,
                     "all_languages": False, "max_age_days": config.MAX_JOB_AGE_DAYS,
                     "threshold": config.DEFAULT_THRESHOLD, "min_lead_score": config.MIN_LEAD_SCORE,
                     "model": config.MODEL, "per_query": 15, "queries": list(seed_queries),
@@ -642,7 +667,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
             trouble.note("reading the saved Options", e)
         return defaults
 
-    OPTION_NUMBERS = {"threshold": (0, 100), "min_lead_score": (0, 100), "max_age_days": (0, 3650), "per_query": (1, 100),
+    OPTION_NUMBERS = {"salary_target": (0, 100_000_000), "threshold": (0, 100), "min_lead_score": (0, 100), "max_age_days": (0, 3650), "per_query": (1, 100),
                       "max_years": (0, 60), "keep_backups": (0, 1000), "followup_days": (0, 365), "scan_days": (1, 3650)}
     OPTION_LISTS = ("queries", "skip_words", "keep_words", "level_words", "wanted_roles", "unwanted_roles", "my_fields")
     OPTION_TEXTS = {"where": 80, "country": 60, "about_right_to_work": 300, "about_start": 300, "about_experience": config.MAX_EXPERIENCE_NOTES}
@@ -679,6 +704,11 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
                 if len(text) > limit:
                     return {}, f"“{key.replace('_', ' ')}” is {len(text)} characters long; the most is {limit}. Shorten it."
                 clean[key] = text
+        if "salary_currency" in clean:
+            code = str(clean["salary_currency"] or "").strip().upper()
+            if code not in salary.CURRENCIES:
+                return {}, "“salary currency” must be one of: " + ", ".join(salary.CURRENCIES) + "."
+            clean["salary_currency"] = code
         if clean.get("country") and not re.fullmatch(r"[^\W\d_]+(?:[ '.\-]+[^\W\d_]+)*\.?", clean["country"]):
             return {}, "“country” must be a country's name in letters, for example Germany."
         for key in ("include_remote", "all_languages", "full_time_only", "notifications", "scan_all_folders"):

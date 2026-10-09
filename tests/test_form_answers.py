@@ -208,3 +208,33 @@ def test_api_refuses_bad_text_with_the_same_words_and_asks_no_one(api, monkeypat
     assert "one draft takes up to 15" in api.make_form_answers("a", many)["msg"]
     assert api.check_questions("Why us?\nSalary?") == {"count": 2, "problem": "", "note": ""}
     assert "characters long" in api.make_form_answers("a", "x" * 400)["msg"]
+
+
+def test_form_answers_use_your_own_salary_figure(isolate_data, monkeypatch):
+    from jobhelper import ui_api
+    seen = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: seen.append(prompt) or _reply(("I expect about 3 200 EUR gross per month.", "")))
+    api = ui_api.Api()
+    assert api.save_options({**api.options(), "where": "Berlin", "salary_target": 3200, "salary_currency": "EUR"})["ok"] is True
+    form_answers.generate(JOB, CV, ["Salary?"])
+    assert "Salary target: about 3 200 EUR gross per month (the candidate's own figure" in seen[-1]
+    assert api.save_options({**api.options(), "salary_target": 0})["ok"] is True
+    form_answers.generate(JOB, CV, ["Salary?"])
+    assert "Salary target: not stated" in seen[-1], "no Prague figure for a search in Berlin"
+    assert api.save_options({**api.options(), "where": "Prague"})["ok"] is True
+    form_answers.generate(JOB, CV, ["Salary?"])
+    assert "about 60 000 CZK gross per month (an estimate for this kind of role" in seen[-1]
+
+
+def test_salary_settings_are_checked(isolate_data):
+    from jobhelper import ui_api
+    api = ui_api.Api()
+    for wrong in ({"salary_target": -1}, {"salary_target": 2.5}, {"salary_target": "a lot"}, {"salary_target": 10**9},
+                  {"salary_currency": "XXX"}, {"salary_currency": ""}, {"salary_currency": 5}):
+        result = api.save_options({**api.options(), **wrong})
+        assert result["ok"] is False and "salary" in result["msg"], wrong
+    assert api.save_options({**api.options(), "salary_target": 4000, "salary_currency": "gbp"})["ok"] is True
+    assert (api.options()["salary_target"], api.options()["salary_currency"]) == (4000, "GBP")
+    assert "CZK" in api.currencies() and "EUR" in api.currencies()
+    assert "software roles in Czechia only" in api.salary_hint("Prague", "") and "software roles in Czechia only" in api.salary_hint("", "")
+    assert "no estimate for this country" in api.salary_hint("Berlin", "") and "no estimate" in api.salary_hint("Prague", "Germany")

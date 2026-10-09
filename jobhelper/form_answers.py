@@ -14,7 +14,7 @@ import re
 from datetime import date
 from typing import Any
 
-from . import config, cover_letter, interview_prep, llm
+from . import config, cover_letter, interview_prep, llm, salary
 
 MAX_QUESTIONS, MAX_QUESTION, MAX_ANSWER = 15, 300, 3000
 
@@ -112,14 +112,12 @@ def common_questions(job: dict[str, Any]) -> list[str]:
 
 
 def _salary_line(job: dict[str, Any]) -> str:
-    try:
-        target = int(job.get("desired_monthly_czk") or 0)
-    except (TypeError, ValueError):
-        target = 0
+    target, currency, yours = salary.asked(job)
     if target <= 0:
         return "- Salary target: not stated"
-    return (f"- Salary target: about {target:,} CZK gross per month (an estimate for this kind of role; "
-            "give it as the expectation and add that it is open to discussion)").replace(",", " ")
+    source = "the candidate's own figure" if yours else "an estimate for this kind of role"
+    return (f"- Salary target: about {salary.money(target, currency)} gross per month ({source}; "
+            "give it as the expectation and add that it is open to discussion)")
 
 
 def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str = "") -> list[dict[str, str]]:

@@ -76,3 +76,22 @@ def test_stage_to_status_mapping():
     assert email_client.STAGE_TO_STATUS["interview"] == "interview"
     assert email_client.STAGE_TO_STATUS["rejection"] == "rejected"
     assert email_client.STAGE_TO_STATUS["offer"] == "offer"
+
+
+def test_the_excel_table_shows_what_you_ask_in_your_currency(isolate_data):
+    from openpyxl import load_workbook
+
+    from jobhelper import agent4_tracker, config, store, ui_api
+    jobs = [store.new_job(id="a", title="Python Developer", company="Acme", status="found", desired_monthly_czk=58000, desired_annual_czk=696000)]
+    api = ui_api.Api()
+    assert api.save_options({**api.options(), "where": "Berlin", "salary_target": 3200, "salary_currency": "EUR"})["ok"] is True
+    agent4_tracker.render_all(jobs)
+    sheet = load_workbook(config.NEW_JOBS_EXCEL).active
+    head = [c.value for c in sheet[1]]
+    row = dict(zip(head, [c.value for c in sheet[2]]))
+    assert row["Desired Monthly (EUR)"] == 3200 and row["Desired Annual (EUR)"] == 38400 and "Desired Monthly (CZK)" not in head
+    assert api.save_options({**api.options(), "where": "Prague", "salary_target": 0})["ok"] is True
+    agent4_tracker.render_all(jobs)
+    sheet = load_workbook(config.NEW_JOBS_EXCEL).active
+    row = dict(zip([c.value for c in sheet[1]], [c.value for c in sheet[2]]))
+    assert row["Desired Monthly (CZK)"] == 58000 and row["Desired Annual (CZK)"] == 696000       # the app's estimate, in crowns

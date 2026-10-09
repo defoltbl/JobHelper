@@ -105,6 +105,7 @@ Dialog {
                             max_age_days: ageSpin.value, per_query: pqSpin.value,
                             threshold: thrSpin.value, min_lead_score: minSpin.value,
                             followup_days: fuSpin.value, scan_days: scanSpin.value,
+                            salary_target: salarySpin.value, salary_currency: currencyCombo.currentText,
                             about_right_to_work: rightField.text.trim(), about_start: startField.text.trim(),
                             about_experience: expField.text.trim(),
                             notifications: notifySw.checked, keep_backups: keepSpin.value,
@@ -205,6 +206,8 @@ Dialog {
         minSpin.value = o.min_lead_score || 0;
         fuSpin.value = o.followup_days !== undefined ? o.followup_days : 10;
         scanSpin.value = o.scan_days !== undefined ? o.scan_days : 30;
+        salarySpin.value = o.salary_target || 0;
+        currencyCombo.currentIndex = Math.max(0, currencyCombo.find(o.salary_currency || "CZK"));
         rightField.text = o.about_right_to_work || ""; startField.text = o.about_start || "";
         expField.text = o.about_experience || "";
         notifySw.checked = o.notifications !== false;
@@ -457,6 +460,18 @@ Dialog {
                 ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; spacing: 6
                     GroupTitle { text: "About you" }
                     Card {
+                        // the figure form answers give as your expectation; yours, in your currency
+                        SRow { label: "Salary you ask for"; hint: "gross per month · 0 = none given"
+                            RowLayout { spacing: 8
+                                ThemedSpin { id: salarySpin; objectName: "salarySpin"; from: 0; to: 100000000; stepSize: 1000; value: 0 }
+                                ThemedCombo { id: currencyCombo; objectName: "currencyCombo"; implicitWidth: 84; plainText: true
+                                    model: bridge.currencies() } } }
+                        Text { objectName: "salaryNote"; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 10
+                            wrapMode: Text.WordWrap; font.pixelSize: 11; color: theme.faint
+                            text: salarySpin.value > 0
+                                  ? "Form answers give this as your expectation, and Insights compares what postings pay with it."
+                                  : bridge.salaryHint(cityCombo.editText, countryField.text) }
+                        Sep {}
                         SRow { label: "Right to work"; hint: "as letters should say it · empty = not mentioned"
                             TextField { id: rightField; objectName: "rightField"; implicitWidth: 250; implicitHeight: 30
                                 placeholderText: "e.g. full right to work in the Czech Republic"; placeholderTextColor: theme.faint

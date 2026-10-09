@@ -902,6 +902,52 @@ def test_last_run_card_says_how_much_mail_the_scan_went_through(ui):
     assert ui.warnings == []
 
 
+def test_options_take_your_own_salary_figure_and_currency(ui):
+    dialog = ui.find("optDialog")
+    start = ui.bridge.options()
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    spin, combo, note = ui.find("salarySpin"), ui.find("currencyCombo"), ui.find("salaryNote")
+    assert spin.property("value") == 0 and combo.property("currentText") == "CZK" and combo.property("count") >= 10
+    ui.js('cityCombo.editText = "Prague"; countryField.text = ""', dialog)
+    assert "software roles in Czechia only" in note.property("text")
+    ui.js('cityCombo.editText = "Berlin"', dialog)
+    assert "no estimate for this country" in note.property("text")
+    spin.setProperty("value", 3200)
+    ui.js('currencyCombo.currentIndex = currencyCombo.find("EUR")', dialog)
+    assert "Form answers give this" in note.property("text")
+    import json
+    got = json.loads(ui.js("JSON.stringify(optDialog.collect().options)", dialog))
+    assert (got["salary_target"], got["salary_currency"], got["where"]) == (3200, "EUR", "Berlin")
+    assert ui.bridge.saveOptions(got)["ok"] is True
+    ui.js("confirmClose = true; close()", dialog)
+    ui.wait(350)
+
+    # the job window and the list say it in that currency
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(salary="70 000 - 80 000 CZK", desired_monthly_czk=58000), render=False)
+    detail = ui.bridge.jobDetail("lead")
+    assert detail["desired_text"] == "3 200 EUR/mo target" and detail["pay_text"] == "posting says 2 800–3 200 EUR/mo"
+    assert [r["desired"] for r in ui.bridge.leads() if r["id"] == "lead"] == ["3 200 EUR/mo"]
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    assert ui.find("salarySpin").property("value") == 3200 and ui.find("currencyCombo").property("currentText") == "EUR"   # loaded again
+    ui.js("confirmClose = true; close()", dialog)
+    ui.wait(350)
+    # no figure of your own, in Berlin: nothing is shown, rather than a Prague figure
+    assert ui.bridge.saveOptions({**ui.bridge.options(), "salary_target": 0})["ok"] is True
+    assert ui.bridge.jobDetail("lead")["desired_text"] == ""
+    assert ui.bridge.saveOptions({**ui.bridge.options(), "where": "Prague", "salary_currency": "CZK"})["ok"] is True
+    detail = ui.bridge.jobDetail("lead")
+    assert detail["desired_text"] == "58 000 CZK/mo target" and detail["pay_text"] == "posting says 70–80k CZK/mo"
+    assert ui.bridge.saveOptions({**ui.bridge.options(), "where": start.get("where", ""), "country": start.get("country", "")})["ok"] is True
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(salary="", desired_monthly_czk=""), render=False)
+    ui.js("optsData = bridge.options()")
+    assert "CZK/mo" not in (ROOT / "ui_qt" / "DetailDialog.qml").read_text(encoding="utf-8") and "CZK/mo" not in (ROOT / "ui_qt" / "views.js").read_text(encoding="utf-8")
+    assert ui.warnings == []
+
+
 def test_options_has_a_country_for_any_city(ui):
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")

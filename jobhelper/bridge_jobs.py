@@ -116,6 +116,14 @@ class JobSlots:
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "msg": str(e)}
 
+    @Slot(result="QVariantList")
+    def currencies(self):
+        return self._api.currencies()
+
+    @Slot(str, str, result=str)
+    def salaryHint(self, where, country):
+        return self._api.salary_hint(where, country)
+
     @Slot(str, result=str)
     def countryOf(self, city):
         return self._api.country_of(city)
