@@ -318,7 +318,8 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
 5. **The layout markup of the windows** (about 5,500 lines of QML) was scanned by a script for texts that can
    be cut and the finds were fixed; it was not read line by line. The window tests and the guide's pictures cover it.
 
-6. **The assistant was tested on a local form in a browser engine, not yet on real sites in the person's Chrome.**
+6. **The assistant was tested in its test area** (`tests/fixtures/forms/`: a plain form, a component-built one, a long
+   one, a framed one, each filled in a browser engine by the real code), **not yet on real sites in the person's Chrome.**
    Sites that build their fields in unusual ways (their own drop-downs, forms inside a frame from another site,
    pages that rebuild a field after it is written) will need a look one by one. Choices (lists other than the
    country, yes/no, tick boxes) and file uploads are left to the person on purpose for now.

@@ -21,7 +21,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit
 
-from . import details, email_client, form_answers
+from . import details, email_client, form_answers, places
 
 MAX_FIELDS = 200
 
@@ -66,7 +66,12 @@ READ = r"""
         if (inner && inner.body) walk(inner); else if (el.src && shown(el)) frames.push(String(el.src).slice(0, 300));
         continue;
       }
-      if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') continue;
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+        var role = el.getAttribute('role');          // a menu, switch or choice drawn by the page itself: counted, never operated
+        if ((role === 'combobox' || role === 'listbox' || role === 'radio' || role === 'checkbox' || role === 'switch'
+             || el.getAttribute('aria-haspopup') === 'listbox') && shown(el)) boxes++;
+        continue;
+      }
       el.removeAttribute(MARK);
       var type = tag === 'INPUT' ? String(el.getAttribute('type') || 'text').toLowerCase() : tag.toLowerCase();
       if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'reset' || type === 'image') continue;
@@ -83,7 +88,8 @@ READ = r"""
                    auto: clean(el.getAttribute('autocomplete')).slice(0, 60), label: label(el, root),
                    hint: clean(el.getAttribute('placeholder')).slice(0, 120),
                    required: !!(el.required || el.getAttribute('aria-required') === 'true'),
-                   filled: filled, most: el.maxLength > 0 ? el.maxLength : 0, options: options});
+                   filled: filled, most: el.maxLength > 0 ? el.maxLength : 0, options: options,
+                   combo: el.getAttribute('role') === 'combobox' || !!el.getAttribute('aria-autocomplete') || el.getAttribute('aria-haspopup') === 'listbox'});
     }
   }
   walk(document);
@@ -151,11 +157,12 @@ def fill_script(items: list[dict[str, Any]], url: str) -> str:
 PASSWORD = "A password is yours to type."
 FILE = "Attach the file yourself: a page cannot be handed a file from outside."
 PRIVATE = "Personal or payment information: fill it in yourself."
-CHOICE = "Choose it yourself: I only pick from a list when it asks for your country."
+CHOICE = "Choose it yourself: I only pick from a plain list, and only when it asks for your country."
 DATE = "Pick the date yourself."
 UNKNOWN = "I did not recognise this field."
 NO_DETAIL = "Not in My details yet: add your {what} there and ask me again."
 TOO_LONG = "The field takes {most} characters and this is {size}. Shorten it and paste it yourself."
+NO_COUNTRY = "The list has no entry for {country}. Choose it yourself."
 NO_JOB = "An open question: choose the job this form is for, and I will draft the answer from your CV."
 NO_LETTER = "No letter written by the app for this job. Paste your own."
 TOO_MANY = f"More than {form_answers.MAX_QUESTIONS} open questions: ask me again after these are done."
@@ -215,8 +222,8 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
         return "", PRIVATE
     if kind in ("date", "month", "week", "time", "datetime-local"):
         return "", DATE
-    if kind in ("range", "color"):
-        return "", CHOICE
+    if kind in ("range", "color") or field.get("combo"):
+        return "", CHOICE           # a box that opens a list of its own: typing into it chooses nothing
     auto = (str(field.get("auto") or "").lower().split() or [""])[-1]
     what = _AUTO.get(auto) or _BY_TYPE.get(kind) or ""
     if not what:
@@ -250,6 +257,17 @@ def value_for(what: str, mine: dict[str, str]) -> str:
     return str(mine.get(what) or "")
 
 
+def country_option(options: list[str], country: str) -> str:
+    """The entry of a list that is this country, however the list spells it ("Czech Republic" for Czechia), or ''."""
+    want = " ".join(str(country or "").lower().split())
+    home = places.country_of(want) or want
+    for option in options:
+        text = " ".join(str(option or "").lower().split())
+        if text and (text == want or (places.country_of(text) or text) == home):
+            return str(option)
+    return ""
+
+
 def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", has_job: bool = False) -> dict[str, list]:
     """What to do with each field that is still empty:
     {"fill": [{n, label, value, kind}], "ask": [{n, label, most}], "left": [{label, why}]}.
@@ -276,6 +294,13 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
                 out["ask"].append({"n": field["n"], "label": question, "most": most})
         else:
             value = letter if what == "letter" else value_for(what, mine)
+            if value and what == "country" and field.get("type") == "select":
+                value = country_option(field.get("options") or [], value)
+                if not value:
+                    out["left"].append({"label": label, "why": NO_COUNTRY.format(country=mine["country"])})
+                    continue
+            if value and what == "phone" and most and len(value) > most:
+                value = re.sub(r"[ ()./\-]", "", value)             # a short field: the same number without its spaces
             if not value:
                 out["left"].append({"label": label, "why": NO_LETTER if what == "letter" else NO_DETAIL.format(what=WHAT.get(what, what))})
             elif most and len(value) > most:
@@ -297,7 +322,7 @@ def read_answer(text: str) -> dict[str, Any]:
     for raw in data["fields"][:MAX_FIELDS]:
         if not isinstance(raw, dict) or not isinstance(raw.get("n"), int):
             continue
-        fields.append({"n": raw["n"], "filled": bool(raw.get("filled")), "required": bool(raw.get("required")),
+        fields.append({"n": raw["n"], "filled": bool(raw.get("filled")), "required": bool(raw.get("required")), "combo": bool(raw.get("combo")),
                        "most": raw.get("most") if isinstance(raw.get("most"), int) else 0,
                        "options": [str(o)[:80] for o in (raw.get("options") or [])[:300]] if isinstance(raw.get("options"), list) else [],
                        **{key: " ".join(str(raw.get(key) or "").split())[:300] for key in ("type", "name", "id", "auto", "label", "hint")}})

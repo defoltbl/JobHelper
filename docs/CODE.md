@@ -365,8 +365,15 @@ The assistant works on the tab that is in front in Google Chrome, in three steps
    open questions go to `form_answers` in one call; everything else is left, with the reason.
 3. A second script writes the values into fields that are still empty and outlines them.
 
-Table 6.4 gives the rules these steps keep. `tests/test_assistant.py` checks each of them, the
-last three on a real page.
+Table 6.4 gives the rules these steps keep. `tests/test_assistant.py` checks each of them.
+
+The whole request is also tried in a test area: `tests/fixtures/fill_in_browser.py` serves the
+forms in `tests/fixtures/forms/` from this machine, opens one in a browser engine, and runs the
+same code the window runs, with Claude replaced by prepared answers and the data in a temporary
+folder. There is a plain form, one built the way component libraries build them (each box
+keeps its own value and undoes what did not arrive like typing), a long one, and one that sits
+in a frame from another address. To check a kind of form the assistant gets wrong, add a page
+there and a test that names what must be filled and what must be left.
 
 *Table 6.4 – The rules of filling in a form*
 
@@ -454,7 +461,7 @@ what stands in for it.
 | Claude | A function that returns a prepared answer |
 | Job boards and mail servers | Functions that return prepared postings and messages |
 | Notifications, Finder, the Trash, the browser | Functions that only record that they were called |
-| The person's Google Chrome | A guard that fails the test. The scripts that read and fill in a form run in a browser engine on a local page, `tests/fixtures/application_form.html` |
+| The person's Google Chrome | A guard that fails the test. The scripts that read and fill in a form run in a browser engine on a local page, `tests/fixtures/forms/` |
 
 ### Test the window
 

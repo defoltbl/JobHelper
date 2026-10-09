@@ -255,7 +255,7 @@ def test_requests_are_checked_before_anything_is_done(isolate):
 
 # ── filling in, end to end (Chrome replaced by a real browser engine on a local page) ──
 def _in_page(*scripts):
-    done = subprocess.run([sys.executable, str(FIXTURES / "run_in_page.py"), str(FIXTURES / "application_form.html")],
+    done = subprocess.run([sys.executable, str(FIXTURES / "run_in_page.py"), str(FIXTURES / "forms" / "plain.html")],
                           input=json.dumps(list(scripts)), capture_output=True, text=True, timeout=120,
                           env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
     if done.returncode != 0:
@@ -380,7 +380,7 @@ def test_trouble_with_chrome_or_claude_is_told_and_the_rest_is_still_done(isolat
     monkeypatch.setattr(chrome, "active_tab", lambda: (_ for _ in ()).throw(chrome.ChromeError(chrome.NO_SCRIPTS)))
     assert ui_api.Api().assistant_fill()["msg"] == chrome.NO_SCRIPTS
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's limit is used up until 14:00.")))
-    _browser(monkeypatch, [_field("Email", n=1), _field("Why Northwind?", kind="textarea", n=2), _field("Country", kind="select", n=3)],
+    _browser(monkeypatch, [_field("Email", n=1), _field("Why Northwind?", kind="textarea", n=2), _field("Country", kind="select", n=3, options=["Choose", "Czechia"])],
              done={"done": [1], "skipped": [3]})
     out = ui_api.Api().assistant_fill("nw1")
     assert out["ok"] and [f["label"] for f in out["filled"]] == ["Email"]
@@ -392,3 +392,84 @@ def test_trouble_with_chrome_or_claude_is_told_and_the_rest_is_still_done(isolat
 def test_the_job_list_for_the_assistant_holds_open_jobs_only(isolate):
     store.save_jobs([_job(), _job(id="r", status="rejected", company="Closed"), _job(id="w", status="waiting", company="Waiting")])
     assert [j["id"] for j in ui_api.Api().assistant_jobs()] == ["nw1", "w"] and ui_api.Api().assistant_jobs()[0]["label"] == "Northwind · Junior Analyst"
+
+
+# ── the test area: the whole request, on forms served on this machine, in a real browser engine ──
+AREA = {"details": {**MINE, "street": "Long Street 5"},
+        "jobs": [{"id": "bp", "title": "Backend Developer", "company": "Brightpath", "status": "letter_ready", "url": "", "description": "FastAPI services."},
+                 {"id": "ql", "title": "Data Analyst", "company": "Quillon", "status": "waiting", "url": "", "description": "SQL reports."},
+                 {"id": "vt", "title": "Junior Tester", "company": "Vantor", "status": "found", "url": "", "description": ""}],
+        "answers": {"Salary expectation (gross, per month)": ["I expect about [your figure] gross per month.", "Your salary figure"]}}
+
+
+def _area(page, **more):
+    done = subprocess.run([sys.executable, str(FIXTURES / "fill_in_browser.py"), page], input=json.dumps({**AREA, **more}),
+                          capture_output=True, text=True, timeout=180, env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
+    if done.returncode != 0:
+        pytest.skip(f"the browser engine did not start here: {done.stderr[-200:]}")
+    out = json.loads(done.stdout)
+    assert out["sent"] is False and out["clicked"] is False, "whatever the form, it is never sent and nothing is clicked"
+    out["left"] = {i["label"]: i["why"] for i in out["result"].get("left", [])}
+    out["filled"] = {i["label"]: i for i in out["result"].get("filled", [])}
+    return out
+
+
+def test_area_a_form_built_from_components_believes_what_was_written():
+    """Pages built with a component library keep each value themselves and undo anything that did not arrive like typing."""
+    out = _area("components.html")
+    result, state = out["result"], out["state"]
+    assert result["ok"] and result["job_id"] == "bp" and result["guessed"], "the company is named in the page's title"
+    assert set(out["filled"]) == {"First Name *", "Last Name *", "Email *", "Phone", "LinkedIn Profile", "What interests you about Brightpath?"}
+    assert out["kept"]["c1"] == "Alex" and out["kept"]["c3"] == "alex@example.com" and out["kept"]["c9"] == state["c9"] != "", \
+        "the page's own record holds the values: they will still be there when the form is sent"
+    assert out["left"]["Location (City)"] == form_fill.CHOICE and state["c5"] == "", "a box that opens its own list is not typed into"
+    assert out["left"]["Are you legally authorized to work in the country of this role?"] == form_fill.CHOICE
+    assert out["left"]["Gender"] == form_fill.PRIVATE and "website" in out["left"]["Website"]
+    assert "60 characters" in out["left"]["Describe a back-end service you built and what you would change today."] and state["c10"] == ""
+    assert result["boxes"] == 2 and state["c13"] is False, "the tick box and the menu drawn by the page are counted and left alone"
+    assert len(out["asked"]) == 2 and state["c1#outline"] == "green"
+
+
+def test_area_a_long_form_is_filled_in_as_far_as_is_safe():
+    out = _area("long.html")
+    result, state = out["result"], out["state"]
+    assert result["ok"] and result["job_id"] == "ql"
+    assert state["a1"] == "Alex Novak" and state["a2"] == state["a3"] == "alex@example.com" and state["a6"] == "Long Street 5"
+    assert state["a7"] == "602 00" and state["a8"] == "Brno" and state["a10"] == MINE["github"]
+    assert state["a9"] == "cz" and "Country" in out["filled"], "Czechia is chosen from a list that calls it Czech Republic"
+    assert state["a5"] == "" and "9 characters" in out["left"]["Mobile"], "a number that does not fit even without spaces is left"
+    assert state["a4"] == "" and out["left"]["Phone country code"] == form_fill.CHOICE
+    assert state["a11"] == "" and out["left"]["Earliest start date"] == form_fill.DATE
+    assert state["a12"] == "" and state["a13"] == "" and out["left"]["Current employer"] == form_fill.UNKNOWN
+    assert state["a15"].startswith("I expect about [your figure]") and state["a15#outline"] == "amber" and out["filled"]["Salary expectation (gross, per month)"]["check"]
+    assert state["a16"] != "" and state["a17"] == "" and "same question" in out["left"]["Why do you want this role?"]
+    assert len(out["asked"]) == form_answers.MAX_QUESTIONS and sum(1 for why in out["left"].values() if why == form_fill.TOO_MANY) == 5
+    assert state["a40"] == "" and state["a41"] == 0 and state["pw" if "pw" in state else "a42"] == "" and state["a43"] == ""
+    assert out["left"]["National ID number"] == form_fill.PRIVATE and out["left"]["Create a password for your candidate account"] == form_fill.PASSWORD
+
+
+def test_area_a_form_in_a_frame_from_another_site_is_named_not_guessed():
+    out = _area("framed.html")
+    assert out["result"]["ok"] is False and out["state"] == {} and out["asked"] == []
+    assert "inside a frame from localhost" in out["result"]["msg"] and "/plain.html" in out["result"]["msg"]
+
+
+def test_area_the_plain_form_and_a_chosen_job():
+    out = _area("plain.html", job_id="vt")
+    result, state = out["result"], out["state"]
+    assert result["ok"] and result["job_id"] == "vt" and not result["guessed"]
+    assert state["fn"] == "Alex" and state["country"] == "CZ" and state["zip"] == "602 00" and state["gh"] == MINE["github"]
+    assert state["city"] == "Already here" and result["kept"] == 1 and state["token"] == "secret-token"
+    assert state["why"].startswith("An answer to: Why do you want to work at Northwind?") and out["asked"] == ["Why do you want to work at Northwind?"]
+    assert out["left"]["Resume/CV"] == form_fill.FILE and out["left"]["Password"] == form_fill.PASSWORD and out["left"]["Date of birth"] == form_fill.PRIVATE
+    assert state["terms"] is False and state["pw"] == "" and state["dob"] == ""
+
+
+def test_a_country_is_found_in_a_list_however_it_is_spelt():
+    assert form_fill.country_option(["Choose", "Germany", "Czech Republic"], "Czechia") == "Czech Republic"
+    assert form_fill.country_option(["czechia"], "Czechia") == "czechia" and form_fill.country_option(["Chad", ""], "Czechia") == ""
+    assert form_fill.country_option(["Atlantis"], "Atlantis") == "Atlantis", "a country the app does not know is matched by its name"
+    todo = form_fill.plan([_field("Country", kind="select", options=["Select", "Germany"])], MINE)
+    assert todo["fill"] == [] and todo["left"] == [{"label": "Country", "why": form_fill.NO_COUNTRY.format(country="Czechia")}]
+    short = form_fill.plan([_field("Mobile", kind="tel", most=13)], MINE)
+    assert short["fill"][0]["value"] == "+420123456789", "a short field gets the same number without its spaces"

@@ -18,6 +18,12 @@ Item {
     property real lid: 0                // 0 = eyes open, 1 = closed
     readonly property bool waving: greeting || hovered
     readonly property string says: busy ? "Working on it…" : (greeting ? "Hi! Tap me to fill in a form." : "Assistant · tap to ask")
+    // The bubble keeps the words it came up with while it fades out: changing them at that moment
+    // (the greeting ending) made it change size and jump on its way out.
+    readonly property bool talking: greeting || hovered || busy
+    property string shown: ""
+    onTalkingChanged: if (talking) shown = says
+    onSaysChanged: if (talking) shown = says
     readonly property color agLight: Qt.lighter(ag, 1.25)
     readonly property color agDark: Qt.darker(ag, 1.3)
     readonly property color steelC: theme ? theme.steel : "#6b7787"
@@ -96,12 +102,13 @@ Item {
     // what it says, to the left of it so that it never leaves the floor
     Rectangle {
         id: bubble; objectName: "assistantBubble"
-        visible: opacity > 0; opacity: (root.greeting || root.hovered || root.busy) ? 1 : 0
+        visible: opacity > 0; opacity: root.talking ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 160 } }
         width: Math.min(200, bubbleText.implicitWidth + 22); height: bubbleText.implicitHeight + 14
+        Behavior on width { enabled: bubble.opacity === 1; NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
         x: -width - 2; y: 52; radius: 10; z: 5
         color: root.theme ? root.theme.surface2 : "#1f2a37"; border.color: root.ag; border.width: 1
-        Text { id: bubbleText; x: 11; y: 7; width: 178; wrapMode: Text.WordWrap; text: root.says
+        Text { id: bubbleText; x: 11; y: 7; width: 178; wrapMode: Text.WordWrap; text: root.shown
             color: root.theme ? root.theme.ink : "#e7eef5"; font.pixelSize: 11; font.bold: true }
         Rectangle { width: 9; height: 9; rotation: 45; color: parent.color; border.color: root.ag; border.width: 1; x: parent.width - 5; y: parent.height / 2 - 4.5 }
         Rectangle { width: 6; height: 14; color: parent.color; x: parent.width - 7; y: parent.height / 2 - 7 }

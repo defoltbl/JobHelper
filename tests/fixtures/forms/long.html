@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Data Analyst application - Quillon</title>
+<style>body{font:14px sans-serif;max-width:640px;margin:24px auto} p{margin:10px 0} label{display:block;font-weight:600} input,textarea,select{width:100%;padding:6px;box-sizing:border-box}</style></head>
+<body>
+<h1>Data Analyst</h1>
+<!-- A long form of the kind a large employer uses: fields named in several ways, limits on length, lists, dates,
+     a question asked twice, and more open questions than one draft takes. -->
+<form onsubmit="window.sent = true; return false;">
+  <p><label for="a1">Full name</label><input id="a1" name="candidate_name" autocomplete="name"></p>
+  <p><label for="a2">E-mail</label><input id="a2" name="mail" type="email"></p>
+  <p><label for="a3">Confirm e-mail</label><input id="a3" name="mail_confirm" type="email"></p>
+  <p><label for="a4">Phone country code</label><select id="a4" name="dial"><option value="">Code</option><option>+420</option><option>+49</option></select></p>
+  <p><label for="a5">Mobile</label><input id="a5" name="mobile" type="tel" maxlength="9"></p>
+  <p><label for="a6">Street address</label><input id="a6" name="addr1"></p>
+  <p><label for="a7">ZIP / Postal code</label><input id="a7" name="zip"></p>
+  <p><label for="a8">Town</label><input id="a8" name="town"></p>
+  <p><label for="a9">Country</label><select id="a9" name="country"><option value="">Choose</option><option value="cz">Czech Republic</option><option value="de">Germany</option></select></p>
+  <p><label for="a10">GitHub</label><input id="a10" name="gh" type="url"></p>
+  <p><label for="a11">Earliest start date</label><input id="a11" name="start" type="date"></p>
+  <p><label for="a12">Years of experience with SQL</label><input id="a12" name="years" type="number"></p>
+  <p><label for="a13">Current employer</label><input id="a13" name="employer"></p>
+  <p><label for="a14">Name of your university</label><input id="a14" name="school_name"></p>
+  <p><label for="a15">Salary expectation (gross, per month)</label><input id="a15" name="salary"></p>
+  <p><label for="a16">Why do you want this role?</label><textarea id="a16" name="q1"></textarea></p>
+  <p><label for="a17">Why do you want this role?</label><textarea id="a17" name="q1_again"></textarea></p>
+  <p><label for="a18">Anything else?</label><textarea id="a18" name="more"></textarea></p>
+  <div id="many"></div>
+  <p><label for="a40">Cover letter</label><textarea id="a40" name="letter"></textarea></p>
+  <p><label for="a41">Upload your CV</label><input id="a41" name="cv" type="file"></p>
+  <p><label for="a42">Create a password for your candidate account</label><input id="a42" name="pw" type="password"></p>
+  <p><label for="a43">National ID number</label><input id="a43" name="nid"></p>
+  <button type="submit" id="send">Send</button>
+</form>
+<script>
+  var many = document.getElementById('many'), html = '';
+  for (var i = 1; i <= 16; i++) html += '<p><label for="m' + i + '">Tell us about situation number ' + i + ' in your work so far.</label><textarea id="m' + i + '" name="m' + i + '"></textarea></p>';
+  many.innerHTML = html;
+  window.sent = false; window.clicked = false;
+  document.getElementById('send').addEventListener('click', function () { window.clicked = true; });
+</script>
+</body></html>

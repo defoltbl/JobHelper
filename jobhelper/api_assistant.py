@@ -144,7 +144,7 @@ class AssistantApi:
                     filled.append({"label": item["label"], "kind": item["kind"], "check": item.get("check", ""),
                                    "value": item["value"] if len(item["value"]) <= SHOWN else item["value"][:SHOWN].rstrip() + "…"})
                 else:
-                    left.append({"label": item["label"], "why": "The page did not take it: the list has no entry written like yours, or the field changed."})
+                    left.append({"label": item["label"], "why": "The page did not take it: the field changed or was filled in the meantime. Type this one yourself."})
         kept = sum(1 for f in page["fields"] if f["filled"])
         label = f"{job.get('title', '')} at {job.get('company', '')}" if job else ""
         return {"ok": True, "action": "fill", "host": host, "url": page["url"],

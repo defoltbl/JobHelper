@@ -958,15 +958,15 @@ Table 9.2 shows what happens to each kind of field.
 
 | Kind of field | What the assistant does |
 |---|---|
-| Name, email, phone, address, links | Writes them from **My details** |
-| A country list | Chooses your country when the list has it written the same way |
+| Name, email, phone, address, links | Writes them from **My details**. A phone field too short for the spaces gets the number without them |
+| A country list | Chooses your country, also when the list spells it another way (*Czech Republic* for Czechia) |
 | An open question, such as "Why do you want to work here?" | Drafts the answer from your CV and the posting, in one Claude call for the whole form. Nothing outside your CV is claimed |
 | A cover letter box | Pastes the letter the app wrote for this job |
 | A field that already holds something | Leaves it as it is |
 | A file, such as your CV | Leaves it to you: a page cannot be handed a file from outside |
 | A password | Leaves it to you |
 | Date of birth, gender, origin, health, payment details | Leaves them to you |
-| Tick boxes, yes/no choices and other lists | Leaves them to you |
+| Tick boxes, yes/no choices, other lists, and boxes that open a menu of their own | Leaves them to you |
 | The **Submit** button | Never pressed |
 
 The assistant understands a few plain requests: to fill in the form, to show your details,

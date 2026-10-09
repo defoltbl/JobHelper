@@ -400,7 +400,7 @@ def test_guide_shots(ui, monkeypatch):
                         "value": "Your back-end services are written in FastAPI on PostgreSQL, the stack of my own project…"},
                        {"label": "When can you start?", "value": "I can start on [your start date].", "kind": "answer", "check": "Your start date"}],
             "left": [{"label": "Resume/CV", "why": "Attach the file yourself: a page cannot be handed a file from outside."},
-                     {"label": "Notice period", "why": "Choose it yourself: I only pick from a list when it asks for your country."}],
+                     {"label": "Notice period", "why": "Choose it yourself: I only pick from a plain list, and only when it asks for your country."}],
             "kept": 1, "boxes": 2,
             "say": "I filled in 6 fields on careers.northwind.example: 4 from My details, 2 answers drafted from your CV. I took this to be the form for "
                    "Junior Python Developer at Northwind Systems. 1 answer needs your attention (outlined in amber on the page). 2 fields are left for you, "

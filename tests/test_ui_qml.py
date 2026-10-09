@@ -3233,9 +3233,20 @@ def test_the_assistant_stands_on_the_line_blinks_and_waves(ui):
     assert bot.property("greeting") and arm.property("rotation") < -100, "the arm is up, waving"
     assert bubble.property("opacity") == 1 and bot.property("says").startswith("Hi!")
     assert bubble.mapToItem(bot.parentItem(), 0, 0).x() >= 0, "the bubble stays on the floor"
+    wide = bubble.property("width")
     bot.setProperty("greeting", False)
-    ui.wait(500)
+    sizes = []
+    for _ in range(12):                                         # on its way out the bubble keeps its words and its size
+        sizes.append((bot.property("shown"), bubble.property("width")))
+        ui.wait(20)
+    assert set(sizes) == {("Hi! Tap me to fill in a form.", wide)}, "it used to switch to the other text and jump while fading"
+    ui.wait(400)
     assert arm.property("rotation") > -40 and bubble.property("opacity") == 0
+    bot.setProperty("hovered", True)
+    ui.wait(400)
+    assert bot.property("shown") == "Assistant · tap to ask" and bubble.property("opacity") == 1
+    bot.setProperty("hovered", False)
+    ui.wait(400)
     assert ui.warnings == []
 
 
