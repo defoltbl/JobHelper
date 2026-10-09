@@ -9,6 +9,8 @@ by a script (`tests/guide_shots.py`), so they can be taken again whenever the wi
 pytest tests/guide_shots.py -q -o addopts=""
 ```
 
+The same guide as one file to read or print: [GUIDE.pdf](GUIDE.pdf) (made with `python scripts/guide_pdf.py`).
+
 Other documents: [README](../README.md) for setup, [COMMANDS](../COMMANDS.md) for every command
 and option, [HANDBOOK](../HANDBOOK.md) for the rules the app is built by and what is left to do.
 

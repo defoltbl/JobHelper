@@ -2386,3 +2386,21 @@ def test_the_job_window_asks_before_closing_with_unsaved_text(ui):
     ui.js("detailDialog.close()")
     ui.wait(350)
     assert ui.warnings == []
+
+
+def test_the_guide_s_pdf_matches_the_guide():
+    """docs/GUIDE.pdf is the same guide as one file. It carries a fingerprint of the text and pictures
+    it was made from; when this fails, run: python scripts/guide_pdf.py"""
+    import importlib.util
+
+    from pypdf import PdfReader
+    spec = importlib.util.spec_from_file_location("guide_pdf", ROOT / "scripts" / "guide_pdf.py")
+    guide_pdf = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guide_pdf)
+    pdf_path = ROOT / "docs" / "GUIDE.pdf"
+    assert pdf_path.is_file(), "docs/GUIDE.pdf is missing: python scripts/guide_pdf.py"
+    reader = PdfReader(str(pdf_path))
+    assert guide_pdf.fingerprint() in (reader.metadata.creator or ""), "the guide changed after its PDF was made: python scripts/guide_pdf.py"
+    assert len(reader.pages) >= 15 and sum(len(page.images) for page in reader.pages) >= 24
+    first = reader.pages[0].extract_text()
+    assert "illustrated" in first and "What the app does for you" in first

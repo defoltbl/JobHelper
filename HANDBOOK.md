@@ -202,7 +202,8 @@ After every batch of changes, without being asked:
 3. Load the real window offscreen on the real data, **read-only**: open the lists and every job
    window, compare a checksum of the data folder before and after, look for QML warnings.
 5. When a window that is pictured in the guide changed, take the guide's pictures again
-   (`pytest tests/guide_shots.py -q -o addopts=""`) and look at them.
+   (`pytest tests/guide_shots.py -q -o addopts=""`) and look at them. After any change to the guide or
+   its pictures, make its PDF again (`python scripts/guide_pdf.py`); a test fails until you do.
 4. For anything that changes how a window looks: screenshots on made-up data, in both themes,
    and actually look at them. A colour that is right in the file can still not reach the label.
 

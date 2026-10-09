@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **The guide as a PDF** (`docs/GUIDE.pdf`, 24 pages): the same text and pictures in one file to read or print.
+
 Found by reading all the code line by line.
 
 - **Fixed: a second search in the same app session reused the first one's answers** from the company career sites and the remote boards. Every search now reads them afresh.
