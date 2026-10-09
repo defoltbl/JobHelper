@@ -259,43 +259,44 @@ After every batch of changes, without being asked:
 
 ## 6. What is left to do
 
-All the Python was read line by line on 10 October 2026, and the logic of every window; what that
-found is fixed (see CHANGELOG, 10 October). Not read line by line: the visual markup of the windows
-(about 3,000 lines of layout), which the window tests and the guide's pictures cover.
+Everything found by reading the code and by the runs on real data up to 10 October 2026 is done (see CHANGELOG).
 
-**Assumptions that still fit one kind of user**: none left of those found on 10 October 2026. What was
-Prague, crowns, Czech, Gmail and software wording is now the person's own city and country (`places`), their
-own salary figure and currency (`salary.asked`), any language (`language.detect`), any mail provider
-(`mailhosts`) and any profession (the interview wording, the remote board's lists). Still true: the built-in
-salary estimate and the job boards jobs.cz and prace.cz are Czech, and say so.
+**Checked on real data, 9 and 10 October 2026** (app closed, a backup before each step)
 
-**Done with the user's data on 9 October 2026** (app closed, backups `before-score-all-again` and `before-90-day-scan`)
+- Score all again; documents from a higher score moved to the backup; one scan over 90 days of both mailboxes.
+- 17 replies filed under the right application with **File under…**; the statuses that followed were corrected.
+- A search that wrote the documents for the jobs that had risen above the limit.
+- A whole run for an invented accountant on real postings, in a throwaway folder: profile, search, scoring,
+  adapted CV and letter. It showed that the adapted CV could state the posting's words as experience; the
+  check for that (`cv_tailor.borrowed_claims`) came out of it.
 
-- **Score all again**: 130 new jobs, 106 scores changed; 42 at or above the limit, 13 of them without documents
-  until the next search writes them.
-- **Documents from a higher score**: 19 jobs, 76 files moved to the encrypted backup (undo for a week); one of
-  them turned out to be an application and got its documents back.
-- **One scan over 90 days of both mailboxes**: 1224 messages, 43 sent to Claude, 10 new replies.
-- **Professions beyond software**, measured on real postings for a nurse, an accountant, a sales
-  representative, a warehouse operative and a graphic designer: titles of the profession go to scoring,
-  other languages and levels are left out with the right reason. Scoring and documents for another
-  profession have still never been run end to end with a real CV of that profession.
+**Known limits** (said in the guide where they matter)
 
-**Seen in the data, for the user to look at**
+1. **The built-in salary estimate covers software roles in Czechia only.** Elsewhere the person enters a figure.
+2. **Outlook.com, Proton and Tuta mailboxes cannot be read** with a password. A sign-in window for Outlook
+   (OAuth) would be a piece of work of its own: registering the app with Microsoft, a browser step, tokens in
+   the Keychain.
+3. **National job boards exist for Czechia only** (jobs.cz, prace.cz). Other countries rely on LinkedIn, company
+   career sites and the remote boards. Adding one board per country is open-ended; add one when a person needs it.
+4. **The check that nothing is claimed beyond the CV** is strongest for technology names (a fixed list) and for
+   two-word terms of the posting (`borrowed_claims`). A single borrowed word, or a claim in the cover letter that
+   is worded freely, can still pass: the person reads both documents before sending, and the guide says so.
+5. **The layout markup of the windows** (about 5,500 lines of QML) was scanned by a script for texts that can
+   be cut and the finds were fixed; it was not read line by line. The window tests and the guide's pictures cover it.
 
-- A few older replies are filed to the wrong application (an interview invitation of one company under
-  another company's job). The matching is fixed for new mail; old entries are corrected by hand in the
-  application's window.
+**Needs the person**
+
+- Whether the thesis-like layout of the PDFs matches the design they had in mind.
 
 **Then**
 
-12. **The big feature** (to be described).
+- **The big feature** (to be described).
 
 **Last**
 
-13. **An app that opens without the terminal.** Expected parts: a real `JobHelper.app` with the
-    existing icon; data moved out of the project folder to a per-user place, with a one-time
-    move of existing data and backups; finding the Claude sign-in from an app started by
-    Finder; the weekly run and the notifier pointed at the packaged app; first launch of an
-    unsigned app on macOS. It is last because every item above changes files the package
-    would freeze.
+- **An app that opens without the terminal.** Expected parts: a real `JobHelper.app` with the
+  existing icon; data moved out of the project folder to a per-user place, with a one-time
+  move of existing data and backups; finding the Claude sign-in from an app started by
+  Finder; the weekly run and the notifier pointed at the packaged app; first launch of an
+  unsigned app on macOS; the technical documentation updated for installing without Python.
+  It is last because every item above changes files the package would freeze.

@@ -674,6 +674,13 @@ wrote it.
 > Use this view to check that nothing was stretched. Every claim on the right must be one you
 > can back in an interview.
 
+Sometimes the job window shows an amber line, **Check your adapted CV before you send it**,
+with a few terms. Those are words of the posting that the adapted CV states as your experience
+although your own CV does not mention them. The app asked for them to be removed once already;
+what is left may still be fair wording for something you did, so the decision is yours: keep
+the term only if it is true of you, and otherwise edit the Word file or add what you really did
+under **More about your work** in Options.
+
 ### The cover letter
 
 The letter is written to the company, about this role, from the facts in your CV.
