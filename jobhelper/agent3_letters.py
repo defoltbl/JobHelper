@@ -218,18 +218,31 @@ def _make_tailored_cv(job: dict[str, Any], cv_text: str, cv_path, fields: dict[s
     KEY SKILLS rewritten, everything else identical). Other master formats fall
     back to a short Markdown note with a tailored profile."""
     previous = job.get("tailored_cv_file", "")
-    if cv_path and str(cv_path).lower().endswith(".docx"):
+    # a Word CV with a profile section gets a full adapted copy; any other gets the profile note below
+    if cv_path and str(cv_path).lower().endswith(".docx") and cv_tailor.adaptable(cv_path):
         name = cv_tailor.tailor(job, cv_text, cv_path)
     else:
         new_profile = llm.ask(TAILOR_PROFILE_PROMPT.format(cv_text=cv_text[:12000], **fields),
                               system=TAILOR_PROFILE_SYSTEM, tag="agent3_letters").strip()
         name = _save_tailored_cv(job, new_profile, template_path=None) if new_profile else ""
-    if name and previous and previous != name:      # drop the superseded generated file
-        (config.TAILORED_CV_DIR / previous).unlink(missing_ok=True)
-        (config.TAILORED_CV_DIR / previous).with_suffix(".pdf").unlink(missing_ok=True)
+    if name and previous and previous != name:      # the superseded file the app wrote: kept in the backup, then removed
+        for old in (config.TAILORED_CV_DIR / previous, (config.TAILORED_CV_DIR / previous).with_suffix(".pdf")):
+            _retire(old)
     if name.endswith(".docx") and pdf.pdf_for(config.TAILORED_CV_DIR / name) is None:
         pdf.to_pdf(config.TAILORED_CV_DIR / name)   # cv_tailor already made one when it checked the page count
     return name
+
+
+def _retire(path) -> None:
+    """Take a document the app wrote out of the way when a new one replaces it: a copy goes
+    to the encrypted backup first (the newest of those are kept), so nothing is simply deleted."""
+    from . import vault
+    if path.is_file():
+        try:
+            vault.keep_copy(path, "letter_versions")
+        except Exception:  # noqa: BLE001 - without a copy the file is left where it is
+            return
+        path.unlink(missing_ok=True)
 
 
 def _generated_letter(job: dict[str, Any]) -> bool:
@@ -256,7 +269,7 @@ def _make_letter(job: dict[str, Any], cv_text: str, cv_path, fields: dict[str, A
         base = config.LETTERS_DIR / previous
         for old in {base, base.with_suffix(".docx"), base.with_suffix(".md"), base.with_suffix(".pdf")}:
             if old.name != name:
-                old.unlink(missing_ok=True)
+                _retire(old)
     if name.endswith(".docx"):
         pdf.to_pdf(config.LETTERS_DIR / name)        # nothing happens without LibreOffice
     return name

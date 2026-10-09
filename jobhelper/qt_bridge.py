@@ -114,6 +114,12 @@ class Bridge(RunSlots, JobSlots, QObject):
         except Exception:  # noqa: BLE001 - a line of explanation must never break Options
             return {"fields": [], "from_cv": False, "all": []}
 
+    @Slot(str, result=bool)
+    def knownRole(self, text):
+        """True if a search role names a profession the app knows (any of them, not only software)."""
+        from . import prefilter
+        return bool(prefilter.fields_of([str(text or "")]))
+
     @Slot("QVariantMap")
     def saveOptions(self, opts):
         self._api.save_options(dict(opts or {}))

@@ -44,7 +44,9 @@ def role_type(title: str) -> str:
     for name, pattern in _ROLE_RE:
         if pattern.search(title or ""):
             return name
-    return "Other"
+    from . import prefilter                 # not a software role: the profession it names, if the app knows one
+    fields = [f for f in prefilter.fields_of([title]) if f != "software and IT"]
+    return fields[0].capitalize() if fields else "Other"
 
 
 def _source(job: dict[str, Any]) -> str:
@@ -184,7 +186,8 @@ def keyword_stats(jobs: list[dict[str, Any]], queries: list[str], threshold: int
 
 _LANGUAGES = {"English", "Czech", "German", "French"}
 # asked for everywhere, but not something to "learn" from a list
-_SOFT = {"Troubleshooting", "Agile", "Scrum", "Jira", "Confluence", "Excel", "Office 365", "Networking"}
+_SOFT = {"Troubleshooting", "Agile", "Scrum", "Jira", "Confluence", "Excel", "Office 365", "Networking",
+         "Project management", "MS Office", "PowerPoint", "B2B", "Driving licence"}
 
 
 def skill_gaps(jobs: list[dict[str, Any]], cv_text: str, limit: int = 15) -> dict[str, Any]:

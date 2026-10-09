@@ -166,23 +166,58 @@ def _set_run_text(run, text: str) -> None:
         run.remove(extra)
 
 
+# How CVs head the two parts that are adapted (compared without spaces, so "K E Y  S K I L L S" counts).
+PROFILE_HEADINGS = ("PROFILE", "SUMMARY", "PROFESSIONALSUMMARY", "PROFESSIONALPROFILE", "PERSONALPROFILE", "CAREERSUMMARY",
+                    "ABOUTME", "ABOUT")
+SKILLS_HEADINGS = ("KEYSKILLS", "SKILLS", "TECHNICALSKILLS", "CORESKILLS", "CORECOMPETENCIES", "COMPETENCIES",
+                   "SKILLS&TOOLS", "PROFESSIONALSKILLS")
+MAX_MASTER_ROWS = 14      # more "skill rows" than this means the end of the section was not found: leave it alone
+
+
+def _is_heading(text: str) -> bool:
+    """A section heading as CVs write them: a short line in capitals, without a colon
+    (a skills row is "Label: items"). Whatever the next section is called, it ends the rows."""
+    text = (text or "").strip()
+    letters = re.sub(r"[^^\W\d_]", "", text) if False else "".join(ch for ch in text if ch.isalpha())
+    return 3 <= len(letters) and len(text) <= 60 and letters.isupper() and ":" not in text
+
+
 def _sections(body) -> dict[str, Any]:
-    """Locate the PROFILE paragraph and the KEY SKILLS rows in the body."""
+    """Locate the PROFILE paragraph and the KEY SKILLS rows in the body.
+
+    The rows run from the skills heading to the next heading of any name. (They used to end
+    only at four fixed headings: in a CV whose next section was called anything else, the
+    whole of that section counted as skill rows and was replaced.)"""
     paras = [p for p in body if p.tag == _P]
-    idx = {(_norm(_text(p))): i for i, p in enumerate(paras)}
-    out: dict[str, Any] = {"paras": paras, "profile": None, "rows": []}
-    if "PROFILE" in idx:
-        for p in paras[idx["PROFILE"] + 1:]:
+    names = [_norm(_text(p)) for p in paras]
+    out: dict[str, Any] = {"paras": paras, "profile": None, "rows": [], "rows_unclear": False}
+    at_profile = next((i for i, name in enumerate(names) if name in PROFILE_HEADINGS), None)
+    if at_profile is not None:
+        for p in paras[at_profile + 1:]:
             if _text(p).strip():
-                out["profile"] = p
+                if not _is_heading(_text(p)):
+                    out["profile"] = p
                 break
-    if "KEYSKILLS" in idx:
-        for p in paras[idx["KEYSKILLS"] + 1:]:
-            if _norm(_text(p)) in ("PROJECTS", "WORKEXPERIENCE&PRACTICALTRAINING", "EDUCATION", "LANGUAGES"):
+    at_skills = next((i for i, name in enumerate(names) if name in SKILLS_HEADINGS), None)
+    if at_skills is not None:
+        for p in paras[at_skills + 1:]:
+            if _is_heading(_text(p)):
                 break
             if _text(p).strip():
                 out["rows"].append(p)
+        if len(out["rows"]) > MAX_MASTER_ROWS:
+            out["rows"], out["rows_unclear"] = [], True
     return out
+
+
+def adaptable(master_path) -> bool:
+    """True if this Word CV has a profile section the app can find (so a full adapted copy can be made)."""
+    try:
+        with zipfile.ZipFile(master_path) as z:
+            body = etree.fromstring(z.read("word/document.xml")).find(f"{{{W}}}body")
+        return _sections(body)["profile"] is not None
+    except Exception:  # noqa: BLE001 - not a Word file the app can read
+        return False
 
 
 def master_rows(master_path) -> list[str]:
@@ -316,6 +351,10 @@ def verify(master_path, out_path) -> list[str]:
 
     if locked(ms) != locked(os_):
         problems.append("A locked paragraph (header, projects, experience, education, languages) changed.")
+    # every heading of the master must still be there, in the same order: a section must never go missing
+    heads = lambda sec: [_norm(_text(p)) for p in sec["paras"] if _is_heading(_text(p))]     # noqa: E731
+    if heads(ms) != heads(os_):
+        problems.append("A section of the master CV is missing from the adapted one.")
     full = "\n".join(_text(p) for p in os_["paras"])
     if "—" in full:
         problems.append("The CV contains an em dash.")

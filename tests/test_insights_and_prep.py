@@ -18,7 +18,8 @@ def _app(id, title, status, source="linkedin", **kw):
     ("QA Tester", "QA / testing"), ("Test Automation Engineer", "QA / testing"),
     ("IT Support Specialist", "IT support"), ("Help Desk Technician", "IT support"), ("Technical Support Engineer", "IT support"),
     ("Android Developer", "Mobile"), ("Junior Python Developer", "Software development"), ("Backend Engineer", "Software development"),
-    ("Marketing Consultant", "Other"), ("(existing application)", insights.ROLE_UNKNOWN), ("", insights.ROLE_UNKNOWN),
+    ("Marketing Consultant", "Sales and marketing"), ("Staff Nurse", "Care and health"), ("Junior Accountant", "Finance"),
+    ("Beekeeper", "Other"), ("(existing application)", insights.ROLE_UNKNOWN), ("", insights.ROLE_UNKNOWN),
 ])
 def test_role_types(title, kind):
     assert insights.role_type(title) == kind

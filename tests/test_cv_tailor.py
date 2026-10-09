@@ -114,3 +114,94 @@ def test_without_a_rules_file_the_general_rules_are_used(isolate_data):
     assert cv_tailor.load_rules("Jane Doe") == cv_tailor.GENERIC_RULES
     config.CV_INSTRUCTION.write_text("## 1. What changes\nAdapt the profile of {{first_name}}.\n## 2. Skipped\nx\n", encoding="utf-8")
     assert cv_tailor.load_rules("Jane Doe\nAnalyst") == "## 1. What changes\nAdapt the profile of Jane."
+
+
+# ── any CV layout: the skills rows end at the next heading, whatever it is called ──
+def _cv_docx(path, lines):
+    import docx
+    doc = docx.Document()
+    for line in lines:
+        doc.add_paragraph(line)
+    doc.save(str(path))
+    return path
+
+
+OTHER_LAYOUT = ["Alex Novak", "Prague · alex@example.com", "SUMMARY", "Accountant with three years in a shared service centre.",
+                "SKILLS", "Accounting: IFRS, VAT, accounts payable", "Tools: SAP, Excel", "Languages: English C1",
+                "EXPERIENCE", "Junior Accountant, Example s.r.o. (2023 - 2026)", "Month-end close and VAT returns for two entities.",
+                "Accounts payable for 40 suppliers.", "EDUCATION", "BSc Economics, 2023", "INTERESTS", "Running"]
+
+
+def _body(path):
+    import zipfile
+
+    from lxml import etree
+    with zipfile.ZipFile(path) as z:
+        return etree.fromstring(z.read("word/document.xml")).find(f"{{{cv_tailor.W}}}body")
+
+
+def test_another_cv_layout_keeps_its_experience_section(tmp_path):
+    master = _cv_docx(tmp_path / "AlexNovak_CV.docx", OTHER_LAYOUT)
+    sec = cv_tailor._sections(_body(master))
+    assert cv_tailor._text(sec["profile"]).startswith("Accountant with three years")
+    assert [cv_tailor._text(p) for p in sec["rows"]] == OTHER_LAYOUT[5:8]                 # the three skill rows, and not one line more
+    assert cv_tailor.adaptable(master) is True and cv_tailor.master_rows(master) == OTHER_LAYOUT[5:8]
+    out = tmp_path / "adapted.docx"
+    cv_tailor.build_docx(master, out, "Accountant who closes the books on time.",
+                         [{"label": "Accounting", "items": "IFRS, VAT"}, {"label": "Tools", "items": "SAP, Excel"}])
+    text = [cv_tailor._text(p) for p in cv_tailor._sections(_body(out))["paras"]]
+    for line in OTHER_LAYOUT[8:]:                                                           # everything after the skills is still there
+        assert line in text, line
+    assert "Accountant who closes the books on time." in text and "Accounting: IFRS, VAT" in text and OTHER_LAYOUT[7] not in text
+    assert cv_tailor.verify(master, out) == []
+
+
+def test_a_section_that_went_missing_fails_the_check(tmp_path):
+    master = _cv_docx(tmp_path / "master.docx", OTHER_LAYOUT)
+    broken = _cv_docx(tmp_path / "broken.docx", [x for x in OTHER_LAYOUT if x not in OTHER_LAYOUT[8:12]])     # no EXPERIENCE at all
+    problems = cv_tailor.verify(master, broken)
+    assert any("section of the master CV is missing" in p or "locked paragraph" in p for p in problems)
+
+
+@pytest.mark.parametrize("line, heading", [
+    ("EXPERIENCE", True), ("W O R K   E X P E R I E N C E", True), ("WORK EXPERIENCE & PRACTICAL TRAINING", True), ("ZKUŠENOSTI", True),
+    ("Accounting: IFRS, VAT", False), ("AWS: EC2, S3", False), ("Python, SQL, Docker", False), ("", False), ("2023", False),
+    ("A" * 61, False), ("Junior Accountant, Example s.r.o.", False),
+])
+def test_what_counts_as_a_heading(line, heading):
+    assert cv_tailor._is_heading(line) is heading
+
+
+def test_a_cv_without_a_profile_or_with_endless_rows_is_left_alone(tmp_path):
+    no_profile = _cv_docx(tmp_path / "a.docx", ["Alex Novak", "EXPERIENCE", "Junior Accountant", "EDUCATION", "BSc"])
+    assert cv_tailor.adaptable(no_profile) is False and cv_tailor.adaptable(tmp_path / "missing.docx") is False
+    (tmp_path / "not_word.docx").write_bytes(b"plain text")
+    assert cv_tailor.adaptable(tmp_path / "not_word.docx") is False
+    endless = _cv_docx(tmp_path / "b.docx", ["Alex Novak", "PROFILE", "A developer.", "KEY SKILLS"] + [f"Row {n}: thing" for n in range(20)])
+    sec = cv_tailor._sections(_body(endless))
+    assert sec["rows"] == [] and sec["rows_unclear"] is True and sec["profile"] is not None     # the profile is still adapted
+    heading_after = _cv_docx(tmp_path / "c.docx", ["Alex Novak", "PROFILE", "KEY SKILLS", "Tools: Excel"])
+    assert cv_tailor._sections(_body(heading_after))["profile"] is None                         # an empty profile section is not a profile
+
+
+def test_a_word_cv_without_a_profile_section_still_gets_a_profile_note(isolate_data, tmp_path, monkeypatch):
+    from jobhelper import agent3_letters, config, llm
+    config.ensure_dirs()
+    master = _cv_docx(config.CV_DIR / "AlexNovak_CV.docx", ["Alex Novak", "EXPERIENCE", "Junior Accountant", "EDUCATION", "BSc"])
+    monkeypatch.setattr(cv_tailor, "tailor", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no profile section: not adaptable")))
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: "Accountant with three years of month-end closing.")
+    job = store.new_job(id="j1", title="Accountant", company="Example", description="IFRS")
+    name = agent3_letters._make_tailored_cv(job, "Alex Novak\nAccountant", master, dict(title="Accountant", company="Example", location="", description="IFRS"))
+    assert name.endswith(".md") and "month-end closing" in (config.TAILORED_CV_DIR / name).read_text(encoding="utf-8")
+
+
+def test_a_replaced_document_is_kept_in_the_backup(isolate_data):
+    from jobhelper import agent3_letters, config, vault
+    config.ensure_dirs()
+    old = config.TAILORED_CV_DIR / "Old_CV.docx"
+    old.write_bytes(b"the earlier adapted CV")
+    agent3_letters._retire(old)
+    kept = list((vault.backups_dir() / "letter_versions").iterdir())
+    assert not old.exists() and len(kept) == 1 and vault.read_bytes(kept[0]) == b"the earlier adapted CV"
+    agent3_letters._retire(old)                                        # nothing there: nothing happens
+    assert len(list((vault.backups_dir() / "letter_versions").iterdir())) == 1

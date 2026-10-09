@@ -2331,3 +2331,26 @@ def test_the_guide_s_pictures_exist_and_come_from_the_picture_script():
         heading = next((h for h in re.findall(r"^## (.+)$", guide, re.M)
                         if re.sub(r"[^a-z0-9 -]", "", h.lower()).replace(" ", "-") == section), None)
         assert heading, section
+
+
+def test_a_search_role_outside_software_can_be_added(ui):
+    """The words the app knew for roles were all from software jobs: "registered nurse" was refused as not a role."""
+    dialog = ui.find("optDialog")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    before = ui.js("rolesModel.count")
+    assert ui.js('optDialog.addRole("registered nurse")') is True and ui.js("optDialog.roleErr") == ""       # a profession the app knows
+    assert ui.js('optDialog.addRole("junior accountant")') is True
+    assert ui.js('optDialog.addRole("beekeeper")') is False                                                   # unknown: asked once …
+    assert "is not a role the app knows" in ui.js("optDialog.roleErr") and "press Add again" in ui.js("optDialog.roleErr")
+    assert ui.js("rolesModel.count") == before + 2
+    assert ui.js('optDialog.addRole("beekeeper")') is True and ui.js("optDialog.roleErr") == ""               # … then added
+    assert ui.js('optDialog.addRole("asdfgh")') is False and ui.js('optDialog.addRole("zzzzqq")') is False     # a different word is asked about afresh
+    assert ui.js("rolesModel.count") == before + 3
+    assert ui.js('optDialog.addRole("план")') is False and "Latin letters" in ui.js("optDialog.roleErr")       # the other checks still hold
+    assert ui.js('optDialog.addRole("beekeeper")') is False and "already in the list" in ui.js("optDialog.roleErr")
+    assert ui.bridge.knownRole("staff nurse") is True and ui.bridge.knownRole("beekeeper") is False and ui.bridge.knownRole("") is False
+    ui.js("optDialog.pendingRole = ''; optDialog.roleErr = ''; optDialog.load()")
+    ui.js("close()", dialog)
+    ui.wait(350)
+    assert ui.warnings == []

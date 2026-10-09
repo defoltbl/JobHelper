@@ -143,6 +143,7 @@ def test_letter_and_cv_get_pdf_copies_and_old_ones_are_removed(isolate_data, mon
         return "new_letter.docx"
 
     monkeypatch.setattr(cv_tailor, "tailor", tailor)
+    monkeypatch.setattr(cv_tailor, "adaptable", lambda path: True)          # the stand-in master is a Word CV with a profile
     monkeypatch.setattr(agent3_letters.cover_letter, "write", write)
     job = store.new_job(id="j", title="Dev", company="Acme", source="linkedin",
                         tailored_cv_file="old_cv.docx", cover_letter_file="old_letter.docx")

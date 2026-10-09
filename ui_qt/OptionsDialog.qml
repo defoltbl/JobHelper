@@ -25,6 +25,7 @@ Dialog {
     ListModel { id: rolesModel }
     ListModel { id: companiesModel }
     property string roleErr: ""
+    property string pendingRole: ""       // a role the app did not know, waiting for a second press on Add
     // "software engineering intern" as a search role while "intern" is skipped would
     // search for jobs only to throw them all away.
     function roleClash(roles, skips, keeps) {
@@ -48,9 +49,16 @@ Dialog {
         if (!t) return false;
         if (win.hasNonLatin(t)) { roleErr = "Use English (Latin letters) for search roles."; return false; }
         if (!/[a-zA-Z]/.test(t) || t.length < 2) { roleErr = "Enter a real role, e.g. 'junior data analyst'."; return false; }
-        if (!win.looksLikeRole(t)) { roleErr = "“" + t + "” doesn't look like a job role — check spelling or try e.g. 'backend developer'."; return false; }
         for (var i = 0; i < rolesModel.count; i++)
             if (rolesModel.get(i).text.toLowerCase() === t.toLowerCase()) { roleErr = "That role is already in the list."; return false; }
+        // a role the app does not know is not wrong (the list of words it knows grew up with software jobs):
+        // it is asked about once, so a typo is caught, and added on the second press
+        if (!win.looksLikeRole(t) && !bridge.knownRole(t) && pendingRole.toLowerCase() !== t.toLowerCase()) {
+            pendingRole = t;
+            roleErr = "“" + t + "” is not a role the app knows. Check the spelling, then press Add again to search for it anyway.";
+            return false;
+        }
+        pendingRole = "";
         rolesModel.append({ text: t });
         return true;
     }
@@ -288,7 +296,7 @@ Dialog {
                             placeholder: "e.g. backend developer" }
                         // which professions the free first look takes as yours: read from the roles above as you type them, or picked here
                         ColumnLayout { id: fieldsBox; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12; spacing: 8
-                            property var read: { var n = wantedTags.tagCount; return optDialog.visible ? bridge.professionFields(wantedTags.all()) : ({ fields: [], all: [] }); }
+                            property var read: { var n = wantedTags.tagCount; return optDialog.visible && bridge ? bridge.professionFields(wantedTags.all()) : ({ fields: [], all: [] }); }
                             readonly property bool byHand: optDialog.pickedFields.length > 0
                             Text { objectName: "fieldsNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                                 text: { var f = fieldsBox.read;

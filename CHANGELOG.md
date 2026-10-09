@@ -7,6 +7,11 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 Found by reading all the code line by line.
 
+- **Fixed: an adapted CV could lose a whole section.** The skills rows were taken to end only at four fixed headings. In a CV whose next section was called anything else (for example "EXPERIENCE"), that section counted as skill rows and was replaced. The rows now end at the next heading of any name, more heading names are recognised ("SUMMARY", "SKILLS" …), and a check fails the file if any section of the master is missing. Your own CV is read exactly as before.
+- **A Word CV without a profile section** now gets the short profile note instead of no adapted CV at all.
+- **Search roles outside software can be added in Options.** "registered nurse" used to be refused as "not a job role"; a role the app does not know is now asked about once and then added.
+- **Insights names the profession** of a role instead of "Other" where it knows it.
+- **A document the app replaces is kept in the backup** before the old file is removed.
 - **Fixed: the paid API was only refused by the Run buttons.** The command line only warned, and form answers, scoring again, interview preparation and pasted replies did not check at all. Now nothing is ever asked while `ANTHROPIC_API_KEY` is set, whatever started it.
 - **Fixed: a false alarm at start-up** when the optional rule files or the letter template are absent. They are optional; the app writes with its built-in rules and a plain letter.
 - **Fixed: a search that ended on an unexpected error lost what it had scored**; it is saved now, and the reason is written to `data/app_trouble.log`.
