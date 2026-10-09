@@ -2304,3 +2304,10 @@ def test_a_long_title_makes_its_row_taller_instead_of_being_cut(ui):
     finally:
         ui.bridge._api._change("lead", lambda jobs, j: j.update(title=start), render=False)
     assert ui.warnings == []
+
+
+def test_help_describes_what_was_added_since_it_was_written():
+    text = (ROOT / "ui_qt" / "HelpDialog.qml").read_text(encoding="utf-8")
+    for words in ("Move documents to backup", "Put them back", "Trash", "Kinds of role you want", "Read it again", "was 55",
+                  "no longer accepts applications", "app_trouble.log", "HANDBOOK.md"):
+        assert words in text, words

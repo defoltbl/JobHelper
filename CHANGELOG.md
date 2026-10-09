@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 9 October 2026
 
+- **Help and README brought up to date** with moving documents and putting them back, the Trash, picking your profession, reading a posting again and closed postings.
 - **Keywords for other professions**: "Keywords in the posting" now also knows the telling terms of finance, sales and marketing, HR, law, engineering, logistics, health care, hospitality, teaching, design, laboratory work and construction (235 terms instead of 112).
 - **More professions to pick from**: design and media, science and laboratory, construction and trades, office and public administration, retail, security and facilities were added (17 in all), and the earlier ones know more titles, some in Czech.
 - **No text is cut off any more**: long job titles, company lines, status messages and labels now wrap, and their row grows, instead of ending in "…".

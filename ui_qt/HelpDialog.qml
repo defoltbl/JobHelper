@@ -42,7 +42,10 @@ Dialog {
             "Each job gets a <b>score</b> from 0 to 100 for how well it fits your CV.",
             "<b>strong</b>: 60 or more. <b>moderate</b>: 50 to 59. <b>stretch</b>: below 50 but above your own <b>limit</b>; read \"<b>Why this score</b>\" before applying.",
             "<b>skipped</b>: the app saw from the title that it is another profession than the roles you look for, or a kind of role you listed as not wanted, and did not spend a Claude call on it. \"<b>Score it anyway</b>\" in the job window overrides that.",
-            "<b>Options</b>, \"<b>Write letters above</b>\", sets from which <b>score</b> a CV and a letter are written." ] },
+            "<b>Options</b>, \"<b>Write letters above</b>\", sets from which <b>score</b> a CV and a letter are written.",
+            "What counts as another profession follows the roles under \"<b>Kinds of role you want</b>\" in <b>Options</b>. The chips below them show what the app takes as your profession, and you can pick it yourself.",
+            "\"<b>scored from the title only</b>\" or \"<b>from a short summary</b>\": the app could not read the whole posting. \"<b>Read it again</b>\" or \"<b>Paste the posting's text</b>\" in the job window fixes that, and the job is scored again by itself.",
+            "\"<b>was 55</b>\" under a score is what the job scored before it was scored again. \"<b>no longer accepts applications</b>\": the posting closed after it was found." ] },
         { title: "The lists on the left", lines: [
             "<b>New Jobs</b>: jobs you have not applied to. <b>Applications</b>: jobs you applied to, with their status. <b>Responses</b>: every reply email. <b>Analytics</b>: the numbers. <b>Insights</b>: what works, how each <b>search</b> keyword performs, skills worth learning, and what the postings say they pay next to your target.",
             "In every list you can <b>search</b>, <b>filter</b> with the chips and <b>sort</b>. Click a row to open it.",
@@ -50,6 +53,7 @@ Dialog {
             "<b>Not interested</b> (in a job's window) removes a job for good; the \"<b>not interested</b>\" chip in <b>New Jobs</b> brings it back." ] },
         { title: "The job window", lines: [
             "It shows the description, why the job got its <b>score</b>, which keywords from the posting are in your CV and which are not, and buttons for the CV, the letter and their PDFs.",
+            "\"<b>Move documents to backup</b>\" appears when a job has a letter and CV but now scores below your limit. They go to an encrypted backup, and \"<b>Put them back</b>\" returns them. <b>New Jobs</b> can do both for all such jobs at once. Old copies are removed in <b>Options</b>, to the <b>Trash</b>, never deleted.",
             "For an application you can change the status by hand (<b>Waiting</b>, <b>Interview</b>, <b>Offer</b>, <b>Rejected</b>), set the day you applied, prepare for an interview, and draft a follow-up email to copy.",
             "<b>Edit letter</b> lets you change a letter the app wrote, or have one paragraph rewritten. Your own letters are never changed by the app.",
             "For a job you applied to: <b>A date to remember</b>: put an interview, a deadline or a test task on a job. It appears under <b>Coming up</b> on the main screen, and you get a notification the day before and on the day.",
@@ -74,7 +78,9 @@ Dialog {
             "A robot or button does nothing: open the <b>Account</b> chip on the left and check the four rows are green.",
             "A rejection is missing: it probably did not arrive in the scanned mailbox. Mark it by hand in the job window, or add a <b>second mailbox</b> in the <b>Account card</b>.",
             "Too many poor jobs: add words to \"<b>Skip titles with</b>\" in <b>Options</b>, or remove a <b>search</b> role that <b>Insights</b> marks as weak.",
-            "More detail on every command is in the file <b>COMMANDS.md</b> in the app's folder." ] }
+            "Good jobs are skipped: check the profession chips in <b>Options</b>, and send a single job to scoring with \"<b>Score it anyway</b>\".",
+            "An error the app carried on after leaves one line in <b>data/app_trouble.log</b>.",
+            "More detail on every command is in <b>COMMANDS.md</b>, and how the app is meant to be used in <b>HANDBOOK.md</b>, both in the app's folder." ] }
     ]
     background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1 }
     contentItem: ColumnLayout {

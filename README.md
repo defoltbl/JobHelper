@@ -1,36 +1,35 @@
-# JobHelper 🧭
+# JobHelper
 
-A personal job-application assistant built from **5 cooperating agents**, powered
-by **your Claude subscription** (via the Claude Code CLI — no paid API key, no
-per-token billing).
+A personal job-application assistant for macOS. Five cooperating agents find postings, score
+them against your CV, write an adapted CV and a cover letter for the good ones, and keep track
+of what you applied to and what the companies answered. It runs on **your Claude subscription**
+through the Claude Code CLI: no paid API key, no per-token bill.
 
-> 📋 **All commands in one place:** see [COMMANDS.md](COMMANDS.md).
->
-> **How to use it, the rules it is built by and what is left to do:** see [HANDBOOK.md](HANDBOOK.md).
+- **All commands with their options:** [COMMANDS.md](COMMANDS.md)
+- **How to use it, the rules it is built by, what is left to do:** [HANDBOOK.md](HANDBOOK.md)
+- **What changed, day by day:** [CHANGELOG.md](CHANGELOG.md)
 
 | # | Agent | What it does |
 |---|-------|--------------|
-| 1 | `agent1_cv` | Reads your CV (PDF/DOCX/TXT) and builds a target job profile + search queries |
-| 2 | `agent2_search` | Searches jobs.cz + prace.cz + LinkedIn (Prague), filters to English + your level, incl. adjacent roles |
-| 3 | `agent3_letters` | Scores each job, writes a cover letter, and a keyword-tailored CV (re-emphasising your real experience for ATS) |
-| 4 | `agent4_tracker` | Builds the Excel tracking table (status colour-coded, best matches first) |
-| 5 | `agent5_responses` | Reads inbox replies, classifies rejections/interviews/offers into a **SQLite database**, updates statuses, and reports rejection analytics |
+| 1 | `agent1_cv` | Reads your CV (PDF, DOCX or TXT) and builds a profile and search queries |
+| 2 | `agent2_search` | Searches the job boards, filters by language, level and age, and notes why each dropped posting was dropped |
+| 3 | `agent3_letters` | Scores each posting, then writes an adapted CV and a cover letter for those above your limit |
+| 4 | `agent4_tracker` | Builds the Excel tables (new jobs, applications) |
+| 5 | `agent5_responses` | Reads replies in your mailbox, files them to applications, and reports why you get rejected |
 
 ## Requirements
 
-- **Claude Code CLI, logged in** with your subscription. Run `claude auth login`
-  once and sign in. **Do not set `ANTHROPIC_API_KEY`** — leaving it unset is
-  what makes the app use your subscription instead of the paid API.
-- Python 3.10+
-- **Job search for Prague needs no API key** — the default source pulls from
-  **jobs.cz + prace.cz + LinkedIn** (LinkedIn's public guest endpoint). It keeps
-  only English ads and roles at your level, and includes adjacent roles you
-  qualify for (e.g. IT support / QA for a junior dev). (For personal use;
-  against the boards' ToS, and may need selector fixes if they change their HTML.
-  Indeed & Glassdoor are excluded — they hard-block scraping.)
-- (Optional) Other countries: an [Adzuna](https://developer.adzuna.com) key
-  (`--source adzuna`, set `ADZUNA_COUNTRY`). Adzuna does **not** cover Czechia.
-- (Optional) A Gmail **App Password** for email status sync.
+- macOS.
+- **Claude Code CLI, signed in** with your subscription (`claude auth login`). **Do not set
+  `ANTHROPIC_API_KEY`**: leaving it unset is what makes the app use the subscription, and the
+  app refuses to run a search while it is set.
+- Python 3.10 or newer.
+- Optional: a Gmail **App Password** for reading replies; LibreOffice for PDF copies of the
+  documents; a Jooble or Adzuna key for those two sources.
+
+Job search needs no key. The default sources are jobs.cz, prace.cz, LinkedIn's public pages and
+the career sites of the companies you list; two remote boards can be added in Options. The boards are read for
+personal use only, at a modest pace, and a site that turns programs away is left alone.
 
 ## Setup
 
@@ -40,174 +39,135 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install --require-hashes -r requirements.lock   # exact, hash-checked packages (or: pip install -r requirements.txt)
 
-cp .env.example .env      # optional settings (the Gmail password does NOT go here)
+cp .env.example .env          # optional settings (the Gmail password does NOT go here)
 ```
 
-Put your CV (English) in `data/cv/` — e.g. `data/cv/my_cv.pdf`.
+Put your CV in `data/cv/`, or choose it in the Account card when the app starts.
 
 ## Use
 
-### Desktop app (recommended)
-
-A window where the 5 agents are robots on a factory conveyor belt — jobs ride
-the belt and you drive everything with buttons (Run search, Scan email, browse
-your leads/applications/responses, open letters & CVs, edit options).
+### The window
 
 ```bash
-python app_qt.py         # native Qt app (PySide6/QML — no web engine, GPU-rendered)
+python app_qt.py
 ```
 
-Click a job row to see it in full (description, why it got its score, keywords in
-and not in your CV). Applications with no reply for 10 days get a follow-up
-reminder with a draft email to copy. A running search or scan can be stopped. With
-LibreOffice installed, each adapted CV and letter also gets a PDF copy.
+Five robots on an assembly line show what is running. **Run search** finds and scores new
+postings; **Scan email** reads replies. The lists on the left hold new jobs, your applications
+and every reply. Click a job to open its window.
 
-In the same window you can put a date on a job (interview, deadline) and get a
-reminder the day before, keep notes per company, paste in a reply that came outside
-email, and compare the adapted CV with your master CV. Insights also lists what the
-postings say they pay. Options can widen the email scan to archived mail and spam.
+What the window does for you:
 
-Everything in the window maps to the command-line tools below.
+- **Before you apply:** why the job got its score, which keywords of the posting are in your CV,
+  a side-by-side view of the adapted CV and your master CV, an editor for the letter, drafted
+  answers for that job's application form, the letter and CV as one PDF, and a short checklist.
+- **After you apply:** status changes from the replies in your mailbox, a reminder to follow up
+  after ten quiet days with a draft to copy, dates with notifications, notes per company, and
+  an interview preparation you can edit and open as a Word sheet.
+- **Keeping the list honest:** a score that rests on little text is marked and can be fixed by
+  reading the posting again or pasting its text; a job can be scored again with your current
+  Options; postings that closed are noticed; documents of a job that fell below your limit can
+  be moved to a backup and put back.
+- **Filtered out:** every posting a search dropped is listed with its reason, and most can be
+  brought back.
+- **Insights:** which search roles work, which skills the postings ask for that your CV does
+  not show, what the postings pay, how long companies take to answer.
 
-### Command line
+A weekly run can do the search and the email scan by itself (the **Weekly run** card).
+
+### The command line
 
 ```bash
-# Full pipeline: analyze CV → search Prague → write letters → build Excel
-python run.py
+python run.py                    # the whole pipeline, with the city saved in Options
+python run.py --where Brno       # another city
+python run.py --threshold 70     # write documents only for stronger matches
+python run.py --reuse-profile    # skip reading the CV again
+python run.py --include-remote   # add the two remote boards
 
-# Other cities / stricter matching / reuse the last CV analysis
-python run.py --where Brno
-python run.py --threshold 70
-python run.py --reuse-profile
-
-# Add remote English roles (RemoteOK + We Work Remotely) to a Prague run
-python run.py --include-remote
-
-# Pick a specific source
-python run.py --source remote                   # remote-only (RemoteOK + WWR)
-python run.py --source all                       # every source
-python run.py --where Warsaw --source adzuna    # needs an Adzuna key + ADZUNA_COUNTRY=pl
+python status.py list            # everything, with ids
+python status.py sync            # read replies and update statuses
+python status.py responses       # reply and rejection analytics
+python status.py usage           # Claude usage of this app
 ```
 
-Outputs:
-- `data/excel_new_jobs/new_jobs.xlsx` and `data/excel_applications/applications.xlsx`
-  — the tracking tables (best matches first, colour-coded status)
-- `data/cover_letters/` — one cover letter (`.docx`) per job worth applying to
-- `data/tailored_cvs/` — an adapted CV per strong match (re-emphasises
-  your **real** experience to match the posting; never invents anything).
-  Your master CV stays in `data/cv/`. Disable with `python run.py --no-tailor-cv`.
-- `data/jobs.json` — the underlying database (encrypted)
-- `data/profile.json` — Agent 1's CV analysis (encrypted)
+The rest is in [COMMANDS.md](COMMANDS.md).
 
-### Tracking your applications (Agent 4)
+### Where things are written
 
-```bash
-python status.py list                          # see everything + IDs
-python status.py update adzuna-123 applied     # mark one applied by hand
-python status.py update adzuna-123 interview --note "call Fri 10:00"
-python status.py sync                          # read inbox replies, auto-update
-python status.py rebuild                       # regenerate the Excel file
-```
+- `data/cover_letters/`, `data/tailored_cvs/`: the documents, as Word files (and PDF with
+  LibreOffice). Your master CV stays in `data/cv/`, your own letters in `data/my_letters/`.
+- `data/excel_new_jobs/`, `data/excel_applications/`, `data/excel_reports/`: the Excel tables.
+- `data/jobs.json`, `data/profile.json`, `data/responses.db`: the app's own data, encrypted.
+- `data/backups/`: encrypted backups, made before anything is changed in bulk.
 
-`sync` opens your inbox **read-only** — it never sends, deletes, or marks
-emails. It matches messages to jobs by company name and asks the model whether
-each reply is an interview invite, rejection, offer, etc., then updates the
-table **and** stores each response in the database (Agent 5).
+### Connecting Gmail (once)
 
-### Rejection & response analytics (Agent 5)
+1. Turn on 2-Step Verification for the Google account.
+2. Create an App Password named "JobHelper" (Google Account → Security → App passwords).
+3. In the app, open the **Account** chip, press **Change** on *Job email*, enter the address and
+   the 16-letter password, and save.
 
-```bash
-python status.py responses          # response rate + rejection-reason breakdown
-python status.py responses --scan   # scan inbox for new replies first, then report
-```
-
-This reads every application reply into `data/responses.db` (encrypted) and writes
-`data/excel_reports/responses_report.xlsx` with a Summary sheet (response rate, rejection
-reasons) and a Responses sheet (every reply). Use it to see *why* you're getting
-rejected and adjust.
-
-### Connecting Gmail (one-time)
-
-1. Turn on **2-Step Verification** for the Google account (required for app passwords).
-2. Go to **Google Account → Security → App passwords**, create one named "JobHelper".
-3. In the app, click the **Account** chip, then **Change** on *Job email*, type the
-   address and the 16-letter password and press **Save**. The address is saved to
-   `.env`; the password goes to the macOS Keychain.
-Never use your real Google password — only an App Password, which you can revoke
-anytime. The app only ever **reads** your inbox.
-
-The desktop app stores the app password in the macOS **Keychain** (enter it in the
-**Account** card), and keeps your job data encrypted on disk. See the
-*Security* section of [COMMANDS.md](COMMANDS.md).
+The address goes to `.env`; the password goes to the macOS Keychain. Use an App Password, never
+your real Google password. The app only ever **reads** the mailbox: it does not send, delete
+or mark anything.
 
 ## Security
 
 - The Gmail app password and the data key are in the macOS **Keychain**.
-- `jobs.json`, `profile.json`, `ui_settings.json`, `responses.db` and all backups are
-  **AES-256 encrypted** on disk.
-- The CV rules, letter rules, letter template, master CV and career-site list are
-  **signed**; a change made outside the app must be approved before the next run.
+- Job data, the profile, settings, the reply database and all backups are **AES-256 encrypted**
+  on disk.
+- The CV rules, letter rules, letter template, master CV and career-site list are **signed**; a
+  change made outside the app must be approved before the next run.
 - Packages are pinned by SHA-256 in `requirements.lock`.
 
-**Save your recovery key once** (needed on a new Mac or after a Keychain reset):
+**Save your recovery key once.** You need it on a new Mac or after a Keychain reset:
 
 ```bash
 python status.py security recovery-key
 ```
 
-CVs, cover letters and Excel trackers stay normal files so Word and Excel can open
-them; an encrypted drive is what protects those. Full details, including where to
-find the Gmail password in Keychain Access and when to use *Approve*, are in
-section 10 of [COMMANDS.md](COMMANDS.md).
+CVs, letters and Excel files stay ordinary files so Word and Excel can open them; an encrypted
+disk is what protects those. Details are in section 10 of [COMMANDS.md](COMMANDS.md).
 
 ## Using it with your own CV
 
 Nothing about one particular person is built into the app.
 
-1. Put your CV in `data/cv/` (or choose it in the Account card). A `.docx` whose sections are
-   headed PROFILE and KEY SKILLS gets a fully adapted copy per job; other formats get a
-   rewritten profile paragraph. Generated files are named after your CV file:
-   `FirstnameLastname_CV_EN.docx` gives `FirstnameLastname_CV_<Company>_<Role>.docx` and
-   `FirstnameLastname_CoverLetter_<Company>_<Role>.docx`.
-2. In Options, fill in **About you** (right to work, when you can start), your city, your
-   search roles and the words to skip. Turn **English only** off if you also want roles that
-   require Czech.
-3. Rules for the CV and the letter are optional. Without them the built-in general rules are
-   used. To write your own, copy `data/cv_adaptation_instruction.example.md` and
-   `data/cover_letter_instruction.example.md` to the same names without `.example` and edit
-   them. `{{name}}`, `{{first_name}}`, `{{location}}`, `{{right_to_work}}` and `{{start}}` in
-   those files are filled in by the app.
-4. A letter template (`data/cover_letter_template.docx`) is optional too: with one, letters keep
-   its head and layout; without one, a plain business letter is written with the name and
-   contacts from your CV.
+1. Put your CV in `data/cv/`. A `.docx` whose sections are headed PROFILE and KEY SKILLS gets a
+   fully adapted copy per job; other formats get a rewritten profile paragraph. Generated files
+   are named after your CV file.
+2. In Options, set your city, your search roles, the **kinds of role you want and do not want**,
+   the level words to skip and the years of experience you accept, and fill in **About you**
+   (right to work, when you can start).
+3. Check the profession chips under *Kinds of role you want*: they show what the app takes as
+   your profession, which decides what is skipped before scoring. Pick it yourself if the app
+   read it wrong. Seventeen professions are known.
+4. Rules for the CV and the letter are optional. To write your own, copy
+   `data/cv_adaptation_instruction.example.md` and `data/cover_letter_instruction.example.md`
+   to the same names without `.example` and edit them.
+5. A letter template (`data/cover_letter_template.docx`) is optional too: with one, letters keep
+   its head and layout; without one, a plain business letter is written.
 
-## English-only jobs
+Whatever the app writes for you claims only what is in your CV or in your own notes under
+*More about your work* in Options.
 
-Because you don't speak Czech, Agent 2 keeps **only English-language ads** by
-default (an English ad is a strong signal the role welcomes non-Czech speakers).
-Czech-language listings are filtered out automatically. To include everything:
+## Language of the postings
 
-```bash
-python run.py --all-languages
-```
+By default only English-language postings are kept, on the view that an English ad is a role
+that works in English. Turn **English only** off in Options (or use `--all-languages`) to keep
+postings in other languages too. Separately, a posting that requires a language your CV does
+not show at a working level is scored low, whatever language it is written in.
 
 ## Tests
 
 ```bash
-source .venv/bin/activate
-pytest
+pytest -q
 ```
 
-The suite runs offline (no network, no Claude usage): scraper parsing is tested
-against saved HTML fixtures in `tests/fixtures/`, and the AI agents are tested
-with the LLM mocked. In VS Code, tests also appear in the Testing panel.
-
-It never touches your real data: every test works in a temporary folder, and the
-`.env` file, the weekly LaunchAgent and the Claude CLI are stubbed. Besides the
-agents and scrapers it covers the desktop app (the window is loaded offscreen:
-welcome screen, progress bar, dialogs, input validation), the bridge between the
-window and the agents, saved Options, the weekly schedule and `run.py`.
-Every new feature gets tests in the same change.
+About 1,100 tests, two minutes, offline. They never touch your real data, the Keychain or
+`.env`, never ask Claude, never read a real job board, and never open a file or put anything in
+the Trash: every test works in temporary folders with stand-ins. The window itself is loaded
+offscreen and driven by the tests. Every change comes with tests in the same commit.
 
 ## Open in VS Code
 
@@ -215,25 +175,13 @@ Every new feature gets tests in the same change.
 code path/to/JobHelper
 ```
 
-Recommended extensions (Python + debugpy) are suggested automatically, and the
-Run/Debug panel has ready-made launch configs for the pipeline and status tools.
-Pick `.venv` as the interpreter when prompted.
+Recommended extensions and launch configurations are included. Pick `.venv` as the interpreter
+when asked.
 
-## Claude usage tracking
+## Claude usage
 
-Every model call's tokens and API-equivalent cost are tracked. `run.py` prints a
-summary at the end, and you can check anytime:
-
-```bash
-python status.py usage          # tokens + API-equiv. cost, broken down by agent
-python status.py usage --reset  # zero the counters
-```
-
-What the numbers mean: the app uses your Claude **subscription**, so there's no
-dollar bill — usage counts against your normal Pro/Max limits. The tracker shows
-**tokens used** and an **API-equivalent cost** (a proxy for "how much"), plus a
-rate-limit snapshot when the SDK reports one. Your subscription's exact remaining
-quota isn't exposed via the API — for that, run `/usage` inside the Claude Code
-terminal. To keep usage low, the app makes **one focused model call per task**
-(CV analysis, per-job scoring+letter, per-email classification), and the job
-search itself uses **no** Claude usage.
+Every model call is counted. `run.py` prints a summary and `python status.py usage` shows it at
+any time: tokens used and what the same work would have cost through the paid API. The app
+uses your subscription, so that figure is a measure, not a bill. To keep usage low the app
+scores five postings per call, skips plainly unsuitable postings before scoring, and the search
+itself uses no Claude at all.

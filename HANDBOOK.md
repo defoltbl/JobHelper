@@ -122,7 +122,7 @@ data/                your data; only the *.example.* files are in git
 | Module | Does |
 |---|---|
 | `agent1_cv` | reads the CV, builds the profile and the search queries |
-| `agent2_search` | searches the boards, filters, notes why a posting was dropped, second read of empty postings |
+| `agent2_search` | searches the boards, filters, notes why a posting was dropped, second read of empty postings, notices closed ones |
 | `agent3_letters` | scores (five postings per call), caps, writes the CV and letter |
 | `agent4_tracker` | builds the Excel files |
 | `agent5_responses` | reads replies, files them to applications, analytics |
@@ -139,8 +139,12 @@ data/                your data; only the *.example.* files are in git
 - **Keeping data safe:** `vault` (encryption, backups), `integrity` (signed rule files),
   `housekeeping` (old backups, logs, the Trash), `store` and `db` (jobs and replies).
 - **Claude:** `llm` (every call goes through it; pauses at the limit), `usage`.
-- **The window's back end:** `ui_api` (what the window can ask for) and `qt_bridge` (the Qt
-  side: slots, background work, progress).
+- **The window's back end:** `ui_api` (what the window can ask for: lists, one job in full, hand
+  edits, Options) with its parts `api_documents` (scores, moving documents, "not interested"),
+  `api_interview` (dates, form answers, interview preparation) and `api_letters` (letter editor,
+  PDFs); `qt_bridge` is the Qt side (slots, background work, progress).
+- **When something fails quietly:** `trouble.note()` writes one line to `data/app_trouble.log`.
+  An error is never swallowed without either a reason in a comment or a line there.
 
 ### Things that are easy to get wrong
 
@@ -157,6 +161,12 @@ data/                your data; only the *.example.* files are in git
 - **Colours fade to `win.clearOf(colour)`**, not to plain transparent, or a dark shadow flashes.
 - **A label on the orange or the green** takes `theme.accentInk`, which is white in the light
   theme and dark in the dark one.
+- **`Api` is one class made of four files.** A method name defined in two of them would silently
+  hide one (there is a test).
+- **Lists that decide what is skipped** (`prefilter.FIELDS`, `keywords.VOCABULARY`) must be
+  measured on the real postings before a change ships: nothing that scored 30 or more may be
+  skipped. A word that an ordinary posting uses ("research", "architect", "compliance") does
+  not belong in them.
 - **The folder `backups/below_your_limit`** holds documents that can be put back. The automatic
   clean-up of old backups must never count it as a backup.
 
@@ -198,6 +208,9 @@ then change it, and say what was changed.
 | A title-only score is capped at 40 and gets no documents | A letter written from a title can only be generic. |
 | A required language the CV does not show caps the score at 25 | The model alone let such jobs through. |
 | "Another profession" follows the roles you look for | The first list was written for software jobs. Measured on 543 real postings, the new rule decides the same and skips nothing that scored 30 or more. |
+| The keyword and profession lists leave out ordinary words | With 235 keywords and 17 professions, 4 of 543 real postings are decided differently, none of them one that had scored 30 or more. |
+| A closed posting with documents is marked, not removed | Removing it would throw away a letter and CV without asking. One without documents goes to the filtered-out list. |
+| Only LinkedIn pages are asked whether a posting closed, 40 per search, each at most every 3 days | It is the only board that answers clearly, and asking every page on every search would hammer it. |
 | The app does not invent job duties for interview stories | Stories come from the CV and the user's notes; "typical tasks" are labelled as general knowledge. |
 | Removing old moved documents uses the Trash | Deleting cannot be taken back. |
 | No Windows or Linux version | Not wanted. |
@@ -206,55 +219,32 @@ then change it, and say what was changed.
 
 ## 6. What is left to do
 
-Checked against the whole code on 9 October 2026. Order matters for the last two.
+Checked against the whole code on 9 October 2026; items found then are done. Order matters
+for the last two.
 
-**Found in the code check**
+**Small**
 
-1. **Closed postings stay in New Jobs.** `agent2_search.prune_closed_leads` exists and is
-   tested, but nothing calls it: a posting that no longer accepts applications is only caught
-   when it is first found, never later.
-2. **Text that is cut off.** 21 places still end a long text with "…" (rows of the lists, cards
-   on the main screen, the job window's header) instead of wrapping.
-3. **Errors that are swallowed.** 14 places catch any error and do nothing. Each needs a look:
-   keep with a reason, or at least write it to the log.
-4. **Helpers nothing uses.** `limitInfo` (bridge), `db.set_response_job`,
-   `filters.is_too_senior_for`, `form_answers.parse_questions`, `vault.use_keychain` are only
-   reached by tests. Use or remove.
-5. **Resume button contrast.** White on blue is about 3.7:1, under the 4.5 the rest meets.
-6. **Three large files.** `ui_api.py` (about 1,400 lines), `Main.qml` (about 1,100) and
-   `qt_bridge.py` (about 950). Splitting `ui_api.py` by area would make the next big feature
-   easier to add.
-
-**Documentation**
-
-7. **README refresh.** It predates most recent features and still explains English-only
-   filtering with "because you don't speak Czech".
-8. **Help window.** It does not yet describe moving documents and putting them back, picking
-   the profession, or the Trash.
-
-**For anyone's CV**
-
-9. **Keywords for other professions.** `keywords.VOCABULARY` is about a hundred software
-   technologies. "Keywords in the posting" and the "none of the technologies are in your CV"
-   skip find little for a non-software CV.
-10. **More professions.** Eleven fields, in English with some Czech words. Design, science,
-    construction and the public sector are missing.
+1. **The combo box's own line.** The closed combo box (city, sort order) still shortens a very
+   long choice; its list wraps.
+2. **`Main.qml` and `qt_bridge.py`** are still about 1,100 and 950 lines.
 
 **Needs the user**
 
-11. **Second mailbox** has only been tested with stand-ins, never with a real second account.
-12. **Score all again** has never been run on the whole list with the current rules (about 26
-    Claude calls).
+3. **Second mailbox** has only been tested with stand-ins, never with a real second account.
+4. **Score all again** has never been run on the whole list with the current rules (about 26
+   Claude calls).
+5. **Professions and keywords beyond software** were measured on a software candidate's
+   postings only. The first user from another field should check what is skipped.
 
 **Then**
 
-13. **The big feature** (to be described).
+6. **The big feature** (to be described).
 
 **Last**
 
-14. **An app that opens without the terminal.** Expected parts: a real `JobHelper.app` with the
-    existing icon; data moved out of the project folder to a per-user place, with a one-time
-    move of existing data and backups; finding the Claude sign-in from an app started by
-    Finder; the weekly run and the notifier pointed at the packaged app; first launch of an
-    unsigned app on macOS. It is last because every item above changes files the package
-    would freeze.
+7. **An app that opens without the terminal.** Expected parts: a real `JobHelper.app` with the
+   existing icon; data moved out of the project folder to a per-user place, with a one-time
+   move of existing data and backups; finding the Claude sign-in from an app started by
+   Finder; the weekly run and the notifier pointed at the packaged app; first launch of an
+   unsigned app on macOS. It is last because every item above changes files the package
+   would freeze.
