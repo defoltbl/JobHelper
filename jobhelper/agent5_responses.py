@@ -156,8 +156,8 @@ def scan_summary(stats: dict[str, Any]) -> str:
 
 
 def scan_detail(stats: dict[str, Any]) -> str:
-    """How much mail a scan went through, for the Last run card: "45 · 5 to Claude"."""
-    return f"{stats.get('scanned', 0)} · {stats.get('asked', 0)} to Claude"
+    """How much mail a scan went through and how much of it Claude was asked about, for the Last run card: "45 · 5 asked"."""
+    return f"{stats.get('scanned', 0)} · {stats.get('asked', 0)} asked"
 
 
 def replies_text(stats: dict[str, Any]) -> str:

@@ -155,9 +155,21 @@ def ui(qapp, tmp_path_factory):
         _wait(30)
     _wait(700)                             # the card's own entrance
     yield handle
-    handle.win.close()
-    del engine
-    mp.undo()
+    # Closing as the app does: the window goes before the bridge, so no binding is left calling a bridge that is gone
+    # (the terminal used to show "TypeError: Cannot call method … of null" on every exit).
+    import app_qt
+    from PySide6.QtCore import qInstallMessageHandler
+    said = []
+    earlier = qInstallMessageHandler(lambda kind, context, message: said.append(message))
+    try:
+        handle.win.close()
+        app_qt.shut_down(engine)
+        del engine, bridge
+        QTest.qWait(50)
+    finally:
+        qInstallMessageHandler(earlier)
+        mp.undo()
+    assert not [m for m in said if "of null" in m or "TypeError" in m], said
 
 
 def test_window_loads_without_qml_warnings(ui):
@@ -957,9 +969,9 @@ def test_last_run_card_says_how_much_mail_the_scan_went_through(ui):
     ui.js('lastRunData = ({ scan: "09 Oct · 0 new" })')
     ui.wait(60)
     assert "Emails read" not in _card_values(ui)                # a summary saved before this was noted: no empty row
-    ui.js('lastRunData = ({ scan: "09 Oct · 0 new", scan_detail: "45 · 5 to Claude", cost: 0.08, cost_of: "email scan" })')
+    ui.js('lastRunData = ({ scan: "09 Oct · 0 new", scan_detail: "45 · 5 asked", cost: 0.08, cost_of: "email scan" })')
     ui.wait(60)
-    assert {"Emails read", "45 · 5 to Claude", "09 Oct · 0 new"} <= _card_values(ui)
+    assert {"Emails read", "45 · 5 asked", "09 Oct · 0 new"} <= _card_values(ui)
     ui.js("lastRunData = bridge.lastRun()")
     assert ui.warnings == []
 

@@ -46,11 +46,18 @@ def main() -> int:
         print("Failed to load the QML UI.")
         return 1
     rc = app.exec()
-    # Tear the QML engine down while `bridge` is still alive, so exit-time
-    # property re-evaluation doesn't fire against a freed context object.
-    engine.deleteLater()
-    engine = None
+    shut_down(engine)
     return rc
+
+
+def shut_down(engine) -> None:
+    """Take the window down now, while the bridge it talks to still exists. Left to be cleaned up
+    later, the bridge would go first and every binding that calls it would complain on the way out
+    ("Cannot call method … of null")."""
+    from shiboken6 import delete
+    for window in engine.rootObjects():
+        delete(window)
+    delete(engine)
 
 
 if __name__ == "__main__":

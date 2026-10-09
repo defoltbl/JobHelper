@@ -171,7 +171,7 @@ def test_a_longer_scan_reads_that_period_and_leaves_the_setting(bridge, monkeypa
     bridge._scan(90)
     bridge._scan()
     assert seen == [90, before] and bridge.options()["scan_days"] == before
-    assert bridge.lastRun()["scan_detail"] == "45 · 5 to Claude"
+    assert bridge.lastRun()["scan_detail"] == "45 · 5 asked"
     assert "Scanned 45 emails (40 read before, 5 sent to Claude) · 0 new." in events[-1][2]
 
 
@@ -799,8 +799,29 @@ def test_a_saved_mailbox_can_be_tried(bridge, monkeypatch):
 
 
 def test_more_providers_are_known_and_some_are_said_to_be_impossible(bridge):
-    for address, host in (("a@yandex.com", "imap.yandex.com"), ("a@mail.ru", "imap.mail.ru"), ("a@t-online.de", "secureimap.t-online.de"),
-                          ("a@mailbox.org", "imap.mailbox.org"), ("a@onet.pl", "imap.poczta.onet.pl")):
+    for address, host in (("a@t-online.de", "secureimap.t-online.de"), ("a@mailbox.org", "imap.mailbox.org"), ("a@onet.pl", "imap.poczta.onet.pl")):
         seen = bridge.mailServer(address, "")
         assert seen["host"] == host and seen["known"] is True and seen["hint"], address
     assert "cannot be read by another program" in bridge.mailServer("a@tuta.com", "")["problem"]
+
+
+def test_russian_mail_services_are_never_used(bridge, monkeypatch):
+    """A standing rule of the project: no Russian service is added or used, as a mailbox or as a server."""
+    from jobhelper import email_client, mailhosts
+    tried = []
+    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0, host="": tried.append(host) or {"ok": True, "msg": ""})
+    saved = []
+    monkeypatch.setattr(config, "set_imap", lambda *a, **k: saved.append(a))
+    for address in ("a@yandex.com", "a@yandex.ru", "a@ya.ru", "a@mail.ru", "a@bk.ru", "a@list.ru", "a@inbox.ru", "a@rambler.ru", "a@firma.ru", "a@post.su"):
+        seen = bridge.mailServer(address, "")
+        assert seen["host"] == "" and "does not work with Russian mail services" in seen["problem"], address
+        result = bridge._save_email_checked(1, address, "secret12345")
+        assert result["ok"] is False and "Russian mail services" in result["msg"], address
+    # nor as the server typed for another address
+    for server in ("imap.yandex.com", "imap.mail.ru", "mail.firma.ru"):
+        assert "Russian mail services" in bridge._save_email_checked(1, "me@smallfirm.example", "secret12345", server)["msg"], server
+    assert tried == [] and saved == [], "nothing is tried and nothing is saved"
+    for domain, (host, _hint) in mailhosts.PROVIDERS.items():
+        assert not mailhosts.never_used(domain) and not mailhosts.never_used(host), domain
+    for fine in ("gmail.com", "seznam.cz", "ukr.net", "imap.example.com", "truro.example", "guru.example"):
+        assert mailhosts.never_used(fine) is False, fine

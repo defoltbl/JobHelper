@@ -32,8 +32,6 @@ PROVIDERS: dict[str, tuple[str, str]] = {
     "centrum.cz": ("imap.centrum.cz", "your mailbox password"), "wp.pl": ("imap.wp.pl", "your mailbox password"),
     "o2.pl": ("poczta.o2.pl", "your mailbox password"), "mail.com": ("imap.mail.com", "your mailbox password"),
     "ukr.net": ("imap.ukr.net", "the IMAP password made in the mailbox settings, not your normal password"),
-    "yandex.com": ("imap.yandex.com", APP_PASSWORD), "yandex.ru": ("imap.yandex.com", APP_PASSWORD), "ya.ru": ("imap.yandex.com", APP_PASSWORD),
-    "mail.ru": ("imap.mail.ru", "the password for external applications made in the mailbox settings, not your normal password"),
     "t-online.de": ("secureimap.t-online.de", "the email password set in the customer centre, not your login password"),
     "posteo.de": ("posteo.de", "your mailbox password"), "posteo.net": ("posteo.de", "your mailbox password"),
     "mailbox.org": ("imap.mailbox.org", "your mailbox password"),
@@ -52,6 +50,17 @@ NOT_POSSIBLE = {
                     "Proton Mail can only be read through its own Bridge program, which this app does not use. Forward your job mail "
                     "to another mailbox and connect that one, or paste replies into their applications by hand."),
 }
+# Russian services are never used by this app: neither a mailbox there nor a server there.
+_NEVER = re.compile(r"(^|\.)(yandex\.[a-z.]+|ya\.ru|mail\.ru|bk\.ru|list\.ru|inbox\.ru|internet\.ru|rambler\.ru|[a-z0-9.-]+\.(ru|su)|ru|su)$", re.IGNORECASE)
+NEVER_MESSAGE = ("This app does not work with Russian mail services. Connect a mailbox at another provider, "
+                 "or paste replies into their applications by hand.")
+
+
+def never_used(name: str) -> bool:
+    """True for a mail domain or server of a Russian service."""
+    return bool(_NEVER.search(str(name or "").strip().lower()))
+
+
 _HOST = re.compile(r"(?=.{4,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+", re.IGNORECASE)
 MAX_PASSWORD = 128
 
@@ -72,6 +81,8 @@ def server_for(address: str, typed: str = "") -> dict[str, object]:
     done yet: the provider cannot be read, the server is missing, or it is not a server name."""
     domain, typed = domain_of(address), str(typed or "").strip().lower()
     out = {"host": "", "known": False, "gmail": False, "hint": "", "problem": ""}
+    if never_used(domain) or never_used(typed):
+        return {**out, "known": True, "problem": NEVER_MESSAGE}
     if domain in NOT_POSSIBLE and not typed:
         return {**out, "known": True, "problem": NOT_POSSIBLE[domain]}
     if typed:

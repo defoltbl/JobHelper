@@ -219,7 +219,8 @@ works except reading replies.
 | Fastmail, Zoho | The provider's server | An app password |
 | Seznam, GMX, WEB.DE | The provider's server | Your mailbox password, with IMAP turned on in the mailbox settings |
 | A company or another provider | The **IMAP server** you type | What that provider gives for reading mail by IMAP |
-| Yandex, Mail.ru, T-Online, Posteo, mailbox.org, Orange, Libero, Onet | The provider's server | What the line under the fields says for that provider |
+| T-Online, Posteo, mailbox.org, Orange, Libero, Onet | The provider's server | What the line under the fields says for that provider |
+| A Russian mail service | Not used | The app does not work with Russian services. Connect a mailbox at another provider |
 | Outlook.com, Hotmail, Proton Mail, Tuta | Not possible | These cannot be read with a password. Forward your job mail to another mailbox and connect that one, or paste replies into their applications (section 9) |
 
 > **Note**
@@ -414,7 +415,7 @@ The rows of the **Last run** card (Table 12):
 | **Filtered out** | How many postings it dropped. Select the number to see each one with its reason (section 12) |
 | **Letters**, **CVs** | How many of each were written |
 | **Email scan** | Day of the last email scan and how many new replies it filed |
-| **Emails read** | How many messages that scan went through, and how many of them were worth a question to Claude. It explains a "0 new": most mail was read before, or is not about an application |
+| **Emails read** | How many messages that scan went through, and how many of them were worth a question to Claude ("1224 · 43 asked"). It explains a "0 new": most mail was read before, or is not about an application |
 | **You paid** | *subscription only*: nothing was billed for the run |
 | **Same search via API** or **Same scan via API** | What the last run alone would have cost with pay-per-use billing. It is a measure of how much work was done, not a bill |
 
