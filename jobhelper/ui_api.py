@@ -760,7 +760,10 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
             return {"ok": False, "msg": "That application is not in the list any more."}
         if target.get("status") not in store.APPLICATION_STATUSES:
             return {"ok": False, "msg": "A reply is filed under an application. Mark that job as applied first."}
-        db.set_response_job(msg_id, job_id)
+        # you said where it belongs: the reply is listed under that company from now on, if the reader had named another
+        named = reply.get("company", "")
+        fix = None if named and email_client.same_company(named, target.get("company", "")) else target.get("company", "")
+        db.set_response_job(msg_id, job_id, fix)
         new_status = email_client.STAGE_TO_STATUS.get(reply.get("stage", ""))
         moved = {}
 

@@ -725,6 +725,12 @@ def test_a_reply_can_be_filed_under_the_application_it_belongs_to(isolate_data):
     assert jobs["right"]["status"] == "interview" and jobs["wrong"]["status"] == "interview"
     assert api.response_detail("<invite>")["job_id"] == "right"
     assert [r["job_id"] for r in db.all_responses() if r["msg_id"] == "<invite>"] == ["right"]
+    # the reader had taken the company from the email; filed by hand, the reply is listed under the application's company
+    db.upsert_response({"msg_id": "<teams>", "received_date": "Tue, 18 Aug 2026 10:00:00 +0200", "from_addr": "noreply@video.example", "subject": "Int",
+                        "job_id": "wrong", "company": "Bigsoft", "role": "", "stage": "acknowledged", "summary": "A call link."})
+    assert api.refile_response("<teams>", "right")["ok"] is True
+    assert [r["company"] for r in db.all_responses() if r["msg_id"] == "<teams>"] == ["Actum"]
+    assert [r["company"] for r in db.all_responses() if r["msg_id"] == "<invite>"] == ["Actum"]         # already right: left as it was
     # a rejection closes the application it is filed under, from any status
     result = api.refile_response("<loose>", "right")
     assert result["ok"] is True and store.find(store.load_jobs(), "right")["status"] == "rejected"

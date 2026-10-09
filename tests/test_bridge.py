@@ -826,3 +826,17 @@ def test_russian_mail_services_are_never_used(bridge, monkeypatch):
         assert not mailhosts.never_used(domain) and not mailhosts.never_used(host), domain
     for fine in ("gmail.com", "seznam.cz", "ukr.net", "imap.example.com", "truro.example", "guru.example"):
         assert mailhosts.never_used(fine) is False, fine
+
+
+def test_a_used_up_limit_is_not_noted_as_a_problem(bridge, monkeypatch):
+    """Every refresh while the limit was used up wrote a line to the log of problems."""
+    from jobhelper import llm, trouble
+    noted = []
+    monkeypatch.setattr(trouble, "note", lambda where, error: noted.append(where))
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self: {"claude": True})
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's 5-hour limit is used up.")))
+    bridge._ping_usage()
+    assert noted == []
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no connection")))
+    bridge._ping_usage()
+    assert noted == ["asking Claude for the current usage"]            # a real failure still is

@@ -283,10 +283,12 @@ class Bridge(RunSlots, JobSlots, QObject):
         threading.Thread(target=self._ping_usage, daemon=True).start()
 
     def _ping_usage(self):
+        from . import llm
         try:
-            from . import llm
             if self._api.connections().get("claude") and not config.using_paid_api():
                 llm.ask("ping", system="Reply with exactly: ok", tag="usage_ping", force=True)
+        except llm.LimitReached:
+            pass                                   # a used-up limit is what the card then shows, not a problem to note
         except Exception as e:  # noqa: BLE001 - the usage card keeps its last numbers
             trouble.note("asking Claude for the current usage", e)
         finally:

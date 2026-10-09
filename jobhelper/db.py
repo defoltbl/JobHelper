@@ -88,10 +88,15 @@ def has_response(msg_id: str) -> bool:
         return cur.fetchone() is not None
 
 
-def set_response_job(msg_id: str, job_id: str) -> bool:
-    """File a stored reply under another application ('' = under none). True if the reply exists."""
+def set_response_job(msg_id: str, job_id: str, company: str | None = None) -> bool:
+    """File a stored reply under another application ('' = under none). True if the reply exists.
+    `company` also corrects the company the reply is listed under (the reader took it from the email,
+    which can name the sender's tool instead: a video-call service, a recruiting system)."""
     with _connect(write=True) as conn:
-        cur = conn.execute("UPDATE responses SET job_id = ? WHERE msg_id = ?", (job_id or "", msg_id))
+        if company is None:
+            cur = conn.execute("UPDATE responses SET job_id = ? WHERE msg_id = ?", (job_id or "", msg_id))
+        else:
+            cur = conn.execute("UPDATE responses SET job_id = ?, company = ? WHERE msg_id = ?", (job_id or "", company, msg_id))
         return cur.rowcount > 0
 
 
