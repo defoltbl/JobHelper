@@ -170,6 +170,39 @@ def content_problems(paragraphs: list[str], unverified: list[str], first_name: s
     return problems
 
 
+# Where a sentence turns from the candidate to the reader or to the job: what follows describes the role, not the person.
+_TURN = re.compile(r"\b(you|your|yours|the role|this role|the position|this position|the posting|the team|the company)\b", re.IGNORECASE)
+# "I" as the one who did something. Not "I'd like", and not the numeral of a job title ("Analyst I opening").
+_I_DID = re.compile(r"\bI(?:'ve|'m| have| am)?\b(?!'d| would| will| want| hope| look| opening| role| position| at | in | and | or |\s*[,.;:)–-])")
+_LATER = re.compile(r"\b(would|could|will|translate|prepare[ds]? me|ready to|learn|grow|develop into|build on|bring|contribute|apply (this|that|it|them))\b",
+                    re.IGNORECASE)
+
+
+def borrowed_claims(paragraphs: list[str], description: str, backed: str) -> list[str]:
+    """Two-word terms of the posting that the letter states as the candidate's own experience although nothing the
+    person wrote (the CV, their notes) has either word. The same check as for the adapted CV, read the way a letter
+    is written: a letter may speak of the role's terms ("your intercompany postings") and of what the candidate
+    wants to do, so a term counts only where the candidate is the one doing it: from "I …" up to where the sentence
+    turns to the reader or to the future."""
+    found: list[str] = []
+    for para in paragraphs:
+        for sentence in _sentences(para):
+            if not _FIRST_PERSON.search(sentence) or _WISH.search(sentence):
+                continue
+            start = _I_DID.search(sentence)                 # "I process …", "I've built …": the candidate as the one who did it
+            if not start:
+                continue                                   # "the role caught my attention because …" describes the role
+            own = sentence[start.start():]
+            for stop in (_TURN, _LATER):
+                m = stop.search(own)
+                if m:
+                    own = own[:m.start()]
+            for phrase in cv_tailor.borrowed_phrases(own, description, backed):
+                if phrase.lower() not in [f.lower() for f in found]:
+                    found.append(phrase)
+    return found
+
+
 def enforce(paragraphs: list[str], unverified: list[str]) -> list[str]:
     """Last line of defence: drop sentences that admit a gap or claim unbacked experience."""
     out = []
@@ -377,6 +410,7 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
     adapted_block = (f"\nPROFILE and KEY SKILLS of the CV adapted for this same application "
                      f"(stay consistent with it):\n---\n{adapted}\n---\n") if adapted else ""
     description = (job.get("description") or "").strip()[:5000] or "(No description was available.)"
+    backed = cv_text + "\n" + config.experience_notes()          # everything the person wrote about their own work
 
     title_line, paragraphs, role_short, feedback = "", [], "", ""
     for _attempt in range(2):
@@ -392,6 +426,9 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
         title_line = clean(str(data.get("title_line", "")))
         role_short = str(data.get("role_short", ""))
         problems = content_problems(paragraphs, unverified, first_name)
+        problems += [f"The letter presents '{phrase}' as the candidate's own experience, but those are the posting's words: nothing in the "
+                     "master CV speaks of it. Say what the candidate really did, and name this only as part of the role or as something "
+                     "the candidate wants to work with." for phrase in borrowed_claims(paragraphs, description, backed)]
         if not problems:
             break
         feedback = "\nYour previous draft was rejected. Fix these problems:\n" + \
@@ -404,6 +441,13 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
     paragraphs = enforce(paragraphs, unverified)
     if any(not p for p in paragraphs):
         raise ValueError("A paragraph was empty after removing unbacked claims.")
+    # What is still stated as experience in the posting's words is not cut out (it can be fair wording for what the CV
+    # does show): it is put in front of the person, next to the same note about the adapted CV.
+    left = borrowed_claims(paragraphs, description, backed)
+    if left:
+        job["letter_check"] = left[:8]
+    else:
+        job.pop("letter_check", None)
     if not title_line:
         title_line = re.sub(r"\s*\(.*?\)", "", job["title"]).strip()
 

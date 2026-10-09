@@ -103,6 +103,13 @@ Dialog {
         if (!sameView) listView.positionViewAtBeginning();      // never reopen mid-list
         open();
     }
+    // the jobs in the list as it is shown now, in its order: what "Review one by one" walks through
+    function reviewIds() {
+        var out = [], rows = listView.model || [];
+        for (var i = 0; i < rows.length; i++)
+            if (rows[i].id && rows[i].heading !== true && rows[i].group !== "not interested") out.push("" + rows[i].id);
+        return out;
+    }
     function apply() {
         var q = query.trim().toLowerCase(), g = groupFilter, words = q.split(/\s+/).filter(function (w) { return w !== ""; });
         var out = allRows.filter(function (r) {
@@ -127,6 +134,10 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true; Layout.margins: 16
             Text { id: titleTxt; color: theme.ink; font.pixelSize: 16; font.bold: true; Layout.fillWidth: true }
+            // New Jobs only: go through the jobs that are listed now (after the search box and the filter), one after another
+            SmallButton { objectName: "reviewStart"; visible: tableDialog.excelKey === "leads" && tableDialog.reviewIds().length > 1
+                text: "Review these " + tableDialog.reviewIds().length + " one by one"
+                onClicked: { var ids = tableDialog.reviewIds(); detailDialog.startReview(ids); } }
             // New Jobs only: score every scored job again with the rules as they are now. Asked twice, it uses the limit.
             SmallButton { objectName: "rescoreAll"; visible: tableDialog.excelKey === "leads" && !win.appRunning
                 text: tableDialog.confirmRescore ? "Yes, score " + tableDialog.rescoreJobs + " again" : "Score all again"

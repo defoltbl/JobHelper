@@ -34,15 +34,46 @@ Dialog {
         }
         return true;
     }
+    // ── going through a list of jobs one after another ("Review these N one by one" in New Jobs) ──
+    property var reviewQueue: []          // the ids still to look at, in the order of the list
+    property int reviewTotal: 0
+    property int reviewDone: 0            // how many were decided (applied or dismissed) in this round
+    readonly property int reviewAt: reviewQueue.indexOf(job.id || "")
+    readonly property bool reviewing: reviewQueue.length > 0 && reviewAt >= 0
+    property string reviewNote: ""
+    function startReview(ids) {
+        reviewQueue = ids || []; reviewTotal = reviewQueue.length; reviewDone = 0; reviewNote = "";
+        if (reviewQueue.length > 0) show(reviewQueue[0]);
+    }
+    function reviewStep(by) {             // -1 = the one before, +1 = the next one; the job itself is left as it is
+        if (!reviewing || !mayLeave("step" + by, by > 0 ? "Next" : "Previous")) return;
+        var to = reviewAt + by;
+        if (to < 0 || to >= reviewQueue.length) return;
+        var keep = reviewQueue, total = reviewTotal, done = reviewDone;
+        show(keep[to]); reviewQueue = keep; reviewTotal = total; reviewDone = done;
+    }
+    // after a decision on the job in view: on to the one that followed it, or the end of the round
+    function reviewAfterDecision(what) {
+        var at = reviewAt, rest = reviewQueue.filter(function (id) { return id !== job.id; });
+        var total = reviewTotal, done = reviewDone + 1;
+        win.countsData = bridge.counts(); win.refreshOpenView();
+        if (rest.length === 0) { reviewQueue = []; close(); ticker.text = what + " That was the last of the " + total + " jobs."; return; }
+        show(rest[Math.min(at, rest.length - 1)]);
+        reviewQueue = rest; reviewTotal = total; reviewDone = done; reviewNote = what;
+    }
     function markApplied() {
         if (!mayLeave("apply", "Mark applied")) return;
+        var wasReviewing = reviewing;
         bridge.applyJob(job.id); ticker.text = "Moved to Applications (waiting).";
+        if (wasReviewing) { reviewAfterDecision("Moved to Applications."); win.reloadAll(); return; }
         close(); tableDialog.close(); win.reloadAll();
     }
     function notInterested() {
         if (!mayLeave("dismiss", "Not interested")) return;
+        var wasReviewing = reviewing;
         var r = bridge.dismissJob(job.id);
         if (r && r.ok) { ticker.text = "Removed. It will not come back in later searches (see the “not interested” filter to undo).";
+            if (wasReviewing) { reviewAfterDecision("Removed from New Jobs."); return; }
             close(); win.countsData = bridge.counts(); win.refreshOpenView(); }
         else ticker.text = (r && r.msg) ? r.msg : "Couldn't remove that job.";
     }
@@ -54,7 +85,7 @@ Dialog {
         }
         close();
     }
-    onClosed: { confirmClose = false; confirmAction = ""; closeNote = ""; }
+    onClosed: { confirmClose = false; confirmAction = ""; closeNote = ""; reviewQueue = []; reviewNote = ""; }
     Shortcut { sequence: "Escape"
         enabled: detailDialog.visible && detailDialog.pending.length > 0 && !(formDialog.visible || prepDialog.visible || prepEditDialog.visible
                  || compareDialog.visible || letterDialog.visible || responseDialog.visible)
@@ -326,6 +357,18 @@ Dialog {
                 Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: detailDialog.tryClose() } }
         }
+        // going through a list: where you are, and the way to the next one
+        Rectangle { objectName: "reviewBar"; visible: detailDialog.reviewing; Layout.fillWidth: true; color: theme.infobg
+            implicitHeight: reviewRow.implicitHeight + 14
+            RowLayout { id: reviewRow; anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 8
+                Text { objectName: "reviewWhere"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 12
+                    text: "Reviewing " + (detailDialog.reviewAt + 1) + " of " + detailDialog.reviewQueue.length + " left"
+                          + (detailDialog.reviewDone > 0 ? " · " + detailDialog.reviewDone + " decided" : "")
+                          + (detailDialog.reviewNote !== "" ? " · " + detailDialog.reviewNote : "")
+                          + ". Decide with Not interested or Mark applied below, or go on and leave this one as it is." }
+                SmallButton { objectName: "reviewPrev"; text: "‹ Previous"; enabled: detailDialog.reviewAt > 0; onClicked: detailDialog.reviewStep(-1) }
+                SmallButton { objectName: "reviewNext"; primaryStyle: true; text: "Next ›"
+                    enabled: detailDialog.reviewAt < detailDialog.reviewQueue.length - 1; onClicked: detailDialog.reviewStep(1) } } }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
 
         Flickable {
@@ -364,6 +407,11 @@ Dialog {
                         text: "Check your adapted CV before you send it. It speaks of " + (detailDialog.job.cv_check || []).join(", ")
                               + ", which " + ((detailDialog.job.cv_check || []).length === 1 ? "is a term" : "are terms")
                               + " of the posting that your own CV does not mention. Keep it only if it is true of you; Compare CV shows where it stands." }
+                    Text { objectName: "letterCheck"; visible: (detailDialog.job.letter_check || []).length > 0
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.warn; font.pixelSize: 12; font.bold: true
+                        text: "Check your cover letter before you send it. It says you have done something with " + (detailDialog.job.letter_check || []).join(", ")
+                              + ", which " + ((detailDialog.job.letter_check || []).length === 1 ? "is a term" : "are terms")
+                              + " of the posting that your own CV does not mention. Keep it only if it is true of you; Edit letter lets you change the sentence." }
                     Repeater {
                         model: detailDialog.applySteps
                         RowLayout { Layout.fillWidth: true; spacing: 10

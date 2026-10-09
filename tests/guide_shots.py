@@ -244,7 +244,14 @@ def test_guide_shots(ui, monkeypatch):
         shot("04_new_jobs")
         ui.js("tableDialog.shelveAll()")
         shot("05_move_documents")
-        ui.js("tableDialog.confirmStale = false; tableDialog.close()")
+        ui.js("tableDialog.confirmStale = false")
+        ui.js('tableDialog.groupFilter = "moderate"; tableDialog.apply()')
+        ui.wait(200)
+        ui.js("detailDialog.startReview(tableDialog.reviewIds())")
+        shot("36_review_one_by_one")
+        ui.js("detailDialog.close()")
+        ui.wait(350)
+        ui.js('tableDialog.groupFilter = ""; tableDialog.apply(); tableDialog.close()')
         ui.wait(350)
 
     def job_window():

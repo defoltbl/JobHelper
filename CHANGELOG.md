@@ -5,6 +5,9 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Review jobs one by one.** In New Jobs, narrow the list (a chip such as *stretch*, or the search box) and select **Review these … one by one**. One window walks through them: **Not interested** or **Mark applied** decides and brings the next job by itself, **Next ›** leaves a job as it is. A bar says where you are and how many you decided.
+- **Cover letters get the same check as adapted CVs.** A two-word term of the posting that the letter states as something you did, while your CV has neither word, is sent back to be rewritten; what is still there is named in the job window (**Check your cover letter**). The letter may still speak of the role's terms and of what you want to do. Measured on the 53 letters already written: 4 would have been sent back once.
+- Everyday phrases ("attention to detail", "end to end", "version control") are not treated as claims by either check.
 - **No Russian services.** Two Russian mail providers had been added to the list of recognised mailboxes; they are removed. The app refuses a mailbox or a mail server of a Russian service and says so.
 - **Fixed: error lines in the terminal when the app closed** ("Cannot call method … of null"). The window is now taken down before the part it talks to.
 - **Last run card:** the row about the scan's mail reads "1224 · 43 asked" and stays on one line.

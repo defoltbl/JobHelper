@@ -560,6 +560,26 @@ Table 16 lists the controls of the New Jobs list.
 | **Score all again** | Scores every job with your current Options. It asks first, because it uses your Claude limit |
 | **open Excel** | Opens the same list as an Excel table |
 
+### Review several jobs one by one
+
+When many jobs wait for a decision, for example all those marked **stretch**, you do not have
+to open each from the list and come back.
+
+1. In **New Jobs**, narrow the list to the jobs you want to go through: select a chip, or type
+   in the search box.
+2. Select **Review these … one by one**. The first job opens, with a bar that says where you
+   are (Figure 8).
+3. Read **Why this score**, then decide: **Not interested** removes the job, **Mark applied**
+   moves it to Applications. The next job opens by itself.
+4. To leave a job as it is, select **Next ›**. **‹ Previous** goes back.
+
+![Reviewing jobs one by one](img/36_review_one_by_one.png)
+
+*Figure 8. Reviewing jobs one by one*
+
+The round ends after the last job, or when you close the window. Jobs you did not decide on
+stay in the list as they were.
+
 ### Next steps
 
 - [Work with one job](#6-work-with-one-job)
@@ -568,11 +588,11 @@ Table 16 lists the controls of the New Jobs list.
 
 ## 6. Work with one job
 
-Select a row in **New Jobs** to open the job's window. Everything about one posting is here (Figure 8).
+Select a row in **New Jobs** to open the job's window. Everything about one posting is here (Figure 9).
 
 ![The job window](img/06_job_window.png)
 
-*Figure 8. The job window*
+*Figure 9. The job window*
 
 ### The checklist: Before you apply
 
@@ -604,11 +624,11 @@ more (Table 18):
 
 ### Why this score
 
-Figure 9 shows the score and the keywords.
+Figure 10 shows the score and the keywords.
 
 ![The score and the keywords](img/07_job_score_keywords.png)
 
-*Figure 9. The score and the keywords*
+*Figure 10. The score and the keywords*
 
 **Why this score** is the reason in words. Read it before you apply to anything below
 **strong**: it tells you what the posting asks for that your CV does not show.
@@ -665,19 +685,20 @@ wrote it.
 1. Open the job.
 2. Select **Compare CV**.
 3. Read the two columns: your master CV on the left, the adapted one on the right. New words
-   are in bold (Figure 10).
+   are in bold (Figure 11).
 
 ![Master CV next to the adapted one](img/09_compare_cv.png)
 
-*Figure 10. Master CV next to the adapted one*
+*Figure 11. Master CV next to the adapted one*
 
 > **Tip**
 > Use this view to check that nothing was stretched. Every claim on the right must be one you
 > can back in an interview.
 
-Sometimes the job window shows an amber line, **Check your adapted CV before you send it**,
-with a few terms. Those are words of the posting that the adapted CV states as your experience
-although your own CV does not mention them. The app asked for them to be removed once already;
+Sometimes the job window shows an amber line, **Check your adapted CV before you send it** or
+**Check your cover letter before you send it**, with a few terms. Those are words of the posting that the adapted CV states as your experience
+although your own CV does not mention them (in a letter: where the sentence says that you did
+it, not where it speaks of the role). The app asked for them to be removed once already;
 what is left may still be fair wording for something you did, so the decision is yours: keep
 the term only if it is true of you, and otherwise edit the Word file or add what you really did
 under **More about your work** in Options.
@@ -694,11 +715,11 @@ The letter is written to the company, about this role, from the facts in your CV
    (for example "shorter"), then select **Rewrite this paragraph**.
 4. Select **Save**. The Word file and the PDF are updated.
 
-Figure 11 shows the letter editor.
+Figure 12 shows the letter editor.
 
 ![The letter editor](img/30_letter_editor.png)
 
-*Figure 11. The letter editor*
+*Figure 12. The letter editor*
 
 Table 21 lists the controls of the letter editor.
 
@@ -749,11 +770,11 @@ Application forms ask their own questions, and every form asks different ones.
 4. Read each answer. Fill in anything marked with square brackets.
 5. Copy the answers into the form.
 
-Figure 12 shows answers for one job's form.
+Figure 13 shows answers for one job's form.
 
 ![Answers for one job's form](img/10_form_answers.png)
 
-*Figure 12. Answers for one job's form*
+*Figure 13. Answers for one job's form*
 
 The answers come from your CV, the posting, and the facts you gave under **About you** in
 Options. An answer the app cannot give truthfully (a salary figure, a date, a reference) is
@@ -801,11 +822,11 @@ Either way, the job is then scored again by itself.
 ### The score dropped after documents were written
 
 If you tighten your Options and score again, a job that had a letter and a CV can fall below
-your limit. Its row says **documents from a higher score** (Figure 13).
+your limit. Its row says **documents from a higher score** (Figure 14).
 
 ![A job that fell below the limit](img/08_job_below_limit.png)
 
-*Figure 13. A job that fell below the limit*
+*Figure 14. A job that fell below the limit*
 
 **For one job:** open it and select **Move documents to backup**. The letter and the CV go to
 an encrypted backup. The job stays in the list. **Put them back** returns them.
@@ -817,11 +838,11 @@ an encrypted backup. The job stays in the list. **Put them back** returns them.
 2. In that bar, select **Move them to backup**.
 3. Read the jobs it names, then select **Yes, move documents of …** to confirm.
 
-Figure 14 shows moving documents for several jobs at once.
+Figure 15 shows moving documents for several jobs at once.
 
 ![Moving documents for several jobs at once](img/05_move_documents.png)
 
-*Figure 14. Moving documents for several jobs at once*
+*Figure 15. Moving documents for several jobs at once*
 
 For a week afterwards, **Put them back** in the same bar undoes the whole move. For a single
 job, **Put them back** stays in its window, also when the job has become an application in the
@@ -836,19 +857,19 @@ meantime (a reply showed that you had applied): those are the documents you sent
 ## 9. Track an application
 
 **Applications** lists where you applied, grouped by where each one stands: offers and
-interviews first, then waiting, then rejected (Figure 15).
+interviews first, then waiting, then rejected (Figure 16).
 
 ![The Applications list](img/11_applications.png)
 
-*Figure 15. The Applications list*
+*Figure 16. The Applications list*
 
 ### The application's window
 
-Select a row to open the application (Figure 16).
+Select a row to open the application (Figure 17).
 
 ![An application in full](img/12_application_window.png)
 
-*Figure 16. An application in full*
+*Figure 17. An application in full*
 
 Table 24 lists the fields of an application.
 
@@ -868,11 +889,11 @@ Table 24 lists the fields of an application.
    too.
 
 The date then shows on the **Coming up** card of the main window. You get a notification the
-day before and on the day. With a time, you also get one about three hours and one hour before (Figure 17).
+day before and on the day. With a time, you also get one about three hours and one hour before (Figure 18).
 
 ![Dates, pasted replies and notes](img/13_application_dates_notes.png)
 
-*Figure 17. Dates, pasted replies and notes*
+*Figure 18. Dates, pasted replies and notes*
 
 ### File a reply that did not come by email
 
@@ -970,17 +991,17 @@ The scan reads that period once. The setting **Scan emails from the last** stays
 
 ### Responses
 
-Figure 18 shows the Responses list.
+Figure 19 shows the Responses list.
 
 ![Every reply](img/15_responses.png)
 
-*Figure 18. Every reply*
+*Figure 19. Every reply*
 
-**Responses** lists every reply with what it was. Select one to read it in full (Figure 19).
+**Responses** lists every reply with what it was. Select one to read it in full (Figure 20).
 
 ![One reply in full](img/31_one_reply.png)
 
-*Figure 19. One reply in full*
+*Figure 20. One reply in full*
 
 Table 26 lists the fields of a reply.
 
@@ -1002,12 +1023,12 @@ one company, or a recruiter who writes from an agency's address.
 
 1. In **Responses**, select the reply.
 2. Select **File under…** (or **File under another…**). The list of your applications opens
-   (Figure 20).
+   (Figure 21).
 3. Type a company or a role to narrow the list, then select the right application.
 
 ![Choosing the application a reply belongs to](img/34_file_reply.png)
 
-*Figure 20. Choosing the application a reply belongs to*
+*Figure 21. Choosing the application a reply belongs to*
 
 The application the reply moves to follows it in the usual way: an invitation makes it an
 interview, a rejection closes it. The application the reply leaves keeps its status, because
@@ -1017,11 +1038,11 @@ applications**.
 
 ### Analytics
 
-Figure 21 shows outcomes and rejection reasons.
+Figure 22 shows outcomes and rejection reasons.
 
 ![Outcomes and rejection reasons](img/16_analytics.png)
 
-*Figure 21. Outcomes and rejection reasons*
+*Figure 22. Outcomes and rejection reasons*
 
 **Analytics** adds the replies up (Table 27).
 
@@ -1064,11 +1085,11 @@ For one interview the app builds a sheet from your CV and the posting.
 3. When the card says the questions and answers are ready, select **Open**.
 
 **Document** on the same card opens the sheet as a Word file. **Make again** builds a new one,
-for example after you changed your CV (Figure 22).
+for example after you changed your CV (Figure 23).
 
 ![The interview preparation](img/14_interview_preparation.png)
 
-*Figure 22. The interview preparation*
+*Figure 23. The interview preparation*
 
 ### What the sheet contains
 
@@ -1116,11 +1137,11 @@ posting a search drops is kept with the reason.
 
 1. On the **Last run** card, select the number next to **Filtered out**.
 
-Figure 23 shows postings the last search filtered out.
+Figure 24 shows postings the last search filtered out.
 
 ![Postings the last search filtered out](img/17_filtered_out.png)
 
-*Figure 23. Postings the last search filtered out*
+*Figure 24. Postings the last search filtered out*
 
 ### Read the list
 
@@ -1150,11 +1171,11 @@ The posting goes to **New Jobs**, and the next search scores it.
 
 ## 13. Learn from your results
 
-**Insights** is worked out on your Mac from your own applications. It asks Claude nothing (Figure 24).
+**Insights** is worked out on your Mac from your own applications. It asks Claude nothing (Figure 25).
 
 ![Insights](img/18_insights.png)
 
-*Figure 24. Insights*
+*Figure 25. Insights*
 
 Table 32 lists the parts of Insights.
 
@@ -1191,11 +1212,11 @@ Table 33 suggests what to do with what you see.
 ## 14. Set your options
 
 Options is where you tell the app what you are looking for. Open it with **Options** in the
-right column, or with a chip under **Search** in the left column (Figure 25).
+right column, or with a chip under **Search** in the left column (Figure 26).
 
 ![Options: the search](img/19_options_search.png)
 
-*Figure 25. Options: the search*
+*Figure 26. Options: the search*
 
 > **Note**
 > A choice too long for its box is shown on two lines, never cut.
@@ -1231,11 +1252,11 @@ Table 34 lists the Search settings.
 
 ### Your profession
 
-Figure 26 shows the roles you want and your profession in Options.
+Figure 27 shows the roles you want and your profession in Options.
 
 ![Options: the roles you want and your profession](img/20_options_roles.png)
 
-*Figure 26. Options: the roles you want and your profession*
+*Figure 27. Options: the roles you want and your profession*
 
 Under **Kinds of role you want**, chips show what the app takes as your profession. The app
 reads it from the roles you want (the outlined chip). It decides which titles are skipped as
@@ -1274,11 +1295,11 @@ Table 35 lists the Matching and Follow-up settings.
 
 ### About you
 
-Figure 27 shows the About you settings.
+Figure 28 shows the About you settings.
 
 ![Options: about you](img/32_options_about_you.png)
 
-*Figure 27. Options: about you*
+*Figure 28. Options: about you*
 
 Table 36 lists the About you settings.
 
@@ -1299,11 +1320,11 @@ Table 36 lists the About you settings.
 
 ### Notifications and storage
 
-Figure 28 shows the Notifications and storage settings.
+Figure 29 shows the Notifications and storage settings.
 
 ![Options: notifications and storage](img/21_options_storage.png)
 
-*Figure 28. Options: notifications and storage*
+*Figure 29. Options: notifications and storage*
 
 Table 37 lists the Notifications and storage settings.
 
@@ -1318,11 +1339,11 @@ Table 37 lists the Notifications and storage settings.
 
 ### Email scan
 
-Figure 29 shows the Email scan and Model settings.
+Figure 30 shows the Email scan and Model settings.
 
 ![Options: email and the model](img/33_options_email.png)
 
-*Figure 29. Options: email and the model*
+*Figure 30. Options: email and the model*
 
 Table 38 lists the Email scan settings.
 
@@ -1359,11 +1380,11 @@ macOS can run a search and an email scan for you once a week, even with the wind
 3. Choose the day and the time.
 4. Select **Save**.
 
-Figure 30 shows the weekly run.
+Figure 31 shows the weekly run.
 
 ![The weekly run](img/22_weekly_run.png)
 
-*Figure 30. The weekly run*
+*Figure 31. The weekly run*
 
 You get a notification when the run is done. The **Last run** card shows its result the next
 time you open the window (Table 40).
@@ -1398,11 +1419,11 @@ Claude (Table 41).
 ### Read the Usage left card
 
 Each window has a bar and a figure for what is left. The numbers come from Claude's last
-answer. **refresh** asks Claude for the current ones (Figure 31).
+answer. **refresh** asks Claude for the current ones (Figure 32).
 
 ![A limit that is used up](img/27_limit_used_up.png)
 
-*Figure 31. A limit that is used up*
+*Figure 32. A limit that is used up*
 
 Table 42 explains what the card shows.
 
@@ -1424,11 +1445,11 @@ shown as free again without you pressing anything.
 
 ### When a run hits the limit
 
-The run pauses instead of failing, and everything done so far is saved (Figure 32).
+The run pauses instead of failing, and everything done so far is saved (Figure 33).
 
 ![The run paused on the limit](img/29_limit_pause.png)
 
-*Figure 32. The run paused on the limit*
+*Figure 33. The run paused on the limit*
 
 1. Read the window: it names the limit and the time it resets.
 2. Select **Close**. You can keep using the lists.
@@ -1450,14 +1471,14 @@ The **Last run** card shows two rows about cost (Table 43).
 ### See everything the app has used
 
 1. In the right column, select **Help**.
-2. Select the tab **Usage and problems** (Figure 33).
+2. Select the tab **Usage and problems** (Figure 34).
 
 The first card shows how many questions the app has asked Claude in all and by kind of work,
 with what the same work would have cost through the paid API. Nothing of it was billed.
 
 ![Usage and problems in Help](img/35_help_usage.png)
 
-*Figure 33. Usage and problems in Help*
+*Figure 34. Usage and problems in Help*
 
 ### Use less of your limit
 
@@ -1549,11 +1570,11 @@ Table 46 lists where data goes instead of being deleted.
 
 ## 18. Troubleshoot problems
 
-Figure 34 shows the Help window.
+Figure 35 shows the Help window.
 
 ![Help inside the app](img/23_help.png)
 
-*Figure 34. Help inside the app*
+*Figure 35. Help inside the app*
 
 **Help** in the app has three tabs: **How it works** covers the same ground as this guide in
 short form, **What changed** lists the changes of each version, and **Usage and problems**
@@ -1648,11 +1669,11 @@ Table 52 lists the folders the app writes to.
 
 ### The light theme
 
-Figure 35 shows the light theme.
+Figure 36 shows the light theme.
 
 ![The light theme](img/24_light_theme.png)
 
-*Figure 35. The light theme*
+*Figure 36. The light theme*
 
 The sun or moon button at the top of the main window switches between the dark and the light
 theme. Every window follows it.

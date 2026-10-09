@@ -250,6 +250,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
             "can_compare": self._comparable(j),
             "can_write_docs": self.can_write_documents(j) == "",
             "cv_check": [str(x) for x in (j.get("cv_check") or [])][:8] if j.get("tailored_cv_file") else [],
+            "letter_check": [str(x) for x in (j.get("letter_check") or [])][:8] if j.get("cover_letter_file") else [],
             "has_prep": bool((j.get("interview_prep") or {}).get("questions")),
             "prep_edited": bool((j.get("interview_prep") or {}).get("edited")),
             "prep_made": (j.get("interview_prep") or {}).get("made", ""),

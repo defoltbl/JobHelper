@@ -108,3 +108,49 @@ def test_third_person_letter_is_retried_and_never_saved(isolate_data, monkeypatc
         cover_letter.write(job, _master_text(), MASTER)
     assert len(calls) == 2 and "first person" in calls[1]          # told what was wrong on the retry
     assert list(config.LETTERS_DIR.glob("*.docx")) == []
+
+
+# ── the posting's words stated as the candidate's own experience ────────────
+ACCOUNTANT = ("Junior accountant with one year of practice in accounts payable. Processed about 300 supplier invoices a month in SAP, "
+              "prepared weekly payment runs, reconciled supplier statements and helped with the month-end closing.")
+POSTING = ("You will post invoices with the correct tax codes and cost centers, keep the vendor master data up to date and confirm "
+           "intercompany balances with our entities. Analyst I level. We work in SAP.")
+
+
+def test_a_letter_that_states_the_posting_s_terms_as_experience_is_noticed():
+    claims = cover_letter.borrowed_claims
+    said = ["In my current role I process a high volume of invoices in SAP, assigning the correct tax codes and cost centers, "
+            "which matches the core requirement of posting invoices for your mother entity."]
+    assert {"tax codes", "cost centers"} <= {c.lower() for c in claims(said, POSTING, ACCOUNTANT)}
+    # speaking of the role, of the reader or of the future is what a letter is for
+    for fine in ("The AP Accountant role caught my attention because it covers tax codes, cost centers and vendor master data.",
+                 "Your team keeps the vendor master data current and confirms intercompany balances, which is work I respect.",
+                 "I would like to grow into vendor master data and intercompany balances.",
+                 "I perform the month-end closing, skills that should translate well to confirming intercompany balances.",
+                 "I reconciled supplier statements and prepared payment runs in SAP.",
+                 "The Analyst I opening stood out to me because it covers cost centers and tax codes."):
+        assert claims([fine], POSTING, ACCOUNTANT) == [], fine
+    assert claims([], POSTING, ACCOUNTANT) == [] and claims(said, "", ACCOUNTANT) == []
+    # what the person wrote in their own notes is theirs
+    assert claims(said, POSTING, ACCOUNTANT + " I assigned tax codes and cost centers to every invoice.") == []
+
+
+def test_a_letter_that_borrows_is_sent_back_and_what_is_left_is_noted(isolate_data, monkeypatch):
+    title, body, _ = _example()
+    monkeypatch.setattr(config, "LETTER_TEMPLATE", TEMPLATE)
+    posting = "You will run quarterly zebra migrations and tune walrus pipelines for our platform."
+    borrowed = list(body)
+    borrowed[2] = body[2].rstrip() + " I ran zebra migrations every quarter."
+    prompts, answers = [], [{"title_line": title, "paragraphs": borrowed, "role_short": "Admin"}, {"title_line": title, "paragraphs": body, "role_short": "Admin"}]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or answers[min(len(prompts) - 1, 1)])
+    job = store.new_job(id="j1", title="Administrator", company="Acme", description=posting)
+    name = cover_letter.write(job, _master_text(), MASTER)
+    assert len(prompts) == 2 and "The letter presents 'zebra migrations' as the candidate's own experience" in prompts[1]
+    assert "letter_check" not in job
+    assert "zebra" not in "\n".join(p.text for p in docx.Document(str(config.LETTERS_DIR / name)).paragraphs)
+    # the model insists: nothing is cut out silently, the person is told what to look at
+    prompts.clear()
+    answers[1] = answers[0]
+    job = store.new_job(id="j2", title="Administrator", company="Acme", description=posting)
+    cover_letter.write(job, _master_text(), MASTER)
+    assert job["letter_check"] == ["zebra migrations"]

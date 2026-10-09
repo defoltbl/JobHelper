@@ -3127,9 +3127,86 @@ def test_the_job_window_says_what_to_check_in_the_adapted_cv(ui):
     assert "which is a term of the posting" in note.property("text")
     ui.js("detailDialog.close()")
     ui.wait(350)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(cover_letter_file="L_lead.docx", letter_check=["tax codes"]), render=False)
+    ui.js('detailDialog.show("lead")')
+    ui.wait(450)
+    assert "It says you have done something with tax codes, which is a term of the posting" in ui.find("letterCheck").property("text")
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+
     def clear(jobs, j):
         j.pop("cv_check", None)
-        j["tailored_cv_file"] = ""
+        j.pop("letter_check", None)
+        j["tailored_cv_file"] = j["cover_letter_file"] = ""
     ui.bridge._api._change("lead", clear, render=False)
+    assert ui.bridge.jobDetail("lead")["letter_check"] == []
     assert ui.bridge.jobDetail("lead")["cv_check"] == []
+    assert ui.warnings == []
+
+
+def test_new_jobs_can_be_reviewed_one_by_one(ui, monkeypatch):
+    """Going through thirty "stretch" jobs meant opening each from the list and coming back; now one window walks through them."""
+    kept = store.load_jobs()
+    text = "We build tools in Python. " * 30
+    store.save_jobs(kept + [store.new_job(id=f"r{n}", title=f"Role {n}", company=f"Firm {n}", status="letter_ready", match_score=40 - n,
+                                          match_tier="stretch", description=text, cover_letter_file=f"L{n}.docx", tailored_cv_file=f"C{n}.docx")
+                            for n in range(4)])
+    done = []
+    monkeypatch.setattr(qt_bridge.Bridge, "applyJob", qt_bridge.Slot(str, result=bool)(lambda self, job_id: done.append(("apply", job_id)) or True))
+    monkeypatch.setattr(ui_api.Api, "dismiss_job", lambda self, job_id: done.append(("dismiss", job_id)) or {"ok": True})
+    try:
+        ui.js('openView("new")')
+        ui.wait(450)
+        table, detail = ui.find("tableDialog"), ui.find("detailDialog")
+        ui.js('tableDialog.groupFilter = "stretch"; tableDialog.apply()')
+        ui.wait(120)
+        start = ui.find("reviewStart")
+        assert start.property("visible") is True and start.property("text") == "Review these 4 one by one"
+        assert ui.js("tableDialog.reviewIds().join(',')") == "r0,r1,r2,r3"                  # the list as it is shown, in its order
+        ui.js("detailDialog.startReview(tableDialog.reviewIds())")
+        ui.wait(450)
+        where = ui.find("reviewWhere")
+        assert detail.property("opened") is True and ui.js("detailDialog.job.id") == "r0" and ui.find("reviewBar").property("visible") is True
+        assert where.property("text").startswith("Reviewing 1 of 4 left.")
+        assert ui.find("reviewPrev").property("enabled") is False and ui.find("reviewNext").property("enabled") is True
+        ui.js("detailDialog.reviewStep(1)")                                                 # leave it as it is, on to the next
+        ui.wait(200)
+        assert ui.js("detailDialog.job.id") == "r1" and where.property("text").startswith("Reviewing 2 of 4 left.") and done == []
+        ui.js("detailDialog.notInterested()")                                               # decided: the next one comes by itself
+        ui.wait(250)
+        assert done == [("dismiss", "r1")] and ui.js("detailDialog.job.id") == "r2" and detail.property("opened") is True
+        assert where.property("text").startswith("Reviewing 2 of 3 left · 1 decided · Removed from New Jobs.")
+        ui.js("detailDialog.reviewStep(-1)")
+        ui.wait(200)
+        assert ui.js("detailDialog.job.id") == "r0"
+        # unsaved text is asked about before moving on, as everywhere in this window
+        ui.js('cnNotes.text = "They pay monthly."')
+        ui.js("detailDialog.reviewStep(1)")
+        assert ui.js("detailDialog.job.id") == "r0" and "press Next once more" in ui.find("closeNote").property("text")
+        ui.js("detailDialog.reviewStep(1)")
+        ui.wait(200)
+        assert ui.js("detailDialog.job.id") == "r2"
+        ui.js("detailDialog.markApplied()")
+        ui.wait(250)
+        assert done[-1] == ("apply", "r2") and ui.js("detailDialog.job.id") == "r3" and table.property("opened") is True     # the list stays behind it
+        ui.js("detailDialog.notInterested()")
+        ui.wait(250)
+        assert ui.js("detailDialog.job.id") == "r0" and where.property("text").startswith("Reviewing 1 of 1 left · 3 decided")
+        assert ui.find("reviewNext").property("enabled") is False
+        ui.js("detailDialog.notInterested()")                                               # the last one: the round ends
+        ui.wait(450)
+        assert detail.property("opened") is False and "That was the last of the 4 jobs." in ui.js("ticker.text")
+        assert ui.js("detailDialog.reviewQueue.length") == 0
+        # opened the ordinary way, the window has no review bar and closes after a decision as before
+        ui.js('detailDialog.show("lead")')
+        ui.wait(450)
+        assert ui.find("reviewBar").property("visible") is False
+        ui.js("detailDialog.startReview(['lead', 'r0']); detailDialog.close()")             # closing ends a round
+        ui.wait(450)
+        assert ui.js("detailDialog.reviewQueue.length") == 0
+        ui.js('tableDialog.groupFilter = ""; tableDialog.apply(); tableDialog.close()')
+        ui.wait(350)
+    finally:
+        store.save_jobs(kept)
+        ui.js("win.reloadAll()")
     assert ui.warnings == []

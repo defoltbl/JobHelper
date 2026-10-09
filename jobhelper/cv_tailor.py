@@ -137,6 +137,13 @@ _FILLER = set("""the and for with you your our are will have has this that from 
     looking join offer offers opportunity environment related relevant required requirements preferred plus etc""".split())
 
 
+# Everyday pairs of words that say how someone works, not what they have done: found in most postings and fair in any CV.
+_SOFT = {("attention", "detail"), ("end", "end"), ("self", "motivat"), ("root", "cause"), ("mostly", "remote"), ("fully", "remote"),
+         ("version", "control"), ("large", "scale"), ("fast", "paced"), ("cross", "functional"), ("problem", "solving"), ("hands", "on"),
+         ("day", "day"), ("best", "practic"), ("real", "world"), ("clear", "written"), ("written", "communicat"), ("plain", "language"),
+         ("detail", "orient"), ("continuous", "improvement"), ("quality", "control"), ("time", "management"), ("decision", "mak")}
+
+
 def _stem(word: str) -> str:
     """A word without its ending, so that "invoices" and "invoice", "reconciling" and "reconciled" compare equal."""
     w = word.lower()
@@ -161,7 +168,9 @@ def borrowed_phrases(text: str, description: str, backed: str) -> list[str]:
               if a not in _FILLER and b not in _FILLER and _stem(a) not in known and _stem(b) not in known}
     found, drafted = [], re.findall(r"[^\W\d_]{3,}", text or "")
     for a, b in zip(drafted, drafted[1:]):
-        if (_stem(a), _stem(b)) in wanted and f"{a} {b}".lower() not in [f.lower() for f in found]:
+        pair = (_stem(a), _stem(b))
+        if pair in wanted and not any(pair[0].startswith(x) and pair[1].startswith(y) for x, y in _SOFT) \
+                and f"{a} {b}".lower() not in [f.lower() for f in found]:
             found.append(f"{a} {b}")
     return found
 
