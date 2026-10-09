@@ -3,6 +3,7 @@
 What to remember about this project: how to use the app, the rules it is built by, how the
 code is laid out, how a change is checked, what was decided and why, and what is left to do.
 
+- How to use each part of the app, step by step and with pictures, is in [docs/GUIDE.md](docs/GUIDE.md).
 - Every command with its options is in [COMMANDS.md](COMMANDS.md).
 - What changed, day by day, is in [CHANGELOG.md](CHANGELOG.md) (also in the app: Help → What changed).
 - Setup from nothing is in [README.md](README.md).
@@ -192,6 +193,8 @@ After every batch of changes, without being asked:
 2. The guard test that no test starts an outside program (`tests/test_guards.py`, part of the suite).
 3. Load the real window offscreen on the real data, **read-only**: open the lists and every job
    window, compare a checksum of the data folder before and after, look for QML warnings.
+5. When a window that is pictured in the guide changed, take the guide's pictures again
+   (`pytest tests/guide_shots.py -q -o addopts=""`) and look at them.
 4. For anything that changes how a window looks: screenshots on made-up data, in both themes,
    and actually look at them. A colour that is right in the file can still not reach the label.
 
@@ -236,19 +239,19 @@ for the last two.
 
 **Needs the user**
 
-3. **Second mailbox** has only been tested with stand-ins, never with a real second account.
-4. **Score all again** has never been run on the whole list with the current rules (about 26
+2. **Second mailbox** has only been tested with stand-ins, never with a real second account.
+3. **Score all again** has never been run on the whole list with the current rules (about 26
    Claude calls).
-5. **Professions and keywords beyond software** were measured on a software candidate's
+4. **Professions and keywords beyond software** were measured on a software candidate's
    postings only. The first user from another field should check what is skipped.
 
 **Then**
 
-6. **The big feature** (to be described).
+5. **The big feature** (to be described).
 
 **Last**
 
-7. **An app that opens without the terminal.** Expected parts: a real `JobHelper.app` with the
+6. **An app that opens without the terminal.** Expected parts: a real `JobHelper.app` with the
    existing icon; data moved out of the project folder to a per-user place, with a one-time
    move of existing data and backups; finding the Claude sign-in from an app started by
    Finder; the weekly run and the notifier pointed at the packaged app; first launch of an

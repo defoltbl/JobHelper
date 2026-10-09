@@ -6,7 +6,8 @@ of what you applied to and what the companies answered. It runs on **your Claude
 through the Claude Code CLI: no paid API key, no per-token bill.
 
 - **All commands with their options:** [COMMANDS.md](COMMANDS.md)
-- **How to use it, the rules it is built by, what is left to do:** [HANDBOOK.md](HANDBOOK.md)
+- **How to use each part, with pictures:** [docs/GUIDE.md](docs/GUIDE.md)
+- **The rules it is built by, how the code is laid out, what is left to do:** [HANDBOOK.md](HANDBOOK.md)
 - **What changed, day by day:** [CHANGELOG.md](CHANGELOG.md)
 
 | # | Agent | What it does |

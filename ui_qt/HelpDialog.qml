@@ -80,7 +80,7 @@ Dialog {
             "Too many poor jobs: add words to \"<b>Skip titles with</b>\" in <b>Options</b>, or remove a <b>search</b> role that <b>Insights</b> marks as weak.",
             "Good jobs are skipped: check the profession chips in <b>Options</b>, and send a single job to scoring with \"<b>Score it anyway</b>\".",
             "An error the app carried on after leaves one line in <b>data/app_trouble.log</b>.",
-            "More detail on every command is in <b>COMMANDS.md</b>, and how the app is meant to be used in <b>HANDBOOK.md</b>, both in the app's folder." ] }
+            "More detail on every command is in <b>COMMANDS.md</b>, and every screen is explained with pictures in <b>docs/GUIDE.md</b>, both in the app's folder." ] }
     ]
     background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1 }
     contentItem: ColumnLayout {

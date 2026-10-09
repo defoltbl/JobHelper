@@ -2310,5 +2310,24 @@ def test_a_long_title_makes_its_row_taller_instead_of_being_cut(ui):
 def test_help_describes_what_was_added_since_it_was_written():
     text = (ROOT / "ui_qt" / "HelpDialog.qml").read_text(encoding="utf-8")
     for words in ("Move documents to backup", "Put them back", "Trash", "Kinds of role you want", "Read it again", "was 55",
-                  "no longer accepts applications", "app_trouble.log", "HANDBOOK.md"):
+                  "no longer accepts applications", "app_trouble.log", "docs/GUIDE.md"):
         assert words in text, words
+
+
+# ── the illustrated guide ───────────────────────────────────────────────────
+def test_the_guide_s_pictures_exist_and_come_from_the_picture_script():
+    import re
+    guide = (ROOT / "docs" / "GUIDE.md").read_text(encoding="utf-8")
+    used = re.findall(r"\]\(img/([^)]+)\)", guide)
+    assert len(used) >= 20 and len(set(used)) == len(used)
+    script = (ROOT / "tests" / "guide_shots.py").read_text(encoding="utf-8")
+    for name in used:
+        assert (ROOT / "docs" / "img" / name).is_file(), name
+        assert f'shot("{name[:-4]}")' in script, f"{name} is not taken by tests/guide_shots.py"
+    assert "tests/guide_shots.py" in guide and "invented" in guide           # says where the pictures come from
+    for link in re.findall(r"\]\((\.\./[^)#]+)\)", guide):
+        assert (ROOT / "docs" / link).resolve().is_file(), link
+    for section in re.findall(r"\]\(#([^)]+)\)", guide):                      # every entry of the contents leads somewhere
+        heading = next((h for h in re.findall(r"^## (.+)$", guide, re.M)
+                        if re.sub(r"[^a-z0-9 -]", "", h.lower()).replace(" ", "-") == section), None)
+        assert heading, section
