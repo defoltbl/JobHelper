@@ -1,7 +1,9 @@
 """Which skills a job posting asks for, and which of them your CV backs up.
 
 No model call: the posting and the master CV are searched for a fixed list of
-technologies, tools and spoken languages. The result explains a match score in
+skills, tools and spoken languages. The list covers software first (it grew
+there) and the most telling terms of other professions; an ordinary word that
+any posting may use ("compliance", "onboarding") is left out on purpose. The result explains a match score in
 the job detail view. It is only ever shown - nothing here is added to a CV.
 """
 from __future__ import annotations
@@ -41,6 +43,49 @@ VOCABULARY: dict[str, list[str]] = {
     "Agile": [], "Scrum": [], "Jira": [], "Confluence": [], "ITIL": [], "ServiceNow": [], "SAP": [],
     "Salesforce": [], "Unit testing": ["unit tests"], "Test automation": ["automated testing", "automated tests"],
     "Networking": ["TCP/IP"], "Troubleshooting": [], "Office 365": ["Microsoft 365", "M365", "O365"],
+    # ── other professions: terms that are telling, not ordinary words ──
+    # finance and accounting
+    "IFRS": [], "GAAP": ["US GAAP"], "Accounts payable": [], "Accounts receivable": [],
+    "Financial modelling": ["financial modeling"], "Bookkeeping": [], "VAT": [], "Payroll": [],
+    "Reconciliation": ["reconciliations"], "QuickBooks": [], "Xero": [], "Bloomberg": [], "AML": [], "KYC": [],
+    # sales and marketing
+    "CRM": [], "HubSpot": [], "Google Analytics": ["GA4"], "SEO": [], "PPC": ["SEM"], "Google Ads": [],
+    "Content marketing": [], "Email marketing": [], "Lead generation": [], "Cold calling": [], "B2B": [],
+    "Account management": [], "Copywriting": [], "Market research": [], "Mailchimp": [], "Canva": [],
+    # customer support
+    "Zendesk": [], "Intercom": [], "Freshdesk": [],
+    # people and recruiting
+    "Talent acquisition": [], "Workday": [], "SuccessFactors": [], "Employer branding": [],
+    "Labour law": ["labor law", "employment law"], "Performance management": [],
+    # law
+    "Due diligence": [], "GDPR": [], "Litigation": [], "Contract law": [], "Corporate law": [], "Legal research": [],
+    # engineering and manufacturing
+    "AutoCAD": [], "SolidWorks": [], "CATIA": [], "Siemens NX": [], "PLC": [], "SCADA": [], "Six Sigma": [],
+    "Kaizen": [], "ISO 9001": [], "CNC": [], "GD&T": [], "FMEA": [], "MATLAB": [], "Simulink": [], "Revit": [],
+    "Technical drawing": ["technical drawings"], "Welding": [], "Hydraulics": [], "Pneumatics": [],
+    # logistics
+    "Supply chain": [], "Warehouse management": ["WMS"], "Forklift": [], "Incoterms": [],
+    "Inventory management": [], "Freight forwarding": [], "Driving licence": ["driving license", "driver's license"],
+    # care and health
+    "Patient care": [], "First aid": [], "CPR": [], "Medication administration": [],
+    "Electronic health records": ["EHR"], "Phlebotomy": [], "Clinical trials": [], "Pharmacovigilance": [],
+    # hospitality
+    "HACCP": [], "Food safety": [], "Barista": [], "Front desk": [], "Menu planning": [], "Bartending": [],
+    # language and teaching
+    "Proofreading": [], "Interpreting": [], "TEFL": ["TESOL", "CELTA"], "Lesson planning": [],
+    "Classroom management": [], "Subtitling": [], "CAT tools": ["Trados", "memoQ"],
+    # design and media
+    "Figma": [], "Photoshop": [], "Illustrator": ["Adobe Illustrator"], "InDesign": [], "After Effects": [],
+    "Premiere Pro": [], "Typography": [], "Wireframing": ["wireframes"], "Blender": [], "UX": ["user experience"],
+    # science and laboratory
+    "PCR": [], "HPLC": [], "Cell culture": [], "GLP": [], "GMP": [], "Spectroscopy": [], "Microscopy": [],
+    "SPSS": [], "Chromatography": [],
+    # construction and trades
+    "BIM": [], "Site management": [], "Quantity surveying": [], "Health and safety": ["HSE", "BOZP"],
+    "Building regulations": [], "Cost estimation": [],
+    # office and public administration
+    "Public procurement": [], "Grant writing": [], "Policy analysis": [], "Project management": [],
+    "MS Office": ["Microsoft Office"], "PowerPoint": [],
     # spoken languages
     "English": [], "Czech": [], "German": [], "French": [],
 }
@@ -59,7 +104,8 @@ _STRICT = {
 }
 _CAPITALISED = {"React", "Swift", "Express", "Spark", "Rust", "Ruby", "Oracle", "Scala",
                 "Excel", "Vue", "Flask", "Angular", "Android", "Git", "Redis", "Kafka", "Airflow",
-                "Jira", "Confluence", "Azure", "Docker", "Linux", "English", "French"}
+                "Jira", "Confluence", "Azure", "Docker", "Linux", "English", "French",
+                "Xero", "Bloomberg", "Canva", "Intercom", "Workday", "Illustrator", "Blender", "Barista", "Forklift"}
 
 
 def _pattern(name: str, spellings: list[str]) -> re.Pattern:

@@ -50,7 +50,7 @@ def test_levels_far_above_a_graduate_are_skipped(title):
 
 def test_posting_with_none_of_your_technologies_is_skipped():
     job = _job("Field IT Support", "Office 365, Active Directory, Networking and ServiceNow on site.")
-    assert "None of the technologies" in _skip(job)
+    assert "None of the skills and tools the posting names are in your CV" in _skip(job)
 
 
 # ── what must always reach the model (each scored 30+ in the first real runs) ──
@@ -65,6 +65,13 @@ def test_posting_with_none_of_your_technologies_is_skipped():
     ("Software Engineer - Sales Tools", "Python and PostgreSQL."),
     ("Junior Data Scientist", "Statistics, R and Python."),
     ("IT Application Support Specialist", "SQL and ticketing tools. Jira."),
+    # titles that share a word with another profession's list but are this one
+    ("Cloud Solution Architect", ""), ("Research Scientist - NLP", ""), ("UX Designer", ""), ("Dispatcher / L1 Support Specialist", ""),
+    ("Lab Automation Software Engineer", ""), ("Hotel Systems Developer", ""), ("Data Analyst - Retail", ""),
+    ("Junior Datový analytik v Automotive", "MS Office, SAP, Power BI and Supply chain reports."),
+    ("Document Controller", ""), ("Financial Analyst", ""),
+    # general office terms do not make a posting "another profession"
+    ("Operations Coordinator", "Project management, MS Office, PowerPoint, B2B, GDPR, Excel and Jira."),
 ])
 def test_plausible_roles_are_never_skipped(title, description):
     assert _skip(_job(title, description)) == ""
@@ -97,6 +104,37 @@ def test_another_candidate_gets_other_skips(mine, skipped, kept):
         assert "another profession" in prefilter.reason_to_skip(_job(title), set(), mine=mine), title
     for title in kept:
         assert prefilter.reason_to_skip(_job(title), set(), mine=mine) == "", title
+
+
+@pytest.mark.parametrize("mine, skipped, kept", [
+    (["design and media"], ["Plumber", "Junior Accountant", "Backend Developer"], ["Graphic Designer", "Illustrator", "Video Editor"]),
+    (["science and laboratory"], ["Receptionist", "Cashier"], ["Lab Technician", "Clinical Research Associate", "Chemist"]),
+    (["construction and trades"], ["Graphic Designer", "Security Guard"], ["Site Manager", "Electrician", "Quantity Surveyor"]),
+    (["office and public administration"], ["Welder", "Staff Nurse"], ["Office Manager", "Administrative Assistant", "Receptionist"]),
+    (["retail"], ["Paralegal", "Bartender"], ["Store Manager", "Cashier", "Retail Sales Assistant"]),
+    (["hospitality"], ["Tutor", "Courier"], ["Waiter", "Barista", "Housekeeper"]),
+])
+def test_the_added_professions_work_like_the_first_ones(mine, skipped, kept):
+    for title in skipped:
+        assert "another profession" in prefilter.reason_to_skip(_job(title), set(), mine=mine), title
+    for title in kept:
+        assert prefilter.reason_to_skip(_job(title), set(), mine=mine) == "", title
+
+
+def test_your_fields_are_found_for_the_added_professions():
+    for role, field in (("Graphic Designer", "design and media"), ("Lab Technician", "science and laboratory"), ("Site Manager", "construction and trades"),
+                        ("Office Manager", "office and public administration"), ("Store Manager", "retail"), ("Security Guard", "security and facilities"),
+                        ("Zdravotní sestra", "care and health"), ("Učitelka angličtiny", "language and teaching")):
+        assert prefilter.fields_of([role]) == [field], role
+    assert len(prefilter.FIELDS) == 17
+
+
+def test_a_posting_from_another_trade_is_caught_by_its_own_words():
+    accountant_keys = {"IFRS", "Bookkeeping", "VAT", "Excel"}
+    nursing = _job("Ward Team Member", "Patient care, medication administration, first aid and CPR on a surgical ward.")
+    finance = _job("Finance Team Member", "IFRS reporting, VAT returns and reconciliations in SAP.")
+    assert "None of the skills and tools the posting names are in your CV (Patient care" in prefilter.reason_to_skip(nursing, accountant_keys, mine=["finance"])
+    assert prefilter.reason_to_skip(finance, accountant_keys, mine=["finance"]) == ""
 
 
 def test_no_title_is_skipped_for_its_profession_when_your_field_is_not_known():

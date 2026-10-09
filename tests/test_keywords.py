@@ -46,7 +46,7 @@ def test_ordinary_words_are_not_keywords(text):
     if text.startswith("JavaScript"):
         assert found == ["JavaScript", "Java"]
     else:
-        assert [k for k in found if k not in ("Agile",)] == []
+        assert [k for k in found if k not in ("Agile", "Driving licence")] == []     # a driving licence is a real requirement
 
 
 def test_node_js_does_not_count_as_javascript():
@@ -68,3 +68,34 @@ def test_extract_remembers_a_text_and_hands_out_fresh_lists():
     before = keywords._extract.cache_info().hits
     keywords.extract(text)
     assert keywords._extract.cache_info().hits == before + 1
+
+
+# ── other professions ───────────────────────────────────────────────────────
+def test_terms_of_other_professions_are_found():
+    cases = {
+        "Month-end close under IFRS, VAT returns, accounts payable and reconciliations.": ["IFRS", "VAT", "Accounts payable", "Reconciliation"],
+        "You run SEO and PPC campaigns in Google Ads and report in GA4; HubSpot is our CRM.": ["SEO", "PPC", "Google Ads", "Google Analytics", "HubSpot", "CRM"],
+        "Patient care on the ward, medication administration, first aid.": ["Patient care", "Medication administration", "First aid"],
+        "3D models in SolidWorks and AutoCAD, FMEA, technical drawings, ISO 9001.": ["SolidWorks", "AutoCAD", "FMEA", "Technical drawing", "ISO 9001"],
+        "Layouts in Figma and Photoshop; wireframes first.": ["Figma", "Photoshop", "Wireframing"],
+        "HACCP and food safety in a busy kitchen; some front desk shifts.": ["HACCP", "Food safety", "Front desk"],
+        "Lesson planning and classroom management; a CELTA is a plus.": ["Lesson planning", "Classroom management", "TEFL"],
+        "HPLC, PCR and cell culture under GLP.": ["HPLC", "PCR", "Cell culture", "GLP"],
+        "BIM coordination, site management, health and safety on site.": ["BIM", "Site management", "Health and safety"],
+    }
+    for text, expected in cases.items():
+        assert keywords.extract(text) == expected, text
+
+
+def test_ordinary_words_are_not_taken_for_skills():
+    text = ("We care about compliance and a smooth onboarding. You will sketch ideas, word your findings clearly, blend into the team, "
+            "work day to day with others, illustrate your point, intercom the office if locked out and lean on your colleagues. "
+            "Forecasting, budgeting, negotiation and customs paperwork are handled by another team; the forklift is not yours to drive.")
+    assert keywords.extract(text) == []
+    assert keywords.extract("Our barista makes great coffee. Barista experience required.") == ["Barista"]
+
+
+def test_a_cv_from_another_field_is_compared_like_a_software_one():
+    cv = "Accountant. IFRS, VAT, bookkeeping, payroll. Excel. English - C1."
+    got = keywords.compare("Bookkeeping and VAT returns under IFRS; QuickBooks and Xero. English.", cv)
+    assert got == {"matched": ["Bookkeeping", "VAT", "IFRS", "English"], "missing": ["QuickBooks", "Xero"]}

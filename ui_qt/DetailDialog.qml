@@ -397,7 +397,7 @@ Dialog {
 
                 DetailCard { heading: "Keywords in the posting"
                     Text { visible: !detailDialog.hasWords; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
-                        text: detailDialog.job.description ? "No known technologies were found in this posting."
+                        text: detailDialog.job.description ? "No known skills or tools were found in this posting."
                                                            : "No description is saved for this job, so keywords cannot be compared." }
                     Text { visible: (detailDialog.job.matched || []).length > 0; text: "In your CV"; color: theme.good; font.pixelSize: 12; font.bold: true }
                     ChipFlow { objectName: "matchedChips"; visible: (detailDialog.job.matched || []).length > 0

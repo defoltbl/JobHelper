@@ -23,20 +23,30 @@ from . import keywords
 FIELDS: dict[str, re.Pattern] = {name: re.compile(r"\b(?:" + words + r")\b", re.IGNORECASE) for name, words in {
     "software and IT": (
         r"software|developer|vývojář\w*|programmer|programátor\w*|backend|back-end|frontend|front-end|full[- ]?stack|python|kotlin|android|"
-        r"machine learning|ml|ai|data (?:scientist|engineer|analyst)|devops|cloud engineer|qa|tester|test engineer"),
-    "sales and marketing": r"account (?:executive|manager)|sales|business development|marketing",
+        r"machine learning|ml|ai|data (?:scientist|engineer|analyst)|datov\w+ analyti\w+|devops|cloud engineer|qa|tester|test engineer"),
+    "sales and marketing": (r"account (?:executive|manager)|sales|business development|marketing|brand manager|public relations|"
+                            r"obchodní zástupce"),
     "customer support": r"customer care|customer service|call cent\w*|nightshift|night shift",
-    "people and recruiting": r"recruit\w*|hr|hris|payroll",
-    "finance": (r"accountant|accounting|účetní|audit\w*|tax|investment|trader|trading|crypto|equities|underwrit\w*|"
+    "people and recruiting": r"recruit\w*|hr|hris|payroll|talent acquisition|personalist\w*",
+    "finance": (r"accountant|accounting|účetní|bookkeeper|audit\w*|tax|investment|trader|trading|crypto|equities|underwrit\w*|"
                 r"risk modell?er|actuar\w*"),
-    "law": r"legal|lawyer|paralegal",
+    "law": r"legal|lawyer|paralegal|attorney|solicitor|notary|právník\w*",
     "engineering and manufacturing": (
         r"mechanical|electrical|civil|plc|hardware design|pcb|projektant\w*|konstrukt\w*|cad|functional safety|quality inspector|"
         r"manufactur\w*|(?:machine|production) operator"),
-    "logistics": r"shipping operator|forklift operator|warehouse|logistic\w*|forklift|driver",
-    "care and health": r"nurse|caregiver",
-    "hospitality": r"chef|cook|cleaner",
-    "language and teaching": r"annotator|content moderator|translator|copywriter|teacher|lecturer",
+    "logistics": r"shipping operator|forklift operator|warehouse|logistic\w*|forklift|driver|courier|skladník\w*|řidič\w*",
+    "care and health": r"nurse|caregiver|physician|dentist|paramedic|physiotherapist|midwife|pharmacist|zdravotní sestra|pečovatel\w*",
+    "hospitality": r"chef|cook|cleaner|waiter|waitress|bartender|barista|housekeeper|kuchař\w*|číšník\w*",
+    "language and teaching": r"annotator|content moderator|translator|copywriter|teacher|lecturer|tutor|učitel\w*|lektor\w*",
+    "design and media": (r"graphic design\w*|interior design\w*|fashion design\w*|illustrator|art director|photographer|video editor|"
+                         r"journalist"),
+    "science and laboratory": r"lab technician|laboratory technician|chemist|biologist|microbiolog\w*|clinical research\w*",
+    "construction and trades": (r"construction|site manager|site supervisor|quantity surveyor|bricklayer|plumber|electrician|carpenter|"
+                                r"welder|roofer|stavbyvedoucí|zedník\w*"),
+    "office and public administration": (r"receptionist|office manager|secretary|administrative assistant|personal assistant|"
+                                         r"civil servant|public administration|úředník\w*"),
+    "retail": r"cashier|store manager|shop assistant|merchandiser|retail",
+    "security and facilities": r"security guard|janitor|caretaker|facility manager",
 }.items()}
 
 _FROM_CV_HITS = 2          # a field counts as yours from the CV alone when it is named at least this often
@@ -87,6 +97,11 @@ def _language_named(found: str) -> str:
     return _LANGUAGE_OF.get(word, word)
 
 
+# Named in postings of every profession: they say nothing about which profession a posting is.
+_EVERYWHERE = {"English", "Czech", "German", "French", "Agile", "Scrum", "Excel", "Jira", "Confluence", "Troubleshooting",
+               "Project management", "MS Office", "PowerPoint", "B2B", "UX", "GDPR", "Driving licence"}
+
+
 def reason_to_skip(job: dict[str, Any], cv_keywords: set[str], check_level: bool = True,
                    mine=(), unwanted=(), wanted=(), languages=()) -> str:
     """'' when the job should be scored; otherwise a short reason it was skipped.
@@ -116,10 +131,10 @@ def reason_to_skip(job: dict[str, Any], cv_keywords: set[str], check_level: bool
                 return f"The title is another profession ({off.group(0).lower()})."
     if description.strip():
         found = keywords.extract(description)
-        tech = [k for k in found if k not in ("English", "Czech", "German", "French", "Agile", "Scrum", "Excel", "Jira", "Confluence", "Troubleshooting")]
+        tech = [k for k in found if k not in _EVERYWHERE]
         have = [k for k in tech if k in cv_keywords]
         if len(tech) >= 3 and not have and not on_profile:
-            return "None of the technologies in the posting are in your CV (" + ", ".join(tech[:4]) + ")."
+            return "None of the skills and tools the posting names are in your CV (" + ", ".join(tech[:4]) + ")."
     return ""
 
 
