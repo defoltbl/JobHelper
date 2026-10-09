@@ -107,9 +107,10 @@ def _body_html(source: Path, page_width: float, page_height: float) -> str:
     # a table: its caption above it, its first row as the heading row
     def table(match) -> str:
         number, title, opening, first_row, rest = match.groups()
-        head = first_row.replace("<td>", '<td bgcolor="#e8edf3">')
         rows = re.findall(r"<tr>.*?</tr>", rest, flags=re.S)
-        opening = f'<table data-kind="data" data-number="{number}" border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;">'
+        shares = iter(_column_shares([first_row] + rows))
+        head = re.sub(r"<td>", lambda _m: f'<td bgcolor="#e8edf3" width="{next(shares)}%">', first_row)
+        opening = f'<table data-kind="data" data-number="{number}" width="100%" border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;">'
         parts = _split_rows(opening, head, rows, source.parent, page_width, page_height * MAX_TABLE_HEIGHT)
         out = ""
         for i, part in enumerate(parts):
@@ -120,6 +121,26 @@ def _body_html(source: Path, page_width: float, page_height: float) -> str:
     html = re.sub(r'<p[^>]*>\s*<span style=" font-style:italic;">Table (\d+)\. (.*?)</span>\s*</p>\s*(<table[^>]*>)\s*(<tr>.*?</tr>)(.*?</table>)',
                   table, html, flags=re.S)
     return html
+
+
+def _column_shares(rows: list[str]) -> list[int]:
+    """How wide each column is, in per cent: a column with much text gets more room, so a table
+    is shorter and more of them fit on a page. No column gets less than a readable minimum."""
+    cells = [[len(re.sub(r"<[^>]+>", "", cell)) for cell in re.findall(r"<td[^>]*>(.*?)</td>", row, flags=re.S)] for row in rows]
+    count = max((len(row) for row in cells), default=0)
+    if not count:
+        return []
+    weight = []
+    for column in range(count):
+        lengths = [row[column] for row in cells if column < len(row)]
+        weight.append(max(8.0, (sum(lengths) / len(lengths)) ** 0.75 if lengths else 8.0))      # long cells count, but not in full
+    least = max(12, round(60 / count))
+    shares = [max(least, round(100 * w / sum(weight))) for w in weight]
+    while sum(shares) > 100:                                     # the minimums pushed it over: take from the widest
+        shares[shares.index(max(shares))] -= 1
+    while sum(shares) < 100:
+        shares[shares.index(max(shares))] += 1
+    return shares
 
 
 def _split_rows(opening: str, head: str, rows: list[str], base: Path, width: float, most: float) -> list[list[str]]:

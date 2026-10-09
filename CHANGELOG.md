@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Technical documentation: a chapter on the tech stack** (`docs/CODE.md`, chapter 2). It names every part the app is built from (Python, Qt Quick, the Claude Code program, Word and Excel libraries, SQLite, the Keychain and the rest), what each is used for and **why it was chosen**, and what was deliberately left out.
 - **The user guide no longer needs the terminal.** It is written for someone who only uses the app: every command was taken out of `docs/GUIDE.md`. What used to need a command can now be done in the window: the **Account** card shows your **Recovery key** (with **Copy**; it is put away again after a minute), and on a new Mac you paste the key there and select **Open my data**.
 - **A separate technical documentation** (`docs/CODE.md`, `docs/CODE.pdf`) for people who work with the code: installing, the command line, the structure of the code, the data files, tests, and how the documentation is made.
 - **Both PDFs are laid out like a thesis**: a title page, contents with page numbers, a list of figures and a list of tables, a page number on every page, each chapter on a new page. **A picture is never split across two pages. A table stays on one page**; a table longer than a page continues between two rows, with the caption "continued" and its heading row repeated. A heading is never left alone at the bottom of a page.

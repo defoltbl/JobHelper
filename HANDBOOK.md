@@ -221,7 +221,7 @@ After every batch of changes, without being asked:
      commands and no code. If the guide needs something, the window must be able to do it.
    - `docs/CODE.md` is the **technical documentation**: installing, the command line, the structure of the
      code, tests, and how the documentation itself is made. `COMMANDS.md` stays the full command reference.
-   - Both follow one pattern (the rules are Table 13 of `docs/CODE.md`): headings that start with a verb,
+   - Both follow one pattern (the rules are in `docs/CODE.md`, "Write in the house style"): headings that start with a verb,
      *Overview*, *Prerequisites*, numbered steps, tables for reference, *Note / Tip / Important / Warning*
      boxes, buttons in bold exactly as the app writes them.
    - Every figure and every table has a numbered caption and is referred to from the text. After adding

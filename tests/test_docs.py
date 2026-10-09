@@ -167,6 +167,31 @@ def test_a_table_too_long_for_a_page_is_cut_between_rows():
     _ = app
 
 
+def test_a_column_with_more_text_gets_more_room():
+    row = lambda *cells: "<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"      # noqa: E731
+    shares = guide_pdf._column_shares([row("Name", "Used for", "Why"), row("Python", "All the logic", "words " * 40), row("Qt", "The window", "words " * 50)])
+    assert sum(shares) == 100 and shares[2] > shares[1] >= shares[0] >= 12
+    even = guide_pdf._column_shares([row("a", "b"), row("c", "d")])
+    assert even == [50, 50] and guide_pdf._column_shares([]) == []
+    many = guide_pdf._column_shares([row(*["x"] * 6), row("y" * 300, *["x"] * 5)])
+    assert sum(many) == 100 and min(many) >= 12, "no column becomes too narrow to read"
+
+
+def test_the_technical_documentation_explains_its_tech_stack():
+    """What each part is used for and why it was chosen, so that a change does not replace one blindly."""
+    code = (DOCS / "CODE.md").read_text(encoding="utf-8")
+    chapter = code[code.index("## 2. Know the tech stack"):code.index("## 3. Install the app")]
+    assert chapter.count("| Technology | Used for | Why it was chosen |") >= 5 and "| Not used | Why not |" in chapter
+    for part in ("Python", "PySide6", "QML", "claude-agent-sdk", "python-docx", "pypdf", "openpyxl", "SQLite", "JSON", "requests", "imaplib",
+                 "AES-256-GCM", "Keychain", "LaunchAgent", "requirements.lock", "pytest", "pyflakes", "Git", "LibreOffice"):
+        assert part in chapter, part
+    wanted = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+    for package in re.findall(r"^([A-Za-z0-9_-]+)>=", wanted, re.M):
+        assert package.lower() in chapter.lower() or package in ("python-dotenv", "lxml"), f"{package} is installed but not explained"
+    for row in re.findall(r"^\| .+ \| .+ \| (.+) \|$", chapter, re.M):
+        assert row == "Why it was chosen" or len(row) > 40, "every part says why, in a sentence"
+
+
 @pytest.mark.parametrize("name", ["GUIDE", "CODE"])
 def test_the_pdf_matches_its_text(name):
     """Each PDF carries a fingerprint of the text, the pictures and the layout it was made from;

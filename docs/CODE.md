@@ -9,14 +9,15 @@ change. To use the app, read the user guide, [GUIDE.md](GUIDE.md).
 ## In this document
 
 1. [Overview](#1-overview)
-2. [Install the app](#2-install-the-app)
-3. [Run the app](#3-run-the-app)
-4. [Use the command line](#4-use-the-command-line)
-5. [Understand the structure of the code](#5-understand-the-structure-of-the-code)
-6. [Work with the data files](#6-work-with-the-data-files)
-7. [Test a change](#7-test-a-change)
-8. [Update the documentation](#8-update-the-documentation)
-9. [Troubleshoot problems](#9-troubleshoot-problems)
+2. [Know the tech stack](#2-know-the-tech-stack)
+3. [Install the app](#3-install-the-app)
+4. [Run the app](#4-run-the-app)
+5. [Use the command line](#5-use-the-command-line)
+6. [Understand the structure of the code](#6-understand-the-structure-of-the-code)
+7. [Work with the data files](#7-work-with-the-data-files)
+8. [Test a change](#8-test-a-change)
+9. [Update the documentation](#9-update-the-documentation)
+10. [Troubleshoot problems](#10-troubleshoot-problems)
 
 ---
 
@@ -60,7 +61,113 @@ Table 2 lists the other documents of the project.
 | [HANDBOOK.md](../HANDBOOK.md) | The rules the app is built by, decisions already made, what is left to do |
 | [CHANGELOG.md](../CHANGELOG.md) | What changed, day by day. The app shows it under **Help** |
 
-## 2. Install the app
+## 2. Know the tech stack
+
+### Overview
+
+JobHelper is built from a small number of well-known parts, each chosen for a reason that
+follows from what the app must do: run on one person's Mac, keep their data private, and use
+their Claude subscription instead of a paid API. This chapter names each part and says why it
+was chosen, so that a change does not replace one without knowing what it was there for.
+
+### The language and the window
+
+Table 3 lists what the app itself is written in.
+
+*Table 3. The language and the window*
+
+| Technology | Used for | Why it was chosen |
+|---|---|---|
+| Python 3.10 or newer | All the logic | The libraries for Word files, Excel files, mail and web pages are mature in Python, and the official Claude library is a Python library. One language for everything keeps the project small enough for one person |
+| Qt Quick (QML) with PySide6 | The window | It draws a native window on the graphics card, so the robots and the lists animate smoothly, and it needs no web browser inside the app. An earlier window built from a web page was removed: two front ends had to be kept the same, and the web one was slower and looked foreign on macOS |
+| QML for layout, Python for logic | The split between `ui_qt/` and `jobhelper/` | A QML file only shows things and calls the bridge; it never reads a file. The logic can therefore be tested without a window, and the window can be tested without real data |
+| Threads with Qt signals | Searches, scans and rewrites | Long work must not freeze the window. A worker thread does it and answers through a signal, which Qt delivers on the window's own thread |
+
+### Claude
+
+Table 4 lists how the app reaches the model.
+
+*Table 4. How the app reaches Claude*
+
+| Technology | Used for | Why it was chosen |
+|---|---|---|
+| `claude-agent-sdk` driving the Claude Code program | Every question to the model | It uses the person's Claude subscription. The paid API bills per use and would make every search cost money; that is why the app refuses to run while `ANTHROPIC_API_KEY` is set |
+| One module, `llm`, for all calls | Asking, counting usage, noticing the limit | With a single door, the rules hold everywhere: no call while the limit is used up, every call counted, no key in an error message |
+| Plain code before and after the model | Filters before scoring; checks after writing | A check in code is free, instant and always gives the same answer. The model is asked only what code cannot decide, and what it wrote is checked against the CV in code |
+
+### Documents and data
+
+Table 5 lists what reads and writes the person's files.
+
+*Table 5. Documents and data*
+
+| Technology | Used for | Why it was chosen |
+|---|---|---|
+| `python-docx` | Reading a CV; writing the adapted CV and the letter | Employers expect Word files. Editing the person's own `.docx` keeps its fonts and layout, where generating a new file would lose them |
+| `pypdf` | Reading a CV that is a PDF; joining the letter and the CV into one PDF | It is pure Python, so nothing else has to be installed |
+| LibreOffice (optional) | PDF copies of Word files | It converts a Word file faithfully and is free. It is optional: without it the app still works and offers Word files only |
+| `openpyxl` | The Excel tables | People already track applications in Excel; the tables can be opened, sorted and shared without the app |
+| JSON files | The job list, the profile, the Options | The data of one person is small. A file can be read whole, backed up by copying, and repaired by hand if it must be |
+| SQLite | The replies read from the mailbox | Replies are many, are looked up by message, and must never be read twice. A small database does that; it is part of Python and needs no server |
+
+### Reading the web and the mailbox
+
+Table 6 lists what reaches outside the Mac.
+
+*Table 6. Reading the web and the mailbox*
+
+| Technology | Used for | Why it was chosen |
+|---|---|---|
+| `requests` with `beautifulsoup4` and `lxml` | Reading the job boards and company career sites | The boards have no common interface, so their public pages are read as a browser would read them, at a modest pace. No search needs a key or an account |
+| `imaplib`, from Python itself | Reading replies | IMAP works with almost every mail provider and can open a mailbox read-only, which is the promise the app makes: it never sends, deletes or marks mail |
+| An app password instead of a sign-in window | Access to the mailbox | It can be cancelled at the provider at any time without changing the real password, and it needs no registration of the app with each provider |
+
+### Privacy and the Mac
+
+Table 7 lists what protects the data and ties the app to macOS.
+
+*Table 7. Privacy and the Mac*
+
+| Technology | Used for | Why it was chosen |
+|---|---|---|
+| AES-256-GCM, from `cryptography` | Encrypting the data files and the backups | Applications and replies are private. This method also notices when a file was changed, so a damaged or tampered file is refused instead of read |
+| The macOS Keychain, through the `security` program | Keeping the data key and the mailbox passwords | Secrets are then protected by the Mac's login and are never written to a file of the project |
+| Signed rule files | The rules for CVs and letters, the letter template, the master CV | These files decide what is written in the person's name. A change made outside the app must be approved before the next run |
+| A LaunchAgent | The weekly run | It is how macOS starts a task on a schedule, also when the window is closed |
+| Hash-pinned packages in `requirements.lock` | Installing | Each package is checked against a fingerprint, so a changed package cannot be installed unnoticed |
+
+### Quality
+
+Table 8 lists what keeps the code correct.
+
+*Table 8. Tools for quality*
+
+| Technology | Used for | Why it was chosen |
+|---|---|---|
+| `pytest` | More than 1,300 tests | Every change comes with tests. The suite needs no network and never touches real data, so it can be run at any time |
+| The window loaded without a screen | Tests of the window | The real QML is loaded and driven, so a broken binding or a missing name fails a test instead of reaching the person |
+| `pyflakes` | Unused and undefined names | It finds a whole kind of mistake in a second, before a test has to |
+| Git, kept on the Mac only | The history of changes | Every finished step is a commit that can be gone back to. There is no remote copy, because the project holds a real CV |
+
+### What is deliberately not used
+
+Table 9 lists parts that were considered and left out.
+
+*Table 9. What is deliberately not used*
+
+| Not used | Why not |
+|---|---|
+| The paid Claude API | It bills per use. The subscription the person already has does the same work |
+| A web browser inside the app | It was tried and removed: slower, larger, and a second front end to keep the same |
+| A database server | One person's data fits in files; a server would be one more thing to install and to keep running |
+| A cloud service for the data | Applications, replies and the CV stay on the person's Mac |
+| Sending mail | The app reads replies and drafts texts. The person sends them, so nothing leaves in their name without them |
+
+### Next steps
+
+- [Install the app](#3-install-the-app)
+
+## 3. Install the app
 
 ### Prerequisites
 
@@ -97,9 +204,9 @@ Before you install, make sure you have:
    cp .env.example .env
    ```
 
-Table 3 lists the main packages and what each is for.
+Table 10 lists the main packages and what each is for.
 
-*Table 3. The main packages*
+*Table 10. The main packages*
 
 | Package | Used for |
 |---|---|
@@ -111,7 +218,7 @@ Table 3 lists the main packages and what each is for.
 | `cryptography` | AES-256-GCM encryption of the data files and the backups |
 | `pytest` | The tests. `pyflakes`, installed separately with `pip install pyflakes`, checks for unused or undefined names |
 
-## 3. Run the app
+## 4. Run the app
 
 ### Start the window
 
@@ -134,9 +241,9 @@ writes to the same files.
 python run.py
 ```
 
-Table 4 lists the options used most often.
+Table 11 lists the options used most often.
 
-*Table 4. The most used options of run.py*
+*Table 11. The most used options of run.py*
 
 | Option | What it does |
 |---|---|
@@ -154,12 +261,12 @@ Table 4 lists the options used most often.
 > Do not run a search from the command line while the window is running one. Both write the
 > same job list.
 
-## 4. Use the command line
+## 5. Use the command line
 
 Everything the window does with applications and replies can also be done with `status.py`.
-Table 5 lists its commands.
+Table 12 lists its commands.
 
-*Table 5. The commands of status.py*
+*Table 12. The commands of status.py*
 
 | Command | What it does |
 |---|---|
@@ -174,14 +281,14 @@ Table 5 lists its commands.
 | `python status.py pdf` | Makes PDF copies of the documents (needs LibreOffice) |
 | `python status.py letters` | Takes in letters the person wrote themselves |
 | `python status.py usage` | Shows the Claude usage of the app, in total and per kind of work |
-| `python status.py security ACTION` | Encryption, Keychain and backup tools (Table 6) |
+| `python status.py security ACTION` | Encryption, Keychain and backup tools (Table 13) |
 
 ### Protect and restore the data
 
-The data files are encrypted with a key kept in the macOS Keychain. Table 6 lists the actions
+The data files are encrypted with a key kept in the macOS Keychain. Table 13 lists the actions
 of `python status.py security`.
 
-*Table 6. The actions of status.py security*
+*Table 13. The actions of status.py security*
 
 | Action | What it does |
 |---|---|
@@ -196,11 +303,11 @@ of `python status.py security`.
 > Anyone who has the recovery key can read the data. Never print it into a log, a chat or a
 > file that is kept.
 
-## 5. Understand the structure of the code
+## 6. Understand the structure of the code
 
-The code is in three places (Table 7).
+The code is in three places (Table 14).
 
-*Table 7. The folders of the project*
+*Table 14. The folders of the project*
 
 | Folder | What is in it |
 |---|---|
@@ -209,13 +316,13 @@ The code is in three places (Table 7).
 | `tests/` | The tests, and the script that takes the pictures of the user guide |
 | `scripts/` | Tools for the documentation: the PDF builder, the numbering check, the diagram |
 | `docs/` | The user guide, this document, their PDFs and the pictures |
-| `data/` | The person's data. Never part of the code; see section 6 |
+| `data/` | The person's data. Never part of the code; see section 7 |
 
 ### The agents
 
-Table 8 names the module of each agent and what it may ask Claude.
+Table 15 names the module of each agent and what it may ask Claude.
 
-*Table 8. The five agents*
+*Table 15. The five agents*
 
 | Agent | Module | What it does | Asks Claude |
 |---|---|---|---|
@@ -227,9 +334,9 @@ Table 8 names the module of each agent and what it may ask Claude.
 
 ### The modules around the agents
 
-Table 9 groups the other modules by what they are for.
+Table 16 groups the other modules by what they are for.
 
-*Table 9. The modules around the agents*
+*Table 16. The modules around the agents*
 
 | Group | Modules | What they do |
 |---|---|---|
@@ -256,12 +363,12 @@ Long work (a search, a scan, a rewrite) runs in a thread and answers through a s
 > Every input is checked twice: in the window, where the person sees a red message next to the
 > field, and again in the `Api` method, so that nothing unusable is saved whatever sent it.
 
-## 6. Work with the data files
+## 7. Work with the data files
 
-Everything a person makes with the app is in `data/` (Table 10). The folder is not part of the
+Everything a person makes with the app is in `data/` (Table 17). The folder is not part of the
 code and is never committed.
 
-*Table 10. The files and folders in data*
+*Table 17. The files and folders in data*
 
 | Path | What it holds | Encrypted |
 |---|---|---|
@@ -283,7 +390,7 @@ Follow these rules when code changes data:
 3. Move a document to the encrypted backup instead of deleting it; put old copies in the Trash.
 4. Do not change the data while the window is running.
 
-## 7. Test a change
+## 8. Test a change
 
 ### Run the tests
 
@@ -303,10 +410,10 @@ Both must pass before a change is committed.
 
 ### What the tests may never touch
 
-The tests work in temporary folders with stand-ins. Table 11 lists what they never reach and
+The tests work in temporary folders with stand-ins. Table 18 lists what they never reach and
 what stands in for it.
 
-*Table 11. What the tests never touch*
+*Table 18. What the tests never touch*
 
 | Never touched | What stands in |
 |---|---|
@@ -326,7 +433,7 @@ finds an item by its `objectName`, and `ui.wait(ms)` lets the window run.
 > After a change that can be seen, take a picture of the window and look at it. A test that
 > reads a text does not notice that the text is not drawn.
 
-## 8. Update the documentation
+## 9. Update the documentation
 
 Each change that a person can see needs three things: a line in `CHANGELOG.md`, the user guide
 brought up to date, and its pictures taken again if a pictured window changed.
@@ -360,10 +467,10 @@ python scripts/guide_pdf.py
 ```
 
 The script makes `docs/GUIDE.pdf` and `docs/CODE.pdf`. It lays each one out with a title page,
-the contents, a list of figures and a list of tables, and it keeps the page rules in Table 12.
+the contents, a list of figures and a list of tables, and it keeps the page rules in Table 19.
 A test fails while a PDF is older than its text.
 
-*Table 12. The page rules of the PDFs*
+*Table 19. The page rules of the PDFs*
 
 | Rule | How the script keeps it |
 |---|---|
@@ -374,9 +481,9 @@ A test fails while a PDF is older than its text.
 
 ### Write in the house style
 
-Table 13 gives the rules for the text of both documents.
+Table 20 gives the rules for the text of both documents.
 
-*Table 13. The rules for writing the documentation*
+*Table 20. The rules for writing the documentation*
 
 | Element | Rule |
 |---|---|
@@ -388,11 +495,11 @@ Table 13 gives the rules for the text of both documents.
 | Links | The link text says where it leads, never just "here" |
 | Notes | Four kinds: Note, Tip, Important, Warning, as a quoted block that starts with the bold word |
 
-## 9. Troubleshoot problems
+## 10. Troubleshoot problems
 
-Table 14 lists the problems met most often while working on the code.
+Table 21 lists the problems met most often while working on the code.
 
-*Table 14. Problems while working on the code*
+*Table 21. Problems while working on the code*
 
 | What you see | Cause | What to do |
 |---|---|---|
