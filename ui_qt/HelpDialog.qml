@@ -90,7 +90,7 @@ Dialog {
                         color: on ? theme.accent : (htMa.containsMouse ? theme.inset : "transparent")
                         border.width: 1; border.color: on ? "transparent" : theme.line
                         Text { id: htT; anchors.centerIn: parent; text: modelData[1]; font.pixelSize: 12; font.bold: parent.on
-                            color: parent.on ? theme.onAccent : theme.soft }
+                            color: parent.on ? theme.accentInk : theme.soft }
                         MouseArea { id: htMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                             onClicked: helpDialog.tab = modelData[0] } } } }
             Item { Layout.fillWidth: true }

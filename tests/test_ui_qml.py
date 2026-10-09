@@ -2223,7 +2223,7 @@ def test_light_theme_text_colours_read_on_light_surfaces():
     for text in ("ink", "soft", "faint", "good", "warn", "crit"):
         for ground in ("winbg", "surface", "surface2"):
             assert _contrast(light[text], light[ground]) >= 4.5, (text, ground, round(_contrast(light[text], light[ground]), 2))
-    assert _contrast(light["onAccent"], light["accent"]) >= 4.5 and _contrast(light["onAccent"], light["good"]) >= 4.5   # the label on a main button, the tick
+    assert _contrast(light["accentInk"], light["accent"]) >= 4.5 and _contrast(light["accentInk"], light["good"]) >= 4.5   # the label on a main button, the tick
     assert _contrast(light["warn"], light["warnbg"]) >= 4.5 and _contrast(light["good"], light["goodbg"]) >= 4.5 and _contrast(light["crit"], light["critbg"]) >= 4.5
 
 
@@ -2231,11 +2231,11 @@ def test_dark_theme_text_colours_read_on_dark_surfaces():
     import re
     main = (ROOT / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
     dark = {name: value for name, value in re.findall(r'property color (\w+): win\.dark \? "(#[0-9a-fA-F]{6})" : "#[0-9a-fA-F]{6}"', main)}
-    assert {"winbg", "surface", "surface2", "ink", "soft", "faint", "accent", "onAccent", "good", "warn", "crit"} <= set(dark)
+    assert {"winbg", "surface", "surface2", "ink", "soft", "faint", "accent", "accentInk", "good", "warn", "crit"} <= set(dark)
     for text in ("ink", "soft", "faint", "good", "warn", "crit", "accent"):
         for ground in ("winbg", "surface", "surface2"):
             assert _contrast(dark[text], dark[ground]) >= 4.5, (text, ground, round(_contrast(dark[text], dark[ground]), 2))
-    assert _contrast(dark["onAccent"], dark["accent"]) >= 4.5 and _contrast(dark["onAccent"], dark["good"]) >= 4.5   # the label on a main button, the tick
+    assert _contrast(dark["accentInk"], dark["accent"]) >= 4.5 and _contrast(dark["accentInk"], dark["good"]) >= 4.5   # the label on a main button, the tick
     assert _contrast(dark["warn"], dark["warnbg"]) >= 4.5 and _contrast(dark["good"], dark["goodbg"]) >= 4.5 and _contrast(dark["crit"], dark["critbg"]) >= 4.5
 
 
@@ -2245,4 +2245,25 @@ def test_no_label_on_the_accent_is_fixed_white():
                  "PrepEditDialog", "LetterDialog", "CompareDialog"):
         text = (ROOT / "ui_qt" / f"{name}.qml").read_text(encoding="utf-8")
         assert '"#ffffff"' not in text and '"white"' not in text, name
-    assert "theme.onAccent" in (ROOT / "ui_qt" / "SmallButton.qml").read_text(encoding="utf-8")
+    assert "theme.accentInk" in (ROOT / "ui_qt" / "SmallButton.qml").read_text(encoding="utf-8")
+
+
+def test_the_label_on_a_main_button_follows_the_theme(ui):
+    """Read from the running window: a colour that exists in the file but does not reach the label would pass the other tests."""
+    start = ui.js("win.dark")
+    try:
+        ui.js("win.dark = true")
+        assert ui.js('"" + theme.accentInk') == "#1b1305" and ui.js('"" + theme.accent') == "#f0a84a"
+        ui.js('openView("new")')
+        ui.wait(450)
+        ui.js("tableDialog.confirmRescore = true; tableDialog.rescoreJobs = 1")              # a main-style button
+        button = ui.find("rescoreAll")
+        assert ui.js('"" + contentItem.color', button) == "#1b1305"
+        ui.js("win.dark = false")
+        ui.wait(50)
+        assert ui.js('"" + theme.accentInk') == "#ffffff" and ui.js('"" + contentItem.color', button) == "#ffffff"
+        ui.js("tableDialog.close()")
+        ui.wait(350)
+    finally:
+        ui.js("win.dark = %s" % ("true" if start else "false"))
+    assert ui.warnings == []

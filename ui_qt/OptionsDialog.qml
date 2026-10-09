@@ -308,7 +308,7 @@ Dialog {
                                         border.width: 1; border.color: picked ? win.clearOf(theme.line) : readOn ? theme.accent : theme.line
                                         Behavior on color { ColorAnimation { duration: 140 } }
                                         Text { id: fcT; anchors.centerIn: parent; text: modelData; font.pixelSize: 11; font.bold: parent.picked || parent.readOn
-                                            color: parent.picked ? theme.onAccent : parent.readOn ? theme.accent : theme.soft }
+                                            color: parent.picked ? theme.accentInk : parent.readOn ? theme.accent : theme.soft }
                                         MouseArea { id: fcMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                             onClicked: optDialog.toggleField(modelData, fieldsBox.read.all) } } }
                                 SmallButton { objectName: "fieldsAuto"; visible: fieldsBox.byHand; implicitHeight: 24; text: "Let the app decide"

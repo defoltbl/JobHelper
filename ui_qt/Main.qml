@@ -263,7 +263,7 @@ ApplicationWindow {
         property color accent: win.dark ? "#f0a84a" : "#b45f06"
         // a label on the accent (a main button, a picked chip) or on the green tick: the dark theme's
         // orange and green are light colours, so the label on them is dark there
-        property color onAccent: win.dark ? "#1b1305" : "#ffffff"
+        property color accentInk: win.dark ? "#1b1305" : "#ffffff"
         property color belt: win.dark ? "#2a3643" : "#c6cfd9"
         property color beltDark: win.dark ? "#1d2731" : "#aeb9c6"
         property color steel: win.dark ? "#8695a6" : "#6b7787"
@@ -383,7 +383,7 @@ ApplicationWindow {
                                 Rectangle { anchors.fill: parent; radius: 17
                                     gradient: Gradient { GradientStop { position: 0; color: theme.accent }
                                                          GradientStop { position: 1; color: Qt.darker(theme.accent, 1.35) } }
-                                    Text { anchors.centerIn: parent; color: theme.onAccent; font.pixelSize: 15; font.bold: true
+                                    Text { anchors.centerIn: parent; color: theme.accentInk; font.pixelSize: 15; font.bold: true
                                         text: connData.claude === true && connData.claude_email ? connData.claude_email.charAt(0).toUpperCase() : "?" } }
                                 Rectangle { width: 12; height: 12; radius: 6; x: 24; y: 24
                                     color: !win.connChecked ? theme.steel : (chip.allOk ? theme.good : theme.crit)

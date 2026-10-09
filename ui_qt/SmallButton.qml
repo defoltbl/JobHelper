@@ -20,6 +20,6 @@ Button {
                                     : (sb.hovered ? Qt.lighter(theme.surface2, 1.25) : theme.surface2)
         border.color: sb.primaryStyle ? "transparent" : (sb.hovered ? theme.steel : theme.line); border.width: 1 }
     contentItem: Text { text: sb.text; font: sb.font
-        color: sb.primaryStyle ? theme.onAccent : theme.ink
+        color: sb.primaryStyle ? theme.accentInk : theme.ink
         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
 }
