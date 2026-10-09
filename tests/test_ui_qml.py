@@ -69,7 +69,7 @@ class Ui:
         raise AssertionError(f"nothing named {name!r} is drawn in {root}")
 
     # each window lives in its own file; names inside a window are only known in that window's context
-    WINDOWS = ["tableDialog", "detailDialog", "compareDialog", "formDialog", "prepEditDialog", "helpDialog", "prepDialog", "letterDialog",
+    WINDOWS = ["tableDialog", "detailDialog", "compareDialog", "formDialog", "assistantDialog", "prepEditDialog", "helpDialog", "prepDialog", "letterDialog",
                "responseDialog", "limitDialog", "welcome", "optDialog", "schedDialog",
                "navPanel", "stagePanel", "statusPanel", "pipelineBar"]      # the parts of the main screen
 
@@ -3210,3 +3210,106 @@ def test_new_jobs_can_be_reviewed_one_by_one(ui, monkeypatch):
         store.save_jobs(kept)
         ui.js("win.reloadAll()")
     assert ui.warnings == []
+
+
+# ── the assistant ───────────────────────────────────────────────────────────
+def test_the_assistant_stands_on_the_line_blinks_and_waves(ui):
+    bot = ui.find("assistantBot")
+    assert bot.property("visible") and bot.property("x") + bot.property("width") <= 1000 and bot.property("y") + bot.property("height") <= 500
+    for robot in ("a4", "a5"):                                  # it does not stand on a station of the line
+        other = ui.find(robot)
+        assert bot.property("x") > other.property("x") + 130
+    lids = []
+    for _ in range(90):                                         # the eyes close and open by themselves
+        lids.append(bot.property("lid"))
+        ui.wait(40)
+        if max(lids) > 0.6 and lids[-1] < 0.2:
+            break
+    assert max(lids) > 0.6 and lids[-1] < 0.2, "it blinked"
+    arm, bubble = ui.drawn("assistantArm", "stagePanel"), ui.drawn("assistantBubble", "stagePanel")
+    assert arm.property("rotation") > -40 and bubble.property("opacity") == 0
+    ui.js("stagePanel.assistant.greet()")
+    ui.wait(500)
+    assert bot.property("greeting") and arm.property("rotation") < -100, "the arm is up, waving"
+    assert bubble.property("opacity") == 1 and bot.property("says").startswith("Hi!")
+    assert bubble.mapToItem(bot.parentItem(), 0, 0).x() >= 0, "the bubble stays on the floor"
+    bot.setProperty("greeting", False)
+    ui.wait(500)
+    assert arm.property("rotation") > -40 and bubble.property("opacity") == 0
+    assert ui.warnings == []
+
+
+def test_the_assistant_asks_for_your_details_first_and_checks_them(ui):
+    from jobhelper import details
+    dialog = ui.find("assistantDialog")
+    ui.js('stagePanel.assistant.tapped()')
+    ui.wait(500)
+    assert dialog.property("opened") and dialog.property("page") == "details", "nothing is saved yet: the details come first"
+    assert ui.js("fieldModel.count") == len(details.KEYS) and ui.js("talk.count") == 1
+    ui.js("assistantDialog.saveDetails()")
+    assert "Every field is empty" in ui.find("asDetailsNote").property("text") and not details.path().exists()
+    ui.js('assistantDialog.setField("first_name", "Alex"); assistantDialog.setField("last_name", "Novak"); assistantDialog.setField("email", "alex@example")')
+    assert dialog.property("dirty") and ui.js("assistantDialog.problem.field") == "email"
+    assert "email address" in ui.find("asDetailsNote").property("text")
+    ui.js("assistantDialog.saveDetails()")
+    assert not details.path().exists(), "a wrong field is not saved"
+    ui.js("assistantDialog.tryClose()")
+    assert dialog.property("opened") and "did not save" in ui.find("asDetailsNote").property("text"), "closing with unsaved changes asks once"
+    ui.js('assistantDialog.setField("email", "alex@example.com"); assistantDialog.setField("linkedin", "linkedin.com/in/alexnovak")')
+    assert ui.js("!assistantDialog.problem.msg")
+    ui.js("assistantDialog.saveDetails()")
+    assert details.load()["email"] == "alex@example.com" and details.load()["linkedin"] == "https://linkedin.com/in/alexnovak"
+    assert not dialog.property("dirty") and dialog.property("detailsSaved") and "Saved" in ui.find("asDetailsNote").property("text")
+    ui.js("assistantDialog.tryClose()")
+    ui.wait(400)
+    assert dialog.property("visible") is False and ui.warnings == []
+
+
+def test_the_assistant_takes_a_request_and_shows_what_it_filled(ui, monkeypatch):
+    import threading
+    dialog, gate, asked = ui.find("assistantDialog"), threading.Event(), []
+
+    def answer(self, text, job_id=""):
+        asked.append((text, job_id))
+        gate.wait(5)
+        return {"ok": True, "action": "fill", "host": "careers.northwind.example", "job_id": "lead", "job": "Junior Python Developer at Acme", "guessed": True,
+                "filled": [{"label": "First name", "value": "Alex", "kind": "detail", "check": ""},
+                           {"label": "When can you start?", "value": "I can start on [your start date].", "kind": "answer", "check": "Your start date"}],
+                "left": [{"label": "Resume/CV", "why": "Attach the file yourself: a page cannot be handed a file from outside."}],
+                "kept": 0, "boxes": 1, "say": "I filled in 2 fields on careers.northwind.example. I never press Submit."}
+    monkeypatch.setattr(ui_api.Api, "assistant_ask", answer)
+    ui.js("assistantDialog.show()")
+    ui.wait(450)
+    assert dialog.property("page") == "ask", "details are saved: it opens ready to be asked"
+    assert [j["id"] for j in dialog.property("jobs").toVariant()] == ["", "lead", "app"]
+    before = ui.js("talk.count")
+    ui.js('assistantDialog.ask("   ")')
+    assert "Write what you need" in ui.find("asErr").property("text") and ui.js("talk.count") == before and asked == []
+    ui.js('assistantDialog.ask("' + "x" * 301 + '")')
+    assert "longer than 300" in ui.find("asErr").property("text") and asked == []
+    ui.js('assistantDialog.forJob("app")')
+    ui.js('assistantDialog.ask("fill the form in chrome")')
+    assert dialog.property("busy") and ui.find("assistantBot").property("busy") and ui.find("asFill").property("enabled") is False
+    ui.js('assistantDialog.ask("again")')
+    assert "still working" in ui.find("asErr").property("text")
+    ui.js("assistantDialog.tryClose()")
+    assert dialog.property("opened"), "it is not closed in the middle of a request"
+    gate.set()
+    for _ in range(100):
+        if not dialog.property("busy"):
+            break
+        ui.wait(30)
+    assert asked == [("fill the form in chrome", "app")]
+    assert ui.js("talk.count") == before + 2 and ui.js("talk.get(talk.count - 1).text").startswith("I filled in 2 fields")
+    assert ui.js("filledModel.count") == 2 and ui.js("filledModel.get(1).check") == "Your start date" and ui.js("leftModel.get(0).label") == "Resume/CV"
+    monkeypatch.setattr(ui_api.Api, "assistant_ask", lambda self, text, job_id="": {"ok": False, "action": "fill", "msg": "Google Chrome is not open."})
+    ui.js("assistantDialog.ask(\"fill it\")")
+    for _ in range(100):
+        if not dialog.property("busy"):
+            break
+        ui.wait(30)
+    assert ui.js("talk.get(talk.count - 1).bad") is True and ui.js("talk.get(talk.count - 1).text") == "Google Chrome is not open."
+    assert ui.js("filledModel.count") == 0, "an old report does not stay under a new answer"
+    ui.js("assistantDialog.tryClose()")
+    ui.wait(400)
+    assert dialog.property("visible") is False and ui.warnings == []

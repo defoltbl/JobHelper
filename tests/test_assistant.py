@@ -228,7 +228,9 @@ def test_a_page_is_matched_to_a_job_only_when_it_is_plain():
     assert form_fill.match_job(jobs, "https://ats.example.net/form/9", "Data Analyst - Northwind careers") == "nw2"
     assert form_fill.match_job(jobs, "https://ats.example.net/form/9", "Careers at Northwind") == "", "two jobs there: you choose"
     assert form_fill.match_job(jobs, "https://ats.example.net/form/9", "Good morning data fans") == "", "shared words name nobody"
-    assert form_fill.match_job(jobs, "https://gooddata.example/", "Home") == "", "a home page is not a posting"
+    assert form_fill.match_job(jobs, "https://gooddata.example/", "Home") == "gd", "the company's own site"
+    board = [_job(id="b1", company="Quillon", url="https://portal.example/")]
+    assert form_fill.match_job(board, "https://portal.example/", "Home") == "", "a home page is not one posting's address"
     assert form_fill.match_job([], "not a url", "") == ""
 
 

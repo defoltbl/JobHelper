@@ -150,6 +150,9 @@ data/                your data; only the *.example.* files are in git
   counts as "here" for a search).
 - **Writing:** `cv_tailor`, `cover_letter`, `letters` (your own letters), `form_answers`,
   `interview_prep`, `prep_doc`, `pdf`.
+- **The assistant:** `assistant` (what a typed request means), `details` (the person's own details,
+  encrypted), `chrome` (the tab in front in Google Chrome, through Apple events), `form_fill` (the two page
+  scripts, what each field is, which job a page belongs to); its back end is `api_assistant`.
 - **Keeping data safe:** `vault` (encryption, backups), `integrity` (signed rule files),
   `housekeeping` (old backups, logs, the Trash), `store` and `db` (jobs and replies).
 - **Claude:** `llm` (every call goes through it; pauses at the limit), `usage`.
@@ -159,7 +162,7 @@ data/                your data; only the *.example.* files are in git
   PDFs); `qt_bridge` is the Qt side (signals, sign-in, Options, schedule) with its parts `bridge_runs` (search,
   scan, scoring again, stopping, pausing on the limit) and `bridge_jobs` (what the job windows ask for).
 - **The main window:** `Main.qml` holds the state, the palette and the dialogs; the screen itself is
-  `NavPanel` (left), `StagePanel` (robots and status line), `StatusPanel` (right), `PipelineBar`
+  `NavPanel` (left), `StagePanel` (robots and status line), `AssistantBot` (the assistant at the end of the line) with its window `AssistantDialog`, `StatusPanel` (right), `PipelineBar`
   (bottom), and `views.js` fills the lists.
 - **When something fails quietly:** `trouble.note()` writes one line to `data/app_trouble.log`.
   An error is never swallowed without either a reason in a comment or a line there.
@@ -281,6 +284,9 @@ After every batch of changes, without being asked:
 | A mailbox is tried before it is saved | Only the form of the password was checked, so a wrong one showed up at the first scan. |
 | Outlook.com, Proton and Tuta are refused with an explanation | They cannot be read with a password; failing later would be worse than saying so at once. |
 | The salary estimate is used only for software roles in Czechia | It is a table of Prague junior software pay. Anywhere else no figure is better than a wrong one. |
+| The assistant fills in forms in the person's own Chrome, through Apple events | The owner's choice ("I tap on him and ask to fill the form in Chrome"). The form is filled where the person is signed in; nothing is installed. A browser inside the app was removed earlier, and an extension would have to be installed by hand. |
+| The assistant never clicks, ticks or sends | The app never acts in the person's name. It writes into empty fields and leaves files, passwords, choices and personal questions to the person. |
+| A request to the assistant is understood by its words, not by a model | It costs nothing and always means the same. Only a form's open questions go to Claude, in one call. |
 | A table or a picture is never split across pages in the PDFs | The owner's rule for the documentation; a long table continues between rows with its heading repeated. |
 
 ---
@@ -312,13 +318,21 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
 5. **The layout markup of the windows** (about 5,500 lines of QML) was scanned by a script for texts that can
    be cut and the finds were fixed; it was not read line by line. The window tests and the guide's pictures cover it.
 
+6. **The assistant was tested on a local form in a browser engine, not yet on real sites in the person's Chrome.**
+   Sites that build their fields in unusual ways (their own drop-downs, forms inside a frame from another site,
+   pages that rebuild a field after it is written) will need a look one by one. Choices (lists other than the
+   country, yes/no, tick boxes) and file uploads are left to the person on purpose for now.
+
 **Needs the person**
 
-- Whether the thesis-like layout of the PDFs matches the design they had in mind.
+- Turning on Chrome's switch (View > Developer > Allow JavaScript from Apple Events) and trying the assistant
+  on a few real application forms; what it leaves or gets wrong there decides the next step.
 
-**Then**
+**Then, for the assistant** (in the order they would help)
 
-- **The big feature** (to be described).
+- Choosing from lists and yes/no questions when the CV or About you settles the answer.
+- Opening a form that sits in a frame from another site in its own tab, by a button.
+- A general question to the assistant about a job or the app, answered by Claude.
 
 **Last**
 

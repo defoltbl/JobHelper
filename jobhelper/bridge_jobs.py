@@ -321,6 +321,35 @@ class JobSlots:
     def saveFormAnswers(self, job_id, items):
         return self._api.save_form_answers(job_id, [dict(i) for i in (items or [])])
 
+    # ── the assistant ───────────────────────────────────────────
+    @Slot(result="QVariantMap")
+    def myDetails(self):
+        return self._api.my_details()
+
+    @Slot("QVariantMap", result="QVariantMap")
+    def checkMyDetails(self, values):
+        return self._api.check_my_details(dict(values or {}))
+
+    @Slot("QVariantMap", result="QVariantMap")
+    def saveMyDetails(self, values):
+        return self._api.save_my_details(dict(values or {}))
+
+    @Slot(result="QVariantList")
+    def assistantJobs(self):
+        return self._api.assistant_jobs()
+
+    @Slot(str, str)
+    def askAssistant(self, text, job_id):
+        """Runs in the background (it talks to Chrome and may ask Claude); the answer arrives as assistantReady."""
+        def work():
+            try:
+                result = self._api.assistant_ask(text, job_id)
+            except Exception as e:  # noqa: BLE001 - the window must always get an answer
+                trouble.note("the assistant's request", e)
+                result = {"ok": False, "action": "none", "msg": str(e) or type(e).__name__}
+            self._post("assistantReady", result)
+        threading.Thread(target=work, daemon=True).start()
+
     @Slot(result="QVariantMap")
     def weekSummary(self):
         return self._api.week_summary()

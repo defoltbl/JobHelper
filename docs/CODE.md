@@ -134,6 +134,7 @@ Table 2.5 lists what protects the data and ties the app to macOS.
 | The macOS Keychain, through the `security` program | Keeping the data key and the mailbox passwords | Secrets are then protected by the Mac's login and are never written to a file of the project |
 | Signed rule files | The rules for CVs and letters, the letter template, the master CV | These files decide what is written in the person's name. A change made outside the app must be approved before the next run |
 | A LaunchAgent | The weekly run | It is how macOS starts a task on a schedule, also when the window is closed |
+| Apple events, through the `osascript` program | The assistant reads and fills in the form that is open in the person's Google Chrome | The form is filled in where the person is already signed in, with nothing to install. Chrome and macOS each ask for consent first, and the app can only do what a script in the page can do: it cannot attach files or read saved passwords |
 | Hash-pinned packages in `requirements.lock` | Installing | Each package is checked against a fingerprint, so a changed package cannot be installed unnoticed |
 
 ### Quality
@@ -159,6 +160,7 @@ Table 2.7 lists parts that were considered and left out.
 |---|---|
 | The paid Claude API | It bills per use. The subscription the person already has does the same work |
 | A web browser inside the app | It was tried and removed: slower, larger, and a second front end to keep the same |
+| A browser extension for filling in forms | It would have to be installed by hand and kept in step with the app. Apple events reach the same page without one |
 | A database server | One person's data fits in files; a server would be one more thing to install and to keep running |
 | A cloud service for the data | Applications, replies and the CV stay on the person's Mac |
 | Sending mail | The app reads replies and drafts texts. The person sends them, so nothing leaves in their name without them |
@@ -347,9 +349,36 @@ Table 6.3 groups the other modules by what they are for.
 | Rules without a model call | `filters`, `prefilter`, `language`, `places`, `keywords`, `salary`, `merge`, `followup`, `planner` | Level, years, language, location, profession, pay, duplicates, reminders |
 | Writing | `cv_tailor`, `cover_letter`, `letters`, `form_answers`, `interview_prep`, `prep_doc`, `pdf` | The adapted CV, the letter, form answers, the interview sheet |
 | Mail | `email_client`, `mailhosts` | Reading mailboxes read-only; which server a mailbox is read from |
+| The assistant | `assistant`, `details`, `chrome`, `form_fill` | What a typed request means; the person's own details; the link to Google Chrome; reading a form, deciding what each field is, and filling it in |
 | Claude | `llm`, `usage` | The one place that asks Claude; counting usage and knowing the limits |
 | Storage and safety | `store`, `db`, `vault`, `integrity`, `housekeeping`, `health`, `trouble` | The job list, the reply database, encryption, signed rule files, backups, the start-up check, the log of errors |
-| The window's back end | `ui_api`, `api_documents`, `api_interview`, `api_letters`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` holds the logic; `Bridge` exposes it to QML and runs long work in threads |
+| The window's back end | `ui_api`, `api_documents`, `api_interview`, `api_letters`, `api_assistant`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` holds the logic; `Bridge` exposes it to QML and runs long work in threads |
+
+### How the assistant fills in a form
+
+The assistant works on the tab that is in front in Google Chrome, in three steps, each in
+`form_fill`:
+
+1. A script lists the fields of the page: what each is called, its kind, and whether it already
+   holds something. It numbers them with an attribute and sends back no value the person typed.
+2. `plan()` decides in plain code what each field is. The person's details come from `details`;
+   open questions go to `form_answers` in one call; everything else is left, with the reason.
+3. A second script writes the values into fields that are still empty and outlines them.
+
+Table 6.4 gives the rules these steps keep. `tests/test_assistant.py` checks each of them, the
+last three on a real page.
+
+*Table 6.4 – The rules of filling in a form*
+
+| Rule | How it is kept |
+|---|---|
+| The form is never sent | Neither script clicks, ticks or submits anything; a test reads both scripts for those calls |
+| Only empty fields are written | The filling script tests each field again just before it writes |
+| Values are data, never code | They travel as JSON inside the script, and the script travels as an argument of `osascript` |
+| What the page answers is not trusted | `read_answer` and `fill_answer` accept only the expected shape and cut every text to a fixed length |
+| Private fields are left alone | Passwords, files, payment and personal-status fields are recognised by their kind or their label and never planned |
+| The right page gets the values | The filling script compares the page's address with the one that was read, and writes nothing when they differ |
+| Chrome is never started | The request first asks whether Chrome is running and stops there when it is not |
 
 ### How the window talks to the logic
 
@@ -425,6 +454,7 @@ what stands in for it.
 | Claude | A function that returns a prepared answer |
 | Job boards and mail servers | Functions that return prepared postings and messages |
 | Notifications, Finder, the Trash, the browser | Functions that only record that they were called |
+| The person's Google Chrome | A guard that fails the test. The scripts that read and fill in a form run in a browser engine on a local page, `tests/fixtures/application_form.html` |
 
 ### Test the window
 

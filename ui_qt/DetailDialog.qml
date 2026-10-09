@@ -876,6 +876,8 @@ Dialog {
             }
             SmallButton { objectName: "answersOpen"; visible: detailDialog.job.is_dismissed !== true
                 text: "Form answers"; onClicked: formDialog.show(detailDialog.job.id) }
+            SmallButton { objectName: "assistantOpen"; visible: detailDialog.job.is_dismissed !== true
+                text: "Fill form in Chrome"; onClicked: assistantDialog.forJob(detailDialog.job.id) }
             SmallButton { objectName: "notInterested"; visible: detailDialog.job.is_lead === true; text: "Not interested"
                 onClicked: detailDialog.notInterested() }
             SmallButton { visible: detailDialog.job.is_dismissed === true; primaryStyle: true; text: "Restore to New Jobs"

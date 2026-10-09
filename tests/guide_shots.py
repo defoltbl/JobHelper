@@ -382,10 +382,48 @@ def test_guide_shots(ui, monkeypatch):
         shot("24_light_theme")
         ui.js("win.dark = true")
 
+    def assistant():
+        from jobhelper import details
+        ui.js("stagePanel.assistant.greet()")
+        ui.wait(700)
+        shot("37_assistant", (238, 60, ui.win.width() - 238 - 236, ui.win.height() - 60 - 110), 1.5)
+        ui.find("assistantBot").setProperty("greeting", False)
+        details.save({"first_name": "Alex", "last_name": "Novak", "email": "alex.novak@example.com", "phone": "+420 123 456 789", "street": "",
+                      "city": "Prague", "postcode": "110 00", "country": "Czechia", "linkedin": "linkedin.com/in/alexnovak",
+                      "github": "github.com/alexnovak", "website": ""})
+        monkeypatch.setattr(ui_api.Api, "assistant_ask", lambda self, text, job_id="": {
+            "ok": True, "action": "fill", "host": "careers.northwind.example", "job_id": "lead1", "job": "Junior Python Developer at Northwind Systems", "guessed": True,
+            "filled": [{"label": "First name", "value": "Alex", "kind": "detail", "check": ""}, {"label": "Last name", "value": "Novak", "kind": "detail", "check": ""},
+                       {"label": "Email", "value": "alex.novak@example.com", "kind": "detail", "check": ""},
+                       {"label": "LinkedIn profile", "value": "https://linkedin.com/in/alexnovak", "kind": "detail", "check": ""},
+                       {"label": "Why do you want to work at Northwind Systems?", "kind": "answer", "check": "",
+                        "value": "Your back-end services are written in FastAPI on PostgreSQL, the stack of my own project…"},
+                       {"label": "When can you start?", "value": "I can start on [your start date].", "kind": "answer", "check": "Your start date"}],
+            "left": [{"label": "Resume/CV", "why": "Attach the file yourself: a page cannot be handed a file from outside."},
+                     {"label": "Notice period", "why": "Choose it yourself: I only pick from a list when it asks for your country."}],
+            "kept": 1, "boxes": 2,
+            "say": "I filled in 6 fields on careers.northwind.example: 4 from My details, 2 answers drafted from your CV. I took this to be the form for "
+                   "Junior Python Developer at Northwind Systems. 1 answer needs your attention (outlined in amber on the page). 2 fields are left for you, "
+                   "listed below with the reason. Read everything on the page, then send the form yourself. I never press Submit."})
+        ui.js("assistantDialog.show()")
+        ui.wait(500)
+        ui.js('assistantDialog.ask("Fill in the form in Chrome")')
+        for _ in range(100):
+            if not ui.find("assistantDialog").property("busy"):
+                break
+            ui.wait(30)
+        ui.js("talkFlick.contentY = 0")
+        shot("38_assistant_fill")
+        ui.js('assistantDialog.page = "details"')
+        shot("39_my_details")
+        ui.js("assistantDialog.tryClose()")
+        ui.wait(350)
+        details.path().unlink(missing_ok=True)
+
     try:
         for name, fn in (("welcome", welcome_card), ("main", main_screen), ("new jobs", new_jobs), ("job window", job_window), ("compare", compare),
                          ("letter editor", letter_editor), ("form answers", form_answers), ("applications", applications), ("interview", interview), ("replies", replies),
-                         ("filtered and insights", filtered_and_insights), ("options", options), ("others", others)):
+                         ("filtered and insights", filtered_and_insights), ("options", options), ("assistant", assistant), ("others", others)):
             step(name, fn)
     finally:
         ui.bridge._set_running(False)

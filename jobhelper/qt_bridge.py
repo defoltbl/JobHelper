@@ -61,6 +61,7 @@ class Bridge(RunSlots, JobSlots, QObject):
     storageDone = Signal("QVariantMap")        # a backup was made, checked or copied out (or why not)
     emailTested = Signal("QVariantMap")        # a saved mailbox was tried: {box, ok, msg}
     emailSaved = Signal("QVariantMap")         # a mailbox was tried and saved (or why not)
+    assistantReady = Signal("QVariantMap")     # the assistant did what was asked (or says why not)
 
     def __init__(self) -> None:
         super().__init__()

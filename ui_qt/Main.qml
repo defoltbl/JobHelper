@@ -108,7 +108,7 @@ ApplicationWindow {
     // ── shared motion (same feel in the welcome screen, dialogs and buttons) ──
     readonly property int motion: 260
     readonly property color dimColor: Qt.rgba(0, 0, 0, dark ? 0.42 : 0.22)
-    readonly property bool dialogOpen: tableDialog.visible || optDialog.visible || schedDialog.visible || detailDialog.visible || limitDialog.visible || responseDialog.visible || letterDialog.visible || prepDialog.visible || helpDialog.visible || compareDialog.visible || formDialog.visible || prepEditDialog.visible
+    readonly property bool dialogOpen: tableDialog.visible || optDialog.visible || schedDialog.visible || detailDialog.visible || limitDialog.visible || responseDialog.visible || letterDialog.visible || prepDialog.visible || helpDialog.visible || compareDialog.visible || formDialog.visible || prepEditDialog.visible || assistantDialog.visible
     property bool stopping: false        // Stop was pressed; waiting for the current step to end
     property bool paused: false          // the run waits because Claude's limit is used up
     property bool canResume: false       // ...and the limit has reset, so Resume works
@@ -301,6 +301,7 @@ ApplicationWindow {
         property color infobg: win.dark ? "#142338" : "#e5eefc"
         property color a1: "#3b82f6"; property color a2: "#10b981"
         property color a3: "#8b5cf6"; property color a4: "#fb923c"; property color a5: "#f43f5e"
+        property color a6: win.dark ? "#22d3ee" : "#0891b2"       // the assistant
     }
 
     // ── reusable buttons ──
@@ -373,6 +374,7 @@ ApplicationWindow {
 
     // ───────────────────────── answers to repeated form questions ─────────────────────────
     FormAnswersDialog { id: formDialog }
+    AssistantDialog { id: assistantDialog }
     PrepEditDialog { id: prepEditDialog }
 
     // ───────────────────────── a message on top of an open window ─────────────────────────

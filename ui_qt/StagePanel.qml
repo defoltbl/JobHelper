@@ -17,6 +17,7 @@ Rectangle {
     readonly property Item botA3: a3
     readonly property Item botA4: a4
     readonly property Item botA5: a5
+    readonly property Item assistant: helper
     Layout.fillWidth: true; Layout.fillHeight: true
     color: theme.inset
     ColumnLayout {
@@ -154,6 +155,13 @@ Rectangle {
                 Robot { id: a3; objectName: "a3"; kind: "write"; theme: win.appTheme; ag: win.appTheme.a3; title: "Scribe"; role: "letters & CVs"; agent: "AGENT 3"; x: 630; y: 112 }
                 Robot { id: a5; objectName: "a5"; kind: "mail"; theme: win.appTheme; ag: win.appTheme.a5; title: "Postman"; role: "reads replies"; agent: "AGENT 5"; x: 300; y: 342 }
                 Robot { id: a4; objectName: "a4"; kind: "table"; theme: win.appTheme; ag: win.appTheme.a4; title: "Tracker"; role: "builds tables"; agent: "AGENT 4"; x: 540; y: 342 }
+
+                // the assistant: not a station of the line, it stands at its end and helps with the forms
+                AssistantBot { id: helper; objectName: "assistantBot"; theme: win.appTheme; x: 906; y: 396
+                    busy: assistantDialog.busy
+                    onTapped: assistantDialog.show() }
+                Connections { target: welcome
+                    function onShownChanged() { if (!welcome.shown) helper.greet(); } }
             }
         }
 

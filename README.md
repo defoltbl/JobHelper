@@ -2,7 +2,8 @@
 
 A desktop assistant for a job search, for macOS. Five cooperating agents find postings, score
 them against your CV, write an adapted CV and a cover letter for the good ones, and keep track
-of what you applied to and what the companies answered. It runs on **your Claude subscription**
+of what you applied to and what the companies answered. A sixth, the assistant, fills in the
+company's application form in your own Chrome when you ask it. It runs on **your Claude subscription**
 through the Claude Code program – no API key, no per-token bill – and everything it knows
 about you stays on your Mac, encrypted.
 
@@ -11,7 +12,7 @@ about you stays on your Mac, encrypted.
 ![UI](https://img.shields.io/badge/UI-Qt%20Quick%20(PySide6)-41CD52?logo=qt&logoColor=white)
 ![Model](https://img.shields.io/badge/model-Claude%20(subscription)-D97757)
 ![Storage](https://img.shields.io/badge/data-AES--256%20encrypted-2E7D32)
-![Tests](https://img.shields.io/badge/tests-1366%20offline-blue)
+![Tests](https://img.shields.io/badge/tests-1464%20offline-blue)
 
 ![The main window](docs/img/02_main.png)
 
@@ -66,6 +67,9 @@ profession, for any city.
   untouched) and a cover letter in your own letter's layout, as Word files and PDFs.
 - **Honesty checks.** A required language the CV does not show caps the score; a term of the
   posting stated as experience is sent back to the model, and what remains is shown to you.
+- **An assistant that fills in the form.** Tap the robot at the end of the line and ask: it
+  writes your details and answers drafted from your CV into the form that is open in Chrome,
+  outlines what it filled, lists what it left and why, and never presses Submit.
 - **Applications tracked by your mailbox.** Replies are read (never changed), classified as
   invitation, rejection, offer or confirmation, and filed to the right application.
 - **Before and after applying.** A checklist per job, drafted answers for that job's form,
@@ -88,6 +92,7 @@ flowchart LR
     AG["Five agents"]
     C["Claude Code program<br/>(subscription)"]
     S["Job boards<br/>career sites"]
+    G["Google Chrome<br/>the open form"]
     M["Mailbox<br/>IMAP, read-only"]
     D[("data/<br/>encrypted files")]
     K["macOS Keychain<br/>keys and passwords"]
@@ -98,6 +103,7 @@ flowchart LR
     AG -->|"score, write"| C
     AG -->|"read postings"| S
     AG -->|"read replies"| M
+    A -->|"read fields, fill empty ones"| G
     A -->|"store, db, vault"| D
     D -.->|"data key"| K
 ```
@@ -138,6 +144,7 @@ A search runs the first four agents in order; an email scan runs the fifth.
 | Web | `requests`, `beautifulsoup4`, `lxml` | Reads the public pages of boards that have no common interface |
 | Mail | `imaplib` (IMAP, read-only) | Works with almost every provider and can promise never to change mail |
 | Security | AES-256-GCM (`cryptography`), macOS Keychain, HMAC-signed rule files | Private data; a tampered file is refused, not read |
+| Form filling | Apple events (`osascript`) to Google Chrome | Fills the form where you are signed in, with nothing to install |
 | Scheduling | macOS LaunchAgent | Runs with the window closed |
 | Quality | `pytest`, `pyflakes`, hash-pinned packages | Every change comes with tests; packages cannot change unnoticed |
 
@@ -152,7 +159,7 @@ JobHelper/
 ├── run.py                    # the same search from the command line (used by the weekly run)
 ├── status.py                 # command-line tools: list, sync, security, usage …
 ├── weekly_jobhelper.sh       # what the weekly LaunchAgent runs
-├── jobhelper/                # all the logic, no window code (53 modules)
+├── jobhelper/                # all the logic, no window code (58 modules)
 │   ├── agent1_cv.py … agent5_responses.py     # the five agents
 │   ├── scrapers_*.py         # one module per kind of job source
 │   ├── filters.py, prefilter.py, language.py, places.py, keywords.py, salary.py
@@ -160,13 +167,15 @@ JobHelper/
 │   ├── cv_tailor.py, cover_letter.py, form_answers.py, interview_prep.py
 │   │                         # writing, each with its checks against the CV
 │   ├── email_client.py, mailhosts.py          # read-only mail; which server a mailbox uses
+│   ├── assistant.py, details.py, chrome.py, form_fill.py
+│   │                         # the assistant: your details, the link to Chrome, filling a form
 │   ├── llm.py, usage.py      # the one door to Claude; usage and limits
 │   ├── store.py, db.py, vault.py, integrity.py, housekeeping.py
 │   │                         # job list, replies, encryption, signed files, backups
 │   └── ui_api.py, api_*.py, qt_bridge.py, bridge_*.py
 │                             # what the window calls
-├── ui_qt/                    # the window: one QML file per dialog or part (36 files)
-├── tests/                    # 1,366 tests, offline, in temporary folders
+├── ui_qt/                    # the window: one QML file per dialog or part (38 files)
+├── tests/                    # 1,464 tests, offline, in temporary folders
 │   └── guide_shots.py        # takes the pictures of the user guide
 ├── scripts/                  # the PDF builder, the numbering check, the diagram, the lock file
 ├── docs/                     # user guide, technical documentation, their PDFs, pictures
@@ -220,6 +229,7 @@ app, **Account** card → *Data protection* → **Recovery key**.
 | Find and score new postings | **Run search** |
 | Decide what to apply to | **New Jobs** → a row → *Why this score*, the CV, the letter |
 | Go through many jobs quickly | **New Jobs** → narrow the list → **Review these … one by one** |
+| Fill in a company's application form | Open it in Chrome, tap the assistant, **Fill in the form in Chrome** |
 | Record an application | **Mark applied** |
 | Read replies from companies | **Scan email**, then **Responses** and **Applications** |
 | Prepare for an interview | An application → **Interview preparation** |
@@ -277,6 +287,9 @@ the same names without `.example`. With a letter of your own as
 - **Nothing is deleted:** data is backed up before any bulk change; documents are moved to an
   encrypted backup and can be put back; old copies go to the Trash.
 - **The mailbox is read-only.** Nothing is sent, deleted, moved or marked as read.
+- **Forms are filled, never sent.** The assistant writes into empty fields of the page you
+  opened and reads back only whether a field is empty. It touches no password, file, payment
+  or personal-status field, and it needs your consent in both Chrome and macOS.
 
 ## Testing
 
@@ -285,7 +298,7 @@ python -m pytest -q
 python -m pyflakes jobhelper tests scripts
 ```
 
-1,366 tests in about two and a half minutes, with no network. They never touch real data, the
+1,464 tests in about two and a half minutes, with no network. They never touch real data, the
 Keychain or `.env`, never ask Claude, never read a real job board or mail server, and never open
 a file or put anything in the Trash: every test works in temporary folders with stand-ins. The
 window itself is loaded without a screen and driven by the tests, and the documentation has
@@ -328,6 +341,10 @@ A few decisions worth highlighting:
   Czech Republic" share a word, and so do "Reed Specialist Recruitment" and an "IT Support
   Specialist" role elsewhere. Words many names share do not count; measured on 150 days of real
   mail, that moved eight replies to the right company and lost none.
+- **A page is filled in by two small scripts that are tested on a real page.** One lists the
+  fields without sending back what they hold; plain code decides what each field is; the other
+  writes values that travel as data, never as code, and only into the page that was read. The
+  tests run both in a browser engine on a local form and read them for anything that clicks.
 - **The documentation is built and tested like code.** The user guide's pictures are taken by
   a script from invented data, figures and tables are numbered by a tool, and the PDF builder
   lays pages out itself so that a figure or a table is never split; tests fail when any of
@@ -342,4 +359,6 @@ A few decisions worth highlighting:
   connected. Russian mail services are not used.
 - The built-in salary estimate covers software roles in Czechia; elsewhere you enter your own
   figure.
+- The assistant fills in forms in Google Chrome only, and leaves lists, tick boxes and file
+  uploads to you. It has been tested on a local form, not yet across real recruiting sites.
 - The app is started from a terminal. Packaging it as an app that opens from Finder is planned.
