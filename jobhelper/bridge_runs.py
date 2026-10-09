@@ -345,7 +345,9 @@ class RunSlots:
             self._save_partial(jobs)
             self.runFinished.emit("search", "Stopped. Everything finished before that is saved.")
         except Exception as e:  # noqa: BLE001
-            self.runFinished.emit("search", "Error: %s" % e)
+            self._save_partial(jobs)                             # what was scored and written before the error is kept
+            trouble.note("the search", e)
+            self.runFinished.emit("search", "Error: %s" % agent2_search.safe_error(e))
             self._notify(notify.FAILED, "Search stopped")
         finally:
             self._set_running(False)
@@ -395,7 +397,9 @@ class RunSlots:
             self.runFinished.emit("scan", "Couldn't sign in to your email — check the Gmail App Password in the Account card.")
         except RuntimeError as e:
             self.runFinished.emit("scan", str(e))
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
+            self._save_partial(jobs)                             # statuses changed by the replies read so far are kept
+            trouble.note("the email scan", e)
             self.runFinished.emit("scan", "Email scan failed — check your connection and try again.")
         finally:
             self._set_running(False)

@@ -423,7 +423,7 @@ def _tier(score: int) -> str:
 def _flag_moderate(job: dict[str, Any]) -> None:
     """Add a review note to moderate (50-59) matches so they aren't sent blindly."""
     if job.get("match_tier") == "moderate":
-        note = f"[{date.today().isoformat()}] Moderate match ({job.get('match_score')}%) — review the letter/CV before sending."
+        note = f"[{date.today().isoformat()}] Moderate match ({job.get('match_score')}%) – review the letter/CV before sending."
         if "Moderate match" not in job.get("notes", ""):
             job["notes"] = (note + "\n" + job.get("notes", "")).strip()
     elif job.get("match_tier") == "stretch":

@@ -13,6 +13,8 @@ authoritative subscription limits, run `/usage` inside the Claude Code terminal.
 from __future__ import annotations
 
 import json
+import os
+import threading
 from datetime import datetime
 from typing import Any
 
@@ -70,7 +72,10 @@ def _load() -> dict[str, Any]:
 
 def _save(state: dict[str, Any]) -> None:
     config.ensure_dirs()
-    config.USAGE_JSON.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    # written whole or not at all: a half-written file would read as "no usage yet" and the totals would start again
+    tmp = config.USAGE_JSON.with_name(f"{config.USAGE_JSON.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, config.USAGE_JSON)
 
 
 def record(rec: dict[str, Any], tag: str = "general") -> None:

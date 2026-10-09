@@ -67,8 +67,8 @@ def main() -> int:
         print("✗ No city to search in. Choose one in the app's Options, or pass it: python run.py --where Brno")
         return 1
     if config.using_paid_api():
-        print("⚠️  ANTHROPIC_API_KEY is set — you'll be billed for the PAID API, "
-              "not your subscription. Unset it to use your subscription.\n")
+        print("✗ " + llm.PAID_API_MESSAGE)
+        return 2
 
     # ── Agent 1: analyze CV ─────────────────────────────────────────────
     profile = agent1_cv.load_profile(current_only=True) if args.reuse_profile else None

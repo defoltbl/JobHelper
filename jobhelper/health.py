@@ -35,7 +35,12 @@ def _jobs() -> str:
     except ValueError:
         return "Your job list (data/jobs.json) is damaged. Restore it from data/backups (python status.py security restore)."
     broken = [j for j in jobs if not isinstance(j, dict) or not j.get("id") or "status" not in j]
-    return f"{len(broken)} entries in your job list are incomplete." if broken else ""
+    if broken:
+        return f"{len(broken)} entries in your job list are incomplete."
+    lost = [j for j in jobs if j["status"] not in store.STATUSES]
+    return (f"{len(lost)} {'job has' if len(lost) == 1 else 'jobs have'} a status the app does not know, so "
+            f"{'it is' if len(lost) == 1 else 'they are'} in none of the lists (the first: {lost[0].get('company') or lost[0]['id']}). "
+            "Run: python status.py repair-statuses") if lost else ""
 
 
 def _responses() -> str:
@@ -77,13 +82,6 @@ def _cv() -> str:
     return "" if cv else "No master CV yet. Add yours in the Account card."
 
 
-def _writing_files() -> str:
-    missing = [name for name, path in (("CV rules", config.CV_INSTRUCTION), ("cover letter rules", config.LETTER_INSTRUCTION),
-                                       ("cover letter template", config.LETTER_TEMPLATE)) if not path.is_file()]
-    return ("Missing in the data folder: " + ", ".join(missing) + ". Letters and CVs cannot be written without them "
-            "(see \"Using it with your own CV\" in README.md).") if missing else ""
-
-
 def _folders() -> str:
     import os
     for folder in (config.DATA_DIR, config.LETTERS_DIR, config.TAILORED_CV_DIR):
@@ -93,8 +91,7 @@ def _folders() -> str:
 
 
 CHECKS = [("Data key", _data_key), ("Job list", _jobs), ("Replies", _responses), ("Options", _settings),
-          ("Rules and template unchanged", _rules), ("Master CV", _cv), ("Files for writing", _writing_files),
-          ("Folders writable", _folders)]
+          ("Rules and template unchanged", _rules), ("Master CV", _cv), ("Folders writable", _folders)]
 
 
 def run(claude_signed_in: bool | None = None) -> dict[str, Any]:

@@ -1,5 +1,7 @@
 """Rules the app must never break: the user's own letters stay untouched, closed
 postings leave the list, emails link to the right company, progress is reported."""
+from pathlib import Path
+
 import pytest
 
 from jobhelper import agent2_search, agent3_letters, config, email_client, filters, llm, store
@@ -312,3 +314,150 @@ def test_roles_requiring_czech_are_only_dropped_with_english_only(monkeypatch):
         ("one", lambda q, w, n: [store.new_job(id="cz", title="IT Support Specialist", company="Acme", location="Prague", description=czech_role)])])
     assert agent2_search.search(["x"], where="Prague") == []                                      # English only (the default)
     assert [j["id"] for j in agent2_search.search(["x"], where="Prague", english_only=False)] == ["cz"]     # for someone who speaks Czech
+
+
+# ── found by reading the code line by line ──────────────────────────────────
+def test_a_wrong_number_in_env_does_not_stop_the_app(monkeypatch):
+    from jobhelper import config
+    for value, expected in (("abc", 50), ("", 50), ("  70 ", 70), ("999", 100), ("-5", 0), ("12.5", 50)):
+        monkeypatch.setenv("JOBHELPER_THRESHOLD", value)
+        assert config._int_env("JOBHELPER_THRESHOLD", 50, 0, 100) == expected, value
+    monkeypatch.delenv("JOBHELPER_THRESHOLD")
+    assert config._int_env("JOBHELPER_THRESHOLD", 50, 0, 100) == 50
+    text = Path(config.__file__).read_text(encoding="utf-8")
+    assert "int(os.getenv(" not in text                              # every number in .env goes through the tolerant reader
+
+
+def test_two_writers_of_one_file_do_not_share_a_temporary_file(tmp_path):
+    import threading
+
+    from jobhelper import vault
+    target, errors = tmp_path / "jobs.json", []
+
+    def write(n):
+        try:
+            for _ in range(60):
+                vault._write_atomic(target, (str(n) * 4000).encode())
+        except Exception as e:  # noqa: BLE001 - any failure is what this test is about
+            errors.append(e)
+    threads = [threading.Thread(target=write, args=(n,)) for n in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    data = target.read_bytes()
+    assert errors == [] and len(data) == 4000 and len(set(data)) == 1          # one writer's text, whole
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_usage_is_written_whole(isolate_data, monkeypatch):
+    from jobhelper import config, usage
+    usage.record({"input_tokens": 5, "cost_usd": 0.5}, tag="t")
+    before = config.USAGE_JSON.read_text(encoding="utf-8")
+
+    def fail(src, dst):
+        raise OSError("disk full")
+    monkeypatch.setattr(usage.os, "replace", fail)
+    with pytest.raises(OSError):
+        usage.record({"input_tokens": 5}, tag="t")
+    assert config.USAGE_JSON.read_text(encoding="utf-8") == before and usage._load()["totals"]["calls"] == 1
+
+
+@pytest.mark.parametrize("weekday, hour, minute", [(8, 9, 0), (1, 24, 0), (1, 9, 60), (-1, 9, 0), ("Mon", 9, 0), (1, None, 0)])
+def test_a_day_or_time_that_does_not_exist_is_refused(monkeypatch, weekday, hour, minute):
+    from jobhelper import schedule
+    monkeypatch.setattr(schedule, "available", lambda: True)
+    monkeypatch.setattr(schedule.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("nothing may be installed")))
+    got = schedule.write_schedule(True, weekday, hour, minute)
+    assert got["ok"] is False and ("day and time" in got["msg"] or "Choose a day" in got["msg"])
+
+
+def test_claude_is_never_asked_with_the_paid_api_key_set(monkeypatch):
+    from jobhelper import llm
+    asked = []
+
+    async def answer(prompt, system, model):
+        asked.append(prompt)
+        return "ok", {"model": model}
+    monkeypatch.setattr(llm, "_ask_async", answer)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-not-a-real-key")
+    for call in (lambda: llm.ask("hello"), lambda: llm.ask("hello", force=True), lambda: llm.ask_json("{}")):
+        with pytest.raises(llm.PaidApiRefused) as refused:
+            call()
+        assert "paid API" in str(refused.value) and "sk-test" not in str(refused.value)
+    assert asked == []
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    assert llm.ask("hello") == "ok" and asked == ["hello"]
+
+
+def test_the_command_line_refuses_the_paid_api_too(isolate_data, monkeypatch, capsys):
+    import run
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-not-a-real-key")
+    monkeypatch.setattr("sys.argv", ["run.py", "--where", "Prague"])
+    assert run.main() == 2
+    out = capsys.readouterr().out
+    assert "paid API" in out and "sk-test" not in out
+
+
+def test_only_web_links_and_plain_file_names_are_opened(isolate_data, monkeypatch):
+    from jobhelper import config, ui_api
+    opened = []
+    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(str(target)))
+    config.ensure_dirs()
+    (config.LETTERS_DIR / "L.docx").write_bytes(b"x")
+    (config.DATA_DIR / "secret.docx").write_bytes(b"x")
+    store.save_jobs([store.new_job(id="web", title="T", company="C", url="https://example.com/job"),
+                     store.new_job(id="file", title="T", company="C", url="file:///etc/hosts"),
+                     store.new_job(id="app", title="T", company="C", url="x-custom-scheme://run"),
+                     store.new_job(id="none", title="T", company="C")])
+    api = ui_api.Api()
+    assert api.open_url("web")["ok"] is True and [api.open_url(i)["ok"] for i in ("file", "app", "none", "zzz")] == [False] * 4
+    assert api.open_doc("letter", "L.docx")["ok"] is True
+    assert api.open_doc("letter", "../secret.docx")["ok"] is False and api.open_doc("letter", str(config.DATA_DIR / "secret.docx"))["ok"] is False
+    assert opened == ["https://example.com/job", str(config.LETTERS_DIR / "L.docx")]
+
+
+def test_a_reply_that_is_not_an_object_does_not_end_the_scan(isolate_data, monkeypatch):
+    from jobhelper import agent5_responses, email_client, llm
+    mails = [{"msg_id": f"<{n}@x>", "date": "Mon, 5 Oct 2026 10:00:00 +0200", "sender": "hr@acme.com", "subject": "Your application", "body": "b",
+              "was_html_only": False} for n in range(3)]
+    answers = iter([["not", "an", "object"], "text", {"is_response": True, "stage": "interview", "company": "Acme"}])
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: mails)
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: next(answers))
+    stats = agent5_responses.process_inbox([store.new_job(id="a", title="Dev", company="Acme", status="waiting")])
+    assert stats["new_responses"] == 1 and stats["invites"] == ["Acme"]
+
+
+def test_a_company_known_only_from_an_unclear_email_becomes_a_real_application(isolate_data):
+    from jobhelper import agent5_responses, db
+    db.upsert_response({"msg_id": "<1@x>", "company": "Quiet Lake", "stage": "other", "received_date": "2026-10-01"})
+    jobs = []
+    assert agent5_responses.reconcile_jobs(jobs) == 1
+    assert jobs[0]["status"] == "waiting" and jobs[0]["status"] in store.APPLICATION_STATUSES      # never a status that is in no list
+
+
+def test_statuses_the_app_does_not_know_can_be_repaired(isolate_data):
+    import status
+    jobs = [store.new_job(id="a", title="T", company="A", status="applied", source="email"),
+            store.new_job(id="b", title="T", company="B", status="weird"),
+            store.new_job(id="c", title="T", company="C", status="interview")]
+    fixed = status.repair_statuses(jobs)
+    assert [j["id"] for j in fixed] == ["a", "b"] and [j["status"] for j in jobs] == ["waiting", "found", "interview"]
+    assert 'Status was "applied"' in jobs[0]["notes"] and status.repair_statuses(jobs) == []
+
+
+def test_the_note_the_app_writes_uses_an_en_dash():
+    from jobhelper import agent3_letters
+    job = store.new_job(id="a", title="T", company="C", match_score=55, match_tier="moderate")
+    agent3_letters._flag_moderate(job)
+    assert "Moderate match (55%) – review" in job["notes"] and "—" not in job["notes"]
+
+
+def test_the_preparation_text_survives_locked_data(isolate_data, monkeypatch):
+    from jobhelper import ui_api, vault
+
+    def locked():
+        raise vault.VaultError("locked")
+    monkeypatch.setattr(store, "load_jobs", locked)
+    api = ui_api.Api()
+    assert api.prep_text("a") == "" and api.prep_parts("a") == {}

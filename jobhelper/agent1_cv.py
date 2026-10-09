@@ -85,6 +85,8 @@ def analyze(cv_path: Path | None = None) -> dict[str, Any]:
         system=SYSTEM,
         tag="agent1_cv",
     )
+    if not isinstance(profile, dict):
+        raise ValueError("Claude's answer about your CV could not be read. Run the search again.")
     profile["_cv_file"] = cv_path.name
     profile["_cv_sha"] = _sha(cv_path)
     vault.write_text(config.PROFILE_JSON, json.dumps(profile, ensure_ascii=False, indent=2))

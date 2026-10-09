@@ -685,7 +685,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
     def open_doc(self, kind, name):
         want_pdf = kind.endswith("_pdf")
         base = {"letter": config.LETTERS_DIR, "cv": config.TAILORED_CV_DIR}.get(kind.replace("_pdf", ""))
-        if not base or not name:
+        if not base or not name or os.path.basename(str(name)) != str(name):     # a file of that folder, never a path
             return {"ok": False}
         p = base / name
         docx = p.with_suffix(".pdf" if want_pdf else ".docx")
@@ -710,8 +710,8 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
     def open_url(self, job_id):
         """Open a lead's job posting in the default browser (to go apply)."""
         job = store.find(store.load_jobs(), job_id)
-        url = (job or {}).get("url", "")
-        if not url:
+        url = str((job or {}).get("url", "") or "").strip()
+        if not url.startswith(("http://", "https://")):         # a job board hands this over: only a web page is opened
             return {"ok": False}
         self._open(url)
         return {"ok": True, "url": url}

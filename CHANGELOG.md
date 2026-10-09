@@ -3,6 +3,16 @@
 The newest changes are first. The Help window in the app shows this file under "What changed".
 Format: a `## date` line, then one `- ` line per change; `**words**` are shown in bold.
 
+## 10 October 2026
+
+Found by reading all the code line by line.
+
+- **Fixed: the paid API was only refused by the Run buttons.** The command line only warned, and form answers, scoring again, interview preparation and pasted replies did not check at all. Now nothing is ever asked while `ANTHROPIC_API_KEY` is set, whatever started it.
+- **Fixed: a false alarm at start-up** when the optional rule files or the letter template are absent. They are optional; the app writes with its built-in rules and a plain letter.
+- **Fixed: a search that ended on an unexpected error lost what it had scored**; it is saved now, and the reason is written to `data/app_trouble.log`.
+- **Fixed: a company known only from an unclear email got a status no list shows.** Such jobs are now "waiting"; the start-up check reports any job in that state, and `python status.py repair-statuses` fixes them.
+- **Safer:** only web links are opened from a posting, a typo in a number in `.env` no longer stops the app, two saves at the same moment cannot collide, and the email command keeps what it read when Claude's limit runs out.
+
 ## 9 October 2026
 
 - **An illustrated guide** (`docs/GUIDE.md`): every screen with a picture, what it is for, why it is needed and how to use it, in 17 sections. The pictures show invented people and companies and can be taken again with one command.

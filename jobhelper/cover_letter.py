@@ -386,6 +386,8 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
             description=description, feedback=feedback, n=BODY_PARAGRAPHS,
             min_words=MIN_WORDS + 10, max_words=MAX_WORDS - 10,
         ), system=SYSTEM, tag="agent3_letters")
+        if not isinstance(data, dict):
+            raise ValueError("The model's answer was not a letter.")
         paragraphs = [clean(str(p)) for p in (data.get("paragraphs") or []) if str(p).strip()]
         title_line = clean(str(data.get("title_line", "")))
         role_short = str(data.get("role_short", ""))

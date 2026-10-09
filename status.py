@@ -18,7 +18,7 @@ import sys
 from datetime import date
 
 from jobhelper import (agent1_cv, agent2_search, agent3_letters, agent4_tracker,
-                       agent5_responses, config, letters, store, usage)
+                       agent5_responses, config, letters, llm, store, usage, vault)
 
 
 def cmd_list(_args) -> int:
@@ -134,6 +134,11 @@ def cmd_sync(args) -> int:
     print(f"Reading inbox ({config.IMAP_USER}), last {days} days — read-only, nothing is sent or deleted …")
     try:
         stats = agent5_responses.process_inbox(jobs, lookback_days=days)
+    except llm.LimitReached as e:
+        store.save_jobs(jobs)                    # the replies read so far have already changed these jobs
+        agent4_tracker.render_excel(jobs)
+        print(f"⏸  {e}\n   What was read is saved. Run it again after the reset: nothing is read twice.")
+        return 3
     except RuntimeError as e:
         print(f"✗ {e}")
         return 1
@@ -196,6 +201,37 @@ def cmd_letters(_args) -> int:
     print(f"  scanned {stats['scanned']}, linked {stats['linked']} to jobs, "
           f"seeded {stats['seeded']} past applications.")
     print(f"→ {config.EXCEL_PATH}")
+    return 0
+
+
+def repair_statuses(jobs) -> list[dict]:
+    """Give every job with a status the app does not know one it does: an application
+    (it has an apply date, or came from an email) becomes "waiting", anything else a new
+    job again. Returns the jobs that were changed. Mutates `jobs`."""
+    fixed = []
+    for j in jobs:
+        if j.get("status") in store.STATUSES:
+            continue
+        applied = bool(j.get("date_applied")) or j.get("source") in ("email", "manual")
+        j["notes"] = (f"[{date.today().isoformat()}] Status was \"{j.get('status')}\", which the app does not know; set to "
+                      f"{'waiting' if applied else 'found'}.\n" + (j.get("notes") or "")).strip()
+        j["status"] = "waiting" if applied else "found"
+        fixed.append(j)
+    return fixed
+
+
+def cmd_repair_statuses(_args) -> int:
+    jobs = store.load_jobs()
+    if not any(j.get("status") not in store.STATUSES for j in jobs):
+        print("Every job has a status the app knows. Nothing to repair.")
+        return 0
+    backup = vault.make_backup("before_status_repair")
+    fixed = repair_statuses(jobs)
+    store.save_jobs(jobs)
+    agent4_tracker.render_all(jobs)
+    print(f"Repaired {len(fixed)} job(s) (backup: {backup.name}):")
+    for j in fixed:
+        print(f"   {j.get('company') or j['id']} – {j.get('title', '')}: now {j['status']}")
     return 0
 
 
@@ -377,6 +413,7 @@ def main() -> int:
 
     sub.add_parser("rebuild", help="Regenerate the Excel table").set_defaults(func=cmd_rebuild)
     sub.add_parser("prune", help="Remove new_jobs leads you've already applied to").set_defaults(func=cmd_prune)
+    sub.add_parser("repair-statuses", help="Fix jobs whose status the app does not know (they show in no list)").set_defaults(func=cmd_repair_statuses)
 
     p_resp = sub.add_parser("responses", help="Show rejection/response analytics (Agent 5)")
     p_resp.add_argument("--scan", action="store_true", help="Scan inbox first for new responses")

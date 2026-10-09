@@ -50,6 +50,18 @@ def own_letters_dir(setting: str | None) -> Path:
 
 COVER_LETTERS_DIR = own_letters_dir(os.getenv("COVER_LETTERS_DIR"))
 
+def _int_env(name: str, default: int, low: int | None = None, high: int | None = None) -> int:
+    """A whole number from the environment. A value that is not a number (a typo in .env)
+    falls back to the default instead of stopping the app before its window opens."""
+    try:
+        value = int(str(os.getenv(name, "") or "").strip() or default)
+    except ValueError:
+        return default
+    if low is not None:
+        value = max(low, value)
+    return min(high, value) if high is not None else value
+
+
 # Model -------------------------------------------------------------------
 # "sonnet" | "opus" | "haiku". Uses your Claude subscription via the CLI as
 # long as ANTHROPIC_API_KEY is NOT set.
@@ -57,21 +69,21 @@ MODEL = os.getenv("JOBHELPER_MODEL", "sonnet").strip() or "sonnet"
 
 # Leads scoring below this (once scored) are hidden from new_jobs.xlsx.
 # 0 = show every lead (user preference). Raise via JOBHELPER_MIN_LEAD_SCORE.
-MIN_LEAD_SCORE = int(os.getenv("JOBHELPER_MIN_LEAD_SCORE", "0") or "0")
+MIN_LEAD_SCORE = _int_env("JOBHELPER_MIN_LEAD_SCORE", 0, 0, 100)
 
 # Only keep jobs posted within this many days (where a posting date is known).
 # 0 disables the recency filter.
-MAX_JOB_AGE_DAYS = int(os.getenv("JOBHELPER_MAX_AGE_DAYS", "10") or "10")
+MAX_JOB_AGE_DAYS = _int_env("JOBHELPER_MAX_AGE_DAYS", 10, 0)
 
 # Write a cover letter + tailored CV for jobs scoring at least this.
-DEFAULT_THRESHOLD = int(os.getenv("JOBHELPER_THRESHOLD", "50") or "50")
+DEFAULT_THRESHOLD = _int_env("JOBHELPER_THRESHOLD", 50, 0, 100)
 # At/above this a match is "strong"; between DEFAULT_THRESHOLD and this it's
 # "moderate" (letter still written, but flagged to review before sending).
 STRONG_THRESHOLD = 60
 # How many postings are scored in one model call. Every call carries a fixed
 # overhead of about ten thousand tokens, so five at a time uses far less of the
 # subscription than five single calls.
-SCORE_BATCH = int(os.getenv("JOBHELPER_SCORE_BATCH", "5") or "5")
+SCORE_BATCH = _int_env("JOBHELPER_SCORE_BATCH", 5, 1, 20)
 
 # Adzuna ------------------------------------------------------------------
 # NOTE: Adzuna does NOT support the Czech Republic. Use it for other countries
@@ -91,11 +103,11 @@ JOOBLE_API_KEY = os.getenv("JOOBLE_API_KEY", "").strip()
 
 # IMAP (email sync) -------------------------------------------------------
 IMAP_HOST = os.getenv("IMAP_HOST", "imap.gmail.com").strip()
-IMAP_PORT = int(os.getenv("IMAP_PORT", "993") or "993")
+IMAP_PORT = _int_env("IMAP_PORT", 993, 1, 65535)
 IMAP_USER = os.getenv("IMAP_USER", "").strip()
 # The app password lives in the macOS Keychain; .env is only read for old setups.
 IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "").strip() or vault.get_secret(vault.IMAP_ACCOUNT)
-IMAP_LOOKBACK_DAYS = int(os.getenv("IMAP_LOOKBACK_DAYS", "30") or "30")
+IMAP_LOOKBACK_DAYS = _int_env("IMAP_LOOKBACK_DAYS", 30, 1)
 # Optional second mailbox (same mail provider): replies that go to another address.
 IMAP_USER_2 = os.getenv("IMAP_USER_2", "").strip()
 IMAP_PASSWORD_2 = os.getenv("IMAP_PASSWORD_2", "").strip() or vault.get_secret(vault.IMAP_ACCOUNT_2)

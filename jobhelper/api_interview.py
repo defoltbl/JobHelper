@@ -158,7 +158,6 @@ class InterviewApi:
         return {"ok": bool(self._change(job_id, lambda jobs, job: job.__setitem__("interview_prep", prep),
                                         render=False).get("ok"))}
 
-    @_guarded(str)
     @_guarded(dict)
     def prep_parts(self, job_id):
         """The saved preparation as a list of parts to edit (see interview_prep.parts)."""
@@ -205,6 +204,7 @@ class InterviewApi:
         (self._reveal if reveal else self._open)(path)
         return {"ok": True, "file": path.name}
 
+    @_guarded(str)
     def prep_text(self, job_id):
         j = store.find(store.load_jobs(), job_id) or {}
         return interview_prep.as_text(j, j["interview_prep"]) if j.get("interview_prep") else ""

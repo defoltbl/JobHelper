@@ -274,8 +274,8 @@ def process_inbox(jobs: list[dict[str, Any]], lookback_days: int | None = None,
             continue
 
         db.mark_seen(msg["msg_id"])  # spent the call — don't reclassify next time
-        if not result.get("is_response"):
-            continue
+        if not isinstance(result, dict) or not result.get("is_response"):
+            continue                   # an answer that is not what was asked for must not end the scan
         if guess and str(result.get("role") or "").strip():
             # the model read the role from the body: pick that posting among the company's, not just any of them
             guess = email_client.best_job_for_company_role(guess["company"], str(result["role"]), jobs) or guess
@@ -366,7 +366,7 @@ def reconcile_jobs(jobs: list[dict[str, Any]]) -> int:
             title=role or "(from email response)",
             company=company,
             source="email",
-            status=_RESULT_TO_STATUS.get(result, "applied"),
+            status=_RESULT_TO_STATUS.get(result, "waiting"),     # they wrote back, so it is an application
             notes="Created from an email response.",
         ))
         existing_ids.add(new_id)

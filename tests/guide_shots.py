@@ -101,7 +101,7 @@ def _replies():
             ("app4", "Cobalt Games", "Junior Developer", "rejection", "They went with a candidate who has shipped a game.", "experience", 9, "Your application at Cobalt Games", "A polite rejection; they keep your CV for junior openings."),
             ("app5", "Sable Energy", "Graduate Engineer", "rejection", "The position was filled internally.", "position_filled", 15, "Update on your application", "The role was filled before interviews started."),
             ("app6", "Fennel Pay", "Backend Engineer", "offer", "", "", 2, "Offer: Backend Engineer", "A written offer with a start date to agree."),
-            ("app2", "Harbour Analytics", "Python Developer", "acknowledgement", "", "", 14, "We received your application", "An automatic confirmation.")]
+            ("app2", "Harbour Analytics", "Python Developer", "acknowledged", "", "", 14, "We received your application", "An automatic confirmation.")]
     for i, (job_id, company, role, stage, reason, category, ago, subject, summary) in enumerate(rows):
         db.upsert_response({"msg_id": f"<{i}@example.com>", "received_date": _days(ago), "from_addr": f"careers@{company.split()[0].lower()}.example.com",
                             "subject": subject, "job_id": job_id, "company": company, "role": role, "stage": stage, "rejection_reason": reason,

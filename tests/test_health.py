@@ -53,12 +53,23 @@ def test_a_missing_key_is_reported_once_per_file_it_blocks(healthy, monkeypatch)
     assert report["ok"] is False
 
 
-def test_missing_cv_rules_and_template(healthy, monkeypatch):
-    monkeypatch.setattr(agent1_cv, "find_cv", lambda: None)
-    config.LETTER_TEMPLATE.unlink()
+def test_a_missing_cv_is_a_problem_but_missing_rules_and_template_are_not(healthy, monkeypatch):
+    """The rule files and the letter template are optional (built-in rules, a plain letter):
+    someone who has just installed the app must not be told that something is wrong."""
+    for optional in (config.LETTER_TEMPLATE, config.CV_INSTRUCTION, config.LETTER_INSTRUCTION):
+        optional.unlink(missing_ok=True)
     report = health.run(True)
-    assert _named(report, "Master CV")["problem"].startswith("No master CV yet")
-    assert "cover letter template" in _named(report, "Files for writing")["problem"]
+    assert report["ok"] is True and report["message"] == "" and not any("cannot be written" in c["problem"] for c in report["checks"])
+    monkeypatch.setattr(agent1_cv, "find_cv", lambda: None)
+    report = health.run(True)
+    assert _named(report, "Master CV")["problem"].startswith("No master CV yet") and report["problems"] == 1
+
+
+def test_a_job_with_a_status_the_app_does_not_know_is_reported(healthy):
+    jobs = store.load_jobs() + [store.new_job(id="lost", title="Dev", company="Quiet Lake", status="applied")]
+    store.save_jobs(jobs)
+    problem = _named(health.run(True), "Job list")["problem"]
+    assert "1 job has a status the app does not know" in problem and "Quiet Lake" in problem and "repair-statuses" in problem
 
 
 def test_changed_rule_files_and_damaged_options(healthy, monkeypatch):

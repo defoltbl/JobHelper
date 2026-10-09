@@ -56,6 +56,12 @@ def write_schedule(enabled: bool, weekday: int, hour: int, minute: int) -> dict:
     if not available():
         return {"ok": False, "msg": "Weekly scheduling is macOS-only."}
     try:
+        weekday, hour, minute = int(weekday), int(hour), int(minute)
+    except (TypeError, ValueError):
+        return {"ok": False, "msg": "Choose a day and a time."}
+    if not (0 <= weekday <= 7 and 0 <= hour <= 23 and 0 <= minute <= 59):
+        return {"ok": False, "msg": "That is not a day and time of the week (hours 0 to 23, minutes 0 to 59)."}
+    try:
         if PLIST.exists():
             subprocess.run(["launchctl", "unload", str(PLIST)], capture_output=True, text=True)
         if enabled:

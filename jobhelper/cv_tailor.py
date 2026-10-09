@@ -402,10 +402,12 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
             description=description, feedback=feedback, max_profile=MAX_PROFILE_CHARS,
             min_rows=MIN_ROWS, max_rows=MAX_ROWS, rows_budget=sum(len(r) for r in m_rows) + 60,
         ), system=SYSTEM, tag="agent3_cv")
+        if not isinstance(data, dict):
+            raise ValueError("The model's answer was not an adapted CV.")
         profile = clean(str(data.get("profile", "")))
         skills = [{"label": clean(str(r.get("label", ""))).rstrip(":"),
                    "items": clean(str(r.get("items", ""))).rstrip(".")}
-                  for r in (data.get("skills") or []) if r.get("label") and r.get("items")]
+                  for r in (data.get("skills") or []) if isinstance(r, dict) and r.get("label") and r.get("items")]
         role_short = str(data.get("role_short", ""))
         problems = content_problems(profile, skills, master_profile, m_rows, unverified, cv_text)
         if not problems:

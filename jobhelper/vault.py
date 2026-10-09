@@ -21,6 +21,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -260,7 +261,8 @@ def decrypt(blob: bytes) -> bytes:
 # ── files ───────────────────────────────────────────────────────────────────
 def _write_atomic(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
+    # its own temporary file per writer: the window and a running search can save the same file at once
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_bytes(data)
     try:
         os.chmod(tmp, 0o600)             # readable by this user only
