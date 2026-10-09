@@ -163,6 +163,31 @@ def _read(imap, num, user: str, folder: str) -> dict[str, Any] | None:
     }
 
 
+def try_login(user: str, password: str, timeout: float = 8.0) -> dict[str, Any]:
+    """Sign in to the mailbox and out again, to learn whether the address and password work.
+
+    {ok: True} when they do; {ok: False, msg} when the server refused them; {ok: None, msg}
+    when the server could not be reached, which says nothing about the password. Read-only:
+    no folder is opened. The password is never part of a message."""
+    try:
+        imap = imaplib.IMAP4_SSL(config.IMAP_HOST, config.IMAP_PORT, timeout=timeout)
+    except (OSError, imaplib.IMAP4.error):
+        return {"ok": None, "msg": "The mail server could not be reached, so the password was not tried."}
+    try:
+        imap.login(user, password)
+    except imaplib.IMAP4.error:
+        return {"ok": False, "msg": "The mail server refused this address and App Password. Check both: the App Password is the "
+                                    "16 letters made in your Google account for this address, not your normal password."}
+    except OSError:
+        return {"ok": None, "msg": "The connection to the mail server was lost, so the password was not tried."}
+    finally:
+        try:
+            imap.logout()
+        except Exception:  # noqa: BLE001 - already closed
+            pass
+    return {"ok": True, "msg": ""}
+
+
 def _fetch_box(user: str, password: str, since: str, all_folders: bool = False) -> list[dict[str, Any]]:
     """Recent messages of one mailbox: the Inbox, and with all_folders also
     archived mail and spam (not Sent or Drafts, and nothing you wrote yourself).

@@ -129,6 +129,9 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
                 when = datetime.fromtimestamp(w["resets_at"])
                 resets = when.strftime("%H:%M") if when.date() == now.date() else when.strftime("%d %b %H:%M")
             out[name + "_resets"] = resets
+        # seconds until the next limit comes back, so the card can correct itself then (0 = none is counting down)
+        coming = [w["resets_at"] - now.timestamp() for w in usage.windows(now.timestamp()).values() if w["resets_at"] and w["used"]]
+        out["next_reset_in"] = int(min(coming)) + 1 if coming else 0
         return out
 
     @_guarded(list)

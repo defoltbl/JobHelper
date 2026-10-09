@@ -16,6 +16,8 @@ Item {
     property bool introDone: false
     property bool waitingLogin: false
     property bool editEmail: false
+    property bool emailBusy: false        // the mailbox is being tried with the address and password just entered
+    property string emailNote: ""         // saved, but something to know (the server could not be reached)
     property int editBox: 1               // which mailbox the editor is for: 1 main, 2 the optional second one
     property string emailDraft: ""
     property string pwDraft: ""
@@ -45,15 +47,19 @@ Item {
         if (!known && pwDraft === "") { emailErr = "Enter the Gmail App Password for this mailbox."; shake.restart(); return; }
         if (editBox === 2 && emailDraft.trim().toLowerCase() === (connData.email_addr || "").toLowerCase()) {
             emailErr = "That is already your main job email. Enter a different address."; shake.restart(); return; }
-        var r = editBox === 2 ? bridge.saveEmail2(emailDraft, pwDraft) : bridge.saveEmail(emailDraft, pwDraft);
-        pwDraft = "";
-        if (r && r.ok) { editEmail = false; bridge.checkConnections(); }
-        else { emailErr = (r && r.msg) ? r.msg : "Couldn't save the email."; shake.restart(); }
+        if (emailBusy) return;
+        emailBusy = true; emailNote = "";
+        bridge.saveEmailChecked(editBox, emailDraft, pwDraft);       // tries the mailbox first; answers through onEmailSaved
     }
     onPhaseChanged: if (phase === "card") { emailDraft = connData.email_addr || ""; keySink.forceActiveFocus(); }
     Connections { target: win; function onConnCheckedChanged() { welcome.advance(); } }
     Connections { target: bridge
-        function onConnectionsReady(info) { if (info.claude === true) welcome.waitingLogin = false; } }
+        function onConnectionsReady(info) { if (info.claude === true) welcome.waitingLogin = false; }
+        function onEmailSaved(r) {
+            welcome.emailBusy = false; welcome.pwDraft = "";
+            if (r && r.ok) { welcome.editEmail = false; welcome.emailNote = r.note || ""; bridge.checkConnections(); }
+            else { welcome.emailErr = (r && r.msg) ? r.msg : "Couldn't save the email."; shake.restart(); }
+        } }
     Timer { interval: 2500; repeat: true; running: welcome.shown && welcome.waitingLogin
         onTriggered: bridge.checkConnections() }
     Timer { interval: 6000; running: welcome.phase === "splash"      // never get stuck on the splash
@@ -191,6 +197,9 @@ Item {
                         onClicked: { welcome.editBox = 1; welcome.emailDraft = connData.email_addr || ""; welcome.pwDraft = ""; welcome.emailErr = "";
                                      welcome.editEmail = true; wEmail.forceActiveFocus(); } }
                 }
+                Text { objectName: "emailNote"; visible: welcome.emailNote !== "" && !welcome.editEmail
+                    Layout.fillWidth: true; Layout.leftMargin: 38; wrapMode: Text.WordWrap
+                    color: theme.warn; font.pixelSize: 11; font.bold: true; text: welcome.emailNote }
                 // optional second mailbox (replies that go to another address)
                 RowLayout { objectName: "secondMailRow"
                     visible: connData.email === true && !welcome.editEmail
@@ -237,8 +246,10 @@ Item {
                         RowLayout { Layout.fillWidth: true; Layout.leftMargin: 38; spacing: 6
                             Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                                 text: "Use a Google App Password, not your normal password." }
-                            SmallButton { text: "Cancel"; onClicked: { welcome.editEmail = false; welcome.emailErr = ""; keySink.forceActiveFocus(); } }
-                            SmallButton { primaryStyle: true; text: "Save"; onClicked: welcome.saveEmail() } }
+                            SmallButton { text: "Cancel"; enabled: !welcome.emailBusy
+                                onClicked: { welcome.editEmail = false; welcome.emailErr = ""; keySink.forceActiveFocus(); } }
+                            SmallButton { objectName: "emailSave"; primaryStyle: true; enabled: !welcome.emailBusy
+                                text: welcome.emailBusy ? "Checking…" : "Save"; onClicked: welcome.saveEmail() } }
                     }
                 }
                 }

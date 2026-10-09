@@ -278,18 +278,6 @@ found is fixed (see CHANGELOG, 10 October). Not read line by line: the visual ma
    whether a message is worth a question to Claude no longer rests on it: `looks_like_application` asks
    `names_tracked_company`, which wants a real name word in the sender or the subject.
 
-**Small**
-
-7. **The combo box's own line** (city, sort order) still shortens a very long choice; its list wraps.
-8. **Closing the job window with "Mark applied" or "Not interested"** does not ask about unsaved text
-   (✕ and Esc do).
-
-**Small, suggested after the scan of 9 October**
-
-- Last run card: say what the scan did ("45 read, 5 asked, 0 new"), so "0 new" explains itself.
-- A one-time "look further back" for the email scan, instead of changing the Options number and back.
-- Try the mailbox password for real when it is saved (today only its form is checked).
-- The usage card refreshes itself when a reset time passes.
 - 11 jobs still have documents from a higher score (the user's decision: New Jobs, Move them to backup).
 
 **Needs the user**

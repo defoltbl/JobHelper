@@ -136,7 +136,10 @@ def scan_summary(stats: dict[str, Any]) -> str:
     """One line about a finished scan: what arrived, invitations first."""
     n, invites, rejections = stats.get("new_responses", 0), len(stats.get("invites") or []), stats.get("rejections", 0)
     plural = lambda k, one, many: f"{k} {one if k == 1 else many}"                       # noqa: E731
-    text = f"Scanned {plural(stats.get('scanned', 0), 'email', 'emails')} · {n} new"
+    text = f"Scanned {plural(stats.get('scanned', 0), 'email', 'emails')}"
+    if "asked" in stats:            # why "0 new" is right: most were read before, and few were worth a question
+        text += f" ({stats.get('already_read', 0)} read before, {stats['asked']} sent to Claude)"
+    text += f" · {n} new"
     parts = []
     if invites:
         parts.append(plural(invites, "invitation", "invitations"))
@@ -150,6 +153,11 @@ def scan_summary(stats: dict[str, Any]) -> str:
     if stats.get("dates"):
         text += " Date saved: " + "; ".join(stats["dates"]) + "."
     return text
+
+
+def scan_detail(stats: dict[str, Any]) -> str:
+    """How much mail a scan went through, for the Last run card: "45 · 5 to Claude"."""
+    return f"{stats.get('scanned', 0)} · {stats.get('asked', 0)} to Claude"
 
 
 def replies_text(stats: dict[str, Any]) -> str:
@@ -245,11 +253,12 @@ def process_inbox(jobs: list[dict[str, Any]], lookback_days: int | None = None,
     emails = email_client.fetch_recent(lookback_days)
     stats = {"scanned": len(emails), "new_responses": 0, "status_updates": 0, "rejections": 0, "invites": []}
 
-    stats["skipped_unrelated"] = 0
+    stats.update(skipped_unrelated=0, already_read=0, asked=0)
     for n, msg in enumerate(emails):
         if progress:
             progress(n, len(emails))
         if db.is_seen(msg["msg_id"]):
+            stats["already_read"] += 1
             continue  # already processed (response or not) — don't re-spend usage
         # Cheap pre-filter: skip obvious non-application mail without an LLM call.
         if not email_client.looks_like_application(msg["sender"], msg["subject"], msg["body"], jobs):
@@ -257,6 +266,7 @@ def process_inbox(jobs: list[dict[str, Any]], lookback_days: int | None = None,
             stats["skipped_unrelated"] += 1
             continue
         guess = email_client.match_job(msg["sender"], msg["subject"], msg["body"], jobs)
+        stats["asked"] += 1
         try:
             result = _ask_waiting(on_limit, lambda: llm.ask_json(
                 PROMPT.format(

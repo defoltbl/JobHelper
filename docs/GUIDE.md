@@ -186,7 +186,8 @@ works except reading replies.
 2. In your Google account, create an **App Password** and name it "JobHelper".
 3. On the **Job email** row of the welcome card, select **Change**.
 4. Enter the address and the 16-letter App Password.
-5. Select **Save**. The app checks the address and the form of the password first, and says in red what to correct.
+5. Select **Save**. The button says **Checking…** while the app signs in to the mailbox once
+   with what you entered. A refused password is not saved, and the card says so in red.
 
 > **Note**
 > An App Password is a separate password that only lets a program read mail. You can cancel
@@ -201,7 +202,8 @@ Use this when replies arrive at two addresses, for example an old address and a 
 2. Select **Add**.
 3. Enter the second address and its own App Password, then select **Save**.
 
-Both mailboxes are then read by every email scan. A problem with the second mailbox never
+Both mailboxes are then read by every email scan. To find older replies in the new mailbox,
+run one longer scan (section 10, *Look further back once*). A problem with the second mailbox never
 stops the scan of the first one; the app tells you about it at the end of the scan.
 
 ### Save your recovery key
@@ -225,7 +227,8 @@ chip (**Claude**, **Email**, **CV**) are the same checks at a glance.
 |---|---|---|
 | **Claude account** stays red after you sign in | The sign-in was done in another browser profile, or was cancelled | Select **Sign in with Claude** again |
 | "A paid API key is set" | `ANTHROPIC_API_KEY` exists in your environment | Remove the variable and start the app again |
-| The mailbox is refused | The normal password was used, or 2-Step Verification is off | Create an App Password and enter that one |
+| "The mail server refused this address and App Password" | The normal password was used, the App Password was cancelled, or it belongs to another address | Create an App Password for this address and enter that one |
+| "Saved. The mail server could not be reached" | No internet connection at that moment | Nothing. The first email scan shows whether it works |
 | **Master CV** is red | No CV was chosen, or the file was moved | Select the **Change…** button and pick the file |
 
 ### Next steps
@@ -312,6 +315,7 @@ The rows of the **Last run** card:
 | **Filtered out** | How many postings it dropped. Select the number to see each one with its reason (section 12) |
 | **Letters**, **CVs** | How many of each were written |
 | **Email scan** | Day of the last email scan and how many new replies it filed |
+| **Emails read** | How many messages that scan went through, and how many of them were worth a question to Claude. It explains a "0 new": most mail was read before, or is not about an application |
 | **You paid** | *subscription only*: nothing was billed for the run |
 | **Same search via API** or **Same scan via API** | What the last run alone would have cost with pay-per-use billing. It is a measure of how much work was done, not a bill |
 
@@ -495,6 +499,10 @@ more:
 | **Score it anyway** | Sends a skipped job to scoring |
 | **Not interested** | Removes the job from the list. Its documents go to an encrypted backup |
 | **Mark applied** | Moves the job to Applications |
+
+> **Note**
+> If you typed something in this window and did not save it, the ✕, the Esc key, **Mark
+> applied** and **Not interested** all ask once before the text is discarded.
 
 ### Next steps
 
@@ -752,9 +760,15 @@ A scan reads the mail of the last days set in Options under **Scan emails from t
 Messages that were already read by an earlier scan are skipped, so a longer period costs
 nothing after the first time.
 
-> **Tip**
-> After you add a second mailbox, set **Scan emails from the last** to 60 or 90 days for one
-> scan, so that older replies in that mailbox are found. Then set it back.
+### Look further back once
+
+Use this after you add a mailbox, or when an old reply is missing.
+
+1. Open **Options** and find **Email scan**.
+2. Under **Look further back once**, choose the number of days (90 to begin with).
+3. Select **Scan now**. A green line confirms that the scan started; you can close Options.
+
+The scan reads that period once. The setting **Scan emails from the last** stays as it is.
 
 ### Responses
 
@@ -792,7 +806,7 @@ nothing after the first time.
 
 | What you see | Cause | What to do |
 |---|---|---|
-| "0 new" after a scan | No new replies in the period, or they were read by an earlier scan | Nothing. To look further back, raise **Scan emails from the last** |
+| "0 new" after a scan | No new replies in the period, or they were read by an earlier scan | Nothing. **Emails read** on the Last run card shows what the scan went through. To look further back, use **Look further back once** |
 | A rejection is missing | It did not arrive in a scanned mailbox, or it is in another folder | Turn on **Also archived mail and spam**, or paste the reply into the application (section 9) |
 | A reply was filed to the wrong application | Two applications at the same company | Open the right application and set its status by hand |
 | A warning about the second mailbox | Its App Password was cancelled or mistyped | Open the Account card and select **Change** for the second mailbox |
@@ -917,6 +931,9 @@ right column, or with a chip under **Search** in the left column.
 ![Options: the search](img/19_options_search.png)
 
 > **Note**
+> A choice too long for its box is shown on two lines, never cut.
+
+> **Note**
 > Every field checks what you type. A value the app cannot use is marked in red with the
 > reason, and **Save** waits until it is corrected. Closing Options with unsaved changes asks
 > once.
@@ -1008,6 +1025,7 @@ Some companies publish their openings on their own career site. To read one dire
 |---|---|---|
 | **Scan emails from the last** | How far back an email scan looks. Messages already read are skipped | 1 to 365 days |
 | **Also archived mail and spam** | Reads those folders too, not only the Inbox. Never Sent or Drafts | On or off |
+| **Look further back once** | Starts one scan over a longer period now. The setting above stays | 2 to 365 days, then **Scan now** |
 
 ### Model
 
@@ -1071,6 +1089,9 @@ answer. **refresh** asks Claude for the current ones.
 | **resets 14:00** under a bar | Shown when less than 20% is left: the time the window is empty again. A date is added when it is another day |
 | **0% left** in red | Claude refused a call because this limit is used up. Nothing can be asked until the time shown |
 | **—** | Claude has not reported this window yet. Select **refresh** |
+
+When a reset time passes while the window is open, the card corrects itself: the limit is
+shown as free again without you pressing anything.
 
 > **Note**
 > Other use of Claude on the same account, in the Claude app or in Claude Code, counts against
@@ -1190,7 +1211,7 @@ what changed in each version.
 | What you see | Cause | What to do |
 |---|---|---|
 | A rejection is missing | It did not arrive in a scanned mailbox or folder | Set the status by hand, or paste the reply (section 9) |
-| A scan finds "0 new" | Nothing new in the period | Raise **Scan emails from the last** to look further back |
+| A scan finds "0 new" | Nothing new in the period | Use **Look further back once** in Options |
 | A scan takes long the first time | It reads a long period once | Later scans skip what was already read |
 
 ### Everything else

@@ -127,6 +127,8 @@ Inside the window:
   normal week, scores and labels, the limit, privacy, what to do when something looks wrong).
 - **Last run card, cost rows** — *You paid: subscription only* and *Same search via API: ≈ $…*
   (or *Same scan via API*): the estimated price of the last run alone with pay-per-use API billing.
+- **Last run card, Emails read** — how many messages the last scan went through and how many were
+  sent to Claude. **Options → Email scan → Look further back once** runs one longer scan.
   The total since the first day is in `python status.py usage`.
 - **More about your work** (Options → About you) — what you really did in each job beyond the
   CV: tasks, tools, team, results (up to 4,000 characters, in English). Interview preparation

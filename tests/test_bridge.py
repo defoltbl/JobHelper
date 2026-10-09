@@ -144,6 +144,81 @@ def test_a_search_notes_what_it_alone_would_have_cost(bridge, monkeypatch):
     assert last["cost"] == 0.41 and last["cost_of"] == "search"
 
 
+def test_a_longer_scan_can_be_asked_for_once(bridge, monkeypatch):
+    started = _no_thread(monkeypatch)
+    monkeypatch.setattr(config, "IMAP_USER", "jobs@example.com")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "abcdabcdabcdabcd")
+    for wrong in (0, -5, 366, 100000):
+        assert bridge.scanEmailBack(wrong)["ok"] is False and "between 1 and 365" in bridge.scanEmailBack(wrong)["msg"]
+    assert started == []
+    assert bridge.scanEmailBack(90) == {"ok": True} and started == ["_scan"]
+    assert "running" in bridge.scanEmailBack(90)["msg"] and started == ["_scan"]
+
+
+def test_a_longer_scan_reads_that_period_and_leaves_the_setting(bridge, monkeypatch):
+    seen = []
+
+    def read(jobs, lookback_days=None, progress=None, on_limit=None):
+        seen.append(lookback_days)
+        return {"scanned": 45, "already_read": 40, "asked": 5, "new_responses": 0, "rejections": 0}
+
+    monkeypatch.setattr(agent5_responses, "process_inbox", read)
+    for name in ("backfill_roles", "annotate_progress", "build_report"):
+        monkeypatch.setattr(agent5_responses, name, lambda jobs: None)
+    monkeypatch.setattr(agent4_tracker, "render_all", lambda jobs: None)
+    events = _record(bridge)
+    before = bridge.options()["scan_days"]
+    bridge._scan(90)
+    bridge._scan()
+    assert seen == [90, before] and bridge.options()["scan_days"] == before
+    assert bridge.lastRun()["scan_detail"] == "45 · 5 to Claude"
+    assert "Scanned 45 emails (40 read before, 5 sent to Claude) · 0 new." in events[-1][2]
+
+
+def test_saving_a_mailbox_tries_it_first(bridge, monkeypatch):
+    from jobhelper import email_client
+    saved, tried = [], []
+    monkeypatch.setattr(config, "set_imap", lambda user, pwd, lookback=None: saved.append((1, user, pwd)))
+    monkeypatch.setattr(config, "set_imap2", lambda user, pwd: saved.append((2, user, pwd)))
+    monkeypatch.setattr(config, "IMAP_USER", "main@example.com")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "oldpasswordoldpw")
+    monkeypatch.setattr(config, "IMAP_PASSWORD_2", "")
+    answer = {"ok": True, "msg": ""}
+    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0: tried.append((user, password)) or dict(answer))
+    check = bridge._save_email_checked
+    # wrong input never reaches the mail server
+    assert check(3, "a@example.com", "abcdabcdabcdabcd")["ok"] is False
+    assert check(1, "not an address", "abcdabcdabcdabcd")["ok"] is False
+    assert "main job email" in check(2, "MAIN@example.com", "abcdabcdabcdabcd")["msg"]
+    assert "App Password" in check(2, "two@example.com", "")["msg"]
+    assert tried == [] and saved == []
+    # accepted: saved; an empty password means the one already kept
+    assert check(1, " main@example.com ", "") == {"ok": True}
+    assert tried == [("main@example.com", "oldpasswordoldpw")] and saved == [(1, "main@example.com", "oldpasswordoldpw")]
+    # refused: not saved, and the reason does not repeat the password
+    answer.update(ok=False, msg="The mail server refused this address and App Password.")
+    result = check(2, "two@example.com", "wrongwrongwrongw")
+    assert result["ok"] is False and "refused" in result["msg"] and "wrongwrongwrongw" not in result["msg"] and len(saved) == 1
+    # the server cannot be reached: saved, with a note
+    answer.update(ok=None, msg="The mail server could not be reached, so the password was not tried.")
+    result = check(2, "two@example.com", "abcdabcdabcdabcd")
+    assert result["ok"] is True and "not tried" in result["note"] and saved[-1] == (2, "two@example.com", "abcdabcdabcdabcd")
+
+
+def test_the_mailbox_check_answers_the_window(bridge, monkeypatch):
+    got = []
+    bridge.emailSaved.connect(got.append)
+    monkeypatch.setattr(qt_bridge.Bridge, "_save_email_checked", lambda self, box, user, password: (_ for _ in ()).throw(RuntimeError("boom")))
+    bridge.saveEmailChecked(2, "two@example.com", "abcdabcdabcdabcd")
+    from PySide6.QtTest import QTest
+    for _ in range(100):
+        QTest.qWait(10)
+        time.sleep(0.005)
+        if got:
+            break
+    assert got == [{"ok": False, "msg": "The mailbox could not be saved.", "box": 2}]
+
+
 def test_an_email_scan_notes_its_own_cost(bridge, monkeypatch):
     usage.record({"cost_usd": 33.5}, tag="earlier")
 

@@ -222,6 +222,49 @@ def test_plain_storage_without_keychain_does_not_block(ui):
     ui.win.setProperty("connData", dict(READY))
 
 
+def _email_answer(ui):
+    """Saving a mailbox tries it in the background; wait for the card to get its answer."""
+    welcome = ui.find("welcome")
+    for _ in range(200):
+        if not welcome.property("emailBusy"):
+            return
+        ui.wait(20)
+    raise AssertionError("the mailbox check never answered")
+
+
+def test_a_refused_app_password_is_not_saved(ui, monkeypatch):
+    """Before, only the form of the password was checked, and a wrong one showed up at the first scan."""
+    from jobhelper import email_client
+    saved, tried = [], []
+    monkeypatch.setattr(config, "set_imap", lambda user, pwd, lookback=None: saved.append((user, pwd)))
+    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0: tried.append((user, password)) or
+                        {"ok": False, "msg": "The mail server refused this address and App Password. Check both."})
+    welcome = ui.find("welcome")
+    ui.js("welcome.openCard(); welcome.editBox = 1")
+    welcome.setProperty("editEmail", True)
+    welcome.setProperty("emailDraft", "jobs@example.com")
+    welcome.setProperty("pwDraft", "abcdabcdabcdabcd")
+    ui.js("welcome.saveEmail()")
+    ui.js("welcome.saveEmail()")                                   # a second press while it is checking does nothing
+    _email_answer(ui)
+    assert tried == [("jobs@example.com", "abcdabcdabcdabcd")] and saved == []
+    assert "refused" in welcome.property("emailErr") and welcome.property("editEmail") is True
+    assert welcome.property("pwDraft") == "" and ui.find("emailSave").property("text") == "Save"
+
+    # no connection: saved, and the card says the password was not tried
+    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0:
+                        {"ok": None, "msg": "The mail server could not be reached, so the password was not tried."})
+    welcome.setProperty("pwDraft", "abcdabcdabcdabcd")
+    ui.js("welcome.saveEmail()")
+    _email_answer(ui)
+    assert saved == [("jobs@example.com", "abcdabcdabcdabcd")] and welcome.property("editEmail") is False
+    note = ui.find("emailNote")
+    assert note.property("visible") is True and "not tried" in note.property("text")
+    ui.js('welcome.emailNote = ""; welcome.finish()')
+    ui.wait(700)
+    assert ui.warnings == []
+
+
 def test_welcome_rejects_a_bad_email_and_stays_open(ui, monkeypatch):
     saved = []
     monkeypatch.setattr(config, "set_imap", lambda user, pwd, lookback=None: saved.append((user, pwd)))
@@ -238,6 +281,8 @@ def test_welcome_rejects_a_bad_email_and_stays_open(ui, monkeypatch):
     welcome.setProperty("emailDraft", "jobs@example.com")
     welcome.setProperty("pwDraft", "abcd abcd abcd abcd")          # spaces as Google shows it
     ui.js("welcome.saveEmail()")
+    assert welcome.property("emailBusy") is True and ui.find("emailSave").property("text") == "Checking…"
+    _email_answer(ui)
     assert saved == [("jobs@example.com", "abcd abcd abcd abcd")]
     assert welcome.property("emailErr") == "" and welcome.property("editEmail") is False
     ui.js("welcome.finish()")
@@ -543,6 +588,7 @@ def test_second_mailbox_row_follows_the_connection(ui):
     welcome.setProperty("emailDraft", READY["email_addr"])
     welcome.setProperty("pwDraft", "abcdabcdabcdabcd")
     ui.js("welcome.saveEmail()")
+    _email_answer(ui)
     assert "already your main job email" in welcome.property("emailErr")    # refused, card stays open
     ui.js('welcome.editEmail = false; welcome.emailErr = ""; welcome.editBox = 1')
     ui.win.setProperty("connData", {**READY, "email2": True, "email2_addr": "second@example.com"})
@@ -842,6 +888,126 @@ def test_last_run_card_shows_the_cost_of_the_last_run_only(ui):
     ui.wait(60)
     assert {"Same scan via API", "≈ $0.00"} <= _card_values(ui)
     ui.js("lastRunData = bridge.lastRun()")
+    assert ui.warnings == []
+
+
+def test_last_run_card_says_how_much_mail_the_scan_went_through(ui):
+    ui.js('lastRunData = ({ scan: "09 Oct · 0 new" })')
+    ui.wait(60)
+    assert "Emails read" not in _card_values(ui)                # a summary saved before this was noted: no empty row
+    ui.js('lastRunData = ({ scan: "09 Oct · 0 new", scan_detail: "45 · 5 to Claude", cost: 0.08, cost_of: "email scan" })')
+    ui.wait(60)
+    assert {"Emails read", "45 · 5 to Claude", "09 Oct · 0 new"} <= _card_values(ui)
+    ui.js("lastRunData = bridge.lastRun()")
+    assert ui.warnings == []
+
+
+def test_options_can_start_one_longer_email_scan(ui, monkeypatch):
+    started = []
+    monkeypatch.setattr(qt_bridge.Bridge, "_scan", lambda self, days=None: started.append(days))
+    monkeypatch.setattr(config, "IMAP_USER", "jobs@example.com")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "abcdabcdabcdabcd")
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    saved_days = ui.find("scanSpin").property("value")
+    spin, note = ui.find("backSpin"), ui.find("backNote")
+    assert spin.property("value") == 90 and note.property("visible") is False
+    spin.setProperty("value", 60)
+    ui.js("optDialog.scanBack()", dialog)
+    for _ in range(50):
+        ui.wait(20)
+        if started:
+            break
+    assert started == [60] and "last 60 days" in note.property("text") and dialog.property("backBad") is False
+    assert ui.find("scanSpin").property("value") == saved_days and ui.bridge.options()["scan_days"] == saved_days   # the setting stays
+    ui.js("optDialog.scanBack()", dialog)                          # the first one is still "running"
+    assert dialog.property("backBad") is True and "running" in note.property("text") and started == [60]
+    ui.bridge._set_running(False)
+    ui.js('win.runMode = ""; win.resetRobots()')
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "")
+    ui.js("optDialog.scanBack()", dialog)                          # no mailbox: said here, in red
+    assert dialog.property("backBad") is True and "job email" in note.property("text") and started == [60]
+    ui.js("confirmClose = false; close()", dialog)
+    ui.wait(350)
+    assert ui.warnings == []
+
+
+def test_closing_buttons_ask_once_before_they_discard_unsaved_text(ui, monkeypatch):
+    """Mark applied and Not interested close the job window; with text not saved they used to discard it silently."""
+    done = []
+    monkeypatch.setattr(qt_bridge.Bridge, "applyJob", qt_bridge.Slot(str, result=bool)(lambda self, job_id: done.append(("apply", job_id)) or True))
+    monkeypatch.setattr(ui_api.Api, "dismiss_job", lambda self, job_id: done.append(("dismiss", job_id)) or {"ok": True})
+    ui.js('detailDialog.show("lead")')
+    ui.wait(450)
+    note = ui.find("closeNote")
+    ui.js('cnNotes.text = "They pay monthly."')
+    ui.js("detailDialog.markApplied()")
+    assert done == [] and ui.find("detailDialog").property("opened") is True
+    assert note.property("text") == "Not saved yet: the notes about the company. Save it, or press Mark applied once more to discard it."
+    ui.js("detailDialog.notInterested()")                       # another button: asked about again, by its own name
+    assert done == [] and "press Not interested once more" in note.property("text")
+    ui.js("detailDialog.notInterested()")                       # the second press of the same button goes ahead
+    ui.wait(350)
+    assert done == [("dismiss", "lead")] and ui.find("detailDialog").property("opened") is False
+    ui.js('detailDialog.show("lead")')
+    ui.wait(450)
+    assert ui.js("detailDialog.confirmAction") == "" and note.property("visible") is False
+    ui.js("detailDialog.markApplied()")                         # nothing typed: no question
+    ui.wait(350)
+    assert done[-1] == ("apply", "lead") and ui.find("detailDialog").property("opened") is False
+    ui.js("tableDialog.close()")
+    ui.wait(300)
+    source = (ROOT / "ui_qt" / "DetailDialog.qml").read_text(encoding="utf-8")
+    assert source.count("bridge.applyJob(") == 1 and source.count("bridge.dismissJob(") == 1, "both buttons go through the asking functions"
+    assert ui.warnings == []
+
+
+def test_usage_card_corrects_itself_when_a_reset_time_passes(ui):
+    timer = ui.find("usageReset")
+    keep = ui.js("JSON.stringify(usageData)")
+    ui.js('usageData = ({ model: "sonnet", five_hour_used: 12, next_reset_in: 0 })')
+    assert timer.property("running") is False
+    ui.js('usageData = ({ model: "sonnet", five_hour_used: 100, five_hour_resets: "14:00", next_reset_in: 600 })')
+    assert timer.property("running") is True and timer.property("interval") == 601500
+    ui.js('usageData = ({ model: "sonnet", seven_day_used: 100, next_reset_in: 590000 })')      # days away: still a valid timer
+    assert 0 < timer.property("interval") <= 2147483647
+    ui.js('usageData = ({ model: "sonnet", five_hour_used: 100, five_hour_resets: "14:00", next_reset_in: 1 })')
+    ui.wait(2900)                                               # the time passes: the card asks the app again
+    assert ui.js("usageData.five_hour_used") != 100
+    ui.js("usageData = JSON.parse('%s')" % keep.replace("\\", "\\\\").replace("'", "\\'"))
+    assert ui.warnings == []
+
+
+def test_a_long_choice_in_a_combo_box_wraps_instead_of_being_cut(ui):
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    ui.js("srcCombo.currentIndex = 1", dialog)                  # "LinkedIn only": short
+    ui.wait(80)
+    short = ui.js("srcCombo.height", dialog)
+    assert short == 32 and ui.js("srcCombo.contentItem.lineCount", dialog) == 1
+    ui.js("srcCombo.implicitWidth = 150", dialog)                # a box that cannot hold the longest choice on one line
+    ui.js("srcCombo.currentIndex = 0", dialog)                  # "Czech boards, LinkedIn & careers"
+    ui.wait(80)
+    assert ui.js("srcCombo.contentItem.lineCount", dialog) >= 2 and ui.js("srcCombo.height", dialog) > short
+    assert ui.js("srcCombo.contentItem.truncated", dialog) is False
+    assert ui.js("srcCombo.contentItem.text", dialog) == "Czech boards, LinkedIn & careers"
+    assert ui.js("srcCombo.contentItem.x + srcCombo.contentItem.width", dialog) <= ui.js("srcCombo.width", dialog)   # clear of the arrow's side
+    # and it is really drawn: the box holds pixels in the text's colour (a blank box once passed every check above)
+    line = ui.js("srcCombo.contentItem", dialog)
+    assert line.property("visible") is True and line.property("opacity") == 1
+    from PySide6.QtQuick import QQuickWindow
+    corner = line.mapToScene(line.boundingRect().topLeft())
+    picture = QQuickWindow.grabWindow(ui.win).copy(int(corner.x()), int(corner.y()), int(line.width()), int(line.height()))
+    ink = ui.js("theme.ink")
+    close = lambda c: abs(c.red() - ink.red()) + abs(c.green() - ink.green()) + abs(c.blue() - ink.blue()) < 90      # noqa: E731
+    assert sum(close(picture.pixelColor(x, y)) for x in range(0, picture.width(), 2) for y in range(0, picture.height(), 2)) > 20
+    assert ui.js("cityCombo.height", dialog) == 32               # an editable box keeps its one-line field
+    ui.js("srcCombo.implicitWidth = 210; confirmClose = false; close()", dialog)
+    ui.wait(350)
     assert ui.warnings == []
 
 

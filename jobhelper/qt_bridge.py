@@ -57,6 +57,7 @@ class Bridge(RunSlots, JobSlots, QObject):
     replyReady = Signal("QVariantMap")         # a pasted reply was filed (or why not)
     answersReady = Signal("QVariantMap")       # answers for a job's form were drafted (or why not)
     rescoreReady = Signal("QVariantMap")       # one job was scored again (or why not)
+    emailSaved = Signal("QVariantMap")         # a mailbox was tried and saved (or why not)
 
     def __init__(self) -> None:
         super().__init__()

@@ -6,7 +6,7 @@ import threading
 
 from PySide6.QtCore import Slot
 
-from . import (config, notify, planner)
+from . import (config, notify, planner, trouble)
 
 
 class JobSlots:
@@ -115,6 +115,42 @@ class JobSlots:
             return {"ok": True}
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "msg": str(e)}
+
+    @Slot(int, str, str)
+    def saveEmailChecked(self, box, user, password):
+        """Try the mailbox's address and App Password for real, then save them. In the background
+        (it talks to the mail server); the answer arrives as emailSaved: {ok, msg, note, box}.
+        A refused password is not saved. With no connection it is saved, and `note` says it was not tried."""
+        def work():
+            try:
+                result = self._save_email_checked(box, str(user or ""), str(password or ""))
+            except Exception as e:  # noqa: BLE001 - the card must always get an answer
+                trouble.note("saving the mailbox", e)
+                result = {"ok": False, "msg": "The mailbox could not be saved."}
+            result["box"] = box
+            self._post("emailSaved", result)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _save_email_checked(self, box, user, password):
+        from . import email_client
+        from .qt_bridge import _address_problem
+        if box not in (1, 2):
+            return {"ok": False, "msg": "There is no such mailbox."}
+        problem = _address_problem(user)
+        if problem:
+            return {"ok": False, "msg": problem}
+        if box == 2 and user.strip().lower() == config.IMAP_USER.lower():
+            return {"ok": False, "msg": "That is already your main job email."}
+        effective = password.strip() or (config.IMAP_PASSWORD if box == 1 else config.IMAP_PASSWORD_2)
+        if not effective:
+            return {"ok": False, "msg": "Enter the App Password for that address."}
+        tried = email_client.try_login(user.strip(), effective)
+        if tried.get("ok") is False:
+            return {"ok": False, "msg": tried["msg"]}
+        saved = self.saveEmail(user, password) if box == 1 else self.saveEmail2(user, password)
+        if saved.get("ok") and tried.get("ok") is None:
+            saved["note"] = "Saved. " + tried["msg"] + " The first email scan will show whether it works."
+        return saved
 
     @Slot(result="QVariantMap")
     def removeEmail2(self):

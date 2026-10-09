@@ -168,7 +168,7 @@ def test_guide_shots(ui, monkeypatch):
     api.save_options({**api.options(), "where": "Prague", "threshold": 50, "wanted_roles": ["junior python developer", "backend developer"],
                       "unwanted_roles": ["tester"], "skip_words": ["intern"], "max_years": 3})
     api.note_run(when=TODAY.strftime("%d %b") + " 09:12", found="+9 new", filtered=7, letters=5, cvs=5, scan=TODAY.strftime("%d %b") + " · 2 new",
-                 cost=0.42, cost_of="search")
+                 scan_detail="45 · 5 to Claude", cost=0.42, cost_of="search")
     api.set_event("app1", (TODAY + timedelta(days=2)).isoformat(), "11:30", "interview", "Video call with the team lead")
 
     def shot(name, part=None, zoom=2):

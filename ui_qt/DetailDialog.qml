@@ -24,15 +24,37 @@ Dialog {
     closePolicy: pending.length > 0 ? Popup.NoAutoClose : Popup.CloseOnEscape
     property bool confirmClose: false
     property string closeNote: ""
+    property string confirmAction: ""     // the button that was asked about once ("apply", "dismiss")
+    // A button that closes this window with text still unsaved asks once, as the ✕ does.
+    function mayLeave(action, label) {
+        if (pending.length > 0 && confirmAction !== action) {
+            confirmAction = action; confirmClose = false;
+            closeNote = "Not saved yet: " + pending.join(", ") + ". Save it, or press " + label + " once more to discard it.";
+            return false;
+        }
+        return true;
+    }
+    function markApplied() {
+        if (!mayLeave("apply", "Mark applied")) return;
+        bridge.applyJob(job.id); ticker.text = "Moved to Applications (waiting).";
+        close(); tableDialog.close(); win.reloadAll();
+    }
+    function notInterested() {
+        if (!mayLeave("dismiss", "Not interested")) return;
+        var r = bridge.dismissJob(job.id);
+        if (r && r.ok) { ticker.text = "Removed. It will not come back in later searches (see the “not interested” filter to undo).";
+            close(); win.countsData = bridge.counts(); win.refreshOpenView(); }
+        else ticker.text = (r && r.msg) ? r.msg : "Couldn't remove that job.";
+    }
     function tryClose() {                 // the ✕ and, with unsaved text, the Esc key: ask once
         if (pending.length > 0 && !confirmClose) {
-            confirmClose = true;
+            confirmClose = true; confirmAction = "";
             closeNote = "Not saved yet: " + pending.join(", ") + ". Save it, or close once more to discard it.";
             return;
         }
         close();
     }
-    onClosed: { confirmClose = false; closeNote = ""; }
+    onClosed: { confirmClose = false; confirmAction = ""; closeNote = ""; }
     Shortcut { sequence: "Escape"
         enabled: detailDialog.visible && detailDialog.pending.length > 0 && !(formDialog.visible || prepDialog.visible || prepEditDialog.visible
                  || compareDialog.visible || letterDialog.visible || responseDialog.visible)
@@ -254,7 +276,7 @@ Dialog {
         var d = bridge.jobDetail(jobId);
         if (!d || !d.id) { ticker.text = "That job could not be opened."; return; }
         confirmRemake = false; if (!scoreBusy) { scoreNote = ""; scoreBad = false; }
-        confirmClose = false; closeNote = ""; replyText.text = "";
+        confirmClose = false; confirmAction = ""; closeNote = ""; replyText.text = "";
         pasteOpen = false; pasteErr = ""; pastedText.text = ""; confirmShelve = false; shelveNote = ""; shelveBad = false;
         job = d; draft = ({}); note = ""; dateErr = ""; if (!prepBusy) prepErr = "";
         eventErr = ""; notesInfo = ""; notesBad = false; replyErr = ""; replyInfo = ""; replyOpen = false; thanks = ({}); thanksNote = "";
@@ -338,8 +360,7 @@ Dialog {
                         Text { objectName: "applyCount"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                             text: detailDialog.stepsDone + " of " + detailDialog.applySteps.length + " done. Then send your application and press Mark applied." }
                         PillButton { objectName: "applyNow"; primaryStyle: true; text: "Mark applied"
-                            onClicked: { bridge.applyJob(detailDialog.job.id); ticker.text = "Moved to Applications (waiting).";
-                                         detailDialog.close(); tableDialog.close(); win.reloadAll(); } }
+                            onClicked: detailDialog.markApplied() }
                     }
                 }
 
@@ -768,16 +789,12 @@ Dialog {
             SmallButton { objectName: "answersOpen"; visible: detailDialog.job.is_dismissed !== true
                 text: "Form answers"; onClicked: formDialog.show(detailDialog.job.id) }
             SmallButton { objectName: "notInterested"; visible: detailDialog.job.is_lead === true; text: "Not interested"
-                onClicked: { var r = bridge.dismissJob(detailDialog.job.id);
-                             if (r && r.ok) { ticker.text = "Removed. It will not come back in later searches (see the “not interested” filter to undo).";
-                                 detailDialog.close(); win.countsData = bridge.counts(); win.refreshOpenView(); }
-                             else ticker.text = (r && r.msg) ? r.msg : "Couldn't remove that job."; } }
+                onClicked: detailDialog.notInterested() }
             SmallButton { visible: detailDialog.job.is_dismissed === true; primaryStyle: true; text: "Restore to New Jobs"
                 onClicked: { bridge.restoreJob(detailDialog.job.id); detailDialog.refresh();
                              win.countsData = bridge.counts(); win.refreshOpenView(); ticker.text = "Back in New Jobs."; } }
-            PillButton { visible: detailDialog.job.is_lead === true; primaryStyle: true; text: "Mark applied"
-                onClicked: { bridge.applyJob(detailDialog.job.id); ticker.text = "Moved to Applications (waiting).";
-                             detailDialog.close(); tableDialog.close(); win.reloadAll(); } }
+            PillButton { objectName: "applyBottom"; visible: detailDialog.job.is_lead === true; primaryStyle: true; text: "Mark applied"
+                onClicked: detailDialog.markApplied() }
         }
     }
 }

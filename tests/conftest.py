@@ -60,6 +60,8 @@ def safe_environment(tmp_path_factory, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)                         # the app refuses to ask with it set; tests set it on purpose
     monkeypatch.setattr(agent2_search, "refetch_description", lambda job: "")     # never read a real job board
     monkeypatch.setattr(agent2_search, "posting_closed", lambda job: None)        # nor ask one whether a posting is still open
+    from jobhelper import email_client
+    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0: {"ok": True, "msg": ""})   # never a real mail server
     from jobhelper import housekeeping
     trash = tmp_path_factory.mktemp("trash")
     monkeypatch.setattr(housekeeping, "trash_dir", lambda path: trash)             # never put anything in the real Trash

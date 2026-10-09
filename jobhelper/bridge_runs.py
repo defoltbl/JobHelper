@@ -51,15 +51,25 @@ class RunSlots:
 
     @Slot(result="QVariantMap")
     def scanEmail(self):
+        return self._start_scan(None)
+
+    @Slot(int, result="QVariantMap")
+    def scanEmailBack(self, days):
+        """One scan over a longer period than Options says; the saved setting stays as it is."""
+        if isinstance(days, bool) or not isinstance(days, int) or not 1 <= days <= 365:
+            return {"ok": False, "msg": "Choose between 1 and 365 days to look back."}
+        return self._start_scan(days)
+
+    def _start_scan(self, days):
         if self._running:
-            return {"ok": False, "msg": "A run is already in progress."}
+            return {"ok": False, "msg": "A search or scan is running. Start this one when it has finished."}
         if not config.has_imap():
             return {"ok": False, "msg": "Set up your job email first (open Account).", "fix": "email"}
         self._stop.clear()
         self._resume.clear()
         self._partial = None
         self._set_running(True)
-        threading.Thread(target=self._scan, daemon=True).start()
+        threading.Thread(target=self._scan, args=(days,), daemon=True).start()
         return {"ok": True}
 
     @Slot(str)
@@ -368,14 +378,14 @@ class RunSlots:
         except Exception as e:  # noqa: BLE001 - Stop must still end the run
             trouble.note("saving what was finished before Stop", e)
 
-    def _scan(self):
+    def _scan(self, days=None):
         jobs = None
         before = usage.total_cost()
         try:
             self.agentChanged.emit("a5", "running", "")
             self.logChanged.emit("Reading inbox (read-only)…")
             jobs = store.load_jobs()
-            days = int(self._api.options().get("scan_days") or config.IMAP_LOOKBACK_DAYS)
+            days = int(days or self._api.options().get("scan_days") or config.IMAP_LOOKBACK_DAYS)
             self.logChanged.emit("Reading inbox (read-only), last %d days…" % days)
             self._partial = self._api.live = jobs
             stats = agent5_responses.process_inbox(jobs, lookback_days=days,
@@ -389,7 +399,7 @@ class RunSlots:
             agent5_responses.build_report(jobs)
             self.agentChanged.emit("a5", "done", "%d new" % stats["new_responses"])
             self._api.note_run(scan="%s · %d new" % (datetime.now().strftime("%d %b"), stats["new_responses"]),
-                               cost=self._spent(before), cost_of="email scan")
+                               scan_detail=agent5_responses.scan_detail(stats), cost=self._spent(before), cost_of="email scan")
             from . import email_client
             warning = (" " + " ".join(email_client.last_warnings)) if email_client.last_warnings else ""
             self.runFinished.emit("scan", agent5_responses.scan_summary(stats) + warning)

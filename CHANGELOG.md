@@ -5,6 +5,12 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Last run card: "Emails read"** says how many messages the scan went through and how many of them were sent to Claude ("45 · 5 to Claude"), so a "0 new" explains itself. The line after a scan says it too.
+- **Look further back once** (Options → Email scan): one scan over a longer period, started with **Scan now**; the saved number of days stays as it is. For a newly added mailbox or a missing old reply.
+- **A mailbox is tried before it is saved.** Saving the job email or the second mailbox now signs in once with what you entered (the button says **Checking…**). A refused App Password is not saved and the card says so; before, only its form was checked and a wrong one showed up at the first scan. With no connection it is saved, with a note that it was not tried.
+- **The usage card corrects itself** when a limit's reset time passes, without pressing refresh.
+- **A long choice in a drop-down box** is shown on two lines instead of being cut.
+- **Mark applied** and **Not interested** in the job window ask once when text there is not saved, as the ✕ and Esc already did.
 - **The guide was rewritten in the style of product documentation** (`docs/GUIDE.md` and `docs/GUIDE.pdf`, 52 pages, 33 pictures): every section now has what the feature is for, **numbered steps**, a **table of every control**, **Note / Tip / Important / Warning** boxes, an "if something is wrong" table and next steps. New: a full **Options reference**, a section on **Claude usage and limits**, how the email scan chooses messages, the second mailbox, a troubleshooting section by topic and a quick reference. Nine new pictures (the list on the left, usage and the last run, a used-up limit, the limit warning, the start-up check, the letter editor, one reply, About you, the email settings).
 - **Usage card:** the time a nearly used limit resets is on its own line under the bar, so the card keeps its width.
 - **Fixed: the usage card said "13% left" while Claude was refusing for a used-up limit.** It kept showing the numbers from the last answer. A refusal now fills the limit it names ("session limit" is the **5-hour** one, "weekly limit" the **7-day** one), the card says **0% left** in red with the time it **resets**, and a limit whose reset time has passed is shown as free again. The pause message used to name the wrong limit in this case; it names the right one now.

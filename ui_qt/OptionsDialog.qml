@@ -122,6 +122,14 @@ Dialog {
     // documents moved to the backup: how many there are, and removing the old ones (asked first, with the count)
     property var shelf: ({})
     property bool confirmTidy: false
+    property string backNote: ""          // what happened when "Scan now" was pressed
+    property bool backBad: false
+    function scanBack() {
+        var r = win.startScanBack(backSpin.value);
+        backBad = !(r && r.ok);
+        backNote = backBad ? ((r && r.msg) || "The scan could not be started.")
+                           : "Reading the last " + backSpin.value + " days. You can close Options; the result appears on the main screen.";
+    }
     property string shelfNote: ""
     property bool shelfBad: false
     property bool shelfDone: false
@@ -207,7 +215,7 @@ Dialog {
         }
     }
     onAboutToShow: load()      // fill + reset BEFORE the window is visible (not after the animation)
-    onOpened: { confirmTidy = false; shelfNote = ""; shelfBad = false; shelfDone = false; shelfSpin.value = 30; readShelf(); }
+    onOpened: { backNote = ""; backBad = false; confirmTidy = false; shelfNote = ""; shelfBad = false; shelfDone = false; shelfSpin.value = 30; readShelf(); }
     background: Rectangle {
         radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1
         MouseArea { anchors.fill: parent; onPressed: function (m) { optSink.forceActiveFocus(); m.accepted = false; } }
@@ -510,6 +518,17 @@ Dialog {
                         Sep {}
                         SRow { label: "Also archived mail and spam"; hint: "not only the Inbox · never Sent or Drafts"
                             ThemedSwitch { id: foldersSw; objectName: "foldersSw" } }
+                        Sep {}
+                        // for once: after adding a mailbox, or when an old reply is missing. The setting above stays.
+                        SRow { label: "Look further back once"; hint: "days · one scan now, the setting above stays"
+                            RowLayout { spacing: 8
+                                ThemedSpin { id: backSpin; objectName: "backSpin"; from: 2; to: 365; value: 90
+                                    onValueChanged: optDialog.backNote = "" }
+                                SmallButton { objectName: "backScan"; text: "Scan now"; onClicked: optDialog.scanBack() } } }
+                        Text { objectName: "backNote"; visible: text !== ""
+                            Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12
+                            wrapMode: Text.WordWrap; font.pixelSize: 11; font.bold: optDialog.backBad
+                            color: optDialog.backBad ? theme.crit : theme.good; text: optDialog.backNote }
                     }
                 }
 

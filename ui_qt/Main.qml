@@ -216,6 +216,13 @@ ApplicationWindow {
     function stopRun() { if (win.appRunning && !win.stopping && bridge.stopRun()) win.stopping = true; }
     function startRun() { if (win.appRunning) return; handleStart(bridge.runSearch(optsData), "Starting…", "search"); }
     function startScan() { if (win.appRunning) return; handleStart(bridge.scanEmail(), "Reading inbox…", "scan"); }
+    // one scan over a longer period (from Options); the answer says why when it could not start
+    function startScanBack(days) {
+        if (win.appRunning) return { ok: false, msg: "A search or scan is running. Start this one when it has finished." };
+        var r = bridge.scanEmailBack(days);
+        if (r && r.ok) handleStart(r, "Reading inbox, last " + days + " days…", "scan");
+        return r || { ok: false, msg: "The scan could not be started." };
+    }
     function startRescore() { if (win.appRunning) return false; var r = bridge.rescoreAll(); handleStart(r, "Scoring again…", "rescore"); return !!(r && r.ok); }
 
     Timer { interval: 60; running: true; repeat: false
@@ -259,6 +266,11 @@ ApplicationWindow {
         }
         function onUsageReady() { win.usageData = bridge.usageInfo(); win.usageBusy = false; }
     }
+    // When a limit's reset time passes, the card corrects itself (no question to Claude: the app knows the time).
+    Timer { id: usageReset; objectName: "usageReset"
+        interval: Math.max(1000, Math.min((win.usageData.next_reset_in || 0), 2000000) * 1000 + 1500)
+        running: (win.usageData.next_reset_in || 0) > 0
+        onTriggered: win.usageData = bridge.usageInfo() }
 
     // ── palette ──
     // Both sets of values are chosen so that small text reads against its surfaces (contrast 4.5:1 or more

@@ -156,6 +156,17 @@ def test_the_usage_card_says_nothing_is_left_while_claude_refuses(isolate_data):
     assert len(card["seven_day_resets"]) > 5                              # another day: the date is part of it
 
 
+def test_the_usage_card_knows_when_the_next_limit_comes_back(isolate_data):
+    assert ui_api.Api().usage_info()["next_reset_in"] == 0
+    _windows(five=0.5, seven=0.0, five_reset=time.time() + 600, seven_reset=time.time() + 86400)
+    assert 595 <= ui_api.Api().usage_info()["next_reset_in"] <= 602          # the unused weekly window is not waited for
+    usage.note_limit(time.time() + 120, SESSION_REFUSAL)
+    assert 115 <= ui_api.Api().usage_info()["next_reset_in"] <= 122
+    _windows(five=0.5, seven=0.2, five_reset=time.time() - 5, seven_reset=time.time() + 86400)
+    state = usage._load(); state.pop("limit_block", None); usage._save(state)
+    assert 86000 < ui_api.Api().usage_info()["next_reset_in"] <= 86402        # the short one has reset: the weekly one is next
+
+
 def test_the_usage_card_without_any_numbers(isolate_data):
     card = ui_api.Api().usage_info()
     assert card["five_hour_used"] is None and card["seven_day_used"] is None and card["five_hour_resets"] == ""

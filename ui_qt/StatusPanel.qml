@@ -71,11 +71,13 @@ Rectangle {
                              { k: "Letters", v: lastRunData.letters !== undefined ? "" + lastRunData.letters : "—" },
                              { k: "CVs", v: lastRunData.cvs !== undefined ? "" + lastRunData.cvs : "—" },
                              { k: "Email scan", v: lastRunData.scan || "—" },
+                             // how much mail that scan went through and how little of it was worth a question
+                             { k: "Emails read", v: lastRunData.scan_detail || "", hide: !lastRunData.scan_detail },
                              { k: "You paid", v: connData.paid_api === true ? "API billing" : "subscription only" },
                              // of the last run alone (a search or an email scan, named in the label), not of everything so far
                              { k: lastRunData.cost === undefined ? "Same work via API"
                                   : (lastRunData.cost_of === "email scan" ? "Same scan via API" : "Same search via API"),
-                               v: lastRunData.cost !== undefined ? "≈ $" + Number(lastRunData.cost).toFixed(2) : "after next run" } ]
+                               v: lastRunData.cost !== undefined ? "≈ $" + Number(lastRunData.cost).toFixed(2) : "after next run" } ].filter(function (row) { return !row.hide; })
                     // the value takes the space that is left and shortens itself, so a
                     // long value can never run out of the card
                     RowLayout { Layout.fillWidth: true; spacing: 8

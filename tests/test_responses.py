@@ -3,6 +3,8 @@ import pytest
 
 from jobhelper import agent5_responses, db, email_client, llm, store
 
+_REAL_TRY_LOGIN = email_client.try_login
+
 
 def test_db_upsert_and_dedupe(isolate_data):
     rec = {"msg_id": "<a@x>", "company": "Acme", "stage": "rejection",
@@ -288,7 +290,7 @@ def test_a_scan_files_both_emails_under_one_application_and_saves_the_date(isola
     assert by["ml"]["status"] == "interview" and by["ros"]["status"] == "waiting"       # the other application is left alone
     assert by["ml"]["event"]["date"] == day and by["ml"]["event"]["time"] == "11:30" and "event" not in by["ros"]
     assert len(stats["invites"]) == 2 and len(stats["dates"]) == 1
-    assert a5.scan_summary(stats).startswith("Scanned 2 emails · 2 new: 2 invitations. Date saved: ")
+    assert a5.scan_summary(stats).startswith("Scanned 2 emails (0 read before, 2 sent to Claude) · 2 new: 2 invitations. Date saved: ")
 
 
 def test_reply_notification_wording():
@@ -297,3 +299,35 @@ def test_reply_notification_wording():
     assert a5.replies_text({"scanned": 12, "new_responses": 3, "rejections": 1, "invites": ["A", "A"]}) == "3 new replies: 2 invitations, 1 rejection."
     assert a5.replies_text({"scanned": 4, "new_responses": 1, "rejections": 1, "invites": []}) == "1 new reply: 1 rejection."
     assert a5.replies_text({"scanned": 4, "new_responses": 2, "rejections": 0, "invites": []}) == "2 new replies."
+
+
+def test_trying_a_mailbox_tells_refused_from_unreachable(monkeypatch):
+    import imaplib
+
+    class Box:
+        def __init__(self, fail=None):
+            self.fail, self.calls = fail, []
+
+        def login(self, user, password):
+            self.calls.append("login")
+            if self.fail:
+                raise self.fail
+
+        def logout(self):
+            self.calls.append("logout")
+
+    box = Box()
+    monkeypatch.setattr(imaplib, "IMAP4_SSL", lambda host, port, timeout=None: box)
+    real = _REAL_TRY_LOGIN                    # conftest replaces the function for every test; this is the real one
+    assert real("me@example.com", "abcdabcdabcdabcd") == {"ok": True, "msg": ""} and box.calls == ["login", "logout"]   # nothing is opened or read
+    box = Box(imaplib.IMAP4.error("[AUTHENTICATIONFAILED] Invalid credentials"))
+    refused = real("me@example.com", "secretsecretsecr")
+    assert refused["ok"] is False and "refused" in refused["msg"] and "secretsecretsecr" not in refused["msg"] and box.calls[-1] == "logout"
+    box = Box(OSError("timed out"))
+    assert real("me@example.com", "abcdabcdabcdabcd")["ok"] is None
+
+    def unreachable(host, port, timeout=None):
+        raise OSError("no route to host")
+    monkeypatch.setattr(imaplib, "IMAP4_SSL", unreachable)
+    lost = real("me@example.com", "abcdabcdabcdabcd")
+    assert lost["ok"] is None and "not tried" in lost["msg"]
