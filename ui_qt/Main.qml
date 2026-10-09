@@ -248,6 +248,8 @@ ApplicationWindow {
     }
 
     // ── palette ──
+    // Light values are chosen so that small text reads against the light surfaces (contrast 4.5:1 or more
+    // for ink, soft, faint, good, warn and crit, and for white text on the accent); see tests/test_ui_qml.py.
     QtObject {
         id: theme
         property color winbg: win.dark ? "#121922" : "#f3f6f9"
@@ -256,17 +258,17 @@ ApplicationWindow {
         property color inset: win.dark ? "#141c25" : "#eceff3"
         property color ink: win.dark ? "#e7eef5" : "#182230"
         property color soft: win.dark ? "#9fb0c1" : "#5a6675"
-        property color faint: win.dark ? "#6f7f90" : "#8b97a5"
+        property color faint: win.dark ? "#6f7f90" : "#657181"
         property color line: win.dark ? "#2a3644" : "#d6dde5"
-        property color accent: win.dark ? "#f0a84a" : "#e5891f"
+        property color accent: win.dark ? "#f0a84a" : "#b45f06"
         property color belt: win.dark ? "#2a3643" : "#c6cfd9"
         property color beltDark: win.dark ? "#1d2731" : "#aeb9c6"
         property color steel: win.dark ? "#8695a6" : "#6b7787"
-        property color good: win.dark ? "#4ade80" : "#15944b"
+        property color good: win.dark ? "#4ade80" : "#0f7a3d"
         property color goodbg: win.dark ? "#12301f" : "#e4f4ea"
         property color warnbg: win.dark ? "#2e2410" : "#f8eed8"
-        property color warn: win.dark ? "#f0b84a" : "#b5720a"
-        property color crit: win.dark ? "#f87171" : "#cf3030"
+        property color warn: win.dark ? "#f0b84a" : "#96600a"
+        property color crit: win.dark ? "#f87171" : "#c02626"
         property color critbg: win.dark ? "#331717" : "#f8e3e3"
         property color infobg: win.dark ? "#142338" : "#e5eefc"
         property color a1: "#3b82f6"; property color a2: "#10b981"

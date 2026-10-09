@@ -2202,3 +2202,25 @@ def test_jobs_that_could_not_be_put_back_are_listed_one_by_one(ui, monkeypatch):
         for name in ("one", "two"):
             (config.LETTERS_DIR / f"L_{name}.docx").unlink(missing_ok=True)
     assert ui.warnings == []
+
+
+# ── light theme: small text must read against the light surfaces ────────────
+def _contrast(a, b):
+    def lum(h):
+        r, g, b_ = (int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
+        f = lambda c: c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4   # noqa: E731
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b_)
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def test_light_theme_text_colours_read_on_light_surfaces():
+    import re
+    main = (ROOT / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
+    light = {name: value for name, value in re.findall(r'property color (\w+): win\.dark \? "#[0-9a-fA-F]{6}" : "(#[0-9a-fA-F]{6})"', main)}
+    assert {"winbg", "surface", "surface2", "ink", "soft", "faint", "accent", "good", "warn", "crit"} <= set(light)
+    for text in ("ink", "soft", "faint", "good", "warn", "crit"):
+        for ground in ("winbg", "surface", "surface2"):
+            assert _contrast(light[text], light[ground]) >= 4.5, (text, ground, round(_contrast(light[text], light[ground]), 2))
+    assert _contrast("#ffffff", light["accent"]) >= 4.5                      # the white label on a main button
+    assert _contrast(light["warn"], light["warnbg"]) >= 4.5 and _contrast(light["good"], light["goodbg"]) >= 4.5 and _contrast(light["crit"], light["critbg"]) >= 4.5

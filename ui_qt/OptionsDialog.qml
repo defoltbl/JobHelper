@@ -475,7 +475,7 @@ Dialog {
                             ThemedSpin { id: keepSpin; objectName: "keepSpin"; from: 0; to: 200; value: 10 } }
                         Sep {}
                         // letters and CVs moved out of the way because their job fell below your limit: only you remove them
-                        SRow { label: "Moved documents older than"; hint: "days · removes copies you no longer need to put back"
+                        SRow { label: "Moved documents older than"; hint: "days · deletes those copies for good"
                             RowLayout { spacing: 8
                                 ThemedSpin { id: shelfSpin; objectName: "shelfSpin"; from: 7; to: 3650; value: 30
                                     onValueChanged: { optDialog.confirmTidy = false; optDialog.shelfNote = ""; optDialog.readShelf(); } }
