@@ -944,6 +944,7 @@ right column, or with a chip under **Search** in the left column.
 | Setting | What it does | Values | Why you would change it |
 |---|---|---|---|
 | **City** | Where to search | A city name | The app will not search without one |
+| **Country** | Which postings of a company's career site, and which remote jobs, count as "here": the city, anywhere in this country, the region it is in ("Europe", "EMEA"), or remote without being tied to another part of the world | A country's name in English. Empty = the country of the city, shown in grey | Type it when the field says the city is not known, or when you also want jobs from a neighbouring country |
 | **Job source** | Which job boards are read | Czech boards, LinkedIn and careers; LinkedIn only; Company career sites only; All sources (+ remote) | More sources find more and take longer |
 | **Search roles** | The words typed into the job boards, in English | One or more roles | Too few results: add a role. Too many poor ones: remove one |
 | **Skip titles with** | Words that drop a posting by its title | Words | To get rid of a kind of posting that keeps appearing |

@@ -26,7 +26,7 @@ from typing import Any
 
 import requests
 
-from . import config, store
+from . import config, filters, store
 
 _H = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
                     "(KHTML, like Gecko) Chrome/122.0 Safari/537.36",
@@ -138,23 +138,9 @@ _STOP = {"junior", "senior", "medior", "mid", "entry", "graduate", "intern", "tr
          "the", "for", "and", "with", "our", "developer", "engineer", "specialist"}
 
 
-# remote roles pinned to a non-European region aren't realistic for a Prague hire
-_NON_EU = ("united states", "canada", " usa", "u.s.", " us ", "us)", "(us", "india",
-           "brazil", "australia", "singapore", "japan", "latam", "apac", "americas",
-           "philippines", "mexico", "argentina", "remote, us", "remote - us")
-
-
 def _loc_ok(loc: str, where: str) -> bool:
-    low = (loc or "").lower()
-    if not low:
-        return True
-    good = {where.lower(), "prague", "praha", "czech", "czechia", "europe", "emea",
-            "worldwide", "anywhere", "eu "}
-    if any(g and g in low for g in good):
-        return True
-    if "remote" in low:
-        return not any(b in low for b in _NON_EU)   # accept EU/unspecified remote only
-    return False
+    """In the searched city, in its country, or remote without being tied to another part of the world."""
+    return filters.location_fits(loc, where)
 
 
 def careers(keyword: str, where: str, limit: int, with_description: bool = True) -> list[dict[str, Any]]:

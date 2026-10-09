@@ -134,7 +134,9 @@ data/                your data; only the *.example.* files are in git
   (LinkedIn guest pages), `scrapers_remote`, `scrapers_ats` (company career systems),
   `scrapers_page` (any other page: only the copy it publishes for search engines).
 - **Rules without a model call:** `filters` (level, years, languages), `prefilter` (another
-  profession, unwanted roles), `keywords`, `salary`, `merge`, `followup`, `planner`.
+  profession, unwanted roles), `keywords`, `salary`, `merge`, `followup`, `planner`, `language`
+  (which language an ad is written in), `places` (which city is in which country, and what
+  counts as "here" for a search).
 - **Writing:** `cv_tailor`, `cover_letter`, `letters` (your own letters), `form_answers`,
   `interview_prep`, `prep_doc`, `pdf`.
 - **Keeping data safe:** `vault` (encryption, backups), `integrity` (signed rule files),
@@ -267,8 +269,6 @@ found is fixed (see CHANGELOG, 10 October). Not read line by line: the visual ma
 
 1. **Money is Czech crowns and Prague rates.** The salary target per role (`salary.estimate`) is a table of
    junior software pay in Prague, and the lists label it "CZK/mo".
-2. **"Here" means Prague or Czechia** for company career sites (`filters.location_fits`, `scrapers_ats._loc_ok`):
-   searching another country keeps Prague jobs and drops local ones from that source.
 4. **The interview preparation is worded for technical roles** ("engineer", "stack"), and the remote boards
    read are the programming feeds.
 5. **The mailbox check expects a Gmail App Password** (16 letters), though another mail host can be set in `.env`.

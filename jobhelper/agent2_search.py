@@ -582,8 +582,9 @@ def search(
          if filters.is_closed(f"{j.get('title','')} {j.get('description','')}") else "",
          "closed / no-longer-accepting postings")
     # A "Prague" search can return Prague, Nebraska.
-    sift("other country", lambda j: f"Located in the United States ({j.get('location', '')})."
-         if filters.is_us_location(j.get("location", "")) else "", "jobs located in the United States")
+    if not filters.searching_in_the_us(where):
+        sift("other country", lambda j: f"Located in the United States ({j.get('location', '')})."
+             if filters.is_us_location(j.get("location", "")) else "", "jobs located in the United States")
     # Career sites list a company's openings everywhere; keep the ones here or remote.
     sift("other country", lambda j: f"A career-site job somewhere else ({j.get('location', '') or 'no location given'})."
          if j.get("source") == "careers" and not filters.location_fits(j.get("location", ""), where) else "",

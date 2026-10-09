@@ -286,6 +286,11 @@ def candidate_facts(cv_text: str = "") -> dict[str, str]:
             "start": str(o.get("about_start") or "").strip()}
 
 
+def search_country() -> str:
+    """The country typed in Options for the search ('' = the country of the city)."""
+    return str(ui_settings().get("country") or "").strip()
+
+
 MAX_EXPERIENCE_NOTES = 4000
 
 

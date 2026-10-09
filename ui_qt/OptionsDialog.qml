@@ -96,7 +96,7 @@ Dialog {
             var c = companiesModel.get(k);
             cs.push({ name: "" + c.name, ats: "" + c.ats, token: "" + c.token });
         }
-        return { options: { where: cityCombo.editText, source: srcCombo.currentValue,
+        return { options: { where: cityCombo.editText, country: countryField.text.trim(), source: srcCombo.currentValue,
                             include_remote: remoteSw.checked, all_languages: !engSw.checked,
                             full_time_only: fullSw.checked,
                             skip_words: skipTags.all(), keep_words: keepTags.all(),
@@ -122,6 +122,16 @@ Dialog {
     // documents moved to the backup: how many there are, and removing the old ones (asked first, with the count)
     property var shelf: ({})
     property bool confirmTidy: false
+    // what is wrong with a typed country ('' = nothing): its English name in letters, as postings write it
+    function countryProblem(text) {
+        var t = (text || "").trim();
+        if (t === "") return "";
+        if (win.hasNonLatin(t)) return "Write the country in English (Latin letters), e.g. Germany.";
+        if (/[0-9]/.test(t)) return "A country's name has no digits. Write it in letters, e.g. Germany.";
+        if (!/^[A-Za-z\u00C0-\u024F]+(?:[ '.\-]+[A-Za-z\u00C0-\u024F]+)*\.?$/.test(t)) return "Write only the country's name, e.g. Germany.";
+        if (t.length >= 60) return "“Country” takes up to 60 characters.";
+        return "";
+    }
     property string backNote: ""          // what happened when "Scan now" was pressed
     property bool backBad: false
     function scanBack() {
@@ -177,6 +187,7 @@ Dialog {
         myLetters = bridge.myLetters();
         var o = win.optsData;
         cityCombo.editText = cityDisplay(o.where);
+        countryField.text = o.country || "";
         srcCombo.currentIndex = Math.max(0, srcCombo.indexOfValue(o.source || "czech"));
         remoteSw.checked = o.include_remote === true;
         fullSw.checked = o.full_time_only !== false;
@@ -255,6 +266,18 @@ Dialog {
                         SRow { label: "City"
                             ThemedCombo { id: cityCombo; objectName: "cityCombo"; editable: true; plainText: true
                                 implicitWidth: 200; model: win.euCities } }
+                        Sep {}
+                        // which postings of a company's career site, and which remote jobs, count as "here"
+                        SRow { label: "Country"; hint: "for career sites and remote jobs · empty = the city's country"
+                            TextField { id: countryField; objectName: "countryField"; implicitWidth: 200; implicitHeight: 30
+                                readonly property string guessed: bridge.countryOf(cityCombo.editText)
+                                placeholderText: guessed !== "" ? guessed + " (from the city)" : "not known for this city: type it"
+                                placeholderTextColor: guessed !== "" ? theme.faint : theme.warn
+                                color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 60
+                                onTextEdited: optDialog.optErr = optDialog.countryProblem(text)
+                                background: Rectangle { radius: 8; color: theme.surface; border.width: 1
+                                    border.color: countryField.activeFocus ? theme.accent
+                                                  : optDialog.countryProblem(countryField.text) !== "" ? theme.crit : theme.line } } }
                         Sep {}
                         SRow { label: "Job source"
                             ThemedCombo { id: srcCombo; implicitWidth: 210; textRole: "text"; valueRole: "value"
@@ -561,6 +584,7 @@ Dialog {
                     if (win.hasNonLatin(cityCombo.editText)) {
                         optDialog.optErr = "City must be in English (Latin letters), e.g. Prague."; return;
                     }
+                    if (optDialog.countryProblem(countryField.text) !== "") { optDialog.optErr = optDialog.countryProblem(countryField.text); return; }
                     var qs = [];
                     for (var i = 0; i < rolesModel.count; i++) qs.push("" + rolesModel.get(i).text);
                     if (expField.text.length > optDialog.expMax) {

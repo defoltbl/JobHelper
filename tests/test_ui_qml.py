@@ -902,6 +902,34 @@ def test_last_run_card_says_how_much_mail_the_scan_went_through(ui):
     assert ui.warnings == []
 
 
+def test_options_has_a_country_for_any_city(ui):
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    field = ui.find("countryField")
+    ui.js('cityCombo.editText = "Prague"', dialog)
+    assert field.property("text") == "" and field.property("placeholderText") == "Czechia (from the city)"
+    ui.js('cityCombo.editText = "Smallville"', dialog)
+    assert field.property("placeholderText") == "not known for this city: type it"
+    for wrong, part in (("Германия", "in English"), ("Germany 2", "no digits"), ("DE;", "only the country's name")):
+        assert part in ui.js('optDialog.countryProblem("%s")' % wrong, dialog), wrong
+    for fine in ("", "Germany", "United Kingdom", "Côte d'Ivoire", "St. Lucia", "Bosnia-Herzegovina"):
+        assert ui.js('optDialog.countryProblem("%s")' % fine, dialog) == "", fine
+    ui.js('cityCombo.editText = "Tbilisi"; countryField.text = "Georgia 1"', dialog)
+    before = ui.bridge.options().get("country", "")
+    assert "no digits" in ui.js("optDialog.countryProblem(countryField.text)", dialog)
+    assert ui.js("optDialog.collect().options.country", dialog) == "Georgia 1"
+    assert ui.bridge.saveOptions(ui.js("optDialog.collect().options", dialog) and {**ui.bridge.options(), "country": "Georgia 1"})["ok"] is False
+    assert ui.bridge.options().get("country", "") == before             # the backend refuses the same thing
+    ui.js('countryField.text = " Georgia "', dialog)
+    assert ui.js("optDialog.collect().options.country", dialog) == "Georgia"
+    ui.js("confirmClose = true; close()", dialog)
+    ui.wait(350)
+    ui.js("optsData = bridge.options()")
+    assert ui.warnings == []
+
+
 def test_options_can_start_one_longer_email_scan(ui, monkeypatch):
     started = []
     monkeypatch.setattr(qt_bridge.Bridge, "_scan", lambda self, days=None: started.append(days))

@@ -116,6 +116,10 @@ class JobSlots:
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "msg": str(e)}
 
+    @Slot(str, result=str)
+    def countryOf(self, city):
+        return self._api.country_of(city)
+
     @Slot(int, str, str)
     def saveEmailChecked(self, box, user, password):
         """Try the mailbox's address and App Password for real, then save them. In the background

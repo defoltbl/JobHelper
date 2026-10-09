@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import re
 
+from . import config, places
+
 # Title markers that indicate a role above junior/mid level.
 _SENIOR_PATTERNS = [
     r"\bsenior\b", r"\bsr\.?\b", r"\blead\b", r"\bteam\s*lead\b", r"\bprincipal\b",
@@ -99,20 +101,20 @@ _US_LOCATION = re.compile(r",\s*(?:%s)\b(?!\w)|\bUnited States\b|\bUSA\b" % "|".
 
 
 def is_us_location(location: str) -> bool:
-    """True for a location in the United States (never wanted in a Prague/EU search)."""
+    """True for a location in the United States: a search for "Prague" also finds Prague, Nebraska."""
     return bool(_US_LOCATION.search(location or ""))
 
 
-_NEAR = re.compile(r"prag|praha|czech|česk|cesk|remote|anywhere|emea|europe|worldwide|\bcz\b", re.IGNORECASE)
+def searching_in_the_us(where: str) -> bool:
+    """Someone whose own search is in the United States keeps those postings."""
+    return (places.country_of(config.search_country()) or places.country_of(where)) == "united states"
 
 
-def location_fits(location: str, where: str) -> bool:
-    """For sources that list a company's jobs worldwide (career sites): is this
-    one in the searched city, in Czechia, or remote? Unknown locations pass."""
-    loc = (location or "").strip()
-    if not loc:
-        return True
-    return bool(_NEAR.search(loc)) or (where or "").strip().lower() in loc.lower()
+def location_fits(location: str, where: str, country: str | None = None) -> bool:
+    """For sources that list a company's jobs worldwide (career sites): is this one in the
+    searched city, in its country, or remote in a way that fits? Unknown locations pass.
+    The country is the one in Options, or the one the city is in (see places.py)."""
+    return places.fits(location, where, config.search_country() if country is None else country)
 
 
 _PART_TIME = re.compile(r"part[\s-]?time|teilzeit|částečný úvazek|zkrácený úvazek|poloviční úvazek|\bbrigáda\b", re.IGNORECASE)

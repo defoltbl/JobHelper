@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import date, datetime
@@ -24,7 +25,7 @@ from .api_documents import DocumentsApi
 from .api_interview import InterviewApi
 from .api_letters import LettersApi
 from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, filters, health, summary,
-               textfmt, compare, config, db, followup, housekeeping, insights, integrity, keywords, merge, pdf,
+               textfmt, compare, config, db, followup, housekeeping, insights, integrity, keywords, merge, pdf, places,
                planner, salary, store, usage, vault)
 
 
@@ -424,7 +425,6 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
     def changelog(self):
         """[{date, items}] from CHANGELOG.md, newest first; **words** become <b>words</b>."""
         import html
-        import re
         try:
             text = (config.ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
         except OSError:
@@ -531,6 +531,11 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
         for a background thread, so the first Insights view opens at once. Returns how many texts were read."""
         return keywords.read_ahead([j.get("description") or "" for j in store.load_jobs()] + [self._cv_text()])
 
+    def country_of(self, city):
+        """The country the app takes a city to be in ("Czechia"), or '' when it does not know the city."""
+        name = places.country_of(str(city or ""))
+        return " ".join(part.capitalize() for part in name.split())
+
     def merge_jobs(self, keep_id, drop_id):
         def go(jobs, j):
             return {"ok": merge.merge(jobs, keep_id, drop_id)}
@@ -618,7 +623,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
             target_roles = [str(r) for r in (profile.get("target_roles") or [])]
         except Exception:
             seed_queries, level, target_roles = [], "junior", []
-        defaults = {"where": "", "source": "czech", "include_remote": False, "full_time_only": True,
+        defaults = {"where": "", "country": "", "source": "czech", "include_remote": False, "full_time_only": True,
                     "all_languages": False, "max_age_days": config.MAX_JOB_AGE_DAYS,
                     "threshold": config.DEFAULT_THRESHOLD, "min_lead_score": config.MIN_LEAD_SCORE,
                     "model": config.MODEL, "per_query": 15, "queries": list(seed_queries),
@@ -640,7 +645,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
     OPTION_NUMBERS = {"threshold": (0, 100), "min_lead_score": (0, 100), "max_age_days": (0, 3650), "per_query": (1, 100),
                       "max_years": (0, 60), "keep_backups": (0, 1000), "followup_days": (0, 365), "scan_days": (1, 3650)}
     OPTION_LISTS = ("queries", "skip_words", "keep_words", "level_words", "wanted_roles", "unwanted_roles", "my_fields")
-    OPTION_TEXTS = {"where": 80, "about_right_to_work": 300, "about_start": 300, "about_experience": config.MAX_EXPERIENCE_NOTES}
+    OPTION_TEXTS = {"where": 80, "country": 60, "about_right_to_work": 300, "about_start": 300, "about_experience": config.MAX_EXPERIENCE_NOTES}
     MAX_LIST, MAX_WORD = 60, 100
 
     def check_options(self, opts):
@@ -674,6 +679,8 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
                 if len(text) > limit:
                     return {}, f"“{key.replace('_', ' ')}” is {len(text)} characters long; the most is {limit}. Shorten it."
                 clean[key] = text
+        if clean.get("country") and not re.fullmatch(r"[^\W\d_]+(?:[ '.\-]+[^\W\d_]+)*\.?", clean["country"]):
+            return {}, "“country” must be a country's name in letters, for example Germany."
         for key in ("include_remote", "all_languages", "full_time_only", "notifications", "scan_all_folders"):
             if key in clean and not isinstance(clean[key], bool):
                 return {}, f"“{key.replace('_', ' ')}” must be on or off."
