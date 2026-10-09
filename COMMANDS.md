@@ -125,8 +125,8 @@ Inside the window:
   clipboard. An answer that claims something your CV lacks is marked "Check this answer".
 - **Help** — the button under Options explains the app in ten short topics (what it does, a
   normal week, scores and labels, the limit, privacy, what to do when something looks wrong).
-- **Last run card, cost rows** — *You paid: your subscription only* and *Same work via API: ≈ $… · search*
-  (or *· email scan*): the estimated price of the last run alone with pay-per-use API billing.
+- **Last run card, cost rows** — *You paid: subscription only* and *Same search via API: ≈ $…*
+  (or *Same scan via API*): the estimated price of the last run alone with pay-per-use API billing.
   The total since the first day is in `python status.py usage`.
 - **More about your work** (Options → About you) — what you really did in each job beyond the
   CV: tasks, tools, team, results (up to 4,000 characters, in English). Interview preparation
@@ -257,7 +257,7 @@ Inside the window:
 - **Weekly run card** — click it to turn the weekly schedule on/off and pick the
   day + time (writes the macOS LaunchAgent for you — see section 9).
 - **Usage left** — your 5-hour / 7-day subscription windows; refreshes on open and
-  with the **↻ refresh** button. Below 20% it also shows when the window resets; when Claude
+  with the **↻ refresh** button. With less than 20% left it also shows when the window resets; when Claude
   has refused a call it shows **0% left** in red until that time.
 - Hover any robot for its name, role, and latest result.
 

@@ -29,13 +29,36 @@ table { border-collapse: collapse; margin-top: 6px; margin-bottom: 6px; }
 th { background-color: #e8edf3; font-weight: bold; }
 th, td { border: 1px solid #c9d2dc; padding: 5px; font-size: 9.5pt; }
 a { color: #1d4ed8; text-decoration: none; }
+td.edge, td.note { border: 0px; }
+td.note { font-size: 10pt; }
 """
+
+
+# A note in the guide ("> **Tip**" and the lines after it) becomes a tinted box with a coloured edge.
+CALLOUTS = {"Note": ("#1d4ed8", "#eaf1fe"), "Tip": ("#15803d", "#e9f7ee"),
+            "Important": ("#7e22ce", "#f4ecfd"), "Warning": ("#b91c1c", "#fdecec")}
+
+
+def callout(match) -> str:
+    kind, text = match.group(1), match.group(2)
+    edge, fill = CALLOUTS[kind]
+    return (f'<table class="callout" width="100%" cellspacing="0" cellpadding="7"><tr>'
+            f'<td class="edge" width="4" bgcolor="{edge}"></td>'
+            f'<td class="note" bgcolor="{fill}"><span style="font-weight:700; color:{edge};">{kind}</span><br>{text}</td></tr></table>')
+
+
+def head_row(match) -> str:
+    """The first row of a table is its heading: tinted, as in the stylesheet's `th`."""
+    if 'class="edge"' in match.group(2):
+        return match.group(0)
+    return match.group(1) + match.group(2).replace("<td>", '<td bgcolor="#e8edf3">') + match.group(3)
 
 
 def fingerprint() -> str:
     """What the PDF was made from: the guide's text and every picture it shows."""
     text = GUIDE.read_text(encoding="utf-8")
     digest = hashlib.sha256(text.encode("utf-8"))
+    digest.update(Path(__file__).read_bytes())            # and how it is laid out: a new look needs a new PDF too
     for name in sorted(set(re.findall(r"\]\((img/[^)]+)\)", text))):
         digest.update((GUIDE.parent / name).read_bytes())
     return digest.hexdigest()[:20]
@@ -69,6 +92,9 @@ def build(out: Path = OUT) -> Path:
         height = round(width * picture.height() / picture.width()) if not picture.isNull() and picture.width() else 0
         return f'<img src="{src}" width="{width}"' + (f' height="{height}"' if height else "") + ">"
     html = re.sub(r'<img src="([^"]+)"[^>]*>', sized, html)
+    html = re.sub(r'<p style="[^"]*margin-left:40px;[^"]*">\s*<span style=" font-weight:700;">(Note|Tip|Important|Warning)</span>\s*(.*?)</p>',
+                  callout, html, flags=re.S)
+    html = re.sub(r"(<table[^>]*>\s*<tr>)(.*?)(</tr>)", head_row, html, flags=re.S)
     doc = QTextDocument()
     doc.setBaseUrl(QUrl.fromLocalFile(str(GUIDE.parent) + "/"))
     doc.setDefaultStyleSheet(CSS)

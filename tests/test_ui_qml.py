@@ -820,7 +820,7 @@ def test_help_opens_from_the_button_and_covers_the_app(ui):
 
 def test_last_run_card_says_what_you_paid_and_the_api_price(ui):
     source = qml_source()
-    assert '"You paid"' in source and '"Same work via API"' in source and "your subscription only" in source
+    assert '"You paid"' in source and '"Same work via API"' in source and '"subscription only"' in source
     assert "$0" not in source, "nothing was paid per run, so no price is shown next to 'You paid'"
     assert '"Total cost"' not in source and '"Cost (API-equiv.)"' not in source
     assert "usageData.cost" not in source, "the card shows the last run's cost, not the total of everything"
@@ -833,32 +833,47 @@ def _card_values(ui):
 def test_last_run_card_shows_the_cost_of_the_last_run_only(ui):
     ui.js('lastRunData = ({ when: "07 Oct 14:20", found: "+3 new" })')
     ui.wait(60)
-    assert "after next run" in _card_values(ui)                 # a summary saved before costs were noted
+    assert {"Same work via API", "after next run"} <= _card_values(ui)     # a summary saved before costs were noted
     ui.js('lastRunData = ({ when: "07 Oct 14:20", found: "+3 new", cost: 0.4, cost_of: "search" })')
     ui.wait(60)
     values = _card_values(ui)
-    assert "≈ $0.40 · search" in values and "your subscription only" in values
+    assert {"Same search via API", "≈ $0.40", "subscription only"} <= values and "Same work via API" not in values
     ui.js('lastRunData = ({ scan: "07 Oct · 0 new", cost: 0, cost_of: "email scan" })')
     ui.wait(60)
-    assert "≈ $0.00 · email scan" in _card_values(ui)
+    assert {"Same scan via API", "≈ $0.00"} <= _card_values(ui)
     ui.js("lastRunData = bridge.lastRun()")
     assert ui.warnings == []
 
 
 def test_usage_card_shows_nothing_left_and_when_it_resets(ui):
     keep = ui.js("JSON.stringify(usageData)")
-    ui.js('usageData = ({ model: "sonnet", five_hour_used: 100, five_hour_resets: "14:00", seven_day_used: 34, seven_day_resets: "12 Oct 09:00" })')
+    width = ui.find("statusPanel").property("width")
+    ui.js('usageData = ({ model: "sonnet", five_hour_used: 100, five_hour_resets: "12 Oct 14:00", seven_day_used: 34, seven_day_resets: "12 Oct 09:00" })')
     ui.wait(60)
     five, seven = ui.drawn("usageLeft_five_hour"), ui.drawn("usageLeft_seven_day")
-    assert five.property("text") == "0% left · resets 14:00" and five.property("font").bold()
-    assert seven.property("text") == "66% left"                 # the reset time matters only when little is left
+    assert five.property("text") == "0% left" and five.property("font").bold()
+    resets = ui.drawn("usageResets_five_hour")
+    assert resets.property("visible") is True and resets.property("text") == "resets 12 Oct 14:00"
+    assert seven.property("text") == "66% left"
+    assert ui.drawn("usageResets_seven_day").property("visible") is False      # the reset time matters only when little is left
+    assert ui.find("statusPanel").property("width") == width, "a longer text must not widen the column past the window"
+    assert resets.mapToItem(None, 0, 0).x() + resets.property("width") <= ui.win.width()
     ui.js('usageData = ({ model: "sonnet", five_hour_used: 85, five_hour_resets: "14:00" })')
     ui.wait(60)
     five, seven = ui.drawn("usageLeft_five_hour"), ui.drawn("usageLeft_seven_day")      # the rows are made again
-    assert five.property("text") == "15% left · resets 14:00" and not five.property("font").bold()
+    assert five.property("text") == "15% left" and not five.property("font").bold()
+    assert ui.drawn("usageResets_five_hour").property("text") == "resets 14:00"
     assert seven.property("text") == "—"
     ui.js("usageData = JSON.parse('%s')" % keep.replace("\\", "\\\\").replace("'", "\\'"))
     assert ui.warnings == []
+
+
+def test_the_right_column_fits_inside_the_window(ui):
+    panel = ui.find("statusPanel")
+    assert panel.mapToItem(None, 0, 0).x() + panel.property("width") <= ui.win.width()
+    for item in ui.seen():
+        if item.property("visible") and isinstance(item.property("text"), str) and item.property("text"):
+            assert item.mapToItem(None, 0, 0).x() + item.property("width") <= ui.win.width() + 0.5, item.property("text")
 
 
 # ── about you, notifications, backups, readable help ────────────────────────
@@ -2475,11 +2490,14 @@ def test_the_guide_s_pictures_exist_and_come_from_the_picture_script():
     import re
     guide = (ROOT / "docs" / "GUIDE.md").read_text(encoding="utf-8")
     used = re.findall(r"\]\(img/([^)]+)\)", guide)
-    assert len(used) >= 20 and len(set(used)) == len(used)
+    assert len(used) >= 30 and len(set(used)) == len(used)
     script = (ROOT / "tests" / "guide_shots.py").read_text(encoding="utf-8")
+    taken = set(re.findall(r'shot\("([^"]+)"', script))
+    assert taken == {name[:-4] for name in used}, "every picture the script takes is shown in the guide, and the other way round"
+    assert sorted(p.name for p in (ROOT / "docs" / "img").glob("*.png")) == sorted(used), "no picture is left over in docs/img"
     for name in used:
         assert (ROOT / "docs" / "img" / name).is_file(), name
-        assert f'shot("{name[:-4]}")' in script, f"{name} is not taken by tests/guide_shots.py"
+        assert re.search(rf'shot\("{re.escape(name[:-4])}"[,)]', script), f"{name} is not taken by tests/guide_shots.py"
     assert "tests/guide_shots.py" in guide and "invented" in guide           # says where the pictures come from
     for link in re.findall(r"\]\((\.\./[^)#]+)\)", guide):
         assert (ROOT / "docs" / link).resolve().is_file(), link
@@ -2557,6 +2575,9 @@ def test_the_guide_s_pdf_matches_the_guide():
     assert pdf_path.is_file(), "docs/GUIDE.pdf is missing: python scripts/guide_pdf.py"
     reader = PdfReader(str(pdf_path))
     assert guide_pdf.fingerprint() in (reader.metadata.creator or ""), "the guide changed after its PDF was made: python scripts/guide_pdf.py"
-    assert len(reader.pages) >= 15 and sum(len(page.images) for page in reader.pages) >= 24
-    first = reader.pages[0].extract_text()
-    assert "illustrated" in first and "What the app does for you" in first
+    assert len(reader.pages) >= 25 and sum(len(page.images) for page in reader.pages) >= 33
+    first = " ".join(reader.pages[0].extract_text().split())        # bold words come out one per line
+    assert "illustrated" in first and "In this guide" in first
+    text = " ".join(" ".join(page.extract_text() for page in reader.pages).split())
+    for part in ("Before you begin", "Next steps", "Options reference", "Troubleshooting", "Quick reference", "Important", "Tip"):
+        assert part in text, part

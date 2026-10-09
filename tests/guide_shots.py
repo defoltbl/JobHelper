@@ -11,7 +11,7 @@ Nothing of yours is read, and Claude is never asked.
 from datetime import date, timedelta
 from pathlib import Path
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Qt
 from PySide6.QtQuick import QQuickWindow
 
 from jobhelper import agent1_cv, agent2_search, config, db, llm, store, ui_api
@@ -133,7 +133,20 @@ def test_guide_shots(ui, monkeypatch):
     monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
     monkeypatch.setattr(ui_api.Api, "_threshold", lambda self: 50)
     monkeypatch.setattr(ui_api.Api, "_old_format_letter", lambda self, j: False)      # the stand-in files are not real letters
-    monkeypatch.setattr(ui_api.Api, "usage_info", lambda self: {"five_hour_used": 34, "seven_day_used": 12, "model": "sonnet", "calls": 41, "cost": 1.87})
+    monkeypatch.setattr(ui_api.Api, "usage_info", lambda self: {"five_hour_used": 34, "five_hour_resets": "", "seven_day_used": 12, "seven_day_resets": "",
+                                                              "model": "sonnet", "calls": 41, "cost": 1.87})
+    letter = ["I am writing to apply for the Junior Python Developer role at Northwind Systems. Your posting describes back-end services in "
+              "Python and FastAPI for logistics planners, which is the kind of work I did during my internship and want to do full time.",
+              "At Example Labs I built internal tools in Python and wrote the unit tests for them with pytest. I worked with PostgreSQL "
+              "every day and packaged the services with Docker, so the stack in your posting is familiar ground.",
+              "I have not worked with Kubernetes or Terraform yet. I learn tools of that kind quickly when a team uses them, and I would "
+              "rather say so than claim otherwise.",
+              "What draws me to Northwind is that the tools are used by planners every day, so a small improvement in a service is felt "
+              "at once. Reviewing colleagues' code, which your posting mentions, is how I learned most during my internship.",
+              "I would be glad to talk about the role. I am in Prague and can start four weeks after an offer."]
+    monkeypatch.setattr(ui_api.Api, "letter_for_edit", lambda self, job_id: {
+        "ok": True, "id": job_id, "company": "Northwind Systems", "title": "Junior Python Developer", "paragraphs": list(letter),
+        "title_line": "Junior Python Developer", "date_text": TODAY.strftime("%d %B %Y"), "min_words": 180, "max_words": 320})
     monkeypatch.setattr(ui_api.Api, "cv_compare", lambda self, job_id: {
         "ok": True, "company": "Northwind Systems", "title": "Junior Python Developer", "file": "AlexNovak_CV_NorthwindSystems.docx", "older_master": False,
         "rows": [{"state": "changed", "section": "PROFILE",
@@ -154,14 +167,22 @@ def test_guide_shots(ui, monkeypatch):
     api = ui.bridge._api
     api.save_options({**api.options(), "where": "Prague", "threshold": 50, "wanted_roles": ["junior python developer", "backend developer"],
                       "unwanted_roles": ["tester"], "skip_words": ["intern"], "max_years": 3})
-    api.note_run(when=TODAY.strftime("%d %b") + " 09:12", found="+9 new", filtered=7, letters=5, cvs=5, scan=TODAY.strftime("%d %b") + " · 2 new")
+    api.note_run(when=TODAY.strftime("%d %b") + " 09:12", found="+9 new", filtered=7, letters=5, cvs=5, scan=TODAY.strftime("%d %b") + " · 2 new",
+                 cost=0.42, cost_of="search")
     api.set_event("app1", (TODAY + timedelta(days=2)).isoformat(), "11:30", "interview", "Video call with the team lead")
 
-    def shot(name):
+    def shot(name, part=None, zoom=2):
+        """The whole window, or one part of it (x, y, width, height) enlarged so its small text can be read."""
         ui.wait(450)
         path = OUT / f"{name}.png"
-        QQuickWindow.grabWindow(ui.win).save(str(path))
+        picture = QQuickWindow.grabWindow(ui.win)
+        if part:
+            x, y, w, h = part
+            picture = picture.copy(x, y, w, h).scaled(w * zoom, h * zoom, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        picture.save(str(path))
         done.append(name)
+
+    RIGHT = (ui.win.width() - 236, 0, 236, 470)          # the column on the right: usage, last run, weekly run
 
     def scroll(dialog_name, target_name, above=200):
         dialog, target = ui.find(dialog_name), ui.find(target_name)
@@ -186,6 +207,14 @@ def test_guide_shots(ui, monkeypatch):
         ui.js("win.reloadAll(); win.healthData = bridge.selfCheck(true); win.healthHidden = true")
         ui.js('ticker.text = "Search finished: 9 new jobs, 5 letters and 5 CVs written."')
         shot("02_main")
+        shot("25_sidebar", (0, 0, 238, 420))
+        shot("26_usage_and_last_run", RIGHT)
+        ui.js('usageData = ({ model: "sonnet", five_hour_used: 100, five_hour_resets: "14:00", seven_day_used: 34, seven_day_resets: "" })')
+        shot("27_limit_used_up", (ui.win.width() - 236, 0, 236, 190))
+        ui.js("usageData = bridge.usageInfo()")
+        ui.js('win.healthData = ({ ok: false, problems: 1, checks: [], message: "No master CV yet. Add yours in the Account card." }); win.healthHidden = false')
+        shot("28_startup_check", (238, 0, 726, 120), 1.5)
+        ui.js("win.healthData = bridge.selfCheck(true); win.healthHidden = true")
         ui.bridge._set_running(True)
         ui.js('win.runMode = "search"; win.elapsed = 147')
         ui.bridge.agentChanged.emit("a1", "done", "profile ready")
@@ -194,6 +223,11 @@ def test_guide_shots(ui, monkeypatch):
         ui.bridge.progressChanged.emit("a3", 6, 14)
         ui.bridge.logChanged.emit("Writing CV and letter 2 of 5: Kestrel Data…")
         shot("03_running")
+        ui.js('win.limitData = ({ paused: true, can_resume: false, window: "5-hour", used: 100, resets_at: "14:00", resets_day: "' + TODAY.strftime("%d %b")
+              + '", message: "Claude\'s 5-hour limit is used up (100%). It resets at 14:00." }); win.paused = true; limitDialog.open()')
+        shot("29_limit_pause")
+        ui.js("limitDialog.close(); win.paused = false; win.limitData = ({})")
+        ui.wait(350)
         ui.bridge._set_running(False)
         ui.js('win.resetRobots(); win.runMode = ""; win.stageKey = ""; win.runProgress = 0; win.runResult = ""')
         ui.js('ticker.text = "Line idle. Press Run search to start the pipeline."')
@@ -222,6 +256,12 @@ def test_guide_shots(ui, monkeypatch):
         ui.js('compareDialog.show("lead1")')
         shot("09_compare_cv")
         ui.js("compareDialog.close()")
+        ui.wait(350)
+
+    def letter_editor():
+        ui.js('letterDialog.show("lead1")')
+        shot("30_letter_editor")
+        ui.js("letterDialog.close()")
         ui.wait(350)
 
     def form_answers():
@@ -274,6 +314,10 @@ def test_guide_shots(ui, monkeypatch):
         shot("15_responses")
         ui.js("tableDialog.close()")
         ui.wait(350)
+        ui.js('responseDialog.show("<0@example.com>")')
+        shot("31_one_reply")
+        ui.js("responseDialog.close()")
+        ui.wait(350)
         ui.js('openView("ana")')
         shot("16_analytics")
         ui.js("tableDialog.close()")
@@ -297,8 +341,12 @@ def test_guide_shots(ui, monkeypatch):
         shot("19_options_search")
         scroll("optDialog", "fieldsNote", 260)
         shot("20_options_roles")
+        scroll("optDialog", "rightField", 200)
+        shot("32_options_about_you")
         scroll("optDialog", "shelfNote", 320)
         shot("21_options_storage")
+        scroll("optDialog", "foldersSw", 420)
+        shot("33_options_email")
         ui.js("close()", dialog)
         ui.wait(350)
 
@@ -317,7 +365,7 @@ def test_guide_shots(ui, monkeypatch):
 
     try:
         for name, fn in (("welcome", welcome_card), ("main", main_screen), ("new jobs", new_jobs), ("job window", job_window), ("compare", compare),
-                         ("form answers", form_answers), ("applications", applications), ("interview", interview), ("replies", replies),
+                         ("letter editor", letter_editor), ("form answers", form_answers), ("applications", applications), ("interview", interview), ("replies", replies),
                          ("filtered and insights", filtered_and_insights), ("options", options), ("others", others)):
             step(name, fn)
     finally:

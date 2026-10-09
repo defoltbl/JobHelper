@@ -67,7 +67,7 @@ Dialog {
             "The app <b>never invents experience</b>. An adapted CV changes only the Profile and Key Skills parts of your <b>master CV</b>, and a letter may only use what your CV shows.",
             "Change your <b>master CV</b> in the <b>Account card</b>. The rules the app follows are in two files in the data folder; if you edit them by hand, approve the change in the <b>Account</b> card." ] },
         { title: "Claude and the limit", lines: [
-            "The app works through your Claude subscription, so a <b>search</b> costs you nothing extra. \"<b>Same work via API</b>\" on the Last run card shows what the last <b>search</b> or email scan alone would have cost with pay-per-use API billing.",
+            "The app works through your Claude subscription, so a <b>search</b> costs you nothing extra. \"<b>Same search via API</b>\" (or \"Same scan via API\") on the Last run card shows what the last <b>search</b> or email scan alone would have cost with pay-per-use API billing.",
             "Your subscription has a <b>5-hour</b> and a <b>7-day</b> <b>limit</b> (<b>Usage left</b>, top right). The card shows when a nearly used one resets. When one is used up, the card says 0% left, the run pauses, saves, and shows a warning. <b>Resume</b> turns blue when the limit is back.",
             "To use less: fewer <b>search</b> roles, Czech boards instead of every source, a higher \"<b>Write letters above</b>\"." ] },
         { title: "Privacy and safety", lines: [

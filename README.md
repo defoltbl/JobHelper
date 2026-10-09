@@ -6,7 +6,7 @@ of what you applied to and what the companies answered. It runs on **your Claude
 through the Claude Code CLI: no paid API key, no per-token bill.
 
 - **All commands with their options:** [COMMANDS.md](COMMANDS.md)
-- **How to use each part, with pictures:** [docs/GUIDE.md](docs/GUIDE.md), also as [docs/GUIDE.pdf](docs/GUIDE.pdf)
+- **How to use each part, step by step, with pictures and reference tables:** [docs/GUIDE.md](docs/GUIDE.md), also as [docs/GUIDE.pdf](docs/GUIDE.pdf)
 - **The rules it is built by, how the code is laid out, what is left to do:** [HANDBOOK.md](HANDBOOK.md)
 - **What changed, day by day:** [CHANGELOG.md](CHANGELOG.md)
 
@@ -165,7 +165,7 @@ not show at a working level is scored low, whatever language it is written in.
 pytest -q
 ```
 
-About 1,100 tests, two minutes, offline. They never touch your real data, the Keychain or
+About 1,200 tests, two minutes, offline. They never touch your real data, the Keychain or
 `.env`, never ask Claude, never read a real job board, and never open a file or put anything in
 the Trash: every test works in temporary folders with stand-ins. The window itself is loaded
 offscreen and driven by the tests. Every change comes with tests in the same commit.

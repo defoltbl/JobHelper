@@ -45,13 +45,17 @@ Rectangle {
                     Item { Layout.fillWidth: true }
                     Text { objectName: "usageLeft_" + modelData.key; font.pixelSize: 11
                         color: modelData.used >= 100 ? theme.crit : theme.soft; font.bold: modelData.used >= 100
-                        text: modelData.used === undefined || modelData.used === null ? "—"
-                              : (100 - modelData.used) + "% left" + (modelData.resets && modelData.used >= 80 ? " · resets " + modelData.resets : "") } }
+                        text: modelData.used === undefined || modelData.used === null ? "—" : (100 - modelData.used) + "% left" } }
                 Rectangle { Layout.fillWidth: true; implicitHeight: 8; radius: 4; color: theme.inset
                     Rectangle { height: parent.height; radius: 4
                         width: parent.width * ((modelData.used === undefined || modelData.used === null ? 0 : modelData.used) / 100)
                         gradient: Gradient { orientation: Gradient.Horizontal
                             GradientStop { position: 0; color: modelData.c1 } GradientStop { position: 1; color: modelData.c2 } } } }
+                // when little is left: the time it comes back, on its own line so the card keeps its width
+                Text { objectName: "usageResets_" + modelData.key; visible: text !== ""
+                    Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; wrapMode: Text.Wrap
+                    color: modelData.used >= 100 ? theme.crit : theme.soft; font.pixelSize: 10
+                    text: modelData.resets && modelData.used >= 80 ? "resets " + modelData.resets : "" }
             }
         }
         // last run card
@@ -67,11 +71,11 @@ Rectangle {
                              { k: "Letters", v: lastRunData.letters !== undefined ? "" + lastRunData.letters : "—" },
                              { k: "CVs", v: lastRunData.cvs !== undefined ? "" + lastRunData.cvs : "—" },
                              { k: "Email scan", v: lastRunData.scan || "—" },
-                             { k: "You paid", v: connData.paid_api === true ? "API billing" : "your subscription only" },
-                             // of the last run alone (a search or an email scan), not of everything so far
-                             { k: "Same work via API", v: lastRunData.cost !== undefined
-                                 ? "≈ $" + Number(lastRunData.cost).toFixed(2) + (lastRunData.cost_of ? " · " + lastRunData.cost_of : "")
-                                 : "after next run" } ]
+                             { k: "You paid", v: connData.paid_api === true ? "API billing" : "subscription only" },
+                             // of the last run alone (a search or an email scan, named in the label), not of everything so far
+                             { k: lastRunData.cost === undefined ? "Same work via API"
+                                  : (lastRunData.cost_of === "email scan" ? "Same scan via API" : "Same search via API"),
+                               v: lastRunData.cost !== undefined ? "≈ $" + Number(lastRunData.cost).toFixed(2) : "after next run" } ]
                     // the value takes the space that is left and shortens itself, so a
                     // long value can never run out of the card
                     RowLayout { Layout.fillWidth: true; spacing: 8

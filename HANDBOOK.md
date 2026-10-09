@@ -217,6 +217,12 @@ After every batch of changes, without being asked:
 5. When a window that is pictured in the guide changed, take the guide's pictures again
    (`pytest tests/guide_shots.py -q -o addopts=""`) and look at them. After any change to the guide or
    its pictures, make its PDF again (`python scripts/guide_pdf.py`); a test fails until you do.
+   The guide follows one pattern per section, as product documentation does: what the feature is for,
+   *Before you begin*, numbered steps, a table of every control, *Note / Tip / Important / Warning* boxes
+   (a quoted block that starts with the bold word), *If something is wrong*, *Next steps*. Keep to it,
+   and write the names of buttons exactly as the window shows them. A picture of one part of the window
+   is taken with `shot(name, (x, y, width, height))`. Tests check that every picture the script takes is
+   in the guide and the other way round.
 4. For anything that changes how a window looks: screenshots on made-up data, in both themes,
    and actually look at them. A colour that is right in the file can still not reach the label.
 
