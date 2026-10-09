@@ -461,3 +461,44 @@ def test_the_preparation_text_survives_locked_data(isolate_data, monkeypatch):
     monkeypatch.setattr(store, "load_jobs", locked)
     api = ui_api.Api()
     assert api.prep_text("a") == "" and api.prep_parts("a") == {}
+
+
+# ── two companies are one only when their names say so ──────────────────────
+@pytest.mark.parametrize("a, b, same", [
+    ("Accenture Czech Republic", "PwC Czech Republic", False),          # a country is not a name
+    ("Good Data", "NTT DATA", False), ("Deutsche Bank", "Deutsche Börse", False), ("Global Payments Inc.", "KBC Global Services", False),
+    ("FLAE ROBOTICS a.s.", "Brightline Robotics", False), ("ACTUM Digital", "NN Digital Hub", False), ("Acme", "", False), ("", "", False),
+    ("CSOB", "ČSOB (KBC)", True), ("Valeo", "Valeo s.r.o.", True), ("TD SYNNEX", "TD SYNNEX Czech Republic", True),
+    ("BRIGHTLINE", "Brightline Robotics", True), ("Aon", "Aon Central and Eastern Europe a.s.", True), ("Veeam", "Veeam Software", True),
+    ("Data Systems", "Data Systems Europe", True),                      # only common words, but one name is the other plus more
+    ("HP", "HP Inc.", True), ("NN", "NN Group", True),
+])
+def test_same_company(a, b, same):
+    assert email_client.same_company(a, b) is same and email_client.same_company(b, a) is same
+
+
+def test_applying_at_one_company_does_not_drop_the_same_role_at_another():
+    applied = [store.new_job(id="a", title="Data Engineer", company="PwC Czech Republic", status="waiting"),
+               store.new_job(id="b", title="Backend Developer", company="Good Data", status="rejected")]
+    found = [store.new_job(id="n1", title="Data Engineer", company="Accenture Czech Republic"),     # another company: stays
+             store.new_job(id="n2", title="Junior Data Engineer", company="PwC"),                   # the same company and role: dropped
+             store.new_job(id="n3", title="Backend Developer", company="NTT DATA"),                 # shares only the word "data": stays
+             store.new_job(id="n4", title="Backend Developer", company="GoodData s.r.o.")]          # another spelling of the same name: dropped
+    dropped = []
+    kept, n = agent2_search.drop_known_applications(found, applied, dropped=dropped)
+    assert [j["id"] for j in kept] == ["n1", "n3"] and n == 2 and [d["job"]["id"] for d in dropped] == ["n2", "n4"]
+    jobs = applied + [store.new_job(id=j["id"], title=j["title"], company=j["company"]) for j in found]
+    removed = agent2_search.prune_applied_leads(jobs)
+    assert [j["id"] for j in removed] == ["n2", "n4"] and {j["id"] for j in jobs} == {"a", "b", "n1", "n3"}
+
+
+def test_a_reply_from_one_company_does_not_count_for_another(isolate_data):
+    from jobhelper import agent5_responses, db
+    db.upsert_response({"msg_id": "<1@x>", "company": "Accenture Czech Republic", "role": "Data Engineer", "stage": "interview",
+                        "received_date": "2026-10-01"})
+    jobs = [store.new_job(id="p", title="(existing application)", company="PwC Czech Republic", status="waiting", source="manual")]
+    assert agent5_responses.backfill_roles(jobs) == 0 and jobs[0]["title"] == "(existing application)"     # not PwC's role
+    assert agent5_responses.reconcile_jobs(jobs) == 1 and jobs[-1]["company"] == "Accenture Czech Republic"  # its own record
+    agent5_responses.annotate_progress(jobs)
+    assert jobs[0]["status"] == "waiting" and not jobs[0].get("stages_path")                                # PwC is still waiting
+    assert email_client.best_job_for_company_role("Accenture Czech Republic", "Data Engineer", jobs[:1]) is None

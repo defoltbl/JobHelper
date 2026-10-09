@@ -7,6 +7,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 Found by reading all the code line by line.
 
+- **Fixed: two companies were taken for one when their names shared any word.** "Accenture Czech Republic" and "PwC Czech Republic" share "Republic", so applying to a role at one could hide the same role at the other as "already applied", and a reply from one could be counted for the other. Names now match only when they are equal, share a real name word, or one is the other with more added. On your data 62 pairs of different companies are now told apart, and the 28 pairs that are one company still match.
 - **Fixed: an adapted CV could lose a whole section.** The skills rows were taken to end only at four fixed headings. In a CV whose next section was called anything else (for example "EXPERIENCE"), that section counted as skill rows and was replaced. The rows now end at the next heading of any name, more heading names are recognised ("SUMMARY", "SKILLS" …), and a check fails the file if any section of the master is missing. Your own CV is read exactly as before.
 - **A Word CV without a profile section** now gets the short profile note instead of no adapted CV at all.
 - **Search roles outside software can be added in Options.** "registered nurse" used to be refused as "not a job role"; a role the app does not know is now asked about once and then added.

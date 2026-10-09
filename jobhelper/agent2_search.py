@@ -157,15 +157,15 @@ def drop_known_applications(
     """
     # ... and a role you marked "not interested" does not come back as a repost either
     exclude = exclude_statuses or (store.APPLICATION_STATUSES | {store.NOT_INTERESTED})
-    known = [(email_client.company_tokens(j.get("company", "")), role_key(j.get("title", "")))
+    known = [(j["company"], role_key(j.get("title", "")))
              for j in existing_jobs if j.get("status") in exclude and j.get("company")]
-    known = [(c, r) for c, r in known if c]
 
     kept, n_dropped = [], 0
     for nj in new_jobs:
-        ctoks = email_client.company_tokens(nj.get("company", ""))
+        company = nj.get("company", "")
         nrole = role_key(nj.get("title", ""))
-        if ctoks and any(ctoks & kc and _same_role(nrole, kr) for kc, kr in known):
+        # the same company, not merely a name that shares a word with it ("Good Data" is not "NTT DATA")
+        if company and any(_same_role(nrole, kr) and email_client.same_company(company, kc) for kc, kr in known):
             n_dropped += 1
             note_dropped(dropped, nj, "already applied", "You already applied for this role at this company.")
             continue
@@ -237,16 +237,15 @@ def prune_applied_leads(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     Different roles at an applied company are kept (multi-role applications).
     """
-    apps = [(email_client.company_tokens(j.get("company", "")), role_key(j.get("title", "")))
+    apps = [(j["company"], role_key(j.get("title", "")))
             for j in jobs if j.get("status") in store.APPLICATION_STATUSES and j.get("company")]
-    apps = [(c, r) for c, r in apps if c]
 
     removed, kept = [], []
     for j in jobs:
         if j.get("status") in store.LEAD_STATUSES:
-            ctoks = email_client.company_tokens(j.get("company", ""))
+            company = j.get("company", "")
             rk = role_key(j.get("title", ""))
-            if ctoks and any(ctoks & ac and _same_role(rk, ar) for ac, ar in apps):
+            if company and any(_same_role(rk, ar) and email_client.same_company(company, ac) for ac, ar in apps):
                 removed.append(j)
                 continue
         kept.append(j)

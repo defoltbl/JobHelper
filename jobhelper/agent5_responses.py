@@ -355,7 +355,7 @@ def reconcile_jobs(jobs: list[dict[str, Any]]) -> int:
         new_id = f"email-{store.slugify(company)}"
         tracked = (new_id in existing_ids
                    or (norm and norm in existing_norm)
-                   or (toks and any(toks & email_client.company_tokens(j.get("company", "")) for j in jobs)))
+                   or (toks and any(email_client.same_company(company, j.get("company", "")) for j in jobs)))
         if tracked:
             continue  # already tracked (seeded / found / linked / created)
         stages = [x.get("stage", "other") for x in rs]
@@ -399,7 +399,7 @@ def backfill_roles(jobs: list[dict[str, Any]]) -> int:
         if not jtoks:
             continue
         for company, counter in roles_by_company.items():
-            if jtoks & email_client.company_tokens(company):
+            if email_client.same_company(job.get("company", ""), company):
                 job["title"] = counter.most_common(1)[0][0]
                 updated += 1
                 break
@@ -507,9 +507,8 @@ def progress_rows(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for g in groups.values():
         job = jobs_by_id.get(g["job_id"])
         if job is None and g["company"]:
-            toks = email_client.company_tokens(g["company"])
-            if toks:
-                job = next((j for j in jobs if toks & email_client.company_tokens(j.get("company", ""))), None)
+            if email_client.company_tokens(g["company"]):
+                job = next((j for j in jobs if email_client.same_company(g["company"], j.get("company", ""))), None)
         result = g["stages"][-1] if g["stages"] else ""  # most recent stage = current outcome
         rows.append({
             "job_id": job["id"] if job else "",
@@ -588,9 +587,8 @@ def annotate_progress(jobs: list[dict[str, Any]]) -> None:
     for row in progress_rows(jobs):
         target = jobs_by_id.get(row["job_id"]) if row["job_id"] else None
         if target is None and row["company"]:
-            toks = email_client.company_tokens(row["company"])
-            if toks:
-                target = next((j for j in jobs if toks & email_client.company_tokens(j.get("company", ""))), None)
+            if email_client.company_tokens(row["company"]):
+                target = next((j for j in jobs if email_client.same_company(row["company"], j.get("company", ""))), None)
         if target is not None:
             target["stages_path"] = row["path"]
             target["result"] = row["result"]

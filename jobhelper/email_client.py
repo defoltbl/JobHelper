@@ -254,6 +254,34 @@ def company_tokens(company: str) -> set[str]:
     return {t for t in tokens if t not in stop}
 
 
+# Words many company names share. Two names that have only such words in common are two companies
+# ("Good Data" and "NTT DATA", "Deutsche Bank" and "Deutsche Börse"), unless one is the other plus more.
+GENERIC_COMPANY_WORDS = {
+    "data", "systems", "system", "software", "solutions", "solution", "technologies", "technology", "tech", "services", "service",
+    "bank", "banka", "consulting", "consultants", "international", "global", "digital", "labs", "lab", "holding", "holdings",
+    "europe", "european", "prague", "praha", "czechia", "republic", "company", "partners", "capital", "energy", "health", "media",
+    "network", "networks", "engineering", "industries", "research", "robotics", "analytics", "cloud", "security", "finance",
+    "financial", "insurance", "pharma", "automotive", "logistics", "telecom", "mobile", "games", "studio", "studios", "design",
+    "management", "central", "eastern", "deutsche", "ceska", "national", "united", "first", "new", "one", "career", "careers",
+    "jobs", "recruitment", "staffing", "personnel", "innovation", "innovations", "development", "business", "enterprise",
+    "enterprises", "trading", "investments", "ventures", "aktiengesellschaft",
+}
+
+
+def same_company(a: str, b: str) -> bool:
+    """Are these two names the same company? Equal once spacing, accents and legal forms are
+    ignored; or they share a word that is really a name; or, when all they share is a common
+    word, one name is the other with more added ("Data Systems" and "Data Systems Europe")."""
+    na, nb = norm_company(a), norm_company(b)
+    if na and na == nb:
+        return True
+    ta, tb = company_tokens(a), company_tokens(b)
+    shared = ta & tb
+    if not shared:
+        return False
+    return bool(shared - GENERIC_COMPANY_WORDS) or ta <= tb or tb <= ta
+
+
 def norm_company(company: str) -> str:
     """A stable identity key for a company name, even when it has no usable
     tokens (e.g. "HP Inc." -> "hp", "NN Group" -> "nn"). Accents, brackets,
@@ -390,7 +418,7 @@ def best_job_for_company_role(company: str, subject: str, jobs: list[dict[str, A
     ctoks = company_tokens(company)
     if not ctoks:
         return None
-    cands = [j for j in jobs if ctoks & company_tokens(j.get("company", ""))]
+    cands = [j for j in jobs if same_company(company, j.get("company", ""))]
     if not cands:
         return None
     subj_role = _role_tokens(subject) - ctoks        # the company's own name is not a role word
