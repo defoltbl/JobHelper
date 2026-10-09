@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 9 October 2026
 
+- **Each job that could not be moved or put back is listed** in New Jobs with its own reason, instead of one long line.
 - **Old moved documents can be removed**: Options shows how many letters and CVs are in the backup after "Move to backup" and removes those older than the age you set, after asking with the count. Copies younger than 7 days are always kept.
 - **Fixed: moved documents were at risk from the automatic clean-up**: the "Keep backups" limit would have treated their folder as one old backup. It is now left alone.
 - **The free first look follows your profession**: which titles count as "another profession" now comes from the roles you look for (or your CV), not from a list written for software jobs. Options shows what the app takes as your profession. A title naming a role you listed as not wanted is skipped before scoring, and a language your CV shows is no longer a reason to skip.

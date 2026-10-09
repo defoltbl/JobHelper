@@ -486,9 +486,12 @@ def test_one_job_that_cannot_be_moved_does_not_stop_the_others(api, monkeypatch)
     real = api.shelve_docs
     monkeypatch.setattr(api, "shelve_docs", lambda job_id, batch="": {"ok": False, "msg": "no"} if job_id == "a" else real(job_id, batch))
     got = api.shelve_all_docs(2)
-    assert got["ok"] is True and got["jobs"] == 1 and got["files"] == 2 and len(got["failed"]) == 1
-    monkeypatch.setattr(api, "shelve_docs", lambda job_id, batch="": {"ok": False, "msg": "no"})
-    assert api.shelve_all_docs()["msg"] == "Couldn't move the documents."
+    assert got["ok"] is True and got["jobs"] == 1 and got["files"] == 2
+    assert got["failed"] == [{"title": "Dev", "company": "Co a", "why": "no"}]             # each one that failed, with its own reason
+    monkeypatch.setattr(api, "shelve_docs", lambda job_id, batch="": {"ok": False})
+    nothing = api.shelve_all_docs()
+    assert nothing["ok"] is False and nothing["msg"] == "Couldn't move the documents."
+    assert nothing["failed"] == [{"title": "Dev", "company": "Co a", "why": "Couldn't move the documents."}]
 
 
 def test_the_list_shows_what_a_job_scored_before(api):
@@ -607,7 +610,11 @@ def test_the_last_batch_is_put_back_together(api, monkeypatch):
     last = api.last_shelved()
     (config.LETTERS_DIR / "L_a.docx").write_bytes(b"in the way")
     got = api.unshelve_last(last["batch"])
-    assert got["ok"] is True and got["jobs"] == 2 and len(got["failed"]) == 1 and "already in its folder" in got["failed"][0]
+    assert got["ok"] is True and got["jobs"] == 2 and len(got["failed"]) == 1
+    assert got["failed"][0]["title"] == "Dev" and got["failed"][0]["company"] == "Co a" and "A file named L_a.docx is already in its folder" in got["failed"][0]["why"]
+    stuck = api.last_shelved()                                       # the one left is now the last batch, and still cannot come back
+    again = api.unshelve_last(stuck["batch"])
+    assert again["ok"] is False and again["msg"] == "Couldn't put the documents back." and "already in its folder" in again["failed"][0]["why"]
 
 
 def test_options_can_say_which_professions_are_taken_as_yours(api, monkeypatch):

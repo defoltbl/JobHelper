@@ -22,12 +22,13 @@ Dialog {
     property string excelKey: ""
     property bool confirmRescore: false
     property int rescoreJobs: 0
-    onClosed: { confirmRescore = false; confirmStale = false; staleNote = ""; }
+    onClosed: { confirmRescore = false; confirmStale = false; staleNote = ""; staleFailed = []; }
     // New Jobs only: jobs that still have a letter or CV from a score that is now below the limit
     property var staleRows: []
     property bool confirmStale: false
     property string staleNote: ""
     property bool staleBad: false
+    property var staleFailed: []          // jobs the last move or put-back could not handle: [{title, company, why}], one line each
     property bool anyWas: false           // some row shows its earlier score: every row keeps room for it
     property var lastShelved: ({})        // the last batch moved to the backup, while it can still be put back
     readonly property int shelvedCount: (lastShelved.jobs || []).length
@@ -36,16 +37,17 @@ Dialog {
         confirmStale = false;
         if (win.appRunning) { staleBad = true; staleNote = "A search or scan is running. Put the documents back when it has finished."; return; }
         var r = bridge.unshelveLast(lastShelved.batch || "");
+        var failed = (r && r.failed) || [];
         if (r && r.ok) {
-            var msg = "Documents of " + staleWord(r.jobs) + " are back in place (" + r.files + (r.files === 1 ? " file" : " files") + ")."
-                      + ((r.failed || []).length ? " Not put back: " + r.failed.join("; ") : "");
-            ticker.text = msg;
+            var msg = "Documents of " + staleWord(r.jobs) + " are back in place (" + r.files + (r.files === 1 ? " file" : " files") + ").";
+            ticker.text = msg + (failed.length ? " " + staleWord(failed.length) + " could not be put back." : "");
             win.countsData = bridge.counts(); win.refreshOpenView();
-            staleBad = (r.failed || []).length > 0; staleNote = staleBad ? msg : "";
+            staleBad = failed.length > 0; staleNote = staleBad ? msg + " Not put back:" : "";
         } else {
-            staleBad = true; staleNote = (r && r.msg) || "Couldn't put the documents back.";
+            staleBad = true; staleNote = ((r && r.msg) || "Couldn't put the documents back.") + (failed.length ? " The reason for each job:" : "");
             lastShelved = bridge.lastShelved();
         }
+        staleFailed = failed;
     }
     function staleWord(n) { return n + (n === 1 ? " job" : " jobs"); }
     function shelveAll() {
@@ -53,19 +55,20 @@ Dialog {
         if (!confirmStale) {
             staleRows = bridge.staleDocs();          // the names asked about are the ones on disk right now
             if (staleRows.length === 0) { win.refreshOpenView(); return; }
-            confirmStale = true; staleNote = ""; staleBad = false;
+            confirmStale = true; staleNote = ""; staleBad = false; staleFailed = [];
             return;
         }
         var r = bridge.shelveAllDocs(staleRows.length);
         confirmStale = false;
+        var failed = (r && r.failed) || [];
+        staleFailed = failed;
         if (r && r.ok) {
-            var msg = "Documents of " + staleWord(r.jobs) + " moved to the backup (" + r.files + (r.files === 1 ? " file" : " files") + ")."
-                      + ((r.failed || []).length ? " Not moved: " + r.failed.join(", ") + "." : "");
-            ticker.text = msg;
+            var msg = "Documents of " + staleWord(r.jobs) + " moved to the backup (" + r.files + (r.files === 1 ? " file" : " files") + ").";
+            ticker.text = msg + (failed.length ? " " + staleWord(failed.length) + " could not be moved." : "");
             win.countsData = bridge.counts(); win.refreshOpenView();
-            staleBad = (r.failed || []).length > 0; staleNote = staleBad ? msg : "";
+            staleBad = failed.length > 0; staleNote = staleBad ? msg + " Not moved:" : "";
         } else {
-            staleBad = true; staleNote = (r && r.msg) || "Couldn't move the documents.";
+            staleBad = true; staleNote = ((r && r.msg) || "Couldn't move the documents.") + (failed.length ? " The reason for each job:" : "");
             staleRows = bridge.staleDocs();
             if (r && r.changed && staleRows.length > 0) confirmStale = true;     // new names: asked again, with the new list
         }
@@ -86,7 +89,7 @@ Dialog {
         staleRows = excel === "leads" ? bridge.staleDocs() : [];
         lastShelved = excel === "leads" ? bridge.lastShelved() : ({});
         if (staleRows.length === 0) confirmStale = false;
-        if (!sameView) { confirmStale = false; staleNote = ""; staleBad = false; }
+        if (!sameView) { confirmStale = false; staleNote = ""; staleBad = false; staleFailed = []; }
         var seen = {}, list = [];
         rows.forEach(function (r) {
             if (r.group === undefined || r.group === "") return;
@@ -209,7 +212,14 @@ Dialog {
                           + tableDialog.dayTime(tableDialog.lastShelved.when) + "." }
                 SmallButton { objectName: "putBack"; text: "Put them back"; onClicked: tableDialog.putBack() } }
             Text { objectName: "staleNote"; visible: tableDialog.staleNote !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
-                font.pixelSize: 12; color: tableDialog.staleBad ? theme.crit : theme.good; text: tableDialog.staleNote }
+                font.pixelSize: 12; font.bold: tableDialog.staleBad; color: tableDialog.staleBad ? theme.crit : theme.good; text: tableDialog.staleNote }
+            // what could not be done, job by job, each with its own reason
+            Flickable { visible: tableDialog.staleFailed.length > 0 && tableDialog.staleNote !== ""
+                Layout.fillWidth: true; implicitHeight: Math.min(failedList.implicitHeight, 112); contentHeight: failedList.implicitHeight
+                clip: true; boundsBehavior: Flickable.StopAtBounds; ScrollBar.vertical: ScrollBar {}
+                Text { id: failedList; objectName: "staleFailed"; textFormat: Text.PlainText; width: parent.width - 12; wrapMode: Text.WordWrap
+                    color: theme.crit; font.pixelSize: 12; lineHeight: 1.25
+                    text: tableDialog.staleFailed.map(function (f) { return f.title + "  ·  " + f.company + ": " + f.why; }).join("\n") } }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         ListView {

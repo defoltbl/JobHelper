@@ -2143,3 +2143,41 @@ def test_old_moved_documents_are_removed_from_options_after_asking(ui):
     ui.wait(350)
     fresh.unlink()
     assert ui.warnings == []
+
+
+def test_jobs_that_could_not_be_put_back_are_listed_one_by_one(ui, monkeypatch):
+    monkeypatch.setattr(ui_api.Api, "_threshold", lambda self: 50)
+    jobs = store.load_jobs()
+    for name in ("one", "two"):
+        (config.LETTERS_DIR / f"L_{name}.docx").write_bytes(b"x")
+        jobs.append(store.new_job(id=f"pb_{name}", title=f"Tester {name}", company="Acme <b>Labs</b>", match_score=20, status="letter_ready",
+                                  cover_letter_file=f"L_{name}.docx", description="x" * 900))
+    store.save_jobs(jobs)
+    try:
+        ui.js('openView("new")')
+        ui.wait(450)
+        ui.js("tableDialog.shelveAll(); tableDialog.shelveAll()")
+        assert not (config.LETTERS_DIR / "L_one.docx").exists() and ui.js("tableDialog.staleFailed.length") == 0
+        (config.LETTERS_DIR / "L_one.docx").write_bytes(b"in the way")
+        ui.js("tableDialog.putBack()")
+        failed = ui.find("staleFailed")
+        assert ui.find("staleNote").property("text") == "Documents of 1 job are back in place (1 file). Not put back:" and ui.js("tableDialog.staleBad") is True
+        assert failed.property("visible") is True
+        assert failed.property("text") == "Tester one  ·  Acme <b>Labs</b>: A file named L_one.docx is already in its folder, so nothing was put back."
+        assert (config.LETTERS_DIR / "L_two.docx").exists() and ui.find("undoRow").property("visible") is True          # the one left is still offered
+        ui.js("tableDialog.putBack()")                                                    # nothing could be done this time: said per job too
+        assert ui.find("staleNote").property("text") == "Couldn't put the documents back. The reason for each job:"
+        assert "Tester one" in failed.property("text") and failed.property("text").count("\n") == 0
+        (config.LETTERS_DIR / "L_one.docx").unlink()
+        ui.js("tableDialog.putBack()")
+        assert ui.js("tableDialog.staleFailed.length") == 0 and failed.property("visible") is False and (config.LETTERS_DIR / "L_one.docx").read_bytes() == b"x"
+        source = qml_source().split('objectName: "staleFailed"')[1][:260]
+        assert "textFormat: Text.PlainText" in qml_source().split('objectName: "staleFailed"')[0][-120:] + source and "wrapMode: Text.WordWrap" in source
+        ui.js("tableDialog.close()")
+        ui.wait(350)
+        assert ui.js("tableDialog.staleFailed.length") == 0
+    finally:
+        store.save_jobs([j for j in store.load_jobs() if not j["id"].startswith("pb_")])
+        for name in ("one", "two"):
+            (config.LETTERS_DIR / f"L_{name}.docx").unlink(missing_ok=True)
+    assert ui.warnings == []

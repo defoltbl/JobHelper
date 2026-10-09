@@ -395,9 +395,9 @@ class Api:
             if got.get("ok"):
                 done, files = done + 1, files + int(got.get("moved") or 0)
             else:
-                failed.append(f"{row['title']} ({row['company']})")
+                failed.append({"title": row["title"], "company": row["company"], "why": got.get("msg") or "Couldn't move the documents."})
         if not done:
-            return {"ok": False, "msg": "Couldn't move the documents."}
+            return {"ok": False, "msg": "Couldn't move the documents.", "failed": failed}
         return {"ok": True, "jobs": done, "files": files, "failed": failed}
 
     def set_description(self, job_id, text):
@@ -607,9 +607,9 @@ class Api:
             if got.get("ok"):
                 done, files = done + 1, files + int(got.get("restored") or 0)
             else:
-                failed.append(f"{row['title']} ({row['company']}): {got.get('msg') or 'not put back'}")
+                failed.append({"title": row["title"], "company": row["company"], "why": got.get("msg") or "Couldn't put the documents back."})
         if not done:
-            return {"ok": False, "msg": failed[0] if failed else "Couldn't put the documents back."}
+            return {"ok": False, "msg": "Couldn't put the documents back.", "failed": failed}
         return {"ok": True, "jobs": done, "files": files, "failed": failed}
 
     def rescore_ids(self, job_id=""):
