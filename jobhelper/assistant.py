@@ -15,6 +15,8 @@ TOO_LONG = f"That is longer than {MAX_REQUEST} characters. Say it in a sentence,
 GREETING = "Hi! Open an application form in Chrome, then ask me to fill it in."
 HELP = ("I fill in application forms. Open the form in Google Chrome, bring its tab to the front, and ask me to fill it in. "
         "Your name, contacts and links come from My details; open questions are answered from your CV for the job you choose. "
+        "I choose from lists and yes/no questions only when your CV or your details settle the answer. "
+        "I choose from lists, menus and yes/no questions only when your CV or your details settle the answer. "
         "I leave files, passwords, tick boxes and personal questions to you, and I never send a form.")
 UNKNOWN = "I did not understand that. " + HELP
 
@@ -52,24 +54,26 @@ def summary(host: str, filled: list[dict[str, Any]], left: list[dict[str, Any]],
     mine = sum(1 for f in filled if f.get("kind") == "detail")
     answers = sum(1 for f in filled if f.get("kind") == "answer")
     letters = sum(1 for f in filled if f.get("kind") == "letter")
+    choices = sum(1 for f in filled if f.get("kind") == "choice")
     to_check = sum(1 for f in filled if f.get("check"))
     parts = []
     if filled:
         made = [_count(mine, "from My details", "from My details")] if mine else []
         made += [_count(answers, "answer drafted from your CV", "answers drafted from your CV")] if answers else []
         made += ["your cover letter"] if letters else []
+        made += [_count(choices, "choice made for you", "choices made for you")] if choices else []
         parts.append(f"I filled in {_count(len(filled), 'field')} on {host}: {', '.join(made)}.")
     else:
         parts.append(f"I filled in nothing on {host}.")
     if job:
         parts.append(f"I took this to be the form for {job}." if guessed else f"The answers are for {job}.")
     if to_check:
-        parts.append(f"{_count(to_check, 'answer needs', 'answers need')} your attention (outlined in amber on the page).")
+        parts.append(f"{_count(to_check, 'of them needs', 'of them need')} your attention (outlined in amber on the page).")
     if left:
         parts.append(f"{_count(len(left), 'field is', 'fields are')} left for you, listed below with the reason.")
     if kept:
         parts.append(f"{_count(kept, 'field', 'fields')} already held something and I did not touch {'it' if kept == 1 else 'them'}.")
     if boxes:
-        parts.append(f"The page also has {_count(boxes, 'tick box or choice', 'tick boxes and choices')}: those are yours.")
+        parts.append(f"The page also has {_count(boxes, 'tick box', 'tick boxes')}: those are yours.")
     parts.append("Read everything on the page, then send the form yourself. I never press Submit.")
     return " ".join(parts)

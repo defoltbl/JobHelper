@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import assistant, chrome, config, cover_letter, details, form_answers, form_fill, mailhosts, store
+from . import assistant, chrome, config, cover_letter, details, form_answers, form_choices, form_fill, mailhosts, store
 from .api_base import _guarded
 
 SHOWN = 90      # characters of a filled-in value shown in the report
@@ -81,9 +81,67 @@ class AssistantApi:
         self._change(job["id"], keep, render=False)
         return {**kept, **{k: v for k, v in new.items() if v["answer"]}}, ""
 
+    def _menu(self, n: int, url: str, typed: str = "") -> list[str]:
+        """Open a menu the page draws itself and read its entries (they are numbered on the page for the pick that follows)."""
+        chrome.run(form_fill.choose_script("open", n, typed, url))
+        options: list[str] = []
+        for wait in (0.35, 0.7):
+            chrome.pause(wait)
+            options = form_fill.choose_answer(chrome.run(form_fill.choose_script("options", n, "", url)))["options"]
+            if options:
+                break
+        return options
+
+    def _choose(self, choices: list[dict[str, Any]], url: str, mine: dict[str, str], job) -> tuple[list[dict], list[dict], list[dict]]:
+        """Decide and make the choices of a form. Returns (values for plain lists and number fields, to be
+        written with the rest; what was chosen by pressing; what is left, with the reason)."""
+        to_fill, chosen, left = [], [], []
+        for extra in choices[form_choices.MAX_CHOICES:]:
+            left.append({"label": extra["label"], "why": form_choices.TOO_MANY})
+        choices = choices[:form_choices.MAX_CHOICES]
+        for c in choices:                            # a menu shows its entries only once it is open
+            if c["kind"] == "menu":
+                typed = (mine.get("city", "") if c["what"] in ("city", "location") else c["value"]) if c["typed"] else ""
+                c["search"] = typed
+                c["options"] = self._menu(c["n"], url, typed)
+                chrome.run(form_fill.choose_script("close", c["n"], bool(typed), url))
+        picks = {c["n"]: form_choices.settle(c, mine, job) for c in choices}
+        open_ones = [c for c in choices if not picks[c["n"]] and (c["kind"] == "number" or c["options"])]
+        why = ""
+        if open_ones:
+            cv_text = self._cv_text()
+            if not cv_text.strip():
+                why = "Your master CV could not be read, so nothing could be chosen from it."
+            else:
+                try:
+                    picks.update(form_choices.decide(open_ones, cv_text, mine, job))
+                except Exception as e:  # noqa: BLE001 - said to the person as the reason; the rest of the form is still filled in
+                    why = f"The choice could not be made: {str(e) or type(e).__name__}"
+        for c in choices:
+            pick = picks.get(c["n"], "")
+            if not pick:
+                left.append({"label": c["label"], "why": form_choices.NO_MENU if c["kind"] == "menu" and not c["options"]
+                             else (why or form_choices.NOT_SETTLED)})
+            elif c["kind"] in ("select", "number"):
+                to_fill.append({"n": c["n"], "label": c["label"], "value": pick, "kind": "choice", "check": form_choices.CHECK})
+            elif c["kind"] == "radio":
+                done = form_fill.choose_answer(chrome.run(form_fill.choose_script("radio", c["n"], c["options"].index(pick), url)))
+                (chosen if done["ok"] else left).append({"label": c["label"], "value": pick, "kind": "choice", "check": form_choices.CHECK}
+                                                        if done["ok"] else {"label": c["label"], "why": "The page did not take the choice. Choose it yourself."})
+            else:
+                options = self._menu(c["n"], url, c.get("search", ""))
+                same = [k for k, o in enumerate(options) if o == pick]
+                done = form_fill.choose_answer(chrome.run(form_fill.choose_script("pick", c["n"], same[0], url))) if same else {"ok": False}
+                if not done["ok"]:
+                    chrome.run(form_fill.choose_script("close", c["n"], bool(c.get("search")), url))
+                (chosen if done["ok"] else left).append({"label": c["label"], "value": pick, "kind": "choice", "check": form_choices.CHECK}
+                                                        if done["ok"] else {"label": c["label"], "why": "The page did not take the choice. Choose it yourself."})
+        return to_fill, chosen, left
+
     def assistant_fill(self, job_id=""):
-        """Fill in the form in the Chrome tab in front. Only empty fields are written, nothing is
-        clicked and the form is not sent. Returns what was filled, what was left and why."""
+        """Fill in the form in the Chrome tab in front. Only empty fields are written; the only things
+        pressed are a menu, an entry of a menu and a radio button; the form is not sent.
+        Returns what was filled, what was left and why."""
         def no(msg, **more):
             return {"ok": False, "action": "fill", "msg": msg, **more}
         mine = details.load()
@@ -132,6 +190,14 @@ class AssistantApi:
                 else:
                     fill.append({"n": q["n"], "label": q["label"], "value": item["answer"], "kind": "answer", "check": item["check"]})
         filled = []
+        if todo["choose"]:
+            try:
+                values, chosen, open_ones = self._choose(todo["choose"], page["url"], mine, job)
+            except chrome.ChromeError as e:
+                return no(str(e))
+            fill += values
+            filled += chosen
+            left += open_ones
         if fill:
             try:
                 done = form_fill.fill_answer(chrome.run(form_fill.fill_script(fill, page["url"])))

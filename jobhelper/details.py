@@ -1,4 +1,5 @@
-"""Your own details, for filling in application forms: name, contacts, address, links.
+"""Your own details, for filling in application forms: name, contacts, address, links, and the
+few facts forms ask again and again (employer, degree, notice period, salary).
 
 They are typed once in the assistant's window and kept encrypted in data/my_details.json.
 Nothing here is guessed: a value read from the CV is only offered, and is saved when you
@@ -16,7 +17,10 @@ from . import config, vault
 FIELDS = (("first_name", "First name", 60), ("last_name", "Last name", 60), ("email", "Email", 120),
           ("phone", "Phone", 30), ("street", "Street and number", 120), ("city", "City", 80),
           ("postcode", "Postcode", 16), ("country", "Country", 60), ("linkedin", "LinkedIn", 200),
-          ("github", "GitHub", 200), ("website", "Website or portfolio", 200))
+          ("github", "GitHub", 200), ("website", "Website or portfolio", 200),
+          ("current_employer", "Current employer", 100), ("current_title", "Current job title", 100),
+          ("university", "University or school", 120), ("degree", "Degree", 120),
+          ("notice_period", "Notice period", 60), ("salary", "Salary expectation", 80))
 KEYS = tuple(key for key, _label, _most in FIELDS)
 LABELS = {key: label for key, label, _most in FIELDS}
 LINKS = {"linkedin": "linkedin.com", "github": "github.com", "website": ""}

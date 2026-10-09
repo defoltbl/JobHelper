@@ -10,7 +10,11 @@ Three steps, each small enough to check:
 3. FILL: a script writes the values into fields that are still empty and outlines them, so
    you can see what was done.
 
-What is never done here: nothing is clicked, no box is ticked, no file is attached, no
+A list, a pair of radio buttons or a menu drawn by the page is a "choice": plan() lists them
+and form_choices decides them. The CHOOSE script then presses exactly three kinds of thing:
+what opens a menu, an entry of a menu, a radio button.
+
+What is never done here: no button is pressed, no box is ticked, no file is attached, no
 password, payment or personal-status field is touched, and the form is never sent. Sending
 is yours.
 """
@@ -27,7 +31,7 @@ MAX_FIELDS = 200
 
 READ = r"""
 (function () {
-  var MARK = 'data-jobhelper', fields = [], frames = [], n = 0, boxes = 0;
+  var MARK = 'data-jobhelper', OPT = 'data-jobhelper-opt', fields = [], frames = [], groups = {}, n = 0, boxes = 0;
   function clean(t) { return String(t || '').replace(/\s+/g, ' ').trim().slice(0, 300); }
   function text(el) { return el ? clean(el.innerText || el.textContent) : ''; }
   function shown(el) {
@@ -45,13 +49,33 @@ READ = r"""
       if (parts.length) return clean(parts.join(' '));
     }
     if (el.getAttribute('aria-label')) return clean(el.getAttribute('aria-label'));
-    var own = el.tagName === 'SELECT' ? text(el) : '', node = el;
+    var own = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? '' : text(el), node = el;     // a list's own entries are not its name
     for (var i = 0; i < 3; i++) {
       node = node.parentElement;
       if (!node) break;
       var around = clean(text(node).replace(own, ''));
       if (around.length > 160) break;
       if (around) return around;
+    }
+    return '';
+  }
+  function without(whole, parts) {
+    parts.forEach(function (part) { if (part) whole = whole.replace(part, ' '); });
+    return clean(whole);
+  }
+  function question(el, root, name) {            // what a group of choices is asked: its legend, its label, or the words around it
+    var set = el.closest('fieldset');
+    if (set && set.querySelector('legend') && text(set.querySelector('legend'))) return text(set.querySelector('legend'));
+    var group = el.closest('[role=radiogroup]');
+    if (group && label(group, root)) return label(group, root);
+    var same = root.querySelectorAll('input[type=radio]'), mine = [], node = el;
+    for (var i = 0; i < same.length; i++) if (same[i].name === name) mine.push(same[i]);
+    var said = mine.map(function (r) { return r.labels && r.labels.length ? text(r.labels[0]) : ''; });
+    for (var up = 0; up < 5 && node.parentElement; up++) {
+      node = node.parentElement;
+      var rest = without(text(node), said);
+      if (rest.length > 200) break;
+      if (rest) return rest;
     }
     return '';
   }
@@ -67,15 +91,38 @@ READ = r"""
         continue;
       }
       if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
-        var role = el.getAttribute('role');          // a menu, switch or choice drawn by the page itself: counted, never operated
-        if ((role === 'combobox' || role === 'listbox' || role === 'radio' || role === 'checkbox' || role === 'switch'
-             || el.getAttribute('aria-haspopup') === 'listbox') && shown(el)) boxes++;
+        var role = el.getAttribute('role');
+        el.removeAttribute(MARK);
+        if (!shown(el)) continue;
+        if (role === 'combobox' || el.getAttribute('aria-haspopup') === 'listbox') {      // a menu drawn by the page itself
+          var now = text(el);
+          n++;
+          el.setAttribute(MARK, String(n));
+          fields.push({n: n, type: 'menu', name: '', id: clean(el.id).slice(0, 80), auto: '', label: label(el, root), hint: '',
+                       required: el.getAttribute('aria-required') === 'true', most: 0, options: [], combo: false,
+                       filled: !!now && !/^(select|choose|please|pick|none|-|\u2014|\.)/i.test(now)});
+        } else if (role === 'listbox' || role === 'radio' || role === 'checkbox' || role === 'switch') boxes++;
         continue;
       }
       el.removeAttribute(MARK);
+      el.removeAttribute(OPT);
       var type = tag === 'INPUT' ? String(el.getAttribute('type') || 'text').toLowerCase() : tag.toLowerCase();
       if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'reset' || type === 'image') continue;
-      if (type === 'checkbox' || type === 'radio') { if (shown(el) || (el.labels && el.labels.length)) boxes++; continue; }
+      if (type === 'checkbox' || type === 'radio') {
+        if (!(shown(el) || (el.labels && el.labels.length))) continue;
+        if (type === 'checkbox' || !el.name || el.disabled) { boxes++; continue; }
+        var group = groups[el.name];              // the radio buttons of one question are one field
+        if (!group) {
+          n++;
+          group = groups[el.name] = {n: n, type: 'radio', name: clean(el.name).slice(0, 80), id: '', auto: '', label: question(el, root, el.name),
+                                     hint: '', required: !!el.required, filled: false, most: 0, options: [], combo: false};
+          fields.push(group);
+        }
+        el.setAttribute(OPT, group.n + ':' + group.options.length);
+        group.options.push(clean(el.labels && el.labels.length ? text(el.labels[0]) : (el.getAttribute('aria-label') || el.value)).slice(0, 80));
+        if (el.checked) group.filled = true;
+        continue;
+      }
       if (type !== 'file' && !shown(el)) continue;
       if (el.disabled || el.readOnly) continue;
       n++;
@@ -147,6 +194,117 @@ FILL = r"""
 """.strip()
 
 
+CHOOSE = r"""
+(function (action, n, arg, url) {
+  if (location.href !== url) return JSON.stringify({moved: true});
+  var MARK = 'data-jobhelper', OPT = 'data-jobhelper-opt', target = null, entries = [], marked = {};
+  function shown(el) {
+    var r = el.getBoundingClientRect(), s = el.ownerDocument.defaultView.getComputedStyle(el);
+    return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && s.display !== 'none';
+  }
+  function walk(root) {
+    var all = root.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.shadowRoot) walk(el.shadowRoot);
+      if (el.tagName === 'IFRAME') {
+        var inner = null;
+        try { inner = el.contentDocument; } catch (e) { inner = null; }
+        if (inner && inner.body) walk(inner);
+        continue;
+      }
+      if (el.getAttribute(MARK) === String(n)) target = el;
+      if (el.getAttribute(OPT)) marked[el.getAttribute(OPT)] = el;
+      if (el.getAttribute('role') === 'option' && shown(el)) entries.push(el);
+    }
+  }
+  // The only things ever pressed: what opens a menu, an entry of a menu, a radio button. Never a button that sends.
+  function may(el) {
+    if (!el || el.disabled || el.type === 'submit' || el.closest('[type=submit]')) return false;
+    var role = el.getAttribute('role'), opens = role === 'combobox' || el.getAttribute('aria-haspopup') === 'listbox' || !!el.getAttribute('aria-autocomplete');
+    if (el.tagName === 'INPUT') return el.type === 'radio' || opens;
+    return role === 'option' || opens;
+  }
+  function press(el) {
+    var view = el.ownerDocument.defaultView;
+    ['mousedown', 'mouseup', 'click'].forEach(function (name) {
+      el.dispatchEvent(new view.MouseEvent(name, {bubbles: true, cancelable: true, view: view}));
+    });
+  }
+  function mark(el) { el.style.outline = '2px solid #f59e0b'; el.style.outlineOffset = '1px'; }
+  walk(document);
+  if (action === 'radio') {
+    var radio = marked[n + ':' + arg];
+    if (!may(radio) || radio.type !== 'radio') return JSON.stringify({ok: false});
+    if (!radio.checked) press(radio);
+    if (radio.checked) mark(radio.labels && radio.labels.length ? radio.labels[0] : radio);
+    return JSON.stringify({ok: radio.checked});
+  }
+  if (action === 'pick') {
+    var entry = marked['m' + arg];
+    if (!may(entry) || entry.getAttribute('role') !== 'option') return JSON.stringify({ok: false});
+    press(entry);
+    if (target) mark(target);
+    return JSON.stringify({ok: true});
+  }
+  if (!may(target)) return JSON.stringify({ok: false});
+  if (action === 'open') {
+    if (target.tagName === 'INPUT') {
+      target.focus();
+      press(target);
+      if (arg) {
+        var view = target.ownerDocument.defaultView;
+        Object.getOwnPropertyDescriptor(view.HTMLInputElement.prototype, 'value').set.call(target, arg);
+        target.dispatchEvent(new view.Event('input', {bubbles: true}));
+      }
+    } else press(target);
+    return JSON.stringify({ok: true});
+  }
+  if (action === 'options') {
+    var own = [], ids = String(target.getAttribute('aria-controls') || target.getAttribute('aria-owns') || '').split(/\s+/).filter(Boolean);
+    ids.forEach(function (id) {
+      var box = target.ownerDocument.getElementById(id);
+      if (box) own = own.concat(Array.prototype.slice.call(box.querySelectorAll('[role=option]')).filter(shown));
+    });
+    var list = (own.length ? own : entries).slice(0, 300);
+    list.forEach(function (el, k) { el.setAttribute(OPT, 'm' + k); });
+    return JSON.stringify({options: list.map(function (el) { return String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80); })});
+  }
+  if (action === 'close') {
+    var view2 = target.ownerDocument.defaultView, key = {key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true};
+    target.dispatchEvent(new view2.KeyboardEvent('keydown', key));
+    target.dispatchEvent(new view2.KeyboardEvent('keyup', key));
+    if (target.tagName === 'INPUT' && String(target.value || '') !== '' && arg) {
+      Object.getOwnPropertyDescriptor(view2.HTMLInputElement.prototype, 'value').set.call(target, '');
+      target.dispatchEvent(new view2.Event('input', {bubbles: true}));
+    }
+    if (target.blur) target.blur();
+    return JSON.stringify({ok: true});
+  }
+  return JSON.stringify({ok: false});
+})(__ACTION__, __N__, __ARG__, __URL__)
+""".strip()
+
+
+def choose_script(action: str, n: int, arg: Any, url: str) -> str:
+    """The CHOOSE script for one step with a menu or a radio button: "open" (arg: text to type, or ''),
+    "options", "pick" (arg: the entry's number), "close" (arg: true to clear typed text), "radio" (arg: the button's number)."""
+    assert action in ("open", "options", "pick", "close", "radio")
+    return (CHOOSE.replace("__ACTION__", json.dumps(action)).replace("__N__", json.dumps(int(n)))
+            .replace("__ARG__", json.dumps(arg)).replace("__URL__", json.dumps(str(url))))
+
+
+def choose_answer(text: str) -> dict[str, Any]:
+    try:
+        data = json.loads(text or "")
+    except ValueError:
+        data = None
+    if not isinstance(data, dict):
+        return {"ok": False, "moved": False, "options": []}
+    options = data.get("options") if isinstance(data.get("options"), list) else []
+    return {"ok": bool(data.get("ok")), "moved": bool(data.get("moved")), "options": [" ".join(str(o).split())[:80] for o in options[:300]]}
+
+
 def fill_script(items: list[dict[str, Any]], url: str) -> str:
     """The FILL script for these values. They travel as data (JSON), never as code."""
     data = [{"n": int(i["n"]), "value": str(i["value"]), "check": bool(i.get("check"))} for i in items]
@@ -157,7 +315,7 @@ def fill_script(items: list[dict[str, Any]], url: str) -> str:
 PASSWORD = "A password is yours to type."
 FILE = "Attach the file yourself: a page cannot be handed a file from outside."
 PRIVATE = "Personal or payment information: fill it in yourself."
-CHOICE = "Choose it yourself: I only pick from a plain list, and only when it asks for your country."
+CHOICE = "Choose it yourself."
 DATE = "Pick the date yourself."
 UNKNOWN = "I did not recognise this field."
 NO_DETAIL = "Not in My details yet: add your {what} there and ask me again."
@@ -172,10 +330,18 @@ _PRIVATE = re.compile(r"passw|captcha|card ?number|credit card|\bcvv\b|\bcvc\b|\
                       r"|religio|orientation|marital|criminal|convict|health")
 _NOT_MINE = re.compile(r"company|employer|organi[sz]ation|school|universit|college|referr|referee|reference|emergency|manager|recruiter"
                        r"|supervisor|\btitle\b|position|\brole\b|degree|skill|user ?name|login|nick")
+# what forms ask again and again; when it is not in My details, an open question is drafted instead
+SOFT = ("current_employer", "current_title", "university", "degree", "notice_period", "salary")
 _RULES = (("linkedin", re.compile(r"linked ?in")),
           ("github", re.compile(r"git ?hub")),
           ("email", re.compile(r"e ?mail")),
           ("phone", re.compile(r"phone|mobile|\bcell\b|telefon|\btel\b")),
+          ("notice_period", re.compile(r"notice period|period of notice|výpovědní")),
+          ("salary", re.compile(r"salary|compensation|remuneration|expected pay|pay expectation")),
+          ("current_employer", re.compile(r"(?:current|present|latest|most recent|last) (?:employer|company|organi[sz]ation)|\bemployer\b")),
+          ("current_title", re.compile(r"(?:current|present|latest|most recent|last) (?:job ?)?(?:title|position|role)|\bjob ?title\b")),
+          ("university", re.compile(r"universit|\bschool\b|college|alma mater")),
+          ("degree", re.compile(r"\bdegree\b|qualification|field of study|\bmajor\b")),
           ("first_name", re.compile(r"first ?name|given ?name|fore ?name|\bfname\b|křestní")),
           ("last_name", re.compile(r"last ?name|sur ?name|family ?name|\blname\b|příjmení")),
           ("full_name", re.compile(r"full ?name|your name|^name\b|\bname$|\bname \*|jméno")),
@@ -211,9 +377,11 @@ def name_of(field: dict[str, Any]) -> str:
 
 def classify(field: dict[str, Any]) -> tuple[str, str]:
     """(what it is, why it is left). The first is a key of the details ("email", "full_name",
-    "location"), "letter", "question", or "" when the field is left to the person."""
+    "location"), "letter", "question", "choice" (something to pick: see form_choices), or ""
+    when the field is left to the person."""
     kind = str(field.get("type") or "text").lower()
     words = _words(field)
+    picked = kind in ("select", "radio", "menu") or bool(field.get("combo"))
     if kind == "password":
         return "", PASSWORD
     if kind == "file":
@@ -222,8 +390,8 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
         return "", PRIVATE
     if kind in ("date", "month", "week", "time", "datetime-local"):
         return "", DATE
-    if kind in ("range", "color") or field.get("combo"):
-        return "", CHOICE           # a box that opens a list of its own: typing into it chooses nothing
+    if kind in ("range", "color"):
+        return "", CHOICE
     auto = (str(field.get("auto") or "").lower().split() or [""])[-1]
     what = _AUTO.get(auto) or _BY_TYPE.get(kind) or ""
     if not what:
@@ -233,20 +401,34 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
                     continue
                 what = key
                 break
-    if kind == "select":
-        return (what, "") if what == "country" else ("", CHOICE)
+    has_words = bool(re.search(r"[^\W\d_]{2}", str(field.get("label") or "")))
+    if picked:
+        if kind == "select" and what == "country":
+            return "country", ""
+        return ("choice", "") if has_words else ("", CHOICE)
     if kind == "textarea" and _LETTER.search(words):
         return "letter", ""
     if what and kind == "textarea" and what not in ("street", "location"):
         what = ""                                   # a big box that mentions "name" or "email" is a question, not a detail
+    if kind == "number":
+        return ("choice", "") if has_words and what not in ("phone", "postcode") else (("", UNKNOWN) if not what else (what, ""))
     if what:
         return what, ""
     label = str(field.get("label") or "").strip()
-    if kind == "number":
-        return "", UNKNOWN
     if kind == "textarea" or "?" in label or len(label) >= 20:
-        return ("question", "") if re.search(r"[^\W\d_]{2}", label) else ("", UNKNOWN)
+        return ("question", "") if has_words else ("", UNKNOWN)
     return "", UNKNOWN
+
+
+def detail_of(field: dict[str, Any]) -> str:
+    """Which of the details a field asks for, whatever kind of field it is ('' = none): a hint for a choice."""
+    words = _words(field)
+    if _PRIVATE.search(words):
+        return ""
+    for key, rule in _RULES:
+        if rule.search(words) and not (key in ("first_name", "last_name", "full_name", "street") and _NOT_MINE.search(words)):
+            return key
+    return ""
 
 
 def value_for(what: str, mine: dict[str, str]) -> str:
@@ -270,38 +452,50 @@ def country_option(options: list[str], country: str) -> str:
 
 def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", has_job: bool = False) -> dict[str, list]:
     """What to do with each field that is still empty:
-    {"fill": [{n, label, value, kind}], "ask": [{n, label, most}], "left": [{label, why}]}.
-    Fields that already hold something are not touched and not listed."""
-    out: dict[str, list] = {"fill": [], "ask": [], "left": []}
+    {"fill": [{n, label, value, kind}], "ask": [{n, label, most}], "choose": [{n, kind, typed, label, options, what, value}],
+     "left": [{label, why}]}. Fields that already hold something are not touched and not listed."""
+    out: dict[str, list] = {"fill": [], "ask": [], "choose": [], "left": []}
     asked: set[str] = set()
+
+    def ask(field, label, most) -> None:
+        question = str(field.get("label") or "").strip()[:form_answers.MAX_QUESTION]
+        if not has_job:
+            out["left"].append({"label": label, "why": NO_JOB})
+        elif question.lower() in asked:
+            out["left"].append({"label": label, "why": "The same question as one above: copy that answer if it fits."})
+        elif len(out["ask"]) >= form_answers.MAX_QUESTIONS:
+            out["left"].append({"label": label, "why": TOO_MANY})
+        else:
+            asked.add(question.lower())
+            out["ask"].append({"n": field["n"], "label": question, "most": most})
+
     for field in fields:
         if field.get("filled"):
             continue
         label, most = name_of(field), int(field.get("most") or 0)
+        kind = str(field.get("type") or "text").lower()
         what, why = classify(field)
         if not what:
             out["left"].append({"label": label, "why": why})
         elif what == "question":
-            question = str(field.get("label") or "").strip()[:form_answers.MAX_QUESTION]
-            if not has_job:
-                out["left"].append({"label": label, "why": NO_JOB})
-            elif question.lower() in asked:
-                out["left"].append({"label": label, "why": "The same question as one above: copy that answer if it fits."})
-            elif len(out["ask"]) >= form_answers.MAX_QUESTIONS:
-                out["left"].append({"label": label, "why": TOO_MANY})
-            else:
-                asked.add(question.lower())
-                out["ask"].append({"n": field["n"], "label": question, "most": most})
+            ask(field, label, most)
+        elif what == "choice":
+            about = detail_of(field)
+            shape = "number" if kind == "number" else ("menu" if kind == "menu" or field.get("combo") else kind)
+            out["choose"].append({"n": field["n"], "kind": shape, "typed": bool(field.get("combo")), "label": label,
+                                  "options": list(field.get("options") or []), "what": about, "value": value_for(about, mine) if about else ""})
         else:
             value = letter if what == "letter" else value_for(what, mine)
-            if value and what == "country" and field.get("type") == "select":
+            if value and what == "country" and kind == "select":
                 value = country_option(field.get("options") or [], value)
                 if not value:
                     out["left"].append({"label": label, "why": NO_COUNTRY.format(country=mine["country"])})
                     continue
             if value and what == "phone" and most and len(value) > most:
                 value = re.sub(r"[ ()./\-]", "", value)             # a short field: the same number without its spaces
-            if not value:
+            if not value and what in SOFT and (len(str(field.get("label") or "")) >= 20 or "?" in str(field.get("label") or "")):
+                ask(field, label, most)                              # not in My details: drafted like any other question
+            elif not value:
                 out["left"].append({"label": label, "why": NO_LETTER if what == "letter" else NO_DETAIL.format(what=WHAT.get(what, what))})
             elif most and len(value) > most:
                 out["left"].append({"label": label, "why": TOO_LONG.format(most=most, size=len(value))})

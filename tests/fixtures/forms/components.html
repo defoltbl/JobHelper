@@ -11,15 +11,19 @@ input,textarea{width:100%;padding:6px;box-sizing:border-box} .menu{border:1px so
   <div class="field"><label for="c2">Last Name <span>*</span></label><input id="c2" name="field_8272" data-controlled></div>
   <div class="field"><label for="c3">Email <span>*</span></label><input id="c3" name="field_8273" data-controlled></div>
   <div class="field"><label for="c4">Phone</label><input id="c4" name="field_8274" data-controlled></div>
-  <div class="field"><label id="l5">Location (City)</label><input id="c5" aria-labelledby="l5" role="combobox" aria-autocomplete="list" name="field_8275" data-controlled></div>
-  <div class="field"><label id="l6">Country</label><div class="menu" role="button" aria-haspopup="listbox" tabindex="0" id="c6">Select...</div></div>
+  <div class="field"><label id="l5">Location (City)</label><input id="c5" aria-labelledby="l5" role="combobox" aria-autocomplete="list" aria-controls="c5-list" name="field_8275" data-search="Berlin, Germany|Brno, Czech Republic|Brno, Slovakia|Bristol, United Kingdom|Prague, Czech Republic"><div id="c5-list" role="listbox"></div></div>
+  <div class="field"><label id="l6">Country</label><div class="menu" role="button" aria-haspopup="listbox" aria-labelledby="l6" tabindex="0" id="c6" data-menu="Austria|Czech Republic|Germany|Poland">Select...</div><div id="c6-list" role="listbox"></div></div>
   <div class="field"><label for="c7">LinkedIn Profile</label><input id="c7" name="field_8277" data-controlled></div>
   <div class="field"><label for="c8">Website</label><input id="c8" name="field_8278" data-controlled></div>
   <div class="field"><label for="c9">What interests you about Brightpath?</label><textarea id="c9" name="field_8279" data-controlled></textarea></div>
   <div class="field"><label for="c10">Describe a back-end service you built and what you would change today.</label><textarea id="c10" name="field_8280" maxlength="60" data-controlled></textarea></div>
   <div class="field"><label for="c11">Are you legally authorized to work in the country of this role?</label>
-    <input id="c11" role="combobox" aria-haspopup="listbox" name="field_8281" data-controlled></div>
-  <div class="field"><label for="c12">Gender</label><input id="c12" role="combobox" name="field_8282" data-controlled></div>
+    <div class="menu" role="combobox" aria-haspopup="listbox" tabindex="0" id="c11" data-menu="Yes|No|I will need sponsorship">Select...</div><div id="c11-list" role="listbox"></div></div>
+  <div class="field"><label id="l14">How did you hear about us?</label>
+    <div class="menu" role="combobox" aria-haspopup="listbox" aria-labelledby="l14" tabindex="0" id="c14" data-menu="Job board|LinkedIn|A friend|Other">Select...</div><div id="c14-list" role="listbox"></div></div>
+  <div class="field"><label id="l15">Favourite colour of our logo</label>
+    <div class="menu" role="combobox" aria-haspopup="listbox" aria-labelledby="l15" tabindex="0" id="c15" data-menu="Blue|Green">Select...</div><div id="c15-list" role="listbox"></div></div>
+  <div class="field"><label id="l12">Gender</label><div class="menu" role="combobox" aria-haspopup="listbox" aria-labelledby="l12" tabindex="0" id="c12" data-menu="Female|Male|Other">Select...</div><div id="c12-list" role="listbox"></div></div>
   <div class="field"><label><input type="checkbox" id="c13" style="width:auto"> I have read the privacy notice</label></div>
   <button type="submit" id="send">Submit Application</button>
 </form>
@@ -45,5 +49,35 @@ input,textarea{width:100%;padding:6px;box-sizing:border-box} .menu{border:1px so
     el.addEventListener('blur', render);
   });
   document.getElementById('send').addEventListener('click', function () { window.clicked = true; });
+
+  // Menus the way component libraries draw them: nothing in the page until the box is pressed; the entries arrive a
+  // moment later; an entry is taken on "mousedown" (before the box loses focus); Escape closes without choosing.
+  window.chosen = {}; window.opened = [];
+  function entries(box, list, words) {
+    setTimeout(function () {
+      list.innerHTML = words.map(function (w) { return '<div role="option" style="padding:4px">' + w + '</div>'; }).join('');
+      Array.prototype.forEach.call(list.children, function (item) {
+        item.addEventListener('mousedown', function () {
+          window.chosen[box.id] = item.textContent; window.state[box.id] = item.textContent;
+          if (box.tagName === 'INPUT') Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(box, item.textContent);
+          else box.textContent = item.textContent;
+          list.innerHTML = '';
+        });
+      });
+    }, 120);
+  }
+  document.querySelectorAll('[data-menu]').forEach(function (box) {
+    var list = document.getElementById(box.id + '-list');
+    box.addEventListener('mousedown', function () { window.opened.push(box.id); entries(box, list, box.getAttribute('data-menu').split('|')); });
+    box.addEventListener('keydown', function (e) { if (e.key === 'Escape') list.innerHTML = ''; });
+  });
+  document.querySelectorAll('[data-search]').forEach(function (box) {
+    var list = document.getElementById(box.id + '-list'), all = box.getAttribute('data-search').split('|');
+    box.addEventListener('input', function () {
+      var typed = box.value.toLowerCase();
+      entries(box, list, typed ? all.filter(function (w) { return w.toLowerCase().indexOf(typed) >= 0; }) : []);
+    });
+    box.addEventListener('keydown', function (e) { if (e.key === 'Escape') list.innerHTML = ''; });
+  });
 </script>
 </body></html>

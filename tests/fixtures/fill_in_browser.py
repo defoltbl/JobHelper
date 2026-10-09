@@ -7,7 +7,8 @@ from a web server started on this machine only (so it has an http address, like 
 tab in front is that page, and scripts run in it. Claude is replaced by the answers in the setup.
 The data folder is a temporary one and the Keychain is in memory, so nothing real is read or changed.
 
-setup: {"details": {...}, "jobs": [...], "job_id": "", "answers": {"question": ["answer", "what to check"]}}
+setup: {"details": {...}, "jobs": [...], "job_id": "", "answers": {"question": ["answer", "what to check"]},
+        "choices": {"question": "the option or number Claude would choose"}}
 out:   {"result": what Api.assistant_fill returned, "state": every field's value afterwards,
         "sent": bool, "clicked": bool, "asked": the questions that went to Claude}
 """
@@ -43,7 +44,8 @@ STATE = r"""
     }
   }
   walk(document);
-  return JSON.stringify({fields: out, sent: !!window.sent, clicked: !!window.clicked, kept: window.state || null});
+  return JSON.stringify({fields: out, sent: !!window.sent, clicked: !!window.clicked, kept: window.state || null,
+                         menus: window.chosen || {}, opened: window.opened || []});
 })()
 """
 
@@ -90,9 +92,13 @@ def main() -> int:
     store.save_jobs(setup.get("jobs", []))
     if setup.get("details"):
         assert details.save(setup["details"])["ok"]
-    asked = []
+    asked, chosen = [], []
 
     def ask_json(prompt, **kw):
+        if "Fields:" in prompt:                 # the question about lists and numbers
+            fields = re.findall(r"^(\d+)\. (.+)$", prompt[prompt.index("Fields:"):], re.M)
+            chosen.extend(label for _n, label in fields)
+            return {"choices": [{"n": int(n), "answer": setup.get("choices", {}).get(label)} for n, label in fields]}
         questions = re.findall(r"^\d+\. (.+)$", prompt[prompt.index("The form's questions:"):], re.M)
         asked.extend(questions)
         answers = setup.get("answers", {})
@@ -116,6 +122,12 @@ def main() -> int:
         loop.exec()
         return "" if not box or box[0] is None else str(box[0])
     chrome.run = run
+
+    def pause(seconds: float) -> None:          # waiting must let the page run: a menu draws its entries on a timer
+        loop = QEventLoop()
+        QTimer.singleShot(int(seconds * 1000), loop.quit)
+        loop.exec()
+    chrome.pause = pause
     chrome.active_tab = lambda: {"url": page.url().toString(), "title": page.title()}
 
     def work_on_page(ok: bool) -> None:
@@ -126,7 +138,8 @@ def main() -> int:
         def go():
             result = ui_api.Api().assistant_fill(setup.get("job_id", ""))
             state = json.loads(run(STATE))
-            out = {"result": result, "state": state["fields"], "kept": state["kept"], "sent": state["sent"], "clicked": state["clicked"], "asked": asked}
+            out = {"result": result, "state": state["fields"], "kept": state["kept"], "sent": state["sent"], "clicked": state["clicked"], "asked": asked,
+                   "chosen": chosen, "menus": state["menus"], "opened": state["opened"]}
             if picture:                              # the page as a PDF: it can be drawn without a screen
                 loop = QEventLoop()
                 page.printToPdf(lambda data: (Path(picture).write_bytes(bytes(data)), loop.quit()))

@@ -7,10 +7,10 @@ import sys
 
 import pytest
 
-from jobhelper import assistant, chrome, config, details, form_answers, form_fill, llm, store, ui_api, vault
+from jobhelper import assistant, chrome, config, details, form_answers, form_choices, form_fill, llm, store, ui_api, vault
 from tests.conftest import FIXTURES
 
-MINE = {"first_name": "Alex", "last_name": "Novak", "email": "alex@example.com", "phone": "+420 123 456 789", "street": "",
+MINE = {**details.empty(), "first_name": "Alex", "last_name": "Novak", "email": "alex@example.com", "phone": "+420 123 456 789", "street": "",
         "city": "Brno", "postcode": "602 00", "country": "Czechia", "linkedin": "https://linkedin.com/in/alexnovak",
         "github": "https://github.com/alexnovak", "website": ""}
 CV = "Alex Novak\nalex@example.com | +420 123 456 789 | linkedin.com/in/alexnovak | github.com/alexnovak\nJunior analyst. SQL, Excel, Python."
@@ -149,7 +149,13 @@ def _field(label="", kind="text", **more):
     (_field("Postal code"), "postcode"), (_field("ZIP"), "postcode"), (_field("City"), "city"), (_field("Location (City)"), "city"),
     (_field("Current location"), "location"), (_field("Street address"), "street"), (_field("Country", kind="select"), "country"),
     (_field("", auto="section-a given-name"), "first_name"), (_field("x", auto="postal-code"), "postcode"),
-    (_field("Why do you want to work with us?", kind="textarea"), "question"), (_field("What are your salary expectations?"), "question"),
+    (_field("Why do you want to work with us?", kind="textarea"), "question"), (_field("What are your salary expectations?"), "salary"),
+    (_field("Notice period"), "notice_period"), (_field("Current employer"), "current_employer"), (_field("Most recent company"), "current_employer"),
+    (_field("Job title"), "current_title"), (_field("Current position"), "current_title"), (_field("School name"), "university"),
+    (_field("University"), "university"), (_field("Degree"), "degree"), (_field("Field of study"), "degree"),
+    (_field("Notice period", kind="select"), "choice"), (_field("Phone country code", kind="select"), "choice"),
+    (_field("Do you need a visa?", kind="radio"), "choice"), (_field("Location", kind="menu"), "choice"), (_field("Country", kind="menu"), "choice"),
+    (_field("City", combo=True), "choice"), (_field("Years of experience with SQL", kind="number"), "choice"),
     (_field("Tell us about a project you are proud of", kind="textarea"), "question"),
     (_field("Cover letter", kind="textarea"), "letter"), (_field("Motivation letter (optional)", kind="textarea"), "letter"),
     (_field("How did you get your name known in the field?", kind="textarea"), "question")])
@@ -165,9 +171,10 @@ def test_fields_are_recognised_by_what_the_page_calls_them(field, what):
     (_field("Passport number"), form_fill.PRIVATE), (_field("Race / Ethnicity", kind="select"), form_fill.PRIVATE),
     (_field("Veteran status", kind="select"), form_fill.PRIVATE), (_field("IBAN"), form_fill.PRIVATE),
     (_field("Start date", kind="date"), form_fill.DATE),
-    (_field("Notice period", kind="select"), form_fill.CHOICE), (_field("Phone country code", kind="select"), form_fill.CHOICE),
-    (_field("Company name"), form_fill.UNKNOWN), (_field("School name"), form_fill.UNKNOWN), (_field("Referee's name"), form_fill.UNKNOWN),
-    (_field("Username"), form_fill.UNKNOWN), (_field("Job title"), form_fill.UNKNOWN), (_field("Years", kind="number"), form_fill.UNKNOWN),
+    (_field("", kind="select"), form_fill.CHOICE), (_field("", kind="radio"), form_fill.CHOICE), (_field("Volume", kind="range"), form_fill.CHOICE),
+    (_field("Gender", kind="radio"), form_fill.PRIVATE), (_field("Gender", kind="menu"), form_fill.PRIVATE), (_field("Age", kind="number"), form_fill.PRIVATE),
+    (_field("Company name"), form_fill.UNKNOWN), (_field("Referee's name"), form_fill.UNKNOWN),
+    (_field("Username"), form_fill.UNKNOWN), (_field("", kind="number"), form_fill.UNKNOWN),
     (_field(""), form_fill.UNKNOWN), (_field("???", kind="textarea"), form_fill.UNKNOWN)])
 def test_what_is_not_the_assistants_to_fill_is_left_with_the_reason(field, why):
     assert form_fill.classify(field) == ("", why)
@@ -213,10 +220,20 @@ def test_values_travel_into_the_page_as_data_and_nothing_is_ever_clicked():
     items, _sep, url = tail.rpartition(", ")
     assert json.loads(items) == [{"n": 3, "value": nasty, "check": True}] and json.loads(url) == 'https://x.example/a"b'
     assert " " not in script and "\n</script>" not in script
+    for never in (".click(", "submit(", "requestSubmit", "fetch(", "XMLHttpRequest", "sendBeacon", "eval(", "innerHTML", "cookie", "localStorage"):
+        assert never not in form_fill.CHOOSE, never
+    assert "el.type === 'submit' || el.closest('[type=submit]')" in form_fill.CHOOSE, "what sends a form is never pressed"
+    assert form_fill.CHOOSE.count("press(") == 5, "pressed: a radio button, an entry of a menu, and what opens a menu (an input or another element); nothing else"
+    with pytest.raises(AssertionError):
+        form_fill.choose_script("submit", 1, "", "https://x.example/")
+    assert json.loads(form_fill.choose_script("open", 4, 'a"b', "https://x.example/").rsplit("})(", 1)[1][:-1].join("[]")) == ["open", 4, 'a"b', "https://x.example/"]
+    assert form_fill.choose_answer("nonsense") == {"ok": False, "moved": False, "options": []}
+    assert form_fill.choose_answer('{"options": ["  A  b ", 5]}')["options"] == ["A b", "5"]
     for code in (form_fill.READ, form_fill.FILL):
-        for never in (".click(", "submit(", ".checked", "requestSubmit", "fetch(", "XMLHttpRequest", "sendBeacon", "eval(", "innerHTML", "cookie", "localStorage"):
+        for never in (".click(", "submit(", "requestSubmit", "fetch(", "XMLHttpRequest", "sendBeacon", "eval(", "innerHTML", "cookie", "localStorage"):
             assert never not in code, never
-    assert "el.value" not in form_fill.READ.replace("String(el.value || '').trim() !== ''", ""), "what you typed is only ever tested for being empty"
+    read = form_fill.READ.replace("String(el.value || '').trim() !== ''", "").replace("(el.getAttribute('aria-label') || el.value)", "")
+    assert "el.value" not in read, "what you typed is only ever tested for being empty (a radio button's value is the page's own name for it)"
 
 
 def test_a_page_is_matched_to_a_job_only_when_it_is_plain():
@@ -282,8 +299,9 @@ def test_a_real_form_is_read_filled_and_never_sent():
     page = form_fill.read_answer(_in_page(form_fill.READ)[0])
     by_name = {f["name"]: f for f in page["fields"]}
     assert set(by_name) == {"first_name", "last_name", "applicant[email]", "phone", "urls[LinkedIn]", "city", "country", "notice", "why",
-                            "cover_letter", "cv", "password", "dob", "company_name", "zip", "github"}, "hidden fields and tick boxes are not listed"
-    assert by_name["city"]["filled"] and not by_name["first_name"]["filled"] and page["boxes"] == 3
+                            "cover_letter", "cv", "password", "dob", "company_name", "zip", "github", "visa"}, "hidden fields and tick boxes are not listed"
+    assert by_name["visa"]["type"] == "radio" and by_name["visa"]["options"] == ["Yes", "No"], "the radio buttons of one question are one field"
+    assert by_name["city"]["filled"] and not by_name["first_name"]["filled"] and page["boxes"] == 1
     assert by_name["applicant[email]"]["label"] == "Email address" and by_name["zip"]["label"] == "Postal code"
     assert "Already here" not in json.dumps(page) and "secret-token" not in json.dumps(page), "what the page holds is not sent back"
     todo = form_fill.plan(page["fields"], MINE, letter="Dear team,\n\nI apply.", has_job=True)
@@ -336,7 +354,7 @@ def test_the_assistant_fills_in_details_and_answers_and_says_what_it_did(isolate
     assert [(f["label"], f["kind"]) for f in out["filled"]] == [("First name", "detail"), ("Email", "detail"), ("Why Northwind?", "answer"), ("When can you start?", "answer")]
     assert out["filled"][3]["check"] == "Your start date" and out["filled"][2]["check"] == ""
     assert {i["label"] for i in out["left"]} == {"CV", "Notice period"} and out["kept"] == 1 and out["boxes"] == 2
-    for part in ("4 fields", "2 from My details", "2 answers drafted from your CV", "Junior Analyst at Northwind", "1 answer needs", "2 fields are left",
+    for part in ("4 fields", "2 from My details", "2 answers drafted from your CV", "Junior Analyst at Northwind", "1 of them needs", "2 fields are left",
                  "1 field already held", "2 tick boxes", "I never press Submit"):
         assert part in out["say"], part
     assert len(asked) == 1 and "1. Why Northwind?\n2. When can you start?" in asked[0] and len(ran) == 2
@@ -395,11 +413,14 @@ def test_the_job_list_for_the_assistant_holds_open_jobs_only(isolate):
 
 
 # ── the test area: the whole request, on forms served on this machine, in a real browser engine ──
-AREA = {"details": {**MINE, "street": "Long Street 5"},
-        "jobs": [{"id": "bp", "title": "Backend Developer", "company": "Brightpath", "status": "letter_ready", "url": "", "description": "FastAPI services."},
+AREA = {"details": {**MINE, "street": "Long Street 5", "current_employer": "Northwind", "notice_period": "1 month"},
+        "jobs": [{"id": "bp", "title": "Backend Developer", "company": "Brightpath", "status": "letter_ready", "source": "linkedin",
+                  "url": "https://www.linkedin.com/jobs/view/1", "description": "FastAPI services."},
                  {"id": "ql", "title": "Data Analyst", "company": "Quillon", "status": "waiting", "url": "", "description": "SQL reports."},
                  {"id": "vt", "title": "Junior Tester", "company": "Vantor", "status": "found", "url": "", "description": ""}],
-        "answers": {"Salary expectation (gross, per month)": ["I expect about [your figure] gross per month.", "Your salary figure"]}}
+        "answers": {"Salary expectation (gross, per month)": ["I expect about [your figure] gross per month.", "Your salary figure"]},
+        "choices": {"Are you legally authorized to work in the country of this role?": "Yes", "Highest level of education": "Master's degree",
+                    "Do you have the right to work in the Czech Republic?": "Yes", "Years of experience with SQL": "2", "Shoe size": "47"}}
 
 
 def _area(page, **more):
@@ -408,25 +429,32 @@ def _area(page, **more):
     if done.returncode != 0:
         pytest.skip(f"the browser engine did not start here: {done.stderr[-200:]}")
     out = json.loads(done.stdout)
-    assert out["sent"] is False and out["clicked"] is False, "whatever the form, it is never sent and nothing is clicked"
+    assert out["sent"] is False and out["clicked"] is False, "whatever the form, it is never sent and its button is never pressed"
     out["left"] = {i["label"]: i["why"] for i in out["result"].get("left", [])}
     out["filled"] = {i["label"]: i for i in out["result"].get("filled", [])}
     return out
 
 
 def test_area_a_form_built_from_components_believes_what_was_written():
-    """Pages built with a component library keep each value themselves and undo anything that did not arrive like typing."""
+    """Pages built with a component library keep each value themselves and undo anything that did not arrive like typing;
+    their lists are menus that hold nothing until they are opened."""
     out = _area("components.html")
     result, state = out["result"], out["state"]
     assert result["ok"] and result["job_id"] == "bp" and result["guessed"], "the company is named in the page's title"
-    assert set(out["filled"]) == {"First Name *", "Last Name *", "Email *", "Phone", "LinkedIn Profile", "What interests you about Brightpath?"}
+    assert {"First Name *", "Last Name *", "Email *", "Phone", "LinkedIn Profile", "What interests you about Brightpath?"} <= set(out["filled"])
     assert out["kept"]["c1"] == "Alex" and out["kept"]["c3"] == "alex@example.com" and out["kept"]["c9"] == state["c9"] != "", \
         "the page's own record holds the values: they will still be there when the form is sent"
-    assert out["left"]["Location (City)"] == form_fill.CHOICE and state["c5"] == "", "a box that opens its own list is not typed into"
-    assert out["left"]["Are you legally authorized to work in the country of this role?"] == form_fill.CHOICE
-    assert out["left"]["Gender"] == form_fill.PRIVATE and "website" in out["left"]["Website"]
+    # menus: opened, read, and the entry pressed
+    assert out["menus"] == {"c5": "Brno, Czech Republic", "c6": "Czech Republic", "c11": "Yes", "c14": "LinkedIn"}
+    assert state["c5"] == "Brno, Czech Republic", "the city is typed into the search box and the entry in your country is taken, not the other Brno"
+    assert out["filled"]["How did you hear about us?"]["value"] == "LinkedIn", "known from where the posting was found, without asking Claude"
+    assert all(out["filled"][label]["check"] == form_choices.CHECK for label in ("Country", "Location (City)", "How did you hear about us?"))
+    assert out["left"]["Favourite colour of our logo"] == form_choices.NOT_SETTLED and "c15" not in out["menus"], "opened to read it, closed without choosing"
+    assert out["left"]["Gender"] == form_fill.PRIVATE and "c12" not in out["opened"], "a personal question is not even opened"
+    assert sorted(out["chosen"]) == ["Are you legally authorized to work in the country of this role?", "Favourite colour of our logo"]
+    assert "website" in out["left"]["Website"]
     assert "60 characters" in out["left"]["Describe a back-end service you built and what you would change today."] and state["c10"] == ""
-    assert result["boxes"] == 2 and state["c13"] is False, "the tick box and the menu drawn by the page are counted and left alone"
+    assert result["boxes"] == 1 and state["c13"] is False, "the tick box is counted and left alone"
     assert len(out["asked"]) == 2 and state["c1#outline"] == "green"
 
 
@@ -435,16 +463,24 @@ def test_area_a_long_form_is_filled_in_as_far_as_is_safe():
     result, state = out["result"], out["state"]
     assert result["ok"] and result["job_id"] == "ql"
     assert state["a1"] == "Alex Novak" and state["a2"] == state["a3"] == "alex@example.com" and state["a6"] == "Long Street 5"
-    assert state["a7"] == "602 00" and state["a8"] == "Brno" and state["a10"] == MINE["github"]
+    assert state["a7"] == "602 00" and state["a8"] == "Brno" and state["a10"] == MINE["github"] and state["a13"] == "Northwind"
     assert state["a9"] == "cz" and "Country" in out["filled"], "Czechia is chosen from a list that calls it Czech Republic"
     assert state["a5"] == "" and "9 characters" in out["left"]["Mobile"], "a number that does not fit even without spaces is left"
-    assert state["a4"] == "" and out["left"]["Phone country code"] == form_fill.CHOICE
+    # lists, radio buttons and a number
+    assert state["a4"] == "+420", "the country code is read off your phone number"
+    assert state["a19"] == "1" and out["filled"]["Notice period"]["value"] == "1 month", "from My details, without asking Claude"
+    assert state["a20"] == "Master's degree" and state["a12"] == "2" and state["r1"] is True and state["r2"] is False
+    assert state["a21"] == "" and out["left"]["Shoe size"] == form_choices.NOT_SETTLED, "an answer that is not one of the options is not written"
+    assert state["r3"] is False and state["r4"] is False and out["left"]["Are you willing to relocate to Mars?"] == form_choices.NOT_SETTLED
+    assert state["r5"] is False and state["r6"] is False and out["left"]["Gender"] == form_fill.PRIVATE
+    assert "Notice period" not in out["chosen"] and "Phone country code" not in out["chosen"] and "Gender" not in out["chosen"]
+    assert all(out["filled"][label]["check"] == form_choices.CHECK and state[key + "#outline"] == "amber"
+               for label, key in (("Notice period", "a19"), ("Highest level of education", "a20"), ("Years of experience with SQL", "a12")))
     assert state["a11"] == "" and out["left"]["Earliest start date"] == form_fill.DATE
-    assert state["a12"] == "" and state["a13"] == "" and out["left"]["Current employer"] == form_fill.UNKNOWN
     assert state["a15"].startswith("I expect about [your figure]") and state["a15#outline"] == "amber" and out["filled"]["Salary expectation (gross, per month)"]["check"]
     assert state["a16"] != "" and state["a17"] == "" and "same question" in out["left"]["Why do you want this role?"]
     assert len(out["asked"]) == form_answers.MAX_QUESTIONS and sum(1 for why in out["left"].values() if why == form_fill.TOO_MANY) == 5
-    assert state["a40"] == "" and state["a41"] == 0 and state["pw" if "pw" in state else "a42"] == "" and state["a43"] == ""
+    assert state["a40"] == "" and state["a41"] == 0 and state["a42"] == "" and state["a43"] == ""
     assert out["left"]["National ID number"] == form_fill.PRIVATE and out["left"]["Create a password for your candidate account"] == form_fill.PASSWORD
 
 
@@ -455,14 +491,99 @@ def test_area_a_form_in_a_frame_from_another_site_is_named_not_guessed():
 
 
 def test_area_the_plain_form_and_a_chosen_job():
-    out = _area("plain.html", job_id="vt")
+    out = _area("plain.html", job_id="vt", choices={"Yes No": "No"})
     result, state = out["result"], out["state"]
     assert result["ok"] and result["job_id"] == "vt" and not result["guessed"]
     assert state["fn"] == "Alex" and state["country"] == "CZ" and state["zip"] == "602 00" and state["gh"] == MINE["github"]
     assert state["city"] == "Already here" and result["kept"] == 1 and state["token"] == "secret-token"
     assert state["why"].startswith("An answer to: Why do you want to work at Northwind?") and out["asked"] == ["Why do you want to work at Northwind?"]
     assert out["left"]["Resume/CV"] == form_fill.FILE and out["left"]["Password"] == form_fill.PASSWORD and out["left"]["Date of birth"] == form_fill.PRIVATE
-    assert state["terms"] is False and state["pw"] == "" and state["dob"] == ""
+    assert state["notice"] == "One month", "the only entry that says the same as My details"
+    assert state["terms"] is False and state["pw"] == "" and state["dob"] == "" and state["visa"] is False
+
+
+# ── choosing ────────────────────────────────────────────────────────────────
+def test_an_option_is_matched_only_when_one_says_the_same():
+    assert form_choices.match_option(["Immediately", "1 month", "2 months"], "1 month") == "1 month"
+    assert form_choices.match_option(["One month", "3 months"], "1 month") == "One month", "a number in words is the same number"
+    assert form_choices.match_option(["Immediately", "1 Month notice", "3 months"], "1 month") == "1 Month notice"
+    assert form_choices.match_option(["1 month", "1 month or more"], "1 month") == "1 month", "the exact one wins"
+    assert form_choices.match_option(["Less than 1 month", "More than 1 month"], "1 month") == "", "two say it: you choose"
+    assert form_choices.match_option(["Yes", "No"], "") == "" and form_choices.match_option([], "x") == ""
+
+
+def test_what_your_details_and_the_job_settle_needs_no_claude():
+    pick = lambda **c: form_choices.settle({"kind": "select", "label": "", "options": [], "what": "", "value": "", **c}, MINE, _job(source="linkedin/guest"))   # noqa: E731
+    assert pick(what="country", options=["Germany", "Czech Republic"]) == "Czech Republic"
+    assert pick(what="city", options=["Brno, Slovakia", "Brno, Czech Republic", "Bristol"]) == "Brno, Czech Republic"
+    assert pick(what="city", options=["Brno", "Bratislava"]) == "Brno" and pick(what="city", options=["Bratislava"]) == ""
+    assert pick(what="phone", options=["+4 Other", "+42 Old", "+420 Czechia", "+49 Germany"]) == "+420 Czechia"
+    assert pick(what="notice_period", value="2 months", options=["1 month", "2 months"]) == "2 months"
+    assert pick(label="How did you hear about us?", options=["Job board", "LinkedIn", "Friend"]) == "LinkedIn"
+    assert pick(label="How did you hear about us?", options=["Friend", "Other"]) == "" and pick(label="Shoe size", options=["40"]) == ""
+    assert form_choices.settle({"kind": "number", "label": "Years", "options": [], "what": "", "value": "3"}, MINE, None) == ""
+
+
+def test_claude_may_only_pick_an_option_that_exists_and_may_leave_it_open(monkeypatch):
+    seen = {}
+
+    def ask(prompt, **kw):
+        seen.update(prompt=prompt, system=kw.get("system"))
+        return {"choices": [{"n": 1, "answer": "yes"}, {"n": 2, "answer": "Maybe"}, {"n": 3, "answer": None}, {"n": 4, "answer": "3"},
+                            {"n": 5, "answer": "about three"}, {"n": 9, "answer": "Yes"}, "junk"]}
+    monkeypatch.setattr(llm, "ask_json", ask)
+    choices = [{"n": 1, "kind": "radio", "label": "Right to work?", "options": ["Yes", "No"]}, {"n": 2, "kind": "select", "label": "Relocate?", "options": ["Yes", "No"]},
+               {"n": 3, "kind": "menu", "label": "Level", "options": ["A", "B"]}, {"n": 4, "kind": "number", "label": "Years of SQL", "options": []},
+               {"n": 5, "kind": "number", "label": "Years of Excel", "options": []}, {"n": 6, "kind": "menu", "label": "Never opened", "options": []}]
+    assert form_choices.decide(choices, CV, MINE, _job(source="linkedin")) == {1: "Yes", 4: "3"}
+    assert "1. Right to work?\n   options: Yes | No" in seen["prompt"] and "4. Years of SQL\n   (a number)" in seen["prompt"] and "Never opened" not in seen["prompt"]
+    assert "Found the posting on: linkedin" in seen["prompt"] and "Lives in: Czechia" in seen["prompt"] and "never guess" in seen["system"]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: pytest.fail("nothing to ask"))
+    assert form_choices.decide([{"n": 6, "kind": "menu", "label": "x", "options": []}], CV, MINE, None) == {}
+
+
+def test_choices_are_planned_apart_from_text_fields():
+    todo = form_fill.plan([_field("Notice period", kind="select", n=1, options=["", "1 month"]), _field("Country", kind="menu", n=2),
+                           _field("City", n=3, combo=True), _field("Years of SQL", kind="number", n=4), _field("Gender", kind="radio", n=5),
+                           _field("Current employer", n=6), _field("What is your current notice period, in weeks?", n=7),
+                           _field("Visa?", kind="radio", n=8, filled=True)],
+                          {**MINE, "notice_period": "1 month"}, has_job=True)
+    assert [(c["n"], c["kind"], c["typed"], c["what"], c["value"]) for c in todo["choose"]] == [
+        (1, "select", False, "notice_period", "1 month"), (2, "menu", False, "country", "Czechia"), (3, "menu", True, "city", "Brno"), (4, "number", False, "", "")]
+    assert todo["left"] == [{"label": "Gender", "why": form_fill.PRIVATE}, {"label": "Current employer", "why": form_fill.NO_DETAIL.format(what="current employer")}]
+    assert todo["fill"] == [{"n": 7, "label": "What is your current notice period, in weeks?", "value": "1 month", "kind": "detail"}]
+    empty = form_fill.plan([_field("What is your current notice period, in weeks?", n=7)], MINE, has_job=True)
+    assert empty["ask"] == [{"n": 7, "label": "What is your current notice period, in weeks?", "most": 0}], "not in My details: drafted like any open question"
+
+
+def test_choosing_goes_through_the_page_step_by_step(isolate, monkeypatch):
+    """Without a browser: which scripts are sent, in which order, and what happens when the page refuses."""
+    store.save_jobs([_job()])
+    details.save(MINE)
+    monkeypatch.setattr(chrome, "pause", lambda seconds: None)
+    monkeypatch.setattr(chrome, "active_tab", lambda: {"url": "https://careers.northwind.example/jobs/42", "title": "Junior Analyst - Northwind"})
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"choices": [{"n": 2, "answer": "No"}, {"n": 4, "answer": "Blue"}]})
+    fields = [_field("Country", kind="menu", n=1), _field("Do you need sponsorship?", kind="radio", n=2, options=["Yes", "No"]),
+              _field("Team", kind="menu", n=3), _field("Colour", kind="menu", n=4)]
+    steps = []
+
+    def run(script):
+        if script == form_fill.READ:
+            return json.dumps({"url": "https://careers.northwind.example/jobs/42", "title": "t", "fields": fields, "frames": [], "boxes": 0})
+        action, n, arg, _url = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
+        steps.append((action, n, arg))
+        if action == "options":
+            return json.dumps({"options": {1: ["Germany", "Czech Republic"], 3: [], 4: ["Blue", "Green"]}[n]})
+        return json.dumps({"ok": not (action == "pick" and n == 4)})
+    monkeypatch.setattr(chrome, "run", run)
+    out = ui_api.Api().assistant_fill("nw1")
+    assert out["ok"] and [(f["label"], f["value"], f["check"]) for f in out["filled"]] == [
+        ("Country", "Czech Republic", form_choices.CHECK), ("Do you need sponsorship?", "No", form_choices.CHECK)]
+    left = {i["label"]: i["why"] for i in out["left"]}
+    assert left == {"Team": form_choices.NO_MENU, "Colour": "The page did not take the choice. Choose it yourself."}
+    assert steps[:3] == [("open", 1, ""), ("options", 1, ""), ("close", 1, False)], "every menu is opened, read and closed before anything is chosen"
+    assert ("pick", 1, 1) in steps and ("radio", 2, 1) in steps and steps[-1] == ("close", 4, False), "a menu the page did not let go of is closed again"
+    assert "2 choices made for you" in out["say"] and "2 of them need" in out["say"]
 
 
 def test_a_country_is_found_in_a_list_however_it_is_spelt():

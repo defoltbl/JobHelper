@@ -11,6 +11,7 @@ its own; it only carries what form_fill asks.
 from __future__ import annotations
 
 import subprocess
+import time
 
 APP = "Google Chrome"
 TIMEOUT = 20
@@ -88,3 +89,8 @@ def run(script: str) -> str:
     """Run a script in the tab in front and return what it gives back as text ('' for nothing)."""
     answer = _checked(_osascript(_wrap("return (execute active tab of front window javascript (item 1 of argv)) as text"), script))
     return "" if answer == "missing value" else answer
+
+
+def pause(seconds: float) -> None:
+    """Give the page a moment (a menu that was just opened draws its entries a little later)."""
+    time.sleep(seconds)
