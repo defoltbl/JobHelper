@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 9 October 2026
 
+- **Postings that closed are noticed**: each search asks the pages of earlier LinkedIn postings (at most 40 per search, each at most every 3 days) whether they still accept applications. A closed one without documents moves to the filtered-out list; one with a letter or CV stays and is marked "no longer accepts applications".
 - **Fixed: documents moved while a search was running** came back as broken links when the search finished. The move (and putting back) now reaches the running search too.
 - **A handbook** (`HANDBOOK.md`): how to use the app, the rules it is built by, how the code is laid out, how a change is checked, and what is left to do.
 - **Dark theme is easier to read too**: the label on the orange buttons, picked chips and the green tick is now dark in the dark theme (white on light orange was hard to read), and hint text is a little brighter.

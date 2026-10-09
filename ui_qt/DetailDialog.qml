@@ -282,7 +282,8 @@ Dialog {
                              detailDialog.job.letter_old_format === true ? "letter: older format, open in Word" : "",
                              (detailDialog.job.score !== null && detailDialog.job.score !== undefined)
                                 ? (detailDialog.job.basis === "title" ? "scored from the title only"
-                                   : detailDialog.job.basis === "summary" ? "scored from a short summary" : "") : ""
+                                   : detailDialog.job.basis === "summary" ? "scored from a short summary" : "") : "",
+                             detailDialog.job.closed === true ? "no longer accepts applications" : ""
                            ].filter(function (t) { return t !== ""; })
                 }
 

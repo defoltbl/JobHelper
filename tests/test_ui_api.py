@@ -668,3 +668,12 @@ def test_moving_and_putting_back_reach_a_running_search_s_own_list(api):
         assert (config.LETTERS_DIR / "L_low.docx").exists() and api.job_detail("low")["docs_stale"] is True
     finally:
         api.live = None
+
+
+def test_a_closed_posting_is_marked_in_the_list_and_the_window(api):
+    config.ensure_dirs()
+    lead, app = _with_docs("lead", 70), _with_docs("app", 70)
+    lead["closed"], app["closed"], app["status"] = True, True, "waiting"
+    store.save_jobs([lead, app, _with_docs("open", 60)])
+    assert {r["id"]: r["closed"] for r in api.leads()} == {"lead": True, "open": False}
+    assert api.job_detail("lead")["closed"] is True and api.job_detail("open")["closed"] is False and api.job_detail("app")["closed"] is False

@@ -165,7 +165,7 @@ class Api:
                  "url": j.get("url", ""),
                  "basis": agent3_letters.text_basis(j) if j.get("match_score") is not None else "",
                  "stale_docs": self._stale_docs(j, threshold),
-                 "before": self._score_before(j),
+                 "before": self._score_before(j), "closed": j.get("closed") is True,
                  "letter": j.get("cover_letter_file", ""), "cv": j.get("tailored_cv_file", "")}
                 for j in rows]
 
@@ -240,6 +240,7 @@ class Api:
             "basis": agent3_letters.text_basis(j) if j["status"] in store.LEAD_STATUSES and j.get("match_score") is not None else "",
             "can_paste_text": j["status"] in store.LEAD_STATUSES and agent3_letters.text_basis(j) != "",
             "docs_stale": self._stale_docs(j), "threshold": self._threshold(),
+            "closed": j.get("closed") is True and j["status"] in store.LEAD_STATUSES,
             "can_unshelve": bool(self._shelved(j)), "shelved_when": (self._shelved(j) or {}).get("when", ""),
             "reason": j.get("match_reason", ""), "description": description[:8000],
             "description_text": textfmt.readable(description[:8000]),

@@ -882,7 +882,8 @@ ApplicationWindow {
                          secondary: [[j.posted || "", j.desired ? Number(j.desired).toLocaleString() + " CZK/mo" : ""]
                                          .filter(function (part) { return part !== ""; }).join("   "),
                                      j.basis === "title" ? "scored from the title only" : j.basis === "summary" ? "scored from a short summary" : "",
-                                     j.stale_docs === true ? "documents from a higher score" : ""]
+                                     j.stale_docs === true ? "documents from a higher score" : "",
+                                     j.closed === true ? "no longer accepts applications" : ""]
                                     .filter(function (part) { return part !== ""; }).join("   ·   "),
                          badge: j.tier || "", value: win.noScore(j.score) ? "–" : "" + j.score, actions: acts,
                          id: j.id, flag: "", was: win.noScore(j.before) ? "" : "was " + j.before, stale: j.stale_docs === true,

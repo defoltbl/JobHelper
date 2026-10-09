@@ -89,6 +89,10 @@ Inside the window:
   shows what the app takes as your profession, and you can pick it yourself there (the chips
   under "Kinds of role you want"; **Let the app decide** goes back). If nothing is picked and
   the app cannot tell, nothing is skipped for its profession. A language your CV shows at a working level is not a reason to skip.
+- **Closed postings** — a search also asks the pages of LinkedIn postings found earlier whether they
+  still accept applications (at most 40 pages per search, each posting at most every 3 days). A
+  closed posting without documents goes to the filtered-out list with that reason; one that has a
+  letter or CV stays in New Jobs, marked "no longer accepts applications".
 - **Second mailbox (optional)** — Account card → *Job email* → **Add** under "Second
   mailbox". Its replies are read in the same scan; one mailbox is enough if you only use one.
 - **Skip words** — Options → Search → *Skip titles with*: jobs whose title contains one of

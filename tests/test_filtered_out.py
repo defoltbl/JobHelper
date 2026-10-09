@@ -352,3 +352,61 @@ def test_a_short_summary_gets_a_second_read_and_then_is_left_be(monkeypatch):
     by["same"]["text_tries"] = "many"                                                                       # a damaged count starts again
     agent2_search.reread_missing(jobs, pause=0)
     assert by["same"]["text_tries"] == 1
+
+
+# ── postings that stopped accepting applications after they were found ──────
+def test_a_search_asks_the_pages_of_new_jobs_whether_they_are_still_open(monkeypatch):
+    answers = {"gone": True, "docs": True, "open": False, "silent": None}
+    asked = []
+    monkeypatch.setattr(agent2_search, "posting_closed", lambda job: asked.append(job["id"]) or answers.get(job["id"]))
+    jobs = [store.new_job(id="gone", title="Dev", company="A", url="https://x/1"),
+            store.new_job(id="docs", title="Dev", company="B", url="https://x/2", status="letter_ready", cover_letter_file="L.docx"),
+            store.new_job(id="open", title="Dev", company="C", url="https://x/3"),
+            store.new_job(id="silent", title="Dev", company="D", url="https://x/4"),
+            store.new_job(id="app", title="Dev", company="E", url="https://x/5", status="waiting")]
+    jobs[2]["closed"] = True                                         # was marked earlier and is open again
+    dropped = []
+    stats = agent2_search.check_closed(jobs, dropped=dropped, today="2026-10-09", pause=0)
+    assert stats == {"asked": 3, "removed": 1, "marked": 1} and sorted(asked) == ["docs", "gone", "open", "silent"]   # never an application
+    by = {j["id"]: j for j in jobs}
+    assert "gone" not in by and dropped[0]["job"]["id"] == "gone" and dropped[0]["group"] == "closed"
+    assert by["docs"]["closed"] is True and by["docs"]["cover_letter_file"] == "L.docx"          # what was written stays
+    assert "closed" not in by["open"] and by["open"]["closed_checked"] == "2026-10-09"
+    assert "closed_checked" not in by["silent"]                                                  # no answer: asked again next time
+
+    asked.clear()
+    agent2_search.check_closed(jobs, today="2026-10-10", pause=0)
+    assert asked == ["silent"]                                       # the others were asked a day ago
+    asked.clear()
+    agent2_search.check_closed(jobs, today="2026-10-12", pause=0)    # three days on, everyone again; the marked one is not counted twice
+    assert sorted(asked) == ["docs", "open", "silent"] and agent2_search.check_closed(jobs, today="2026-10-20", pause=0)["marked"] == 0
+
+
+def test_only_so_many_pages_are_asked_per_search_longest_unchecked_first(monkeypatch):
+    asked = []
+    monkeypatch.setattr(agent2_search, "posting_closed", lambda job: asked.append(job["id"]) or False)
+    jobs = [store.new_job(id=f"j{i:03}", title="Dev", company="A", url="https://x") for i in range(agent2_search.CLOSED_PER_SEARCH + 5)]
+    for j in jobs[:5]:
+        j["closed_checked"] = "2026-09-01"                            # asked long ago; the rest never
+    agent2_search.check_closed(jobs, today="2026-10-09", pause=0)
+    assert len(asked) == agent2_search.CLOSED_PER_SEARCH and not set(asked) & {j["id"] for j in jobs[:5]}
+    asked.clear()
+    agent2_search.check_closed(jobs, today="2026-10-09", pause=0)
+    assert sorted(asked) == [j["id"] for j in jobs[:5]]               # the next search does the others
+
+
+def test_only_boards_that_give_a_clear_answer_are_asked(monkeypatch):
+    from jobhelper import scrapers_intl
+    monkeypatch.undo()
+    replies = {"111111": ("Text of the posting", False, ""), "222222": ("", True, ""), "333333": ("", False, "")}
+    monkeypatch.setattr(scrapers_intl, "_fetch_detail", lambda number: replies[number])
+    assert agent2_search.posting_closed({"id": "linkedin-111111", "url": ""}) is False
+    assert agent2_search.posting_closed({"id": "x", "url": "https://www.linkedin.com/jobs/view/dev-222222"}) is True
+    assert agent2_search.posting_closed({"id": "linkedin-333333", "url": ""}) is None           # an empty answer (too many requests) is not "closed"
+    assert agent2_search.posting_closed({"id": "jobscz-1", "url": "https://www.jobs.cz/rpd/1/"}) is None
+    assert agent2_search.posting_closed({"id": "linkedin-abc", "url": ""}) is None
+
+    def down(number):
+        raise OSError("no network")
+    monkeypatch.setattr(scrapers_intl, "_fetch_detail", down)
+    assert agent2_search.posting_closed({"id": "linkedin-111111", "url": ""}) is None

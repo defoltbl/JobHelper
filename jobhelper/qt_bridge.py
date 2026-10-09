@@ -862,6 +862,8 @@ class Bridge(QObject):
             added -= len(agent2_search.prune_duplicate_leads(jobs))     # same role already listed from another board
             # a posting whose text could not be read gets one more try before it is scored from its title
             added -= agent2_search.reread_missing(jobs, english_only=not o["all_languages"], dropped=dropped)["removed"]
+            # postings that stopped accepting applications since they were found
+            agent2_search.check_closed(jobs, dropped=dropped)
             agent2_search.save_dropped(dropped)
             store.save_jobs(jobs)
             self.agentChanged.emit("a2", "done", "+%d new" % added)

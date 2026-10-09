@@ -119,8 +119,11 @@ def main() -> int:
         added, skipped = store.upsert(jobs, new_jobs)
         added -= len(agent2_search.prune_duplicate_leads(jobs))
         added -= agent2_search.reread_missing(jobs, english_only=not args.all_languages, dropped=filtered)["removed"]
+        closed = agent2_search.check_closed(jobs, dropped=filtered)
         agent2_search.save_dropped(filtered)
         msg = f"   found {len(new_jobs)} listings — {added} new, {skipped} already tracked"
+        if closed["removed"] or closed["marked"]:
+            msg += f"; {closed['removed'] + closed['marked']} earlier ones no longer accept applications"
         if dropped_known:
             msg += f"; skipped {dropped_known} you've already applied to (same role & company)"
         print(msg)

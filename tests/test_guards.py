@@ -70,14 +70,15 @@ def test_is_closed_leaves_open_postings():
     assert not filters.is_closed("")
 
 
-def test_prune_closed_leads_keeps_applications():
+def test_closed_postings_leave_the_list_and_applications_are_kept():
     closed = "No longer accepting applications"
     jobs = [store.new_job(id="lead-closed", description=closed),
             store.new_job(id="lead-open", description="Join us"),
             store.new_job(id="applied", description=closed, status="waiting")]
-    removed = agent2_search.prune_closed_leads(jobs)
-    assert [j["id"] for j in removed] == ["lead-closed"]
+    dropped = []
+    assert agent2_search.check_closed(jobs, dropped=dropped, network=False) == {"asked": 0, "removed": 1, "marked": 0}
     assert [j["id"] for j in jobs] == ["lead-open", "applied"]
+    assert dropped[0]["group"] == "closed" and dropped[0]["reason"] == agent2_search.CLOSED_REASON and dropped[0]["job"]["id"] == "lead-closed"
 
 
 # ── matching emails to jobs ─────────────────────────────────────────────────

@@ -254,33 +254,73 @@ def prune_applied_leads(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return removed
 
 
-def prune_closed_leads(jobs: list[dict[str, Any]], network: bool = False) -> list[dict[str, Any]]:
-    """Remove leads whose posting no longer accepts applications.
+CLOSED_RECHECK_DAYS = 3        # a posting's page is asked again at most this often
+CLOSED_PER_SEARCH = 40         # and at most this many pages per search, the longest unchecked first
+CLOSED_REASON = "The posting no longer accepts applications."
 
-    Always drops leads whose stored text already says so. With network=True,
-    also re-checks each LinkedIn lead's live page (slower) to catch postings
-    that were closed after we saved them. Mutates `jobs`; returns removed leads.
-    """
-    removed, kept = [], []
-    for j in jobs:
-        if j.get("status") in store.LEAD_STATUSES:
-            if filters.is_closed(f"{j.get('title','')} {j.get('description','')}"):
-                removed.append(j)
-                continue
-            if network and (j.get("id", "").startswith("linkedin-") or "linkedin.com" in j.get("url", "")):
-                lid = j["id"].replace("linkedin-", "")
-                try:
-                    _desc, closed, posted = scrapers_intl._fetch_detail(lid)
-                    if closed:
-                        removed.append(j)
-                        continue
-                    if posted and not j.get("date_posted"):
-                        j["date_posted"] = posted
-                except Exception:
-                    pass
-        kept.append(j)
-    jobs[:] = kept
-    return removed
+
+def posting_closed(job: dict[str, Any]) -> bool | None:
+    """Ask a posting's own page whether it still accepts applications.
+    True / False, or None when the board gives no clear answer (or is not one the app can ask)."""
+    if not (job.get("id", "").startswith("linkedin-") or "linkedin.com" in (job.get("url") or "")):
+        return None
+    number = re.search(r"(\d{6,})", job.get("id", "") + " " + (job.get("url") or ""))
+    if not number:
+        return None
+    try:
+        text, closed, _posted = scrapers_intl._fetch_detail(number.group(1))
+    except Exception:  # noqa: BLE001 - no answer is not "closed"
+        return None
+    return True if closed else (False if text else None)
+
+
+def check_closed(jobs: list[dict[str, Any]], dropped: list | None = None, network: bool = True,
+                 today: str = "", pause: float = 0.4) -> dict[str, int]:
+    """Find new jobs whose posting no longer accepts applications: by what their saved text
+    says, and (network=True) by asking the pages of those not asked for CLOSED_RECHECK_DAYS.
+    A closed job without documents leaves the list (noted in `dropped` with the reason);
+    one that has a letter or CV stays and is marked `closed`, so nothing written is lost.
+    A job found open again loses the mark. Mutates `jobs`. {asked, removed, marked}"""
+    import time
+    from datetime import date, timedelta
+    today = today or date.today().isoformat()
+    stale = (date.fromisoformat(today) - timedelta(days=CLOSED_RECHECK_DAYS)).isoformat()
+    leads = [j for j in jobs if j.get("status") in store.LEAD_STATUSES]
+    verdict: dict[int, bool] = {}
+    for j in leads:
+        if filters.is_closed(f"{j.get('title', '')} {j.get('description', '')}"):
+            verdict[id(j)] = True
+    stats = {"asked": 0, "removed": 0, "marked": 0}
+    if network:
+        due = [j for j in leads if id(j) not in verdict and str(j.get("closed_checked") or "") <= stale]
+        due.sort(key=lambda j: str(j.get("closed_checked") or ""))
+        for j in due[:CLOSED_PER_SEARCH]:
+            answer = posting_closed(j)
+            if answer is None:
+                continue                       # nothing learned: ask again next time
+            stats["asked"] += 1
+            j["closed_checked"] = today
+            verdict[id(j)] = answer
+            if pause:
+                time.sleep(pause)
+    gone = set()
+    for j in leads:
+        closed = verdict.get(id(j))
+        if closed is None:
+            continue
+        if not closed:
+            j.pop("closed", None)
+        elif j.get("cover_letter_file") or j.get("tailored_cv_file"):
+            if not j.get("closed"):
+                stats["marked"] += 1
+            j["closed"] = True
+        else:
+            note_dropped(dropped, j, "closed", CLOSED_REASON)
+            gone.add(id(j))
+    if gone:
+        jobs[:] = [j for j in jobs if id(j) not in gone]
+        stats["removed"] = len(gone)
+    return stats
 
 
 def is_english_job(job: dict[str, Any]) -> bool:

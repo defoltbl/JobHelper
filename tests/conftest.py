@@ -58,6 +58,7 @@ def safe_environment(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(ui_api.Api, "_reveal", lambda self, target: None)  # nor a real Finder window
     from jobhelper import agent2_search
     monkeypatch.setattr(agent2_search, "refetch_description", lambda job: "")     # never read a real job board
+    monkeypatch.setattr(agent2_search, "posting_closed", lambda job: None)        # nor ask one whether a posting is still open
     from jobhelper import housekeeping
     trash = tmp_path_factory.mktemp("trash")
     monkeypatch.setattr(housekeeping, "trash_dir", lambda path: trash)             # never put anything in the real Trash
