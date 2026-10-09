@@ -322,32 +322,70 @@ _NEGATIVE = [
     "job digest", "newsletter", "unsubscribe to stop", "account confirmation",
     "api key", "api account", "verify your email", "confirm your email",
     "cheat code", "weekly", "new matches", "jobs matching",
+    "nových nabídek", "nabídek práce", "nabídky práce", "potvrďte svůj e-mail",        # job-board alerts and sign-up mail
+    "one-time password", "verification code", "reset your password", "account created", "account creation",
 ]
 _NEGATIVE_SENDERS = ["jobnotification", "jobs2web", "noreply@linkedin", "no-reply@linkedin",
                      "3scale", "newsletter", "digest@"]
+
+
+# Marks of mail sent to a whole list, and of senders no person writes from.
+_BULK = re.compile(r"unsubscribe|odhl[aá]sit|odhl[aá]šen|view (this email |it )?in (your |a )?browser|zobrazit v prohl[ií]že[cč]i"
+                   r"|manage (your )?(email )?preferences|email preferences", re.IGNORECASE)
+_AUTOMATED_SENDER = re.compile(r"(^|[<\s\"'])(no[-_.]?reply|do[-_.]?not[-_.]?reply|noreply|notifications?|notifikace|statements?"
+                               r"|billing|invoices?|receipts?|marketing|news|promo|offers?|info|mailer)[^@\s]*@|@(notifikace|notifications?"
+                               r"|news|newsletter|mail|email|e|em|marketing|info|promo)\.", re.IGNORECASE)
+
+
+def names_tracked_company(sender: str, subject: str, jobs: list[dict[str, Any]]) -> bool:
+    """Does the sender or the subject name a company you track, by a word that is really its name?
+
+    A word many companies share ("international", "data", "praha") names nobody: an advert for an
+    international conference is not from International SOS. A name made only of such words counts
+    when all of it is there. A name too short to be a word ("HP") counts when it is the sender's domain."""
+    words = set(re.findall(r"[a-z0-9]{3,}", f"{sender} {subject}".lower()))
+    domain = re.sub(r"[^a-z0-9.]", "", (sender or "").lower().split("@")[-1].split(">")[0])
+    labels = set(domain.split(".")[:-1])
+    for job in jobs:
+        tokens = company_tokens(job.get("company", ""))
+        own = tokens - GENERIC_COMPANY_WORDS
+        if own & words or (tokens and not own and tokens <= words):
+            return True
+        short = norm_company(job.get("company", ""))
+        if not tokens and len(short) >= 2 and short in labels:
+            return True
+    return False
 
 
 def looks_like_application(sender: str, subject: str, body: str,
                           jobs: list[dict[str, Any]]) -> bool:
     """Cheap heuristic: is this email plausibly a reply to a specific application?
 
-    A match on a tracked company always wins. Otherwise obvious alerts/digests/
-    confirmations are rejected, and remaining mail must carry application
-    keywords or come from a real ATS domain. Keeps LLM calls focused during a
-    big historical scan.
+    Decides what is worth a question to Claude, so it must let every real reply
+    through and keep advertising out:
+    - obvious alerts, digests and sign-up mail are rejected first, even from a
+      company you track ("New SAP Jobs Posted" is an alert, not a reply);
+    - mail from a recruiting system passes;
+    - mail whose sender or subject names a company you track passes when it
+      talks about an application, and also without such words when a person
+      wrote it (a recruiter's "are you free on Tuesday?"). Automatic mail from
+      that company with no such words is a statement or an advert;
+    - any other mail needs application words and must not be list mail.
+    A company's name deep in the text is not enough: shops and newsletters
+    mention brands and cities all the time.
     """
     low_sender = sender.lower()
     subj = subject.lower()
-    # Reject obvious alerts/digests/confirmations first — even from a company we
-    # track (e.g. "New SAP Jobs Posted" is an alert, not a reply).
     if any(n in subj for n in _NEGATIVE) or any(n in low_sender for n in _NEGATIVE_SENDERS):
         return False
-    if match_job(sender, subject, body, jobs):
-        return True
     if any(d in low_sender for d in _ATS_DOMAINS):
         return True
-    hay = f"{subject} {body[:1500]}".lower()
-    return any(k in hay for k in _APP_KEYWORDS)
+    hay = f"{subject} {(body or '')[:1500]}".lower()
+    worded = any(k in hay for k in _APP_KEYWORDS)
+    listed = bool(_BULK.search(body or ""))
+    if names_tracked_company(sender, subject, jobs):
+        return worded or not (listed or _AUTOMATED_SENDER.search(sender or ""))
+    return worded and not listed
 
 
 # Generic words that appear in many job titles — ignored when disambiguating

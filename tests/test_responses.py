@@ -1,4 +1,6 @@
 """Agent 5 (response analysis) + SQLite DB tests — mocked email + LLM."""
+import pytest
+
 from jobhelper import agent5_responses, db, email_client, llm, store
 
 
@@ -135,6 +137,60 @@ def test_backfill_roles(isolate_data):
     assert updated == 1
     assert jobs[0]["title"] == "Software Developer in Test"  # filled from email role
     assert jobs[1]["title"] == "Python Developer"            # real title untouched
+
+
+TRACKED = [{"company": "International Rescue"}, {"company": "Northwind Systems"}, {"company": "Kestrel"},
+           {"company": "Bright Praha s.r.o."}, {"company": "HP Inc."}, {"company": "Data Systems"}]
+
+
+@pytest.mark.parametrize("sender, subject, body", [
+    # a conference advert: "international" is in a tracked company's name, and names nobody
+    ("Conference <info@eu-conf.example>", "International scientific conference in Spain", "Submit your paper by Friday."),
+    # a shop's advert that mentions a brand or a city somewhere in its text
+    ("Shop <news@shop.example>", "Technology for everyone", "Laptops by Kestrel and others, from our store in Praha."),
+    ("Shoes <akce@obuv.example>", "Celebrate with us", "Up to 25 % off. Our shop in Praha. Unsubscribe here."),
+    # automatic mail from a company you applied to, with nothing about an application in it
+    ("Kestrel <no-reply@kestrel.example>", "Your statement is available", "Open the app to see it."),
+    ("Kestrel <hello@news.kestrel.example>", "What is new this month", "Three new features."),
+    ("Kestrel <team@kestrel.example>", "What is new this month", "Three new features. Unsubscribe at any time."),
+    # list mail that merely uses the words
+    ("Big Blue <careers@bigblue.example>", "Advice for entry-level candidates", "How to get hired. Unsubscribe."),
+    # job-board alerts and sign-up mail, even from a recruiting system
+    ("jobs.cz <info@jobs.cz>", "41 nových nabídek práce, například u Acme", "Podívejte se."),
+    ("jobs.cz <info@jobs.cz>", "Potvrďte svůj e-mail", "Klikněte."),
+    ("Careers <system@successfactors.com>", "One-Time Password for Candidate Account", "Your code is 123456."),
+])
+def test_advertising_and_automatic_mail_is_not_sent_to_claude(sender, subject, body):
+    assert email_client.looks_like_application(sender, subject, body, TRACKED) is False
+
+
+@pytest.mark.parametrize("sender, subject, body", [
+    # a person at the company, with no application words at all
+    ("Jana <jana.novak@kestrel.example>", "Tuesday?", "Hi, are you free for a short call on Tuesday afternoon?"),
+    # automatic mail from the company that does talk about the application
+    ("Kestrel <no-reply@kestrel.example>", "News about your application", "We regret to inform you. Unsubscribe."),
+    ("Northwind Systems Careers <noreply@northwind.example>", "Thank you for applying", "We received your CV."),
+    # a recruiting system, and plain application wording from a stranger
+    ("Acme via Greenhouse <no-reply@greenhouse.io>", "Update", "hello"),
+    ("hr@other.example", "Your application", "We would like to invite you to an interview."),
+    # a company whose name is too short to be a word, known by its domain
+    ("Sam <sam@hp.example>", "Next steps", "Could you send me your availability?"),
+    # a name made only of common words counts when all of it is there
+    ("Data Systems <people@datasys.example>", "Hello from Data Systems", "Can we talk this week?"),
+])
+def test_real_replies_still_reach_claude(sender, subject, body):
+    assert email_client.looks_like_application(sender, subject, body, TRACKED) is True
+
+
+def test_a_shared_common_word_does_not_name_a_company():
+    names = email_client.names_tracked_company
+    assert names("info@eu-conf.example", "International conference", TRACKED) is False
+    assert names("x@shop.example", "New systems for your home", TRACKED) is False          # "systems" alone
+    assert names("x@shop.example", "Data for everyone", TRACKED) is False                  # half of "Data Systems"
+    assert names("jobs@northwind.example", "Hello", TRACKED) is True
+    assert names("x@mail.example", "Your interview at Kestrel", TRACKED) is True
+    assert names("x@hp.example", "Hello", TRACKED) is True and names("x@php.example", "Hello", TRACKED) is False
+    assert names("x@mail.example", "Hello", []) is False and names("", "", TRACKED) is False
 
 
 def test_looks_like_application():
