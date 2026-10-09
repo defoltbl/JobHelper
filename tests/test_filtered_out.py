@@ -111,7 +111,7 @@ def test_api_lists_them_and_opens_only_a_saved_web_link(isolate_data, monkeypatc
 ])
 def test_management_as_a_field_is_not_a_senior_title(title, senior):
     from jobhelper import filters
-    assert filters.is_too_senior_for(title, "junior") is senior
+    assert bool(filters.level_word(title, "junior")) is senior
 
 
 # ── level words and the years limit come from Options ───────────────────────
@@ -135,7 +135,7 @@ def test_defaults_follow_the_level_in_the_cv():
 def test_level_words_from_options_decide(title, words, word):
     from jobhelper import filters
     assert filters.level_word(title, "junior", words) == word
-    assert filters.is_too_senior_for(title, "junior", words) is bool(word)
+    assert bool(filters.level_word(title, "junior", words)) is bool(word)
 
 
 def test_years_limit_from_options():

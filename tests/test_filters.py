@@ -4,22 +4,22 @@ from jobhelper import filters
 def test_drops_senior_for_junior():
     for title in ["Senior Python Developer", "Lead Data Engineer", "Engineering Manager",
                   "Principal Architect", "Head of Data", "Sr. Backend Engineer"]:
-        assert filters.is_too_senior_for(title, "junior")
+        assert bool(filters.level_word(title, "junior"))
 
 
 def test_keeps_junior_and_mid_titles():
     for title in ["Junior Python Developer", "Python Developer", "IT Support Specialist",
                   "QA Tester", "Help Desk Technician", "Medior Backend Developer"]:
-        assert not filters.is_too_senior_for(title, "junior")
+        assert not bool(filters.level_word(title, "junior"))
 
 
 def test_senior_candidate_not_filtered():
-    assert not filters.is_too_senior_for("Senior Python Developer", "senior")
-    assert not filters.is_too_senior_for("Lead Engineer", "lead")
+    assert not bool(filters.level_word("Senior Python Developer", "senior"))
+    assert not bool(filters.level_word("Lead Engineer", "lead"))
 
 
 def test_mid_candidate_still_drops_senior():
-    assert filters.is_too_senior_for("Senior Developer", "mid")
+    assert bool(filters.level_word("Senior Developer", "mid"))
 
 
 def test_requires_czech_detects_requirement():

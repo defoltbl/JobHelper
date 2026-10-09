@@ -14,6 +14,7 @@ import subprocess
 import sys
 from datetime import date, datetime, timedelta
 
+from . import trouble  # noqa: I001
 from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, cv_tailor, filters, form_answers, health, prep_doc, summary, textfmt,
                compare, config, cover_letter, db, followup, housekeeping, insights, integrity, interview_prep, keywords, merge, pdf,
                planner, salary, store, usage, vault)
@@ -62,8 +63,8 @@ class Api:
                 os.startfile(str(path))  # type: ignore[attr-defined]
             else:
                 subprocess.Popen(["xdg-open", str(path)])
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 - the window says "couldn't open"; the reason is kept
+            trouble.note("opening a file or folder", e)
 
     def _reveal(self, path):
         """Show a file in its folder (selected in Finder), so it is easy to drag into a form."""
@@ -72,8 +73,8 @@ class Api:
                 subprocess.Popen(["open", "-R", str(path)])
             else:
                 self._open(os.path.dirname(str(path)))
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            trouble.note("showing a file in its folder", e)
 
     def show_in_folder(self, kind, job_id):
         """Reveal a job's CV, letter or single PDF in its folder. The PDF copy when there is one."""
@@ -301,8 +302,8 @@ class Api:
             if twin is not None:
                 try:
                     fn(running, twin)
-                except Exception:  # noqa: BLE001 - the saved copy is already right
-                    pass
+                except Exception as e:  # noqa: BLE001 - the saved copy is already right
+                    trouble.note(f"repeating a hand edit on the running search's list ({job_id})", e)
         return result
 
     def set_status(self, job_id, status):
@@ -1241,8 +1242,8 @@ class Api:
         try:
             if p.exists():
                 defaults.update(json.loads(vault.read_text(p)))
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 - the defaults are used; the start-up check tells the user
+            trouble.note("reading the saved Options", e)
         return defaults
 
     def save_options(self, opts):
@@ -1259,8 +1260,8 @@ class Api:
                 data = json.loads(p.read_text(encoding="utf-8"))
                 return [{"name": c.get("name", ""), "ats": c.get("ats", ""), "token": c.get("token", "")}
                         for c in data if isinstance(c, dict) and c.get("ats") and c.get("token")]
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 - an unreadable list is shown as empty
+            trouble.note("reading the career-site list", e)
         return []
 
     def save_companies(self, companies):

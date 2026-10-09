@@ -52,11 +52,6 @@ def level_word(title: str, candidate_seniority: str, words=None) -> str:
     return next((str(w) for w in words if _word_in(title or "", str(w))), "")
 
 
-def is_too_senior_for(title: str, candidate_seniority: str, words=None) -> bool:
-    """True if `title` is above the candidate's level (see level_word)."""
-    return bool(level_word(title, candidate_seniority, words))
-
-
 # Detects a real Czech-language *requirement* (not "Czech Republic", not "Czech
 # is a plus"). Matches phrasings like "Czech language", "fluent Czech",
 # "native Czech", "knowledge of Czech", "Czech B2", "čeština".

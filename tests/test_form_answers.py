@@ -17,9 +17,9 @@ def _reply(*answers):
 def test_questions_are_read_one_per_line_without_list_marks():
     text = "1. What are your salary expectations? *\n\n- Why do you want to work with us?\n(3) When can you start?\n" \
            "• Why do you want to work with us?\n   \nDo you need a visa"
-    assert form_answers.parse_questions(text) == ["What are your salary expectations?", "Why do you want to work with us?",
+    assert form_answers.check_questions(text)["questions"] == ["What are your salary expectations?", "Why do you want to work with us?",
                                                   "When can you start?", "Do you need a visa"]
-    assert form_answers.parse_questions("") == [] and form_answers.parse_questions(None) == []
+    assert form_answers.check_questions("")["questions"] == [] and form_answers.check_questions(None)["questions"] == []
 
 
 def test_common_questions_name_the_company():
@@ -189,7 +189,7 @@ def test_the_old_answers_bank_is_gone():
 def test_bad_pasted_text_is_explained_not_cut_silently(text, problem):
     got = form_answers.check_questions(text)
     assert problem in got["problem"] and got["questions"] == []
-    assert form_answers.parse_questions(text) == []
+    assert form_answers.check_questions(text)["questions"] == []
 
 
 def test_good_text_says_what_was_left_out():

@@ -134,12 +134,6 @@ def all_responses() -> list[dict[str, Any]]:
     return rows
 
 
-def set_response_job(msg_id: str, job_id: str) -> None:
-    """Re-link a stored response to a (different) job."""
-    with _connect(write=True) as conn:
-        conn.execute("UPDATE responses SET job_id = ? WHERE msg_id = ?", (job_id, msg_id))
-
-
 def relink_responses(old_job_id: str, new_job_id: str) -> int:
     """Point every reply stored for one job at another (two records merged into one)."""
     if not old_job_id or old_job_id == new_job_id:

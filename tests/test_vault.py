@@ -133,7 +133,6 @@ def test_responses_database_is_encrypted_and_keeps_working(isolate_data):
     assert raw.startswith(vault.MAGIC)
     assert b"SQLite format" not in raw and b"Acme" not in raw and b"regret" not in raw
     assert db.total() == 1 and db.is_seen("<1@x>") and db.has_response("<1@x>")
-    db.set_response_job("<1@x>", "job-9")
     db.upsert_response({"msg_id": "<2@x>", "company": "Beta", "stage": "interview"})
     assert [r["company"] for r in db.all_responses()] == ["Acme", "Beta"] or db.total() == 2
     assert db.all_responses()[0]["job_id"] in ("job-9", "")

@@ -186,6 +186,7 @@ ApplicationWindow {
         if (r && r.fix === "city") { optsData = bridge.options(); optDialog.open(); }     // straight to where the city is set
         if (r && r.fix) welcome.openCard();   // jump to the fix
     }
+    readonly property color resumeBlue: "#2563eb"
     function noScore(v) { return v === null || v === undefined; }
     // The status line is behind any open window, so a message written there while a window is
     // open is also shown on top of it for a few seconds: red when it says something went wrong.
@@ -478,7 +479,8 @@ ApplicationWindow {
                             id: resumeBtn; objectName: "resumeButton"
                             visible: win.paused
                             implicitHeight: 34; implicitWidth: resumeRow.implicitWidth + 28; radius: 10
-                            color: win.canResume ? (resumeMa.containsMouse ? Qt.lighter(theme.a1, 1.1) : theme.a1) : theme.inset
+                            // a darker blue than the robots' own: the white label needs it to read
+                            color: win.canResume ? (resumeMa.containsMouse ? Qt.lighter(win.resumeBlue, 1.12) : win.resumeBlue) : theme.inset
                             border.width: 1; border.color: win.canResume ? win.clearOf(theme.line) : theme.line
                             scale: resumeMa.pressed && win.canResume ? 0.96 : 1
                             Behavior on color { ColorAnimation { duration: win.motion } }

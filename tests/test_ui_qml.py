@@ -2239,6 +2239,10 @@ def test_dark_theme_text_colours_read_on_dark_surfaces():
     assert _contrast(dark["warn"], dark["warnbg"]) >= 4.5 and _contrast(dark["good"], dark["goodbg"]) >= 4.5 and _contrast(dark["crit"], dark["critbg"]) >= 4.5
 
 
+def test_the_resume_button_s_white_label_reads_on_its_blue(ui):
+    assert _contrast("#ffffff", ui.js('"" + win.resumeBlue')) >= 4.5 and "win.resumeBlue" in qml_source()
+
+
 def test_no_label_on_the_accent_is_fixed_white():
     """A main button, a picked chip and the tick take their label colour from the theme: white suits only the light theme."""
     for name in ("SmallButton", "PillButton", "TableDialog", "HelpDialog", "OptionsDialog", "DetailDialog", "FormAnswersDialog", "PrepDialog",

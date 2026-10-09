@@ -21,6 +21,7 @@ from urllib.parse import unquote, urlparse
 from PySide6.QtCore import Property, QMetaObject, QObject, Qt, Signal, Slot
 
 from .ui_api import Api
+from . import trouble  # noqa: I001
 from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker,
                agent5_responses, config, integrity, letters, notify, planner, schedule, store)
 
@@ -131,8 +132,8 @@ class Bridge(QObject):
                     clean.append(c)
                 else:  # tolerate odd item types from the bridge
                     clean.append({"name": c["name"], "ats": c["ats"], "token": c["token"]})
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 - what could be read is saved
+            trouble.note("reading the career-site list from the window", e)
         self._api.save_companies(clean)
 
     # ── actions ─────────────────────────────────────────────────
@@ -241,8 +242,8 @@ class Bridge(QObject):
         def work():
             try:
                 self._api.insights()
-            except Exception:  # noqa: BLE001 - only a head start; the view computes it itself if this failed
-                pass
+            except Exception as e:  # noqa: BLE001 - only a head start; the view computes it itself if this failed
+                trouble.note("preparing Insights in the background", e)
         threading.Thread(target=work, daemon=True).start()
 
     @Slot()
@@ -254,8 +255,8 @@ class Bridge(QObject):
             from . import llm
             if self._api.connections().get("claude") and not config.using_paid_api():
                 llm.ask("ping", system="Reply with exactly: ok", tag="usage_ping", force=True)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 - the usage card keeps its last numbers
+            trouble.note("asking Claude for the current usage", e)
         finally:
             self.usageReady.emit()
 
@@ -470,10 +471,6 @@ class Bridge(QObject):
                 "resets_day": datetime.fromtimestamp(resets).strftime("%d %b") if resets else "",
                 "message": message or llm.limit_message(status)}
 
-    @Slot(result="QVariantMap")
-    def limitInfo(self):
-        return self._limit_state()
-
     def _notify(self, message: str, subtitle: str = "") -> None:
         """A desktop notification, but only while the app is in the background -
         in front of you the status bar already says it."""
@@ -482,7 +479,7 @@ class Bridge(QObject):
             from PySide6.QtGui import QGuiApplication
             if QGuiApplication.instance() is not None and QGuiApplication.applicationState() == Qt.ApplicationActive:
                 return
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - cannot tell whether the window is in front: send it
             pass
         notify.send(message, subtitle)
 
@@ -548,8 +545,8 @@ class Bridge(QObject):
             else:
                 from PySide6.QtGui import QGuiApplication
                 QGuiApplication.beep()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001 - a sound is never worth stopping for
+            trouble.note("playing the finished sound", e)
 
     def _tick(self, key: str, done: int, total: int) -> None:
         """Progress from an agent; also where a run can be stopped."""
@@ -913,8 +910,8 @@ class Bridge(QObject):
         try:
             store.save_jobs(jobs)
             agent4_tracker.render_all(jobs)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001 - Stop must still end the run
+            trouble.note("saving what was finished before Stop", e)
 
     def _scan(self):
         jobs = None

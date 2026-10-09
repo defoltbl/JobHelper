@@ -104,11 +104,6 @@ def check_questions(text: str) -> dict[str, Any]:
     return {"questions": out, "problem": "", "note": "; ".join(notes)}
 
 
-def parse_questions(text: str) -> list[str]:
-    """The questions in pasted text ([] when check_questions finds a problem)."""
-    return check_questions(text)["questions"]
-
-
 def common_questions(job: dict[str, Any]) -> list[str]:
     """What forms ask most often, to start from when you have not opened the form yet."""
     company = (job.get("company") or "this company").strip()

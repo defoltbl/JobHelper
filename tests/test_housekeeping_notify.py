@@ -370,3 +370,29 @@ def test_the_trash_is_the_one_of_the_file_s_own_disk(tmp_path, monkeypatch):
     assert housekeeping.trash_dir(b) == other.resolve() / ".Trashes" / "501" and (other / ".Trashes" / "501").is_dir()     # made on first use
     (other / ".Trashes" / "501").rmdir(); (other / ".Trashes").rmdir()
     assert housekeeping.trash_dir(b) is None                                                                    # a disk without a Trash
+
+
+# ── errors the app carries on after are written down ────────────────────────
+def test_trouble_is_noted_without_secrets_and_never_fails(isolate_data, monkeypatch):
+    from jobhelper import trouble
+    trouble.note("reading a page", ValueError("bad answer from https://api.example.com/v1/jobs?app_id=ID&app_key=SECRET\nsecond line"))
+    trouble.note("a plain message", "x" * 2000)
+    lines = (config.DATA_DIR / trouble.LOG_NAME).read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2 and "reading a page: ValueError: bad answer from https://api.example.com/v1/jobs second line" in lines[0]
+    assert "SECRET" not in lines[0] and "app_key" not in lines[0] and lines[0][:4].isdigit() and len(lines[1]) < 500
+    monkeypatch.setattr(config, "DATA_DIR", config.DATA_DIR / "a_file_not_a_folder")
+    (config.DATA_DIR).parent.mkdir(parents=True, exist_ok=True)
+    config.DATA_DIR.write_text("in the way")
+    trouble.note("nowhere to write", OSError("disk"))                  # must not raise
+
+
+def test_damaged_options_fall_back_to_defaults_and_leave_a_note(isolate_data):
+    from jobhelper import trouble
+    config.ensure_dirs()
+    (config.DATA_DIR / "ui_settings.json").write_text("{not json", encoding="utf-8")
+    assert ui_api.Api().options()["keep_backups"] == housekeeping.DEFAULT_KEEP
+    assert "reading the saved Options" in (config.DATA_DIR / trouble.LOG_NAME).read_text(encoding="utf-8")
+    for _ in range(housekeeping.LOG_LINES + 50):
+        trouble.note("filling the log", "x")
+    housekeeping.trim_logs()
+    assert len((config.DATA_DIR / trouble.LOG_NAME).read_text(encoding="utf-8").splitlines()) == housekeeping.LOG_LINES

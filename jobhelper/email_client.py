@@ -211,7 +211,7 @@ def _fetch_box(user: str, password: str, since: str, all_folders: bool = False) 
     finally:
         try:
             imap.logout()
-        except Exception:
+        except Exception:  # noqa: BLE001 - the connection is gone either way
             pass
     return out
 

@@ -223,8 +223,9 @@ def remove_imap2() -> None:
     remove_env(["IMAP_USER_2", "IMAP_PASSWORD_2"])
     try:
         vault.delete_secret(vault.IMAP_ACCOUNT_2)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as e:  # noqa: BLE001 - the address is forgotten either way
+        from . import trouble
+        trouble.note("removing the second mailbox's password from the Keychain", e)
     IMAP_USER_2 = IMAP_PASSWORD_2 = ""
 
 

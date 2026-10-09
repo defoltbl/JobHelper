@@ -461,6 +461,8 @@ Or just open the app (`python app_qt.py`) and use **Run search** / **Scan email*
 | `data/jobs.json` | Underlying job database, source of truth (encrypted) |
 | `data/profile.json` | Agent 1's CV analysis (encrypted) |
 | `data/usage.json` | Claude usage tracker |
+| `data/app_trouble.log` | One line for each error the app carried on after (kept short automatically) |
+| `data/backups/below_your_limit/` | Letters and CVs moved out of the way (can be put back); never cleaned up automatically |
 | `data/ui_settings.json` | Desktop-app Options: city, source, thresholds, model (encrypted) |
 | `data/company_notes.json` | Your notes per company (encrypted) |
 | `data/filtered_out.json` | What the last search filtered out, with reasons (encrypted) |
