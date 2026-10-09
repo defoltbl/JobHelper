@@ -560,7 +560,8 @@ def test_putting_back_changes_nothing_unless_all_of_it_can_be(api):
     # it turned out to be an application (a reply showed you had applied): those are the documents you sent
     jobs = store.load_jobs(); store.find(jobs, "d")["status"] = "waiting"; store.save_jobs(jobs)
     assert api.job_detail("d")["can_unshelve"] is True and api.unshelve_docs("d") == {"ok": True, "restored": 2}
-    assert store.find(store.load_jobs(), "d")["cover_letter_file"] == "L_d.docx"
+    back = store.find(store.load_jobs(), "d")
+    assert back["cover_letter_file"] == "L_d.docx" and back["status"] == "waiting", "it stays an application"
 
     moved("e")                                                      # a note that points outside the folders is not followed
     jobs = store.load_jobs(); record = store.find(jobs, "e")["shelved"]

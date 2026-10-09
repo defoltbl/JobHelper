@@ -197,8 +197,8 @@ class DocumentsApi:
             if record.get("cover_letter_file"):
                 j["cover_letter_file"] = record["cover_letter_file"]
             j["tailored_cv_file"], j["match_tier"] = record.get("tailored_cv_file", ""), record.get("match_tier", "")
-            if record.get("status") in store.LEAD_STATUSES:
-                j["status"] = record["status"]
+            if record.get("status") in store.LEAD_STATUSES and j.get("status") in store.LEAD_STATUSES:
+                j["status"] = record["status"]              # a job that became an application meanwhile stays one
             j["apply_steps"] = list(record.get("apply_steps") or [])
             j["last_update"] = date.today().isoformat()
             j.pop("shelved", None)
