@@ -198,7 +198,7 @@ Dialog {
                                     onTextChanged: if (activeFocus) { fmModel.setProperty(index, "answer", text); formDialog.dirty = true
                                                                       formDialog.note = ""; formDialog.err = ""; formDialog.confirmClose = false; }
                                     Text { visible: fmAns.text === ""; text: "Write this answer yourself"; color: theme.faint; font.pixelSize: 12 } } }
-                            Text { visible: fmAns.text.length > formDialog.maxAnswer; Layout.fillWidth: true; color: theme.crit; font.pixelSize: 11; font.bold: true
+                            Text { visible: fmAns.text.length > formDialog.maxAnswer; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true
                                 text: (fmAns.text.length - formDialog.maxAnswer) + " characters too long (the limit is " + formDialog.maxAnswer + ")" }
                         }
                     }

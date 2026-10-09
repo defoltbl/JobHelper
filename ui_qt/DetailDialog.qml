@@ -696,7 +696,7 @@ Dialog {
                             color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                             onTextChanged: if (activeFocus) { detailDialog.notesInfo = ""; detailDialog.notesBad = false; }
                             Text { visible: cnNotes.text === ""; text: "Anything else worth remembering"; color: theme.faint; font.pixelSize: 12 } } }
-                    Text { objectName: "notesOver"; visible: cnNotes.text.length > detailDialog.notesMax; Layout.fillWidth: true
+                    Text { objectName: "notesOver"; visible: cnNotes.text.length > detailDialog.notesMax; Layout.fillWidth: true; wrapMode: Text.WordWrap
                         color: theme.crit; font.pixelSize: 11; font.bold: true
                         text: (cnNotes.text.length - detailDialog.notesMax) + " characters too long (the limit is " + detailDialog.notesMax + ")" }
                     RowLayout { Layout.fillWidth: true; spacing: 6

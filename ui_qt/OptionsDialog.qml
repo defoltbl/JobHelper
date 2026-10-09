@@ -435,11 +435,18 @@ Dialog {
                         // existing companies
                         Repeater { model: companiesModel
                             ColumnLayout { Layout.fillWidth: true; spacing: 0
-                                Item { Layout.fillWidth: true; implicitHeight: 38
-                                    Row { anchors.left: parent.left; anchors.leftMargin: 14; anchors.verticalCenter: parent.verticalCenter; spacing: 8
-                                        Text { text: model.name; color: theme.ink; font.pixelSize: 13; font.bold: true; anchors.verticalCenter: parent.verticalCenter }
-                                        Rectangle { radius: 999; color: theme.inset; implicitHeight: 18; implicitWidth: atp.width + 14; anchors.verticalCenter: parent.verticalCenter
-                                            Text { id: atp; anchors.centerIn: parent; text: model.ats + " / " + model.token; color: theme.soft; font.pixelSize: 10 } } }
+                                // a long company name wraps; it never runs under the ✕
+                                Item { Layout.fillWidth: true; implicitHeight: Math.max(38, coLine.implicitHeight + 14)
+                                    RowLayout { id: coLine; objectName: "companyLine"; spacing: 8
+                                        anchors.left: parent.left; anchors.leftMargin: 14; anchors.right: parent.right; anchors.rightMargin: 40
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        Text { objectName: "companyName"; text: model.name; color: theme.ink; font.pixelSize: 13; font.bold: true
+                                            Layout.fillWidth: true; wrapMode: Text.Wrap }
+                                        Rectangle { radius: 9; color: theme.inset; implicitHeight: Math.max(18, atp.implicitHeight + 6)
+                                            implicitWidth: Math.min(atpWide.implicitWidth + 14, 220)
+                                            Text { id: atpWide; visible: false; text: atp.text; font.pixelSize: 10 }      // how wide it would be on one line
+                                            Text { id: atp; anchors.centerIn: parent; width: parent.width - 14; horizontalAlignment: Text.AlignHCenter
+                                                wrapMode: Text.WrapAnywhere; text: model.ats + " / " + model.token; color: theme.soft; font.pixelSize: 10 } } }
                                     Text { anchors.right: parent.right; anchors.rightMargin: 14; anchors.verticalCenter: parent.verticalCenter
                                         text: "✕"; color: theme.faint; font.pixelSize: 13
                                         HoverHandler { cursorShape: Qt.PointingHandCursor }

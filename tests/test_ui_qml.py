@@ -3082,3 +3082,19 @@ def test_the_account_card_tries_the_saved_mailboxes(ui, monkeypatch):
     ui.js("welcome.finish()")
     ui.wait(700)
     assert welcome.property("testNote") == "" and ui.warnings == []
+
+
+def test_a_long_company_name_in_options_wraps_and_stays_clear_of_the_remove_mark(ui):
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    ui.js('companiesModel.append({ name: "The Very Long Named International Engineering and Consulting Company of Central Europe Limited", ats: "greenhouse", token: "' + "x" * 60 + '" })', dialog)
+    ui.wait(120)
+    line = next(i for i in ui.seen("optScroll") if i.objectName() == "companyLine")
+    name = next(i for i in line.childItems() if i.objectName() == "companyName")
+    assert name.property("lineCount") >= 2 and name.property("truncated") is False
+    assert line.mapToItem(None, 0, 0).x() + line.width() <= ui.find("optScroll").mapToItem(None, 0, 0).x() + ui.find("optScroll").width() - 30
+    ui.js("companiesModel.remove(companiesModel.count - 1); confirmClose = true; close()", dialog)
+    ui.wait(350)
+    assert ui.warnings == []

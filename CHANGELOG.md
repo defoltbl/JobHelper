@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Fixed: a reply could be filed under a company because of a job-title word in the company's name** ("Reed Specialist Recruitment" got a rejection for an "IT Support Specialist" role elsewhere). Such words no longer count as the company's name.
+- **Fixed: a long company name in Options → Company career sites ran under the ✕.** It wraps now. Three "too long" messages and the hint under the lists wrap as well.
 - **A salary of its own for a kind of role** (Options → About you → **A different figure for**): enter *support* and a figure, and jobs with that word in the title use it instead of the general one, in form answers, the lists and Insights.
 - **Test a connected mailbox** (Account card → **Test**): the app signs in once and says whether the mailbox can still be read. More providers are recognised by the address (Yandex, Mail.ru, T-Online, Posteo, mailbox.org, Orange, Libero, Onet), and Tuta is named as one that cannot be read.
 - **The PDFs have less empty space:** a chapter now follows on the same page instead of starting a new one. The page rules are unchanged.

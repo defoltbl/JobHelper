@@ -122,7 +122,7 @@ Dialog {
                                                                   prepEditDialog.err = ""; prepEditDialog.note = ""; prepEditDialog.confirmClose = false; } } }
                         Text { visible: parent.listSays !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit
                             font.pixelSize: 11; font.bold: true; text: parent.listSays }
-                        Text { visible: parent.over; Layout.fillWidth: true; color: theme.crit; font.pixelSize: 11; font.bold: true
+                        Text { visible: parent.over; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true
                             text: (peText.text.length - prepEditDialog.maxPart) + " characters too long (the limit is " + prepEditDialog.maxPart + ")" }
                     }
                 }

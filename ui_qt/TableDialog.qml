@@ -286,7 +286,7 @@ Dialog {
                 Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: theme.line; opacity: 0.5 }
             }
             footer: Text { visible: listView.count > 0 && (!!listView.model[0].id || !!listView.model[0].rid)
-                width: listView.width; height: 34
+                width: listView.width; height: Math.max(34, implicitHeight + 8); wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                 text: listView.count > 0 && listView.model[0].rid ? "Click a row to read the whole reply."
                                                                   : "Click a row for the description, score explanation and keywords."
