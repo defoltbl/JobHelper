@@ -21,7 +21,7 @@ Dialog {
     padding: 0
     property var prep: ({})
     property string note: ""
-    function who(q) {       // older saved preparations have no audience: technical kinds go to the engineer
+    function who(q) {       // older saved preparations have no audience: questions about the work itself go to the specialist
         if (q && (q.audience === "hr" || q.audience === "technical")) return q.audience;
         return q && (q.kind === "technical" || q.kind === "your projects") ? "technical" : "hr";
     }
@@ -58,11 +58,11 @@ Dialog {
                 Repeater {
                     model: prepDialog.prep.questions || []
                     ColumnLayout { Layout.fillWidth: true; spacing: 6
-                        // the questions come in two groups: what HR asks, and what an engineer asks
+                        // the questions come in two groups: what HR asks, and what someone who does the work asks
                         Text { visible: index === 0 || (prepDialog.who(prepDialog.prep.questions[index - 1]) !== prepDialog.who(modelData))
                             Layout.fillWidth: true; wrapMode: Text.WordWrap; Layout.topMargin: index === 0 ? 0 : 10
                             text: prepDialog.who(modelData) === "hr" ? "If you speak with HR or a recruiter: plain words, no jargon"
-                                                                     : "If you speak with an engineer or the hiring manager: precise answers"
+                                                                     : "If you speak with someone who does this work or the hiring manager: precise answers"
                             color: theme.ink; font.pixelSize: 14; font.bold: true }
                         Text { visible: index === 0 || (prepDialog.prep.questions[index - 1].kind !== modelData.kind)
                                         || (prepDialog.who(prepDialog.prep.questions[index - 1]) !== prepDialog.who(modelData))
@@ -90,7 +90,7 @@ Dialog {
                     Repeater { model: prepDialog.prep.ask_hr || []
                         Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; lineHeight: 1.25
                             text: "•  " + modelData } } }
-                DetailCard { heading: "What you can ask the engineer or the hiring manager"; objectName: "askTech"
+                DetailCard { heading: "What you can ask the people you would work with or the hiring manager"; objectName: "askTech"
                     visible: (prepDialog.prep.ask_technical || []).length > 0
                     Repeater { model: prepDialog.prep.ask_technical || []
                         Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; lineHeight: 1.25

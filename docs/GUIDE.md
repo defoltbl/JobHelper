@@ -854,10 +854,10 @@ for example after you changed your CV.
 |---|---|
 | What to expect | A short summary of this interview |
 | The opening pitch | Two or three sentences to introduce yourself |
-| Questions an HR person is likely to ask | Answered in plain words |
-| Questions an engineer is likely to ask | Answered precisely |
+| Questions an HR person or a recruiter is likely to ask | Answered in plain words, without the jargon of your field |
+| Questions someone who does this work, or the hiring manager, is likely to ask | Answered precisely, with the real tools, methods and numbers |
 | **Why they ask** | Under each question: what the interviewer wants to learn |
-| Questions you can ask them | For the HR person and for the engineer |
+| Questions you can ask them | For the HR person, and for the people you would work with |
 
 > **Important**
 > The answers are a starting point built from your CV. An answer that touches something your

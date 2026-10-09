@@ -474,7 +474,7 @@ Dialog {
                         Sep {}
                         SRow { label: "Right to work"; hint: "as letters should say it · empty = not mentioned"
                             TextField { id: rightField; objectName: "rightField"; implicitWidth: 250; implicitHeight: 30
-                                placeholderText: "e.g. full right to work in the Czech Republic"; placeholderTextColor: theme.faint
+                                placeholderText: "e.g. EU citizen, no permit needed"; placeholderTextColor: theme.faint
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 90
                                 onTextEdited: optDialog.optErr = text.length >= maximumLength ? "“Right to work” takes up to " + maximumLength + " characters." : ""
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1

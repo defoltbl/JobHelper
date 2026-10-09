@@ -23,10 +23,43 @@ _HEADERS = {
     "Accept-Language": "en;q=0.9",
 }
 _TIMEOUT = 25
-_WWR_FEEDS = [
-    "https://weworkremotely.com/categories/remote-programming-jobs.rss",
-    "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss",
-]
+_WWR = "https://weworkremotely.com/categories/"
+_WWR_FEEDS = [_WWR + "remote-programming-jobs.rss", _WWR + "remote-devops-sysadmin-jobs.rss"]      # software and IT
+# The board's other lists, by the profession they hold (the names are those of prefilter.FIELDS).
+_WWR_BY_FIELD = {
+    "software and IT": _WWR_FEEDS,
+    "sales and marketing": [_WWR + "remote-sales-and-marketing-jobs.rss"],
+    "customer support": [_WWR + "remote-customer-support-jobs.rss"],
+    "design and media": [_WWR + "remote-design-jobs.rss"],
+    "finance": [_WWR + "remote-management-and-finance-jobs.rss"],
+    "office and public administration": [_WWR + "remote-management-and-finance-jobs.rss"],
+}
+_WWR_OTHER = [_WWR + "all-other-remote-jobs.rss", "https://weworkremotely.com/remote-jobs.rss"]      # everything else
+
+
+def wwr_feeds(fields=None) -> list[str]:
+    """Which of the board's lists to read for someone who works in `fields`. None means "ask
+    Options and the CV profile"; a profession the board has no list for gets its general lists;
+    with no profession known, the programming lists as before."""
+    if fields is None:
+        fields = _my_fields()
+    feeds: list[str] = []
+    for name in fields or []:
+        for url in _WWR_BY_FIELD.get(name, _WWR_OTHER):
+            if url not in feeds:
+                feeds.append(url)
+    return feeds or list(_WWR_FEEDS)
+
+
+def _my_fields() -> list[str]:
+    """The professions picked in Options, else the ones the wanted roles or the search roles name."""
+    try:
+        from . import config, prefilter
+        options = config.ui_settings()
+        return prefilter.chosen_fields(options.get("my_fields")) or \
+            prefilter.fields_of(list(options.get("wanted_roles") or []) + list(options.get("queries") or []))
+    except Exception:  # noqa: BLE001 - a missing profession only means the usual lists
+        return []
 
 
 def _clean(text: str) -> str:
@@ -116,7 +149,7 @@ def _rss_date(pubdate: str) -> str:
 
 def weworkremotely(keyword: str, where: str, limit: int, with_description: bool = True) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    for feed in _WWR_FEEDS:
+    for feed in wwr_feeds():
         try:
             rss = _wwr_feed(feed)
         except requests.RequestException:

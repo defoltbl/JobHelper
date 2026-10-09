@@ -1,4 +1,5 @@
 """Insights worked out locally, and interview preparation built from the CV."""
+from pathlib import Path
 import pytest
 
 from jobhelper import agent2_search, config, db, insights, interview_prep, llm, store, ui_api
@@ -172,8 +173,8 @@ def test_prep_text_for_copying():
     prep = interview_prep._clean(GOOD)
     text = interview_prep.as_text(_job(), prep)
     assert text.startswith("Interview preparation: Junior Python Developer at Acme")
-    assert "IF YOU SPEAK WITH HR OR A RECRUITER" in text and "IF YOU SPEAK WITH AN ENGINEER OR THE HIRING MANAGER" in text
-    assert text.index("IF YOU SPEAK WITH HR") < text.index("IF YOU SPEAK WITH AN ENGINEER")
+    assert "IF YOU SPEAK WITH HR OR A RECRUITER" in text and "IF YOU SPEAK WITH SOMEONE WHO DOES THIS WORK OR THE HIRING MANAGER" in text
+    assert text.index("IF YOU SPEAK WITH HR") < text.index("IF YOU SPEAK WITH SOMEONE WHO DOES THIS WORK")
     assert "QUESTIONS TO ASK THEM" in text and "REVISE BEFORE THE INTERVIEW" in text
     assert "—" not in text
 
@@ -321,7 +322,7 @@ def test_the_sheet_is_a_word_document_in_the_order_you_read_it(tmp_path):
     order = ["About BRIGHTLINE (if they ask what you know)", "The role – what the work actually is", "Your fit – lead with these",
              "The honest gap (own it, don't hide it)", "The key question: “This role asks for 3+ years. Why you?”",
              "Your opening pitch (about 45 seconds)", "If you speak with HR or a recruiter",
-             "If you speak with an engineer or the hiring manager", "Concepts to be able to explain",
+             "If you speak with someone who does this work or the hiring manager", "Concepts to be able to explain",
              "Worth revising before the call", "Questions to ask them", "Practical reminders"]
     assert [lines.index(h) for h in order] == sorted(lines.index(h) for h in order)
     assert "Imitation learning: Learning a policy from demonstrations." in lines and prep_doc.COMPANY_NOTE in lines
@@ -415,7 +416,7 @@ def test_experience_notes_come_from_options_and_reach_both_drafts(isolate_data, 
     assert seen == {"prep": "At Acme I wrote the import service.", "form": "At Acme I wrote the import service."}
 
 
-# ── two audiences: HR in plain words, the engineer in detail ────────────────
+# ── two audiences: HR in plain words, the specialist in detail ────────────────
 TWO = dict(FULL, questions=[
     {"audience": "technical", "kind": "technical", "question": "How does PPO work?", "why": "", "answer": "It clips the policy update."},
     {"audience": "hr", "kind": "about you", "question": "Tell me about your last project.", "why": "", "answer": "I taught a program to play a game by copying good players."},
@@ -433,7 +434,7 @@ def test_questions_are_split_by_who_asks(monkeypatch):
     assert [(q["audience"], q["question"]) for q in prep["questions"]] == [
         ("hr", "Tell me about your last project."), ("hr", "When can you start?"),                 # an unknown audience: by its kind
         ("technical", "How does PPO work?"), ("technical", "What is a policy?"), ("technical", "Tell me about your last project.")]
-    assert "They usually do not know the technology" in prompts[0] and "about 7 questions a recruiter" in prompts[0]
+    assert "They usually do not know the specialist side of the work" in prompts[0] and "about 7 questions a recruiter" in prompts[0]
     assert "it is never written as something this candidate did" in prompts[0]
     assert prep["experience"][0]["typical"][0].startswith("An intern in this kind of role usually")
 
@@ -444,11 +445,11 @@ def test_the_sheet_has_both_sets_and_marks_usual_tasks_as_general(tmp_path):
     from jobhelper import prep_doc
     prep = dict(interview_prep._clean(TWO), made="2026-10-08", checks=[])
     lines = [p.text for p in docx.Document(str(prep_doc.build({"title": "ML Engineer", "company": "BRIGHTLINE"}, prep, tmp_path / "x.docx"))).paragraphs if p.text.strip()]
-    hr, tech = lines.index("If you speak with HR or a recruiter"), lines.index("If you speak with an engineer or the hiring manager")
+    hr, tech = lines.index("If you speak with HR or a recruiter"), lines.index("If you speak with someone who does this work or the hiring manager")
     assert hr < tech
     assert "I taught a program to play a game by copying good players." in lines[hr:tech]             # the plain answer is in the HR set
     assert "A route planner for delivery vans in Python." in lines[tech:] and "It clips the policy update." in lines[tech:]
-    assert lines[hr + 1].startswith("They usually do not know the technology")
+    assert lines[hr + 1].startswith("They usually do not know the specialist side of the work")
     assert "For HR, in plain words:" in lines and "“I helped build a tool that loads data, and I checked that it works.”" in lines
     general = lines.index("What people in this kind of position usually do (general knowledge about the role, not your record):")
     assert lines[general + 1] == "An intern in this kind of role usually fixes small bugs."
@@ -475,7 +476,7 @@ def test_questions_to_ask_are_kept_for_each_listener(monkeypatch):
     assert prep["ask_hr"] == ASK["ask_hr"] and prep["ask_technical"] == ASK["ask_technical"]
     assert '"ask_hr"' in prompts[0] and '"ask_technical"' in prompts[0]
     text = interview_prep.as_text({"title": "ML Engineer", "company": "BRIGHTLINE"}, prep)
-    assert "QUESTIONS TO ASK HR OR THE RECRUITER" in text and "QUESTIONS TO ASK THE ENGINEER OR MANAGER" in text
+    assert "QUESTIONS TO ASK HR OR THE RECRUITER" in text and "QUESTIONS TO ASK THE PEOPLE YOU WOULD WORK WITH OR THE MANAGER" in text
 
 
 def test_the_sheet_puts_your_questions_under_each_set(tmp_path):
@@ -484,7 +485,7 @@ def test_the_sheet_puts_your_questions_under_each_set(tmp_path):
     from jobhelper import prep_doc
     prep = dict(interview_prep._clean(ASK), made="2026-10-08", checks=[])
     lines = [p.text for p in docx.Document(str(prep_doc.build({"title": "T", "company": "BRIGHTLINE"}, prep, tmp_path / "x.docx"))).paragraphs if p.text.strip()]
-    hr, tech = lines.index("If you speak with HR or a recruiter"), lines.index("If you speak with an engineer or the hiring manager")
+    hr, tech = lines.index("If you speak with HR or a recruiter"), lines.index("If you speak with someone who does this work or the hiring manager")
     assert hr < lines.index("What you can ask them:") < tech < lines.index("What you can ask this person:")
     assert "What are the next steps after this call?" in lines[hr:tech] and "What would I own in the first three months?" in lines[tech:]
     assert "Questions to ask them" not in lines                                     # no second, mixed list
@@ -595,3 +596,14 @@ def test_api_edits_the_saved_preparation(isolate_data, monkeypatch):
     assert api.save_prep_parts("a", [{"key": "pitch", "text": "My own pitch."}]) == {"ok": True, "to_check": 0}
     assert ui_api.Api().interview_prep("a")["pitch"] == "My own pitch." and api.job_detail("a")["prep_edited"] is True
     assert api.prep_parts("a")["edited"] != ""
+
+
+def test_the_preparation_is_not_worded_for_one_profession():
+    """It spoke of "an engineer" and "the stack", whoever the candidate was."""
+    prompt = interview_prep.PROMPT.lower()
+    for word in ("engineer", "stack", "the technology", "ml research"):
+        assert word not in prompt, word
+    assert "whatever the profession" in prompt and "someone who does this work" in prompt
+    assert "engineer" not in " ".join(interview_prep.AUDIENCE_TITLES.values()).lower()
+    source = Path(interview_prep.__file__).read_text(encoding="utf-8").lower()
+    assert "engineer" not in source

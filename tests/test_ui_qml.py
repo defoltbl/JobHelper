@@ -1969,7 +1969,7 @@ def test_preparation_window_groups_questions_by_who_asks(ui):
     assert ui.js('prepDialog.who({ kind: "technical" })') == "technical" and ui.js('prepDialog.who({ kind: "practical" })') == "hr"   # older saved ones
     source = qml_source()
     assert "If you speak with HR or a recruiter: plain words, no jargon" in source
-    assert "If you speak with an engineer or the hiring manager: precise answers" in source
+    assert "If you speak with someone who does this work or the hiring manager: precise answers" in source
 
 
 def test_preparation_window_shows_what_you_can_ask_each_listener(ui):

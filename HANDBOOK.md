@@ -265,10 +265,12 @@ All the Python was read line by line on 10 October 2026, and the logic of every 
 found is fixed (see CHANGELOG, 10 October). Not read line by line: the visual markup of the windows
 (about 3,000 lines of layout), which the window tests and the guide's pictures cover.
 
-**Assumptions that still fit one kind of user** (the app works for others, these parts just help less)
+**Assumptions that still fit one kind of user**: none left of those found on 10 October 2026. What was
+Prague, crowns, Czech, Gmail and software wording is now the person's own city and country (`places`), their
+own salary figure and currency (`salary.asked`), any language (`language.detect`), any mail provider
+(`mailhosts`) and any profession (the interview wording, the remote board's lists). Still true: the built-in
+salary estimate and the job boards jobs.cz and prace.cz are Czech, and say so.
 
-4. **The interview preparation is worded for technical roles** ("engineer", "stack"), and the remote boards
-   read are the programming feeds.
 - 11 jobs still have documents from a higher score (the user's decision: New Jobs, Move them to backup).
 
 **Needs the user**

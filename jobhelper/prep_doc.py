@@ -13,7 +13,7 @@ from typing import Any
 
 COMPANY_NOTE = ("Only what the posting and their emails say. Before the call, look at their website: what they build, "
                 "how big they are, recent news.")
-KIND_TITLES = {"about you": "About you", "technical": "Technical questions", "your projects": "Your projects",
+KIND_TITLES = {"about you": "About you", "technical": "The work itself", "your projects": "Your projects",
                "behavioural": "How you work", "the role and company": "The role and the company", "practical": "Practical questions"}
 
 
@@ -128,7 +128,7 @@ def build(job: dict[str, Any], prep: dict[str, Any], out_path: Path, contact: st
         para(f"“{prep['pitch']}”")
 
     from . import interview_prep
-    notes = {"hr": "They usually do not know the technology. Plain words, no jargon; what you did, how you work, why this job.",
+    notes = {"hr": "They usually do not know the specialist side of the work. Plain words, no jargon; what you did, how you work, why this job.",
              "technical": "Precise answers: the real tools, methods and numbers. Say plainly what you have not used."}
     for audience, title in interview_prep.AUDIENCE_TITLES.items():
         asked = [q for q in prep.get("questions") or []

@@ -46,12 +46,13 @@ What the company has written so far (may be empty):
 Write {n} questions, most likely first, across these kinds:
 "about you", "technical", "your projects", "behavioural", "the role and company", "practical".
 The candidate may meet two different people, so write for both and mark each question with its "audience":
-- "hr": about {hr} questions a recruiter or HR person asks. They usually do not know the technology, so
-  the answers are in plain words: no jargon, and any technical term that cannot be avoided is explained in
+- "hr": about {hr} questions a recruiter or HR person asks. They usually do not know the specialist side of the work, so
+  the answers are in plain words: no jargon, and any specialist term that cannot be avoided is explained in
   a few words. They want to hear motivation, how the candidate works with people, reliability, what the
   candidate actually did day to day, and the practical facts.
-- "technical": about {tech} questions an engineer or the hiring manager asks. Precise answers, with the
-  real tools, methods and numbers. They must come from the posting's stack and the candidate's own work.
+- "technical": about {tech} questions someone who does this work, or the hiring manager, asks: the specialist
+  side of the role, whatever the profession (its tools, methods, rules and standards). Precise answers, with the
+  real tools, methods and numbers. They must come from what the posting asks for and the candidate's own work.
 A question both may ask ("Tell me about your last project") appears once for each, answered differently.
 
 For each answer:
@@ -75,9 +76,9 @@ Besides the questions, write the sheet the candidate reads before the call:
   the candidate's own words above give you, and nothing else: do not add duties, tools, team sizes or results that
   are not written there. Where they say little, the story is shorter; say so in "thin".
   "gained" is what that work gave them that matters for this role.
-  "plain" is the same story in 2-3 sentences for an HR person who does not know the technology.
-  "typical" is 3-5 things people in that kind of position usually do day to day, stated in general ("An ML
-  research intern usually …"). This is general knowledge about the role, for the candidate to compare with
+  "plain" is the same story in 2-3 sentences for an HR person who does not know the specialist side of the work.
+  "typical" is 3-5 things people in that kind of position usually do day to day, stated in general ("Someone in
+  that position usually …"). This is general knowledge about the role, for the candidate to compare with
   what they really did; it is never written as something this candidate did.
   "if_true" is 3-5 questions TO THE CANDIDATE that turn those usual tasks into reminders, e.g. "Did you write
   the tests for it yourself?". Never statements about the candidate.
@@ -112,11 +113,11 @@ Return JSON with exactly these keys:
       "why": "<one short sentence: why they ask it>", "answer": "<the answer, first person>"}}
   ],
   "ask_hr": ["<5 questions the candidate can ask HR or a recruiter: the process and next steps, the team, how the first months look, working arrangements; specific to this company and role, nothing a quick look at the posting already answers>"],
-  "ask_technical": ["<5 questions the candidate can ask an engineer or the hiring manager: the actual work, stack, how the team builds and reviews, what a junior would own first; specific to this posting>"],
+  "ask_technical": ["<5 questions the candidate can ask someone who does this work or the hiring manager: the actual work, the tools and methods, how the team works and checks its work, what a newcomer would own first; specific to this posting>"],
   "revise": ["<up to 5 topics from the posting worth revising before the interview>"]
 }}"""
 
-AUDIENCE_TITLES = {"hr": "If you speak with HR or a recruiter", "technical": "If you speak with an engineer or the hiring manager"}
+AUDIENCE_TITLES = {"hr": "If you speak with HR or a recruiter", "technical": "If you speak with someone who does this work or the hiring manager"}
 KINDS = ["about you", "technical", "your projects", "behavioural", "the role and company", "practical"]
 AUDIENCES = ["hr", "technical"]
 QUESTIONS, HR_QUESTIONS = 14, 7
@@ -223,7 +224,7 @@ def _clean(data: Any) -> dict[str, Any]:
         kind = str(item.get("kind", "")).strip().lower()
         kind = kind if kind in KINDS else "about you"
         audience = str(item.get("audience", "")).strip().lower()
-        if audience not in AUDIENCES:               # an older or careless reply: technical kinds go to the engineer
+        if audience not in AUDIENCES:               # an older or careless reply: questions about the work itself go to the specialist
             audience = "technical" if kind in ("technical", "your projects") else "hr"
         questions.append({"audience": audience, "kind": kind, "question": question,
                           "why": cover_letter.clean(str(item.get("why", ""))).strip(), "answer": answer})
@@ -269,7 +270,7 @@ def as_text(job: dict[str, Any], prep: dict[str, Any]) -> str:
             who = audience
             lines += [AUDIENCE_TITLES[who].upper(), ""]
         lines += [f"{n}. {q['question']}", q["answer"], ""]
-    for key, title in (("ask_hr", "QUESTIONS TO ASK HR OR THE RECRUITER"), ("ask_technical", "QUESTIONS TO ASK THE ENGINEER OR MANAGER"),
+    for key, title in (("ask_hr", "QUESTIONS TO ASK HR OR THE RECRUITER"), ("ask_technical", "QUESTIONS TO ASK THE PEOPLE YOU WOULD WORK WITH OR THE MANAGER"),
                        ("ask_them", "QUESTIONS TO ASK THEM")):
         if prep.get(key):
             lines += [title, ""] + [f"- {x}" for x in prep[key]] + [""]
@@ -281,7 +282,7 @@ def as_text(job: dict[str, Any], prep: dict[str, Any]) -> str:
 # ── editing the saved preparation by hand ───────────────────────────────────
 MAX_PART, MAX_ITEMS, MAX_ITEM = 3000, 12, 400
 _LISTS = {"company": "About the company", "role": "The role: what the work is", "fit": "Your fit: lead with these",
-          "ask_hr": "What you can ask HR or the recruiter", "ask_technical": "What you can ask the engineer or the hiring manager",
+          "ask_hr": "What you can ask HR or the recruiter", "ask_technical": "What you can ask the people you would work with or the hiring manager",
           "revise": "Worth revising before the call", "reminders": "Practical reminders"}
 _TEXTS = {"summary": "What to expect", "company_say": "What you can say about the company", "role_plain": "The role in plain terms",
           "gap": "The honest gap", "pitch": "Your opening pitch"}
@@ -313,7 +314,7 @@ def parts(prep: dict[str, Any]) -> list[dict[str, str]]:
         elif name == "questions":
             for i, q in enumerate(prep.get("questions") or []):
                 who = "HR asks" if (q.get("audience") or ("technical" if q.get("kind") in ("technical", "your projects") else "hr")) == "hr" \
-                    else "The engineer asks"
+                    else "A specialist asks"
                 add(f"questions.{i}.answer", f"{who}: {q['question']}", q.get("answer", ""))
     return out
 
