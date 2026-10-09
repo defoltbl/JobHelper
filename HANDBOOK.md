@@ -175,6 +175,14 @@ data/                your data; only the *.example.* files are in git
   measured on the real postings before a change ships: nothing that scored 30 or more may be
   skipped. A word that an ordinary posting uses ("research", "architect", "compliance") does
   not belong in them.
+- **Two company names are one company only through `email_client.same_company`.** Never compare
+  by "any shared word": "Accenture Czech Republic" and "PwC Czech Republic" share one.
+- **Every call to Claude goes through `llm.ask`,** which refuses while `ANTHROPIC_API_KEY` is set.
+  Do not add a second way to ask.
+- **A CV's sections are found by their headings, whatever they are called** (`cv_tailor._sections`):
+  never by a fixed list of names, or another person's CV loses a section.
+- **Caches that outlive one search** are wrong in an app that stays open for days: clear them at
+  the start of `agent2_search.search`.
 - **The folder `backups/below_your_limit`** holds documents that can be put back. The automatic
   clean-up of old backups must never count it as a backup.
 
@@ -223,37 +231,53 @@ then change it, and say what was changed.
 | Only LinkedIn pages are asked whether a posting closed, 40 per search, each at most every 3 days | It is the only board that answers clearly, and asking every page on every search would hammer it. |
 | The app does not invent job duties for interview stories | Stories come from the CV and the user's notes; "typical tasks" are labelled as general knowledge. |
 | Removing old moved documents uses the Trash | Deleting cannot be taken back. |
+| The rule files and the letter template are optional | Without them the built-in rules and a plain letter are used, so their absence is not reported as a problem. |
+| A search role the app does not know is asked about once, not refused | The words it knows grew up with software jobs. |
 | No Windows or Linux version | Not wanted. |
 
 ---
 
 ## 6. What is left to do
 
-Checked against the whole code on 9 October 2026; items found then are done. Order matters
-for the last two.
+All the Python was read line by line on 10 October 2026, and the logic of every window; what that
+found is fixed (see CHANGELOG, 10 October). Not read line by line: the visual markup of the windows
+(about 3,000 lines of layout), which the window tests and the guide's pictures cover.
+
+**Assumptions that still fit one kind of user** (the app works for others, these parts just help less)
+
+1. **Money is Czech crowns and Prague rates.** The salary target per role (`salary.estimate`) is a table of
+   junior software pay in Prague, and the lists label it "CZK/mo".
+2. **"Here" means Prague or Czechia** for company career sites (`filters.location_fits`, `scrapers_ats._loc_ok`):
+   searching another country keeps Prague jobs and drops local ones from that source.
+3. **"English only" speaks of Czech.** A posting in any other language is reported as "written in Czech".
+4. **The interview preparation is worded for technical roles** ("engineer", "stack"), and the remote boards
+   read are the programming feeds.
+5. **The mailbox check expects a Gmail App Password** (16 letters), though another mail host can be set in `.env`.
+6. **Emails are matched to a company by any shared name word** (`email_client.match_job`). The search filters
+   and the reply bookkeeping no longer do this; here the best match usually wins, so it was left.
 
 **Small**
 
-1. **The combo box's own line.** The closed combo box (city, sort order) still shortens a very
-   long choice; its list wraps.
+7. **The combo box's own line** (city, sort order) still shortens a very long choice; its list wraps.
+8. **Closing the job window with "Mark applied" or "Not interested"** does not ask about unsaved text
+   (✕ and Esc do).
 
 **Needs the user**
 
-2. **Second mailbox** has only been tested with stand-ins, never with a real second account.
-3. **Score all again** has never been run on the whole list with the current rules (about 26
-   Claude calls).
-4. **Professions and keywords beyond software** were measured on a software candidate's
-   postings only. The first user from another field should check what is skipped.
+9. **Second mailbox** has only been tested with stand-ins, never with a real second account.
+10. **Score all again** has never been run on the whole list with the current rules (about 26 Claude calls).
+11. **Professions and keywords beyond software** were measured on a software candidate's postings only.
+    The first user from another field should check what is skipped.
 
 **Then**
 
-5. **The big feature** (to be described).
+12. **The big feature** (to be described).
 
 **Last**
 
-6. **An app that opens without the terminal.** Expected parts: a real `JobHelper.app` with the
-   existing icon; data moved out of the project folder to a per-user place, with a one-time
-   move of existing data and backups; finding the Claude sign-in from an app started by
-   Finder; the weekly run and the notifier pointed at the packaged app; first launch of an
-   unsigned app on macOS. It is last because every item above changes files the package
-   would freeze.
+13. **An app that opens without the terminal.** Expected parts: a real `JobHelper.app` with the
+    existing icon; data moved out of the project folder to a per-user place, with a one-time
+    move of existing data and backups; finding the Claude sign-in from an app started by
+    Finder; the weekly run and the notifier pointed at the packaged app; first launch of an
+    unsigned app on macOS. It is last because every item above changes files the package
+    would freeze.
