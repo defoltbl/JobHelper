@@ -72,7 +72,7 @@ Dialog {
             "To use less: fewer <b>search</b> roles, Czech boards instead of every source, a higher \"<b>Write letters above</b>\"." ] },
         { title: "Privacy and safety", lines: [
             "Everything stays on your Mac. Your job data and backups are <b>encrypted</b> on disk, and the mailbox passwords and the data key are in the macOS <b>Keychain</b>.",
-            "Save your <b>recovery key</b> once (python status.py security recovery-key) and keep it in a password manager: on a new Mac it is the only way to open your data.",
+            "Save your <b>recovery key</b> once (<b>Account</b> card, Data protection, <b>Recovery key</b>) and keep it in a password manager: on a new Mac it is the only way to open your data.",
             "Only job postings, your CV text and the text of reply emails are sent to Claude, to <b>score</b> jobs and write documents." ] },
         { title: "If something looks wrong", lines: [
             "A robot or button does nothing: open the <b>Account</b> chip on the left and check the four rows are green.",

@@ -116,6 +116,35 @@ class JobSlots:
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "msg": str(e)}
 
+    @Slot(result="QVariantMap")
+    def recoveryKey(self):
+        """The key to the encrypted data, to show when the person asks for it in the Account card.
+        It is never written to a log or put into a message."""
+        from . import vault
+        try:
+            if vault.state() != "ok":
+                return {"ok": False, "msg": "There is no key to show: data protection is not on, or its key is missing."}
+            return {"ok": True, "key": vault.recovery_key()}
+        except Exception:  # noqa: BLE001 - the reason could carry the key
+            return {"ok": False, "msg": "The recovery key could not be read from the Keychain."}
+
+    @Slot(str, result="QVariantMap")
+    def restoreKey(self, text):
+        """Put a saved recovery key back into the Keychain (a new Mac, or after the Keychain was reset)."""
+        from . import vault
+        text = str(text or "").strip()
+        if not text:
+            return {"ok": False, "msg": "Paste your recovery key first."}
+        if len(text) > 200 or not text.isascii() or " " in text:
+            return {"ok": False, "msg": "That is not a recovery key. It is one line of letters, digits, - and _, with no spaces."}
+        try:
+            vault.restore_key(text)
+        except vault.VaultError as e:
+            return {"ok": False, "msg": str(e) if "does not belong" in str(e) else "That is not a recovery key for this data."}
+        except Exception:  # noqa: BLE001 - never repeat what was pasted
+            return {"ok": False, "msg": "The key could not be put into the Keychain."}
+        return {"ok": True}
+
     @Slot(result="QVariantList")
     def currencies(self):
         return self._api.currencies()

@@ -19,6 +19,24 @@ Item {
     property string hostDraft: ""         // the IMAP server, typed for a provider the app does not know
     // the server is asked for only when the address does not tell it (its own flag: a field's `visible` also depends on what is around it)
     readonly property bool needsServer: win.isEmail(emailDraft) && bridge.mailServer(emailDraft, "").known !== true
+    property string keyText: ""           // the recovery key while it is shown; cleared when hidden, on a timer, and when the card closes
+    property string keyErr: ""
+    property bool keyCopied: false
+    property string restoreErr: ""
+    function toggleKey() {
+        keyErr = ""; keyCopied = false;
+        if (keyText !== "") { keyText = ""; return; }
+        var r = bridge.recoveryKey();
+        if (r && r.ok) keyText = r.key; else keyErr = (r && r.msg) || "The recovery key could not be shown.";
+    }
+    function restoreKey() {
+        var r = bridge.restoreKey(restoreField.text);
+        restoreField.text = "";                                     // never left on screen
+        if (r && r.ok) { restoreErr = ""; bridge.checkConnections(); win.reloadAll(); }
+        else restoreErr = (r && r.msg) || "The key could not be used.";
+    }
+    onShownChanged: if (!shown) { keyText = ""; keyErr = ""; keyCopied = false; restoreErr = ""; }
+    Timer { interval: 60000; running: welcome.keyText !== ""; onTriggered: { welcome.keyText = ""; welcome.keyCopied = false; } }
     property bool emailBusy: false        // the mailbox is being tried with the address and password just entered
     property string emailNote: ""         // saved, but something to know (the server could not be reached)
     property int editBox: 1               // which mailbox the editor is for: 1 main, 2 the optional second one
@@ -294,13 +312,45 @@ Item {
                     ok: connData.vault === "ok" && welcome.changedFiles.length === 0
                     subColor: welcome.protectedOk ? theme.soft : theme.crit
                     sub: connData.vault === "locked"
-                            ? "Your data is encrypted but its key is not in the Keychain. Run: python status.py security restore-key"
+                            ? "Your data is encrypted but its key is not in the Keychain. Paste your recovery key below."
                        : welcome.changedFiles.length > 0
                             ? ("Changed outside the app: " + welcome.changedFiles.join(", ") + ". Check them, then approve.")
                        : connData.vault === "ok" ? "Encrypted on disk · key and mailbox password in your Keychain"
                        : "Off: no Keychain on this system, files are stored plain."
                     SmallButton { visible: welcome.changedFiles.length > 0 && connData.vault === "ok"; primaryStyle: true
                         text: "Approve"; onClicked: { bridge.approveChanges(); bridge.checkConnections(); } }
+                    SmallButton { objectName: "keyShow"; visible: connData.vault === "ok" && welcome.changedFiles.length === 0
+                        text: welcome.keyText !== "" ? "Hide key" : "Recovery key"; onClicked: welcome.toggleKey() }
+                }
+                // the recovery key, shown only when asked for, and put away again by itself
+                ColumnLayout { objectName: "keyPanel"; visible: welcome.keyText !== "" || welcome.keyErr !== ""
+                    Layout.fillWidth: true; Layout.leftMargin: 38; spacing: 6
+                    Text { visible: welcome.keyText !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.warn; font.pixelSize: 11; font.bold: true
+                        text: "Keep this somewhere safe and outside this Mac (a password manager). Anyone who has it can read your data. "
+                              + "You need it on a new Mac or after the Keychain is reset." }
+                    RowLayout { visible: welcome.keyText !== ""; Layout.fillWidth: true; spacing: 6
+                        TextField { objectName: "keyField"; Layout.fillWidth: true; readOnly: true; selectByMouse: true
+                            text: welcome.keyText; color: theme.ink; font.pixelSize: 11; font.family: "Menlo"
+                            background: Rectangle { radius: 8; color: theme.inset; border.width: 1; border.color: theme.line } }
+                        SmallButton { objectName: "keyCopy"; text: welcome.keyCopied ? "Copied" : "Copy"
+                            onClicked: { welcome.keyCopied = bridge.copyText(welcome.keyText); } } }
+                    Text { objectName: "keyErr"; visible: welcome.keyErr !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        color: theme.crit; font.pixelSize: 11; font.bold: true; text: welcome.keyErr }
+                }
+                // a new Mac, or the Keychain was reset: the saved key opens the data again
+                ColumnLayout { objectName: "restorePanel"; visible: connData.vault === "locked"
+                    Layout.fillWidth: true; Layout.leftMargin: 38; spacing: 6
+                    RowLayout { Layout.fillWidth: true; spacing: 6
+                        TextField { id: restoreField; objectName: "restoreField"; Layout.fillWidth: true; echoMode: TextInput.Password
+                            placeholderText: "Your recovery key"; placeholderTextColor: theme.faint; maximumLength: 200
+                            color: theme.ink; font.pixelSize: 12; selectByMouse: true
+                            background: Rectangle { radius: 8; color: theme.inset; border.width: 1
+                                border.color: restoreField.activeFocus ? theme.accent : welcome.restoreErr !== "" ? theme.crit : theme.line }
+                            onTextEdited: welcome.restoreErr = ""
+                            onAccepted: welcome.restoreKey() }
+                        SmallButton { objectName: "restoreGo"; primaryStyle: true; text: "Open my data"; onClicked: welcome.restoreKey() } }
+                    Text { objectName: "restoreErr"; visible: welcome.restoreErr !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        color: theme.crit; font.pixelSize: 11; font.bold: true; text: welcome.restoreErr }
                 }
 
                 Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line; opacity: 0.7 }

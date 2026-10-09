@@ -1,6 +1,6 @@
-# JobHelper: the illustrated guide
+# JobHelper user guide
 
-**Applies to:** JobHelper on macOS, the window started with `python app_qt.py`.
+**Applies to:** JobHelper for macOS.
 
 This guide explains every part of the app: what it is for, how to use it step by step, what
 each control does, and what to do when something does not look right.
@@ -11,7 +11,7 @@ each control does, and what to do when something does not look right.
 
 1. [Overview](#1-overview)
 2. [Set up the app](#2-set-up-the-app)
-3. [Tour of the main window](#3-tour-of-the-main-window)
+3. [Find your way around the main window](#3-find-your-way-around-the-main-window)
 
 **Find jobs and apply**
 
@@ -34,22 +34,36 @@ each control does, and what to do when something does not look right.
 
 **Configure and maintain**
 
-14. [Options reference](#14-options-reference)
+14. [Set your options](#14-set-your-options)
 15. [Schedule a weekly run](#15-schedule-a-weekly-run)
-16. [Claude usage and limits](#16-claude-usage-and-limits)
-17. [Your data and how it is protected](#17-your-data-and-how-it-is-protected)
-18. [Troubleshooting](#18-troubleshooting)
-19. [Quick reference](#19-quick-reference)
+16. [Watch your Claude usage and limits](#16-watch-your-claude-usage-and-limits)
+17. [Protect your data](#17-protect-your-data)
+18. [Troubleshoot problems](#18-troubleshoot-problems)
+19. [Look things up](#19-look-things-up)
 
 ### How to read this guide
 
-Each section is built the same way: a short explanation of what the feature is for, the steps
-to use it, a table of what every control does, and the problems people run into.
+Every section is built the same way: an overview of what the feature is for, what you need
+before you start, the steps to follow, a table of what each control does, and the problems
+people run into (Table 1).
 
-| Mark | Meaning |
+*Table 1. How things are written in this guide*
+
+| Element | How it is written | Example |
+|---|---|---|
+| A button, a list or a label in the window | **Bold**, spelled as in the app | Select **Run search**; open **Options** |
+| A path through the window | **Bold**, joined with > | **Options** > **Email scan** > **Scan now** |
+| Something you type | *Italics* | Enter *Prague* in **City** |
+| The name of a file or a folder | `Monospace` | Your CV as a `.docx` file |
+| A key on the keyboard | Capitalised, joined with + | Press Esc; press Cmd+C to copy |
+| A figure or a table | By its number | Figure 2, Table 5 |
+
+Four kinds of box mark what deserves attention (Table 2).
+
+*Table 2. The four kinds of box*
+
+| Box | Meaning |
 |---|---|
-| **Bold** | Something you see in the window: a button, a list, a label |
-| `Monospace` | Something you type, or the name of a file |
 | **Note** | Extra information that helps you understand |
 | **Tip** | A faster or better way to do something |
 | **Important** | Something you should know before you continue |
@@ -57,24 +71,13 @@ to use it, a table of what every control does, and the problems people run into.
 
 ### About the pictures
 
-The pictures show the real window filled with **invented** people and companies. A script
-(`tests/guide_shots.py`) takes them, so they can be taken again whenever the window changes:
-
-```bash
-pytest tests/guide_shots.py -q -o addopts=""
-```
-
-The same guide as one file to read or print: [GUIDE.pdf](GUIDE.pdf), made with
-`python scripts/guide_pdf.py`.
+The figures show the real window of the app, filled with **invented** people and companies.
 
 ### Related documents
 
-| Document | Use it for |
-|---|---|
-| [README](../README.md) | Installing the app |
-| [COMMANDS](../COMMANDS.md) | Every command and option of the command line |
-| [HANDBOOK](../HANDBOOK.md) | The rules the app is built by, how the code is laid out, what is left to do |
-| [CHANGELOG](../CHANGELOG.md) | What changed, day by day |
+This guide is for using the app. People who work with its code will find the installation, the
+command line, the structure of the code and the tests in the technical documentation,
+[CODE.md](CODE.md).
 
 ---
 
@@ -88,7 +91,9 @@ and reading the answers. JobHelper does the repetitive part of all five and leav
 decisions to you.
 
 The work is split between five agents. The window shows each one as a robot on an assembly
-line.
+line (Table 3).
+
+*Table 3. The five robots and what each does*
 
 | Robot | What it does | Asks Claude |
 |---|---|---|
@@ -115,10 +120,14 @@ uses counts against your normal Claude limits, and the window shows how much is 
 (section 16).
 
 > **Important**
-> The app refuses to run while a paid API key (`ANTHROPIC_API_KEY`) is set, so that you are
-> never billed per use by accident.
+> The app refuses to run while a paid Claude key is set on the Mac, so that you are never
+> billed per use by accident.
 
 ### A normal week
+
+Table 4 shows a normal week with the app.
+
+*Table 4. A normal week with the app*
 
 | When | What you do | Section |
 |---|---|---|
@@ -137,21 +146,27 @@ uses counts against your normal Claude limits, and the window shows how much is 
 
 ## 2. Set up the app
 
-Do this once. When the app starts, it checks four things and shows them on the welcome card.
+Do this once. When the app starts, it checks four things and shows them on the welcome card (Figure 1).
 
 ![The welcome card](img/01_welcome.png)
 
-### Before you begin
+*Figure 1. The welcome card*
+
+### Prerequisites
 
 You need:
 
-- A Mac with the app installed (see the [README](../README.md)).
+- JobHelper installed on your Mac and its window open.
 - A Claude subscription, and the Claude Code program signed in on this Mac.
 - Your CV as a `.docx`, `.pdf` or `.txt` file.
 - Optional: the mailbox you apply from, and a password for a program to read it (for Gmail
   and most other providers, an *app password*).
 
 ### What the welcome card checks
+
+Table 5 lists the four checks.
+
+*Table 5. What the welcome card checks*
 
 | Row | What it is | Why it is needed | Required |
 |---|---|---|---|
@@ -192,7 +207,9 @@ works except reading replies.
 4. Enter the password. If the app does not know the provider, a third field appears: enter the
    provider's **IMAP server** there (its help pages name it, for example `imap.example.com`).
 5. Select **Save**. The button says **Checking…** while the app signs in to the mailbox once
-   with what you entered. A refused password is not saved, and the card says so in red.
+   with what you entered. A refused password is not saved, and the card says so in red (Table 6).
+
+*Table 6. Mail providers and the password each one wants*
 
 | Your address is at | Read from | Password to enter |
 |---|---|---|
@@ -224,13 +241,29 @@ stops the scan of the first one; the app tells you about it at the end of the sc
 
 ### Save your recovery key
 
-> **Warning**
-> Without the recovery key your data cannot be opened on another Mac, or on this Mac after
-> the Keychain is reset. Save it once, somewhere safe and outside this Mac.
+Your job data is encrypted with a key that the app keeps in the macOS Keychain. The recovery
+key is that key as one line of text. You need it to open your data on another Mac, or on this
+Mac after the Keychain is reset.
 
-```bash
-python status.py security recovery-key
-```
+1. Select the **Account** chip to open the card.
+2. On the **Data protection** row, select **Recovery key**.
+3. Select **Copy**, and paste the key into a password manager or another safe place outside
+   this Mac.
+4. Select **Hide key**. The key is also put away by itself after a minute, and when the card
+   closes.
+
+> **Warning**
+> Anyone who has the recovery key can read your data. Do not send it by email or keep it in a
+> plain note. Without it, your data cannot be opened on a new Mac.
+
+### Open your data on a new Mac
+
+When the key is missing from the Keychain, the **Data protection** row is red and asks for it.
+
+1. Paste your recovery key into the field under the row.
+2. Select **Open my data**.
+
+The app checks that the key belongs to this data before it uses it.
 
 ### Open the card again later
 
@@ -239,10 +272,14 @@ chip (**Claude**, **Email**, **CV**) are the same checks at a glance.
 
 ### If something is wrong
 
+Table 7 lists problems while setting up, and what to do.
+
+*Table 7. Problems while setting up, and what to do*
+
 | What you see | Cause | What to do |
 |---|---|---|
 | **Claude account** stays red after you sign in | The sign-in was done in another browser profile, or was cancelled | Select **Sign in with Claude** again |
-| "A paid API key is set" | `ANTHROPIC_API_KEY` exists in your environment | Remove the variable and start the app again |
+| "A paid API key is set" | A paid Claude key is set on this Mac | Ask whoever set up the app to remove it, then start the app again. The app never bills you per use |
 | "The mail server refused this address and password" | The normal password was used where an app password is needed, the app password was cancelled, or it belongs to another address | Create an app password for this address and enter that one |
 | "The app does not know this provider" | The address is at a company or a small provider | Enter its IMAP server in the third field |
 | "Microsoft no longer lets a program read…" | Outlook.com and Hotmail cannot be read with a password | Forward your job mail to another mailbox and connect that one |
@@ -251,16 +288,22 @@ chip (**Claude**, **Email**, **CV**) are the same checks at a glance.
 
 ### Next steps
 
-- [Tour of the main window](#3-tour-of-the-main-window)
-- [Options reference](#14-options-reference), to say what you are looking for
+- [Find your way around the main window](#3-find-your-way-around-the-main-window)
+- [Set your options](#14-set-your-options), to say what you are looking for
 
 ---
 
-## 3. Tour of the main window
+## 3. Find your way around the main window
+
+Figure 2 shows the main window.
 
 ![The main window](img/02_main.png)
 
-The window has three columns and a strip at the bottom.
+*Figure 2. The main window*
+
+The window has three columns and a strip at the bottom (Table 8).
+
+*Table 8. The areas of the main window*
 
 | Area | Where | What it holds |
 |---|---|---|
@@ -271,7 +314,15 @@ The window has three columns and a strip at the bottom.
 
 ### The left column
 
+Figure 3 shows the lists and the account chip.
+
 ![The lists and the account chip](img/25_sidebar.png)
+
+*Figure 3. The lists and the account chip*
+
+Table 9 describes the lists in the left column.
+
+*Table 9. The lists in the left column*
 
 | Item | What it opens | The mark on the right |
 |---|---|---|
@@ -293,6 +344,10 @@ Under the lists:
 
 ### The middle
 
+Table 10 lists the controls in the middle.
+
+*Table 10. The controls in the middle*
+
 | Control | What it does |
 |---|---|
 | **Run search** | Starts a search (section 4). While a run is going, it becomes **Stop** |
@@ -303,7 +358,11 @@ Under the lists:
 
 ### The red line at the top
 
+Figure 4 shows the red line of the start-up check.
+
 ![The start-up check found something](img/28_startup_check.png)
+
+*Figure 4. The start-up check found something*
 
 Each time the app starts, it checks itself: the data key, the job list, the replies, the
 settings, the rule files, your master CV and the folders. If something is wrong, a red line at
@@ -312,7 +371,15 @@ next start; **Show all** appears when more than one thing was found.
 
 ### The right column
 
+Figure 5 shows the Usage left card and the Last run card.
+
 ![Usage and the last run](img/26_usage_and_last_run.png)
+
+*Figure 5. Usage and the last run*
+
+Table 11 lists the cards in the right column.
+
+*Table 11. The cards in the right column*
 
 | Card | What it tells you |
 |---|---|
@@ -324,7 +391,9 @@ next start; **Show all** appears when more than one thing was found.
 | **Options** | Opens the settings (section 14) |
 | **Help** | A short version of this guide, and the list of changes |
 
-The rows of the **Last run** card:
+The rows of the **Last run** card (Table 12):
+
+*Table 12. The rows of the Last run card*
 
 | Row | Meaning |
 |---|---|
@@ -348,7 +417,7 @@ The rows of the **Last run** card:
 A search finds new postings, drops the ones that cannot fit, scores the rest against your CV,
 and writes an adapted CV and a cover letter for each good one.
 
-### Before you begin
+### Prerequisites
 
 - The **Claude account** and **Master CV** rows of the Account card are green.
 - A city and at least one search role are set in Options (section 14).
@@ -359,9 +428,17 @@ and writes an adapted CV and a cover letter for each good one.
 2. Watch the assembly line. You can keep using the lists while it runs.
 3. When the status line says the search is finished, open **New Jobs**.
 
+Figure 6 shows a search in progress.
+
 ![A search in progress](img/03_running.png)
 
+*Figure 6. A search in progress*
+
 ### What happens, in order
+
+Table 13 lists what a search does, step by step.
+
+*Table 13. What a search does, step by step*
 
 | Step | Robot | What it does |
 |---|---|---|
@@ -395,9 +472,13 @@ is kept, and the next search continues with what was not done.
 
 ### If Claude's limit runs out
 
-The run pauses instead of failing. See [Claude usage and limits](#16-claude-usage-and-limits).
+The run pauses instead of failing. See [Watch your Claude usage and limits](#16-watch-your-claude-usage-and-limits).
 
 ### If something is wrong
+
+Table 14 lists problems with a search, and what to do.
+
+*Table 14. Problems with a search, and what to do*
 
 | What you see | Cause | What to do |
 |---|---|---|
@@ -415,11 +496,17 @@ The run pauses instead of failing. See [Claude usage and limits](#16-claude-usag
 ## 5. Review new jobs
 
 **New Jobs** is the list of postings found for you that you have not applied to, best score
-first.
+first (Figure 7).
 
 ![The New Jobs list](img/04_new_jobs.png)
 
+*Figure 7. The New Jobs list*
+
 ### Read a row
+
+Table 15 explains how to read a row.
+
+*Table 15. How to read a row of New Jobs*
 
 | You see | It means |
 |---|---|
@@ -447,6 +534,10 @@ first.
 
 ### Controls of the list
 
+Table 16 lists the controls of the New Jobs list.
+
+*Table 16. The controls of the New Jobs list*
+
 | Control | What it does |
 |---|---|
 | The search box | Shows only the rows that contain what you type |
@@ -464,14 +555,18 @@ first.
 
 ## 6. Work with one job
 
-Select a row in **New Jobs** to open the job's window. Everything about one posting is here.
+Select a row in **New Jobs** to open the job's window. Everything about one posting is here (Figure 8).
 
 ![The job window](img/06_job_window.png)
+
+*Figure 8. The job window*
 
 ### The checklist: Before you apply
 
 The checklist has one line per step. Tick the steps as you go. The ticks are remembered for
-this job.
+this job (Table 17).
+
+*Table 17. The checklist of a job and its buttons*
 
 | Line of the checklist | Its button | What the button does |
 |---|---|---|
@@ -485,7 +580,9 @@ this job.
 application form.
 
 The row of buttons at the bottom of the window opens the same documents again and adds two
-more:
+more (Table 18):
+
+*Table 18. The two extra buttons for documents*
 
 | Button | What it does |
 |---|---|
@@ -494,12 +591,18 @@ more:
 
 ### Why this score
 
+Figure 9 shows the score and the keywords.
+
 ![The score and the keywords](img/07_job_score_keywords.png)
+
+*Figure 9. The score and the keywords*
 
 **Why this score** is the reason in words. Read it before you apply to anything below
 **strong**: it tells you what the posting asks for that your CV does not show.
 
-**Keywords in the posting** compares the skills and tools the posting names with your CV.
+**Keywords in the posting** compares the skills and tools the posting names with your CV (Table 19).
+
+*Table 19. The two groups of keywords*
 
 | Group | Meaning |
 |---|---|
@@ -511,6 +614,10 @@ more:
 > skill, add it to your master CV, or describe it under **More about your work** in Options.
 
 ### The buttons at the bottom
+
+Table 20 lists the buttons at the bottom of the job window.
+
+*Table 20. The buttons at the bottom of the job window*
 
 | Button | What it does |
 |---|---|
@@ -545,9 +652,11 @@ wrote it.
 1. Open the job.
 2. Select **Compare CV**.
 3. Read the two columns: your master CV on the left, the adapted one on the right. New words
-   are in bold.
+   are in bold (Figure 10).
 
 ![Master CV next to the adapted one](img/09_compare_cv.png)
+
+*Figure 10. Master CV next to the adapted one*
 
 > **Tip**
 > Use this view to check that nothing was stretched. Every claim on the right must be one you
@@ -565,7 +674,15 @@ The letter is written to the company, about this role, from the facts in your CV
    (for example "shorter"), then select **Rewrite this paragraph**.
 4. Select **Save**. The Word file and the PDF are updated.
 
+Figure 11 shows the letter editor.
+
 ![The letter editor](img/30_letter_editor.png)
+
+*Figure 11. The letter editor*
+
+Table 21 lists the controls of the letter editor.
+
+*Table 21. The controls of the letter editor*
 
 | Control | What it does |
 |---|---|
@@ -598,12 +715,18 @@ Application forms ask their own questions, and every form asks different ones.
 4. Read each answer. Fill in anything marked with square brackets.
 5. Copy the answers into the form.
 
+Figure 12 shows answers for one job's form.
+
 ![Answers for one job's form](img/10_form_answers.png)
+
+*Figure 12. Answers for one job's form*
 
 The answers come from your CV, the posting, and the facts you gave under **About you** in
 Options. An answer the app cannot give truthfully (a salary figure, a date, a reference) is
 left with the missing part in square brackets and a **Check** note. The answers are kept with
-the job.
+the job (Table 22).
+
+*Table 22. The limits of one draft of form answers*
 
 | Limit | Value |
 |---|---|
@@ -623,7 +746,9 @@ Two situations make a score misleading. The app marks both in the list and in th
 ### The posting could not be read in full
 
 Some job boards return only a title or a short summary. The row then says **scored from the
-title only** or **scored from a short summary**.
+title only** or **scored from a short summary** (Table 23).
+
+*Table 23. What the app does when a posting could not be read*
 
 | Mark | What the app did |
 |---|---|
@@ -642,9 +767,11 @@ Either way, the job is then scored again by itself.
 ### The score dropped after documents were written
 
 If you tighten your Options and score again, a job that had a letter and a CV can fall below
-your limit. Its row says **documents from a higher score**.
+your limit. Its row says **documents from a higher score** (Figure 13).
 
 ![A job that fell below the limit](img/08_job_below_limit.png)
+
+*Figure 13. A job that fell below the limit*
 
 **For one job:** open it and select **Move documents to backup**. The letter and the CV go to
 an encrypted backup. The job stays in the list. **Put them back** returns them.
@@ -656,7 +783,11 @@ an encrypted backup. The job stays in the list. **Put them back** returns them.
 2. In that bar, select **Move them to backup**.
 3. Read the jobs it names, then select **Yes, move documents of …** to confirm.
 
+Figure 14 shows moving documents for several jobs at once.
+
 ![Moving documents for several jobs at once](img/05_move_documents.png)
+
+*Figure 14. Moving documents for several jobs at once*
 
 For a week afterwards, **Put them back** in the same bar undoes the whole move. For a single
 job, **Put them back** stays in its window, also when the job has become an application in the
@@ -671,15 +802,23 @@ meantime (a reply showed that you had applied): those are the documents you sent
 ## 9. Track an application
 
 **Applications** lists where you applied, grouped by where each one stands: offers and
-interviews first, then waiting, then rejected.
+interviews first, then waiting, then rejected (Figure 15).
 
 ![The Applications list](img/11_applications.png)
 
+*Figure 15. The Applications list*
+
 ### The application's window
 
-Select a row to open the application.
+Select a row to open the application (Figure 16).
 
 ![An application in full](img/12_application_window.png)
+
+*Figure 16. An application in full*
+
+Table 24 lists the fields of an application.
+
+*Table 24. The fields of an application*
 
 | Field | What it is | When to change it |
 |---|---|---|
@@ -695,9 +834,11 @@ Select a row to open the application.
    too.
 
 The date then shows on the **Coming up** card of the main window. You get a notification the
-day before and on the day. With a time, you also get one about three hours and one hour before.
+day before and on the day. With a time, you also get one about three hours and one hour before (Figure 17).
 
 ![Dates, pasted replies and notes](img/13_application_dates_notes.png)
+
+*Figure 17. Dates, pasted replies and notes*
 
 ### File a reply that did not come by email
 
@@ -742,7 +883,7 @@ one of them and choose **Merge into one** or **They are different**.
 An email scan reads new mail in your mailbox, works out which messages are answers to your
 applications, and files each one to its application.
 
-### Before you begin
+### Prerequisites
 
 - The **Job email** row of the Account card is green (section 2).
 
@@ -760,7 +901,9 @@ applications, and files each one to its application.
 
 Most mail in a mailbox is not about your applications. Asking Claude about every message
 would waste your limit, so the app first decides, without Claude, which messages are worth a
-question.
+question (Table 25).
+
+*Table 25. Which messages are sent to Claude*
 
 | A message is | Sent to Claude |
 |---|---|
@@ -793,11 +936,21 @@ The scan reads that period once. The setting **Scan emails from the last** stays
 
 ### Responses
 
+Figure 18 shows the Responses list.
+
 ![Every reply](img/15_responses.png)
 
-**Responses** lists every reply with what it was. Select one to read it in full.
+*Figure 18. Every reply*
+
+**Responses** lists every reply with what it was. Select one to read it in full (Figure 19).
 
 ![One reply in full](img/31_one_reply.png)
+
+*Figure 19. One reply in full*
+
+Table 26 lists the fields of a reply.
+
+*Table 26. The fields of a reply*
 
 | Field | Meaning |
 |---|---|
@@ -809,9 +962,15 @@ The scan reads that period once. The setting **Scan emails from the last** stays
 
 ### Analytics
 
+Figure 20 shows outcomes and rejection reasons.
+
 ![Outcomes and rejection reasons](img/16_analytics.png)
 
-**Analytics** adds the replies up.
+*Figure 20. Outcomes and rejection reasons*
+
+**Analytics** adds the replies up (Table 27).
+
+*Table 27. The parts of Analytics*
 
 | Part | What it shows |
 |---|---|
@@ -824,6 +983,10 @@ The scan reads that period once. The setting **Scan emails from the last** stays
 > to change: your level, a missing skill, or the kind of role you apply to.
 
 ### If something is wrong
+
+Table 28 lists problems with replies, and what to do.
+
+*Table 28. Problems with replies, and what to do*
 
 | What you see | Cause | What to do |
 |---|---|---|
@@ -846,11 +1009,17 @@ For one interview the app builds a sheet from your CV and the posting.
 3. When the card says the questions and answers are ready, select **Open**.
 
 **Document** on the same card opens the sheet as a Word file. **Make again** builds a new one,
-for example after you changed your CV.
+for example after you changed your CV (Figure 21).
 
 ![The interview preparation](img/14_interview_preparation.png)
 
+*Figure 21. The interview preparation*
+
 ### What the sheet contains
+
+Table 29 lists the parts of the interview sheet.
+
+*Table 29. The parts of the interview sheet*
 
 | Part | What it is |
 |---|---|
@@ -867,6 +1036,10 @@ for example after you changed your CV.
 > claim you cannot back.
 
 ### Use the sheet
+
+Table 30 lists the buttons of the interview sheet.
+
+*Table 30. The buttons of the interview sheet*
 
 | Button | What it does |
 |---|---|
@@ -888,12 +1061,18 @@ posting a search drops is kept with the reason.
 
 1. On the **Last run** card, select the number next to **Filtered out**.
 
+Figure 22 shows postings the last search filtered out.
+
 ![Postings the last search filtered out](img/17_filtered_out.png)
+
+*Figure 22. Postings the last search filtered out*
 
 ### Read the list
 
 Each row is one dropped posting with the reason in words. The chips at the top group the rows
-by reason.
+by reason (Table 31).
+
+*Table 31. Reasons a posting is filtered out, and where to change each rule*
 
 | Reason | Meaning | Where to change the rule |
 |---|---|---|
@@ -916,9 +1095,15 @@ The posting goes to **New Jobs**, and the next search scores it.
 
 ## 13. Learn from your results
 
-**Insights** is worked out on your Mac from your own applications. It asks Claude nothing.
+**Insights** is worked out on your Mac from your own applications. It asks Claude nothing (Figure 23).
 
 ![Insights](img/18_insights.png)
+
+*Figure 23. Insights*
+
+Table 32 lists the parts of Insights.
+
+*Table 32. The parts of Insights*
 
 | Part | The question it answers |
 |---|---|
@@ -935,6 +1120,10 @@ The posting goes to **New Jobs**, and the next search scores it.
 
 ### What to do with it
 
+Table 33 suggests what to do with what you see.
+
+*Table 33. What to do with what Insights shows*
+
 | You see | Consider |
 |---|---|
 | One kind of role gets the interviews | Put that role first in **Search roles**, and add it to **Kinds of role you want** |
@@ -944,12 +1133,14 @@ The posting goes to **New Jobs**, and the next search scores it.
 
 ---
 
-## 14. Options reference
+## 14. Set your options
 
 Options is where you tell the app what you are looking for. Open it with **Options** in the
-right column, or with a chip under **Search** in the left column.
+right column, or with a chip under **Search** in the left column (Figure 24).
 
 ![Options: the search](img/19_options_search.png)
+
+*Figure 24. Options: the search*
 
 > **Note**
 > A choice too long for its box is shown on two lines, never cut.
@@ -960,6 +1151,10 @@ right column, or with a chip under **Search** in the left column.
 > once.
 
 ### Search
+
+Table 34 lists the Search settings.
+
+*Table 34. The Search settings*
 
 | Setting | What it does | Values | Why you would change it |
 |---|---|---|---|
@@ -981,7 +1176,11 @@ right column, or with a chip under **Search** in the left column.
 
 ### Your profession
 
+Figure 25 shows the roles you want and your profession in Options.
+
 ![Options: the roles you want and your profession](img/20_options_roles.png)
+
+*Figure 25. Options: the roles you want and your profession*
 
 Under **Kinds of role you want**, chips show what the app takes as your profession. The app
 reads it from the roles you want (the outlined chip). It decides which titles are skipped as
@@ -1004,6 +1203,10 @@ Some companies publish their openings on their own career site. To read one dire
 
 ### Matching and follow-up
 
+Table 35 lists the Matching and Follow-up settings.
+
+*Table 35. The Matching and Follow-up settings*
+
 | Setting | What it does | Values |
 |---|---|---|
 | **Write letters above** | The score from which a CV and a letter are written | 0 to 100 |
@@ -1016,7 +1219,15 @@ Some companies publish their openings on their own career site. To read one dire
 
 ### About you
 
+Figure 26 shows the About you settings.
+
 ![Options: about you](img/32_options_about_you.png)
+
+*Figure 26. Options: about you*
+
+Table 36 lists the About you settings.
+
+*Table 36. The About you settings*
 
 | Setting | What it does |
 |---|---|
@@ -1032,7 +1243,15 @@ Some companies publish their openings on their own career site. To read one dire
 
 ### Notifications and storage
 
+Figure 27 shows the Notifications and storage settings.
+
 ![Options: notifications and storage](img/21_options_storage.png)
+
+*Figure 27. Options: notifications and storage*
+
+Table 37 lists the Notifications and storage settings.
+
+*Table 37. The Notifications and storage settings*
 
 | Setting | What it does | Values |
 |---|---|---|
@@ -1042,7 +1261,15 @@ Some companies publish their openings on their own career site. To read one dire
 
 ### Email scan
 
+Figure 28 shows the Email scan and Model settings.
+
 ![Options: email and the model](img/33_options_email.png)
+
+*Figure 28. Options: email and the model*
+
+Table 38 lists the Email scan settings.
+
+*Table 38. The Email scan settings*
 
 | Setting | What it does | Values |
 |---|---|---|
@@ -1051,6 +1278,10 @@ Some companies publish their openings on their own career site. To read one dire
 | **Look further back once** | Starts one scan over a longer period now. The setting above stays | 2 to 365 days, then **Scan now** |
 
 ### Model
+
+Table 39 describes the Model setting.
+
+*Table 39. The Model setting*
 
 | Setting | What it does | Values |
 |---|---|---|
@@ -1071,10 +1302,16 @@ macOS can run a search and an email scan for you once a week, even with the wind
 3. Choose the day and the time.
 4. Select **Save**.
 
+Figure 29 shows the weekly run.
+
 ![The weekly run](img/22_weekly_run.png)
 
+*Figure 29. The weekly run*
+
 You get a notification when the run is done. The **Last run** card shows its result the next
-time you open the window.
+time you open the window (Table 40).
+
+*Table 40. What happens at the scheduled time*
 
 | Situation at the scheduled time | What happens |
 |---|---|
@@ -1089,10 +1326,12 @@ Open the card again, turn **Enabled** off, and select **Save**.
 
 ---
 
-## 16. Claude usage and limits
+## 16. Watch your Claude usage and limits
 
 Your Claude subscription has two limits, and the app counts against both like any other use of
-Claude.
+Claude (Table 41).
+
+*Table 41. The two limits of a Claude subscription*
 
 | Limit | What it is |
 |---|---|
@@ -1102,9 +1341,15 @@ Claude.
 ### Read the Usage left card
 
 Each window has a bar and a figure for what is left. The numbers come from Claude's last
-answer. **refresh** asks Claude for the current ones.
+answer. **refresh** asks Claude for the current ones (Figure 30).
 
 ![A limit that is used up](img/27_limit_used_up.png)
+
+*Figure 30. A limit that is used up*
+
+Table 42 explains what the card shows.
+
+*Table 42. How to read the Usage left card*
 
 | You see | Meaning |
 |---|---|
@@ -1122,9 +1367,11 @@ shown as free again without you pressing anything.
 
 ### When a run hits the limit
 
-The run pauses instead of failing, and everything done so far is saved.
+The run pauses instead of failing, and everything done so far is saved (Figure 31).
 
 ![The run paused on the limit](img/29_limit_pause.png)
+
+*Figure 31. The run paused on the limit*
 
 1. Read the window: it names the limit and the time it resets.
 2. Select **Close**. You can keep using the lists.
@@ -1134,20 +1381,20 @@ The run continues from where it stopped. Nothing that was finished is done again
 
 ### What a run costs
 
-The **Last run** card shows two rows about cost.
+The **Last run** card shows two rows about cost (Table 43).
+
+*Table 43. The two cost rows of the Last run card*
 
 | Row | Meaning |
 |---|---|
 | **You paid** | *subscription only*. Nothing was billed for the run |
 | **Same search via API**, **Same scan via API** | What that one run would have cost with pay-per-use billing |
 
-The total since the first day, with a line per kind of work, is on the command line:
-
-```bash
-python status.py usage
-```
-
 ### Use less of your limit
+
+Table 44 lists ways to use less of your limit.
+
+*Table 44. Ways to use less of your limit*
 
 | Do this | Why it helps |
 |---|---|
@@ -1159,12 +1406,14 @@ python status.py usage
 
 ---
 
-## 17. Your data and how it is protected
+## 17. Protect your data
 
 ### Where your data is
 
 Everything stays on your Mac. The only things that leave it are the questions put to Claude
-(your CV text and a posting), the requests to the job boards, and the reading of your mailbox.
+(your CV text and a posting), the requests to the job boards, and the reading of your mailbox (Table 45).
+
+*Table 45. Where your data is and what protects it*
 
 | What | Where | Protected by |
 |---|---|---|
@@ -1194,6 +1443,10 @@ is changed outside the app, the next run waits.
 
 ### Nothing is thrown away
 
+Table 46 lists where data goes instead of being deleted.
+
+*Table 46. Where data goes instead of being deleted*
+
 | Action | Where the data goes |
 |---|---|
 | **Not interested** | The job leaves the list; its documents go to an encrypted backup |
@@ -1203,22 +1456,34 @@ is changed outside the app, the next run waits.
 
 ---
 
-## 18. Troubleshooting
+## 18. Troubleshoot problems
+
+Figure 32 shows the Help window.
 
 ![Help inside the app](img/23_help.png)
+
+*Figure 32. Help inside the app*
 
 **Help** in the app covers the same ground as this guide in short form. Its second tab lists
 what changed in each version.
 
 ### Starting and signing in
 
+Table 47 lists problems with starting and signing in.
+
+*Table 47. Problems with starting and signing in*
+
 | What you see | Cause | What to do |
 |---|---|---|
 | A red line at the top of the main window | The start-up check found something | The line says what and how to fix it |
 | A button does nothing | A required row of the Account card is red | Open the **Account** chip and make the rows green |
-| "A paid API key is set" | `ANTHROPIC_API_KEY` is set | Remove the variable and start the app again |
+| "A paid API key is set" | A paid Claude key is set on this Mac | Ask whoever set up the app to remove it, then start the app again |
 
 ### Searching and scoring
+
+Table 48 lists problems with searching and scoring.
+
+*Table 48. Problems with searching and scoring*
 
 | What you see | Cause | What to do |
 |---|---|---|
@@ -1231,6 +1496,10 @@ what changed in each version.
 
 ### Replies
 
+Table 49 lists problems with replies.
+
+*Table 49. Problems with replies*
+
 | What you see | Cause | What to do |
 |---|---|---|
 | A rejection is missing | It did not arrive in a scanned mailbox or folder | Set the status by hand, or paste the reply (section 9) |
@@ -1239,16 +1508,24 @@ what changed in each version.
 
 ### Everything else
 
+Table 50 lists other problems.
+
+*Table 50. Other problems*
+
 | What you see | Cause | What to do |
 |---|---|---|
-| Something failed quietly | The app carried on after an error | `data/app_trouble.log` has one line for each such error |
-| The data cannot be opened on a new Mac | The data key is in the old Mac's Keychain | Use your recovery key; the steps are in section 10 of [COMMANDS](../COMMANDS.md) |
+| Something failed quietly | The app carried on after an error | The file `app_trouble.log` in the app's `data` folder has one line for each such error |
+| The data cannot be opened on a new Mac | The data key is in the old Mac's Keychain | Paste your recovery key in the **Account** card (section 2) |
 
 ---
 
-## 19. Quick reference
+## 19. Look things up
 
 ### Words the app uses
+
+Table 51 explains the words the app uses.
+
+*Table 51. Words the app uses*
 
 | Word | Meaning |
 |---|---|
@@ -1264,6 +1541,10 @@ what changed in each version.
 
 ### Where things are written
 
+Table 52 lists the folders the app writes to.
+
+*Table 52. The folders the app writes to*
+
 | Folder | What is in it |
 |---|---|
 | `data/cv/` | Your master CV |
@@ -1275,20 +1556,11 @@ what changed in each version.
 
 ### The light theme
 
+Figure 33 shows the light theme.
+
 ![The light theme](img/24_light_theme.png)
+
+*Figure 33. The light theme*
 
 The sun or moon button at the top of the main window switches between the dark and the light
 theme. Every window follows it.
-
-### The same from the command line
-
-| To do this | Run |
-|---|---|
-| The whole search | `python run.py` |
-| Read replies and update statuses | `python status.py sync` |
-| List everything, with ids | `python status.py list` |
-| Reply and rejection numbers | `python status.py responses` |
-| Claude usage of the app | `python status.py usage` |
-| Show the recovery key | `python status.py security recovery-key` |
-
-Every command and its options are in [COMMANDS](../COMMANDS.md).

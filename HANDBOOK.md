@@ -216,24 +216,22 @@ After every batch of changes, without being asked:
 2. The guard test that no test starts an outside program (`tests/test_guards.py`, part of the suite).
 3. Load the real window offscreen on the real data, **read-only**: open the lists and every job
    window, compare a checksum of the data folder before and after, look for QML warnings.
-5. When a window that is pictured in the guide changed, take the guide's pictures again
-   (`pytest tests/guide_shots.py -q -o addopts=""`) and look at them. After any change to the guide or
-   its pictures, make its PDF again (`python scripts/guide_pdf.py`); a test fails until you do.
-   The guide follows one pattern per section, as product documentation does: what the feature is for,
-   *Before you begin*, numbered steps, a table of every control, *Note / Tip / Important / Warning* boxes
-   (a quoted block that starts with the bold word), *If something is wrong*, *Next steps*. Keep to it,
-   and write the names of buttons exactly as the window shows them. A picture of one part of the window
-   is taken with `shot(name, (x, y, width, height))`. Tests check that every picture the script takes is
-   in the guide and the other way round.
-4. For anything that changes how a window looks: screenshots on made-up data, in both themes,
-   and actually look at them. A colour that is right in the file can still not reach the label.
-
-What tests may never do (the shared fixtures in `tests/conftest.py` enforce it): touch real
-data, the Keychain or `.env`; ask Claude; send a notification; open a file, a folder or a web
-page; read a real job board; put anything in the real Trash.
-
-Before real data is changed by a script: close the app, make a backup with `vault.make_backup`,
-then change it, and say what was changed.
+5. Documentation, when a change can be seen:
+   - `docs/GUIDE.md` is the **user guide**: for someone who only uses the app. It contains no terminal
+     commands and no code. If the guide needs something, the window must be able to do it.
+   - `docs/CODE.md` is the **technical documentation**: installing, the command line, the structure of the
+     code, tests, and how the documentation itself is made. `COMMANDS.md` stays the full command reference.
+   - Both follow one pattern (the rules are Table 13 of `docs/CODE.md`): headings that start with a verb,
+     *Overview*, *Prerequisites*, numbered steps, tables for reference, *Note / Tip / Important / Warning*
+     boxes, buttons in bold exactly as the app writes them.
+   - Every figure and every table has a numbered caption and is referred to from the text. After adding
+     one, run `python scripts/guide_number.py`.
+   - Take the guide's pictures again when a pictured window changed
+     (`pytest tests/guide_shots.py -q -o addopts=""`) and look at them.
+   - Make the PDFs again: `python scripts/guide_pdf.py`. They are laid out like a thesis (title page,
+     contents, lists of figures and tables, page numbers) and keep the page rules: a figure is never split,
+     a table stays on one page, a longer one continues between rows with its heading row repeated, a
+     heading is never left alone at the bottom of a page. `tests/test_docs.py` checks all of this.
 
 ---
 

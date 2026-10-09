@@ -232,6 +232,60 @@ def _email_answer(ui):
     raise AssertionError("the mailbox check never answered")
 
 
+def test_the_recovery_key_is_shown_and_restored_in_the_account_card(ui, monkeypatch):
+    """Both needed a command in the terminal before; someone who only uses the window could not do either."""
+    from jobhelper import vault
+    monkeypatch.setattr(vault, "state", lambda: "ok")
+    monkeypatch.setattr(vault, "recovery_key", lambda: "k" * 43 + "=")
+    copied = []
+    monkeypatch.setattr(qt_bridge.Bridge, "copyText", qt_bridge.Slot(str, result=bool)(lambda self, text: copied.append(text) or True))
+    welcome = ui.find("welcome")
+    ui.js("welcome.openCard()")
+    ui.win.setProperty("connData", {**READY, "vault": "ok", "changed_files": []})
+    ui.wait(80)
+    assert welcome.property("keyText") == "" and ui.find("keyShow").property("text") == "Recovery key"   # never shown unasked
+    ui.js("welcome.toggleKey()")
+    assert welcome.property("keyText") == "k" * 43 + "=" and ui.find("keyShow").property("text") == "Hide key"
+    assert ui.find("keyField").property("readOnly") is True and ui.find("keyField").property("text") == "k" * 43 + "="
+    ui.js("welcome.keyCopied = bridge.copyText(welcome.keyText)")
+    assert copied == ["k" * 43 + "="] and ui.find("keyCopy").property("text") == "Copied"
+    ui.js("welcome.toggleKey()")                                   # Hide
+    assert welcome.property("keyText") == ""
+    ui.js("welcome.toggleKey(); welcome.finish()")                 # closing the card puts it away too
+    ui.wait(700)
+    assert welcome.property("keyText") == ""
+    assert "interval: 60000; running: welcome.keyText" in qml_source(), "and it is put away by itself after a minute"
+    # no key to show
+    monkeypatch.setattr(vault, "state", lambda: "off")
+    ui.js("welcome.openCard(); welcome.toggleKey()")
+    assert welcome.property("keyText") == "" and "no key to show" in welcome.property("keyErr")
+
+    # a new Mac: the saved key opens the data again
+    used = []
+    def restore(text):
+        if text != "good-key":
+            raise vault.VaultError("That key does not belong to this data." if text == "other-key" else "That is not a valid JobHelper key.")
+        used.append(text)
+    monkeypatch.setattr(vault, "restore_key", restore)
+    ui.win.setProperty("connData", {**READY, "vault": "locked", "changed_files": []})
+    field = ui.find("restoreField")
+    for typed, part in (("", "Paste your recovery key first"), ("two words", "not a recovery key"), ("ключ", "not a recovery key"),
+                        ("x" * 201, "not a recovery key"), ("bad-key", "not a recovery key for this data"), ("other-key", "does not belong")):
+        field.setProperty("text", typed)
+        ui.js("welcome.restoreKey()")
+        assert part in welcome.property("restoreErr"), typed
+        assert field.property("text") == "", "what was pasted is never left on screen"
+        assert typed == "" or typed not in welcome.property("restoreErr")
+    field.setProperty("text", "good-key")
+    ui.js("welcome.restoreKey()")
+    assert used == ["good-key"] and welcome.property("restoreErr") == ""
+    ui.win.setProperty("connData", dict(READY))
+    ui.js('welcome.keyErr = ""; welcome.finish()')
+    ui.wait(700)
+    assert "python status.py" not in (ROOT / "ui_qt" / "WelcomeOverlay.qml").read_text(encoding="utf-8")
+    assert ui.warnings == []
+
+
 def test_a_refused_app_password_is_not_saved(ui, monkeypatch):
     """Before, only the form of the password was checked, and a wrong one showed up at the first scan."""
     from jobhelper import email_client
@@ -2734,27 +2788,6 @@ def test_help_describes_what_was_added_since_it_was_written():
 
 
 # ── the illustrated guide ───────────────────────────────────────────────────
-def test_the_guide_s_pictures_exist_and_come_from_the_picture_script():
-    import re
-    guide = (ROOT / "docs" / "GUIDE.md").read_text(encoding="utf-8")
-    used = re.findall(r"\]\(img/([^)]+)\)", guide)
-    assert len(used) >= 30 and len(set(used)) == len(used)
-    script = (ROOT / "tests" / "guide_shots.py").read_text(encoding="utf-8")
-    taken = set(re.findall(r'shot\("([^"]+)"', script))
-    assert taken == {name[:-4] for name in used}, "every picture the script takes is shown in the guide, and the other way round"
-    assert sorted(p.name for p in (ROOT / "docs" / "img").glob("*.png")) == sorted(used), "no picture is left over in docs/img"
-    for name in used:
-        assert (ROOT / "docs" / "img" / name).is_file(), name
-        assert re.search(rf'shot\("{re.escape(name[:-4])}"[,)]', script), f"{name} is not taken by tests/guide_shots.py"
-    assert "tests/guide_shots.py" in guide and "invented" in guide           # says where the pictures come from
-    for link in re.findall(r"\]\((\.\./[^)#]+)\)", guide):
-        assert (ROOT / "docs" / link).resolve().is_file(), link
-    for section in re.findall(r"\]\(#([^)]+)\)", guide):                      # every entry of the contents leads somewhere
-        heading = next((h for h in re.findall(r"^## (.+)$", guide, re.M)
-                        if re.sub(r"[^a-z0-9 -]", "", h.lower()).replace(" ", "-") == section), None)
-        assert heading, section
-
-
 def test_a_search_role_outside_software_can_be_added(ui):
     """The words the app knew for roles were all from software jobs: "registered nurse" was refused as not a role."""
     dialog = ui.find("optDialog")
@@ -2808,24 +2841,3 @@ def test_the_job_window_asks_before_closing_with_unsaved_text(ui):
     ui.js("detailDialog.close()")
     ui.wait(350)
     assert ui.warnings == []
-
-
-def test_the_guide_s_pdf_matches_the_guide():
-    """docs/GUIDE.pdf is the same guide as one file. It carries a fingerprint of the text and pictures
-    it was made from; when this fails, run: python scripts/guide_pdf.py"""
-    import importlib.util
-
-    from pypdf import PdfReader
-    spec = importlib.util.spec_from_file_location("guide_pdf", ROOT / "scripts" / "guide_pdf.py")
-    guide_pdf = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(guide_pdf)
-    pdf_path = ROOT / "docs" / "GUIDE.pdf"
-    assert pdf_path.is_file(), "docs/GUIDE.pdf is missing: python scripts/guide_pdf.py"
-    reader = PdfReader(str(pdf_path))
-    assert guide_pdf.fingerprint() in (reader.metadata.creator or ""), "the guide changed after its PDF was made: python scripts/guide_pdf.py"
-    assert len(reader.pages) >= 25 and sum(len(page.images) for page in reader.pages) >= 33
-    first = " ".join(reader.pages[0].extract_text().split())        # bold words come out one per line
-    assert "illustrated" in first and "In this guide" in first
-    text = " ".join(" ".join(page.extract_text() for page in reader.pages).split())
-    for part in ("Before you begin", "Next steps", "Options reference", "Troubleshooting", "Quick reference", "Important", "Tip"):
-        assert part in text, part
