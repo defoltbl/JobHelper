@@ -63,12 +63,12 @@ def write_schedule(enabled: bool, weekday: int, hour: int, minute: int) -> dict:
         return {"ok": False, "msg": "That is not a day and time of the week (hours 0 to 23, minutes 0 to 59)."}
     try:
         if PLIST.exists():
-            subprocess.run(["launchctl", "unload", str(PLIST)], capture_output=True, text=True)
+            subprocess.run(["launchctl", "unload", str(PLIST)], capture_output=True, text=True, timeout=20)
         if enabled:
             PLIST.parent.mkdir(parents=True, exist_ok=True)
             config.DATA_DIR.mkdir(parents=True, exist_ok=True)
             PLIST.write_bytes(_plist_bytes(int(weekday), int(hour), int(minute)))
-            r = subprocess.run(["launchctl", "load", str(PLIST)], capture_output=True, text=True)
+            r = subprocess.run(["launchctl", "load", str(PLIST)], capture_output=True, text=True, timeout=20)
             if r.returncode != 0 and (r.stderr or "").strip():
                 return {"ok": False, "msg": r.stderr.strip()}
         elif PLIST.exists():

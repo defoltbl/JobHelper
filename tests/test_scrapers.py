@@ -45,7 +45,7 @@ def test_a_script_loaded_page_still_gives_company_and_language():
     from jobhelper import language, scrapers_cz
     description, company = scrapers_cz.parse_detail(BRANDED)
     assert company == "ENERGETICKÝ A PRŮMYSLOVÝ HOLDING, a.s."
-    assert description.startswith("Jsi AI nadšenec?") and language.is_english(description) is False     # a Czech ad is seen as one
+    assert description.startswith("Jsi AI nadšenec?") and language.detect(description) == "Czech"     # a Czech ad is seen as one
 
 
 def test_a_normal_page_is_read_as_before():

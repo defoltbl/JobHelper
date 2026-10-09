@@ -89,10 +89,6 @@ class Bridge(RunSlots, JobSlots, QObject):
 
     # ── reads (delegate to the shared Api) ──────────────────────
     @Slot(result="QVariantMap")
-    def connections(self):
-        return self._api.connections()
-
-    @Slot(result="QVariantMap")
     def counts(self):
         return self._api.counts()
 
@@ -179,22 +175,6 @@ class Bridge(RunSlots, JobSlots, QObject):
         return self._api.open_url(job_id)
 
     # ── connection management (write to the right places) ───────
-    @Slot(str, str, result="QVariantMap")
-    def saveEmail(self, user, password):
-        """Save Gmail IMAP email + app password to .env (password optional:
-        blank keeps the current one)."""
-        try:
-            problem = _address_problem(user)
-            if problem:
-                return {"ok": False, "msg": problem}
-            pwd = password.strip() or config.IMAP_PASSWORD
-            if not pwd:
-                return {"ok": False, "msg": "Enter the App Password for that address."}
-            config.set_imap(user.strip(), pwd)
-            return {"ok": True}
-        except Exception as e:  # noqa: BLE001
-            return {"ok": False, "msg": str(e)}
-
     @Slot(str, result="QVariantMap")
     def setMasterCV(self, path):
         """Copy a chosen CV file into data/cv/ as the master CV."""

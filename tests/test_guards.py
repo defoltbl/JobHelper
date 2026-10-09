@@ -568,7 +568,8 @@ def test_an_address_that_is_not_one_is_refused_by_the_backend(isolate_data, monk
     monkeypatch.setattr(config, "set_imap", lambda *a, **k: saved.append(a))
     monkeypatch.setattr(config, "set_imap2", lambda *a, **k: saved.append(a))
     bridge = qt_bridge.Bridge()
-    assert bridge.saveEmail(address, "abcdabcdabcdabcd")["ok"] is False and bridge.saveEmail2(address, "abcdabcdabcdabcd")["ok"] is False
+    assert bridge._save_email_checked(1, address, "abcdabcdabcdabcd")["ok"] is False
+    assert bridge._save_email_checked(2, address, "abcdabcdabcdabcd")["ok"] is False
     assert saved == []
 
 
@@ -579,5 +580,6 @@ def test_an_address_needs_a_password_the_first_time(isolate_data, monkeypatch):
     saved = []
     monkeypatch.setattr(config, "set_imap", lambda *a, **k: saved.append(a))
     bridge = qt_bridge.Bridge()
-    assert "App Password" in bridge.saveEmail("me@example.com", "  ")["msg"] and "App Password" in bridge.saveEmail2("two@example.com", "")["msg"]
-    assert bridge.saveEmail("me@example.com", "abcdabcdabcdabcd")["ok"] is True and saved == [("me@example.com", "abcdabcdabcdabcd")]
+    assert "Enter the password" in bridge._save_email_checked(1, "me@gmail.com", "  ")["msg"]
+    assert "Enter the password" in bridge._save_email_checked(2, "two@gmail.com", "")["msg"]
+    assert bridge._save_email_checked(1, "me@gmail.com", "abcdabcdabcdabcd")["ok"] is True and saved == [("me@gmail.com", "abcdabcdabcdabcd")]

@@ -1,31 +1,35 @@
 from jobhelper import language
 
 
+def _is_english(text):
+    return language.detect(text) == ""
+
+
 def test_english_text_is_english():
-    assert language.is_english(
+    assert _is_english(
         "We are looking for a Python developer to join our team. "
         "You will work with our data platform and REST APIs."
     )
 
 
 def test_czech_text_is_not_english():
-    assert not language.is_english(
+    assert not _is_english(
         "Hledáme vývojáře v jazyce Python. Nabízíme zajímavou práci a "
         "možnost odborného růstu. Požadujeme znalost a zkušenosti."
     )
 
 
 def test_czech_diacritics_detected():
-    assert not language.is_english("Softwarový vývojář pro naši společnost")
+    assert not _is_english("Softwarový vývojář pro naši společnost")
 
 
 def test_short_or_empty_defaults_english():
-    assert language.is_english("")
-    assert language.is_english("DevOps")
+    assert _is_english("")
+    assert _is_english("DevOps")
 
 
 def test_english_title_only():
-    assert language.is_english("Senior Backend Engineer (Python)")
+    assert _is_english("Senior Backend Engineer (Python)")
 
 
 # ── long English ads with a few Czech letters (found by the filtered-out list) ──
@@ -35,25 +39,22 @@ ENGLISH_AD = ("About us ČSOB is part of KBC Group which is an integrated bank-i
 
 
 def test_a_long_english_ad_with_a_few_czech_letters_is_english():
-    from jobhelper import language
     assert sum(ch in "čšžňřěýáíéůú" for ch in ENGLISH_AD.lower()) >= 3
-    assert language.is_english(ENGLISH_AD) is True
+    assert _is_english(ENGLISH_AD) is True
 
 
 def test_czech_text_is_still_czech_whatever_its_length():
-    from jobhelper import language
     czech = "Hledáme vývojáře do našeho týmu. Nabízíme zajímavou práci, přátelský kolektiv a možnost růstu. " * 20
-    assert language.is_english(czech) is False
-    assert language.is_english("Softwarový vývojář") is False
-    assert language.is_english("Vývojář") is True                     # too short to judge: kept, as before
+    assert _is_english(czech) is False
+    assert _is_english("Softwarový vývojář") is False
+    assert _is_english("Vývojář") is True                     # too short to judge: kept, as before
 
 
 def test_an_english_ad_inside_a_czech_page_frame_is_english():
-    from jobhelper import language
     page = ("Nabídky práce Detail nabídky Aktualizováno včera UX Designer Plat neuveden. "
             + "We are looking for a designer who will work with our product team and the developers. "
               "You have experience with user research and you are able to present your work in English. " * 12)
-    assert language.is_english(page) is True
+    assert _is_english(page) is True
 
 
 # ── which language, when it is not English ──────────────────────────────────
@@ -86,7 +87,7 @@ ADS = {
 def test_the_language_of_an_ad_is_named():
     for name, text in ADS.items():
         assert language.detect(text) == name, name
-        assert language.is_english(text) is False, name
+        assert _is_english(text) is False, name
 
 
 def test_english_ads_are_not_taken_for_another_language():
@@ -99,7 +100,7 @@ def test_english_ads_are_not_taken_for_another_language():
            "in a team of five. We offer mentoring, a learning budget and the possibility to work from home two days a week.",
            "Data Analyst (m/w/d)", "Software Engineer", "", "QA"]
     for text in ads:
-        assert language.detect(text) == "" and language.is_english(text) is True, text[:40]
+        assert language.detect(text) == "" and _is_english(text) is True, text[:40]
 
 
 def test_a_script_that_cannot_be_named_is_still_not_english():

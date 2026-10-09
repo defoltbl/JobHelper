@@ -89,9 +89,9 @@ def test_non_latin_ads_rejected():
           "プロダクトを開発していただきます。第二新卒〜キャリア初期の方を対象に、全領域を担えるエンジニア"
           "へ育っていただくことを想定したポジションです。3D / AI 開発にも携わります。")
     ru = "Мы ищем разработчика Python для нашей команды в Праге опыт работы с Django обязателен"
-    assert not language.is_english(jp)
-    assert not language.is_english(ru)
-    assert language.is_english("We are looking for a Python developer with strong Django experience.")
+    assert language.detect(jp) == "Japanese"
+    assert language.detect(ru) == "Russian"
+    assert language.detect("We are looking for a Python developer with strong Django experience.") == ""
 
 
 def test_relative_date_handles_years():

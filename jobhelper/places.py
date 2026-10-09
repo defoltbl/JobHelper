@@ -68,6 +68,14 @@ _REMOTE = re.compile(r"\b(remote|anywhere|worldwide|work from home|home office)\
 _EU = re.compile(r"\beu\b")
 
 
+_STEMS = {"czech", "cesk", "slovak", "slovensk"}      # "Czech Republic", "Ceska republika", "Slovakia", "Slovensko"
+
+
+def _named(names, text: str) -> bool:
+    """Is one of a country's names in the text? As a whole word, except the few stems that have endings."""
+    return any(re.search(rf"\b{re.escape(n)}" + ("" if n in _STEMS else r"\b"), text) for n in names)
+
+
 def plain(text: str) -> str:
     """Lower case without accents: "Kraków" and "krakow", "München" and "munchen" compare equal."""
     return unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().lower().strip()
@@ -79,7 +87,7 @@ def country_of(place: str) -> str:
     if not text:
         return ""
     for country, (names, cities) in COUNTRIES.items():
-        if text == country or any(re.search(rf"\b{re.escape(n)}", text) for n in names) or \
+        if text == country or _named(names, text) or \
                 any(re.search(rf"\b{re.escape(c)}\b", text) for c in cities):
             return country
     return ""
@@ -91,7 +99,7 @@ def named_countries(location: str) -> set[str]:
     found = set()
     for country, (names, cities) in COUNTRIES.items():
         code = _CODES.get(country)
-        if any(re.search(rf"\b{re.escape(n)}", text) for n in names) or any(re.search(rf"\b{re.escape(c)}\b", text) for c in cities) \
+        if _named(names, text) or any(re.search(rf"\b{re.escape(c)}\b", text) for c in cities) \
                 or (code and re.search(rf"(?:,|\(|-)\s*{code}\b\)?\s*$", text)):
             found.add(country)
     return found

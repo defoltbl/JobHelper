@@ -5,6 +5,12 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+Found by checking all the code again before the next big step.
+
+- **Fixed: a place whose name begins like a country was taken for that country** ("Indianapolis, Indiana" was read as India), so a search in the United States lost postings of its own. Country names are now matched as whole words.
+- The weekly schedule can no longer hang while it waits for macOS: its two calls have a time limit.
+- Removed what nothing used any more: three functions of the window's back end (the old ways of saving a mailbox and of reading the connections), one language helper, and a second copy of the function that strips HTML from a posting.
+
 - **Review jobs one by one.** In New Jobs, narrow the list (a chip such as *stretch*, or the search box) and select **Review these … one by one**. One window walks through them: **Not interested** or **Mark applied** decides and brings the next job by itself, **Next ›** leaves a job as it is. A bar says where you are and how many you decided.
 - **Cover letters get the same check as adapted CVs.** A two-word term of the posting that the letter states as something you did, while your CV has neither word, is sent back to be rewritten; what is still there is named in the job window (**Check your cover letter**). The letter may still speak of the role's terms and of what you want to do. Measured on the 53 letters already written: 4 would have been sent back once.
 - Everyday phrases ("attention to detail", "end to end", "version control") are not treated as claims by either check.

@@ -240,9 +240,9 @@ def test_second_mailbox_can_be_removed(mail):
 def test_the_same_address_twice_is_not_a_second_mailbox(mail, qapp):
     from jobhelper import qt_bridge
     bridge = qt_bridge.Bridge()
-    assert bridge.saveEmail2("MAIN@example.com", "wxyzwxyzwxyzwxyz")["ok"] is False
-    assert bridge.saveEmail2("second@example.com", "wxyzwxyzwxyzwxyz") == {"ok": True}
-    assert bridge.saveEmail2("second@example.com", "") == {"ok": True}               # blank keeps the password
+    assert bridge._save_email_checked(2, "MAIN@example.com", "wxyzwxyzwxyzwxyz", "imap.example.com")["ok"] is False
+    assert bridge._save_email_checked(2, "second@example.com", "wxyzwxyzwxyzwxyz", "imap.example.com") == {"ok": True}
+    assert bridge._save_email_checked(2, "second@example.com", "", "imap.example.com") == {"ok": True}      # blank keeps the password
     assert config.IMAP_PASSWORD_2 == "wxyzwxyzwxyzwxyz"
     conn = ui_api.Api().connections()
     assert conn["email2"] is True and conn["email2_addr"] == "second@example.com"

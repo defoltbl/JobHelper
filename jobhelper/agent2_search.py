@@ -13,7 +13,6 @@ Deterministic HTTP — spends no Claude subscription usage.
 """
 from __future__ import annotations
 
-import html
 import re
 import unicodedata
 from typing import Any, Callable
@@ -21,16 +20,13 @@ from typing import Any, Callable
 import requests
 
 from . import (config, email_client, filters, language, salary, scrapers_ats,
-               scrapers_cz, scrapers_intl, scrapers_remote, store)
+               scrapers_cz, scrapers_intl, scrapers_remote, store, textfmt)
 
 ADZUNA_URL = "https://api.adzuna.com/v1/api/jobs/{country}/search/{page}"
 JOOBLE_URL = "https://jooble.org/api/{key}"
 
 
-def _clean(text: str) -> str:
-    text = html.unescape(text or "")
-    text = re.sub(r"<[^>]+>", " ", text)  # strip any HTML tags
-    return re.sub(r"\s+", " ", text).strip()
+_clean = textfmt.strip_tags          # text from a board, without its HTML
 
 
 # ── Adzuna ──────────────────────────────────────────────────────────────────

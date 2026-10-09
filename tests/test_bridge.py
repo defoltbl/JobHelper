@@ -374,12 +374,13 @@ def test_save_email_writes_to_env(bridge, tmp_path, monkeypatch):
     for name in ("IMAP_USER", "IMAP_PASSWORD"):
         monkeypatch.setattr(config, name, "")
         monkeypatch.delenv(name, raising=False)
-    assert bridge.saveEmail("jobs@example.com", "abcdabcdabcdabcd") == {"ok": True}
+    monkeypatch.setattr(config, "IMAP_HOST", "")
+    assert bridge._save_email_checked(1, "jobs@gmail.com", "abcdabcdabcdabcd") == {"ok": True}
     env_text = (tmp_path / ".env").read_text(encoding="utf-8")
-    assert "IMAP_USER=jobs@example.com" in env_text and "abcdabcdabcdabcd" not in env_text
+    assert "IMAP_USER=jobs@gmail.com" in env_text and "abcdabcdabcdabcd" not in env_text
     assert vault.get_secret(vault.IMAP_ACCOUNT) == "abcdabcdabcdabcd"
-    assert bridge.saveEmail("other@example.com", "") == {"ok": True}        # blank keeps the password
-    assert config.IMAP_PASSWORD == "abcdabcdabcdabcd" and config.IMAP_USER == "other@example.com"
+    assert bridge._save_email_checked(1, "other@gmail.com", "") == {"ok": True}        # blank keeps the password
+    assert config.IMAP_PASSWORD == "abcdabcdabcdabcd" and config.IMAP_USER == "other@gmail.com"
 
 
 # ── data protection ─────────────────────────────────────────────────────────

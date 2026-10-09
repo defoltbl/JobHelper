@@ -73,3 +73,14 @@ def test_a_search_in_the_united_states_keeps_american_postings(isolate_data, mon
     assert agent2_search.search(["developer"], where="Prague", dropped=dropped) == [] and "United States" in dropped[0]["reason"]
     dropped = []
     assert [j["id"] for j in agent2_search.search(["developer"], where="Austin", dropped=dropped)] == ["tx"] and dropped == []
+
+
+def test_a_country_s_name_is_matched_as_a_whole_word():
+    """"Indianapolis, Indiana" was read as India, so a search in the United States lost its own postings."""
+    assert places.named_countries("Indianapolis, Indiana") == set()
+    assert places.fits("Indianapolis, Indiana, United States", "Chicago") is True
+    assert places.country_of("Indiana") == "" and places.country_of("India") == "india"
+    assert places.named_countries("Francesville") == set() and places.named_countries("Paris, France") == {"france"}
+    # the stems of adjectives still match their endings
+    assert places.country_of("Czech Republic") == "czechia" and places.country_of("Ceska republika") == "czechia"
+    assert places.country_of("Slovensko") == "slovakia" and places.named_countries("Bratislava, Slovakia") == {"slovakia"}

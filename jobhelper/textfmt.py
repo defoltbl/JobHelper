@@ -31,6 +31,14 @@ _LABEL = re.compile(r"(?:(?<=[.!?a-z0-9)]) +|(?<=\n))((?:[A-Z][\w'’&/-]*)(?: (
 _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z“\"(])")
 
 
+def strip_tags(text: str) -> str:
+    """Text from a job board without its HTML: entities read, tags removed, spaces tidied."""
+    import html
+    text = html.unescape(text or "")
+    text = re.sub(r"<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def readable(text: str) -> str:
     """The description with headings on their own lines, list items marked and long blocks split."""
     text = _JUNK.sub("", (text or "").strip())

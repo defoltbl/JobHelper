@@ -6,14 +6,13 @@ cached per run to avoid refetching.
 """
 from __future__ import annotations
 
-import html
 import re
 from functools import lru_cache
 from typing import Any
 
 import requests
 
-from . import store
+from . import store, textfmt
 
 _HEADERS = {
     "User-Agent": (
@@ -62,10 +61,7 @@ def _my_fields() -> list[str]:
         return []
 
 
-def _clean(text: str) -> str:
-    text = html.unescape(text or "")
-    text = re.sub(r"<[^>]+>", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+_clean = textfmt.strip_tags          # text from a board, without its HTML
 
 
 def _keywords(keyword: str) -> list[str]:

@@ -109,9 +109,3 @@ def detect(text: str) -> str:
     if hits >= 4 and hits > en * 2 and hits >= len(words) * 0.08:
         return name
     return ""
-
-
-def is_english(text: str) -> bool:
-    """True if the text looks like English. Empty or very short text counts as English
-    (we can't tell, so don't drop it)."""
-    return detect(text) == ""
