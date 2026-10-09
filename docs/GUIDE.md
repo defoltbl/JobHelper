@@ -219,7 +219,8 @@ works except reading replies.
 | Fastmail, Zoho | The provider's server | An app password |
 | Seznam, GMX, WEB.DE | The provider's server | Your mailbox password, with IMAP turned on in the mailbox settings |
 | A company or another provider | The **IMAP server** you type | What that provider gives for reading mail by IMAP |
-| Outlook.com, Hotmail, Proton Mail | Not possible | These cannot be read with a password. Forward your job mail to another mailbox and connect that one, or paste replies into their applications (section 9) |
+| Yandex, Mail.ru, T-Online, Posteo, mailbox.org, Orange, Libero, Onet | The provider's server | What the line under the fields says for that provider |
+| Outlook.com, Hotmail, Proton Mail, Tuta | Not possible | These cannot be read with a password. Forward your job mail to another mailbox and connect that one, or paste replies into their applications (section 9) |
 
 > **Note**
 > An app password is a separate password that only lets a program read mail. You can cancel it
@@ -264,6 +265,17 @@ When the key is missing from the Keychain, the **Data protection** row is red an
 2. Select **Open my data**.
 
 The app checks that the key belongs to this data before it uses it.
+
+### Test a connected mailbox
+
+An app password can be cancelled at the provider without the app knowing. To check that the
+mailboxes can still be read:
+
+1. Open the **Account** card.
+2. On the **Job email** row, select **Test**.
+
+A green line says that the app signed in; a red line says what the mail server answered. Both
+mailboxes are tried when you have two.
 
 ### Open the card again later
 
@@ -697,6 +709,20 @@ Table 21 lists the controls of the letter editor.
 > Closing the editor with unsaved changes asks once. The previous version of a saved letter is
 > kept in an encrypted backup.
 
+### Have documents written for one job
+
+A search writes documents only for jobs at or above your limit. For any other new job you can
+have them written when you decide to apply after all, or after the job was scored again.
+
+1. Open the job.
+2. Under **Why this score**, select **Write CV and letter**. The app asks Claude; this takes
+   about a minute.
+3. When the line says **Written**, check both documents as usual.
+
+A letter that you wrote yourself is never replaced: only what is missing is written. When the
+posting's text is missing, the app asks you to read the posting again first (section 8),
+because a letter written from a title alone would be generic.
+
 ### Your own letters
 
 A letter that **you** wrote is never touched.
@@ -959,14 +985,35 @@ Table 26 lists the fields of a reply.
 | **Next step** | What they ask of you, if anything |
 | **Reason** | For a rejection: the reason they gave, and its kind |
 | The application | Which of your applications it was filed to. Select it to open that application |
+| **File under…** | Files the reply under another application, or under none |
+
+### File a reply under the right application
+
+Sometimes a reply is filed under the wrong application, or under none: two applications at
+one company, or a recruiter who writes from an agency's address.
+
+1. In **Responses**, select the reply.
+2. Select **File under…** (or **File under another…**). The list of your applications opens
+   (Figure 20).
+3. Type a company or a role to narrow the list, then select the right application.
+
+![Choosing the application a reply belongs to](img/34_file_reply.png)
+
+*Figure 20. Choosing the application a reply belongs to*
+
+The application the reply moves to follows it in the usual way: an invitation makes it an
+interview, a rejection closes it. The application the reply leaves keeps its status, because
+only you know whether this reply had set it; the green line reminds you to look. To unlink a
+reply that is about none of your applications, select **It belongs to none of my
+applications**.
 
 ### Analytics
 
-Figure 20 shows outcomes and rejection reasons.
+Figure 21 shows outcomes and rejection reasons.
 
 ![Outcomes and rejection reasons](img/16_analytics.png)
 
-*Figure 20. Outcomes and rejection reasons*
+*Figure 21. Outcomes and rejection reasons*
 
 **Analytics** adds the replies up (Table 27).
 
@@ -992,7 +1039,7 @@ Table 28 lists problems with replies, and what to do.
 |---|---|---|
 | "0 new" after a scan | No new replies in the period, or they were read by an earlier scan | Nothing. **Emails read** on the Last run card shows what the scan went through. To look further back, use **Look further back once** |
 | A rejection is missing | It did not arrive in a scanned mailbox, or it is in another folder | Turn on **Also archived mail and spam**, or paste the reply into the application (section 9) |
-| A reply was filed to the wrong application | Two applications at the same company | Open the right application and set its status by hand |
+| A reply was filed to the wrong application, or to none | Two applications at the same company, or a sender the app could not place | Open the reply and select **File under…** |
 | A warning about the second mailbox | Its password was cancelled or mistyped | Open the Account card and select **Change** for the second mailbox |
 
 ---
@@ -1009,11 +1056,11 @@ For one interview the app builds a sheet from your CV and the posting.
 3. When the card says the questions and answers are ready, select **Open**.
 
 **Document** on the same card opens the sheet as a Word file. **Make again** builds a new one,
-for example after you changed your CV (Figure 21).
+for example after you changed your CV (Figure 22).
 
 ![The interview preparation](img/14_interview_preparation.png)
 
-*Figure 21. The interview preparation*
+*Figure 22. The interview preparation*
 
 ### What the sheet contains
 
@@ -1061,11 +1108,11 @@ posting a search drops is kept with the reason.
 
 1. On the **Last run** card, select the number next to **Filtered out**.
 
-Figure 22 shows postings the last search filtered out.
+Figure 23 shows postings the last search filtered out.
 
 ![Postings the last search filtered out](img/17_filtered_out.png)
 
-*Figure 22. Postings the last search filtered out*
+*Figure 23. Postings the last search filtered out*
 
 ### Read the list
 
@@ -1095,11 +1142,11 @@ The posting goes to **New Jobs**, and the next search scores it.
 
 ## 13. Learn from your results
 
-**Insights** is worked out on your Mac from your own applications. It asks Claude nothing (Figure 23).
+**Insights** is worked out on your Mac from your own applications. It asks Claude nothing (Figure 24).
 
 ![Insights](img/18_insights.png)
 
-*Figure 23. Insights*
+*Figure 24. Insights*
 
 Table 32 lists the parts of Insights.
 
@@ -1136,11 +1183,11 @@ Table 33 suggests what to do with what you see.
 ## 14. Set your options
 
 Options is where you tell the app what you are looking for. Open it with **Options** in the
-right column, or with a chip under **Search** in the left column (Figure 24).
+right column, or with a chip under **Search** in the left column (Figure 25).
 
 ![Options: the search](img/19_options_search.png)
 
-*Figure 24. Options: the search*
+*Figure 25. Options: the search*
 
 > **Note**
 > A choice too long for its box is shown on two lines, never cut.
@@ -1176,11 +1223,11 @@ Table 34 lists the Search settings.
 
 ### Your profession
 
-Figure 25 shows the roles you want and your profession in Options.
+Figure 26 shows the roles you want and your profession in Options.
 
 ![Options: the roles you want and your profession](img/20_options_roles.png)
 
-*Figure 25. Options: the roles you want and your profession*
+*Figure 26. Options: the roles you want and your profession*
 
 Under **Kinds of role you want**, chips show what the app takes as your profession. The app
 reads it from the roles you want (the outlined chip). It decides which titles are skipped as
@@ -1219,11 +1266,11 @@ Table 35 lists the Matching and Follow-up settings.
 
 ### About you
 
-Figure 26 shows the About you settings.
+Figure 27 shows the About you settings.
 
 ![Options: about you](img/32_options_about_you.png)
 
-*Figure 26. Options: about you*
+*Figure 27. Options: about you*
 
 Table 36 lists the About you settings.
 
@@ -1232,6 +1279,7 @@ Table 36 lists the About you settings.
 | Setting | What it does |
 |---|---|
 | **Salary you ask for** | Your expected pay, gross per month, with its currency. Form answers give it as your expectation, the job window and the lists show it, and Insights compares what postings pay with it. 0 = none given: the app then uses its own estimate, which it has for software roles in Czechia only, and otherwise leaves the figure for you to fill in |
+| **A different figure for** | A salary of its own for one kind of role, used instead of the general one when the words are in the job's title (*support* for "IT Support Specialist"). Enter the kind of role and the figure, then select **+ Add** |
 | **Right to work** | How letters and answers should say it. Empty = not mentioned |
 | **You can start** | When you can start. Empty = not mentioned |
 | **More about your work** | What you really did in each job beyond what the CV says, in your own words. The app may use it like the CV |
@@ -1243,11 +1291,11 @@ Table 36 lists the About you settings.
 
 ### Notifications and storage
 
-Figure 27 shows the Notifications and storage settings.
+Figure 28 shows the Notifications and storage settings.
 
 ![Options: notifications and storage](img/21_options_storage.png)
 
-*Figure 27. Options: notifications and storage*
+*Figure 28. Options: notifications and storage*
 
 Table 37 lists the Notifications and storage settings.
 
@@ -1257,15 +1305,16 @@ Table 37 lists the Notifications and storage settings.
 |---|---|---|
 | **Notifications** | A macOS notification when a run finishes, pauses on the limit, or an interview invitation arrives | On or off |
 | **Keep backups** | How many automatic backups are kept; older ones are removed | 0 to 200; 0 = keep all |
+| **Back up everything** | **Back up now** makes one encrypted backup of everything. **Check backups** proves that a backup can be restored. **Save a readable copy…** puts the newest full backup, not encrypted, into an empty folder you choose | Three buttons |
 | **Moved documents older than** | Moves old copies in the backup to the Trash, after asking | 7 days or more |
 
 ### Email scan
 
-Figure 28 shows the Email scan and Model settings.
+Figure 29 shows the Email scan and Model settings.
 
 ![Options: email and the model](img/33_options_email.png)
 
-*Figure 28. Options: email and the model*
+*Figure 29. Options: email and the model*
 
 Table 38 lists the Email scan settings.
 
@@ -1302,11 +1351,11 @@ macOS can run a search and an email scan for you once a week, even with the wind
 3. Choose the day and the time.
 4. Select **Save**.
 
-Figure 29 shows the weekly run.
+Figure 30 shows the weekly run.
 
 ![The weekly run](img/22_weekly_run.png)
 
-*Figure 29. The weekly run*
+*Figure 30. The weekly run*
 
 You get a notification when the run is done. The **Last run** card shows its result the next
 time you open the window (Table 40).
@@ -1341,11 +1390,11 @@ Claude (Table 41).
 ### Read the Usage left card
 
 Each window has a bar and a figure for what is left. The numbers come from Claude's last
-answer. **refresh** asks Claude for the current ones (Figure 30).
+answer. **refresh** asks Claude for the current ones (Figure 31).
 
 ![A limit that is used up](img/27_limit_used_up.png)
 
-*Figure 30. A limit that is used up*
+*Figure 31. A limit that is used up*
 
 Table 42 explains what the card shows.
 
@@ -1367,11 +1416,11 @@ shown as free again without you pressing anything.
 
 ### When a run hits the limit
 
-The run pauses instead of failing, and everything done so far is saved (Figure 31).
+The run pauses instead of failing, and everything done so far is saved (Figure 32).
 
 ![The run paused on the limit](img/29_limit_pause.png)
 
-*Figure 31. The run paused on the limit*
+*Figure 32. The run paused on the limit*
 
 1. Read the window: it names the limit and the time it resets.
 2. Select **Close**. You can keep using the lists.
@@ -1389,6 +1438,18 @@ The **Last run** card shows two rows about cost (Table 43).
 |---|---|
 | **You paid** | *subscription only*. Nothing was billed for the run |
 | **Same search via API**, **Same scan via API** | What that one run would have cost with pay-per-use billing |
+
+### See everything the app has used
+
+1. In the right column, select **Help**.
+2. Select the tab **Usage and problems** (Figure 33).
+
+The first card shows how many questions the app has asked Claude in all and by kind of work,
+with what the same work would have cost through the paid API. Nothing of it was billed.
+
+![Usage and problems in Help](img/35_help_usage.png)
+
+*Figure 33. Usage and problems in Help*
 
 ### Use less of your limit
 
@@ -1428,14 +1489,36 @@ Everything stays on your Mac. The only things that leave it are the questions pu
 The app makes a backup by itself before it changes data in bulk. The newest ones are kept,
 as many as **Keep backups** in Options says.
 
+To make a backup of everything yourself, for example before you move to a new Mac:
+
+1. Open **Options** > **Notifications and storage**.
+2. Select **Back up now**. The green line names the folder of the backup.
+3. Optional: select **Check backups**. The app restores a backup into a throwaway folder and
+   compares it with your data, to prove that it can be restored.
+
+To take your data out of the app in a form that any program can open:
+
+1. Select **Save a readable copy…**.
+2. Choose an empty folder outside the app's own folder.
+
+> **Warning**
+> A readable copy is not encrypted. Keep that folder safe, and delete it when you no longer
+> need it.
+
 ### Changes to the rule files
 
-The files that tell the app how to write your CV and your letters are signed. If one of them
-is changed outside the app, the next run waits.
+The files that tell the app how to write your CV and your letters, the letter template and
+your master CV are signed. If one of them is changed outside the app, the next run waits.
 
-1. Open the **Account** card.
-2. Read what changed.
-3. Approve the change, or put the file back.
+1. Open the **Account** card. The **Data protection** row names the changed files.
+2. Select **See what changed**. The lines that were removed are shown in red with a minus
+   sign, the lines that were added in green with a plus sign.
+3. Select **Approve** if the change is yours. Otherwise put the file back as it was.
+
+> **Note**
+> The app keeps the text of each file as it was when you approved it. For a file approved
+> before this was added, the card says that no earlier copy was kept; open the file and read
+> it before you approve.
 
 > **Warning**
 > Approve a change only when you made it yourself. The rule files decide what the app is
@@ -1458,14 +1541,15 @@ Table 46 lists where data goes instead of being deleted.
 
 ## 18. Troubleshoot problems
 
-Figure 32 shows the Help window.
+Figure 34 shows the Help window.
 
 ![Help inside the app](img/23_help.png)
 
-*Figure 32. Help inside the app*
+*Figure 34. Help inside the app*
 
-**Help** in the app covers the same ground as this guide in short form. Its second tab lists
-what changed in each version.
+**Help** in the app has three tabs: **How it works** covers the same ground as this guide in
+short form, **What changed** lists the changes of each version, and **Usage and problems**
+shows what the app has used and the small problems it carried on after.
 
 ### Starting and signing in
 
@@ -1514,7 +1598,7 @@ Table 50 lists other problems.
 
 | What you see | Cause | What to do |
 |---|---|---|
-| Something failed quietly | The app carried on after an error | The file `app_trouble.log` in the app's `data` folder has one line for each such error |
+| Something failed quietly | The app carried on after an error | Open **Help** > **Usage and problems**: the second card lists such errors, newest first, and **Show the file in Finder** shows the whole log |
 | The data cannot be opened on a new Mac | The data key is in the old Mac's Keychain | Paste your recovery key in the **Account** card (section 2) |
 
 ---
@@ -1556,11 +1640,11 @@ Table 52 lists the folders the app writes to.
 
 ### The light theme
 
-Figure 33 shows the light theme.
+Figure 35 shows the light theme.
 
 ![The light theme](img/24_light_theme.png)
 
-*Figure 33. The light theme*
+*Figure 35. The light theme*
 
 The sun or moon button at the top of the main window switches between the dark and the light
 theme. Every window follows it.

@@ -5,6 +5,9 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **A salary of its own for a kind of role** (Options → About you → **A different figure for**): enter *support* and a figure, and jobs with that word in the title use it instead of the general one, in form answers, the lists and Insights.
+- **Test a connected mailbox** (Account card → **Test**): the app signs in once and says whether the mailbox can still be read. More providers are recognised by the address (Yandex, Mail.ru, T-Online, Posteo, mailbox.org, Orange, Libero, Onet), and Tuta is named as one that cannot be read.
+- **The PDFs have less empty space:** a chapter now follows on the same page instead of starting a new one. The page rules are unchanged.
 - **File a reply under the right application.** In a reply's window, **File under…** lists your applications (type a company or a role to narrow it); choose one and the reply moves there. The application it moves to follows the reply (an invitation makes it an interview, a rejection closes it); the one it leaves keeps its status, which only you can judge. **It belongs to none of my applications** unlinks it.
 - **Write CV and letter for one job** (job window): for a job the search wrote no documents for, because it was below your limit or was scored again since. A letter of your own is never replaced; only what is missing is written.
 - **Help has a third tab, Usage and problems:** everything the app has asked Claude so far, in all and by kind of work, with what it would have cost through the paid API; and the last problems the app carried on after, with **Show the file in Finder**.

@@ -238,3 +238,16 @@ def test_salary_settings_are_checked(isolate_data):
     assert "CZK" in api.currencies() and "EUR" in api.currencies()
     assert "software roles in Czechia only" in api.salary_hint("Prague", "") and "software roles in Czechia only" in api.salary_hint("", "")
     assert "no estimate for this country" in api.salary_hint("Berlin", "") and "no estimate" in api.salary_hint("Prague", "Germany")
+
+
+def test_the_salary_list_by_role_is_checked(isolate_data):
+    from jobhelper import ui_api
+    api = ui_api.Api()
+    for wrong, part in (([{"role": "s", "amount": 5}], "kind of role in words"), ([{"role": "123", "amount": 5}], "kind of role in words"),
+                        ([{"role": "support", "amount": 0}], "whole number above 0"), ([{"role": "support", "amount": 2.5}], "whole number above 0"),
+                        ([{"role": "support", "amount": 1}, {"role": "Support", "amount": 2}], "twice"), ("support=5", "up to 20 lines"),
+                        ([{"role": f"role {chr(97 + n)}", "amount": 5} for n in range(21)], "up to 20 lines"), (["support"], "kind of role in words")):
+        result = api.save_options({**api.options(), "salary_by_role": wrong})
+        assert result["ok"] is False and part in result["msg"], wrong
+    assert api.save_options({**api.options(), "salary_by_role": [{"role": " support ", "amount": 42000}]})["ok"] is True
+    assert api.options()["salary_by_role"] == [{"role": "support", "amount": 42000}]

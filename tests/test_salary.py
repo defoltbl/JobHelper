@@ -65,3 +65,13 @@ def test_money_is_written_as_people_write_it():
     assert salary.span(55000, 65000) == "55–65k CZK" and salary.span(60000, 60000) == "60k CZK"
     assert salary.span(2600, 3200, "EUR") == "2 600–3 200 EUR" and salary.span(3000, 3000, "EUR") == "3 000 EUR"
     assert salary.tidy(58400) == 58000 and salary.tidy(2840) == 2800
+
+
+def test_a_kind_of_role_can_have_its_own_figure():
+    opts = {"where": "Prague", "salary_target": 60000, "salary_by_role": [{"role": "support", "amount": 42000}, {"role": "data engineer", "amount": 70000}]}
+    assert salary.asked({"title": "IT Support Specialist"}, opts) == (42000, "CZK", True)
+    assert salary.asked({"title": "Junior Data Engineer (m/f)"}, opts) == (70000, "CZK", True)
+    assert salary.asked({"title": "Python Developer"}, opts) == (60000, "CZK", True)                 # no line for it: the general figure
+    assert salary.asked({"title": "Supporter of Engineers"}, opts) == (60000, "CZK", True)           # whole words only
+    assert salary.asked({"title": "Support"}, {"salary_by_role": [{"role": "support", "amount": 0}, "nonsense", {"role": "", "amount": 5}]}) == (0, "CZK", False)
+    assert salary.asked({"title": "IT Support"}, {"where": "Berlin", "salary_currency": "EUR", "salary_by_role": [{"role": "support", "amount": 2800}]}) == (2800, "EUR", True)

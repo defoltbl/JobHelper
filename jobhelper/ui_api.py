@@ -824,7 +824,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
             target_roles = [str(r) for r in (profile.get("target_roles") or [])]
         except Exception:
             seed_queries, level, target_roles = [], "junior", []
-        defaults = {"where": "", "country": "", "salary_target": 0, "salary_currency": "CZK", "source": "czech", "include_remote": False, "full_time_only": True,
+        defaults = {"where": "", "country": "", "salary_target": 0, "salary_currency": "CZK", "salary_by_role": [], "source": "czech", "include_remote": False, "full_time_only": True,
                     "all_languages": False, "max_age_days": config.MAX_JOB_AGE_DAYS,
                     "threshold": config.DEFAULT_THRESHOLD, "min_lead_score": config.MIN_LEAD_SCORE,
                     "model": config.MODEL, "per_query": 15, "queries": list(seed_queries),
@@ -880,6 +880,23 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
                 if len(text) > limit:
                     return {}, f"“{key.replace('_', ' ')}” is {len(text)} characters long; the most is {limit}. Shorten it."
                 clean[key] = text
+        if "salary_by_role" in clean:
+            entries, seen = clean["salary_by_role"], set()
+            if not isinstance(entries, (list, tuple)) or len(entries) > 20:
+                return {}, "“salary by role” takes up to 20 lines."
+            tidy = []
+            for entry in entries:
+                role = str((entry or {}).get("role") or "").strip() if isinstance(entry, dict) else ""
+                amount = (entry or {}).get("amount") if isinstance(entry, dict) else None
+                if not 2 <= len(role) <= 60 or not re.search(r"[^\W\d_]{2}", role):
+                    return {}, "Each line of “salary by role” needs a kind of role in words, for example support."
+                if isinstance(amount, bool) or not isinstance(amount, (int, float)) or amount != int(amount) or not 1 <= amount <= 100_000_000:
+                    return {}, f"The salary for “{role}” must be a whole number above 0."
+                if role.lower() in seen:
+                    return {}, f"“{role}” is in the salary list twice."
+                seen.add(role.lower())
+                tidy.append({"role": role, "amount": int(amount)})
+            clean["salary_by_role"] = tidy
         if "salary_currency" in clean:
             code = str(clean["salary_currency"] or "").strip().upper()
             if code not in salary.CURRENCIES:

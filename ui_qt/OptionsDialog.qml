@@ -24,6 +24,20 @@ Dialog {
     padding: 0
     ListModel { id: rolesModel }
     ListModel { id: companiesModel }
+    ListModel { id: payModel }            // a salary of its own for some kinds of role: { role, amount }
+    property string payErr: ""
+    function addPay() {
+        var role = payRole.text.trim();
+        payErr = "";
+        if (win.hasNonLatin(role)) { payErr = "Write the kind of role in English (Latin letters), as it stands in job titles."; return; }
+        if (role.length < 2 || !/[A-Za-z\u00C0-\u024F]{2}/.test(role)) { payErr = "Enter a kind of role in words, for example support."; return; }
+        if (payAmount.value <= 0) { payErr = "Enter the salary for “" + role + "”: a number above 0."; return; }
+        if (payModel.count >= 20) { payErr = "The list takes up to 20 kinds of role. Remove one first."; return; }
+        for (var i = 0; i < payModel.count; i++)
+            if (payModel.get(i).role.toLowerCase() === role.toLowerCase()) { payErr = "“" + role + "” is already in the list. Remove it first to change its figure."; return; }
+        payModel.append({ role: role, amount: payAmount.value });
+        payRole.text = ""; payAmount.value = 0;
+    }
     property string roleErr: ""
     property string pendingRole: ""       // a role the app did not know, waiting for a second press on Add
     // "software engineering intern" as a search role while "intern" is skipped would
@@ -96,6 +110,8 @@ Dialog {
             var c = companiesModel.get(k);
             cs.push({ name: "" + c.name, ats: "" + c.ats, token: "" + c.token });
         }
+        var pays = [];
+        for (var p = 0; p < payModel.count; p++) pays.push({ role: "" + payModel.get(p).role, amount: payModel.get(p).amount });
         return { options: { where: cityCombo.editText, country: countryField.text.trim(), source: srcCombo.currentValue,
                             include_remote: remoteSw.checked, all_languages: !engSw.checked,
                             full_time_only: fullSw.checked,
@@ -105,7 +121,7 @@ Dialog {
                             max_age_days: ageSpin.value, per_query: pqSpin.value,
                             threshold: thrSpin.value, min_lead_score: minSpin.value,
                             followup_days: fuSpin.value, scan_days: scanSpin.value,
-                            salary_target: salarySpin.value, salary_currency: currencyCombo.currentText,
+                            salary_target: salarySpin.value, salary_currency: currencyCombo.currentText, salary_by_role: pays,
                             about_right_to_work: rightField.text.trim(), about_start: startField.text.trim(),
                             about_experience: expField.text.trim(),
                             notifications: notifySw.checked, keep_backups: keepSpin.value,
@@ -225,6 +241,9 @@ Dialog {
         fuSpin.value = o.followup_days !== undefined ? o.followup_days : 10;
         scanSpin.value = o.scan_days !== undefined ? o.scan_days : 30;
         salarySpin.value = o.salary_target || 0;
+        payModel.clear(); payErr = ""; payRole.text = ""; payAmount.value = 0;
+        var byRole = o.salary_by_role || [];
+        for (var q = 0; q < byRole.length; q++) payModel.append({ role: byRole[q].role, amount: byRole[q].amount });
         currencyCombo.currentIndex = Math.max(0, currencyCombo.find(o.salary_currency || "CZK"));
         rightField.text = o.about_right_to_work || ""; startField.text = o.about_start || "";
         expField.text = o.about_experience || "";
@@ -489,6 +508,27 @@ Dialog {
                             text: salarySpin.value > 0
                                   ? "Form answers give this as your expectation, and Insights compares what postings pay with it."
                                   : bridge.salaryHint(cityCombo.editText, countryField.text) }
+                        // another figure for some kinds of role: a support job and a developer job rarely pay the same
+                        SRow { label: "A different figure for"; hint: "a kind of role, as in job titles · used instead of the one above"
+                            RowLayout { spacing: 6
+                                TextField { id: payRole; objectName: "payRole"; implicitWidth: 120; implicitHeight: 30; maximumLength: 60
+                                    placeholderText: "e.g. support"; placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true
+                                    background: Rectangle { radius: 8; color: theme.surface; border.width: 1
+                                        border.color: payRole.activeFocus ? theme.accent : optDialog.payErr !== "" ? theme.crit : theme.line }
+                                    onTextEdited: optDialog.payErr = ""; onAccepted: optDialog.addPay() }
+                                ThemedSpin { id: payAmount; objectName: "payAmount"; from: 0; to: 100000000; stepSize: 1000; value: 0 }
+                                SmallButton { objectName: "payAdd"; text: "+ Add"; onClicked: optDialog.addPay() } } }
+                        Text { objectName: "payErr"; visible: optDialog.payErr !== ""; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12
+                            wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true; text: optDialog.payErr }
+                        Flow { objectName: "payChips"; visible: payModel.count > 0; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 10; spacing: 6
+                            Repeater { model: payModel
+                                Rectangle { radius: 999; color: theme.inset; border.width: 1; border.color: theme.line
+                                    implicitHeight: 24; implicitWidth: payChip.implicitWidth + 20
+                                    Row { id: payChip; anchors.centerIn: parent; spacing: 6
+                                        Text { text: model.role + " · " + Number(model.amount).toLocaleString(Qt.locale("en_US"), "f", 0).replace(/,/g, " ") + " " + currencyCombo.currentText
+                                            color: theme.ink; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                        Text { text: "×"; color: theme.soft; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter
+                                            MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: payModel.remove(index) } } } } } }
                         Sep {}
                         SRow { label: "Right to work"; hint: "as letters should say it · empty = not mentioned"
                             TextField { id: rightField; objectName: "rightField"; implicitWidth: 250; implicitHeight: 30

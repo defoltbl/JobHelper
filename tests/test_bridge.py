@@ -762,3 +762,45 @@ def test_the_main_window_is_made_of_its_parts():
     assert 'import "views.js" as Views' in main and len(main.splitlines()) < 600
     stage = (root / "StagePanel.qml").read_text(encoding="utf-8")
     assert "theme: theme;" not in stage            # inside a part that would bind a robot's theme to itself
+
+
+def test_a_saved_mailbox_can_be_tried(bridge, monkeypatch):
+    from PySide6.QtTest import QTest
+
+    from jobhelper import email_client
+    got, tried = [], []
+    bridge.emailTested.connect(got.append)
+
+    def wait(n):
+        for _ in range(200):
+            QTest.qWait(10)
+            time.sleep(0.005)
+            if len(got) >= n:
+                return
+    monkeypatch.setattr(config, "IMAP_USER", "")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "")
+    bridge.testMailbox(1)
+    wait(1)
+    assert got[-1] == {"ok": False, "msg": "That mailbox is not connected yet.", "box": 1}
+    monkeypatch.setattr(config, "IMAP_USER", "me@seznam.cz")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "secret123")
+    monkeypatch.setattr(config, "IMAP_HOST", "")
+    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0, host="": tried.append((user, host)) or {"ok": True, "msg": ""})
+    bridge.testMailbox(1)
+    wait(2)
+    assert tried == [("me@seznam.cz", "imap.seznam.cz")] and got[-1] == {"ok": True, "msg": "Signed in to me@seznam.cz: the mailbox can be read.", "box": 1}
+    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0, host="": {"ok": False, "msg": "The mail server refused this address and password."})
+    bridge.testMailbox(1)
+    wait(3)
+    assert got[-1]["ok"] is False and "refused" in got[-1]["msg"] and "secret123" not in got[-1]["msg"]
+    bridge.testMailbox(7)
+    wait(4)
+    assert got[-1]["ok"] is False
+
+
+def test_more_providers_are_known_and_some_are_said_to_be_impossible(bridge):
+    for address, host in (("a@yandex.com", "imap.yandex.com"), ("a@mail.ru", "imap.mail.ru"), ("a@t-online.de", "secureimap.t-online.de"),
+                          ("a@mailbox.org", "imap.mailbox.org"), ("a@onet.pl", "imap.poczta.onet.pl")):
+        seen = bridge.mailServer(address, "")
+        assert seen["host"] == host and seen["known"] is True and seen["hint"], address
+    assert "cannot be read by another program" in bridge.mailServer("a@tuta.com", "")["problem"]

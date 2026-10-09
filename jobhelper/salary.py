@@ -101,7 +101,8 @@ def currency_of(options: dict | None = None) -> str:
 def asked(job: dict, options: dict | None = None) -> tuple[int, str, bool]:
     """What to ask for in this job: (gross per month, currency, True when it is your own figure).
 
-    Your figure from Options when you gave one. Otherwise the app's estimate for the job, which
+    Your figure from Options when you gave one: the one for this kind of role when its words are
+    in the title ("support" for "IT Support Specialist"), else the general one. Otherwise the app's estimate for the job, which
     exists only for software roles and only while the search is in Czechia (or no city is set
     yet). (0, currency, False) when there is nothing to say."""
     from . import config, places
@@ -111,6 +112,15 @@ def asked(job: dict, options: dict | None = None) -> tuple[int, str, bool]:
         own = int(opts.get("salary_target") or 0)
     except (TypeError, ValueError):
         own = 0
+    for entry in opts.get("salary_by_role") or []:              # a figure of your own for this kind of role comes first
+        try:
+            role, amount = str(entry.get("role") or ""), int(entry.get("amount") or 0)
+        except (AttributeError, TypeError, ValueError):
+            continue
+        from . import prefilter
+        phrase = prefilter._phrase(role)
+        if amount > 0 and phrase is not None and phrase.search(str(job.get("title") or "")):
+            return amount, currency, True
     if own > 0:
         return own, currency, True
     home = places.country_of(str(opts.get("country") or "")) or places.country_of(str(opts.get("where") or ""))

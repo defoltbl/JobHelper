@@ -149,8 +149,9 @@ def test_the_contents_give_the_real_page_numbers(laid_out):
     assert report["contents"]["figures"] == [f["first_page"] for f in report["figures"]]
     assert report["contents"]["tables"] == [t["first_page"] for t in report["tables"] if not t["continued"]]
     assert all(page > 1 for page in report["contents"]["headings"])
-    chapters = [h for h in report["headings"] if h["level"] == 2]
-    assert len({h["page"] for h in chapters}) == len(chapters), "each chapter starts on a page of its own"
+    body = [h for h in report["headings"] if h["level"] == 2 and h["text"] not in ("Contents", "List of figures", "List of tables")]
+    lists = [h for h in report["headings"] if h["text"] in ("Contents", "List of figures", "List of tables")]
+    assert body[0]["page"] > max(h["page"] for h in lists), "the text starts after the contents and the lists"
 
 
 def test_a_table_too_long_for_a_page_is_cut_between_rows():

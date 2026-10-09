@@ -32,12 +32,22 @@ PROVIDERS: dict[str, tuple[str, str]] = {
     "centrum.cz": ("imap.centrum.cz", "your mailbox password"), "wp.pl": ("imap.wp.pl", "your mailbox password"),
     "o2.pl": ("poczta.o2.pl", "your mailbox password"), "mail.com": ("imap.mail.com", "your mailbox password"),
     "ukr.net": ("imap.ukr.net", "the IMAP password made in the mailbox settings, not your normal password"),
+    "yandex.com": ("imap.yandex.com", APP_PASSWORD), "yandex.ru": ("imap.yandex.com", APP_PASSWORD), "ya.ru": ("imap.yandex.com", APP_PASSWORD),
+    "mail.ru": ("imap.mail.ru", "the password for external applications made in the mailbox settings, not your normal password"),
+    "t-online.de": ("secureimap.t-online.de", "the email password set in the customer centre, not your login password"),
+    "posteo.de": ("posteo.de", "your mailbox password"), "posteo.net": ("posteo.de", "your mailbox password"),
+    "mailbox.org": ("imap.mailbox.org", "your mailbox password"),
+    "orange.fr": ("imap.orange.fr", "your mailbox password"), "libero.it": ("imapmail.libero.it", "your mailbox password"),
+    "onet.pl": ("imap.poczta.onet.pl", "your mailbox password, with IMAP turned on in the mailbox settings"),
 }
 # Mailboxes a program cannot read with a password, with what to do instead.
 NOT_POSSIBLE = {
     **dict.fromkeys(("outlook.com", "hotmail.com", "live.com", "msn.com", "outlook.cz", "hotmail.co.uk"),
                     "Microsoft no longer lets a program read an Outlook.com mailbox with a password. Forward your job mail to another "
                     "mailbox and connect that one, or paste replies into their applications by hand."),
+    **dict.fromkeys(("tuta.com", "tutanota.com", "tutamail.com", "tuta.io"),
+                    "Tuta mailboxes cannot be read by another program at all. Forward your job mail to another mailbox and "
+                    "connect that one, or paste replies into their applications by hand."),
     **dict.fromkeys(("proton.me", "protonmail.com", "pm.me"),
                     "Proton Mail can only be read through its own Bridge program, which this app does not use. Forward your job mail "
                     "to another mailbox and connect that one, or paste replies into their applications by hand."),

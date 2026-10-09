@@ -38,7 +38,7 @@ MARGIN, FOOTER = 48, 26    # points around the text; room under it for the page 
 CSS = """
 body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 10pt; color: #182230; }
 h1 { font-size: 20pt; margin-top: 0; }
-h2 { font-size: 16pt; margin-top: 0; margin-bottom: 10px; color: #8a4a05; }
+h2 { font-size: 16pt; margin-top: 26px; margin-bottom: 10px; color: #8a4a05; }
 h3 { font-size: 12pt; margin-top: 16px; margin-bottom: 4px; }
 p { margin-top: 4px; margin-bottom: 8px; }
 code, pre { font-family: Menlo, Monaco, monospace; font-size: 9pt; background-color: #eef1f5; }
@@ -224,7 +224,7 @@ def _layout(html: str, base: Path, width: float, height: float):
     doc.setBaseUrl(QUrl.fromLocalFile(str(base) + "/"))
     doc.setDefaultStyleSheet(CSS)
     doc.setDocumentMargin(0)
-    doc.setHtml(re.sub(r'<h2 style="', '<h2 style="page-break-before:always; ', html))      # a chapter starts on a new page
+    doc.setHtml(html)       # a chapter follows on the same page; only the contents and the lists start a page of their own
     doc.setPageSize(QSizeF(width, height))
     layout = doc.documentLayout()
     kinds = _kinds(html)
@@ -333,7 +333,7 @@ def compose(source: Path = GUIDE):
     pages = {"headings": ["000"] * len(entries["headings"]), "figures": ["000"] * len(entries["figures"]), "tables": ["000"] * len(entries["tables"])}
     doc = report = None
     for _attempt in range(6):                           # the numbers are known only once the pages are laid out
-        doc, report = _layout(_front(title, subtitle, entries, pages) + body, source.parent, width, height)
+        doc, report = _layout(_front(title, subtitle, entries, pages) + '<p style="page-break-before:always;"></p>' + body, source.parent, width, height)
         found = {"headings": [h["page"] for h in report["headings"]][len(front_headings):],
                  "figures": [f["first_page"] for f in report["figures"]],
                  "tables": [t["first_page"] for t in report["tables"] if not t["continued"]]}

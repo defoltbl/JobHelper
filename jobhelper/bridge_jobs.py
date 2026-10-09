@@ -217,6 +217,27 @@ class JobSlots:
             saved["note"] = "Saved. " + tried["msg"] + " The first email scan will show whether it works."
         return saved
 
+    @Slot(int)
+    def testMailbox(self, box):
+        """Sign in to a saved mailbox once, to learn whether it can still be read (an app password may have
+        been cancelled). In the background; the answer arrives as emailTested: {box, ok, msg}."""
+        def work():
+            from . import email_client
+            user, password = (config.IMAP_USER, config.IMAP_PASSWORD) if box == 1 else (config.IMAP_USER_2, config.IMAP_PASSWORD_2)
+            if box not in (1, 2) or not user or not password:
+                result = {"ok": False, "msg": "That mailbox is not connected yet."}
+            else:
+                try:
+                    tried = email_client.try_login(user, password, host=config.imap_host(box))
+                    result = {"ok": tried.get("ok") is True,
+                              "msg": f"Signed in to {user}: the mailbox can be read." if tried.get("ok") is True else tried.get("msg", "It did not work.")}
+                except Exception as e:  # noqa: BLE001 - the card must always get an answer
+                    trouble.note("trying a saved mailbox", e)
+                    result = {"ok": False, "msg": "The mailbox could not be tried."}
+            result["box"] = box
+            self._post("emailTested", result)
+        threading.Thread(target=work, daemon=True).start()
+
     @Slot(result="QVariantMap")
     def removeEmail2(self):
         try:

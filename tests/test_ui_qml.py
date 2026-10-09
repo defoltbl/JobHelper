@@ -3018,3 +3018,67 @@ def test_the_account_card_shows_what_changed_in_a_watched_file(ui, monkeypatch):
     ui.wait(700)
     assert ui.js("welcome.changes.length") == 0, "put away when the card closes"
     assert ui.warnings == []
+
+
+def test_options_take_a_salary_of_its_own_for_a_kind_of_role(ui):
+    import json
+    dialog = ui.find("optDialog")
+    start = ui.bridge.options()
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    role, amount, err = ui.find("payRole"), ui.find("payAmount"), ui.find("payErr")
+    for typed, value, part in (("", 40000, "kind of role in words"), ("7", 40000, "kind of role in words"), ("поддержка", 40000, "in English"),
+                               ("support", 0, "a number above 0")):
+        role.setProperty("text", typed); amount.setProperty("value", value)
+        ui.js("optDialog.addPay()", dialog)
+        assert part in err.property("text") and ui.js("payModel.count", dialog) == 0, typed
+    role.setProperty("text", " support "); amount.setProperty("value", 42000)
+    ui.js("optDialog.addPay()", dialog)
+    assert ui.js("payModel.count", dialog) == 1 and err.property("visible") is False and role.property("text") == ""
+    role.setProperty("text", "Support"); amount.setProperty("value", 50000)
+    ui.js("optDialog.addPay()", dialog)
+    assert "already in the list" in err.property("text") and ui.js("payModel.count", dialog) == 1
+    got = json.loads(ui.js("JSON.stringify(optDialog.collect().options)", dialog))
+    assert got["salary_by_role"] == [{"role": "support", "amount": 42000}]
+    assert ui.bridge.saveOptions(got)["ok"] is True
+    ui.js("confirmClose = true; close()", dialog)
+    ui.wait(350)
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    assert ui.js("payModel.count", dialog) == 1 and ui.js("payModel.get(0).role", dialog) == "support"      # loaded again
+    chips = {t.property("text") for t in ui.seen("payChips") if isinstance(t.property("text"), str)}
+    assert any(t.startswith("support · 42 000 ") for t in chips)
+    ui.js("payModel.remove(0); confirmClose = true; close()", dialog)
+    ui.wait(350)
+    assert ui.bridge.saveOptions({**ui.bridge.options(), "salary_by_role": start.get("salary_by_role", [])})["ok"] is True
+    ui.js("optsData = bridge.options()")
+    assert ui.warnings == []
+
+
+def test_the_account_card_tries_the_saved_mailboxes(ui, monkeypatch):
+    from jobhelper import email_client
+    monkeypatch.setattr(config, "IMAP_USER", "me@gmail.com")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "abcdabcdabcdabcd")
+    monkeypatch.setattr(config, "IMAP_USER_2", "two@seznam.cz")
+    monkeypatch.setattr(config, "IMAP_PASSWORD_2", "secret")
+    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0, host="":
+                        {"ok": True, "msg": ""} if "gmail" in user else {"ok": False, "msg": "The mail server refused this address and password."})
+    welcome = ui.find("welcome")
+    ui.js("welcome.openCard()")
+    ui.win.setProperty("connData", {**READY, "email": True, "email2": True, "email2_addr": "two@seznam.cz"})
+    ui.js("welcome.testMail()")
+    assert welcome.property("testBusy") is True and ui.find("mailTest").property("text") == "Testing…"
+    ui.js("welcome.testMail()")                                     # a second press while it is testing does nothing
+    for _ in range(200):
+        ui.wait(20)
+        if not welcome.property("testBusy"):
+            break
+    note = welcome.property("testNote")
+    assert "Signed in to me@gmail.com" in note and "refused" in note and welcome.property("testBad") is True
+    assert "secret" not in note and "abcdabcd" not in note
+    ui.win.setProperty("connData", dict(READY))
+    ui.js("welcome.finish()")
+    ui.wait(700)
+    assert welcome.property("testNote") == "" and ui.warnings == []

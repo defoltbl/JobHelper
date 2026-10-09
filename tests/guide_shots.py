@@ -147,6 +147,13 @@ def test_guide_shots(ui, monkeypatch):
     monkeypatch.setattr(ui_api.Api, "letter_for_edit", lambda self, job_id: {
         "ok": True, "id": job_id, "company": "Northwind Systems", "title": "Junior Python Developer", "paragraphs": list(letter),
         "title_line": "Junior Python Developer", "date_text": TODAY.strftime("%d %B %Y"), "min_words": 180, "max_words": 320})
+    monkeypatch.setattr(ui_api.Api, "usage_overview", lambda self: {"calls": 214, "cost": 9.86, "kinds": [
+        {"name": "Scoring jobs and writing letters", "calls": 121, "cost": 6.42}, {"name": "Adapting CVs", "calls": 38, "cost": 2.31},
+        {"name": "Reading replies", "calls": 41, "cost": 0.74}, {"name": "Interview preparation", "calls": 3, "cost": 0.27},
+        {"name": "Form answers", "calls": 4, "cost": 0.09}, {"name": "Asking how much is left", "calls": 7, "cost": 0.03}]})
+    monkeypatch.setattr(ui_api.Api, "trouble_log", lambda self, most=25: {"total": 2, "file": "app_trouble.log", "lines": [
+        TODAY.strftime("%Y-%m-%d") + " 09:14  reading one posting again: the page did not answer in time",
+        TODAY.strftime("%Y-%m-%d") + " 09:02  playing the finished sound: no sound device"]})
     monkeypatch.setattr(ui_api.Api, "cv_compare", lambda self, job_id: {
         "ok": True, "company": "Northwind Systems", "title": "Junior Python Developer", "file": "AlexNovak_CV_NorthwindSystems.docx", "older_master": False,
         "rows": [{"state": "changed", "section": "PROFILE",
@@ -316,6 +323,8 @@ def test_guide_shots(ui, monkeypatch):
         ui.wait(350)
         ui.js('responseDialog.show("<0@example.com>")')
         shot("31_one_reply")
+        ui.js("responseDialog.startPicking()")
+        shot("34_file_reply")
         ui.js("responseDialog.close()")
         ui.wait(350)
         ui.js('openView("ana")')
@@ -357,6 +366,9 @@ def test_guide_shots(ui, monkeypatch):
         ui.wait(350)
         ui.js("helpDialog.open()")
         shot("23_help")
+        ui.js('helpDialog.tab = "use"')
+        shot("35_help_usage")
+        ui.js('helpDialog.tab = "how"')
         ui.js("helpDialog.close()")
         ui.wait(350)
         ui.js("win.dark = false")

@@ -19,6 +19,16 @@ Item {
     property string hostDraft: ""         // the IMAP server, typed for a provider the app does not know
     // the server is asked for only when the address does not tell it (its own flag: a field's `visible` also depends on what is around it)
     readonly property bool needsServer: win.isEmail(emailDraft) && bridge.mailServer(emailDraft, "").known !== true
+    property bool testBusy: false         // the saved mailboxes are being tried
+    property int testLeft: 0
+    property string testNote: ""
+    property bool testBad: false
+    function testMail() {
+        if (testBusy) return;
+        testNote = ""; testBad = false; testBusy = true; testLeft = connData.email2 === true ? 2 : 1;
+        bridge.testMailbox(1);
+        if (connData.email2 === true) bridge.testMailbox(2);
+    }
     property var changes: []              // what changed in each watched file, while the person looks at it
     property string keyText: ""           // the recovery key while it is shown; cleared when hidden, on a timer, and when the card closes
     property string keyErr: ""
@@ -36,7 +46,7 @@ Item {
         if (r && r.ok) { restoreErr = ""; bridge.checkConnections(); win.reloadAll(); }
         else restoreErr = (r && r.msg) || "The key could not be used.";
     }
-    onShownChanged: if (!shown) { changes = []; keyText = ""; keyErr = ""; keyCopied = false; restoreErr = ""; }
+    onShownChanged: if (!shown) { testNote = ""; testBad = false; changes = []; keyText = ""; keyErr = ""; keyCopied = false; restoreErr = ""; }
     Timer { interval: 60000; running: welcome.keyText !== ""; onTriggered: { welcome.keyText = ""; welcome.keyCopied = false; } }
     property bool emailBusy: false        // the mailbox is being tried with the address and password just entered
     property string emailNote: ""         // saved, but something to know (the server could not be reached)
@@ -82,6 +92,11 @@ Item {
     Connections { target: win; function onConnCheckedChanged() { welcome.advance(); } }
     Connections { target: bridge
         function onConnectionsReady(info) { if (info.claude === true) welcome.waitingLogin = false; }
+        function onEmailTested(r) {
+            welcome.testLeft -= 1; welcome.testBad = welcome.testBad || !(r && r.ok);
+            welcome.testNote = (welcome.testNote !== "" ? welcome.testNote + " " : "") + ((r && r.msg) || "");
+            if (welcome.testLeft <= 0) welcome.testBusy = false;
+        }
         function onEmailSaved(r) {
             welcome.emailBusy = false; welcome.pwDraft = "";
             if (r && r.ok) { welcome.editEmail = false; welcome.emailNote = r.note || ""; bridge.checkConnections(); }
@@ -220,11 +235,16 @@ Item {
                     ok: connData.email === true
                     sub: connData.email === true ? ((connData.email_addr || "") + " · read-only")
                                                  : "Optional. Reads replies from your mailbox, never sends or deletes."
+                    SmallButton { objectName: "mailTest"; visible: !welcome.editEmail && connData.email === true; enabled: !welcome.testBusy
+                        text: welcome.testBusy ? "Testing…" : "Test"; onClicked: welcome.testMail() }
                     SmallButton { visible: !welcome.editEmail; text: connData.email === true ? "Change" : "Connect"
                         onClicked: { welcome.editBox = 1; welcome.emailDraft = connData.email_addr || ""; welcome.hostDraft = connData.email_host || "";
                                      welcome.pwDraft = ""; welcome.emailErr = "";
                                      welcome.editEmail = true; wEmail.forceActiveFocus(); } }
                 }
+                Text { objectName: "testNote"; visible: welcome.testNote !== "" && !welcome.editEmail
+                    Layout.fillWidth: true; Layout.leftMargin: 38; wrapMode: Text.WordWrap; font.pixelSize: 11; font.bold: welcome.testBad
+                    color: welcome.testBad ? theme.crit : theme.good; text: welcome.testNote }
                 Text { objectName: "emailNote"; visible: welcome.emailNote !== "" && !welcome.editEmail
                     Layout.fillWidth: true; Layout.leftMargin: 38; wrapMode: Text.WordWrap
                     color: theme.warn; font.pixelSize: 11; font.bold: true; text: welcome.emailNote }
