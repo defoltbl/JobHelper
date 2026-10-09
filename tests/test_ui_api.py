@@ -636,3 +636,13 @@ def test_options_can_say_which_professions_are_taken_as_yours(api, monkeypatch):
         raise OSError("no profile")
     monkeypatch.setattr(agent1_cv, "load_profile", broken)
     assert api.profession_fields(["sales manager"]) == {"fields": ["sales and marketing"], "from_cv": False}
+
+
+def test_what_a_score_rests_on_is_said_only_for_a_new_job_with_a_score(api):
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="lead", title="Dev", company="A", match_score=40, description="Short summary."),
+                     store.new_job(id="unscored", title="Dev", company="B", description="Short summary."),
+                     store.new_job(id="app", title="Dev", company="C", match_score=64, status="waiting", description="Short summary."),
+                     store.new_job(id="rejected", title="Dev", company="D", match_score=64, status="rejected")])
+    assert [api.job_detail(i)["basis"] for i in ("lead", "unscored", "app", "rejected")] == ["summary", "", "", ""]
+    assert api.job_detail("unscored")["can_paste_text"] is True and api.job_detail("app")["can_paste_text"] is False

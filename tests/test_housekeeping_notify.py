@@ -291,7 +291,11 @@ def test_old_moved_documents_are_counted_and_removed_only_by_age(isolate_data):
     refused = api.tidy_shelf(30, 5)                                                         # the question named another number
     assert refused["ok"] is False and refused["changed"] is True and "it is now 2" in refused["msg"] and month.exists()
     assert api.tidy_shelf(100, 1) == {"ok": True, "removed": 1, "bytes": 2048} and not year.exists() and month.exists() and fresh.exists()
+    trash = housekeeping.trash_dir(year)
+    assert (trash / year.name).read_bytes() == b"x" * 2048                                  # moved to the Trash, not deleted
+    (trash / month.name).write_bytes(b"an older file of the same name")                     # a name already in the Trash is not overwritten
     assert api.tidy_shelf(30) == {"ok": True, "removed": 1, "bytes": 2048} and not month.exists() and fresh.exists()
+    assert (trash / month.name).read_bytes() == b"an older file of the same name" and len(list(trash.iterdir())) == 3
     assert api.tidy_shelf(7)["ok"] is False and fresh.exists()                               # nothing that young is ever removed
 
 
@@ -335,3 +339,34 @@ def test_a_job_whose_copies_were_removed_no_longer_offers_to_put_them_back(isola
     assert api.tidy_shelf(30, 2)["removed"] == 2
     assert "shelved" not in store.find(store.load_jobs(), "old") and api.job_detail("old")["can_unshelve"] is False
     assert api.job_detail("new")["can_unshelve"] is True and api.unshelve_docs("new")["ok"] is True      # the recent one is untouched
+
+
+def test_without_a_trash_nothing_is_removed(isolate_data, monkeypatch):
+    config.ensure_dirs()
+    old = _shelf_copy("L_old", 90)
+    monkeypatch.setattr(housekeeping, "trash_dir", lambda path: None)
+    assert housekeeping.move_to_trash(old) is False
+    got = ui_api.Api().tidy_shelf(30, 1)
+    assert got == {"ok": False, "msg": "The Trash of this disk cannot be used, so nothing was removed."} and old.exists()
+
+    def refuses(src, dst):
+        raise PermissionError("not allowed")
+    monkeypatch.setattr(housekeeping, "trash_dir", lambda path: old.parent.parent)
+    monkeypatch.setattr(housekeeping.os, "rename", refuses)
+    assert ui_api.Api().tidy_shelf(30, 1)["msg"] == "The old copies could not be moved to the Trash." and old.exists()
+
+
+def test_the_trash_is_the_one_of_the_file_s_own_disk(tmp_path, monkeypatch):
+    monkeypatch.undo()                                                # the real function; every path below is inside tmp_path
+    home, other = tmp_path / "home", tmp_path / "disk"
+    (home / ".Trash").mkdir(parents=True); (home / "data").mkdir(); (other / "project" / "data").mkdir(parents=True); (other / ".Trashes").mkdir()
+    a, b = home / "data" / "a.enc", other / "project" / "data" / "b.enc"
+    a.write_bytes(b"a"); b.write_bytes(b"b")
+    monkeypatch.setattr(housekeeping.Path, "home", classmethod(lambda cls: home))
+    inside = str(other.resolve())
+    monkeypatch.setattr(housekeeping, "_disk", lambda p: 2 if str(p).startswith(inside) else 1)      # "disk" is another disk
+    monkeypatch.setattr(housekeeping.os, "getuid", lambda: 501)
+    assert housekeeping.trash_dir(a) == home / ".Trash"
+    assert housekeeping.trash_dir(b) == other.resolve() / ".Trashes" / "501" and (other / ".Trashes" / "501").is_dir()     # made on first use
+    (other / ".Trashes" / "501").rmdir(); (other / ".Trashes").rmdir()
+    assert housekeeping.trash_dir(b) is None                                                                    # a disk without a Trash

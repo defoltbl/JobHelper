@@ -30,7 +30,7 @@ Button {
         opacity: pb.enabled ? 1 : 0.5
     }
     property string glyph: ""            // "mail" draws an envelope before the label
-    readonly property color fg: primaryStyle ? "#ffffff" : (tinted ? tint : theme.ink)
+    readonly property color fg: primaryStyle ? theme.onAccent : (tinted ? tint : theme.ink)
     contentItem: Item {
         implicitWidth: btnRow.implicitWidth; implicitHeight: btnRow.implicitHeight
         Row {

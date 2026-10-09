@@ -4,13 +4,15 @@
 * Side folders (earlier letter versions, documents of dismissed jobs): the
   newest files are kept.
 * Documents moved to the backup because their job fell below your limit: never
-  removed here. They can be put back, so only you remove them (Options), by age.
+  removed here. They can be put back, so only you remove them (Options), by age,
+  and then they go to the Trash rather than being deleted.
 * Log files of the weekly run: only their last lines are kept.
 
 Run at every start. Nothing here touches live data, only backups and logs.
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from datetime import datetime, timedelta
@@ -92,20 +94,61 @@ def shelf_files(older_than_days: int | None = None) -> list[Path]:
     return sorted(files)
 
 
+def _disk(path: Path) -> int:
+    return os.stat(path).st_dev
+
+
+def trash_dir(path: Path) -> Path | None:
+    """The Trash of the disk a file is on (None if that disk has none the app can use).
+    On the disk of your home folder that is ~/.Trash; on another disk, its .Trashes/<your id>."""
+    try:
+        path = Path(path).resolve()
+        home = Path.home()
+        if _disk(path) == _disk(home):
+            trash = home / ".Trash"
+        else:
+            top = path if path.is_dir() else path.parent
+            while top.parent != top and _disk(top.parent) == _disk(top):
+                top = top.parent
+            trash = top / ".Trashes" / str(os.getuid())
+            if not trash.exists() and trash.parent.is_dir():
+                trash.mkdir(mode=0o700, exist_ok=True)
+        return trash if trash.is_dir() and os.access(trash, os.W_OK) else None
+    except OSError:
+        return None
+
+
+def move_to_trash(path: Path) -> bool:
+    """Move one file into the Trash of its disk (never deletes). False if that could not be done."""
+    path = Path(path)
+    trash = trash_dir(path)
+    if trash is None or not path.is_file():
+        return False
+    dest, n = trash / path.name, 1
+    while dest.exists():
+        n += 1
+        dest = trash / f"{path.stem} {n}{path.suffix}"
+    try:
+        os.rename(path, dest)
+    except OSError:
+        return False
+    return True
+
+
 def tidy_shelf(days: int) -> dict:
-    """Delete, for good, the moved documents older than `days` (never fewer than SHELF_MIN_DAYS).
-    {removed: [names], bytes}"""
+    """Move the moved documents older than `days` to the Trash (never fewer than SHELF_MIN_DAYS;
+    nothing is deleted here). {removed: [names], bytes, no_trash: bool}"""
     days = max(int(days), SHELF_MIN_DAYS)
-    removed, size = [], 0
-    for path in shelf_files(days):
+    removed, size, old = [], 0, shelf_files(days)
+    for path in old:
         try:
             n = path.stat().st_size
-            path.unlink()
         except OSError:
             continue
-        removed.append(path.name)
-        size += n
-    return {"removed": removed, "bytes": size}
+        if move_to_trash(path):
+            removed.append(path.name)
+            size += n
+    return {"removed": removed, "bytes": size, "no_trash": bool(old) and not removed and trash_dir(old[0]) is None}
 
 
 def trim_logs(lines: int = LOG_LINES) -> int:

@@ -2135,7 +2135,7 @@ def test_old_moved_documents_are_removed_from_options_after_asking(ui):
     ui.js("optDialog.tidyShelf()")
     assert ui.js("optDialog.confirmTidy") is False and old_two.exists()               # nothing to ask about
     ui.js("shelfSpin.value = 60; optDialog.tidyShelf()")                              # first press only asks
-    assert button.property("text") == "Yes, delete 1" and "This cannot be undone" in note.property("text") and old_two.exists()
+    assert button.property("text") == "Yes, move 1 to the Trash" and "The app can then no longer put them back" in note.property("text") and old_two.exists()
     assert ui.find("tidyCancel").property("visible") is True
     ui.js("shelfSpin.value = 30")                                                     # the age changed: the question is taken back
     assert ui.js("optDialog.confirmTidy") is False and button.property("text") == "Remove"
@@ -2150,9 +2150,10 @@ def test_old_moved_documents_are_removed_from_options_after_asking(ui):
     ui.js("optDialog.tidyShelf()")
     copy("three", 50)                                                                 # the folder changed after the question
     ui.js("optDialog.tidyShelf()")
-    assert "The number changed: it is now 3" in note.property("text") and button.property("text") == "Yes, delete 3" and old_one.exists()
+    assert "The number changed: it is now 3" in note.property("text") and button.property("text") == "Yes, move 3 to the Trash" and old_one.exists()
     ui.js("optDialog.tidyShelf()")
-    assert note.property("text") == "Deleted 3 old copies (12 KB)." and ui.js("optDialog.shelfBad") is False
+    assert note.property("text") == "Moved 3 old copies to the Trash (12 KB)." and ui.js("optDialog.shelfBad") is False
+    assert (housekeeping.trash_dir(old_one) / old_one.name).exists()
     assert not old_one.exists() and not old_two.exists() and fresh.exists() and button.property("enabled") is False
     assert "wrapMode: Text.WordWrap" in qml_source().split('objectName: "shelfNote"')[1][:200]
     ui.js("close()", dialog)
@@ -2222,5 +2223,26 @@ def test_light_theme_text_colours_read_on_light_surfaces():
     for text in ("ink", "soft", "faint", "good", "warn", "crit"):
         for ground in ("winbg", "surface", "surface2"):
             assert _contrast(light[text], light[ground]) >= 4.5, (text, ground, round(_contrast(light[text], light[ground]), 2))
-    assert _contrast("#ffffff", light["accent"]) >= 4.5                      # the white label on a main button
+    assert _contrast(light["onAccent"], light["accent"]) >= 4.5 and _contrast(light["onAccent"], light["good"]) >= 4.5   # the label on a main button, the tick
     assert _contrast(light["warn"], light["warnbg"]) >= 4.5 and _contrast(light["good"], light["goodbg"]) >= 4.5 and _contrast(light["crit"], light["critbg"]) >= 4.5
+
+
+def test_dark_theme_text_colours_read_on_dark_surfaces():
+    import re
+    main = (ROOT / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
+    dark = {name: value for name, value in re.findall(r'property color (\w+): win\.dark \? "(#[0-9a-fA-F]{6})" : "#[0-9a-fA-F]{6}"', main)}
+    assert {"winbg", "surface", "surface2", "ink", "soft", "faint", "accent", "onAccent", "good", "warn", "crit"} <= set(dark)
+    for text in ("ink", "soft", "faint", "good", "warn", "crit", "accent"):
+        for ground in ("winbg", "surface", "surface2"):
+            assert _contrast(dark[text], dark[ground]) >= 4.5, (text, ground, round(_contrast(dark[text], dark[ground]), 2))
+    assert _contrast(dark["onAccent"], dark["accent"]) >= 4.5 and _contrast(dark["onAccent"], dark["good"]) >= 4.5   # the label on a main button, the tick
+    assert _contrast(dark["warn"], dark["warnbg"]) >= 4.5 and _contrast(dark["good"], dark["goodbg"]) >= 4.5 and _contrast(dark["crit"], dark["critbg"]) >= 4.5
+
+
+def test_no_label_on_the_accent_is_fixed_white():
+    """A main button, a picked chip and the tick take their label colour from the theme: white suits only the light theme."""
+    for name in ("SmallButton", "PillButton", "TableDialog", "HelpDialog", "OptionsDialog", "DetailDialog", "FormAnswersDialog", "PrepDialog",
+                 "PrepEditDialog", "LetterDialog", "CompareDialog"):
+        text = (ROOT / "ui_qt" / f"{name}.qml").read_text(encoding="utf-8")
+        assert '"#ffffff"' not in text and '"white"' not in text, name
+    assert "theme.onAccent" in (ROOT / "ui_qt" / "SmallButton.qml").read_text(encoding="utf-8")

@@ -236,7 +236,8 @@ class Api:
             "score": j.get("match_score"), "tier": j.get("match_tier", ""),
             "score_before": self._score_before(j),
             "can_rescore": j["status"] in store.LEAD_STATUSES and j.get("match_score") is not None,
-            "basis": agent3_letters.text_basis(j),
+            # what the score rests on matters while you decide whether to apply; an application is past that
+            "basis": agent3_letters.text_basis(j) if j["status"] in store.LEAD_STATUSES and j.get("match_score") is not None else "",
             "can_paste_text": j["status"] in store.LEAD_STATUSES and agent3_letters.text_basis(j) != "",
             "docs_stale": self._stale_docs(j), "threshold": self._threshold(),
             "can_unshelve": bool(self._shelved(j)), "shelved_when": (self._shelved(j) or {}).get("when", ""),
@@ -556,9 +557,9 @@ class Api:
                 "old": len(old), "old_bytes": sum(p.stat().st_size for p in old), "days": days}
 
     def tidy_shelf(self, days=None, expected=-1):
-        """Delete the moved documents older than `days` for good. `expected` is the count the
-        question named; if it is no longer right nothing is deleted. Jobs whose copies are gone
-        lose their note, so no window offers to put back what no longer exists."""
+        """Move the moved documents older than `days` to the Trash. `expected` is the count the
+        question named; if it is no longer right nothing is moved. Jobs whose copies are gone
+        lose their note, so no window offers to put back what is no longer in the backup."""
         state = self.shelf_status(days)
         if not state.get("ok"):
             return state
@@ -578,7 +579,8 @@ class Api:
             if touched:
                 store.save_jobs(jobs)
         if not gone:
-            return {"ok": False, "msg": "The old copies could not be deleted."}
+            return {"ok": False, "msg": "The Trash of this disk cannot be used, so nothing was removed." if done.get("no_trash")
+                    else "The old copies could not be moved to the Trash."}
         return {"ok": True, "removed": len(gone), "bytes": done["bytes"]}
 
     @_guarded(dict)

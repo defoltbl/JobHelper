@@ -136,15 +136,16 @@ Dialog {
             readShelf();
             if (shelfBad || (shelf.old || 0) === 0) return;
             confirmTidy = true;
-            shelfNote = "Delete " + shelf.old + (shelf.old === 1 ? " moved document" : " moved documents") + " older than " + shelf.days
-                        + " days (" + megabytes(shelf.old_bytes) + ")? This cannot be undone: those can no longer be put back.";
+            shelfNote = "Move " + shelf.old + (shelf.old === 1 ? " document" : " documents") + " older than " + shelf.days
+                        + " days (" + megabytes(shelf.old_bytes) + ") from the backup to the Trash? The app can then no longer put them back. "
+                        + "Empty the Trash to free the space.";
             return;
         }
         confirmTidy = false;
         var r = bridge.tidyShelf(shelfSpin.value, shelf.old || 0);
         shelfBad = !(r && r.ok);
-        if (r && r.ok) { shelfDone = true; shelfNote = "Deleted " + r.removed + (r.removed === 1 ? " old copy" : " old copies") + " (" + megabytes(r.bytes) + ")."; readShelf(); shelfBad = false; }
-        else { shelfNote = (r && r.msg) || "The old copies could not be deleted."; var keep = shelfNote; readShelf(); shelfBad = true; shelfNote = keep;
+        if (r && r.ok) { shelfDone = true; shelfNote = "Moved " + r.removed + (r.removed === 1 ? " old copy" : " old copies") + " to the Trash (" + megabytes(r.bytes) + ")."; readShelf(); shelfBad = false; }
+        else { shelfNote = (r && r.msg) || "The old copies could not be moved to the Trash."; var keep = shelfNote; readShelf(); shelfBad = true; shelfNote = keep;
                if (r && r.changed && (shelf.old || 0) > 0) confirmTidy = true; }
     }
     function tryClose() {                 // the ✕ and the Esc key: ask once before throwing changes away
@@ -307,7 +308,7 @@ Dialog {
                                         border.width: 1; border.color: picked ? win.clearOf(theme.line) : readOn ? theme.accent : theme.line
                                         Behavior on color { ColorAnimation { duration: 140 } }
                                         Text { id: fcT; anchors.centerIn: parent; text: modelData; font.pixelSize: 11; font.bold: parent.picked || parent.readOn
-                                            color: parent.picked ? "#ffffff" : parent.readOn ? theme.accent : theme.soft }
+                                            color: parent.picked ? theme.onAccent : parent.readOn ? theme.accent : theme.soft }
                                         MouseArea { id: fcMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                             onClicked: optDialog.toggleField(modelData, fieldsBox.read.all) } } }
                                 SmallButton { objectName: "fieldsAuto"; visible: fieldsBox.byHand; implicitHeight: 24; text: "Let the app decide"
@@ -475,13 +476,13 @@ Dialog {
                             ThemedSpin { id: keepSpin; objectName: "keepSpin"; from: 0; to: 200; value: 10 } }
                         Sep {}
                         // letters and CVs moved out of the way because their job fell below your limit: only you remove them
-                        SRow { label: "Moved documents older than"; hint: "days · deletes those copies for good"
+                        SRow { label: "Moved documents older than"; hint: "days · moves those copies to the Trash"
                             RowLayout { spacing: 8
                                 ThemedSpin { id: shelfSpin; objectName: "shelfSpin"; from: 7; to: 3650; value: 30
                                     onValueChanged: { optDialog.confirmTidy = false; optDialog.shelfNote = ""; optDialog.readShelf(); } }
                                 SmallButton { objectName: "tidyShelf"; primaryStyle: optDialog.confirmTidy
                                     enabled: (optDialog.shelf.old || 0) > 0 || optDialog.confirmTidy
-                                    text: optDialog.confirmTidy ? "Yes, delete " + optDialog.shelf.old : "Remove"
+                                    text: optDialog.confirmTidy ? "Yes, move " + optDialog.shelf.old + " to the Trash" : "Remove"
                                     onClicked: optDialog.tidyShelf() }
                                 SmallButton { objectName: "tidyCancel"; visible: optDialog.confirmTidy; text: "Cancel"
                                     onClicked: { optDialog.confirmTidy = false; optDialog.shelfNote = ""; } } } }

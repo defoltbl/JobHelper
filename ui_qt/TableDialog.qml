@@ -174,7 +174,7 @@ Dialog {
                         border.width: 1; border.color: on ? win.clearOf(theme.line) : theme.line
                         Behavior on color { ColorAnimation { duration: 140 } }
                         Text { id: gT; anchors.centerIn: parent; font.pixelSize: 11; font.bold: parent.on
-                            color: parent.on ? "#ffffff" : theme.soft
+                            color: parent.on ? theme.onAccent : theme.soft
                             text: (modelData.all ? "all" : modelData.key.replace(/_/g, " ")) + "  " + modelData.n }
                         MouseArea { id: gMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                             onClicked: { tableDialog.groupFilter = modelData.key; tableDialog.apply(); listView.positionViewAtBeginning(); } }

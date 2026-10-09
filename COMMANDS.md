@@ -196,8 +196,8 @@ Inside the window:
   **Put them back** undoes it: in New Jobs for the last batch (offered for 7 days), in a job's
   window for that job. The files return to their folders and leave the backup.
   Moved documents are never cleaned up by "Keep backups". **Options → Notifications and storage →
-  Moved documents older than … days → Remove** deletes the old ones for good, after asking with
-  the count (never copies younger than 7 days).
+  Moved documents older than … days → Remove** moves the old ones to the Trash, after asking with
+  the count (never copies younger than 7 days). Empty the Trash to free the space.
 - **Required-language check** — after scoring, the app itself looks for a required language your CV
   does not show at a working level (basic, A1 and A2 do not count) and lowers the score to 25,
   with the reason in the job window. A language named as a plus is ignored.

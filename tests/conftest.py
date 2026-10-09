@@ -58,6 +58,9 @@ def safe_environment(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(ui_api.Api, "_reveal", lambda self, target: None)  # nor a real Finder window
     from jobhelper import agent2_search
     monkeypatch.setattr(agent2_search, "refetch_description", lambda job: "")     # never read a real job board
+    from jobhelper import housekeeping
+    trash = tmp_path_factory.mktemp("trash")
+    monkeypatch.setattr(housekeeping, "trash_dir", lambda path: trash)             # never put anything in the real Trash
     monkeypatch.setattr(ui_api, "_claude_auth_status",        # never ask the real Claude CLI who is signed in
                         lambda: types.SimpleNamespace(stdout="{}", returncode=1))
     monkeypatch.setattr(config, "USAGE_JSON", tmp_path_factory.mktemp("usage") / "usage.json")

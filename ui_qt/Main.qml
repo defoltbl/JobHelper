@@ -248,8 +248,8 @@ ApplicationWindow {
     }
 
     // ── palette ──
-    // Light values are chosen so that small text reads against the light surfaces (contrast 4.5:1 or more
-    // for ink, soft, faint, good, warn and crit, and for white text on the accent); see tests/test_ui_qml.py.
+    // Both sets of values are chosen so that small text reads against its surfaces (contrast 4.5:1 or more
+    // for ink, soft, faint, good, warn and crit, and for a label on the accent); see tests/test_ui_qml.py.
     QtObject {
         id: theme
         property color winbg: win.dark ? "#121922" : "#f3f6f9"
@@ -258,9 +258,12 @@ ApplicationWindow {
         property color inset: win.dark ? "#141c25" : "#eceff3"
         property color ink: win.dark ? "#e7eef5" : "#182230"
         property color soft: win.dark ? "#9fb0c1" : "#5a6675"
-        property color faint: win.dark ? "#6f7f90" : "#657181"
+        property color faint: win.dark ? "#8493a3" : "#657181"
         property color line: win.dark ? "#2a3644" : "#d6dde5"
         property color accent: win.dark ? "#f0a84a" : "#b45f06"
+        // a label on the accent (a main button, a picked chip) or on the green tick: the dark theme's
+        // orange and green are light colours, so the label on them is dark there
+        property color onAccent: win.dark ? "#1b1305" : "#ffffff"
         property color belt: win.dark ? "#2a3643" : "#c6cfd9"
         property color beltDark: win.dark ? "#1d2731" : "#aeb9c6"
         property color steel: win.dark ? "#8695a6" : "#6b7787"
@@ -380,7 +383,7 @@ ApplicationWindow {
                                 Rectangle { anchors.fill: parent; radius: 17
                                     gradient: Gradient { GradientStop { position: 0; color: theme.accent }
                                                          GradientStop { position: 1; color: Qt.darker(theme.accent, 1.35) } }
-                                    Text { anchors.centerIn: parent; color: "#ffffff"; font.pixelSize: 15; font.bold: true
+                                    Text { anchors.centerIn: parent; color: theme.onAccent; font.pixelSize: 15; font.bold: true
                                         text: connData.claude === true && connData.claude_email ? connData.claude_email.charAt(0).toUpperCase() : "?" } }
                                 Rectangle { width: 12; height: 12; radius: 6; x: 24; y: 24
                                     color: !win.connChecked ? theme.steel : (chip.allOk ? theme.good : theme.crit)

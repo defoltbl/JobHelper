@@ -296,7 +296,7 @@ Dialog {
                             readonly property bool ticked: (detailDialog.job.apply_steps || []).indexOf(modelData.key) >= 0
                             Rectangle { implicitWidth: 20; implicitHeight: 20; radius: 10
                                 color: parent.ticked ? theme.good : "transparent"; border.width: 1; border.color: parent.ticked ? theme.good : theme.line
-                                Text { anchors.centerIn: parent; text: parent.parent.ticked ? "✓" : ""; color: "#ffffff"; font.pixelSize: 12; font.bold: true } }
+                                Text { anchors.centerIn: parent; text: parent.parent.ticked ? "✓" : ""; color: theme.onAccent; font.pixelSize: 12; font.bold: true } }
                             Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 13
                                 color: parent.ticked ? theme.soft : theme.ink; text: modelData.label }
                             SmallButton { visible: modelData.key === "cv" || modelData.key === "letter"
@@ -481,7 +481,7 @@ Dialog {
                                 color: on ? theme.accent : (ekMa.containsMouse ? theme.inset : "transparent")
                                 border.width: 1; border.color: on ? "transparent" : theme.line
                                 Text { id: ekT; anchors.centerIn: parent; text: modelData; font.pixelSize: 11; font.bold: parent.on
-                                    color: parent.on ? "#ffffff" : theme.soft }
+                                    color: parent.on ? theme.onAccent : theme.soft }
                                 MouseArea { id: ekMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                     onClicked: detailDialog.eventKind = modelData } } } }
                     RowLayout { Layout.fillWidth: true; spacing: 6

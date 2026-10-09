@@ -5,6 +5,9 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 9 October 2026
 
+- **Dark theme is easier to read too**: the label on the orange buttons, picked chips and the green tick is now dark in the dark theme (white on light orange was hard to read), and hint text is a little brighter.
+- **Old moved documents go to the Trash**: "Remove" in Options no longer deletes them; it moves them to the Trash of their disk, and does nothing if that disk has no Trash.
+- **Fixed: "scored from a short summary" on applications**: the tag is only shown on a new job that has a score.
 - **Light theme is easier to read**: hints, warnings, the green and red notes and the orange of the main buttons are darker in the light theme, so small text no longer fades into the background.
 - **Pick your profession yourself**: under "Kinds of role you want" in Options, choose the professions the free first look should treat as yours, or leave it to the app.
 - **Each job that could not be moved or put back is listed** in New Jobs with its own reason, instead of one long line.
