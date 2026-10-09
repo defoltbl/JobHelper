@@ -99,3 +99,27 @@ def test_a_cv_from_another_field_is_compared_like_a_software_one():
     cv = "Accountant. IFRS, VAT, bookkeeping, payroll. Excel. English - C1."
     got = keywords.compare("Bookkeeping and VAT returns under IFRS; QuickBooks and Xero. English.", cv)
     assert got == {"matched": ["Bookkeeping", "VAT", "IFRS", "English"], "missing": ["QuickBooks", "Xero"]}
+
+
+def test_reading_ahead_makes_the_later_question_immediate(monkeypatch):
+    import time
+    rests = []
+    monkeypatch.setattr(time, "sleep", rests.append)
+    keywords._extract.cache_clear()
+    texts = ["We use Python and Docker.", "", "SQL and Excel reporting.", None]
+    assert keywords.read_ahead(texts) == 2                    # empty texts are not read
+    assert len(rests) == 2 and all(0 < r < 0.05 for r in rests), "a short rest after each text, so the window is not starved"
+    before = keywords._extract.cache_info().hits
+    assert keywords.extract("We use Python and Docker.") == ["Python", "Docker"]
+    assert keywords._extract.cache_info().hits == before + 1  # answered from what was read ahead
+    assert keywords.read_ahead([]) == 0
+
+
+def test_the_app_reads_ahead_every_posting_and_the_cv(isolate_data, monkeypatch):
+    from jobhelper import store, ui_api
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", description="Python and SQL"),
+                     store.new_job(id="b", title="QA", company="Borg", description="")])
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Java developer")
+    seen = []
+    monkeypatch.setattr(keywords, "read_ahead", lambda texts, pause=0.004: seen.extend(texts) or len(texts))
+    assert ui_api.Api().read_ahead() == 3 and seen == ["Python and SQL", "", "Java developer"]

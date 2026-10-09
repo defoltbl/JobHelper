@@ -5,6 +5,12 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Fixed: the usage card said "13% left" while Claude was refusing for a used-up limit.** It kept showing the numbers from the last answer. A refusal now fills the limit it names ("session limit" is the **5-hour** one, "weekly limit" the **7-day** one), the card says **0% left** in red with the time it **resets**, and a limit whose reset time has passed is shown as free again. The pause message used to name the wrong limit in this case; it names the right one now.
+- **Last run card: "Same work via API" is the cost of the last run only** (a search or an email scan, and it says which), no longer the total of everything since the first day. **"You paid"** says *your subscription only*.
+- **Fixed: the welcome animation stuttered.** The app was preparing the **Insights** view at the same moment, which held the window up for about half a second. That preparation now waits until the welcome screen is closed and works in small steps, so nothing on screen is held up (measured: 733 ms of hold-ups at start before, 30 ms now).
+- **New icons in the list on the left:** a small **bar chart** for **Analytics** and a **light bulb** for **Insights**, drawn by the app so they are clear in both themes.
+- **Email scan asks Claude about far fewer messages.** Adverts and newsletters used to be sent to Claude when they shared one common word with a company you track ("International", "Praha") or mentioned a brand somewhere in the text. Now the sender or the subject must name the company by its real name, automatic mail from that company needs to talk about an application, and job-board alerts and sign-up mail are left out. On 150 days of real mail: **242 messages instead of 661**, and every one of the 133 filed replies still gets through.
+
 - **The guide as a PDF** (`docs/GUIDE.pdf`, 24 pages): the same text and pictures in one file to read or print.
 
 Found by reading all the code line by line.

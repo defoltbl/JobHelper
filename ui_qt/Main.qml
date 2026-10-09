@@ -132,8 +132,12 @@ ApplicationWindow {
         lastRunData = bridge.lastRun();
         upcomingData = bridge.upcoming();
         bridge.checkConnections();          // answers through onConnectionsReady
-        bridge.warmUp();                    // in the background: makes the first Insights view open at once
+        if (!welcome.shown) bridge.warmUp();   // in the background: makes the first Insights view open at once
     }
+    // Not while the welcome screen is up: preparing Insights is heavy enough to make its animation stutter.
+    Timer { id: warmLater; interval: 900; onTriggered: bridge.warmUp() }
+    Connections { target: welcome
+        function onShownChanged() { if (!welcome.shown) warmLater.restart(); else warmLater.stop(); } }
     // ── input validation helpers ──
     function hasNonLatin(s) {
         return /[぀-ヿ㐀-鿿가-힯Ѐ-ӿͰ-Ͽ؀-ۿ֐-׿฀-๿ऀ-ॿ]/.test(s || "");
@@ -250,7 +254,7 @@ ApplicationWindow {
             win.connData = info;
             // once per launch, and again until it is clean. Its own flag: the splash stops waiting after
             // 6 seconds and sets connChecked itself, and a slow sign-in check must not skip this.
-            if (!win.healthRan || !win.healthData.ok) { win.healthData = bridge.selfCheck(info.claude === true); win.healthRan = true; }
+            if (!win.healthRan || !win.healthData.ok) { win.healthData = info.health ? JSON.parse(info.health) : bridge.selfCheck(info.claude === true); win.healthRan = true; }
             win.connChecked = true;
         }
         function onUsageReady() { win.usageData = bridge.usageInfo(); win.usageBusy = false; }

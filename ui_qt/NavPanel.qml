@@ -53,8 +53,18 @@ Rectangle {
                                 : modelData.k === "app" ? (countsData.applications !== undefined ? countsData.applications : "—")
                                 : (countsData.responses !== undefined ? countsData.responses : "—") }
                     }
-                    Text { visible: modelData.k === "ana" || modelData.k === "ins"; anchors.centerIn: parent
-                        text: modelData.k === "ana" ? "▦" : "✦"; color: theme.soft; font.pixelSize: 13 }
+                    // Analytics: a small bar chart, drawn (a font's symbol for it is not recognisable at this size)
+                    Item { objectName: "navIcon_ana"; visible: modelData.k === "ana"; anchors.centerIn: parent; width: 17; height: 14
+                        Repeater { model: [6, 10, 14]
+                            Rectangle { x: index * 6; width: 4; height: modelData; y: parent.height - height; radius: 1
+                                color: navMouse.containsMouse ? theme.ink : theme.soft } }
+                    }
+                    // Insights: a light bulb, for what the app noticed
+                    Item { objectName: "navIcon_ins"; visible: modelData.k === "ins"; anchors.centerIn: parent; width: 12; height: 16
+                        readonly property color ink: navMouse.containsMouse ? theme.ink : theme.soft
+                        Rectangle { width: 12; height: 12; radius: 6; color: win.clearOf(parent.ink); border.color: parent.ink; border.width: 2 }
+                        Rectangle { x: 4; y: 11; width: 4; height: 2; color: parent.ink }
+                        Rectangle { x: 4; y: 14; width: 4; height: 2; radius: 1; color: parent.ink } }
                     }
                 }
                 MouseArea { id: navMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor

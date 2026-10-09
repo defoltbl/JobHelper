@@ -136,6 +136,24 @@ def _extract(text: str) -> tuple[str, ...]:
     return tuple(name for _pos, name in sorted(hits))
 
 
+def read_ahead(texts: list[str], pause: float = 0.004) -> int:
+    """Read the given texts now so that asking for them later is immediate; returns how many.
+
+    Meant for a background thread while the window is in use: reading one posting
+    is a few hundred searches during which nothing else in the program runs, so
+    there is a short rest after each one. Without it the window's own work has to
+    queue behind thousands of searches and its animations stutter."""
+    import time
+    done = 0
+    for text in texts:
+        if text:
+            _extract(text)
+            done += 1
+            if pause:
+                time.sleep(pause)
+    return done
+
+
 def compare(description: str, cv_text: str) -> dict[str, list[str]]:
     """Split what the posting asks for into what the CV shows and what it does not."""
     wanted = extract(description)

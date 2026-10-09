@@ -13,6 +13,7 @@ the weekly schedule and the usage card.
 """
 from __future__ import annotations
 
+import json
 import queue
 import shutil
 import subprocess
@@ -67,6 +68,7 @@ class Bridge(RunSlots, JobSlots, QObject):
         self._can_resume = False
         self._partial = None                 # jobs of the run in progress, saved when it pauses
         self._outbox: queue.Queue = queue.Queue()
+        self._warming = threading.Lock()     # held while Insights is being prepared in the background
         config.apply_ui_settings()
 
     # ── running state (QML-bindable) ────────────────────────────
@@ -239,6 +241,12 @@ class Bridge(RunSlots, JobSlots, QObject):
                 info = self._api.connections()
             except Exception:  # noqa: BLE001
                 info = {}
+            # The start-up check too: it reads every job, which costs the window a frame or two. As text,
+            # because an answer sent from another thread arrives only when its values are plain ones.
+            try:
+                info["health"] = json.dumps(self._api.self_check(info.get("claude") is True))
+            except Exception as e:  # noqa: BLE001 - the window then runs the check itself
+                trouble.note("the start-up check", e)
             self.connectionsReady.emit(info)
         threading.Thread(target=work, daemon=True).start()
 
@@ -263,12 +271,18 @@ class Bridge(RunSlots, JobSlots, QObject):
     # ── usage refresh (a tiny ping fetches current rate-limit windows) ──
     @Slot()
     def warmUp(self):
-        """Read every posting's keywords once, in the background, so the first Insights view opens at once."""
+        """Read every posting's keywords once, in the background, so the first Insights view opens at once.
+        One at a time: a second request while the first is still reading is dropped."""
+        if not self._warming.acquire(blocking=False):
+            return
+
         def work():
             try:
-                self._api.insights()
+                self._api.read_ahead()
             except Exception as e:  # noqa: BLE001 - only a head start; the view computes it itself if this failed
                 trouble.note("preparing Insights in the background", e)
+            finally:
+                self._warming.release()
         threading.Thread(target=work, daemon=True).start()
 
     @Slot()

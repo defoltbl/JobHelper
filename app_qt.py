@@ -22,6 +22,9 @@ QML = Path(__file__).resolve().parent / "ui_qt" / "Main.qml"
 
 
 def main() -> int:
+    # Background work (reading the mailbox, preparing Insights) hands over to the window ten times
+    # sooner than Python's default, so animations stay smooth while it runs.
+    sys.setswitchinterval(0.0005)
     app = QGuiApplication(sys.argv)
     app.setApplicationName("JobHelper")
     icon = Path(__file__).resolve().parent / "ui_qt" / "icon.png"

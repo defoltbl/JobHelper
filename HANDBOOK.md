@@ -188,6 +188,19 @@ data/                your data; only the *.example.* files are in git
 
 ---
 
+- **Heavy work in a background thread still holds the window up.** Python runs one thread at a time, so
+  thousands of small steps in a worker (the Insights keywords were 59,000 searches) make every call from
+  the window queue behind them. Give such work short rests (`keywords.read_ahead`), keep it away from
+  animations (it starts after the welcome screen), and keep `sys.setswitchinterval` in `app_qt.py`.
+- **An answer sent from a worker thread must carry plain values.** The start-up check travels inside the
+  connection answer as text (`info.health`, JSON) and the window parses it.
+- **Under test the window's loop keeps Python to itself for one whole wait**, so a worker only moves
+  between two waits. `Ui.wait` waits in short steps for that reason; do not call `QTest.qWait` directly.
+- **Rows made by a `Repeater` are not found by `findChild`.** Use `ui.seen(part)` / `ui.drawn(name)`.
+- **The usage numbers are a snapshot from Claude's last answer.** `usage.windows()` corrects them: a
+  refusal fills the window it names until its reset, a window past its reset time is empty. Everything
+  that shows or tests the limit goes through it.
+
 ## 4. Checking a change
 
 ```bash
@@ -255,7 +268,9 @@ found is fixed (see CHANGELOG, 10 October). Not read line by line: the visual ma
    read are the programming feeds.
 5. **The mailbox check expects a Gmail App Password** (16 letters), though another mail host can be set in `.env`.
 6. **Emails are matched to a company by any shared name word** (`email_client.match_job`). The search filters
-   and the reply bookkeeping no longer do this; here the best match usually wins, so it was left.
+   and the reply bookkeeping no longer do this; here the best match usually wins, so it was left. What decides
+   whether a message is worth a question to Claude no longer rests on it: `looks_like_application` asks
+   `names_tracked_company`, which wants a real name word in the sender or the subject.
 
 **Small**
 

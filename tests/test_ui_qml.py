@@ -10,6 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QObject, QUrl  # noqa: E402
 from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression, qmlContext  # noqa: E402
+from PySide6.QtQuick import QQuickItem  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
 from jobhelper import config, notify, qt_bridge, schedule, store, ui_api  # noqa: E402
@@ -25,6 +26,20 @@ def qml_source() -> str:
     return "\n".join(p.read_text(encoding="utf-8") for p in sorted(list((ROOT / "ui_qt").glob("*.qml")) + list((ROOT / "ui_qt").glob("*.js"))))
 
 
+def _wait(ms):
+    """Let the window run for `ms`. In short steps: under test the window's loop keeps Python to
+    itself for the whole of one wait (the running app does not), and a background thread, such
+    as the connection check, gets its turn only between two waits."""
+    import time
+    end = time.monotonic() + ms / 1000
+    while True:
+        left = end - time.monotonic()
+        if left <= 0:
+            break
+        QTest.qWait(max(1, min(8, round(left * 1000))))
+        time.sleep(0.002)                  # a real pause: this is when background threads run
+
+
 class Ui:
     """A loaded window plus helpers to poke it."""
 
@@ -36,6 +51,22 @@ class Ui:
         obj = self.win.findChild(QObject, name)
         assert obj is not None, f"no QML object named {name!r}"
         return obj
+
+    def seen(self, root="statusPanel"):
+        """Every item drawn under a part of the window, rows made by a Repeater included
+        (those are children on screen but not children of the object tree, so find() misses them)."""
+        todo, out = [self.win.findChild(QQuickItem, root)], []
+        while todo:
+            item = todo.pop()
+            out.append(item)
+            todo.extend(item.childItems())
+        return out
+
+    def drawn(self, name, root="statusPanel"):
+        for item in self.seen(root):
+            if item.objectName() == name:
+                return item
+        raise AssertionError(f"nothing named {name!r} is drawn in {root}")
 
     # each window lives in its own file; names inside a window are only known in that window's context
     WINDOWS = ["tableDialog", "detailDialog", "compareDialog", "formDialog", "prepEditDialog", "helpDialog", "prepDialog", "letterDialog",
@@ -72,7 +103,7 @@ class Ui:
         raise AssertionError(error)
 
     def wait(self, ms=60):
-        QTest.qWait(ms)
+        _wait(ms)
 
 
 @pytest.fixture(scope="module")
@@ -117,7 +148,12 @@ def ui(qapp, tmp_path_factory):
     handle = Ui(engine, bridge, conn, warnings)
     handle.sent = sent
     handle.win.show()
-    QTest.qWait(2300)                      # splash → welcome card
+    _wait(2300)                            # splash → welcome card
+    for _ in range(200):                   # the connection check is a thread; wait for it, not for a guessed time
+        if handle.win.property("connChecked") and handle.find("welcome").property("phase") == "card":
+            break
+        _wait(30)
+    _wait(700)                             # the card's own entrance
     yield handle
     handle.win.close()
     del engine
@@ -694,6 +730,7 @@ def test_letter_editor_edits_rewrites_and_saves(ui, monkeypatch):
         ui.wait(30)
         if ui.js("letterDialog.busyIndex") == -1:
             break
+    assert ui.js("letterDialog.err") == ""
     assert ui.js("letterDialog.texts[3]") == "I would like to bring the same drive to this team."
     assert ui.js("letterDialog.dirty") is True and "rewritten" in ui.js("letterDialog.info")
     assert cover_letter.read_letter(config.LETTERS_DIR / "L.docx")["paragraphs"][3] == paras[3]     # nothing saved yet
@@ -783,9 +820,45 @@ def test_help_opens_from_the_button_and_covers_the_app(ui):
 
 def test_last_run_card_says_what_you_paid_and_the_api_price(ui):
     source = qml_source()
-    assert '"You paid"' in source and '"Same work via API"' in source and "$0 · subscription" in source
+    assert '"You paid"' in source and '"Same work via API"' in source and "your subscription only" in source
+    assert "$0" not in source, "nothing was paid per run, so no price is shown next to 'You paid'"
     assert '"Total cost"' not in source and '"Cost (API-equiv.)"' not in source
-    assert ui.js("usageData.cost !== undefined") in (True, False) and ui.warnings == []
+    assert "usageData.cost" not in source, "the card shows the last run's cost, not the total of everything"
+
+
+def _card_values(ui):
+    return {t.property("text") for t in ui.seen() if isinstance(t.property("text"), str)}
+
+
+def test_last_run_card_shows_the_cost_of_the_last_run_only(ui):
+    ui.js('lastRunData = ({ when: "07 Oct 14:20", found: "+3 new" })')
+    ui.wait(60)
+    assert "after next run" in _card_values(ui)                 # a summary saved before costs were noted
+    ui.js('lastRunData = ({ when: "07 Oct 14:20", found: "+3 new", cost: 0.4, cost_of: "search" })')
+    ui.wait(60)
+    values = _card_values(ui)
+    assert "≈ $0.40 · search" in values and "your subscription only" in values
+    ui.js('lastRunData = ({ scan: "07 Oct · 0 new", cost: 0, cost_of: "email scan" })')
+    ui.wait(60)
+    assert "≈ $0.00 · email scan" in _card_values(ui)
+    ui.js("lastRunData = bridge.lastRun()")
+    assert ui.warnings == []
+
+
+def test_usage_card_shows_nothing_left_and_when_it_resets(ui):
+    keep = ui.js("JSON.stringify(usageData)")
+    ui.js('usageData = ({ model: "sonnet", five_hour_used: 100, five_hour_resets: "14:00", seven_day_used: 34, seven_day_resets: "12 Oct 09:00" })')
+    ui.wait(60)
+    five, seven = ui.drawn("usageLeft_five_hour"), ui.drawn("usageLeft_seven_day")
+    assert five.property("text") == "0% left · resets 14:00" and five.property("font").bold()
+    assert seven.property("text") == "66% left"                 # the reset time matters only when little is left
+    ui.js('usageData = ({ model: "sonnet", five_hour_used: 85, five_hour_resets: "14:00" })')
+    ui.wait(60)
+    five, seven = ui.drawn("usageLeft_five_hour"), ui.drawn("usageLeft_seven_day")      # the rows are made again
+    assert five.property("text") == "15% left · resets 14:00" and not five.property("font").bold()
+    assert seven.property("text") == "—"
+    ui.js("usageData = JSON.parse('%s')" % keep.replace("\\", "\\\\").replace("'", "\\'"))
+    assert ui.warnings == []
 
 
 # ── about you, notifications, backups, readable help ────────────────────────
@@ -1000,6 +1073,21 @@ def test_sidebar_counts_and_icons_share_one_column(ui):
     assert 'objectName: "navTail_" + modelData.k; implicitWidth: 46' in source
     tail = source[source.index('objectName: "navTail_"'):][:1400]
     assert tail.count("anchors.centerIn: parent") >= 3                             # the pill, its number and the icon
+
+
+def test_analytics_has_a_drawn_bar_chart_for_its_icon(ui):
+    """A font's symbol for it could not be recognised at that size; three rising bars can."""
+    icons = [i for i in ui.seen("navPanel") if i.objectName() == "navIcon_ana"]
+    assert len(icons) == 5 and [i.property("visible") for i in icons].count(True) == 1     # one per row, shown on its own row only
+    icon = next(i for i in icons if i.property("visible"))
+    bars = sorted((b for b in icon.childItems() if b.property("radius") is not None), key=lambda b: b.property("x"))
+    assert [b.property("height") for b in bars] == [6, 10, 14]                              # rising, left to right
+    assert all(b.property("y") + b.property("height") == icon.property("height") for b in bars), "all stand on one line"
+    assert all(b.property("x") + b.property("width") <= icon.property("width") for b in bars)
+    assert "▦" not in qml_source()
+    bulbs = [i for i in ui.seen("navPanel") if i.objectName() == "navIcon_ins" and i.property("visible")]
+    assert len(bulbs) == 1 and len(bulbs[0].childItems()) == 3 and "✦" not in qml_source()    # drawn too: glass, neck, base
+    assert ui.warnings == []
 
 
 def test_filtered_out_list_opens_from_the_last_run_card(ui):
@@ -1309,20 +1397,88 @@ def test_hover_fades_to_the_same_colour_not_through_black(ui):
                 raise AssertionError(f"{path.name}:{i + 1} fades a hover colour to plain transparent")
 
 
-def test_insights_are_warmed_up_in_the_background(ui, monkeypatch):
+def _until(done, seconds=2.0):
     import time
-    calls = []
-    monkeypatch.setattr(ui_api.Api, "insights", lambda self: calls.append(1) or {})
-    ui.js("bridge.warmUp()")
-    for _ in range(100):
+    end = time.time() + seconds
+    while time.time() < end and not done():
         time.sleep(0.01)
-        if calls:
-            break
-    assert calls == [1]
-    monkeypatch.setattr(ui_api.Api, "insights", lambda self: (_ for _ in ()).throw(RuntimeError("no data yet")))
+    return done()
+
+
+def test_insights_are_warmed_up_in_the_background(ui, monkeypatch):
+    calls = []
+    monkeypatch.setattr(ui_api.Api, "read_ahead", lambda self: calls.append(1) or 0)
+    ui.js("bridge.warmUp()")
+    assert _until(lambda: calls and not ui.bridge._warming.locked()) and calls == [1]
+    monkeypatch.setattr(ui_api.Api, "read_ahead", lambda self: (_ for _ in ()).throw(RuntimeError("no data yet")))
     ui.js("bridge.warmUp()")                                   # a failure in the head start is not shown to anyone
-    time.sleep(0.05)
+    assert _until(lambda: not ui.bridge._warming.locked())
     assert "bridge.warmUp()" in qml_source() and ui.warnings == []
+
+
+def test_a_second_warm_up_does_not_start_while_the_first_is_reading(ui, monkeypatch):
+    import threading
+    started, go_on = [], threading.Event()
+    monkeypatch.setattr(ui_api.Api, "read_ahead", lambda self: started.append(1) or go_on.wait(2))
+    ui.js("bridge.warmUp()")
+    assert _until(lambda: started)
+    ui.js("bridge.warmUp()")
+    ui.js("bridge.warmUp()")
+    go_on.set()
+    assert _until(lambda: not ui.bridge._warming.locked()) and started == [1]
+
+
+def test_insights_are_not_prepared_while_the_welcome_screen_is_up(ui, monkeypatch):
+    """Preparing them is heavy enough to make the welcome animation stutter, so it waits for the screen to close."""
+    calls = []
+    monkeypatch.setattr(ui_api.Api, "read_ahead", lambda self: calls.append(1) or 0)
+    welcome = ui.find("welcome")
+    was = welcome.property("shown")
+    welcome.setProperty("shown", True)
+    ui.js("reloadAll()")
+    ui.wait(1100)
+    assert calls == []
+    welcome.setProperty("shown", False)
+    ui.wait(300)
+    assert calls == [], "not at once either: the screen is still fading out"
+    ui.wait(900)
+    assert _until(lambda: calls == [1])
+    ui.js("reloadAll()")                                       # afterwards, every reload refreshes it straight away
+    assert _until(lambda: calls == [1, 1])
+    welcome.setProperty("shown", was)
+    ui.wait(1000)
+    assert ui.warnings == []
+
+
+def test_the_start_up_check_comes_with_the_connection_check(ui, monkeypatch):
+    """Both are done off the window's thread; the window only shows the result."""
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self: {"claude": True})
+    monkeypatch.setattr(ui_api.Api, "self_check", lambda self, signed_in=None: {"ok": True, "problems": [], "asked": signed_in})
+    got = []
+    ui.bridge.connectionsReady.connect(got.append)
+    ui.bridge.checkConnections()
+    for _ in range(100):
+        ui.wait(20)
+        if got:
+            break
+    import json
+    assert got and json.loads(got[-1]["health"]) == {"ok": True, "problems": [], "asked": True}
+    assert "JSON.parse(info.health)" in qml_source()
+
+
+def test_the_window_shows_the_start_up_check_it_was_sent(ui):
+    was = ui.js("JSON.stringify(healthData)")
+    ui.js("healthRan = false")
+    ui.bridge.connectionsReady.emit({**ui.conn, "health": '{"ok": false, "problems": 1, "message": "No master CV yet.", "checks": []}'})
+    ui.wait(80)
+    assert ui.js("healthData.message") == "No master CV yet." and ui.js("healthRan") is True
+    ui.js("healthRan = false")
+    ui.bridge.connectionsReady.emit(dict(ui.conn))             # no check came with it: the window asks itself
+    ui.wait(80)
+    assert ui.js("healthData.checks.length") > 0
+    ui.js("healthData = JSON.parse('%s')" % was.replace("\\", "\\\\").replace("'", "\\'"))
+    assert ui.warnings == []
+
 
 
 # ── answers for one job's form ──────────────────────────────────────────────
