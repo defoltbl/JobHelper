@@ -1,5 +1,6 @@
 """The Qt bridge between the window and the agents — everything external is stubbed."""
 import time
+from pathlib import Path
 
 import pytest
 
@@ -553,3 +554,34 @@ def test_score_again_for_one_job_answers_through_the_signal(bridge, monkeypatch,
         if got:
             break
     assert got == [{"ok": True, "score": 30, "before": 80, "job_id": "e"}]
+
+
+# ── the bridge and the main window are put together from parts ──────────────
+def test_every_bridge_call_in_the_window_is_a_real_slot_and_no_name_is_defined_twice():
+    import re
+
+    from jobhelper import bridge_jobs, bridge_runs
+    parts = [qt_bridge.Bridge, bridge_runs.RunSlots, bridge_jobs.JobSlots]
+    seen = {}
+    for part in parts:
+        for name in vars(part):
+            if name.startswith("__") or name == "staticMetaObject":
+                continue
+            assert name not in seen, f"{name} is defined in {seen[name].__name__} and in {part.__name__}"
+            seen[name] = part
+    root = Path(qt_bridge.__file__).resolve().parent.parent / "ui_qt"
+    text = "\n".join(p.read_text(encoding="utf-8") for p in list(root.glob("*.qml")) + list(root.glob("*.js")))
+    called = set(re.findall(r"\bbridge\.([A-Za-z_]\w*)\(", text)) - {"running"}        # `running` is a property, named in a comment
+    meta = qt_bridge.Bridge.staticMetaObject
+    slots = {bytes(meta.method(i).name()).decode() for i in range(meta.methodCount())}
+    assert len(called) > 80 and called <= slots, sorted(called - slots)
+
+
+def test_the_main_window_is_made_of_its_parts():
+    root = Path(qt_bridge.__file__).resolve().parent.parent / "ui_qt"
+    main = (root / "Main.qml").read_text(encoding="utf-8")
+    for part in ("NavPanel", "StagePanel", "StatusPanel", "PipelineBar"):
+        assert (root / f"{part}.qml").is_file() and f"{part} {{ id: " in main, part
+    assert 'import "views.js" as Views' in main and len(main.splitlines()) < 600
+    stage = (root / "StagePanel.qml").read_text(encoding="utf-8")
+    assert "theme: theme;" not in stage            # inside a part that would bind a robot's theme to itself

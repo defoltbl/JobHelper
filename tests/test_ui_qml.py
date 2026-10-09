@@ -22,7 +22,7 @@ READY = {"claude": True, "plan": "pro", "claude_email": "me@example.com", "paid_
 
 def qml_source() -> str:
     """The text of every QML file of the window (it is split into one file per window)."""
-    return "\n".join(p.read_text(encoding="utf-8") for p in sorted((ROOT / "ui_qt").glob("*.qml")))
+    return "\n".join(p.read_text(encoding="utf-8") for p in sorted(list((ROOT / "ui_qt").glob("*.qml")) + list((ROOT / "ui_qt").glob("*.js"))))
 
 
 class Ui:
@@ -39,7 +39,8 @@ class Ui:
 
     # each window lives in its own file; names inside a window are only known in that window's context
     WINDOWS = ["tableDialog", "detailDialog", "compareDialog", "formDialog", "prepEditDialog", "helpDialog", "prepDialog", "letterDialog",
-               "responseDialog", "limitDialog", "welcome", "optDialog", "schedDialog"]
+               "responseDialog", "limitDialog", "welcome", "optDialog", "schedDialog",
+               "navPanel", "stagePanel", "statusPanel", "pipelineBar"]      # the parts of the main screen
 
     def _inside(self, obj):
         """The context of the file an object was written in. For a window made in Main.qml

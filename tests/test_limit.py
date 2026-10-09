@@ -7,7 +7,7 @@ from datetime import datetime
 import pytest
 
 import run
-from jobhelper import (agent1_cv, agent3_letters, agent4_tracker, agent5_responses, config, db, email_client,
+from jobhelper import (agent1_cv, bridge_runs, agent3_letters, agent4_tracker, agent5_responses, config, db, email_client,
                        letters, llm, qt_bridge, store, ui_api, usage)
 
 pytest.importorskip("PySide6")
@@ -205,7 +205,7 @@ def bridge(qapp, isolate_data, monkeypatch):
     monkeypatch.setattr(qt_bridge.Bridge, "LIMIT_POLL_SECONDS", 0.03)
     monkeypatch.setattr(agent1_cv, "load_profile", lambda current_only=False: {"seniority": "junior", "search_queries": ["dev"]})
     monkeypatch.setattr(agent1_cv, "find_cv", lambda: None)
-    monkeypatch.setattr(qt_bridge.agent2_search, "search", lambda queries, progress=None, **kw: _jobs(3))
+    monkeypatch.setattr(bridge_runs.agent2_search, "search", lambda queries, progress=None, **kw: _jobs(3))
     monkeypatch.setattr(letters, "import_letters", lambda jobs: {"scanned": 0, "linked": 0, "seeded": 0})
     monkeypatch.setattr(agent5_responses, "annotate_progress", lambda jobs: None)
     monkeypatch.setattr(agent4_tracker, "render_all", lambda jobs: None)

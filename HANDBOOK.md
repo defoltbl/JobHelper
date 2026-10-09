@@ -142,7 +142,11 @@ data/                your data; only the *.example.* files are in git
 - **The window's back end:** `ui_api` (what the window can ask for: lists, one job in full, hand
   edits, Options) with its parts `api_documents` (scores, moving documents, "not interested"),
   `api_interview` (dates, form answers, interview preparation) and `api_letters` (letter editor,
-  PDFs); `qt_bridge` is the Qt side (slots, background work, progress).
+  PDFs); `qt_bridge` is the Qt side (signals, sign-in, Options, schedule) with its parts `bridge_runs` (search,
+  scan, scoring again, stopping, pausing on the limit) and `bridge_jobs` (what the job windows ask for).
+- **The main window:** `Main.qml` holds the state, the palette and the dialogs; the screen itself is
+  `NavPanel` (left), `StagePanel` (robots and status line), `StatusPanel` (right), `PipelineBar`
+  (bottom), and `views.js` fills the lists.
 - **When something fails quietly:** `trouble.note()` writes one line to `data/app_trouble.log`.
   An error is never swallowed without either a reason in a comment or a line there.
 
@@ -161,7 +165,10 @@ data/                your data; only the *.example.* files are in git
 - **Colours fade to `win.clearOf(colour)`**, not to plain transparent, or a dark shadow flashes.
 - **A label on the orange or the green** takes `theme.accentInk`, which is white in the light
   theme and dark in the dark one.
-- **`Api` is one class made of four files.** A method name defined in two of them would silently
+- **A part of the main window cannot see names inside another part.** What everyone needs (the
+  status line `ticker`, the robots `a1`…`a5`) is handed up as a property of the window in
+  `Main.qml`. In a part, `Robot { theme: theme }` binds the robot's theme to itself.
+- **`Api` and `Bridge` are each one class made of several files.** A method name defined in two of them would silently
   hide one (there is a test).
 - **Lists that decide what is skipped** (`prefilter.FIELDS`, `keywords.VOCABULARY`) must be
   measured on the real postings before a change ships: nothing that scored 30 or more may be
@@ -226,7 +233,6 @@ for the last two.
 
 1. **The combo box's own line.** The closed combo box (city, sort order) still shortens a very
    long choice; its list wraps.
-2. **`Main.qml` and `qt_bridge.py`** are still about 1,100 and 950 lines.
 
 **Needs the user**
 
