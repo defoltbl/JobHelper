@@ -21,6 +21,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import trouble  # noqa: I001
+from .api_assistant import AssistantApi
 from .api_base import _guarded, _stem
 from .api_documents import DocumentsApi
 from .api_interview import InterviewApi
@@ -35,7 +36,7 @@ def _claude_auth_status():
     return subprocess.run(["claude", "auth", "status"], capture_output=True, text=True, timeout=8)
 
 
-class Api(DocumentsApi, InterviewApi, LettersApi):
+class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi):
     # ── small helpers ───────────────────────────────────────────
     def _open(self, path):
         try:

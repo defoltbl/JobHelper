@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Junior Analyst - Northwind Careers</title></head>
+<body>
+<form id="application" action="/never-sent" onsubmit="window.sent = true; return false;">
+  <label for="fn">First name *</label><input id="fn" name="first_name" required>
+  <label for="ln">Last name *</label><input id="ln" name="last_name" required>
+  <div><span>Email address</span><input type="email" name="applicant[email]"></div>
+  <input type="tel" name="phone" placeholder="Phone number">
+  <label>LinkedIn profile <input type="url" name="urls[LinkedIn]"></label>
+  <label for="city">City</label><input id="city" name="city" value="Already here">
+  <label for="country">Country</label>
+  <select id="country" name="country"><option value="">Select...</option><option value="DE">Germany</option><option value="CZ">Czechia</option></select>
+  <label for="notice">Notice period</label>
+  <select id="notice" name="notice"><option value="">Select...</option><option>One month</option></select>
+  <label for="why">Why do you want to work at Northwind?</label><textarea id="why" name="why"></textarea>
+  <label for="letter">Cover letter</label><textarea id="letter" name="cover_letter"></textarea>
+  <label for="cv">Resume/CV</label><input type="file" id="cv" name="cv">
+  <label for="pw">Password</label><input type="password" id="pw" name="password">
+  <label for="dob">Date of birth</label><input id="dob" name="dob">
+  <label for="company">Current company</label><input id="company" name="company_name">
+  <label><input type="checkbox" name="terms" id="terms"> I agree to the terms</label>
+  <label><input type="radio" name="visa" value="yes"> Yes</label><label><input type="radio" name="visa" value="no"> No</label>
+  <input type="hidden" name="token" value="secret-token">
+  <input type="text" name="trap" style="display:none">
+  <div id="host"></div>
+  <button type="submit" id="send">Submit application</button>
+</form>
+<iframe id="inner" srcdoc="<label for='gh'>GitHub</label><input id='gh' name='github'>"></iframe>
+<script>
+  // a field inside an open shadow root, as component libraries build them
+  var root = document.getElementById('host').attachShadow({mode: 'open'});
+  root.innerHTML = '<label for="zip">Postal code</label><input id="zip" name="zip">';
+  // a page that listens the way React does: it only believes a value it was told about
+  window.heard = [];
+  document.getElementById('fn').addEventListener('input', function (e) { window.heard.push(e.target.value); });
+  document.getElementById('send').addEventListener('click', function () { window.clicked = true; });
+</script>
+</body></html>
