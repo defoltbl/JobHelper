@@ -29,11 +29,12 @@ Put your CV (English) in `data/cv/` — e.g. `data/cv/FirstnameLastname_CV_EN.do
 app use your subscription instead of the paid API.
 
 **No terminal?** After `pip install` + `python app_qt.py`, the app's welcome
-card (and later the **Account** chip) handles the rest: Claude login, your Gmail
-email + App Password, and picking your CV — so you can skip the `.env` and
+card (and later the **Account** chip) handles the rest: Claude login, your job
+mailbox and its password, and picking your CV — so you can skip the `.env` and
 `data/cv/` steps.
 
-**Do this once after the first start** — save your recovery key (see section 10):
+**Do this once after the first start** — save your recovery key (see section 10). In the
+app: **Account** chip → *Data protection* → **Recovery key**. Or:
 
 ```bash
 python status.py security recovery-key
@@ -120,16 +121,19 @@ Inside the window:
   learn**: technologies the postings ask for most that are not in your CV. That list is only
   shown; nothing from it is ever added to a CV or letter.
 - **Interview preparation** — in an application's window: **Prepare** asks Claude (once or
-  twice) for about twelve likely questions with answers built only from your CV, questions to
+  twice) for about fourteen likely questions (half as HR asks them, half as someone who does
+  the work asks them) with answers built only from your CV, questions to
   ask them, and topics to revise. It is saved with the job; **Copy all** puts it on the
   clipboard. An answer that claims something your CV lacks is marked "Check this answer".
-- **Help** — the button under Options explains the app in ten short topics (what it does, a
-  normal week, scores and labels, the limit, privacy, what to do when something looks wrong).
+- **Help** — the button under Options has three tabs: **How it works** (ten short topics: what
+  the app does, a normal week, scores and labels, the limit, privacy, what to do when something
+  looks wrong), **What changed** (this project's CHANGELOG) and **Usage and problems** (every
+  question asked of Claude so far, in all and by kind of work, and the last errors the app
+  carried on after, with a button that shows the log file in Finder).
 - **Last run card, cost rows** — *You paid: subscription only* and *Same search via API: ≈ $…*
   (or *Same scan via API*): the estimated price of the last run alone with pay-per-use API billing.
 - **Last run card, Emails read** — how many messages the last scan went through and how many were
   sent to Claude. **Options → Email scan → Look further back once** runs one longer scan.
-  The total since the first day is in `python status.py usage`.
 - **More about your work** (Options → About you) — what you really did in each job beyond the
   CV: tasks, tools, team, results (up to 4,000 characters, in English). Interview preparation
   and form answers treat it like the CV, so the work-experience part of the interview sheet
@@ -145,6 +149,11 @@ Inside the window:
   interview invitation. The weekly run notifies too.
 - **Keep backups** (Options) — only the newest N backups in `data/backups/` are kept; older ones
   are deleted for good at every start (0 = keep all). Weekly log files keep their last 400 lines.
+- **Back up everything** (Options → Notifications and storage) — **Back up now** (one encrypted
+  backup of the data, your CV, your letters, the documents and the rules), **Check backups**
+  (restores one into a throwaway folder and compares it) and **Save a readable copy…** (the
+  newest full backup, not encrypted, into an empty folder you choose). The same as
+  `python status.py security backup-all`, `test-restore` and `restore`.
 - **A date to remember** (job window of an application) — an interview, deadline, test task or call with a
   date (`YYYY-MM-DD`), an optional time and a note. The next ones are listed under
   **Coming up** on the main screen; a macOS notification comes the day before and on the
@@ -165,8 +174,24 @@ Inside the window:
   applications past it); and what the scorer's explanations of low scores mention most.
   All counted locally, no Claude.
 - **What the postings pay** (Insights) — every posting in your lists that states pay,
-  converted to gross CZK per month (yearly ÷ 12, EUR × 25, USD × 23, rough fixed rates),
-  next to your target, with the middle value.
+  converted to gross pay per month in your currency (yearly ÷ 12, other currencies at rough
+  fixed rates), next to what you ask for, with the middle value.
+- **Salary you ask for** (Options → About you) — your own figure and currency, and under **A
+  different figure for** another figure for a kind of role ("support"). With none given the app
+  uses its own estimate, which exists only for software roles in Czechia.
+- **Country** (Options → Search) — which postings of company career sites and which remote jobs
+  count as "here": your city, this country, its region ("Europe", "EMEA") or remote without
+  being tied to another part of the world. Empty = the country of the city.
+- **File under…** (a reply's window) — files a reply under another application, or under none.
+  The application it moves to follows the reply; the one it leaves keeps its status.
+- **Write CV and letter** (job window) — writes the documents for one new job on request, for
+  example one below your limit. A letter of your own is never replaced.
+- **Review these … one by one** (New Jobs) — walks through the jobs listed now (after the search
+  box and the filter chip) in one window: **Not interested** or **Mark applied** decides and
+  brings the next, **Next ›** leaves a job as it is.
+- **Check your adapted CV / cover letter** (job window) — shown when a document states a
+  two-word term of the posting as your experience although your CV has neither word. The app
+  asked for it to be removed once; what is left is yours to judge.
 - **Also archived mail and spam** (Options, off by default) — the email scan also reads
   the mailbox's archive ("All Mail") and spam folders, never Sent or Drafts, and still
   read-only. Turn it on if replies get archived by a filter or land in spam.
@@ -243,17 +268,19 @@ Inside the window:
   is listed first; the sidebar shows how many. In the job view, **Draft follow-up**
   writes a short email for you to **Copy** and send yourself (the app never sends
   mail); **Mark as followed up** restarts the count.
-- **Options** — macOS-style settings: city (EU-city picker), job source,
+- **Options** — macOS-style settings: city (EU-city picker) and country, job source,
   **search keywords** (add/remove the roles Scout searches for, with suggestions),
   date window, score thresholds, and model. Saved (encrypted) to `data/ui_settings.json`;
   `run.py` and the weekly run use the same saved Options.
 - **Welcome screen / Account chip** — the app opens on a short splash, then a
   welcome card showing Claude, job email, master CV and data protection; press
   **Start** (or Enter) to enter. The **Account** chip in the left column reopens the
-  same card: a *Sign in with Claude* button, editable Gmail email + App Password
-  (the password goes to the macOS Keychain), a CV picker (or drop the file on the
-  card) that copies it into `data/cv/`, and an **Approve** button when a protected
-  file was changed outside the app (section 10).
+  same card: a *Sign in with Claude* button, the job mailbox and its password (any
+  provider the card recognises, or one whose IMAP server you type; the password goes to
+  the macOS Keychain and is tried before it is saved), **Test** for the connected
+  mailboxes, a CV picker (or drop the file on the card) that copies it into `data/cv/`,
+  **Recovery key**, and, when a protected file was changed outside the app, **See what
+  changed** and **Approve** (section 10). Russian mail services are never used.
 - **Status bar and stepper** — while a run is going you see the current step, a
   progress bar with percent and "6 / 14 jobs", and the elapsed time.
 - **Weekly run card** — click it to turn the weekly schedule on/off and pick the
@@ -274,8 +301,8 @@ Section 10 (security) is worth reading once either way.
 Analyze CV → search jobs → write cover letters → build the Excel tracker.
 
 ```bash
-python run.py                         # default: Prague, English-only, jobs.cz+prace.cz+LinkedIn
-                                      # (if you saved Options in the app, those are the defaults)
+python run.py                         # the city and settings saved in the app's Options;
+                                      # English-only, jobs.cz + prace.cz + LinkedIn + your career sites
 ```
 
 ### Common options (combine freely)
@@ -425,9 +452,10 @@ your real data, `.env` and Keychain are never touched.
 | `JOOBLE_API_KEY` | Optional Jooble key |
 | `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` / `ADZUNA_COUNTRY` | Optional Adzuna (non-Czech) |
 
-**Gmail App Password:** Google Account → Security → 2-Step Verification (on) →
-App passwords → create one → enter the 16 letters in the app: **Account** chip →
-*Job email* → **Change** → **Save**. It is stored in the macOS Keychain. (If you
+**Mailbox password:** enter it in the app: **Account** chip → *Job email* → **Change** →
+**Save**. For Gmail it is an App Password (Google Account → Security → 2-Step Verification
+on → App passwords → create one, 16 letters); the card says what each other provider wants.
+It is stored in the macOS Keychain. (If you
 ever put `IMAP_PASSWORD=` in `.env`, the next start moves it to the Keychain and
 removes the line.) Details in section 10.
 
@@ -517,7 +545,7 @@ Your own letters are never converted.
 ### How the cover letter is made
 
 The rules live in `data/cover_letter_instruction.md`; the look comes from
-`data/cover_letter_template.docx` (your Wargaming letter). After editing either
+`data/cover_letter_template.docx` (a letter of your own, whose head and layout are kept). After editing either
 file by hand, approve the change (section 10). Only the title line,
 the date and the five body paragraphs get new text; the head block, fonts,
 spacing and page setup are untouched (only `word/document.xml` is edited). The
@@ -534,7 +562,7 @@ place can be set as `COVER_LETTERS_DIR` in `.env`). They are never rewritten.
 
 ## 9. Weekly automation (macOS LaunchAgent)
 
-A LaunchAgent runs a **job search + email analysis** every Monday 09:00:
+A LaunchAgent runs a **job search + email analysis** once a week, on the day and at the time you chose:
 `~/Library/LaunchAgents/com.jobhelper.weeklyscan.plist` → `weekly_jobhelper.sh` →
 `run.py --reuse-profile` then `status.py sync --summary`
 
@@ -598,7 +626,11 @@ open your encrypted data and backups. Anyone who has it can read them, so do not
 keep it in a file next to the data. You only need to do this once; the key
 does not change.
 
-To use it later (new Mac, or the app says the key is missing):
+The app shows the same key: **Account** chip → *Data protection* → **Recovery key** (with
+**Copy**; it is put away again after a minute).
+
+To use it later (new Mac, or the app says the key is missing), paste it in the **Account**
+card under *Data protection* and select **Open my data**, or:
 
 ```bash
 python status.py security restore-key   # paste the saved line when asked
@@ -618,7 +650,8 @@ for the moment after **you** changed one of the five protected files outside the
 | Changed the CV with **Change…** in the Account card, or career sites in **Options** | nothing, changes made in the app are trusted | nothing |
 | Did not touch these files but the warning appears | something else changed them | open the file and check it **before** approving |
 
-Approve in the app (**Account** chip → **Approve** on the *Data protection* row) or:
+Approve in the app (**Account** chip → *Data protection* row: **See what changed** shows the
+lines removed and added since you last approved, then **Approve**) or:
 
 ```bash
 python status.py security approve
@@ -659,15 +692,16 @@ python status.py security backup        # make an encrypted backup of the data f
 python status.py security restore data/backups/<backup> ~/Desktop/restored   # decrypt a backup
 ```
 
-### The Gmail app password on your Mac
+### The mailbox passwords on your Mac
 
 - **Where it is:** open the **Keychain Access** app (Spotlight: "Keychain Access"; on newer macOS the
   **Passwords** app does not show these entries), pick the **login** keychain and search for
-  **JobHelper**. You will see *JobHelper: Gmail app password* (account `imap_password`) and
+  **JobHelper**. You will see *JobHelper: Gmail app password* (account `imap_password`; the
+  entry keeps this name whatever your provider is, and a second mailbox has one of its own) and
   *JobHelper: data encryption key* (account `data_key`). Double-click, tick **Show password**
   and enter your Mac password to see it.
 - **How to add or change it:** in the app click the **Account** chip, then **Change** on *Job email*,
-  type the address and the 16-letter app password, **Save**. The app writes it to the Keychain.
+  type the address and the password, **Save**. The app tries it, then writes it to the Keychain.
 - **How to get a new app password from Google:** <https://myaccount.google.com/apppasswords>
   (2-Step Verification must be on), create one named "JobHelper", copy the 16 letters.
 - **If macOS asks** "security wants to use your confidential information stored in JobHelper",

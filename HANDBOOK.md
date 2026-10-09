@@ -4,7 +4,8 @@ What to remember about this project: how to use the app, the rules it is built b
 code is laid out, how a change is checked, what was decided and why, and what is left to do.
 
 - How to use each part of the app, step by step and with pictures, is in [docs/GUIDE.md](docs/GUIDE.md).
-- Every command with its options is in [COMMANDS.md](COMMANDS.md).
+- Installing, the command line, the structure of the code and the tech stack with its reasons are in
+  [docs/CODE.md](docs/CODE.md). Every command with its options is in [COMMANDS.md](COMMANDS.md).
 - What changed, day by day, is in [CHANGELOG.md](CHANGELOG.md) (also in the app: Help → What changed).
 - Setup from nothing is in [README.md](README.md).
 
@@ -50,7 +51,12 @@ The **Weekly run** card can do steps 1 and 3 once a week by itself.
 | Prepare for an interview | Application window → **Interview preparation** (editable, opens as a Word sheet) |
 | Add a reply that did not come by email | Application window → **Paste a reply** |
 | Use a letter you wrote yourself | Options → *Your own letters* → **Open folder** |
-| Save the key you need on a new Mac | `python status.py security recovery-key` (do this once) |
+| File a reply under the right application | Responses → the reply → **File under…** |
+| Have a CV and letter written for one job | Job window → **Write CV and letter** |
+| Go through many jobs quickly | New Jobs → narrow the list → **Review these … one by one** |
+| See what the app has used, and what went wrong quietly | Help → **Usage and problems** |
+| Back up everything, or take a readable copy out | Options → Notifications and storage → **Back up everything** |
+| Save the key you need on a new Mac | Account card → *Data protection* → **Recovery key** (do this once) |
 
 ### What the marks mean
 
@@ -73,14 +79,19 @@ These came from decisions made while building it. A change that breaks one is a 
 - The app runs on the Claude **subscription** through the Claude Code CLI, never the paid API.
   `ANTHROPIC_API_KEY` must stay unset; the app refuses to run a search with it set.
 - The mailbox is opened **read-only**. Nothing is ever sent, deleted or marked.
-- Secrets (the Gmail app password, the data key) live in the macOS Keychain and are never
+- Secrets (the mailbox passwords, the data key) live in the macOS Keychain and are never
   printed, logged or put in an error message. An address in an error loses its query part.
+- **No Russian service is added or used**, anywhere: mail providers, job boards, APIs, hosts.
+  `mailhosts.never_used` refuses such a mailbox or server, and a test keeps the provider list clean.
 
 **What is written for the user**
 - A CV, a letter, a form answer or an interview story never claims anything that is not in the
   master CV or in the user's own *More about your work* notes.
 - A letter the user wrote themselves is never rewritten, replaced or moved. Only documents the
   app wrote can be.
+- What the app cannot settle by itself is shown, not hidden: a term of the posting that an adapted CV
+  or a letter still states as experience after one retry is named in the job window (`cv_check`,
+  `letter_check`); a sentence is not cut out silently.
 - Texts use an en dash, not an em dash, no emojis, first person.
 
 **Data**
@@ -188,8 +199,6 @@ data/                your data; only the *.example.* files are in git
 - **The folder `backups/below_your_limit`** holds documents that can be put back. The automatic
   clean-up of old backups must never count it as a backup.
 
----
-
 - **Heavy work in a background thread still holds the window up.** Python runs one thread at a time, so
   thousands of small steps in a worker (the Insights keywords were 59,000 searches) make every call from
   the window queue behind them. Give such work short rests (`keywords.read_ahead`), keep it away from
@@ -202,6 +211,13 @@ data/                your data; only the *.example.* files are in git
 - **The usage numbers are a snapshot from Claude's last answer.** `usage.windows()` corrects them: a
   refusal fills the window it names until its reset, a window past its reset time is empty. Everything
   that shows or tests the limit goes through it.
+- **The window is taken down before the bridge** when the app closes (`app_qt.shut_down`), or every binding
+  that calls the bridge prints an error on the way out.
+- **A sentence of a letter is a claim only where the candidate is the one doing it** (`cover_letter.borrowed_claims`):
+  "the role caught my attention because it covers X" describes the role. Measure a change to these checks on the
+  letters and CVs already written before it ships.
+
+---
 
 ## 4. Checking a change
 
@@ -216,6 +232,8 @@ After every batch of changes, without being asked:
 2. The guard test that no test starts an outside program (`tests/test_guards.py`, part of the suite).
 3. Load the real window offscreen on the real data, **read-only**: open the lists and every job
    window, compare a checksum of the data folder before and after, look for QML warnings.
+4. For a change that can be seen: take a picture of the window and look at it. A test that reads a
+   text does not notice that the text is not drawn.
 5. Documentation, when a change can be seen:
    - `docs/GUIDE.md` is the **user guide**: for someone who only uses the app. It contains no terminal
      commands and no code. If the guide needs something, the window must be able to do it.
@@ -254,6 +272,13 @@ After every batch of changes, without being asked:
 | The rule files and the letter template are optional | Without them the built-in rules and a plain letter are used, so their absence is not reported as a problem. |
 | A search role the app does not know is asked about once, not refused | The words it knows grew up with software jobs. |
 | No Windows or Linux version | Not wanted. |
+| No Russian services | The owner's rule. A mailbox or server of one is refused with a plain message. |
+| A term of the posting left in a CV or letter is shown, not cut out | Cutting whole sentences removed fair wording ("version control" for someone who uses Git). Measured on 53 real CVs and letters before it shipped. |
+| The user guide has no terminal commands | It is for someone who only uses the app. What needed a command (the recovery key, backups) got a button. |
+| A mailbox is tried before it is saved | Only the form of the password was checked, so a wrong one showed up at the first scan. |
+| Outlook.com, Proton and Tuta are refused with an explanation | They cannot be read with a password; failing later would be worse than saying so at once. |
+| The salary estimate is used only for software roles in Czechia | It is a table of Prague junior software pay. Anywhere else no figure is better than a wrong one. |
+| A table or a picture is never split across pages in the PDFs | The owner's rule for the documentation; a long table continues between rows with its heading repeated. |
 
 ---
 

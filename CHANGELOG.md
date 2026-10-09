@@ -9,6 +9,9 @@ Found by checking all the code again before the next big step.
 
 - **Fixed: a place whose name begins like a country was taken for that country** ("Indianapolis, Indiana" was read as India), so a search in the United States lost postings of its own. Country names are now matched as whole words.
 - The weekly schedule can no longer hang while it waits for macOS: its two calls have a time limit.
+- **Fixed: a used-up limit filled the log of problems.** Every refresh of the usage card while the limit was used up wrote a line there; it is what the card shows, not a problem.
+- **A reply you file by hand is listed under that application's company** when the reader had named another (a video-call service, a recruiting system).
+- The command reference (`COMMANDS.md`) was read through and brought up to date: any mailbox instead of Gmail only, the recovery key in the app, the new buttons, pay in your currency.
 - Removed what nothing used any more: three functions of the window's back end (the old ways of saving a mailbox and of reading the connections), one language helper, and a second copy of the function that strips HTML from a posting.
 
 - **Review jobs one by one.** In New Jobs, narrow the list (a chip such as *stretch*, or the search box) and select **Review these … one by one**. One window walks through them: **Not interested** or **Mark applied** decides and brings the next job by itself, **Next ›** leaves a job as it is. A bar says where you are and how many you decided.

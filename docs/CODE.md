@@ -280,6 +280,9 @@ Table 12 lists its commands.
 | `python status.py retailor ID` | Writes a letter and an adapted CV for one job |
 | `python status.py pdf` | Makes PDF copies of the documents (needs LibreOffice) |
 | `python status.py letters` | Takes in letters the person wrote themselves |
+| `python status.py prune` | Removes new jobs you have already applied to |
+| `python status.py repair-emails` | Reads email text again, without Claude, and fixes replies that were misread because the email was HTML only |
+| `python status.py repair-statuses` | Fixes jobs whose status the app does not know |
 | `python status.py usage` | Shows the Claude usage of the app, in total and per kind of work |
 | `python status.py security ACTION` | Encryption, Keychain and backup tools (Table 13) |
 
