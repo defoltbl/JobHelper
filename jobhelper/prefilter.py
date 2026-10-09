@@ -59,6 +59,12 @@ def fields_of(roles, cv_text: str = "") -> list[str]:
     return [name for name, hits in counts.items() if hits == most] if most >= _FROM_CV_HITS else []
 
 
+def chosen_fields(names) -> list[str]:
+    """The fields picked by hand in Options, in the order of FIELDS; names this list does not have are dropped."""
+    picked = {str(n) for n in names} if isinstance(names, (list, tuple, set)) else set()
+    return [name for name in FIELDS if name in picked]
+
+
 def _phrase(text: str) -> re.Pattern | None:
     words = [re.escape(w) for w in re.findall(r"[^\W_]+(?:[+#.][^\W_]*)*", str(text or ""))]
     return re.compile(r"(?<![^\W_])" + r"[\s\-/]+".join(words) + r"(?![^\W_])", re.IGNORECASE) if words else None
@@ -117,15 +123,16 @@ def reason_to_skip(job: dict[str, Any], cv_keywords: set[str], check_level: bool
     return ""
 
 
-def apply(jobs: list[dict[str, Any]], cv_text: str, check_level: bool = True, roles=None, unwanted=None, wanted=None) -> int:
+def apply(jobs: list[dict[str, Any]], cv_text: str, check_level: bool = True, roles=None, unwanted=None, wanted=None, fields=None) -> int:
     """Mark unscored leads that are plainly not a fit, so they are not sent to
     the model. Returns how many were marked. Jobs the user sent back to scoring
     (`prefilter_override`) and jobs already scored are left alone.
     check_level=False (no level words in Options: a senior candidate) keeps
     director / head-of titles in. roles: every role you look for (they decide which
-    professions are yours); unwanted / wanted: the role names from Options."""
+    professions are yours); unwanted / wanted: the role names from Options.
+    fields: the professions picked by hand in Options; when given they are used as they are."""
     from . import filters
-    mine = fields_of(roles, cv_text)
+    mine = chosen_fields(fields) or fields_of(roles, cv_text)
     languages = filters.cv_languages(cv_text)
     cv_keywords = set(keywords.extract(cv_text))
     marked = 0

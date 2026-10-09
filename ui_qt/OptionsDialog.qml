@@ -93,7 +93,7 @@ Dialog {
                             full_time_only: fullSw.checked,
                             skip_words: skipTags.all(), keep_words: keepTags.all(),
                             level_words: levelTags.all(), max_years: yearsSpin.value,
-                            wanted_roles: wantedTags.all(), unwanted_roles: unwantedTags.all(),
+                            wanted_roles: wantedTags.all(), unwanted_roles: unwantedTags.all(), my_fields: pickedFields.slice(),
                             max_age_days: ageSpin.value, per_query: pqSpin.value,
                             threshold: thrSpin.value, min_lead_score: minSpin.value,
                             followup_days: fuSpin.value, scan_days: scanSpin.value,
@@ -105,6 +105,12 @@ Dialog {
                  companies: cs };
     }
     function changed() { return loaded !== "" && JSON.stringify(collect()) !== loaded; }
+    // your profession for the free first look: read from the roles, or picked by hand here
+    property var pickedFields: []
+    function toggleField(name, all) {
+        var on = pickedFields.indexOf(name) >= 0;
+        pickedFields = (all || []).filter(function (f) { return f === name ? !on : pickedFields.indexOf(f) >= 0; });
+    }
     // documents moved to the backup: how many there are, and removing the old ones (asked first, with the count)
     property var shelf: ({})
     property bool confirmTidy: false
@@ -161,6 +167,8 @@ Dialog {
         keepTags.setAll(o.keep_words || []);
         levelTags.setAll(o.level_words || []);
         wantedTags.setAll(o.wanted_roles || []); unwantedTags.setAll(o.unwanted_roles || []);
+        var known = bridge.professionFields([]).all || [];
+        pickedFields = known.filter(function (name) { return (o.my_fields || []).indexOf(name) >= 0; });   // only names the app has, in its order
         yearsSpin.value = o.max_years !== undefined ? o.max_years : 4;
         engSw.checked = !(o.all_languages === true);
         ageSpin.value = o.max_age_days !== undefined ? o.max_age_days : 10;
@@ -277,14 +285,34 @@ Dialog {
                         TagEditor { id: wantedTags; objectName: "wantedTags"; chipTone: theme.good
                             label: "Kinds of role you want"; hint: "the score measures fit for these · another field scores 40 at most"
                             placeholder: "e.g. backend developer" }
-                        // which professions the free first look takes as yours: it follows the roles above as you type them
-                        Text { objectName: "fieldsNote"; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12
-                            wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
-                            text: { var n = wantedTags.tagCount; var f = optDialog.visible ? bridge.professionFields(wantedTags.all()) : ({ fields: [] });
-                                    return (f.fields || []).length === 0
-                                        ? "The app cannot tell your profession from these roles or your CV, so no job is skipped for its profession before scoring."
-                                        : "Your profession, as the app reads it from " + (f.from_cv ? "your CV" : "these roles") + ": " + f.fields.join(", ")
-                                          + ". A title that is plainly another profession is skipped before scoring, at no cost to your Claude limit; you can still send it to scoring from the list."; } }
+                        // which professions the free first look takes as yours: read from the roles above as you type them, or picked here
+                        ColumnLayout { id: fieldsBox; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12; spacing: 8
+                            property var read: { var n = wantedTags.tagCount; return optDialog.visible ? bridge.professionFields(wantedTags.all()) : ({ fields: [], all: [] }); }
+                            readonly property bool byHand: optDialog.pickedFields.length > 0
+                            Text { objectName: "fieldsNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
+                                text: { var f = fieldsBox.read;
+                                        var tail = " A title that is plainly another profession is skipped before scoring, at no cost to your Claude limit; you can still send it to scoring from the list.";
+                                        if (fieldsBox.byHand) return "Your profession, as you picked it: " + optDialog.pickedFields.join(", ") + "." + tail;
+                                        return (f.fields || []).length === 0
+                                            ? "The app cannot tell your profession from these roles or your CV, so no job is skipped for its profession before scoring. Pick it below if you want that."
+                                            : "Your profession, as the app reads it from " + (f.from_cv ? "your CV" : "these roles") + ": " + f.fields.join(", ")
+                                              + "." + tail + " Pick below to set it yourself."; } }
+                            Flow { objectName: "fieldChips"; Layout.fillWidth: true; spacing: 6
+                                Repeater { model: fieldsBox.read.all || []
+                                    Rectangle {
+                                        readonly property bool picked: optDialog.pickedFields.indexOf(modelData) >= 0
+                                        readonly property bool readOn: !fieldsBox.byHand && (fieldsBox.read.fields || []).indexOf(modelData) >= 0
+                                        height: 24; radius: 12; width: fcT.implicitWidth + 18
+                                        color: picked ? theme.accent : (fcMa.containsMouse ? theme.surface2 : theme.inset)
+                                        border.width: 1; border.color: picked ? win.clearOf(theme.line) : readOn ? theme.accent : theme.line
+                                        Behavior on color { ColorAnimation { duration: 140 } }
+                                        Text { id: fcT; anchors.centerIn: parent; text: modelData; font.pixelSize: 11; font.bold: parent.picked || parent.readOn
+                                            color: parent.picked ? "#ffffff" : parent.readOn ? theme.accent : theme.soft }
+                                        MouseArea { id: fcMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                            onClicked: optDialog.toggleField(modelData, fieldsBox.read.all) } } }
+                                SmallButton { objectName: "fieldsAuto"; visible: fieldsBox.byHand; implicitHeight: 24; text: "Let the app decide"
+                                    onClicked: optDialog.pickedFields = [] } }
+                        }
                         Sep {}
                         TagEditor { id: unwantedTags; objectName: "unwantedTags"; chipTone: theme.crit
                             label: "Kinds of role you do not want"; hint: "a title that names one is skipped before scoring · otherwise scored 20 at most"

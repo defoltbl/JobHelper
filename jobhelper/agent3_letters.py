@@ -523,7 +523,7 @@ def process(
         wanted = saved.get("wanted_roles") or profile.get("target_roles") or []
         stats["prefiltered"] = prefilter.apply(
             jobs, cv_text, check_level=bool(level_words), roles=list(wanted) + list(profile.get("adjacent_roles") or []),
-            unwanted=saved.get("unwanted_roles") or [], wanted=wanted)
+            unwanted=saved.get("unwanted_roles") or [], wanted=wanted, fields=saved.get("my_fields"))
 
     def _skip(job):
         # Applications and anything past the "found" stage are left alone. A found

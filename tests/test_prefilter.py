@@ -142,6 +142,23 @@ def test_process_takes_the_roles_from_options_or_the_cv_analysis(isolate_data, m
     monkeypatch.setattr(config, "ui_settings", lambda: {"wanted_roles": ["Data Analyst"], "unwanted_roles": ["Tester"]})
     agent3_letters.process([_job("Dev", id="2")], profile, threshold=60, cv_text=CV)
     assert seen[-1]["roles"] == ["Data Analyst", "QA Engineer"] and seen[-1]["wanted"] == ["Data Analyst"] and seen[-1]["unwanted"] == ["Tester"]
+    assert seen[-1]["fields"] is None
+    monkeypatch.setattr(config, "ui_settings", lambda: {"my_fields": ["finance"]})
+    agent3_letters.process([_job("Dev", id="3")], profile, threshold=60, cv_text=CV)
+    assert seen[-1]["fields"] == ["finance"]
+
+
+def test_a_profession_picked_by_hand_is_used_as_it_is():
+    assert prefilter.chosen_fields(["law", "finance", "no such field", 7, ""]) == ["finance", "law"]      # known names only, in the app's order
+    for nothing in (None, [], "finance", {"finance": 1}, 5):
+        assert prefilter.chosen_fields(nothing) == []
+    jobs = [_job("Junior Python Developer", id="dev"), _job("Junior Accountant", id="acc"), _job("Staff Nurse", id="nurse")]
+    assert prefilter.apply(jobs, CV, roles=["Backend Developer"], fields=["finance"]) == 2                # the pick beats the roles and the CV
+    by = {j["id"]: j.get("prefilter", "") for j in jobs}
+    assert "another profession" in by["dev"] and "another profession" in by["nurse"] and by["acc"] == ""
+    fresh = [_job("Junior Python Developer", id="dev"), _job("Junior Accountant", id="acc")]
+    assert prefilter.apply(fresh, CV, roles=["Backend Developer"], fields=["no such field"]) == 1         # a pick the app does not know: read from the roles again
+    assert "another profession" in fresh[1]["prefilter"] and not fresh[0].get("prefilter")
 
 
 def test_apply_marks_only_unscored_leads_and_respects_an_override():

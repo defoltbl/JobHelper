@@ -111,7 +111,7 @@ class Bridge(QObject):
         try:
             return self._api.profession_fields(list(wanted or []))
         except Exception:  # noqa: BLE001 - a line of explanation must never break Options
-            return {"fields": [], "from_cv": False}
+            return {"fields": [], "from_cv": False, "all": []}
 
     @Slot("QVariantMap")
     def saveOptions(self, opts):

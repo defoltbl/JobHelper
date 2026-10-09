@@ -364,7 +364,7 @@ class Api:
         wanted = [str(w).strip() for w in (wanted or []) if str(w).strip()] or list(profile.get("target_roles") or [])
         roles = wanted + list(profile.get("adjacent_roles") or [])
         from_roles = prefilter.fields_of(roles)
-        return {"fields": from_roles or prefilter.fields_of([], self._cv_text()), "from_cv": not from_roles}
+        return {"fields": from_roles or prefilter.fields_of([], self._cv_text()), "from_cv": not from_roles, "all": list(prefilter.FIELDS)}
 
     @staticmethod
     def _score_before(j):
@@ -1218,7 +1218,7 @@ class Api:
                     "followup_days": followup.DEFAULT_DAYS, "scan_days": config.IMAP_LOOKBACK_DAYS,
                     "skip_words": ["intern", "internship"], "keep_words": [],
                     # what the scorer treats as your direction: starts from the roles read from your CV
-                    "wanted_roles": list(target_roles), "unwanted_roles": [],
+                    "wanted_roles": list(target_roles), "unwanted_roles": [], "my_fields": [],
                     # start from the level in the CV; the user can change both in Options
                     "level_words": filters.default_level_words(level), "max_years": filters.default_max_years(level),
                     "about_right_to_work": "", "about_start": "", "about_experience": "", "notifications": True, "scan_all_folders": False,

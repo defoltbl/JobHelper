@@ -1585,6 +1585,27 @@ def test_wanted_and_unwanted_roles_are_edited_in_options(ui):
     assert note.property("text").startswith("The app cannot tell your profession from these roles or your CV") \
         or "from your CV" in note.property("text")
     assert "a title that names one is skipped before scoring" in source
+
+    ui.js('wantedTags.setAll(["backend developer"])')                                                 # … or you pick it yourself
+    names = ui.js("fieldsBox.read.all.join('|')").split("|")
+    assert "software and IT" in names and "care and health" in names and ui.find("fieldsAuto").property("visible") is False
+    assert note.property("text").endswith("Pick below to set it yourself.") and ui.js("optDialog.changed()") is False
+    ui.js('optDialog.toggleField("law", fieldsBox.read.all); optDialog.toggleField("finance", fieldsBox.read.all)')
+    assert ui.js("optDialog.pickedFields.join('|')") == "finance|law"                                 # kept in the app's order
+    assert note.property("text").startswith("Your profession, as you picked it: finance, law.") and ui.find("fieldsAuto").property("visible") is True
+    assert ui.js("optDialog.changed()") is True and ui.js("optDialog.collect().options.my_fields.join('|')") == "finance|law"
+    ui.js('optDialog.toggleField("law", fieldsBox.read.all)')
+    assert ui.js("optDialog.pickedFields.join('|')") == "finance"
+    ui.js("optDialog.pickedFields = []")                                                              # "Let the app decide"
+    assert "as the app reads it from these roles: software and IT" in note.property("text") and ui.js("optDialog.changed()") is False
+    ui.js("close()", dialog)
+    ui.wait(350)
+    ui.bridge.saveOptions({**start, "where": "Prague", "wanted_roles": ["backend developer"], "my_fields": ["law", "no such field", "finance"]})
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    assert ui.js("optDialog.pickedFields.join('|')") == "finance|law" and ui.js("optDialog.changed()") is False   # an unknown name is dropped on load
+    assert "Let the app decide" in source and "Pick it below if you want that." in source
     ui.js("close()", dialog)
     ui.wait(350)
     ui.bridge.saveOptions(start)

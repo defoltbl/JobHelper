@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 9 October 2026
 
+- **Pick your profession yourself**: under "Kinds of role you want" in Options, choose the professions the free first look should treat as yours, or leave it to the app.
 - **Each job that could not be moved or put back is listed** in New Jobs with its own reason, instead of one long line.
 - **Old moved documents can be removed**: Options shows how many letters and CVs are in the backup after "Move to backup" and removes those older than the age you set, after asking with the count. Copies younger than 7 days are always kept.
 - **Fixed: moved documents were at risk from the automatic clean-up**: the "Keep backups" limit would have treated their folder as one old backup. It is now left alone.

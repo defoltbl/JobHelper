@@ -618,7 +618,10 @@ def test_the_last_batch_is_put_back_together(api, monkeypatch):
 
 
 def test_options_can_say_which_professions_are_taken_as_yours(api, monkeypatch):
-    from jobhelper import agent1_cv
+    from jobhelper import agent1_cv, prefilter
+    real = api.profession_fields
+    assert real([])["all"] == list(prefilter.FIELDS) and len(real([])["all"]) > 5            # every profession the app knows, for the pick list
+    monkeypatch.setattr(api, "profession_fields", lambda wanted=None: {k: v for k, v in real(wanted).items() if k != "all"})
     monkeypatch.setattr(agent1_cv, "load_profile", lambda: {"target_roles": ["Backend Developer"], "adjacent_roles": ["Data Analyst"]})
     monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Nurse on a ward, then a nurse in a clinic.")
     assert api.profession_fields() == {"fields": ["software and IT"], "from_cv": False}                    # nothing typed: the CV analysis' roles
