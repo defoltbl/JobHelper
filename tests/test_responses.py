@@ -331,3 +331,23 @@ def test_trying_a_mailbox_tells_refused_from_unreachable(monkeypatch):
     monkeypatch.setattr(imaplib, "IMAP4_SSL", unreachable)
     lost = real("me@example.com", "abcdabcdabcdabcd")
     assert lost["ok"] is None and "not tried" in lost["msg"]
+
+
+def test_a_reply_is_not_filed_to_a_company_by_a_word_many_companies_share():
+    jobs = [{"id": "a", "company": "International Rescue", "title": "Developer", "status": "waiting"},
+            {"id": "b", "company": "Northwind Systems", "title": "Developer", "status": "waiting"},
+            {"id": "c", "company": "Bright Praha s.r.o.", "title": "Tester", "status": "waiting"},
+            {"id": "d", "company": "Data Systems", "title": "Analyst", "status": "waiting"}]
+    match = email_client.match_job
+    assert match("info@eu-conf.example", "International scientific conference", "Submit your paper.", jobs) is None
+    assert match("shop@obuv.example", "Sale", "Visit our shop in Praha. New systems for your home.", jobs) is None
+    assert match("x@mail.example", "Data for everyone", "Big data.", jobs) is None                      # half of "Data Systems"
+    # a real name word still does it, from the sender, the subject or the text
+    assert match("jobs@northwind.example", "Your application", "", jobs)["id"] == "b"
+    assert match("hr@mail.example", "Interview at International Rescue", "", jobs)["id"] == "a"
+    assert match("hr@mail.example", "Your application", "Thank you for applying to Bright.", jobs)["id"] == "c"
+    # a name made only of common words: all of it must be there
+    assert match("people@mail.example", "Hello from Data Systems", "", jobs)["id"] == "d"
+    # between two companies, the one named by its own word wins over one that only shares a common word
+    both = jobs + [{"id": "e", "company": "Kestrel International", "title": "Developer", "status": "waiting"}]
+    assert match("careers@kestrel.example", "Kestrel International: your application", "", both)["id"] == "e"

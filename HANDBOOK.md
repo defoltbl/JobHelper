@@ -273,11 +273,6 @@ found is fixed (see CHANGELOG, 10 October). Not read line by line: the visual ma
 4. **The interview preparation is worded for technical roles** ("engineer", "stack"), and the remote boards
    read are the programming feeds.
 5. **The mailbox check expects a Gmail App Password** (16 letters), though another mail host can be set in `.env`.
-6. **Emails are matched to a company by any shared name word** (`email_client.match_job`). The search filters
-   and the reply bookkeeping no longer do this; here the best match usually wins, so it was left. What decides
-   whether a message is worth a question to Claude no longer rests on it: `looks_like_application` asks
-   `names_tracked_company`, which wants a real name word in the sender or the subject.
-
 - 11 jobs still have documents from a higher score (the user's decision: New Jobs, Move them to backup).
 
 **Needs the user**

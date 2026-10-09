@@ -441,7 +441,7 @@ def _likelier(job: dict[str, Any]) -> tuple[int, int, str]:
 def match_job(sender: str, subject: str, body: str, jobs: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Best-effort match an email to a tracked job.
 
-    Word-level (not substring). A company name found in the sender/subject counts
+    Word-level (not substring), and by words that are really the company's name. A company name found in the sender/subject counts
     far more than one found only deep in the body (so an Outlook/"Microsoft 365"
     footer in a Valeo email can't hijack the match). Among jobs at the same
     company, the one whose title best matches the subject wins — so "Application
@@ -459,10 +459,16 @@ def match_job(sender: str, subject: str, body: str, jobs: list[dict[str, Any]]) 
         toks = company_tokens(job.get("company", ""))
         if not toks:
             continue
+        # A word many companies share ("data", "international", "praha") names nobody: one of the
+        # name's own words must be there, or, for a name made only of such words, all of it.
+        own = toks - GENERIC_COMPANY_WORDS
+        if own:
+            if not own & (strong | weak):
+                continue
+        elif not toks <= (strong | weak):
+            continue
         in_strong = len(toks & strong)
         in_weak = len(toks & weak)
-        if in_strong == 0 and in_weak == 0:
-            continue
         company_score = in_strong * 3 + in_weak
         role_score = len(_role_tokens(job.get("title", "")) & subj_role)
         key = (1 if in_strong else 0, company_score, role_score, _likelier(job))

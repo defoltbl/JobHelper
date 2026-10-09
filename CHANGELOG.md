@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Replies are matched to the right company more often.** A reply is no longer tied to a company because both names contain a common word ("Solutions", "Global", "Services"); one of the company's own name words must be in the message. On 150 days of real mail, 8 replies that pointed at the wrong company now point at the right one, and no correct match was lost.
 - **Last run card: "Emails read"** says how many messages the scan went through and how many of them were sent to Claude ("45 · 5 to Claude"), so a "0 new" explains itself. The line after a scan says it too.
 - **Look further back once** (Options → Email scan): one scan over a longer period, started with **Scan now**; the saved number of days stays as it is. For a newly added mailbox or a missing old reply.
 - **A mailbox is tried before it is saved.** Saving the job email or the second mailbox now signs in once with what you entered (the button says **Checking…**). A refused App Password is not saved and the card says so; before, only its form was checked and a wrong one showed up at the first scan. With no connection it is saved, with a note that it was not tried.
