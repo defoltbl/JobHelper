@@ -677,3 +677,17 @@ def test_a_closed_posting_is_marked_in_the_list_and_the_window(api):
     store.save_jobs([lead, app, _with_docs("open", 60)])
     assert {r["id"]: r["closed"] for r in api.leads()} == {"lead": True, "open": False}
     assert api.job_detail("lead")["closed"] is True and api.job_detail("open")["closed"] is False and api.job_detail("app")["closed"] is False
+
+
+def test_the_parts_of_the_back_end_do_not_define_the_same_name_twice():
+    """`Api` is put together from several files; a name defined in two of them would silently hide one."""
+    from jobhelper import api_documents, api_interview, api_letters
+    parts = [ui_api.Api, api_documents.DocumentsApi, api_interview.InterviewApi, api_letters.LettersApi]
+    seen = {}
+    for part in parts:
+        for name in vars(part):
+            if name.startswith("__"):
+                continue
+            assert name not in seen, f"{name} is defined in {seen[name].__name__} and in {part.__name__}"
+            seen[name] = part
+    assert len(seen) > 100 and callable(ui_api.Api().shelve_docs) and callable(ui_api.Api().save_letter) and callable(ui_api.Api().set_event)
