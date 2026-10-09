@@ -112,7 +112,7 @@ def _dropped():
     rows = []
     for title, company, group, reason in (
             ("Senior Backend Engineer", "Northwind Systems", "too senior", "The title is above your level (senior)."),
-            ("Vývojář Python", "Datová Dílna", "needs Czech", "The ad is written in Czech."),
+            ("Vývojář Python", "Datová Dílna", "other language", "The ad is written in Czech."),
             ("Python Developer (part-time)", "Kestrel Data", "part time", "Part-time; you asked for full-time only."),
             ("Backend Developer", "Harbour Analytics", "already applied", "You already applied to this role at this company."),
             ("Junior Developer", "Quiet Lake", "too old", "Posted more than 10 days ago."),

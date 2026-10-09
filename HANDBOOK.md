@@ -269,7 +269,6 @@ found is fixed (see CHANGELOG, 10 October). Not read line by line: the visual ma
    junior software pay in Prague, and the lists label it "CZK/mo".
 2. **"Here" means Prague or Czechia** for company career sites (`filters.location_fits`, `scrapers_ats._loc_ok`):
    searching another country keeps Prague jobs and drops local ones from that source.
-3. **"English only" speaks of Czech.** A posting in any other language is reported as "written in Czech".
 4. **The interview preparation is worded for technical roles** ("engineer", "stack"), and the remote boards
    read are the programming feeds.
 5. **The mailbox check expects a Gmail App Password** (16 letters), though another mail host can be set in `.env`.

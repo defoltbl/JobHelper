@@ -348,7 +348,7 @@ Dialog {
                         SRow { label: "Full-time only"; hint: "hide part-time roles"
                             ThemedSwitch { id: fullSw; objectName: "fullSw" } }
                         Sep {}
-                        SRow { label: "English only"; hint: "hide Czech-language ads"
+                        SRow { label: "English only"; hint: "hide ads in another language, and roles that need one"
                             ThemedSwitch { id: engSw; objectName: "engSw" } }
                         Sep {}
                         SRow { label: "Max job age"; hint: "in days · 0 = any date"

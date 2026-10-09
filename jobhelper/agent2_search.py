@@ -322,13 +322,32 @@ def check_closed(jobs: list[dict[str, Any]], dropped: list | None = None, networ
     return stats
 
 
-def is_english_job(job: dict[str, Any]) -> bool:
-    """Keep only English-language ads (user does not speak Czech).
+LANGUAGE_GROUP = "other language"       # the name of the reason in the Filtered out list
 
-    Judged on the description when present, otherwise the title.
-    """
+
+def is_english_job(job: dict[str, Any]) -> bool:
+    """Is the ad written in English? Judged on the description when present, otherwise the title."""
+    return other_language(job) == ""
+
+
+def other_language(job: dict[str, Any]) -> str:
+    """The language an ad is written in when that is not English ("Czech", "German" …), else ''."""
     text = (job.get("description") or "").strip() or job.get("title", "")
-    return language.is_english(text)
+    return language.detect(text)
+
+
+def language_reason(job: dict[str, Any]) -> str:
+    """Why a posting does not fit someone who works in English only: '' or one sentence."""
+    description = job.get("description", "")
+    if filters.requires_czech(description):
+        return "Requires Czech at a working level."
+    for group in filters.required_languages(description):
+        if "english" not in group:
+            return "Requires %s at a working level." % " or ".join(name.capitalize() for name in group)
+    name = other_language(job)
+    if name:
+        return "The ad is not written in English." if name == "another language" else f"The ad is written in {name}."
+    return ""
 
 
 def _is_recent(job: dict[str, Any], max_age_days: int) -> bool:
@@ -405,7 +424,7 @@ def reread_missing(jobs: list[dict[str, Any]], english_only: bool = True, droppe
         if job.get("match_score") is not None and not job.get("cover_letter_file"):
             job["score_before"], job["match_score"] = job["match_score"], None
         if english_only and not job.get("cover_letter_file") and not is_english_job(job):
-            note_dropped(dropped, job, "needs Czech", "The ad is written in Czech.")
+            note_dropped(dropped, job, LANGUAGE_GROUP, language_reason(job) or "The ad is not written in English.")
             gone.append(id(job))
     if gone:
         jobs[:] = [j for j in jobs if id(j) not in gone]
@@ -495,7 +514,7 @@ def search(
 
     progress(done, total), if given, is called before each provider/query request.
 
-    With english_only (default), Czech-language ads are dropped. Roles above the
+    With english_only (default), ads in another language and roles that need one are dropped. Roles above the
     candidate's level are dropped for junior/mid. With max_age_days>0, jobs with a
     known posting date older than that are dropped (undated jobs are kept).
 
@@ -593,12 +612,10 @@ def search(
         word = filters.level_word(j["title"], candidate_seniority, level_words)
         return f'The title has a level you skip ("{word}").' if word else ""
     sift("level", level_reason, f"roles above your level (candidate: {candidate_seniority})")
-    # With "English only" on: roles that need Czech, and ads written in Czech.
+    # With "English only" on: roles that need another language, and ads not written in English.
     # (Someone who speaks Czech turns "English only" off and keeps them.)
     if english_only:
-        sift("needs Czech", lambda j: "Requires Czech at a working level."
-             if filters.requires_czech(j.get("description", "")) else "", "roles requiring Czech language")
-        sift("needs Czech", lambda j: "" if is_english_job(j) else "The ad is written in Czech.", "Czech-language ads")
+        sift(LANGUAGE_GROUP, language_reason, "roles that need another language, and ads not written in English")
     if max_age_days and max_age_days > 0:
         sift("too old", lambda j: "" if _is_recent(j, max_age_days) else f"Posted more than {max_age_days} days ago.",
              f"jobs older than {max_age_days} days")

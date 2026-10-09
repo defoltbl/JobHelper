@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **"English only" now knows other languages than Czech.** An ad written in German, Polish, French, Spanish, Italian, Dutch, Portuguese, Slovak, Russian, Ukrainian or another script is recognised and left out, and the reason names the language ("The ad is written in German") instead of always saying Czech. German and Polish ads used to pass as English. A role that requires any other language at a working level ("fluent German", "Czech or Slovak") is left out too, before it costs a Claude call. In the Filtered out list the group is called **other language**.
 - **Replies are matched to the right company more often.** A reply is no longer tied to a company because both names contain a common word ("Solutions", "Global", "Services"); one of the company's own name words must be in the message. On 150 days of real mail, 8 replies that pointed at the wrong company now point at the right one, and no correct match was lost.
 - **Last run card: "Emails read"** says how many messages the scan went through and how many of them were sent to Claude ("45 · 5 to Claude"), so a "0 new" explains itself. The line after a scan says it too.
 - **Look further back once** (Options → Email scan): one scan over a longer period, started with **Scan now**; the saved number of days stays as it is. For a newly added mailbox or a missing old reply.

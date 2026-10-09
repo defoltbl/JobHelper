@@ -172,7 +172,7 @@ Inside the window:
   read-only. Turn it on if replies get archived by a filter or land in spam.
 - **Filtered out · see why** (Last run card) — every posting the last search removed before
   scoring, each with its reason (located in the United States, asks for 6+ years, a word you
-  skip, part-time, duplicate, senior title, needs Czech, too old, already applied, closed).
+  skip, part-time, duplicate, senior title, other language, too old, already applied, closed).
   Filter by reason, search, and open the posting to check a rule. **bring back** adds a posting to New Jobs so
   the next search run scores it (not offered for duplicates, closed postings and roles you already applied for). The list is replaced by
   each search (`data/filtered_out.json`, encrypted, at most 600 rows).
@@ -287,7 +287,7 @@ python run.py --threshold 60          # only write letters for stronger matches 
 python run.py --per-query 20          # more results per search query (default 15)
 python run.py --max-age-days 14       # how recent a job must be (default 10; 0 = off)
 python run.py --reuse-profile         # skip Agent 1, reuse the last CV analysis
-python run.py --all-languages         # include Czech-language ads too (default: English only)
+python run.py --all-languages         # keep ads in other languages too (default: English only)
 python run.py --skip-search           # re-score existing jobs only (no new search)
 python run.py --no-tailor-cv          # skip the per-job tailored CVs (letters only)
 ```

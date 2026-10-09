@@ -410,3 +410,37 @@ def test_only_boards_that_give_a_clear_answer_are_asked(monkeypatch):
         raise OSError("no network")
     monkeypatch.setattr(scrapers_intl, "_fetch_detail", down)
     assert agent2_search.posting_closed({"id": "linkedin-111111", "url": ""}) is None
+
+
+def test_english_only_says_which_language_it_is(monkeypatch):
+    from jobhelper import agent2_search as a2
+    reason = a2.language_reason
+    job = lambda description, title="Developer": {"title": title, "description": description}     # noqa: E731
+    assert reason(job("Wir suchen einen Entwickler für unser Team. Ihre Aufgaben sind die Entwicklung und der Betrieb unserer "
+                      "Dienste. Sie bringen Erfahrung mit Python mit und wir bieten flexible Arbeitszeiten.")) == "The ad is written in German."
+    assert reason(job("We build tools for planners. You will need fluent German to talk to our customers every day.")) \
+        == "Requires German at a working level."
+    assert reason(job("Excellent communication skills in Czech or Slovak are required.")) == "Requires Czech or Slovak at a working level."
+    assert reason(job("Znalost češtiny je nutná.", "Tester")) == "Requires Czech at a working level."
+    # English asked for, another language only as a plus, or no language named: nothing against it
+    assert reason(job("Fluent English is required. German is a plus. You will work with Python.")) == ""
+    assert reason(job("You will work with Python and SQL in a team of five.")) == ""
+    assert reason(job("")) == ""
+    assert a2.LANGUAGE_GROUP == "other language"
+
+
+def test_a_search_leaves_out_an_ad_in_any_other_language(monkeypatch):
+    german = ("Wir suchen einen Softwareentwickler für unser Team. Ihre Aufgaben sind die Entwicklung und der Betrieb unserer "
+              "Dienste. Sie bringen Erfahrung mit Python mit und wir bieten flexible Arbeitszeiten sowie ein gutes Gehalt.")
+    found = [_job("de", "Softwareentwickler", description=german), _job("en", "Software Developer"),
+             _job("fr", "Support Agent", description=EN + "You must speak fluent French with our customers every day.")]
+    monkeypatch.setattr(agent2_search, "active_providers",
+                        lambda source, max_age_days=0: [("fake", lambda q, where, n: [dict(j) for j in found])])
+    dropped = []
+    kept = agent2_search.search(["developer"], where="Prague", dropped=dropped)
+    assert [j["id"] for j in kept] == ["en"]
+    assert {d["reason"] for d in dropped} == {"The ad is written in German.", "Requires French at a working level."}
+    assert {d["group"] for d in dropped} == {"other language"}
+    dropped = []
+    kept = agent2_search.search(["developer"], where="Prague", dropped=dropped, english_only=False)      # someone who works in other languages too
+    assert sorted(j["id"] for j in kept) == ["de", "en", "fr"] and dropped == []

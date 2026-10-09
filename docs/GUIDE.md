@@ -357,7 +357,8 @@ and writes an adapted CV and a cover letter for each good one.
 
 What step 3 drops:
 
-- Postings in a language you did not ask for.
+- Postings written in another language, and roles that require one at a working level
+  (with **English only** on). The reason names the language.
 - Titles above your level.
 - Part-time work, when you want full-time.
 - Postings older than your limit.
@@ -877,7 +878,7 @@ by reason.
 | Reason | Meaning | Where to change the rule |
 |---|---|---|
 | **too senior** | The title is above your level | **Skip levels above yours** |
-| **needs Czech** or another language | The ad is not in English | **English only** |
+| **other language** | The ad is written in another language (the reason names it), or the role requires one at a working level | **English only** |
 | **part time** | You asked for full-time only | **Full-time only** |
 | **too old** | Posted longer ago than your limit | **Max job age** |
 | **years** | Asks for more years of experience than you accept | **Skip jobs asking for** |
@@ -953,7 +954,7 @@ right column, or with a chip under **Search** in the left column.
 | **Skip jobs asking for** | Drops postings that ask for this many years or more | 0 to 30; 0 = never | To keep out postings you are not yet eligible for |
 | **Include remote jobs** | Adds the remote boards | On or off | To widen the search beyond your city |
 | **Full-time only** | Hides part-time roles | On or off | Turn off if part-time suits you |
-| **English only** | Hides postings written in another language | On or off | Turn off if you also work in the local language |
+| **English only** | Hides postings written in another language, and roles that require another language at a working level | On or off | Turn off if you also work in the local language. A posting that requires a language your CV does not show is then scored low instead |
 | **Max job age** | Drops postings older than this | Days; 0 = any date | Old postings are often already filled |
 | **Results per query** | How many postings each role asks each board for | 1 to 100 | Raise it for a wider search, lower it for a faster one |
 
