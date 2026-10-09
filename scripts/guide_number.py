@@ -4,10 +4,12 @@
     python scripts/guide_number.py            # docs/GUIDE.md and docs/CODE.md
     python scripts/guide_number.py --check    # only say what is wrong
 
-A figure's caption is the line `*Figure 7. Text*` under its picture; a table's caption is the
-line `*Table 7. Text*` above it. The text refers to them as "Figure 7" and "Table 7". After a
-figure or table is added (give it any number not used yet, such as 900), this renumbers the
-captions in the order they appear and changes every reference to match.
+Figures and tables are numbered inside their chapter, as in a thesis: the second figure of
+chapter 4 is Figure 4.2. A figure's caption is the line `*Figure 4.2 – Text*` under its picture;
+a table's caption is the line `*Table 4.2 – Text*` above it. The text refers to them as
+"Figure 4.2" and "Table 4.2". After a figure or table is added (give it any number not used yet,
+such as 900), this renumbers the captions in the order they appear and changes every reference
+to match.
 """
 from __future__ import annotations
 
@@ -17,27 +19,53 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCUMENTS = [ROOT / "docs" / "GUIDE.md", ROOT / "docs" / "CODE.md"]
-CAPTION = re.compile(r"^\*(Figure|Table) (\d+)\. (.+)\*$", re.M)
+NUMBER = r"\d+(?:\.\d+)?"
+CAPTION = re.compile(rf"^\*(Figure|Table) ({NUMBER})(?: –|\.) (.+)\*$", re.M)     # "Figure 7. Text" is the older way of writing one
+CHAPTER = re.compile(r"^## (\d+)\. ")
 
 
-def captions(text: str, kind: str) -> list[tuple[int, str]]:
-    return [(int(m.group(2)), m.group(3)) for m in CAPTION.finditer(text) if m.group(1) == kind]
+def captions(text: str, kind: str) -> list[tuple[str, str]]:
+    return [(m.group(2), m.group(3)) for m in CAPTION.finditer(text) if m.group(1) == kind]
+
+
+def expected(text: str) -> dict[str, list[tuple[str, str]]]:
+    """For each kind, (the number a caption carries, the number it should carry) in the order of the text."""
+    chapter, count = 0, {"Figure": 0, "Table": 0}
+    out = {"Figure": [], "Table": []}
+    for line in text.split("\n"):
+        heading = CHAPTER.match(line)
+        if heading:
+            chapter, count = int(heading.group(1)), {"Figure": 0, "Table": 0}
+            continue
+        caption = CAPTION.match(line)
+        if caption:
+            kind = caption.group(1)
+            count[kind] += 1
+            out[kind].append((caption.group(2), f"{chapter}.{count[kind]}"))
+    return out
 
 
 def problems(text: str) -> list[str]:
-    """What breaks the rules: numbers out of order, a picture or table with no caption, one the text never refers to."""
+    """What breaks the rules: numbers out of order, a caption written another way, a picture or
+    table with no caption, one the text never refers to, one outside every chapter."""
     found = []
-    for kind in ("Figure", "Table"):
-        numbers = [n for n, _title in captions(text, kind)]
-        if numbers != list(range(1, len(numbers) + 1)):
-            found.append(f"{kind} numbers are not 1 to {len(numbers)} in order: {numbers}")
-        body = CAPTION.sub("", text)
+    body = CAPTION.sub("", text)
+    for kind, pairs in expected(text).items():
+        numbers = [old for old, _new in pairs]
+        for old, new in pairs:
+            if new.startswith("0."):
+                found.append(f"{kind} {old} stands before the first numbered chapter")
+            elif old != new:
+                found.append(f"{kind} {old} should be {kind} {new}: numbers follow the chapter and the order of the text")
         for n in numbers:
-            if not re.search(rf"\b{kind} {n}\b", body):
+            if not re.search(rf"\b{kind} {re.escape(n)}(?![\d.]*\d)", body):
                 found.append(f"{kind} {n} is never referred to in the text")
-        for m in re.finditer(rf"\b{kind} (\d+)\b", body):
-            if int(m.group(1)) not in numbers:
+        for m in re.finditer(rf"\b{kind} ({NUMBER})", body):
+            if m.group(1) not in numbers:
                 found.append(f"the text refers to {kind} {m.group(1)}, which does not exist")
+    for m in CAPTION.finditer(text):
+        if f"{m.group(1)} {m.group(2)} – " not in m.group(0):
+            found.append(f"the caption of {m.group(1)} {m.group(2)} is not written as '{m.group(1)} {m.group(2)} – text'")
     lines = text.split("\n")
     for i, line in enumerate(lines):
         if line.startswith("!["):
@@ -52,13 +80,13 @@ def problems(text: str) -> list[str]:
 
 
 def renumber(text: str) -> str:
-    for kind in ("Figure", "Table"):
-        old = [n for n, _title in captions(text, kind)]
+    for kind, pairs in expected(text).items():
+        old = [o for o, _new in pairs]
         if len(set(old)) != len(old):
             raise ValueError(f"two {kind.lower()}s carry the same number: give the new one a number not used yet")
-        new = {n: i for i, n in enumerate(old, 1)}
-        text = re.sub(rf"\b{kind} (\d+)\b", lambda m: f"{kind} {new.get(int(m.group(1)), int(m.group(1)))}", text)
-    return text
+        new = dict(pairs)
+        text = re.sub(rf"\b{kind} ({NUMBER})", lambda m: f"{kind} {new.get(m.group(1), m.group(1))}", text)
+    return CAPTION.sub(lambda m: f"*{m.group(1)} {m.group(2)} – {m.group(3)}*", text)
 
 
 def main() -> int:

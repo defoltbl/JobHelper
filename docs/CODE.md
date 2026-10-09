@@ -28,16 +28,16 @@ an adapted CV and a cover letter for the good ones, and tracks applications and 
 written in Python. The window is built with Qt Quick (PySide6). All model calls go through the
 Claude Code program, so that they use the person's Claude subscription and never the paid API.
 
-The work is done by five agents (Figure 1). A search runs the first four in order; an email
+The work is done by five agents (Figure 1.1). A search runs the first four in order; an email
 scan runs the fifth.
 
 ![The five agents and what each keeps](img/code_pipeline.png)
 
-*Figure 1. The five agents and what each keeps*
+*Figure 1.1 – The five agents and what each keeps*
 
-Six rules shape the whole code base, and every change must keep them (Table 1).
+Six rules shape the whole code base, and every change must keep them (Table 1.1).
 
-*Table 1. The rules every change must keep*
+*Table 1.1 – The rules every change must keep*
 
 | Rule | What it means in the code |
 |---|---|
@@ -50,9 +50,9 @@ Six rules shape the whole code base, and every change must keep them (Table 1).
 
 ### Related documents
 
-Table 2 lists the other documents of the project.
+Table 1.2 lists the other documents of the project.
 
-*Table 2. The documents of the project*
+*Table 1.2 – The documents of the project*
 
 | Document | Use it for |
 |---|---|
@@ -72,9 +72,9 @@ was chosen, so that a change does not replace one without knowing what it was th
 
 ### The language and the window
 
-Table 3 lists what the app itself is written in.
+Table 2.1 lists what the app itself is written in.
 
-*Table 3. The language and the window*
+*Table 2.1 – The language and the window*
 
 | Technology | Used for | Why it was chosen |
 |---|---|---|
@@ -85,9 +85,9 @@ Table 3 lists what the app itself is written in.
 
 ### Claude
 
-Table 4 lists how the app reaches the model.
+Table 2.2 lists how the app reaches the model.
 
-*Table 4. How the app reaches Claude*
+*Table 2.2 – How the app reaches Claude*
 
 | Technology | Used for | Why it was chosen |
 |---|---|---|
@@ -97,9 +97,9 @@ Table 4 lists how the app reaches the model.
 
 ### Documents and data
 
-Table 5 lists what reads and writes the person's files.
+Table 2.3 lists what reads and writes the person's files.
 
-*Table 5. Documents and data*
+*Table 2.3 – Documents and data*
 
 | Technology | Used for | Why it was chosen |
 |---|---|---|
@@ -112,9 +112,9 @@ Table 5 lists what reads and writes the person's files.
 
 ### Reading the web and the mailbox
 
-Table 6 lists what reaches outside the Mac.
+Table 2.4 lists what reaches outside the Mac.
 
-*Table 6. Reading the web and the mailbox*
+*Table 2.4 – Reading the web and the mailbox*
 
 | Technology | Used for | Why it was chosen |
 |---|---|---|
@@ -124,9 +124,9 @@ Table 6 lists what reaches outside the Mac.
 
 ### Privacy and the Mac
 
-Table 7 lists what protects the data and ties the app to macOS.
+Table 2.5 lists what protects the data and ties the app to macOS.
 
-*Table 7. Privacy and the Mac*
+*Table 2.5 – Privacy and the Mac*
 
 | Technology | Used for | Why it was chosen |
 |---|---|---|
@@ -138,9 +138,9 @@ Table 7 lists what protects the data and ties the app to macOS.
 
 ### Quality
 
-Table 8 lists what keeps the code correct.
+Table 2.6 lists what keeps the code correct.
 
-*Table 8. Tools for quality*
+*Table 2.6 – Tools for quality*
 
 | Technology | Used for | Why it was chosen |
 |---|---|---|
@@ -151,9 +151,9 @@ Table 8 lists what keeps the code correct.
 
 ### What is deliberately not used
 
-Table 9 lists parts that were considered and left out.
+Table 2.7 lists parts that were considered and left out.
 
-*Table 9. What is deliberately not used*
+*Table 2.7 – What is deliberately not used*
 
 | Not used | Why not |
 |---|---|
@@ -204,9 +204,9 @@ Before you install, make sure you have:
    cp .env.example .env
    ```
 
-Table 10 lists the main packages and what each is for.
+Table 3.1 lists the main packages and what each is for.
 
-*Table 10. The main packages*
+*Table 3.1 – The main packages*
 
 | Package | Used for |
 |---|---|
@@ -241,9 +241,9 @@ writes to the same files.
 python run.py
 ```
 
-Table 11 lists the options used most often.
+Table 4.1 lists the options used most often.
 
-*Table 11. The most used options of run.py*
+*Table 4.1 – The most used options of run.py*
 
 | Option | What it does |
 |---|---|
@@ -264,9 +264,9 @@ Table 11 lists the options used most often.
 ## 5. Use the command line
 
 Everything the window does with applications and replies can also be done with `status.py`.
-Table 12 lists its commands.
+Table 5.1 lists its commands.
 
-*Table 12. The commands of status.py*
+*Table 5.1 – The commands of status.py*
 
 | Command | What it does |
 |---|---|
@@ -284,14 +284,14 @@ Table 12 lists its commands.
 | `python status.py repair-emails` | Reads email text again, without Claude, and fixes replies that were misread because the email was HTML only |
 | `python status.py repair-statuses` | Fixes jobs whose status the app does not know |
 | `python status.py usage` | Shows the Claude usage of the app, in total and per kind of work |
-| `python status.py security ACTION` | Encryption, Keychain and backup tools (Table 13) |
+| `python status.py security ACTION` | Encryption, Keychain and backup tools (Table 5.2) |
 
 ### Protect and restore the data
 
-The data files are encrypted with a key kept in the macOS Keychain. Table 13 lists the actions
+The data files are encrypted with a key kept in the macOS Keychain. Table 5.2 lists the actions
 of `python status.py security`.
 
-*Table 13. The actions of status.py security*
+*Table 5.2 – The actions of status.py security*
 
 | Action | What it does |
 |---|---|
@@ -308,9 +308,9 @@ of `python status.py security`.
 
 ## 6. Understand the structure of the code
 
-The code is in three places (Table 14).
+The code is in three places (Table 6.1).
 
-*Table 14. The folders of the project*
+*Table 6.1 – The folders of the project*
 
 | Folder | What is in it |
 |---|---|
@@ -323,9 +323,9 @@ The code is in three places (Table 14).
 
 ### The agents
 
-Table 15 names the module of each agent and what it may ask Claude.
+Table 6.2 names the module of each agent and what it may ask Claude.
 
-*Table 15. The five agents*
+*Table 6.2 – The five agents*
 
 | Agent | Module | What it does | Asks Claude |
 |---|---|---|---|
@@ -337,9 +337,9 @@ Table 15 names the module of each agent and what it may ask Claude.
 
 ### The modules around the agents
 
-Table 16 groups the other modules by what they are for.
+Table 6.3 groups the other modules by what they are for.
 
-*Table 16. The modules around the agents*
+*Table 6.3 – The modules around the agents*
 
 | Group | Modules | What they do |
 |---|---|---|
@@ -368,10 +368,10 @@ Long work (a search, a scan, a rewrite) runs in a thread and answers through a s
 
 ## 7. Work with the data files
 
-Everything a person makes with the app is in `data/` (Table 17). The folder is not part of the
+Everything a person makes with the app is in `data/` (Table 7.1). The folder is not part of the
 code and is never committed.
 
-*Table 17. The files and folders in data*
+*Table 7.1 – The files and folders in data*
 
 | Path | What it holds | Encrypted |
 |---|---|---|
@@ -413,10 +413,10 @@ Both must pass before a change is committed.
 
 ### What the tests may never touch
 
-The tests work in temporary folders with stand-ins. Table 18 lists what they never reach and
+The tests work in temporary folders with stand-ins. Table 8.1 lists what they never reach and
 what stands in for it.
 
-*Table 18. What the tests never touch*
+*Table 8.1 – What the tests never touch*
 
 | Never touched | What stands in |
 |---|---|
@@ -452,11 +452,13 @@ python -m pytest tests/guide_shots.py -q -o addopts=""
 
 ### Keep the numbers of figures and tables in order
 
-Every picture has a caption under it and every table a caption above it: a line in italics
-that begins with the word Figure or Table, its number and a full stop. The text refers to each
-by its number.
+Figures and tables are numbered inside their chapter, as in a thesis: the second figure of
+chapter 4 carries the number 4.2. Every picture has a caption under it and every table a caption above
+it: a line in italics made of the word Figure or Table, the number, an en dash and the title.
+The text refers to each by its number.
 
-1. Give a new figure or table any number that is not used yet, for example 900.
+1. Write the caption of a new figure or table with any number that is not used yet, for
+   example 900.
 2. Renumber the captions and every reference in one go:
 
    ```bash
@@ -469,24 +471,27 @@ by its number.
 python scripts/guide_pdf.py
 ```
 
-The script makes `docs/GUIDE.pdf` and `docs/CODE.pdf`. It lays each one out with a title page,
-the contents, a list of figures and a list of tables, and it keeps the page rules in Table 19.
+The script makes `docs/GUIDE.pdf` and `docs/CODE.pdf`. It lays each one out like a thesis: a
+title page, the contents with dotted lines that lead to the page numbers, then the text with
+its page number at the top right. A caption stands centred under its picture and above its
+table. There are no lists of figures and tables. The script keeps the page rules in
+Table 9.1.
 A test fails while a PDF is older than its text.
 
-*Table 19. The page rules of the PDFs*
+*Table 9.1 – The page rules of the PDFs*
 
 | Rule | How the script keeps it |
 |---|---|
 | A figure is never split across two pages | A picture and its caption are one block; a block that would cross a page starts on the next one |
 | A table stays on one page | The same, with the caption above it |
-| A table longer than a page continues between two rows | It is cut into parts that fit, each with the caption "continued" and the heading row repeated |
+| A table longer than a page continues between two rows | It is cut into parts that fit, each under the line "Continuation of Table" with its number, and with the heading row repeated |
 | A heading is never left alone at the bottom of a page | A heading whose text would start on the next page moves there too |
 
 ### Write in the house style
 
-Table 20 gives the rules for the text of both documents.
+Table 9.2 gives the rules for the text of both documents.
 
-*Table 20. The rules for writing the documentation*
+*Table 9.2 – The rules for writing the documentation*
 
 | Element | Rule |
 |---|---|
@@ -500,9 +505,9 @@ Table 20 gives the rules for the text of both documents.
 
 ## 10. Troubleshoot problems
 
-Table 21 lists the problems met most often while working on the code.
+Table 10.1 lists the problems met most often while working on the code.
 
-*Table 21. Problems while working on the code*
+*Table 10.1 – Problems while working on the code*
 
 | What you see | Cause | What to do |
 |---|---|---|

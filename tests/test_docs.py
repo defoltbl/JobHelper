@@ -1,5 +1,6 @@
 """The documentation keeps its own rules: the user guide needs no terminal, every figure and table
-is numbered and referred to, and in the PDFs nothing is split across pages."""
+is numbered inside its chapter and referred to, and the PDFs are laid out like a thesis, with
+nothing split across pages."""
 import importlib.util
 import os
 import re
@@ -82,19 +83,27 @@ def test_every_figure_and_table_is_numbered_captioned_and_referred_to(name):
 
 
 def test_the_numbering_tool_renumbers_and_finds_what_is_wrong():
-    text = ("See Figure 900 and Table 5.\\n\\n![A](img/a.png)\\n\\n*Figure 900. A*\\n\\nAs Figure 1 shows.\\n\\n![B](img/b.png)\\n\\n*Figure 1. B*\\n\\n"
-            "*Table 5. T*\\n\\n| a |\\n|---|\\n| 1 |\\n").replace("\\n", "\n")
+    """Numbers follow the chapter, as in a thesis: the second figure of chapter 2 is Figure 2.2."""
+    text = ("## 1. One\n\nSee Figure 900 and Table 5.\n\n![A](img/a.png)\n\n*Figure 900 – A*\n\n## 2. Two\n\nAs Figure 1.1 shows.\n\n"
+            "![B](img/b.png)\n\n*Figure 1.1 – B*\n\n![C](img/c.png)\n\n*Figure 7. C*\n\nAnd Figure 7.\n\n"
+            "*Table 5 – T*\n\n| a |\n|---|\n| 1 |\n").replace("\\n", "\n")
     fresh = guide_number.renumber(text)
-    assert "See Figure 1 and Table 1." in fresh and "*Figure 1. A*" in fresh and "As Figure 2 shows." in fresh and "*Figure 2. B*" in fresh
-    assert guide_number.problems(fresh) == []
-    assert any("not 1 to" in p for p in guide_number.problems(text))
-    lonely = "![A](img/a.png)\n\ntext\n\n| a |\n|---|\n| 1 |\n"
+    assert "See Figure 1.1 and Table 2.1." in fresh and "*Figure 1.1 – A*" in fresh
+    assert "As Figure 2.1 shows." in fresh and "*Figure 2.1 – B*" in fresh
+    assert "*Figure 2.2 – C*" in fresh and "And Figure 2.2." in fresh, "a caption written the older way is rewritten"
+    assert "*Table 2.1 – T*" in fresh
+    assert guide_number.problems(fresh) == [] and guide_number.renumber(fresh) == fresh
+    found = guide_number.problems(text)
+    assert any("should be Figure 1.1" in p for p in found) and any("is not written as" in p for p in found)
+    lonely = "## 1. One\n\n![A](img/a.png)\n\ntext\n\n| a |\n|---|\n| 1 |\n"
     found = guide_number.problems(lonely)
     assert any("no caption under it" in p for p in found) and any("no caption above it" in p for p in found)
-    assert any("never referred to" in p for p in guide_number.problems("![A](img/a.png)\n\n*Figure 1. A*\n"))
-    assert any("does not exist" in p for p in guide_number.problems("As Table 3 shows.\n"))
+    assert any("never referred to" in p for p in guide_number.problems("## 1. One\n\n![A](img/a.png)\n\n*Figure 1.1 – A*\n"))
+    assert any("never referred to" in p for p in guide_number.problems("## 1. One\n\nSee Figure 1.12.\n\n![A](img/a.png)\n\n*Figure 1.1 – A*\n"))
+    assert any("does not exist" in p for p in guide_number.problems("## 1. One\n\nAs Table 1.3 shows.\n"))
+    assert any("before the first numbered chapter" in p for p in guide_number.problems("See Table 0.1.\n\n*Table 0.1 – T*\n\n| a |\n|---|\n| 1 |\n"))
     with pytest.raises(ValueError):
-        guide_number.renumber("*Figure 1. A*\n\n*Figure 1. B*\n")
+        guide_number.renumber("## 1. One\n\n*Figure 1.1 – A*\n\n*Figure 1.1 – B*\n")
 
 
 def test_the_pictures_exist_and_come_from_their_scripts():
@@ -128,10 +137,12 @@ def test_a_table_stays_on_one_page_and_a_long_one_continues_with_its_heading_row
             start = first[table["number"]]
             assert table["heading"] == start["heading"] != "", "the heading row is repeated on the next page"
             assert table["first_page"] > start["first_page"]
+            assert table["caption"] == f"Continuation of Table {table['number']}"
         else:
             first[table["number"]] = table
-    numbers = [t["number"] for t in report["tables"] if not t["continued"]]
-    assert numbers == list(range(1, len(numbers) + 1))
+    text = (DOCS / f"{name}.md").read_text(encoding="utf-8")
+    assert [t["caption"] for t in report["tables"] if not t["continued"]] == [f"Table {n} – {title}".replace("`", "").replace("**", "")
+                                                                             for n, title in guide_number.captions(text, "Table")]
     if name == "GUIDE":
         assert any(t["continued"] for t in report["tables"]), "the long Search table is the case this rule is for"
 
@@ -143,15 +154,31 @@ def test_a_heading_is_never_left_alone_at_the_bottom_of_a_page(laid_out):
 
 
 def test_the_contents_give_the_real_page_numbers(laid_out):
+    """As in a thesis: the contents come first, every entry has a dotted line that leads to its
+    page number, and there is no list of figures or tables in front of the text."""
     _name, report = laid_out
-    front = sum(1 for h in report["headings"] if h["text"] in ("Contents", "List of figures", "List of tables"))
-    assert report["contents"]["headings"] == [h["page"] for h in report["headings"]][front:]
-    assert report["contents"]["figures"] == [f["first_page"] for f in report["figures"]]
-    assert report["contents"]["tables"] == [t["first_page"] for t in report["tables"] if not t["continued"]]
-    assert all(page > 1 for page in report["contents"]["headings"])
-    body = [h for h in report["headings"] if h["level"] == 2 and h["text"] not in ("Contents", "List of figures", "List of tables")]
-    lists = [h for h in report["headings"] if h["text"] in ("Contents", "List of figures", "List of tables")]
-    assert body[0]["page"] > max(h["page"] for h in lists), "the text starts after the contents and the lists"
+    headings = report["headings"]
+    assert headings[0]["text"] == "Contents" and headings[0]["page"] == 2
+    assert not any(h["text"].startswith("List of") for h in headings)
+    assert report["contents"] == [h["page"] for h in headings[1:]]
+    assert all(page > headings[0]["page"] for page in report["contents"]), "the text starts after the contents"
+    assert [(leader["title"], leader["page"]) for leader in report["leaders"]] == [(h["text"], h["page"]) for h in headings[1:]]
+    for leader in report["leaders"]:
+        assert leader["to"] - leader["from"] > 60, f"no room for the dotted line after '{leader['title']}'"
+    bases = [leader["base"] for leader in report["leaders"]]
+    assert bases == sorted(bases) and len(set(bases)) == len(bases)
+
+
+def test_captions_are_written_as_in_a_thesis():
+    """'Figure 2.1 – Title' under the picture, 'Table 2.1 – Title' above the table; numbers restart in each chapter."""
+    for name in ("GUIDE", "CODE"):
+        text = (DOCS / f"{name}.md").read_text(encoding="utf-8")
+        assert not re.search(r"^\*(Figure|Table) \d+\. ", text, re.M), "no caption is written the older way"
+        assert not re.search(r"\b(Figure|Table) \d+(?![\d.]*\d)", text), "every reference carries the chapter"
+        chapters = {n.split(".")[0] for kind in ("Figure", "Table") for n, _title in guide_number.captions(text, kind)}
+        assert len(chapters) >= 5
+    source = (ROOT / "scripts" / "guide_pdf.py").read_text(encoding="utf-8")
+    assert "List of figures" not in source and "List of tables" not in source
 
 
 def test_a_table_too_long_for_a_page_is_cut_between_rows():
@@ -203,9 +230,10 @@ def test_the_pdf_matches_its_text(name):
     reader = PdfReader(str(path))
     assert guide_pdf.fingerprint(DOCS / f"{name}.md") in (reader.metadata.creator or ""), f"docs/{name}.md changed after its PDF was made: python scripts/guide_pdf.py"
     text = " ".join(" ".join(page.extract_text() for page in reader.pages[:12]).split())
-    for part in ("Contents", "List of tables", "List of figures", "Table 1.", "Figure 1."):
+    for part in ("Contents", "Table 1.1 –", "Figure 1.1 –" if name == "CODE" else "Figure 2.1 –", "1. Overview"):
         assert part in text, part
+    assert "List of figures" not in text and "List of tables" not in text
     pictures = sum(len(page.images) for page in reader.pages)
     assert pictures >= (33 if name == "GUIDE" else 1)
     last = " ".join(reader.pages[-1].extract_text().split())
-    assert last.endswith(str(len(reader.pages))), "every page carries its number"
+    assert str(len(reader.pages)) in last.split(), "every page carries its number"

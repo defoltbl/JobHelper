@@ -242,8 +242,11 @@ After every batch of changes, without being asked:
    - Both follow one pattern (the rules are in `docs/CODE.md`, "Write in the house style"): headings that start with a verb,
      *Overview*, *Prerequisites*, numbered steps, tables for reference, *Note / Tip / Important / Warning*
      boxes, buttons in bold exactly as the app writes them.
-   - Every figure and every table has a numbered caption and is referred to from the text. After adding
-     one, run `python scripts/guide_number.py`.
+   - Every figure and every table has a numbered caption and is referred to from the text. Numbers follow
+     the chapter, as in a thesis ("Figure 4.2 – Title" under a picture, "Table 4.2 – Title" above a table).
+     After adding one, run `python scripts/guide_number.py`.
+   - The PDFs are laid out like a thesis: contents with dotted lines to the page numbers, the page number at
+     the top right, no lists of figures and tables, a long table continued under "Continuation of Table N".
    - Take the guide's pictures again when a pictured window changed
      (`pytest tests/guide_shots.py -q -o addopts=""`) and look at them.
    - Make the PDFs again: `python scripts/guide_pdf.py`. They are laid out like a thesis (title page,
