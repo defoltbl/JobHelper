@@ -23,6 +23,6 @@ RowLayout {
     ColumnLayout { Layout.fillWidth: true; spacing: 1
         Text { text: sr.title; color: theme.ink; font.pixelSize: 14; font.bold: true }
         Text { text: sr.sub; color: sr.subColor; font.pixelSize: 12; Layout.fillWidth: true
-            maximumLineCount: 3; elide: Text.ElideRight; wrapMode: Text.WordWrap } }
+            wrapMode: Text.Wrap } }
     Row { id: act; spacing: 6; Layout.alignment: Qt.AlignVCenter }
 }

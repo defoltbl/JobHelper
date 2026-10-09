@@ -227,7 +227,7 @@ Dialog {
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar {}
             delegate: Rectangle {
-                width: listView.width; implicitHeight: 54
+                width: listView.width; implicitHeight: Math.max(54, rowWords.implicitHeight + 18)     // a long title makes the row taller, it is not cut
                 readonly property bool openable: !!modelData.id || !!modelData.rid
                 readonly property bool heading: modelData.heading === true
                 color: heading ? theme.inset : rowMa.containsMouse && openable ? theme.inset : (index % 2 ? theme.surface2 : win.clearOf(theme.surface2))
@@ -241,10 +241,10 @@ Dialog {
                         Text { text: modelData.value; color: theme.ink; font.pixelSize: 14; font.bold: true }
                         // the score it had before it was scored again
                         Text { visible: !!modelData.was; text: modelData.was || ""; color: theme.faint; font.pixelSize: 10 } }
-                    ColumnLayout { spacing: 1; Layout.fillWidth: true
+                    ColumnLayout { id: rowWords; spacing: 1; Layout.fillWidth: true
                         Text { text: modelData.primary; color: modelData.heading === true ? theme.accent : theme.ink
-                            font.pixelSize: 13; font.bold: modelData.heading === true; Layout.fillWidth: true; elide: Text.ElideRight }
-                        Text { visible: modelData.secondary !== ""; text: modelData.secondary; color: theme.faint; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight } }
+                            font.pixelSize: 13; font.bold: modelData.heading === true; Layout.fillWidth: true; wrapMode: Text.Wrap }
+                        Text { visible: modelData.secondary !== ""; text: modelData.secondary; color: theme.faint; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.Wrap } }
                     Rectangle { visible: !!modelData.flag; radius: 999; implicitHeight: 20; implicitWidth: flT.width + 16
                         color: theme.warnbg
                         Text { id: flT; anchors.centerIn: parent; text: modelData.flag || ""; color: theme.warn; font.pixelSize: 11; font.bold: true } }

@@ -2271,3 +2271,36 @@ def test_the_label_on_a_main_button_follows_the_theme(ui):
     finally:
         ui.js("win.dark = %s" % ("true" if start else "false"))
     assert ui.warnings == []
+
+
+# ── text wraps, it is never cut off ─────────────────────────────────────────
+def test_no_text_in_the_window_is_cut_with_an_ellipsis():
+    for path in sorted((ROOT / "ui_qt").glob("*.qml")):
+        text = path.read_text(encoding="utf-8")
+        assert "elide:" not in text and "maximumLineCount" not in text, f"{path.name} cuts a text short; let it wrap"
+
+
+def test_a_long_title_makes_its_row_taller_instead_of_being_cut(ui):
+    long_title = "Senior Principal Associate Vice Coordinator of Cross-Functional Platform Reliability and Developer Experience Enablement (Remote, EMEA)"
+    start = store.find(store.load_jobs(), "lead")["title"]
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(title=long_title), render=False)
+    try:
+        ui.js('openView("new")')
+        ui.wait(450)
+        heights = ui.js("(function(){ var out = []; for (var i = 0; i < listView.count; i++) { var it = listView.itemAtIndex(i); if (it) out.push(Math.round(it.height)); } return out.join(','); })()")
+        heights = [int(h) for h in heights.split(",") if h]
+        assert max(heights) > 54 and min(heights) >= 54                                 # the long one grew, the others kept their size
+        ui.js("tableDialog.close()")
+        ui.wait(350)
+        _open_job(ui, "lead")
+        title = ui.find("detailTitle")
+        assert title.property("truncated") is False and title.property("lineCount") >= 2 and title.property("text") == long_title
+        ui.js("detailDialog.close()")
+        ui.wait(350)
+        ui.js('ticker.text = "' + "A long message in the status line that has to be read to its last word. " * 4 + '"')
+        ui.wait(100)
+        assert ui.js("statusBar.height") > 46 and ui.js("ticker.truncated") is False     # the bar grows with its message
+        ui.js('ticker.text = ""')
+    finally:
+        ui.bridge._api._change("lead", lambda jobs, j: j.update(title=start), render=False)
+    assert ui.warnings == []

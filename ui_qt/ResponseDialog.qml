@@ -30,7 +30,7 @@ Dialog {
         RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
             ColumnLayout { Layout.fillWidth: true; spacing: 2
                 Text { objectName: "responseTitle"; text: responseDialog.r.company || ""; color: theme.ink; font.pixelSize: 17; font.bold: true
-                    Layout.fillWidth: true; elide: Text.ElideRight }
+                    Layout.fillWidth: true; wrapMode: Text.Wrap }
                 Text { text: responseDialog.r.role || ""; visible: text !== ""; color: theme.soft; font.pixelSize: 12
                     Layout.fillWidth: true; wrapMode: Text.WordWrap } }
             Rectangle { visible: !!responseDialog.r.stage; radius: 999; implicitHeight: 22; implicitWidth: rsT.width + 18
@@ -61,7 +61,7 @@ Dialog {
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         RowLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 6
-            Text { Layout.fillWidth: true; elide: Text.ElideRight; color: theme.faint; font.pixelSize: 11
+            Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.faint; font.pixelSize: 11
                 text: responseDialog.r.job_id ? ("Belongs to: " + responseDialog.r.job_company + " · " + responseDialog.r.job_title
                                                  + " (" + responseDialog.r.job_status + ")")
                                               : "Not linked to an application in your list." }

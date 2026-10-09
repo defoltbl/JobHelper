@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 9 October 2026
 
+- **No text is cut off any more**: long job titles, company lines, status messages and labels now wrap, and their row grows, instead of ending in "…".
 - **Errors the app carries on after are written down**: `data/app_trouble.log` gets one line when, for example, the saved Options cannot be read or a folder does not open. Addresses lose their query part, so no key ends up there.
 - **Resume button**: a darker blue, so its white label reads.
 - **Postings that closed are noticed**: each search asks the pages of earlier LinkedIn postings (at most 40 per search, each at most every 3 days) whether they still accept applications. A closed one without documents moves to the filtered-out list; one with a letter or CV stays and is marked "no longer accepts applications".

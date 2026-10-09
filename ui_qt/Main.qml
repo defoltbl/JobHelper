@@ -330,24 +330,24 @@ ApplicationWindow {
                             { k: "ins", label: "Insights", dot: theme.a3 }
                         ]
                         Rectangle {
-                            Layout.fillWidth: true; implicitHeight: 40; radius: 10
+                            Layout.fillWidth: true; implicitHeight: Math.max(40, navCol.implicitHeight + 10); radius: 10
                             objectName: "navRow_" + modelData.k
                             color: navMouse.containsMouse ? theme.surface2 : win.clearOf(theme.surface2)
                             Behavior on color { ColorAnimation { duration: 90 } }
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 11; anchors.rightMargin: 11; spacing: 10
                                 Rectangle { implicitWidth: 9; implicitHeight: 9; radius: 3; color: modelData.dot }
-                                ColumnLayout { Layout.fillWidth: true; spacing: 0
+                                ColumnLayout { id: navCol; Layout.fillWidth: true; spacing: 0
                                     Text { text: modelData.label; color: theme.ink; font.pixelSize: 14
-                                        Layout.fillWidth: true; elide: Text.ElideRight }
+                                        Layout.fillWidth: true; wrapMode: Text.Wrap }
                                     Text { visible: modelData.k === "app" && (countsData.duplicates || 0) > 0
                                         text: (countsData.duplicates || 0) + ((countsData.duplicates || 0) === 1 ? " possible duplicate" : " possible duplicates")
                                         color: theme.steel; font.pixelSize: 10; font.bold: true
-                                        Layout.fillWidth: true; elide: Text.ElideRight }
+                                        Layout.fillWidth: true; wrapMode: Text.Wrap }
                                     Text { visible: modelData.k === "app" && (countsData.followups || 0) > 0
                                         text: (countsData.followups || 0) + " to follow up"
                                         color: theme.warn; font.pixelSize: 10; font.bold: true
-                                        Layout.fillWidth: true; elide: Text.ElideRight }
+                                        Layout.fillWidth: true; wrapMode: Text.Wrap }
                                 }
                                 Item { objectName: "navTail_" + modelData.k; implicitWidth: 46; implicitHeight: 20
                                 Rectangle {
@@ -372,7 +372,7 @@ ApplicationWindow {
                         id: chip; objectName: "accountChip"
                         readonly property bool allOk: connData.claude === true && (connData.cv || "") !== "" && connData.paid_api !== true
                                                       && welcome.protectedOk
-                        Layout.fillWidth: true; implicitHeight: 56; radius: 13
+                        Layout.fillWidth: true; implicitHeight: Math.max(56, chipCol.implicitHeight + 18); radius: 13
                         color: chipMa.containsMouse ? theme.surface2 : theme.inset
                         border.color: chipMa.containsMouse ? theme.steel : theme.line; border.width: 1
                         scale: chipMa.pressed ? 0.97 : 1
@@ -390,11 +390,11 @@ ApplicationWindow {
                                     color: !win.connChecked ? theme.steel : (chip.allOk ? theme.good : theme.crit)
                                     border.color: theme.surface; border.width: 2 }
                             }
-                            ColumnLayout { Layout.fillWidth: true; spacing: 0
-                                Text { Layout.fillWidth: true; elide: Text.ElideMiddle; color: theme.ink; font.pixelSize: 12; font.bold: true
+                            ColumnLayout { id: chipCol; Layout.fillWidth: true; spacing: 0
+                                Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.ink; font.pixelSize: 12; font.bold: true
                                     text: !win.connChecked ? "Checking…"
                                         : connData.claude === true ? (connData.claude_email || "Claude account") : "Not signed in" }
-                                Text { Layout.fillWidth: true; elide: Text.ElideRight; font.pixelSize: 11
+                                Text { Layout.fillWidth: true; wrapMode: Text.Wrap; font.pixelSize: 11
                                     color: !win.connChecked || chip.allOk ? theme.faint : theme.crit
                                     text: !win.connChecked ? "connections"
                                         : connData.paid_api === true ? "Paid API key is set"
@@ -597,7 +597,7 @@ ApplicationWindow {
                         readonly property color tone: win.runResult === "ok" ? theme.good
                             : win.runResult === "error" ? theme.crit
                             : win.paused ? theme.warn : (busy ? win.stageColor : theme.steel)
-                        Layout.fillWidth: true; implicitHeight: 46; radius: 12
+                        Layout.fillWidth: true; implicitHeight: Math.max(46, ticker.implicitHeight + 22); radius: 12
                         color: theme.surface; border.width: 1
                         border.color: (busy || win.paused) ? Qt.rgba(tone.r, tone.g, tone.b, 0.55) : theme.line
                         Behavior on border.color { ColorAnimation { duration: win.motion } }
@@ -628,7 +628,7 @@ ApplicationWindow {
                                 }
                             }
                             Text { id: ticker; text: "Line idle. Press Run search to start the pipeline."
-                                color: theme.soft; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
+                                color: theme.soft; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.Wrap }
                             Text { visible: statusBar.showBar && (win.runMode === "search" || win.runProgress > 0)
                                 text: Math.round(win.runProgress * 100) + "%"
                                 color: statusBar.tone; font.pixelSize: 12; font.bold: true
@@ -734,7 +734,7 @@ ApplicationWindow {
                                     Text { text: modelData.k; color: theme.soft; font.pixelSize: 12 }
                                     Text { objectName: "lastRunValue"; text: modelData.v; font.pixelSize: 12; font.bold: true
                                         color: modelData.view ? theme.accent : theme.ink
-                                        Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; elide: Text.ElideRight }
+                                        Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; wrapMode: Text.Wrap }
                                     TapHandler { enabled: !!modelData.view; onTapped: win.openView(modelData.view) }
                                     HoverHandler { enabled: !!modelData.view; cursorShape: Qt.PointingHandCursor } }
                             }
@@ -749,11 +749,11 @@ ApplicationWindow {
                             Repeater {
                                 model: win.upcomingData
                                 ColumnLayout { Layout.fillWidth: true; spacing: 0
-                                    Text { Layout.fillWidth: true; elide: Text.ElideRight; font.pixelSize: 12; font.bold: true
+                                    Text { Layout.fillWidth: true; wrapMode: Text.Wrap; font.pixelSize: 12; font.bold: true
                                         color: modelData.days <= 1 ? theme.warn : theme.ink
                                         text: modelData.label.charAt(0).toUpperCase() + modelData.label.slice(1)
                                               + (modelData.time ? " · " + modelData.time : "") + " · " + modelData.kind }
-                                    Text { Layout.fillWidth: true; elide: Text.ElideRight; color: theme.soft; font.pixelSize: 11
+                                    Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 11
                                         text: (modelData.company || modelData.title) + "  ·  " + modelData.date }
                                     TapHandler { onTapped: detailDialog.show(modelData.id) }
                                     HoverHandler { cursorShape: Qt.PointingHandCursor }
@@ -836,7 +836,7 @@ ApplicationWindow {
                     }
                 }
                 Item { Layout.fillWidth: true }
-                Text { color: theme.faint; font.pixelSize: 11; elide: Text.ElideRight
+                Text { color: theme.faint; font.pixelSize: 11; wrapMode: Text.Wrap
                     Layout.maximumWidth: 360; horizontalAlignment: Text.AlignRight
                     text: "Applied jobs move to Applications automatically" }
             }

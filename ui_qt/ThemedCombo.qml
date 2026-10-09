@@ -15,10 +15,11 @@ ComboBox {
     background: Rectangle { radius: 7; color: theme.surface
         border.color: cb.activeFocus ? theme.accent : theme.line; border.width: 1 }
     delegate: ItemDelegate {
-        width: cb.width; height: 30
+        width: cb.width; height: Math.max(30, comboLine.implicitHeight + 10)
         contentItem: Text {
+            id: comboLine
             text: cb.plainText ? modelData : (cb.textRole ? (modelData[cb.textRole] !== undefined ? modelData[cb.textRole] : model[cb.textRole]) : modelData)
-            color: theme.ink; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter; leftPadding: 8; elide: Text.ElideRight }
+            color: theme.ink; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter; leftPadding: 8; wrapMode: Text.Wrap }
         background: Rectangle { color: (cb.highlightedIndex === index) ? theme.surface2 : "transparent" }
         highlighted: cb.highlightedIndex === index
     }

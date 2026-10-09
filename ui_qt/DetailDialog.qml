@@ -248,8 +248,8 @@ Dialog {
                     color: win.badgeColor(detailDialog.job.tier || ""); font.pixelSize: 17; font.bold: true } }
             ColumnLayout { Layout.fillWidth: true; spacing: 2
                 Text { objectName: "detailTitle"; text: detailDialog.job.title || ""; color: theme.ink; font.pixelSize: 17; font.bold: true
-                    Layout.fillWidth: true; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight }
-                Text { color: theme.soft; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight
+                    Layout.fillWidth: true; wrapMode: Text.Wrap }
+                Text { color: theme.soft; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.Wrap
                     text: (detailDialog.job.company || "") + (detailDialog.job.location ? "  ·  " + detailDialog.job.location : "") } }
             Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
                 Layout.alignment: Qt.AlignTop
@@ -464,7 +464,7 @@ Dialog {
                             onTextEdited: detailDialog.dateErr = ""
                             onAccepted: detailDialog.saveDate() }
                         SmallButton { objectName: "dateSave"; text: "Save date"; onClicked: detailDialog.saveDate() }
-                        Text { Layout.fillWidth: true; elide: Text.ElideRight; color: theme.faint; font.pixelSize: 11
+                        Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.faint; font.pixelSize: 11
                             text: detailDialog.job.applied_from_email ? "taken from the first email" : "" }
                     }
                     Text { objectName: "dateErr"; visible: detailDialog.dateErr !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap

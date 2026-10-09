@@ -87,7 +87,7 @@ Dialog {
         RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
             ColumnLayout { Layout.fillWidth: true; spacing: 2
                 Text { text: "Cover letter"; color: theme.ink; font.pixelSize: 17; font.bold: true }
-                Text { Layout.fillWidth: true; elide: Text.ElideRight; color: theme.soft; font.pixelSize: 12
+                Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 12
                     text: (letterDialog.meta.company || "") + "  ·  " + (letterDialog.meta.title_line || letterDialog.meta.title || "") } }
             Text { objectName: "letterWords"; font.pixelSize: 12; font.bold: true
                 color: (letterDialog.words < (letterDialog.meta.min_words || 0) || letterDialog.words > (letterDialog.meta.max_words || 9999)) ? theme.warn : theme.soft

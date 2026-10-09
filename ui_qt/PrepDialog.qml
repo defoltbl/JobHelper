@@ -36,7 +36,7 @@ Dialog {
         RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
             ColumnLayout { Layout.fillWidth: true; spacing: 2
                 Text { text: "Interview preparation"; color: theme.ink; font.pixelSize: 17; font.bold: true }
-                Text { objectName: "prepFor"; Layout.fillWidth: true; elide: Text.ElideRight; color: theme.soft; font.pixelSize: 12
+                Text { objectName: "prepFor"; Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 12
                     text: (prepDialog.prep.company || "") + "  ·  " + (prepDialog.prep.title || "") } }
             Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
                 Layout.alignment: Qt.AlignTop
