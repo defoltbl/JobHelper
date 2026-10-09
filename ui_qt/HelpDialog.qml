@@ -71,7 +71,7 @@ Dialog {
             "Your subscription has a <b>5-hour</b> and a <b>7-day</b> <b>limit</b> (<b>Usage left</b>, top right). The card shows when a nearly used one resets. When one is used up, the card says 0% left, the run pauses, saves, and shows a warning. <b>Resume</b> turns blue when the limit is back.",
             "To use less: fewer <b>search</b> roles, Czech boards instead of every source, a higher \"<b>Write letters above</b>\"." ] },
         { title: "Privacy and safety", lines: [
-            "Everything stays on your Mac. Your job data and backups are <b>encrypted</b> on disk, and the Gmail app password and the data key are in the macOS <b>Keychain</b>.",
+            "Everything stays on your Mac. Your job data and backups are <b>encrypted</b> on disk, and the mailbox passwords and the data key are in the macOS <b>Keychain</b>.",
             "Save your <b>recovery key</b> once (python status.py security recovery-key) and keep it in a password manager: on a new Mac it is the only way to open your data.",
             "Only job postings, your CV text and the text of reply emails are sent to Claude, to <b>score</b> jobs and write documents." ] },
         { title: "If something looks wrong", lines: [

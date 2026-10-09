@@ -18,7 +18,7 @@ source .venv/bin/activate             # activate it (do this every new terminal)
 pip install --require-hashes -r requirements.lock   # install the exact, hash-checked packages
                                       # (or: pip install -r requirements.txt)
 
-cp .env.example .env                  # optional settings (never put the Gmail password here)
+cp .env.example .env                  # optional settings (never put the mailbox password here)
 claude auth login                     # sign in with your Claude subscription
 claude auth status                    # verify: "loggedIn": true
 ```
@@ -419,7 +419,8 @@ your real data, `.env` and Keychain are never touched.
 | Key | What it's for |
 |-----|---------------|
 | `JOBHELPER_MODEL` | `sonnet` (default) / `opus` / `haiku` |
-| `IMAP_USER` | Gmail address for Agent 5 (the **App Password** is in the Keychain, not here) |
+| `IMAP_USER` | The job mailbox's address for Agent 5 (its password is in the Keychain, not here) |
+| `IMAP_HOST`, `IMAP_HOST_2` | The mail server of the first and second mailbox, written by the app only when you typed one (a provider it does not know) |
 | `IMAP_LOOKBACK_DAYS` | How many days of inbox to scan (default 30) |
 | `JOOBLE_API_KEY` | Optional Jooble key |
 | `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` / `ADZUNA_COUNTRY` | Optional Adzuna (non-Czech) |
@@ -577,7 +578,7 @@ list in **Help → What changed**. Add a `- ` line under a `## date` heading for
 
 What is protected:
 
-- **Gmail app password** is in the macOS **Keychain**, not in `.env` (`.env` keeps only the address).
+- **The mailbox passwords** are in the macOS **Keychain**, not in `.env` (`.env` keeps only the address).
 - **`jobs.json`, `profile.json`, `ui_settings.json`, `responses.db`** and everything in
   **`data/backups/`** are AES-256 encrypted. The key is in the Keychain too.
 - **CV rules, cover-letter rules, letter template, master CV, career-site list** are signed.

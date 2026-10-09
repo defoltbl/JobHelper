@@ -106,6 +106,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
                 "paid_api": config.using_paid_api(),
                 "email": config.has_imap(), "email_addr": config.IMAP_USER,
                 "email2": bool(config.IMAP_USER_2 and config.IMAP_PASSWORD_2), "email2_addr": config.IMAP_USER_2,
+                "email_host": config.IMAP_HOST, "email2_host": config.IMAP_HOST_2,       # a server typed by hand ('' = read from the address)
                 "cv": cv.name if cv else ""}
 
     @_guarded(lambda: {"leads": 0, "applications": 0, "responses": 0, "followups": 0, "duplicates": 0})

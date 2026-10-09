@@ -412,7 +412,7 @@ class RunSlots:
             self._save_partial(jobs)
             self.runFinished.emit("scan", "Stopped. Emails read before that are saved.")
         except imaplib.IMAP4.error:
-            self.runFinished.emit("scan", "Couldn't sign in to your email — check the Gmail App Password in the Account card.")
+            self.runFinished.emit("scan", "Couldn't sign in to your email — check its password in the Account card.")
         except RuntimeError as e:
             self.runFinished.emit("scan", str(e))
         except Exception as e:  # noqa: BLE001

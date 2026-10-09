@@ -16,6 +16,9 @@ Item {
     property bool introDone: false
     property bool waitingLogin: false
     property bool editEmail: false
+    property string hostDraft: ""         // the IMAP server, typed for a provider the app does not know
+    // the server is asked for only when the address does not tell it (its own flag: a field's `visible` also depends on what is around it)
+    readonly property bool needsServer: win.isEmail(emailDraft) && bridge.mailServer(emailDraft, "").known !== true
     property bool emailBusy: false        // the mailbox is being tried with the address and password just entered
     property string emailNote: ""         // saved, but something to know (the server could not be reached)
     property int editBox: 1               // which mailbox the editor is for: 1 main, 2 the optional second one
@@ -41,15 +44,20 @@ Item {
     function saveEmail() {
         emailErr = "";
         if (!win.isEmail(emailDraft)) { emailErr = "Enter a valid email address (e.g. you@gmail.com)."; shake.restart(); return; }
-        if (pwDraft !== "" && !win.isAppPassword(pwDraft)) {
-            emailErr = "A Gmail App Password is 16 letters (no spaces). Check for typos."; shake.restart(); return; }
-        var known = editBox === 2 ? connData.email2 === true : connData.email === true;
-        if (!known && pwDraft === "") { emailErr = "Enter the Gmail App Password for this mailbox."; shake.restart(); return; }
         if (editBox === 2 && emailDraft.trim().toLowerCase() === (connData.email_addr || "").toLowerCase()) {
             emailErr = "That is already your main job email. Enter a different address."; shake.restart(); return; }
+        var server = bridge.mailServer(emailDraft, needsServer ? hostDraft : "");
+        if (server.problem) { emailErr = server.problem; shake.restart(); return; }
+        if (!server.host) { emailErr = "Enter this provider's IMAP server, for example imap." + emailDraft.trim().split("@").pop() + "."; shake.restart(); return; }
+        if (pwDraft !== "" && server.gmail === true && !win.isAppPassword(pwDraft)) {
+            emailErr = "A Google App Password is 16 letters (no digits). Check for typos."; shake.restart(); return; }
+        if (pwDraft !== "" && win.hasNonLatin(pwDraft)) {
+            emailErr = "A mail server takes only English letters, digits and symbols in a password here."; shake.restart(); return; }
+        var known = editBox === 2 ? connData.email2 === true : connData.email === true;
+        if (!known && pwDraft === "") { emailErr = "Enter the password for this mailbox."; shake.restart(); return; }
         if (emailBusy) return;
         emailBusy = true; emailNote = "";
-        bridge.saveEmailChecked(editBox, emailDraft, pwDraft);       // tries the mailbox first; answers through onEmailSaved
+        bridge.saveEmailChecked(editBox, emailDraft, pwDraft, needsServer ? hostDraft : "");       // tries the mailbox first; answers through onEmailSaved
     }
     onPhaseChanged: if (phase === "card") { emailDraft = connData.email_addr || ""; keySink.forceActiveFocus(); }
     Connections { target: win; function onConnCheckedChanged() { welcome.advance(); } }
@@ -192,9 +200,10 @@ Item {
                     order: 1; label: "2"; title: "Job email"
                     ok: connData.email === true
                     sub: connData.email === true ? ((connData.email_addr || "") + " · read-only")
-                                                 : "Optional. Reads replies from Gmail, never sends or deletes."
+                                                 : "Optional. Reads replies from your mailbox, never sends or deletes."
                     SmallButton { visible: !welcome.editEmail; text: connData.email === true ? "Change" : "Connect"
-                        onClicked: { welcome.editBox = 1; welcome.emailDraft = connData.email_addr || ""; welcome.pwDraft = ""; welcome.emailErr = "";
+                        onClicked: { welcome.editBox = 1; welcome.emailDraft = connData.email_addr || ""; welcome.hostDraft = connData.email_host || "";
+                                     welcome.pwDraft = ""; welcome.emailErr = "";
                                      welcome.editEmail = true; wEmail.forceActiveFocus(); } }
                 }
                 Text { objectName: "emailNote"; visible: welcome.emailNote !== "" && !welcome.editEmail
@@ -209,7 +218,8 @@ Item {
                         text: connData.email2 === true ? ("Second mailbox: " + (connData.email2_addr || "") + " · read-only")
                                                        : "Second mailbox (optional)" }
                     SmallButton { objectName: "secondMailAdd"; text: connData.email2 === true ? "Change" : "Add"
-                        onClicked: { welcome.editBox = 2; welcome.emailDraft = connData.email2_addr || ""; welcome.pwDraft = "";
+                        onClicked: { welcome.editBox = 2; welcome.emailDraft = connData.email2_addr || ""; welcome.hostDraft = connData.email2_host || "";
+                                     welcome.pwDraft = "";
                                      welcome.emailErr = ""; welcome.editEmail = true; wEmail.forceActiveFocus(); } }
                     SmallButton { visible: connData.email2 === true; text: "Remove"
                         onClicked: { bridge.removeEmail2(); bridge.checkConnections(); } }
@@ -233,7 +243,7 @@ Item {
                             onAccepted: wPw.forceActiveFocus() }
                         TextField { id: wPw; Layout.fillWidth: true; Layout.leftMargin: 38; echoMode: TextInput.Password
                             placeholderText: (welcome.editBox === 2 ? connData.email2 === true : connData.email === true)
-                                             ? "App password (leave blank to keep)" : "Gmail App Password (16 letters)"
+                                             ? "Password (leave blank to keep)" : "Password for this mailbox"
                             text: welcome.pwDraft; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                             placeholderTextColor: theme.faint
                             background: Rectangle { radius: 8; color: theme.inset; border.width: 1
@@ -241,11 +251,24 @@ Item {
                                     : (welcome.emailErr !== "" && win.isEmail(welcome.emailDraft) ? theme.crit : theme.line) }
                             onTextEdited: { welcome.pwDraft = text; welcome.emailErr = ""; }
                             onAccepted: welcome.saveEmail() }
+                        // the server: asked for only when the address does not tell it
+                        TextField { id: serverRow; objectName: "mailServerField"; Layout.fillWidth: true; Layout.leftMargin: 38
+                            visible: welcome.needsServer
+                            placeholderText: "IMAP server, e.g. imap." + (welcome.emailDraft.trim().split("@").pop() || "example.com")
+                            text: welcome.hostDraft; color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 253
+                            placeholderTextColor: theme.faint
+                            background: Rectangle { radius: 8; color: theme.inset; border.width: 1
+                                border.color: serverRow.activeFocus ? theme.accent : theme.line }
+                            onTextEdited: { welcome.hostDraft = text; welcome.emailErr = ""; }
+                            onAccepted: wPw.forceActiveFocus() }
                         Text { visible: welcome.emailErr !== ""; Layout.fillWidth: true; Layout.leftMargin: 38; wrapMode: Text.WordWrap
                             color: theme.crit; font.pixelSize: 11; font.bold: true; text: welcome.emailErr }
                         RowLayout { Layout.fillWidth: true; Layout.leftMargin: 38; spacing: 6
                             Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
-                                text: "Use a Google App Password, not your normal password." }
+                                objectName: "mailHint"
+                                readonly property var server: bridge.mailServer(welcome.emailDraft, welcome.needsServer ? welcome.hostDraft : "")
+                                text: !win.isEmail(welcome.emailDraft) ? "Most providers want a separate app password for a program, not the one you sign in with."
+                                      : server.problem ? server.problem : server.hint }
                             SmallButton { text: "Cancel"; enabled: !welcome.emailBusy
                                 onClicked: { welcome.editEmail = false; welcome.emailErr = ""; keySink.forceActiveFocus(); } }
                             SmallButton { objectName: "emailSave"; primaryStyle: true; enabled: !welcome.emailBusy
@@ -274,7 +297,7 @@ Item {
                             ? "Your data is encrypted but its key is not in the Keychain. Run: python status.py security restore-key"
                        : welcome.changedFiles.length > 0
                             ? ("Changed outside the app: " + welcome.changedFiles.join(", ") + ". Check them, then approve.")
-                       : connData.vault === "ok" ? "Encrypted on disk · key and Gmail password in your Keychain"
+                       : connData.vault === "ok" ? "Encrypted on disk · key and mailbox password in your Keychain"
                        : "Off: no Keychain on this system, files are stored plain."
                     SmallButton { visible: welcome.changedFiles.length > 0 && connData.vault === "ok"; primaryStyle: true
                         text: "Approve"; onClicked: { bridge.approveChanges(); bridge.checkConnections(); } }

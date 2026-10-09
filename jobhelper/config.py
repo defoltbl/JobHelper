@@ -102,7 +102,9 @@ ADZUNA_SUPPORTED = {
 JOOBLE_API_KEY = os.getenv("JOOBLE_API_KEY", "").strip()
 
 # IMAP (email sync) -------------------------------------------------------
-IMAP_HOST = os.getenv("IMAP_HOST", "imap.gmail.com").strip()
+# The mail server of each mailbox: read from the address (see mailhosts.py) unless one is set here.
+IMAP_HOST = os.getenv("IMAP_HOST", "").strip()
+IMAP_HOST_2 = os.getenv("IMAP_HOST_2", "").strip()
 IMAP_PORT = _int_env("IMAP_PORT", 993, 1, 65535)
 IMAP_USER = os.getenv("IMAP_USER", "").strip()
 # The app password lives in the macOS Keychain; .env is only read for old setups.
@@ -186,11 +188,31 @@ def remove_env(keys) -> None:
         os.environ.pop(k, None)
 
 
-def set_imap(user: str, password: str, lookback: int | None = None) -> None:
-    """Save the Gmail IMAP login and apply it live: the address goes to .env,
+def imap_host(box: int = 1) -> str:
+    """The server a mailbox is read from: the one set for it, else the one its address tells, else Gmail's."""
+    from . import mailhosts
+    typed, user = (IMAP_HOST, IMAP_USER) if box == 1 else (IMAP_HOST_2, IMAP_USER_2)
+    return typed or str(mailhosts.server_for(user)["host"]) or "imap.gmail.com"
+
+
+def _keep_host(key: str, host: str | None) -> str:
+    """Write (or, when empty, remove) a mailbox's own server in .env; None leaves it as it is."""
+    if host is None:
+        return IMAP_HOST if key == "IMAP_HOST" else IMAP_HOST_2
+    host = host.strip().lower()
+    if host:
+        update_env({key: host})
+    else:
+        remove_env([key])
+    return host
+
+
+def set_imap(user: str, password: str, lookback: int | None = None, host: str | None = None) -> None:
+    """Save the mailbox login and apply it live: the address goes to .env,
     the app password to the macOS Keychain (to .env only where there is none)."""
-    global IMAP_USER, IMAP_PASSWORD, IMAP_LOOKBACK_DAYS
+    global IMAP_USER, IMAP_PASSWORD, IMAP_LOOKBACK_DAYS, IMAP_HOST
     user, password = user.strip(), password.strip()
+    IMAP_HOST = _keep_host("IMAP_HOST", host)
     vals = {"IMAP_USER": user}
     if lookback is not None:
         vals["IMAP_LOOKBACK_DAYS"] = str(int(lookback))
@@ -209,16 +231,17 @@ def mailboxes() -> list[dict[str, str]]:
     """The mailboxes to scan: the main one, then the optional second one."""
     boxes = []
     if IMAP_USER and IMAP_PASSWORD:
-        boxes.append({"user": IMAP_USER, "password": IMAP_PASSWORD})
+        boxes.append({"user": IMAP_USER, "password": IMAP_PASSWORD, "host": imap_host(1)})
     if IMAP_USER_2 and IMAP_PASSWORD_2 and IMAP_USER_2.lower() != IMAP_USER.lower():
-        boxes.append({"user": IMAP_USER_2, "password": IMAP_PASSWORD_2})
+        boxes.append({"user": IMAP_USER_2, "password": IMAP_PASSWORD_2, "host": imap_host(2)})
     return boxes
 
 
-def set_imap2(user: str, password: str) -> None:
+def set_imap2(user: str, password: str, host: str | None = None) -> None:
     """Save or change the optional second mailbox (address in .env, password in the Keychain)."""
-    global IMAP_USER_2, IMAP_PASSWORD_2
+    global IMAP_USER_2, IMAP_PASSWORD_2, IMAP_HOST_2
     user, password = user.strip(), password.strip()
+    IMAP_HOST_2 = _keep_host("IMAP_HOST_2", host)
     if vault.keychain().available:
         if password:
             vault.set_secret(vault.IMAP_ACCOUNT_2, password)
@@ -231,8 +254,9 @@ def set_imap2(user: str, password: str) -> None:
 
 def remove_imap2() -> None:
     """Forget the second mailbox: address, and its password from the Keychain."""
-    global IMAP_USER_2, IMAP_PASSWORD_2
-    remove_env(["IMAP_USER_2", "IMAP_PASSWORD_2"])
+    global IMAP_USER_2, IMAP_PASSWORD_2, IMAP_HOST_2
+    remove_env(["IMAP_USER_2", "IMAP_PASSWORD_2", "IMAP_HOST_2"])
+    IMAP_HOST_2 = ""
     try:
         vault.delete_secret(vault.IMAP_ACCOUNT_2)
     except Exception as e:  # noqa: BLE001 - the address is forgotten either way

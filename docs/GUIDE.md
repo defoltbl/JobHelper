@@ -148,7 +148,8 @@ You need:
 - A Mac with the app installed (see the [README](../README.md)).
 - A Claude subscription, and the Claude Code program signed in on this Mac.
 - Your CV as a `.docx`, `.pdf` or `.txt` file.
-- Optional: a Gmail address that you apply from, and an *App Password* for it.
+- Optional: the mailbox you apply from, and a password for a program to read it (for Gmail
+  and most other providers, an *app password*).
 
 ### What the welcome card checks
 
@@ -182,17 +183,31 @@ works except reading replies.
 
 ### Connect your mailbox
 
-1. In your Google account, turn on **2-Step Verification**.
-2. In your Google account, create an **App Password** and name it "JobHelper".
-3. On the **Job email** row of the welcome card, select **Change**.
-4. Enter the address and the 16-letter App Password.
+1. Get a password for a program from your mail provider (the table below). For Gmail: turn on
+   **2-Step Verification** in your Google account, then create an **App Password** and name it
+   "JobHelper".
+2. On the **Job email** row of the welcome card, select **Connect** (or **Change**).
+3. Enter the address. The line under the fields then says which server it will be read from and
+   what kind of password that provider wants.
+4. Enter the password. If the app does not know the provider, a third field appears: enter the
+   provider's **IMAP server** there (its help pages name it, for example `imap.example.com`).
 5. Select **Save**. The button says **Checking…** while the app signs in to the mailbox once
    with what you entered. A refused password is not saved, and the card says so in red.
 
+| Your address is at | Read from | Password to enter |
+|---|---|---|
+| Gmail | `imap.gmail.com` | A Google App Password (16 letters) |
+| Yahoo, AOL | The provider's server | An app password from the account's security settings |
+| iCloud | `imap.mail.me.com` | An app-specific password from your Apple account |
+| Fastmail, Zoho | The provider's server | An app password |
+| Seznam, GMX, WEB.DE | The provider's server | Your mailbox password, with IMAP turned on in the mailbox settings |
+| A company or another provider | The **IMAP server** you type | What that provider gives for reading mail by IMAP |
+| Outlook.com, Hotmail, Proton Mail | Not possible | These cannot be read with a password. Forward your job mail to another mailbox and connect that one, or paste replies into their applications (section 9) |
+
 > **Note**
-> An App Password is a separate password that only lets a program read mail. You can cancel
-> it in your Google account at any time without changing your real password. Never enter your
-> real Google password in the app.
+> An app password is a separate password that only lets a program read mail. You can cancel it
+> in your account at any time without changing your real password. Where a provider offers
+> one, never enter your real password in the app.
 
 ### Add a second mailbox (optional)
 
@@ -200,7 +215,8 @@ Use this when replies arrive at two addresses, for example an old address and a 
 
 1. On the welcome card, under the **Job email** row, find **Second mailbox (optional)**.
 2. Select **Add**.
-3. Enter the second address and its own App Password, then select **Save**.
+3. Enter the second address and its own password, then select **Save**. It may be at another
+   provider than the first one.
 
 Both mailboxes are then read by every email scan. To find older replies in the new mailbox,
 run one longer scan (section 10, *Look further back once*). A problem with the second mailbox never
@@ -227,7 +243,9 @@ chip (**Claude**, **Email**, **CV**) are the same checks at a glance.
 |---|---|---|
 | **Claude account** stays red after you sign in | The sign-in was done in another browser profile, or was cancelled | Select **Sign in with Claude** again |
 | "A paid API key is set" | `ANTHROPIC_API_KEY` exists in your environment | Remove the variable and start the app again |
-| "The mail server refused this address and App Password" | The normal password was used, the App Password was cancelled, or it belongs to another address | Create an App Password for this address and enter that one |
+| "The mail server refused this address and password" | The normal password was used where an app password is needed, the app password was cancelled, or it belongs to another address | Create an app password for this address and enter that one |
+| "The app does not know this provider" | The address is at a company or a small provider | Enter its IMAP server in the third field |
+| "Microsoft no longer lets a program read…" | Outlook.com and Hotmail cannot be read with a password | Forward your job mail to another mailbox and connect that one |
 | "Saved. The mail server could not be reached" | No internet connection at that moment | Nothing. The first email scan shows whether it works |
 | **Master CV** is red | No CV was chosen, or the file was moved | Select the **Change…** button and pick the file |
 
@@ -810,7 +828,7 @@ The scan reads that period once. The setting **Scan emails from the last** stays
 | "0 new" after a scan | No new replies in the period, or they were read by an earlier scan | Nothing. **Emails read** on the Last run card shows what the scan went through. To look further back, use **Look further back once** |
 | A rejection is missing | It did not arrive in a scanned mailbox, or it is in another folder | Turn on **Also archived mail and spam**, or paste the reply into the application (section 9) |
 | A reply was filed to the wrong application | Two applications at the same company | Open the right application and set its status by hand |
-| A warning about the second mailbox | Its App Password was cancelled or mistyped | Open the Account card and select **Change** for the second mailbox |
+| A warning about the second mailbox | Its password was cancelled or mistyped | Open the Account card and select **Change** for the second mailbox |
 
 ---
 
@@ -1150,7 +1168,7 @@ Everything stays on your Mac. The only things that leave it are the questions pu
 |---|---|---|
 | The job list, your profile, your settings, the replies | `data/`, as encrypted files | AES-256 encryption |
 | All backups | `data/backups/` | AES-256 encryption |
-| The Gmail App Password and the data key | The macOS Keychain | Your Mac's login |
+| The mailbox passwords and the data key | The macOS Keychain | Your Mac's login |
 | CVs, letters, Excel tables | `data/`, as ordinary files, so that Word and Excel can open them | The encryption of your disk |
 | The rule files for the CV and the letter | `data/` | A signature; a change made outside the app must be approved |
 

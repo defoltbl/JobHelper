@@ -135,7 +135,7 @@ data/                your data; only the *.example.* files are in git
   `scrapers_page` (any other page: only the copy it publishes for search engines).
 - **Rules without a model call:** `filters` (level, years, languages), `prefilter` (another
   profession, unwanted roles), `keywords`, `salary`, `merge`, `followup`, `planner`, `language`
-  (which language an ad is written in), `places` (which city is in which country, and what
+  (which language an ad is written in), `mailhosts` (which server a mailbox is read from), `places` (which city is in which country, and what
   counts as "here" for a search).
 - **Writing:** `cv_tailor`, `cover_letter`, `letters` (your own letters), `form_answers`,
   `interview_prep`, `prep_doc`, `pdf`.
@@ -269,7 +269,6 @@ found is fixed (see CHANGELOG, 10 October). Not read line by line: the visual ma
 
 4. **The interview preparation is worded for technical roles** ("engineer", "stack"), and the remote boards
    read are the programming feeds.
-5. **The mailbox check expects a Gmail App Password** (16 letters), though another mail host can be set in `.env`.
 - 11 jobs still have documents from a higher score (the user's decision: New Jobs, Move them to backup).
 
 **Needs the user**

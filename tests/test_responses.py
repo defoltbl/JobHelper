@@ -316,10 +316,11 @@ def test_trying_a_mailbox_tells_refused_from_unreachable(monkeypatch):
         def logout(self):
             self.calls.append("logout")
 
-    box = Box()
-    monkeypatch.setattr(imaplib, "IMAP4_SSL", lambda host, port, timeout=None: box)
+    box, hosts = Box(), []
+    monkeypatch.setattr(imaplib, "IMAP4_SSL", lambda host, port, timeout=None: hosts.append(host) or box)
     real = _REAL_TRY_LOGIN                    # conftest replaces the function for every test; this is the real one
-    assert real("me@example.com", "abcdabcdabcdabcd") == {"ok": True, "msg": ""} and box.calls == ["login", "logout"]   # nothing is opened or read
+    assert real("me@example.com", "abcdabcdabcdabcd", host="imap.example.com") == {"ok": True, "msg": ""}
+    assert box.calls == ["login", "logout"] and hosts == ["imap.example.com"]     # nothing is opened or read
     box = Box(imaplib.IMAP4.error("[AUTHENTICATIONFAILED] Invalid credentials"))
     refused = real("me@example.com", "secretsecretsecr")
     assert refused["ok"] is False and "refused" in refused["msg"] and "secretsecretsecr" not in refused["msg"] and box.calls[-1] == "logout"

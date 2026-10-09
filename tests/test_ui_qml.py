@@ -236,13 +236,14 @@ def test_a_refused_app_password_is_not_saved(ui, monkeypatch):
     """Before, only the form of the password was checked, and a wrong one showed up at the first scan."""
     from jobhelper import email_client
     saved, tried = [], []
-    monkeypatch.setattr(config, "set_imap", lambda user, pwd, lookback=None: saved.append((user, pwd)))
-    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0: tried.append((user, password)) or
+    monkeypatch.setattr(config, "set_imap", lambda user, pwd, lookback=None, host=None: saved.append((user, pwd)))
+    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0, host="": tried.append((user, password)) or
                         {"ok": False, "msg": "The mail server refused this address and App Password. Check both."})
     welcome = ui.find("welcome")
     ui.js("welcome.openCard(); welcome.editBox = 1")
     welcome.setProperty("editEmail", True)
     welcome.setProperty("emailDraft", "jobs@example.com")
+    welcome.setProperty("hostDraft", "imap.example.com")
     welcome.setProperty("pwDraft", "abcdabcdabcdabcd")
     ui.js("welcome.saveEmail()")
     ui.js("welcome.saveEmail()")                                   # a second press while it is checking does nothing
@@ -252,7 +253,7 @@ def test_a_refused_app_password_is_not_saved(ui, monkeypatch):
     assert welcome.property("pwDraft") == "" and ui.find("emailSave").property("text") == "Save"
 
     # no connection: saved, and the card says the password was not tried
-    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0:
+    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0, host="":
                         {"ok": None, "msg": "The mail server could not be reached, so the password was not tried."})
     welcome.setProperty("pwDraft", "abcdabcdabcdabcd")
     ui.js("welcome.saveEmail()")
@@ -267,18 +268,25 @@ def test_a_refused_app_password_is_not_saved(ui, monkeypatch):
 
 def test_welcome_rejects_a_bad_email_and_stays_open(ui, monkeypatch):
     saved = []
-    monkeypatch.setattr(config, "set_imap", lambda user, pwd, lookback=None: saved.append((user, pwd)))
+    monkeypatch.setattr(config, "set_imap", lambda user, pwd, lookback=None, host=None: saved.append((user, pwd)))
     welcome = ui.find("welcome")
     ui.js("welcome.openCard()")
     welcome.setProperty("editEmail", True)
-    for email, password in (("not-an-email", ""), ("jobs@example.com", "short"), ("jobs@example.com", "пароль")):
+    welcome.setProperty("hostDraft", "")
+    for email, password in (("not-an-email", ""), ("jobs@gmail.com", "short"), ("jobs@gmail.com", "пароль"), ("jobs@gmail.com", "abcdabcdabcd1234"),
+                            ("jobs@example.com", "secret123"), ("jobs@outlook.com", "secret123"), ("jobs@seznam.cz", "пароль")):
         welcome.setProperty("emailDraft", email)
         welcome.setProperty("pwDraft", password)
         ui.js("welcome.saveEmail()")
         assert welcome.property("emailErr") != "", (email, password)
         assert welcome.property("editEmail") is True
     assert saved == []
-    welcome.setProperty("emailDraft", "jobs@example.com")
+    welcome.setProperty("emailDraft", "jobs@gmail.com")
+    assert welcome.property("needsServer") is False and "Google App Password" in ui.find("mailHint").property("text")
+    welcome.setProperty("emailDraft", "jobs@example.com")          # a provider the app does not know: its server is asked for
+    assert welcome.property("needsServer") is True and "imap.example.com" in ui.find("mailHint").property("text")
+    assert "bridge.saveEmailChecked(editBox, emailDraft, pwDraft, needsServer ? hostDraft" in qml_source()
+    welcome.setProperty("hostDraft", "imap.example.com")
     welcome.setProperty("pwDraft", "abcd abcd abcd abcd")          # spaces as Google shows it
     ui.js("welcome.saveEmail()")
     assert welcome.property("emailBusy") is True and ui.find("emailSave").property("text") == "Checking…"

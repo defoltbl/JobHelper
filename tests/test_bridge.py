@@ -178,38 +178,98 @@ def test_a_longer_scan_reads_that_period_and_leaves_the_setting(bridge, monkeypa
 def test_saving_a_mailbox_tries_it_first(bridge, monkeypatch):
     from jobhelper import email_client
     saved, tried = [], []
-    monkeypatch.setattr(config, "set_imap", lambda user, pwd, lookback=None: saved.append((1, user, pwd)))
-    monkeypatch.setattr(config, "set_imap2", lambda user, pwd: saved.append((2, user, pwd)))
-    monkeypatch.setattr(config, "IMAP_USER", "main@example.com")
+    monkeypatch.setattr(config, "set_imap", lambda user, pwd, lookback=None, host=None: saved.append((1, user, pwd, host)))
+    monkeypatch.setattr(config, "set_imap2", lambda user, pwd, host=None: saved.append((2, user, pwd, host)))
+    monkeypatch.setattr(config, "IMAP_USER", "main@gmail.com")
     monkeypatch.setattr(config, "IMAP_PASSWORD", "oldpasswordoldpw")
     monkeypatch.setattr(config, "IMAP_PASSWORD_2", "")
     answer = {"ok": True, "msg": ""}
-    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0: tried.append((user, password)) or dict(answer))
+    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0, host="": tried.append((user, password, host)) or dict(answer))
     check = bridge._save_email_checked
     # wrong input never reaches the mail server
-    assert check(3, "a@example.com", "abcdabcdabcdabcd")["ok"] is False
+    assert check(3, "a@gmail.com", "abcdabcdabcdabcd")["ok"] is False
     assert check(1, "not an address", "abcdabcdabcdabcd")["ok"] is False
-    assert "main job email" in check(2, "MAIN@example.com", "abcdabcdabcdabcd")["msg"]
-    assert "App Password" in check(2, "two@example.com", "")["msg"]
+    assert "main job email" in check(2, "MAIN@gmail.com", "abcdabcdabcdabcd")["msg"]
+    assert "Enter the password" in check(2, "two@gmail.com", "")["msg"]
+    assert "16 letters" in check(2, "two@gmail.com", "short")["msg"] and "16 letters" in check(2, "two@gmail.com", "abcdabcdabcd1234")["msg"]
     assert tried == [] and saved == []
     # accepted: saved; an empty password means the one already kept
-    assert check(1, " main@example.com ", "") == {"ok": True}
-    assert tried == [("main@example.com", "oldpasswordoldpw")] and saved == [(1, "main@example.com", "oldpasswordoldpw")]
+    assert check(1, " main@gmail.com ", "") == {"ok": True}
+    assert tried == [("main@gmail.com", "oldpasswordoldpw", "imap.gmail.com")] and saved == [(1, "main@gmail.com", "oldpasswordoldpw", "")]
     # refused: not saved, and the reason does not repeat the password
-    answer.update(ok=False, msg="The mail server refused this address and App Password.")
-    result = check(2, "two@example.com", "wrongwrongwrongw")
+    answer.update(ok=False, msg="The mail server refused this address and password.")
+    result = check(2, "two@gmail.com", "wrongwrongwrongw")
     assert result["ok"] is False and "refused" in result["msg"] and "wrongwrongwrongw" not in result["msg"] and len(saved) == 1
     # the server cannot be reached: saved, with a note
     answer.update(ok=None, msg="The mail server could not be reached, so the password was not tried.")
-    result = check(2, "two@example.com", "abcdabcdabcdabcd")
-    assert result["ok"] is True and "not tried" in result["note"] and saved[-1] == (2, "two@example.com", "abcdabcdabcdabcd")
+    result = check(2, "two@gmail.com", "abcdabcdabcdabcd")
+    assert result["ok"] is True and "not tried" in result["note"] and saved[-1] == (2, "two@gmail.com", "abcdabcdabcdabcd", "")
+
+
+def test_a_mailbox_at_any_provider_can_be_connected(bridge, monkeypatch):
+    """It used to be Gmail or nothing: a 16-letter password was demanded and Google's server was asked, whatever the address."""
+    from jobhelper import email_client
+    saved, tried = [], []
+    monkeypatch.setattr(config, "set_imap", lambda user, pwd, lookback=None, host=None: saved.append((user, pwd, host)))
+    monkeypatch.setattr(config, "IMAP_USER", "")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "")
+    monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0, host="": tried.append(host) or {"ok": True, "msg": ""})
+    check = bridge._save_email_checked
+    # a provider the app knows: the server comes from the address, and its own kind of password is accepted
+    assert check(1, "me@seznam.cz", "My-Real.Pass9") == {"ok": True}
+    assert check(1, "me@icloud.com", "abcd-efgh-ijkl-mnop") == {"ok": True}
+    assert tried == ["imap.seznam.cz", "imap.mail.me.com"] and saved[-1] == ("me@icloud.com", "abcd-efgh-ijkl-mnop", "")
+    # a provider it does not know: the server must be typed, and must look like one
+    assert "IMAP server" in check(1, "me@smallfirm.example", "secret123")["msg"]
+    for wrong in ("imap", "http://imap.smallfirm.example", "imap smallfirm", "imap..example", "-imap.example.com", "imap.example.com/x"):
+        assert "not a mail server's name" in check(1, "me@smallfirm.example", "secret123", wrong)["msg"], wrong
+    assert check(1, "me@smallfirm.example", "secret123", " IMAP.SmallFirm.example ") == {"ok": True}
+    assert tried[-1] == "imap.smallfirm.example" and saved[-1] == ("me@smallfirm.example", "secret123", "imap.smallfirm.example")
+    # a company address hosted by Google: typing Google's server brings Google's password rule with it
+    assert "16 letters" in check(1, "me@smallfirm.example", "secret123", "imap.gmail.com")["msg"]
+    # providers that cannot be read with a password say so, and say what to do instead
+    for address in ("me@outlook.com", "me@hotmail.com", "me@proton.me"):
+        result = check(1, address, "whatever123")
+        assert result["ok"] is False and "Forward your job mail" in result["msg"], address
+    # a password a mail server cannot take here
+    assert "English letters" in check(1, "me@seznam.cz", "пароль123")["msg"]
+    assert "the most is 128" in check(1, "me@seznam.cz", "x" * 129)["msg"]
+    assert len(saved) == 3
+
+
+def test_what_the_app_knows_about_a_mail_provider(bridge):
+    gmail = bridge.mailServer("me@gmail.com", "")
+    assert gmail["host"] == "imap.gmail.com" and gmail["known"] is True and gmail["gmail"] is True and "Google App Password" in gmail["hint"]
+    assert bridge.mailServer("ME@Yahoo.com", "")["host"] == "imap.mail.yahoo.com"
+    unknown = bridge.mailServer("me@smallfirm.example", "")
+    assert unknown["host"] == "" and unknown["known"] is False and "imap.smallfirm.example" in unknown["hint"] and unknown["problem"] == ""
+    assert bridge.mailServer("me@smallfirm.example", "mail.smallfirm.example")["host"] == "mail.smallfirm.example"
+    assert "Outlook.com" in bridge.mailServer("me@outlook.com", "")["problem"]
+    assert bridge.mailServer("", "") == {"host": "", "known": False, "gmail": False, "hint": "", "problem": ""}
+
+
+def test_each_mailbox_is_read_from_its_own_server(bridge, tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "ENV_PATH", tmp_path / ".env")
+    for name in ("IMAP_USER", "IMAP_PASSWORD", "IMAP_USER_2", "IMAP_PASSWORD_2", "IMAP_HOST", "IMAP_HOST_2"):
+        monkeypatch.setattr(config, name, "")
+        monkeypatch.delenv(name, raising=False)
+    assert bridge._save_email_checked(1, "me@gmail.com", "abcdabcdabcdabcd") == {"ok": True}
+    assert bridge._save_email_checked(2, "me@smallfirm.example", "secret123", "imap.smallfirm.example") == {"ok": True}
+    boxes = config.mailboxes()
+    assert [(b["user"], b["host"]) for b in boxes] == [("me@gmail.com", "imap.gmail.com"), ("me@smallfirm.example", "imap.smallfirm.example")]
+    env_text = (tmp_path / ".env").read_text(encoding="utf-8")
+    assert "IMAP_HOST_2=imap.smallfirm.example" in env_text and "IMAP_HOST=" not in env_text.replace("IMAP_HOST_2", "") and "secret123" not in env_text
+    assert bridge.removeEmail2() == {"ok": True} and config.IMAP_HOST_2 == "" and "IMAP_HOST_2" not in (tmp_path / ".env").read_text(encoding="utf-8")
+    # an old set-up with no server written anywhere is still Gmail's
+    monkeypatch.setattr(config, "IMAP_USER", "someone@oldsetup.example")
+    assert config.imap_host(1) == "imap.gmail.com"
 
 
 def test_the_mailbox_check_answers_the_window(bridge, monkeypatch):
     got = []
     bridge.emailSaved.connect(got.append)
-    monkeypatch.setattr(qt_bridge.Bridge, "_save_email_checked", lambda self, box, user, password: (_ for _ in ()).throw(RuntimeError("boom")))
-    bridge.saveEmailChecked(2, "two@example.com", "abcdabcdabcdabcd")
+    monkeypatch.setattr(qt_bridge.Bridge, "_save_email_checked", lambda self, box, user, password, host="": (_ for _ in ()).throw(RuntimeError("boom")))
+    bridge.saveEmailChecked(2, "two@example.com", "abcdabcdabcdabcd", "")
     from PySide6.QtTest import QTest
     for _ in range(100):
         QTest.qWait(10)

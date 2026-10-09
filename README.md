@@ -25,7 +25,7 @@ through the Claude Code CLI: no paid API key, no per-token bill.
   `ANTHROPIC_API_KEY`**: leaving it unset is what makes the app use the subscription, and the
   app refuses to run a search while it is set.
 - Python 3.10 or newer.
-- Optional: a Gmail **App Password** for reading replies; LibreOffice for PDF copies of the
+- Optional: a mailbox password for reading replies (for Gmail, an **App Password**); LibreOffice for PDF copies of the
   documents; a Jooble or Adzuna key for those two sources.
 
 Job search needs no key. The default sources are jobs.cz, prace.cz, LinkedIn's public pages and
@@ -40,7 +40,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install --require-hashes -r requirements.lock   # exact, hash-checked packages (or: pip install -r requirements.txt)
 
-cp .env.example .env          # optional settings (the Gmail password does NOT go here)
+cp .env.example .env          # optional settings (the mailbox password does NOT go here)
 ```
 
 Put your CV in `data/cv/`, or choose it in the Account card when the app starts.
@@ -101,20 +101,22 @@ The rest is in [COMMANDS.md](COMMANDS.md).
 - `data/jobs.json`, `data/profile.json`, `data/responses.db`: the app's own data, encrypted.
 - `data/backups/`: encrypted backups, made before anything is changed in bulk.
 
-### Connecting Gmail (once)
+### Connecting your mailbox (once)
 
-1. Turn on 2-Step Verification for the Google account.
-2. Create an App Password named "JobHelper" (Google Account → Security → App passwords).
-3. In the app, open the **Account** chip, press **Change** on *Job email*, enter the address and
-   the 16-letter password, and save.
+1. Get a password for a program from your mail provider. For Gmail: turn on 2-Step Verification,
+   then create an App Password named "JobHelper" (Google Account → Security → App passwords).
+2. In the app, open the **Account** chip, press **Change** on *Job email*, enter the address and
+   that password, and save. The app signs in once to check them.
 
-The address goes to `.env`; the password goes to the macOS Keychain. Use an App Password, never
-your real Google password. The app only ever **reads** the mailbox: it does not send, delete
+Gmail, Yahoo, iCloud, Fastmail, Seznam, GMX and others are recognised by the address; for any
+other provider the card asks for its IMAP server. Outlook.com and Proton Mail cannot be read
+with a password. The address goes to `.env`; the password goes to the macOS Keychain. Where the
+provider offers an app password, use it, never your real one. The app only ever **reads** the mailbox: it does not send, delete
 or mark anything.
 
 ## Security
 
-- The Gmail app password and the data key are in the macOS **Keychain**.
+- The mailbox passwords and the data key are in the macOS **Keychain**.
 - Job data, the profile, settings, the reply database and all backups are **AES-256 encrypted**
   on disk.
 - The CV rules, letter rules, letter template, master CV and career-site list are **signed**; a

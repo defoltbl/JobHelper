@@ -187,7 +187,7 @@ def mail(isolate_data, monkeypatch):
              "second@example.com": [{"msg_id": "<s1>"}, {"msg_id": "<both>"}]}
     asked = []
 
-    def fetch(user, password, since, all_folders=False):
+    def fetch(user, password, since, all_folders=False, host=""):
         asked.append(user)
         if isinstance(boxes.get(user), Exception):
             raise boxes[user]
@@ -220,7 +220,7 @@ def test_a_broken_second_mailbox_does_not_stop_the_scan(mail):
     boxes["second@example.com"] = imaplib.IMAP4.error("AUTHENTICATIONFAILED")
     got = email_client.fetch_recent(10)
     assert [m["msg_id"] for m in got] == ["<m1>", "<both>"]
-    assert "second@example.com" in email_client.last_warnings[0] and "App Password" in email_client.last_warnings[0]
+    assert "second@example.com" in email_client.last_warnings[0] and "check its password" in email_client.last_warnings[0]
 
 
 def test_a_broken_main_mailbox_is_still_an_error(mail):

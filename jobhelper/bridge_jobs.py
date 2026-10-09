@@ -128,14 +128,22 @@ class JobSlots:
     def countryOf(self, city):
         return self._api.country_of(city)
 
-    @Slot(int, str, str)
-    def saveEmailChecked(self, box, user, password):
-        """Try the mailbox's address and App Password for real, then save them. In the background
+    @Slot(str, str, result="QVariantMap")
+    def mailServer(self, address, typed):
+        """What the app knows about an address's mail provider, for the line under the fields:
+        {host, known, gmail, hint, problem}."""
+        from . import mailhosts
+        return mailhosts.server_for(address, typed)
+
+    @Slot(int, str, str, str)
+    def saveEmailChecked(self, box, user, password, host):
+        """Try the mailbox's address and password for real, then save them. In the background
         (it talks to the mail server); the answer arrives as emailSaved: {ok, msg, note, box}.
-        A refused password is not saved. With no connection it is saved, and `note` says it was not tried."""
+        A refused password is not saved. With no connection it is saved, and `note` says it was not tried.
+        `host` is the IMAP server, typed for a provider the app does not know ('' otherwise)."""
         def work():
             try:
-                result = self._save_email_checked(box, str(user or ""), str(password or ""))
+                result = self._save_email_checked(box, str(user or ""), str(password or ""), str(host or ""))
             except Exception as e:  # noqa: BLE001 - the card must always get an answer
                 trouble.note("saving the mailbox", e)
                 result = {"ok": False, "msg": "The mailbox could not be saved."}
@@ -143,24 +151,40 @@ class JobSlots:
             self._post("emailSaved", result)
         threading.Thread(target=work, daemon=True).start()
 
-    def _save_email_checked(self, box, user, password):
-        from . import email_client
+    def _save_email_checked(self, box, user, password, host=""):
+        from . import email_client, mailhosts
         from .qt_bridge import _address_problem
         if box not in (1, 2):
             return {"ok": False, "msg": "There is no such mailbox."}
+        user, host = user.strip(), host.strip().lower()
         problem = _address_problem(user)
         if problem:
             return {"ok": False, "msg": problem}
-        if box == 2 and user.strip().lower() == config.IMAP_USER.lower():
+        if box == 2 and user.lower() == config.IMAP_USER.lower():
             return {"ok": False, "msg": "That is already your main job email."}
-        effective = password.strip() or (config.IMAP_PASSWORD if box == 1 else config.IMAP_PASSWORD_2)
+        server = mailhosts.server_for(user, host)
+        if server["problem"]:
+            return {"ok": False, "msg": server["problem"]}
+        if not server["host"]:
+            return {"ok": False, "msg": server["hint"]}
+        same_address = user.lower() == (config.IMAP_USER if box == 1 else config.IMAP_USER_2).lower()
+        kept = (config.IMAP_PASSWORD if box == 1 else config.IMAP_PASSWORD_2) if same_address or not password.strip() else ""
+        if password.strip():
+            problem = mailhosts.password_problem(user, server["host"], password)
+            if problem:
+                return {"ok": False, "msg": problem}
+        effective = password.strip() or kept
         if not effective:
-            return {"ok": False, "msg": "Enter the App Password for that address."}
-        tried = email_client.try_login(user.strip(), effective)
+            return {"ok": False, "msg": "Enter the password for that address."}
+        tried = email_client.try_login(user, effective, host=server["host"])
         if tried.get("ok") is False:
             return {"ok": False, "msg": tried["msg"]}
-        saved = self.saveEmail(user, password) if box == 1 else self.saveEmail2(user, password)
-        if saved.get("ok") and tried.get("ok") is None:
+        if box == 1:
+            config.set_imap(user, effective, host=host)        # '' forgets a server typed earlier: the address tells it now
+        else:
+            config.set_imap2(user, effective, host=host)
+        saved = {"ok": True}
+        if tried.get("ok") is None:
             saved["note"] = "Saved. " + tried["msg"] + " The first email scan will show whether it works."
         return saved
 

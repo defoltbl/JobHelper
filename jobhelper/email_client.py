@@ -163,21 +163,21 @@ def _read(imap, num, user: str, folder: str) -> dict[str, Any] | None:
     }
 
 
-def try_login(user: str, password: str, timeout: float = 8.0) -> dict[str, Any]:
+def try_login(user: str, password: str, timeout: float = 8.0, host: str = "") -> dict[str, Any]:
     """Sign in to the mailbox and out again, to learn whether the address and password work.
 
     {ok: True} when they do; {ok: False, msg} when the server refused them; {ok: None, msg}
     when the server could not be reached, which says nothing about the password. Read-only:
     no folder is opened. The password is never part of a message."""
     try:
-        imap = imaplib.IMAP4_SSL(config.IMAP_HOST, config.IMAP_PORT, timeout=timeout)
+        imap = imaplib.IMAP4_SSL(host or config.imap_host(1), config.IMAP_PORT, timeout=timeout)
     except (OSError, imaplib.IMAP4.error):
         return {"ok": None, "msg": "The mail server could not be reached, so the password was not tried."}
     try:
         imap.login(user, password)
     except imaplib.IMAP4.error:
-        return {"ok": False, "msg": "The mail server refused this address and App Password. Check both: the App Password is the "
-                                    "16 letters made in your Google account for this address, not your normal password."}
+        return {"ok": False, "msg": "The mail server refused this address and password. Check both. Most providers want a "
+                                    "separate app password for a program, not the one you sign in with."}
     except OSError:
         return {"ok": None, "msg": "The connection to the mail server was lost, so the password was not tried."}
     finally:
@@ -188,12 +188,12 @@ def try_login(user: str, password: str, timeout: float = 8.0) -> dict[str, Any]:
     return {"ok": True, "msg": ""}
 
 
-def _fetch_box(user: str, password: str, since: str, all_folders: bool = False) -> list[dict[str, Any]]:
+def _fetch_box(user: str, password: str, since: str, all_folders: bool = False, host: str = "") -> list[dict[str, Any]]:
     """Recent messages of one mailbox: the Inbox, and with all_folders also
     archived mail and spam (not Sent or Drafts, and nothing you wrote yourself).
     Read-only: folders are opened read-only and messages are fetched with PEEK,
     so nothing is marked, moved or changed."""
-    imap = imaplib.IMAP4_SSL(config.IMAP_HOST, config.IMAP_PORT)
+    imap = imaplib.IMAP4_SSL(host or config.imap_host(1), config.IMAP_PORT)
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
 
@@ -249,21 +249,20 @@ def fetch_recent(lookback_days: int | None = None, all_folders: bool | None = No
     boxes = config.mailboxes()
     if not boxes:
         raise RuntimeError(
-            "IMAP is not configured. Add your job email in the app's Account card "
-            "(use a Gmail App Password, not your real password)."
+            "No mailbox is connected. Add your job email in the app's Account card."
         )
     days = lookback_days if lookback_days is not None else config.IMAP_LOOKBACK_DAYS
     since = (datetime.now() - timedelta(days=days)).strftime("%d-%b-%Y")
     if all_folders is None:
         all_folders = config.ui_settings().get("scan_all_folders") is True
     last_warnings.clear()
-    out = _fetch_box(boxes[0]["user"], boxes[0]["password"], since, all_folders)
+    out = _fetch_box(boxes[0]["user"], boxes[0]["password"], since, all_folders, host=boxes[0].get("host", ""))
     seen = {m["msg_id"] for m in out}
     for box in boxes[1:]:
         try:
-            extra = _fetch_box(box["user"], box["password"], since, all_folders)
+            extra = _fetch_box(box["user"], box["password"], since, all_folders, host=box.get("host", ""))
         except imaplib.IMAP4.error:
-            last_warnings.append(f"Couldn't sign in to {box['user']}: check its App Password in the Account card.")
+            last_warnings.append(f"Couldn't sign in to {box['user']}: check its password in the Account card.")
             continue
         except OSError as e:
             last_warnings.append(f"Couldn't reach {box['user']}: {e}")
