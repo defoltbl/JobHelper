@@ -129,6 +129,55 @@ def unverified_terms(master_text: str) -> list[str]:
     return [t for t in terms if not re.search(rf"(?<![a-z0-9]){re.escape(t.lower())}(?![a-z0-9])", low)]
 
 
+_FILLER = set("""the and for with you your our are will have has this that from into about over under more most very also such than then
+    their they them was were been being can could should would may might must not but all any each every other another some many much new
+    who what which when where while how why its his her she him out off per via able well good great strong high level based using use used
+    work working works role roles team teams job jobs position company companies experience experienced skills skill knowledge ability
+    including include includes within across between part time full year years month months day days people person candidate candidates
+    looking join offer offers opportunity environment related relevant required requirements preferred plus etc""".split())
+
+
+def _stem(word: str) -> str:
+    """A word without its ending, so that "invoices" and "invoice", "reconciling" and "reconciled" compare equal."""
+    w = word.lower()
+    for ending in ("ations", "ation", "ings", "ing", "ies", "ed", "es", "s"):
+        if w.endswith(ending) and len(w) - len(ending) >= 4:
+            return w[: -len(ending)]
+    return w
+
+
+def borrowed_phrases(text: str, description: str, backed: str) -> list[str]:
+    """Phrases of two words that `text` (a drafted PROFILE) took from the posting although neither word is
+    anywhere in what the person wrote (the master CV and their own notes): "cost center", "master data".
+
+    The fixed "never claim" list knows technologies. This finds the same thing for any profession: the
+    surest sign that a draft presents the posting's requirements as the person's experience is a term of
+    the posting, in the draft, of which the CV knows nothing. One shared word is not enough to count,
+    so ordinary wording is left alone."""
+    words = lambda t: re.findall(r"[^\W\d_]{3,}", (t or "").lower())      # noqa: E731
+    known = {_stem(w) for w in words(backed)}
+    posting = words(description)
+    wanted = {(_stem(a), _stem(b)) for a, b in zip(posting, posting[1:])
+              if a not in _FILLER and b not in _FILLER and _stem(a) not in known and _stem(b) not in known}
+    found, drafted = [], re.findall(r"[^\W\d_]{3,}", text or "")
+    for a, b in zip(drafted, drafted[1:]):
+        if (_stem(a), _stem(b)) in wanted and f"{a} {b}".lower() not in [f.lower() for f in found]:
+            found.append(f"{a} {b}")
+    return found
+
+
+def borrowed_claims(profile: str, description: str, backed: str) -> list[str]:
+    """The borrowed phrases a PROFILE states as experience. One named only as an interest
+    ("keen to grow into …") is the honest way to mention it and is left out."""
+    phrases = borrowed_phrases(profile, description, backed)
+    claimed = []
+    for sentence in re.split(r"(?<=[.!?])\s+", profile or ""):
+        if _INTEREST.search(sentence):
+            continue
+        claimed += [p for p in phrases if _mentions(sentence, p) and p not in claimed]
+    return claimed
+
+
 def unknown_skill_terms(items: str, master_text: str) -> list[str]:
     """Technology-looking words in a KEY SKILLS row that the master never
     mentions (names with a capital letter, digit or symbol, e.g. "Kafka", "S3")."""
@@ -430,6 +479,7 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
     master_profile = _text(sec["profile"]) if sec["profile"] is not None else ""
     m_rows = [_text(p) for p in sec["rows"]]
     unverified = unverified_terms(cv_text)
+    backed = cv_text + "\n" + config.experience_notes()          # everything the person wrote about their own work
 
     description = (job.get("description") or "").strip()[:5000] or "(No description was available.)"
     profile, skills, role_short, feedback = "", [], "", ""
@@ -449,6 +499,9 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
                   for r in (data.get("skills") or []) if isinstance(r, dict) and r.get("label") and r.get("items")]
         role_short = str(data.get("role_short", ""))
         problems = content_problems(profile, skills, master_profile, m_rows, unverified, cv_text)
+        problems += [f"PROFILE presents '{phrase}' as the candidate's experience, but those are the posting's words: nothing in the "
+                     "master CV speaks of it. Leave it out, or name it only as something the candidate is keen to grow into."
+                     for phrase in borrowed_claims(profile, description, backed)]
         if not problems:
             break
         feedback = "\nYour previous draft was rejected. Fix these problems:\n" + \
@@ -457,6 +510,13 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
     profile, skills = enforce(profile, skills, unverified, cv_text)
     if not profile:
         raise ValueError("The model returned no usable PROFILE.")
+    # What is still stated as experience in the posting's words after the retry is not cut out by the app (a phrase
+    # such as "version control" can be fair wording for what the CV does show): it is put in front of the person.
+    left = borrowed_claims(profile, description, backed)
+    if left:
+        job["cv_check"] = left[:8]
+    else:
+        job.pop("cv_check", None)
     # Still too long after the retry: drop trailing items from the longest rows.
     budget = estimate_lines(master_profile, m_rows) + SPARE_LINES
     while skills and estimate_lines(profile, [_row_text(r) for r in skills]) > budget:

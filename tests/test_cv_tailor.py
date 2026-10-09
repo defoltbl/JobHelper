@@ -205,3 +205,64 @@ def test_a_replaced_document_is_kept_in_the_backup(isolate_data):
     assert not old.exists() and len(kept) == 1 and vault.read_bytes(kept[0]) == b"the earlier adapted CV"
     agent3_letters._retire(old)                                        # nothing there: nothing happens
     assert len(list((vault.backups_dir() / "letter_versions").iterdir())) == 1
+
+
+# ── the posting's words stated as the person's experience, in any profession ──
+ACCOUNTANT_CV = ("Junior accountant with a bachelor's degree in finance and one year of practice in accounts payable. "
+                 "Processed about 300 supplier invoices a month in SAP, prepared weekly payment runs, reconciled supplier statements "
+                 "and helped with the month-end closing. Bank reconciliation, VAT returns, SAP FI, MS Excel.")
+AP_POSTING = ("You will post invoices with the correct tax codes and cost centers, keep the vendor master data up to date within our "
+              "Procure to Pay process, and confirm intercompany balances. Experience with Coupa is a plus. We work in SAP.")
+
+
+def test_terms_of_the_posting_that_the_cv_knows_nothing_of_are_found():
+    """Seen with an accountant's CV: the adapted profile said "coding tax and cost center data" and "vendor master
+    data upkeep". The fixed never-claim list knows technologies only, so nothing objected."""
+    draft = ("Junior accountant with one year of practice in accounts payable. Experienced in processing supplier invoices, "
+             "coding tax codes and cost center data, and vendor master data upkeep in SAP. Keen to grow into intercompany balances and Coupa.")
+    found = [p.lower() for p in cv_tailor.borrowed_phrases(draft, AP_POSTING, ACCOUNTANT_CV)]
+    assert {"tax codes", "cost center", "vendor master", "master data", "intercompany balances"} <= set(found)
+    claimed = [p.lower() for p in cv_tailor.borrowed_claims(draft, AP_POSTING, ACCOUNTANT_CV)]
+    assert {"tax codes", "cost center", "vendor master", "master data"} <= set(claimed)
+    assert "intercompany balances" not in claimed, "named as an interest: that is the honest way"
+
+
+def test_wording_the_cv_backs_is_left_alone():
+    fine = ("Junior accountant with one year of practice in accounts payable. Experienced in processing supplier invoices, "
+            "payment runs and reconciling supplier statements in SAP, and in supporting the month-end closing.")
+    assert cv_tailor.borrowed_phrases(fine, AP_POSTING, ACCOUNTANT_CV) == []
+    # one shared word is not enough; endings do not matter; what the person wrote in their notes counts as theirs
+    assert cv_tailor.borrowed_phrases("I reconciled invoices and posted invoice batches.", AP_POSTING, ACCOUNTANT_CV) == []
+    notes = ACCOUNTANT_CV + "\nI also kept the vendor master data up to date."
+    assert "vendor master" not in [p.lower() for p in cv_tailor.borrowed_phrases("Kept vendor master data current.", AP_POSTING, notes)]
+    assert cv_tailor.borrowed_phrases("", AP_POSTING, ACCOUNTANT_CV) == [] and cv_tailor.borrowed_phrases("Cost centers.", "", ACCOUNTANT_CV) == []
+    assert cv_tailor.borrowed_claims("", AP_POSTING, ACCOUNTANT_CV) == []
+
+
+def test_a_draft_that_borrows_from_the_posting_is_sent_back_and_what_is_left_is_noted(isolate_data, monkeypatch):
+    profile, rows, _ = _example_content()
+    cv_text = "\n".join(p.text for p in docx.Document(str(MASTER)).paragraphs)
+    posting = "You will run quarterly zebra migrations and tune walrus pipelines for our platform."
+    assert "zebra" not in cv_text.lower() and "walrus" not in cv_text.lower()
+    borrowed = profile.rstrip() + " Experienced in zebra migrations."
+    prompts, answers = [], [{"profile": borrowed, "skills": rows, "role_short": "Admin"}, {"profile": profile, "skills": rows, "role_short": "Admin"}]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or answers[min(len(prompts) - 1, 1)])
+    job = store.new_job(id="j1", title="Administrator", company="Acme", description=posting)
+    name = cv_tailor.tailor(job, cv_text, MASTER)
+    assert len(prompts) == 2 and "PROFILE presents 'zebra migrations' as the candidate's experience" in prompts[1]
+    assert "cv_check" not in job                                            # the second draft is clean
+    text = "\n".join(p.text for p in docx.Document(str(config.TAILORED_CV_DIR / name)).paragraphs)
+    assert "zebra" not in text
+    # the model insists: the app does not cut the sentence out, it tells the person what to look at
+    prompts.clear()
+    answers[1] = answers[0]
+    job = store.new_job(id="j2", title="Administrator", company="Acme", description=posting)
+    cv_tailor.tailor(job, cv_text, MASTER)
+    assert job["cv_check"] == ["zebra migrations"]
+    # named as an interest, it is neither sent back nor noted
+    prompts.clear()
+    keen = {"profile": profile.rstrip() + " Keen to grow into zebra migrations.", "skills": rows, "role_short": "Admin"}
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or keen)
+    job = store.new_job(id="j3", title="Administrator", company="Acme", description=posting)
+    cv_tailor.tailor(job, cv_text, MASTER)
+    assert not any("zebra migrations' as the candidate" in prompt for prompt in prompts) and "cv_check" not in job

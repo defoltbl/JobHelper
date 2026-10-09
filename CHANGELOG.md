@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **The adapted CV is checked for the posting's own words, in any profession.** A whole run with an invented accountant's CV on real postings showed the gap: the adapted profile said "coding tax and cost center data" and "vendor master data upkeep", which were the posting's words and not the CV's. The existing check knew technology names only. Now any two-word term of the posting that the draft states as experience, while your CV has neither word, is sent back to be removed or named only as an interest. What is still there after that is not cut out silently: the job window says **Check your adapted CV** and names the terms. On the same postings the new profiles state only what the CV shows.
 - **Fixed: a reply could be filed under a company because of a job-title word in the company's name** ("Reed Specialist Recruitment" got a rejection for an "IT Support Specialist" role elsewhere). Such words no longer count as the company's name.
 - **Fixed: a long company name in Options → Company career sites ran under the ✕.** It wraps now. Three "too long" messages and the hint under the lists wrap as well.
 - **A salary of its own for a kind of role** (Options → About you → **A different figure for**): enter *support* and a figure, and jobs with that word in the title use it instead of the general one, in form answers, the lists and Insights.

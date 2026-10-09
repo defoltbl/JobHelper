@@ -3098,3 +3098,26 @@ def test_a_long_company_name_in_options_wraps_and_stays_clear_of_the_remove_mark
     ui.js("companiesModel.remove(companiesModel.count - 1); confirmClose = true; close()", dialog)
     ui.wait(350)
     assert ui.warnings == []
+
+
+def test_the_job_window_says_what_to_check_in_the_adapted_cv(ui):
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cv_check=["cost center", "vendor master"]), render=False)
+    ui.js('detailDialog.show("lead")')
+    ui.wait(450)
+    note = ui.find("cvCheck")
+    assert ui.js("detailDialog.job.cv_check.length") == 2
+    assert "It speaks of cost center, vendor master, which are terms of the posting that your own CV does not mention" in note.property("text")
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    ui.bridge._api._change("lead", lambda jobs, j: j.update(cv_check=["cost center"]), render=False)
+    ui.js('detailDialog.show("lead")')
+    ui.wait(450)
+    assert "which is a term of the posting" in note.property("text")
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    def clear(jobs, j):
+        j.pop("cv_check", None)
+        j["tailored_cv_file"] = ""
+    ui.bridge._api._change("lead", clear, render=False)
+    assert ui.bridge.jobDetail("lead")["cv_check"] == []
+    assert ui.warnings == []
