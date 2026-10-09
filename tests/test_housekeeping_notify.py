@@ -253,3 +253,85 @@ def test_search_notification_wording(new, ready, text):
 def test_icon_files_exist_and_the_app_uses_them():
     assert (ROOT / "ui_qt" / "icon.png").stat().st_size > 10_000 and (ROOT / "ui_qt" / "icon.icns").read_bytes()[:4] == b"icns"
     assert "setWindowIcon" in (ROOT / "app_qt.py").read_text(encoding="utf-8")
+
+
+# ── documents moved to the backup: never cleaned up unasked, removed by age on request ──
+def _shelf_copy(name, days_old):
+    from datetime import datetime, timedelta
+    folder = vault.backups_dir() / housekeeping.SHELF
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = (datetime.now() - timedelta(days=days_old, minutes=5)).strftime("%Y%m%d_%H%M%S")
+    path = folder / f"{name}.{stamp}.docx.enc"
+    path.write_bytes(b"x" * 2048)
+    return path
+
+
+def test_moved_documents_survive_the_automatic_clean_up(isolate_data):
+    config.ensure_dirs()
+    old = _shelf_copy("L_old", 400)
+    for i in range(4):
+        (vault.backups_dir() / f"before_x_2026010{i}_120000").mkdir(parents=True)
+    assert housekeeping.SHELF not in [p.name for p in housekeeping.backup_entries()]
+    removed = housekeeping.prune_backups(keep=1)
+    assert len(removed) == 3 and housekeeping.SHELF not in removed and old.exists()          # the folder is not "an old backup"
+    ui_api.Api().save_options({"keep_backups": 1})
+    housekeeping.run()
+    assert old.exists()
+
+
+def test_old_moved_documents_are_counted_and_removed_only_by_age(isolate_data):
+    config.ensure_dirs()
+    api = ui_api.Api()
+    assert api.shelf_status() == {"ok": True, "files": 0, "bytes": 0, "old": 0, "old_bytes": 0, "days": 30}
+    assert "No moved documents are older than 30 days" in api.tidy_shelf()["msg"]
+    fresh, month, year = _shelf_copy("L_fresh", 2), _shelf_copy("L_month", 45), _shelf_copy("L_year", 400)
+    (vault.backups_dir() / housekeeping.SHELF / ".DS_Store").write_bytes(b"")
+    assert api.shelf_status(30) == {"ok": True, "files": 3, "bytes": 6144, "old": 2, "old_bytes": 4096, "days": 30}
+    assert api.shelf_status(100)["old"] == 1 and api.shelf_status(7)["old"] == 2
+    refused = api.tidy_shelf(30, 5)                                                         # the question named another number
+    assert refused["ok"] is False and refused["changed"] is True and "it is now 2" in refused["msg"] and month.exists()
+    assert api.tidy_shelf(100, 1) == {"ok": True, "removed": 1, "bytes": 2048} and not year.exists() and month.exists() and fresh.exists()
+    assert api.tidy_shelf(30) == {"ok": True, "removed": 1, "bytes": 2048} and not month.exists() and fresh.exists()
+    assert api.tidy_shelf(7)["ok"] is False and fresh.exists()                               # nothing that young is ever removed
+
+
+@pytest.mark.parametrize("days, words", [(6, "younger than 7 days are kept"), (0, "younger than 7 days"), (-3, "younger than 7 days"),
+                                         (4000, "The most is 3650 days"), (30.5, "whole number of days"), ("30", "whole number of days"),
+                                         (True, "whole number of days")])
+def test_a_wrong_age_is_refused_with_the_reason(isolate_data, days, words):
+    config.ensure_dirs()
+    path = _shelf_copy("L", 400)
+    api = ui_api.Api()
+    assert words in api.shelf_status(days)["msg"] and words in api.tidy_shelf(days)["msg"] and path.exists()
+
+
+def test_the_module_never_removes_copies_younger_than_the_minimum(isolate_data):
+    config.ensure_dirs()
+    young, old = _shelf_copy("L_young", 3), _shelf_copy("L_old", 20)
+    assert housekeeping.tidy_shelf(0)["removed"] == [old.name] and young.exists()
+
+
+def test_a_job_whose_copies_were_removed_no_longer_offers_to_put_them_back(isolate_data):
+    from datetime import datetime, timedelta
+    config.ensure_dirs()
+    api = ui_api.Api()
+    api.save_options({"threshold": 50})
+    for name in ("old", "new"):
+        (config.LETTERS_DIR / f"L_{name}.docx").write_bytes(b"letter")
+        (config.TAILORED_CV_DIR / f"CV_{name}.docx").write_bytes(b"cv")
+    store.save_jobs([store.new_job(id=n, title="Dev", company=n, match_score=20, status="letter_ready", cover_letter_file=f"L_{n}.docx",
+                                   tailored_cv_file=f"CV_{n}.docx", description="x" * 900) for n in ("old", "new")])
+    assert api.shelve_all_docs()["ok"] is True
+    folder = vault.backups_dir() / housekeeping.SHELF
+    record = store.find(store.load_jobs(), "old")["shelved"]
+    stamp = (datetime.now() - timedelta(days=60)).strftime("%Y%m%d_%H%M%S")
+    jobs = store.load_jobs()
+    for item in store.find(jobs, "old")["shelved"]["files"]:                                # make the copies of one job two months old
+        aged = item["backup"].replace(item["backup"].split(".")[-3], stamp) if item["backup"].endswith(".enc") else item["backup"].replace(item["backup"].split(".")[-2], stamp)
+        (folder / item["backup"]).rename(folder / aged)
+        item["backup"] = aged
+    store.save_jobs(jobs)
+    assert record and api.shelf_status(30)["old"] == 2 and api.job_detail("old")["can_unshelve"] is True
+    assert api.tidy_shelf(30, 2)["removed"] == 2
+    assert "shelved" not in store.find(store.load_jobs(), "old") and api.job_detail("old")["can_unshelve"] is False
+    assert api.job_detail("new")["can_unshelve"] is True and api.unshelve_docs("new")["ok"] is True      # the recent one is untouched

@@ -105,6 +105,42 @@ Dialog {
                  companies: cs };
     }
     function changed() { return loaded !== "" && JSON.stringify(collect()) !== loaded; }
+    // documents moved to the backup: how many there are, and removing the old ones (asked first, with the count)
+    property var shelf: ({})
+    property bool confirmTidy: false
+    property string shelfNote: ""
+    property bool shelfBad: false
+    property bool shelfDone: false
+    function megabytes(n) { return (n || 0) < 1048576 ? Math.max(1, Math.round((n || 0) / 1024)) + " KB" : ((n || 0) / 1048576).toFixed(1) + " MB"; }
+    function readShelf() {
+        if (!visible) return;
+        var s = bridge.shelfStatus(shelfSpin.value);
+        if (s && s.ok) { shelf = s; shelfBad = false; } else { shelf = ({}); shelfBad = true; shelfNote = (s && s.msg) || "The backup folder could not be read."; }
+    }
+    function shelfSummary() {
+        if ((shelf.files || 0) === 0) return "No documents have been moved to the backup.";
+        return shelf.files + (shelf.files === 1 ? " moved document is" : " moved documents are") + " in the backup (" + megabytes(shelf.bytes) + "). "
+               + ((shelf.old || 0) === 0 ? "None is older than " + shelf.days + " days."
+                  : shelf.old + (shelf.old === 1 ? " is" : " are") + " older than " + shelf.days + " days (" + megabytes(shelf.old_bytes) + ").");
+    }
+    function tidyShelf() {
+        shelfDone = false;
+        if (win.appRunning) { confirmTidy = false; shelfBad = true; shelfNote = "A search or scan is running. Remove old copies when it has finished."; return; }
+        if (!confirmTidy) {
+            readShelf();
+            if (shelfBad || (shelf.old || 0) === 0) return;
+            confirmTidy = true;
+            shelfNote = "Delete " + shelf.old + (shelf.old === 1 ? " moved document" : " moved documents") + " older than " + shelf.days
+                        + " days (" + megabytes(shelf.old_bytes) + ")? This cannot be undone: those can no longer be put back.";
+            return;
+        }
+        confirmTidy = false;
+        var r = bridge.tidyShelf(shelfSpin.value, shelf.old || 0);
+        shelfBad = !(r && r.ok);
+        if (r && r.ok) { shelfDone = true; shelfNote = "Deleted " + r.removed + (r.removed === 1 ? " old copy" : " old copies") + " (" + megabytes(r.bytes) + ")."; readShelf(); shelfBad = false; }
+        else { shelfNote = (r && r.msg) || "The old copies could not be deleted."; var keep = shelfNote; readShelf(); shelfBad = true; shelfNote = keep;
+               if (r && r.changed && (shelf.old || 0) > 0) confirmTidy = true; }
+    }
     function tryClose() {                 // the ✕ and the Esc key: ask once before throwing changes away
         if (changed() && !confirmClose) {
             confirmClose = true;
@@ -113,7 +149,7 @@ Dialog {
         }
         close();
     }
-    onClosed: { confirmClose = false; loaded = ""; }
+    onClosed: { confirmClose = false; loaded = ""; confirmTidy = false; }
     function load() {
         myLetters = bridge.myLetters();
         var o = win.optsData;
@@ -154,6 +190,7 @@ Dialog {
         }
     }
     onAboutToShow: load()      // fill + reset BEFORE the window is visible (not after the animation)
+    onOpened: { confirmTidy = false; shelfNote = ""; shelfBad = false; shelfDone = false; shelfSpin.value = 30; readShelf(); }
     background: Rectangle {
         radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1
         MouseArea { anchors.fill: parent; onPressed: function (m) { optSink.forceActiveFocus(); m.accepted = false; } }
@@ -408,6 +445,22 @@ Dialog {
                         Sep {}
                         SRow { label: "Keep backups"; hint: "newest ones kept, older deleted · 0 = keep all"
                             ThemedSpin { id: keepSpin; objectName: "keepSpin"; from: 0; to: 200; value: 10 } }
+                        Sep {}
+                        // letters and CVs moved out of the way because their job fell below your limit: only you remove them
+                        SRow { label: "Moved documents older than"; hint: "days · removes copies you no longer need to put back"
+                            RowLayout { spacing: 8
+                                ThemedSpin { id: shelfSpin; objectName: "shelfSpin"; from: 7; to: 3650; value: 30
+                                    onValueChanged: { optDialog.confirmTidy = false; optDialog.shelfNote = ""; optDialog.readShelf(); } }
+                                SmallButton { objectName: "tidyShelf"; primaryStyle: optDialog.confirmTidy
+                                    enabled: (optDialog.shelf.old || 0) > 0 || optDialog.confirmTidy
+                                    text: optDialog.confirmTidy ? "Yes, delete " + optDialog.shelf.old : "Remove"
+                                    onClicked: optDialog.tidyShelf() }
+                                SmallButton { objectName: "tidyCancel"; visible: optDialog.confirmTidy; text: "Cancel"
+                                    onClicked: { optDialog.confirmTidy = false; optDialog.shelfNote = ""; } } } }
+                        Text { objectName: "shelfNote"; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12
+                            wrapMode: Text.WordWrap; font.pixelSize: 11; font.bold: optDialog.shelfBad
+                            color: optDialog.shelfBad ? theme.crit : optDialog.confirmTidy ? theme.warn : optDialog.shelfDone ? theme.good : theme.faint
+                            text: optDialog.shelfNote !== "" ? optDialog.shelfNote : optDialog.shelfSummary() }
                     }
                 }
 

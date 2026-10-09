@@ -2086,3 +2086,60 @@ def test_the_list_shows_the_score_before(ui):
     ui.wait(350)
     assert "the score it had before it was scored again" in qml_source()
     assert ui.warnings == []
+
+
+# ── Options: old moved documents are removed only after asking, with the count ──
+def test_old_moved_documents_are_removed_from_options_after_asking(ui):
+    from datetime import datetime, timedelta
+
+    from jobhelper import housekeeping, vault
+    folder = vault.backups_dir() / housekeeping.SHELF
+    folder.mkdir(parents=True, exist_ok=True)
+    for old in folder.iterdir():
+        old.unlink()
+
+    def copy(name, days):
+        path = folder / f"{name}.{(datetime.now() - timedelta(days=days, minutes=5)).strftime('%Y%m%d_%H%M%S')}.docx.enc"
+        path.write_bytes(b"x" * 4096)
+        return path
+    fresh, old_one, old_two = copy("fresh", 1), copy("one", 40), copy("two", 90)
+    dialog = ui.find("optDialog")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    note, button = ui.find("shelfNote"), ui.find("tidyShelf")
+    assert note.property("text") == "3 moved documents are in the backup (12 KB). 2 are older than 30 days (8 KB)."
+    assert button.property("text") == "Remove" and button.property("enabled") is True
+    ui.js("shelfSpin.value = 200")                                                    # another age: counted again at once
+    assert note.property("text").endswith("None is older than 200 days.") and button.property("enabled") is False
+    ui.js("optDialog.tidyShelf()")
+    assert ui.js("optDialog.confirmTidy") is False and old_two.exists()               # nothing to ask about
+    ui.js("shelfSpin.value = 60; optDialog.tidyShelf()")                              # first press only asks
+    assert button.property("text") == "Yes, delete 1" and "This cannot be undone" in note.property("text") and old_two.exists()
+    assert ui.find("tidyCancel").property("visible") is True
+    ui.js("shelfSpin.value = 30")                                                     # the age changed: the question is taken back
+    assert ui.js("optDialog.confirmTidy") is False and button.property("text") == "Remove"
+    ui.js("optDialog.tidyShelf(); win.appRunning = true; optDialog.tidyShelf()")      # a search started meanwhile
+    assert "A search or scan is running" in note.property("text") and ui.js("optDialog.shelfBad") is True and old_one.exists()
+    ui.js("win.appRunning = false")
+    ui.bridge._running = True
+    try:
+        assert "A search or scan is running" in ui.bridge.tidyShelf(30, 2)["msg"] and old_one.exists()
+    finally:
+        ui.bridge._running = False
+    ui.js("optDialog.tidyShelf()")
+    copy("three", 50)                                                                 # the folder changed after the question
+    ui.js("optDialog.tidyShelf()")
+    assert "The number changed: it is now 3" in note.property("text") and button.property("text") == "Yes, delete 3" and old_one.exists()
+    ui.js("optDialog.tidyShelf()")
+    assert note.property("text") == "Deleted 3 old copies (12 KB)." and ui.js("optDialog.shelfBad") is False
+    assert not old_one.exists() and not old_two.exists() and fresh.exists() and button.property("enabled") is False
+    assert "wrapMode: Text.WordWrap" in qml_source().split('objectName: "shelfNote"')[1][:200]
+    ui.js("close()", dialog)
+    ui.wait(350)
+    ui.js("open()", dialog)
+    ui.wait(450)
+    assert note.property("text") == "1 moved document is in the backup (4 KB). None is older than 30 days."
+    ui.js("close()", dialog)
+    ui.wait(350)
+    fresh.unlink()
+    assert ui.warnings == []

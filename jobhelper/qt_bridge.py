@@ -316,6 +316,22 @@ class Bridge(QObject):
             return {"ok": False, "msg": "A search or scan is running. Put the documents back when it has finished."}
         return self._api.unshelve_docs(job_id)
 
+    @Slot(int, result="QVariantMap")
+    def shelfStatus(self, days):
+        try:
+            return self._api.shelf_status(days)
+        except Exception as e:  # noqa: BLE001 - Options must open whatever the backup folder looks like
+            return {"ok": False, "msg": str(e) or type(e).__name__}
+
+    @Slot(int, int, result="QVariantMap")
+    def tidyShelf(self, days, expected):
+        if self._running:
+            return {"ok": False, "msg": "A search or scan is running. Remove old copies when it has finished."}
+        try:
+            return self._api.tidy_shelf(days, expected)
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "msg": str(e) or type(e).__name__}
+
     @Slot(result="QVariantMap")
     def lastShelved(self):
         return self._api.last_shelved()

@@ -530,6 +530,57 @@ class Api:
         result = self._change(job_id, go)
         return {"ok": True, "restored": done.get("n", 0)} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "Couldn't put the documents back."}
 
+    # ── moved documents that have grown old ─────────────────────
+    SHELF_DAYS = 30                   # the age Options suggests
+    SHELF_MAX_DAYS = 3650
+
+    def _shelf_days(self, days):
+        """A usable number of days, or the reason it is not one."""
+        if isinstance(days, bool) or not isinstance(days, (int, float)) or days != int(days):
+            return None, "Give the age as a whole number of days."
+        days = int(days)
+        if days < housekeeping.SHELF_MIN_DAYS:
+            return None, f"Copies younger than {housekeeping.SHELF_MIN_DAYS} days are kept: New Jobs still offers to put them back."
+        if days > self.SHELF_MAX_DAYS:
+            return None, f"The most is {self.SHELF_MAX_DAYS} days."
+        return days, ""
+
+    def shelf_status(self, days=None):
+        """How many moved documents are in the backup, and how many are older than `days`:
+        {ok, files, bytes, old, old_bytes, days} or {ok: False, msg}."""
+        days, why = self._shelf_days(self.SHELF_DAYS if days is None else days)
+        if days is None:
+            return {"ok": False, "msg": why}
+        files, old = housekeeping.shelf_files(), housekeeping.shelf_files(days)
+        return {"ok": True, "files": len(files), "bytes": sum(p.stat().st_size for p in files),
+                "old": len(old), "old_bytes": sum(p.stat().st_size for p in old), "days": days}
+
+    def tidy_shelf(self, days=None, expected=-1):
+        """Delete the moved documents older than `days` for good. `expected` is the count the
+        question named; if it is no longer right nothing is deleted. Jobs whose copies are gone
+        lose their note, so no window offers to put back what no longer exists."""
+        state = self.shelf_status(days)
+        if not state.get("ok"):
+            return state
+        if not state["old"]:
+            return {"ok": False, "msg": f"No moved documents are older than {state['days']} days."}
+        if isinstance(expected, int) and not isinstance(expected, bool) and expected >= 0 and expected != state["old"]:
+            return {"ok": False, "changed": True, "msg": f"The number changed: it is now {state['old']}. Check and confirm again."}
+        done = housekeeping.tidy_shelf(state["days"])
+        gone = set(done["removed"])
+        if gone:
+            jobs, touched = store.load_jobs(), False
+            for j in jobs:
+                record = j.get("shelved")
+                if isinstance(record, dict) and any(isinstance(f, dict) and f.get("backup") in gone for f in record.get("files") or []):
+                    j.pop("shelved", None)
+                    touched = True
+            if touched:
+                store.save_jobs(jobs)
+        if not gone:
+            return {"ok": False, "msg": "The old copies could not be deleted."}
+        return {"ok": True, "removed": len(gone), "bytes": done["bytes"]}
+
     @_guarded(dict)
     def last_shelved(self):
         """The most recent batch of documents moved to the backup that can still be put back, for
