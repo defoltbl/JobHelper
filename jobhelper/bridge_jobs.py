@@ -103,8 +103,14 @@ class JobSlots:
     def saveEmail2(self, user, password):
         """Add or change the optional second mailbox (blank password keeps the current one)."""
         try:
+            from .qt_bridge import _address_problem
+            problem = _address_problem(user)
+            if problem:
+                return {"ok": False, "msg": problem}
             if user.strip().lower() == config.IMAP_USER.lower():
                 return {"ok": False, "msg": "That is already your main job email."}
+            if not (password.strip() or config.IMAP_PASSWORD_2):
+                return {"ok": False, "msg": "Enter the App Password for that address."}
             config.set_imap2(user.strip(), password.strip() or config.IMAP_PASSWORD_2)
             return {"ok": True}
         except Exception as e:  # noqa: BLE001

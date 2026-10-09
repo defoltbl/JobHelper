@@ -9,7 +9,34 @@ import QtQuick.Effects
 
 Dialog {
     id: detailDialog; objectName: "detailDialog"
-    modal: true; anchors.centerIn: parent; closePolicy: Popup.CloseOnEscape
+    modal: true; anchors.centerIn: parent
+    // text you typed here and did not save yet: Esc and ✕ must not throw it away unasked
+    readonly property var pending: {
+        var out = [], n = job.company_notes || {}, e = job.event || {};
+        if (pastedText.text.trim() !== "") out.push("the pasted posting text");
+        if (replyText.text.trim() !== "") out.push("the pasted reply");
+        if (cnContact.text !== (n.contact || "") || cnSalary.text !== (n.salary || "") || cnAsked.text !== (n.asked || "")
+                || cnNotes.text !== (n.notes || "")) out.push("the notes about the company");
+        if (evDate.text !== (e.date || "") || evTime.text !== (e.time || "") || evNote.text !== (e.note || "")) out.push("the date to remember");
+        if (dateField.text !== (job.applied || "")) out.push("the day you applied");
+        return out;
+    }
+    closePolicy: pending.length > 0 ? Popup.NoAutoClose : Popup.CloseOnEscape
+    property bool confirmClose: false
+    property string closeNote: ""
+    function tryClose() {                 // the ✕ and, with unsaved text, the Esc key: ask once
+        if (pending.length > 0 && !confirmClose) {
+            confirmClose = true;
+            closeNote = "Not saved yet: " + pending.join(", ") + ". Save it, or close once more to discard it.";
+            return;
+        }
+        close();
+    }
+    onClosed: { confirmClose = false; closeNote = ""; }
+    Shortcut { sequence: "Escape"
+        enabled: detailDialog.visible && detailDialog.pending.length > 0 && !(formDialog.visible || prepDialog.visible || prepEditDialog.visible
+                 || compareDialog.visible || letterDialog.visible || responseDialog.visible)
+        onActivated: detailDialog.tryClose() }
     enter: Transition { ParallelAnimation {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
         NumberAnimation { property: "scale"; from: 0.92; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 0.7 } } }
@@ -227,6 +254,7 @@ Dialog {
         var d = bridge.jobDetail(jobId);
         if (!d || !d.id) { ticker.text = "That job could not be opened."; return; }
         confirmRemake = false; if (!scoreBusy) { scoreNote = ""; scoreBad = false; }
+        confirmClose = false; closeNote = ""; replyText.text = "";
         pasteOpen = false; pasteErr = ""; pastedText.text = ""; confirmShelve = false; shelveNote = ""; shelveBad = false;
         job = d; draft = ({}); note = ""; dateErr = ""; if (!prepBusy) prepErr = "";
         eventErr = ""; notesInfo = ""; notesBad = false; replyErr = ""; replyInfo = ""; replyOpen = false; thanks = ({}); thanksNote = "";
@@ -254,7 +282,7 @@ Dialog {
             Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
                 Layout.alignment: Qt.AlignTop
                 Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: detailDialog.close() } }
+                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: detailDialog.tryClose() } }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
 
@@ -716,6 +744,9 @@ Dialog {
         }
 
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
+        Text { objectName: "closeNote"; visible: detailDialog.closeNote !== ""; text: detailDialog.closeNote
+            Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.topMargin: 10
+            wrapMode: Text.Wrap; color: theme.crit; font.pixelSize: 12; font.bold: true }
         RowLayout { objectName: "detailFooter"; Layout.fillWidth: true; Layout.margins: 12; spacing: 6
             Flow { objectName: "detailDocs"; Layout.fillWidth: true; Layout.minimumWidth: 120; spacing: 6
             SmallButton { visible: !!detailDialog.job.url; text: "Open posting ↗"

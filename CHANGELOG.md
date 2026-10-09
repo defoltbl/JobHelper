@@ -7,6 +7,10 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 Found by reading all the code line by line.
 
+- **Fixed: a second search in the same app session reused the first one's answers** from the company career sites and the remote boards. Every search now reads them afresh.
+- **Fixed: a newly chosen master CV could be ignored** when an older CV in the folder came first by name. The app now remembers the file you chose.
+- **The job window asks before closing with unsaved text** (a pasted posting or reply, company notes, a date), on both ✕ and Esc.
+- **Options and email addresses are checked by the backend as well as the window**, so nothing unusable can be saved whatever sends it; text that is too long is refused, not cut.
 - **Fixed: two companies were taken for one when their names shared any word.** "Accenture Czech Republic" and "PwC Czech Republic" share "Republic", so applying to a role at one could hide the same role at the other as "already applied", and a reply from one could be counted for the other. Names now match only when they are equal, share a real name word, or one is the other with more added. On your data 62 pairs of different companies are now told apart, and the 28 pairs that are one company still match.
 - **Fixed: an adapted CV could lose a whole section.** The skills rows were taken to end only at four fixed headings. In a CV whose next section was called anything else (for example "EXPERIENCE"), that section counted as skill rows and was replaced. The rows now end at the next heading of any name, more heading names are recognised ("SUMMARY", "SKILLS" …), and a check fails the file if any section of the master is missing. Your own CV is read exactly as before.
 - **A Word CV without a profile section** now gets the short profile note instead of no adapted CV at all.

@@ -30,6 +30,17 @@ from . import trouble  # noqa: I001
 from . import (config, integrity, schedule)
 
 
+def _address_problem(address: str) -> str:
+    """'' or what is wrong with an email address (the window checks the same before it asks)."""
+    import re
+    text = str(address or "").strip()
+    if not text:
+        return "Enter the email address."
+    if len(text) > 254 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", text):
+        return "That does not look like an email address."
+    return ""
+
+
 class Bridge(RunSlots, JobSlots, QObject):
     # key in {a1..a5}, status in {running,done}, info text
     agentChanged = Signal(str, str, str)
@@ -120,10 +131,12 @@ class Bridge(RunSlots, JobSlots, QObject):
         from . import prefilter
         return bool(prefilter.fields_of([str(text or "")]))
 
-    @Slot("QVariantMap")
+    @Slot("QVariantMap", result="QVariantMap")
     def saveOptions(self, opts):
-        self._api.save_options(dict(opts or {}))
-        config.apply_ui_settings()
+        result = self._api.save_options(dict(opts or {}))
+        if result.get("ok"):
+            config.apply_ui_settings()
+        return result
 
     @Slot(result="QVariantList")
     def companies(self):
@@ -165,7 +178,12 @@ class Bridge(RunSlots, JobSlots, QObject):
         """Save Gmail IMAP email + app password to .env (password optional:
         blank keeps the current one)."""
         try:
+            problem = _address_problem(user)
+            if problem:
+                return {"ok": False, "msg": problem}
             pwd = password.strip() or config.IMAP_PASSWORD
+            if not pwd:
+                return {"ok": False, "msg": "Enter the App Password for that address."}
             config.set_imap(user.strip(), pwd)
             return {"ok": True}
         except Exception as e:  # noqa: BLE001
@@ -187,9 +205,10 @@ class Bridge(RunSlots, JobSlots, QObject):
             dest = config.CV_DIR / src.name
             # picking the CV that's already the master → no-op success (avoids
             # a SameFileError leaking its raw PosixPath repr into the UI)
-            if src.resolve() == dest.resolve():
-                return {"ok": True, "name": src.name}
-            shutil.copy2(src, dest)
+            if src.resolve() != dest.resolve():
+                shutil.copy2(src, dest)
+            from . import agent1_cv
+            agent1_cv.remember_cv(dest.name)      # this one is the master, even if another CV in the folder sorts before it
             integrity.approve(["master_cv"])      # chosen through the app: trusted
             return {"ok": True, "name": src.name}
         except Exception:  # noqa: BLE001

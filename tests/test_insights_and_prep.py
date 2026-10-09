@@ -401,8 +401,10 @@ def test_experience_notes_come_from_options_and_reach_both_drafts(isolate_data, 
     config.ensure_dirs()
     api = ui_api.Api()
     assert config.experience_notes() == "" and api.options()["about_experience"] == ""
-    api.save_options({"about_experience": "  At Acme I wrote the import service.  " + "x" * 5000})
-    assert config.experience_notes().startswith("At Acme I wrote the import service.") and len(config.experience_notes()) == config.MAX_EXPERIENCE_NOTES
+    refused = api.save_options({"about_experience": "  At Acme I wrote the import service.  " + "x" * 5000})
+    assert refused["ok"] is False and "Shorten it" in refused["msg"] and config.experience_notes() == ""       # too long: refused, never cut silently
+    assert api.save_options({"about_experience": "  At Acme I wrote the import service.  " + "x" * 3000})["ok"] is True
+    assert config.experience_notes().startswith("At Acme I wrote the import service.") and len(config.experience_notes()) <= config.MAX_EXPERIENCE_NOTES
     api.save_options({"about_experience": "At Acme I wrote the import service."})
     monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
     store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="waiting")])

@@ -2354,3 +2354,35 @@ def test_a_search_role_outside_software_can_be_added(ui):
     ui.js("close()", dialog)
     ui.wait(350)
     assert ui.warnings == []
+
+
+def test_the_job_window_asks_before_closing_with_unsaved_text(ui):
+    _open_job(ui, "app")
+    dialog = ui.find("detailDialog")
+    assert ui.js("detailDialog.pending.length") == 0 and ui.js("detailDialog.closePolicy") != 0           # nothing typed: Esc closes
+    ui.js('cnNotes.text = "They asked about pytest."')
+    assert ui.js("detailDialog.pending.join('|')") == "the notes about the company" and ui.js("detailDialog.closePolicy") == 0   # Esc alone no longer closes
+    ui.js("detailDialog.tryClose()")                                                                    # the ✕ (and Esc, through the shortcut)
+    note = ui.find("closeNote")
+    assert dialog.property("opened") is True and note.property("visible") is True
+    assert note.property("text") == "Not saved yet: the notes about the company. Save it, or close once more to discard it."
+    ui.js("detailDialog.saveNotes()")                                                                   # saved: nothing pending any more
+    assert ui.js("detailDialog.pending.length") == 0
+    ui.js('evNote.text = "bring the laptop"; replyText.text = "Dear Alex, thank you for your time today."')
+    assert ui.js("detailDialog.pending.join('|')") == "the pasted reply|the date to remember"
+    ui.js("detailDialog.confirmClose = false; detailDialog.tryClose()")
+    assert "the pasted reply, the date to remember" in note.property("text") and dialog.property("opened") is True
+    ui.js("detailDialog.tryClose()")                                                                    # the second time closes and discards
+    ui.wait(350)
+    assert dialog.property("opened") is False
+    _open_job(ui, "app")                                                                                # opened again: clean
+    assert ui.js("detailDialog.pending.length") == 0 and ui.js("detailDialog.closeNote") == "" and ui.js("replyText.text") == ""
+    ui.js("detailDialog.tryClose()")
+    ui.wait(350)
+    assert dialog.property("opened") is False
+    ui.bridge._api.save_company_notes("Beta", {"contact": "", "salary": "", "asked": "", "notes": ""})
+    _open_job(ui, "lead")                                                                               # a new job has none of those fields filled
+    assert ui.js("detailDialog.pending.length") == 0
+    ui.js("detailDialog.close()")
+    ui.wait(350)
+    assert ui.warnings == []

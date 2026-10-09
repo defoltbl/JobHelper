@@ -502,3 +502,82 @@ def test_a_reply_from_one_company_does_not_count_for_another(isolate_data):
     agent5_responses.annotate_progress(jobs)
     assert jobs[0]["status"] == "waiting" and not jobs[0].get("stages_path")                                # PwC is still waiting
     assert email_client.best_job_for_company_role("Accenture Czech Republic", "Data Engineer", jobs[:1]) is None
+
+
+# ── found by reading the code line by line (second part) ────────────────────
+def test_every_search_reads_the_boards_afresh(monkeypatch):
+    from jobhelper import scrapers_ats, scrapers_remote
+    scrapers_ats._cache[("greenhouse", "acme")] = [store.new_job(id="old", title="Dev", company="Acme")]
+    cleared = []
+    monkeypatch.setattr(scrapers_remote._remoteok_payload, "cache_clear", lambda: cleared.append("remoteok"), raising=False) \
+        if hasattr(scrapers_remote._remoteok_payload, "cache_clear") else None
+    monkeypatch.setattr(agent2_search, "active_providers", lambda source, max_age_days=0: [("stub", lambda q, where, n: [])])
+    agent2_search.search(["dev"], where="Prague")
+    assert scrapers_ats._cache == {}                                 # what a search three days ago was told is not used again
+
+
+def test_the_cv_you_chose_is_the_master_whatever_else_is_in_the_folder(isolate_data):
+    from jobhelper import agent1_cv, ui_api
+    config.ensure_dirs()
+    (config.CV_DIR / "Anna_CV.docx").write_bytes(b"old")
+    (config.CV_DIR / "Zed_CV.docx").write_bytes(b"new")
+    assert agent1_cv.find_cv().name == "Anna_CV.docx"                # nothing chosen: the first by name, as before
+    agent1_cv.remember_cv("Zed_CV.docx")
+    assert agent1_cv.find_cv().name == "Zed_CV.docx"
+    api = ui_api.Api()
+    assert api.save_options({**api.options(), "threshold": 55})["ok"] is True
+    assert agent1_cv.find_cv().name == "Zed_CV.docx"                 # saving Options does not forget it
+    (config.CV_DIR / "Zed_CV.docx").unlink()
+    assert agent1_cv.find_cv().name == "Anna_CV.docx"                # the chosen file is gone: back to what is there
+    agent1_cv.remember_cv("../../somewhere/else.docx")
+    assert agent1_cv.find_cv().name == "Anna_CV.docx" and config.ui_settings()["master_cv"] == "else.docx"
+
+
+@pytest.mark.parametrize("change, words", [
+    ({"threshold": 101}, "“threshold” must be a whole number from 0 to 100"), ({"threshold": "fifty"}, "whole number"),
+    ({"per_query": 0}, "from 1 to 100"), ({"max_years": 2.5}, "whole number"), ({"keep_backups": True}, "whole number"),
+    ({"skip_words": "intern"}, "must be a list of words"), ({"queries": ["x" * 101]}, "101 characters long; the most is 100"),
+    ({"wanted_roles": [f"role {n}" for n in range(61)]}, "has 61 entries; the most is 60"),
+    ({"about_experience": "x" * (config.MAX_EXPERIENCE_NOTES + 1)}, "Shorten it"), ({"where": ["Prague"]}, "must be text"),
+    ({"full_time_only": "yes"}, "must be on or off"),
+])
+def test_options_that_cannot_be_used_are_refused_by_the_backend(isolate_data, change, words):
+    from jobhelper import ui_api
+    api = ui_api.Api()
+    assert api.save_options({**api.options(), "threshold": 45})["ok"] is True
+    got = api.save_options({**api.options(), **change})
+    assert got["ok"] is False and words in got["msg"]
+    assert api.options()["threshold"] == 45                           # nothing of the refused set was saved
+
+
+def test_options_are_tidied_and_keep_what_the_window_does_not_send(isolate_data):
+    from jobhelper import ui_api
+    api = ui_api.Api()
+    assert api.save_options({"threshold": 60.0, "skip_words": [" intern ", "", "intern", 7, "trainee"], "where": "  Prague "})["ok"] is True
+    saved = config.ui_settings()
+    assert saved["threshold"] == 60 and isinstance(saved["threshold"], int) and saved["skip_words"] == ["intern", "trainee"] and saved["where"] == "Prague"
+    assert api.save_options({"max_years": 3})["ok"] is True
+    assert config.ui_settings()["threshold"] == 60 and config.ui_settings()["max_years"] == 3
+    assert api.save_options("not options")["ok"] is False and api.save_options(None)["ok"] is True
+
+
+@pytest.mark.parametrize("address", ["", "   ", "not an address", "a@b", "two@@x.com", "a b@x.com", "x" * 250 + "@x.com"])
+def test_an_address_that_is_not_one_is_refused_by_the_backend(isolate_data, monkeypatch, address):
+    from jobhelper import qt_bridge
+    saved = []
+    monkeypatch.setattr(config, "set_imap", lambda *a, **k: saved.append(a))
+    monkeypatch.setattr(config, "set_imap2", lambda *a, **k: saved.append(a))
+    bridge = qt_bridge.Bridge()
+    assert bridge.saveEmail(address, "abcdabcdabcdabcd")["ok"] is False and bridge.saveEmail2(address, "abcdabcdabcdabcd")["ok"] is False
+    assert saved == []
+
+
+def test_an_address_needs_a_password_the_first_time(isolate_data, monkeypatch):
+    from jobhelper import qt_bridge
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "")
+    monkeypatch.setattr(config, "IMAP_PASSWORD_2", "")
+    saved = []
+    monkeypatch.setattr(config, "set_imap", lambda *a, **k: saved.append(a))
+    bridge = qt_bridge.Bridge()
+    assert "App Password" in bridge.saveEmail("me@example.com", "  ")["msg"] and "App Password" in bridge.saveEmail2("two@example.com", "")["msg"]
+    assert bridge.saveEmail("me@example.com", "abcdabcdabcdabcd")["ok"] is True and saved == [("me@example.com", "abcdabcdabcdabcd")]

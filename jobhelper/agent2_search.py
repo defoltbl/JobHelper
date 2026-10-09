@@ -506,6 +506,11 @@ def search(
     """
     if not str(where or "").strip():
         raise RuntimeError("No city to search in. Choose one in the app's Options (or pass --where to run.py).")
+    # What the career sites and remote boards answered is remembered while one search asks its queries,
+    # not from one search to the next: the app can stay open for days.
+    scrapers_ats._cache.clear()
+    scrapers_remote._remoteok_payload.cache_clear()
+    scrapers_remote._wwr_feed.cache_clear()
     providers = active_providers(source, max_age_days=max_age_days)
     if not providers:
         raise RuntimeError(

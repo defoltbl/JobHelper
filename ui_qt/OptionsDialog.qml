@@ -560,7 +560,8 @@ Dialog {
                     var clash = optDialog.roleClash(qs, skipTags.all(), keepTags.all());
                     if (clash !== "") { optDialog.optErr = clash; return; }
                     var all = optDialog.collect();
-                    bridge.saveOptions(all.options);
+                    var saved = bridge.saveOptions(all.options);
+                    if (!(saved && saved.ok)) { optDialog.optErr = (saved && saved.msg) || "The Options could not be saved."; return; }
                     bridge.saveCompanies(all.companies);
                     win.optsData = bridge.options();
                     win.countsData = bridge.counts();      // the follow-up count depends on the new setting

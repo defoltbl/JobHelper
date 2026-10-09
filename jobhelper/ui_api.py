@@ -628,10 +628,57 @@ class Api(DocumentsApi, InterviewApi, LettersApi):
             trouble.note("reading the saved Options", e)
         return defaults
 
+    OPTION_NUMBERS = {"threshold": (0, 100), "min_lead_score": (0, 100), "max_age_days": (0, 3650), "per_query": (1, 100),
+                      "max_years": (0, 60), "keep_backups": (0, 1000), "followup_days": (0, 365), "scan_days": (1, 3650)}
+    OPTION_LISTS = ("queries", "skip_words", "keep_words", "level_words", "wanted_roles", "unwanted_roles", "my_fields")
+    OPTION_TEXTS = {"where": 80, "about_right_to_work": 300, "about_start": 300, "about_experience": config.MAX_EXPERIENCE_NOTES}
+    MAX_LIST, MAX_WORD = 60, 100
+
+    def check_options(self, opts):
+        """(clean options, '') or ({}, what is wrong). The window checks the same things as you type;
+        this is the last word, so nothing unusable is saved whatever sent it."""
+        if not isinstance(opts, dict):
+            return {}, "Those are not Options."
+        clean = dict(opts)
+        for key, (low, high) in self.OPTION_NUMBERS.items():
+            if key in clean:
+                value = clean[key]
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or value != int(value) or not low <= value <= high:
+                    return {}, f"“{key.replace('_', ' ')}” must be a whole number from {low} to {high}."
+                clean[key] = int(value)
+        for key in self.OPTION_LISTS:
+            if key in clean:
+                if not isinstance(clean[key], (list, tuple)):
+                    return {}, f"“{key.replace('_', ' ')}” must be a list of words."
+                words = [str(w).strip() for w in clean[key] if isinstance(w, str) and str(w).strip()]
+                if len(words) > self.MAX_LIST:
+                    return {}, f"“{key.replace('_', ' ')}” has {len(words)} entries; the most is {self.MAX_LIST}."
+                long = next((w for w in words if len(w) > self.MAX_WORD), None)
+                if long:
+                    return {}, f"An entry under “{key.replace('_', ' ')}” is {len(long)} characters long; the most is {self.MAX_WORD}."
+                clean[key] = list(dict.fromkeys(words))
+        for key, limit in self.OPTION_TEXTS.items():
+            if key in clean:
+                text = str(clean[key] or "").strip() if isinstance(clean[key], (str, type(None))) else None
+                if text is None:
+                    return {}, f"“{key.replace('_', ' ')}” must be text."
+                if len(text) > limit:
+                    return {}, f"“{key.replace('_', ' ')}” is {len(text)} characters long; the most is {limit}. Shorten it."
+                clean[key] = text
+        for key in ("include_remote", "all_languages", "full_time_only", "notifications", "scan_all_folders"):
+            if key in clean and not isinstance(clean[key], bool):
+                return {}, f"“{key.replace('_', ' ')}” must be on or off."
+        return clean, ""
+
     def save_options(self, opts):
+        """Save the Options. What the window does not send (the chosen master CV) is kept."""
+        clean, problem = self.check_options(opts or {})
+        if problem:
+            return {"ok": False, "msg": problem}
+        kept = {k: v for k, v in config.ui_settings().items() if k not in clean}
         config.ensure_dirs()
         vault.write_text(config.DATA_DIR / "ui_settings.json",
-                         json.dumps(opts or {}, ensure_ascii=False, indent=2))
+                         json.dumps({**kept, **clean}, ensure_ascii=False, indent=2))
         return {"ok": True}
 
     # ── career-site companies (data/companies.json) ─────────────

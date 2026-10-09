@@ -58,13 +58,28 @@ def read_cv_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
+CV_TYPES = {".pdf", ".docx", ".txt", ".md"}
+
+
 def find_cv() -> Path | None:
+    """The master CV: the file you chose in the app if it is still there, else the first
+    CV file in data/cv/ by name."""
     config.ensure_dirs()
-    candidates = sorted(
-        p for p in config.CV_DIR.iterdir()
-        if p.is_file() and p.suffix.lower() in {".pdf", ".docx", ".txt", ".md"}
-    )
+    chosen = str(config.ui_settings().get("master_cv") or "")
+    if chosen and Path(chosen).name == chosen:
+        path = config.CV_DIR / chosen
+        if path.is_file() and path.suffix.lower() in CV_TYPES:
+            return path
+    candidates = sorted(p for p in config.CV_DIR.iterdir() if p.is_file() and p.suffix.lower() in CV_TYPES)
     return candidates[0] if candidates else None
+
+
+def remember_cv(name: str) -> None:
+    """Note which file in data/cv/ is the master CV (kept with the Options)."""
+    data = config.ui_settings()
+    data["master_cv"] = Path(str(name)).name
+    config.ensure_dirs()
+    vault.write_text(config.DATA_DIR / "ui_settings.json", json.dumps(data, ensure_ascii=False, indent=2))
 
 
 def analyze(cv_path: Path | None = None) -> dict[str, Any]:
