@@ -12,7 +12,7 @@ from __future__ import annotations
 # Order matters — more specific / higher-paid roles first.
 _JUNIOR_MONTHLY: list[tuple[str, int]] = [
     ("genai", 65000), ("machine learning", 62000), ("ml engineer", 62000),
-    ("ai engineer", 62000), ("data scien", 60000), (" ai", 60000), ("ai ", 60000),
+    ("ai engineer", 62000), ("data scien", 60000), ("ai", 60000),
     ("golang", 62000), ("scala", 62000), ("c++", 60000), ("rust", 62000),
     ("devops", 60000), ("sre", 60000), ("site reliability", 60000),
     ("data engineer", 60000), ("cloud", 58000), ("infrastructure", 58000),
@@ -28,6 +28,12 @@ _JUNIOR_MONTHLY: list[tuple[str, int]] = [
     ("developer", 55000), ("engineer", 55000), ("software", 55000), ("programmer", 55000),
 ]
 
+# As whole words: "ios" is not in "kiosk", "ai" not in "Thai", "qa" not in "Qatar", "sre" not in "pressroom".
+# ("java" still finds "javascript", and "data scien" finds "scientist" and "science": those are meant.)
+_OPEN_END = ("data scien", "java")
+_WORD = {kw: __import__("re").compile(r"(?<![a-z0-9])" + __import__("re").escape(kw) + ("" if kw in _OPEN_END or not kw[-1].isalnum() else r"(?![a-z0-9])"))
+         for kw, _pay in _JUNIOR_MONTHLY}
+
 _LEVEL_MULT = {"junior": 1.0, "entry": 1.0, "graduate": 1.0, "mid": 1.3,
                "medior": 1.3, "senior": 1.7, "lead": 2.0}
 
@@ -36,7 +42,7 @@ def estimate(title: str, seniority: str = "junior") -> tuple[int, int]:
     """(monthly, annual) gross CZK for a software role in Prague, rounded to the nearest 1000.
     (0, 0) for a title the table does not know: no figure is better than one from another profession."""
     t = (title or "").lower()
-    base = next((v for kw, v in _JUNIOR_MONTHLY if kw in t), 0)
+    base = next((v for kw, v in _JUNIOR_MONTHLY if _WORD[kw].search(t)), 0)
     if not base:
         return 0, 0
     mult = _LEVEL_MULT.get((seniority or "junior").strip().lower(), 1.0)

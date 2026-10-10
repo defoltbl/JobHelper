@@ -75,3 +75,18 @@ def test_a_kind_of_role_can_have_its_own_figure():
     assert salary.asked({"title": "Supporter of Engineers"}, opts) == (60000, "CZK", True)           # whole words only
     assert salary.asked({"title": "Support"}, {"salary_by_role": [{"role": "support", "amount": 0}, "nonsense", {"role": "", "amount": 5}]}) == (0, "CZK", False)
     assert salary.asked({"title": "IT Support"}, {"where": "Berlin", "salary_currency": "EUR", "salary_by_role": [{"role": "support", "amount": 2800}]}) == (2800, "EUR", True)
+
+
+# ── found by reading salary.py line by line (10 October 2026) ───────────────
+import pytest as _pytest
+
+
+@_pytest.mark.parametrize("title, monthly", [
+    ("Thai chef", 0), ("Kiosk attendant", 0), ("Qatar airways agent", 0), ("Pressroom operator", 0), ("Retail assistant", 0),
+    ("AI Engineer", 62000), ("Junior AI/ML Developer", 60000), ("Head of AI", 60000), ("iOS Developer", 55000), ("QA Tester", 48000),
+    ("JavaScript Developer", 55000), ("Data Scientist", 60000), ("C++ Developer", 60000), (".NET Developer", 55000), ("SRE", 60000)])
+def test_the_salary_table_is_matched_on_whole_words(title, monthly):
+    """The table's words were looked for anywhere in a title: "ai" in "Thai chef", "ios" in "Kiosk attendant", "qa" in "Qatar".
+    Those titles got an estimate for a software role; they now get none, as the table promises for titles it does not know."""
+    from jobhelper import salary
+    assert salary.estimate(title)[0] == monthly
