@@ -151,8 +151,10 @@ data/                your data; only the *.example.* files are in git
 - **Writing:** `cv_tailor`, `cover_letter`, `letters` (your own letters), `form_answers`,
   `interview_prep`, `prep_doc`, `pdf`.
 - **The assistant:** `assistant` (what a typed request means), `details` (the person's own details,
-  encrypted), `chrome` (the tab in front in Google Chrome, through Apple events), `form_fill` (the two page
-  scripts, what each field is, which job a page belongs to); its back end is `api_assistant`.
+  encrypted), `chrome` (the tab in front in Google Chrome, through Apple events), `form_fill` (the page
+  scripts, what each field is, which job a page belongs to), `form_choices` (lists, radio buttons, menus,
+  numbers: settled by the details, else by one call to Claude), `answer_memory` (the person's own wording,
+  reused for the same question elsewhere); its back end is `api_assistant`.
 - **Keeping data safe:** `vault` (encryption, backups), `integrity` (signed rule files),
   `housekeeping` (old backups, logs, the Trash), `store` and `db` (jobs and replies).
 - **Claude:** `llm` (every call goes through it; pauses at the limit), `usage`.
@@ -285,7 +287,9 @@ After every batch of changes, without being asked:
 | Outlook.com, Proton and Tuta are refused with an explanation | They cannot be read with a password; failing later would be worse than saying so at once. |
 | The salary estimate is used only for software roles in Czechia | It is a table of Prague junior software pay. Anywhere else no figure is better than a wrong one. |
 | The assistant fills in forms in the person's own Chrome, through Apple events | The owner's choice ("I tap on him and ask to fill the form in Chrome"). The form is filled where the person is signed in; nothing is installed. A browser inside the app was removed earlier, and an extension would have to be installed by hand. |
-| The assistant never clicks, ticks or sends | The app never acts in the person's name. It writes into empty fields and leaves files, passwords, choices and personal questions to the person. |
+| The assistant presses only a menu, an entry of a menu and a radio button | The owner allowed choosing from menus on 10 October 2026 ("do it"). It still never presses a button, never ticks a box and never sends: the script that presses checks what it is given. |
+| Only what the person wrote or corrected is remembered as their wording | A draft nobody read is not their answer. An answer that names its company is not offered to another one. |
+| A free question to the assistant is one Claude call with facts from the app | So an answer cannot come from anywhere else; when the facts do not hold it, the assistant says so. |
 | A request to the assistant is understood by its words, not by a model | It costs nothing and always means the same. Only a form's open questions go to Claude, in one call. |
 | A table or a picture is never split across pages in the PDFs | The owner's rule for the documentation; a long table continues between rows with its heading repeated. |
 
@@ -321,19 +325,19 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
 6. **The assistant was tested in its test area** (`tests/fixtures/forms/`: a plain form, a component-built one, a long
    one, a framed one, each filled in a browser engine by the real code), **not yet on real sites in the person's Chrome.**
    Sites that build their fields in unusual ways (their own drop-downs, forms inside a frame from another site,
-   pages that rebuild a field after it is written) will need a look one by one. Choices (lists other than the
-   country, yes/no, tick boxes) and file uploads are left to the person on purpose for now.
+   pages that rebuild a field after it is written) will need a look one by one. Tick boxes, dates and file
+   uploads are left to the person on purpose.
 
 **Needs the person**
 
 - Turning on Chrome's switch (View > Developer > Allow JavaScript from Apple Events) and trying the assistant
   on a few real application forms; what it leaves or gets wrong there decides the next step.
 
-**Then, for the assistant** (in the order they would help)
+**Then, for the assistant**
 
-- Choosing from lists and yes/no questions when the CV or About you settles the answer.
-- Opening a form that sits in a frame from another site in its own tab, by a button.
-- A general question to the assistant about a job or the app, answered by Claude.
+- Whatever the trial on real sites shows. Menus are the likeliest: every component library draws them a little
+  differently, and the script knows the common pattern (a box that opens a list of `role=option` entries).
+- Date fields (a start date from About you).
 
 **Last**
 

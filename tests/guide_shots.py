@@ -390,7 +390,8 @@ def test_guide_shots(ui, monkeypatch):
         ui.find("assistantBot").setProperty("greeting", False)
         details.save({"first_name": "Alex", "last_name": "Novak", "email": "alex.novak@example.com", "phone": "+420 123 456 789", "street": "",
                       "city": "Prague", "postcode": "110 00", "country": "Czechia", "linkedin": "linkedin.com/in/alexnovak",
-                      "github": "github.com/alexnovak", "website": ""})
+                      "github": "github.com/alexnovak", "website": "", "current_employer": "Riverside Labs", "current_title": "Junior developer",
+                      "university": "Charles University", "degree": "Master's degree in computer science", "notice_period": "1 month", "salary": ""})
         monkeypatch.setattr(ui_api.Api, "assistant_ask", lambda self, text, job_id="": {
             "ok": True, "action": "fill", "host": "careers.northwind.example", "job_id": "lead1", "job": "Junior Python Developer at Northwind Systems", "guessed": True,
             "filled": [{"label": "First name", "value": "Alex", "kind": "detail", "check": ""}, {"label": "Last name", "value": "Novak", "kind": "detail", "check": ""},
@@ -398,13 +399,17 @@ def test_guide_shots(ui, monkeypatch):
                        {"label": "LinkedIn profile", "value": "https://linkedin.com/in/alexnovak", "kind": "detail", "check": ""},
                        {"label": "Why do you want to work at Northwind Systems?", "kind": "answer", "check": "",
                         "value": "Your back-end services are written in FastAPI on PostgreSQL, the stack of my own project…"},
-                       {"label": "When can you start?", "value": "I can start on [your start date].", "kind": "answer", "check": "Your start date"}],
+                       {"label": "When can you start?", "value": "I can start on [your start date].", "kind": "answer", "check": "Your start date"},
+                       {"label": "Country", "value": "Czech Republic", "kind": "choice", "check": "Chosen for you: check it."},
+                       {"label": "Do you have the right to work in the Czech Republic?", "value": "Yes", "kind": "choice", "check": "Chosen for you: check it."}],
             "left": [{"label": "Resume/CV", "why": "Attach the file yourself: a page cannot be handed a file from outside."},
-                     {"label": "Notice period", "why": "Choose it yourself: I only pick from a plain list, and only when it asks for your country."}],
-            "kept": 1, "boxes": 2,
-            "say": "I filled in 6 fields on careers.northwind.example: 4 from My details, 2 answers drafted from your CV. I took this to be the form for "
-                   "Junior Python Developer at Northwind Systems. 1 answer needs your attention (outlined in amber on the page). 2 fields are left for you, "
+                     {"label": "Are you willing to relocate?", "why": "Your CV, My details and About you do not settle this. Choose it yourself."}],
+            "kept": 1, "boxes": 2, "wants_file": True, "has_files": True, "is_lead": True, "can_learn": True,
+            "say": "I filled in 8 fields on careers.northwind.example: 4 from My details, 2 answers drafted from your CV, 2 choices made for you. I took this to be the form for "
+                   "Junior Python Developer at Northwind Systems. 3 of them need your attention (outlined in amber on the page). 2 fields are left for you, "
                    "listed below with the reason. Read everything on the page, then send the form yourself. I never press Submit."})
+        monkeypatch.setattr(ui_api.Api, "assistant_watch", lambda self: {"ok": False, "url": "", "sign": "", "empty": 0})
+        monkeypatch.setattr(ui_api.Api, "assistant_memory", lambda self: {"count": 3})
         ui.js("assistantDialog.show()")
         ui.wait(500)
         ui.js('assistantDialog.ask("Fill in the form in Chrome")')
@@ -414,6 +419,8 @@ def test_guide_shots(ui, monkeypatch):
             ui.wait(30)
         ui.js("talkFlick.contentY = 0")
         shot("38_assistant_fill")
+        ui.js("talkFlick.contentY = Math.max(0, talkFlick.contentHeight - talkFlick.height)")
+        shot("40_assistant_next")
         ui.js('assistantDialog.page = "details"')
         shot("39_my_details")
         ui.js("assistantDialog.tryClose()")

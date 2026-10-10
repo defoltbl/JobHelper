@@ -35,6 +35,18 @@ Dialog {
     property var problem: ({})            // {field, msg} of the first thing wrong, as you type
     property string detailsNote: ""
     property int offered: 0               // fields filled from the CV and not saved yet
+    // what the last answer offers to do next
+    property var last: ({})               // the assistant's last answer to a fill
+    property bool nextPage: false         // the form in Chrome moved on to other fields since the last fill
+    property string watchSign: ""         // what the form looked like right after the fill
+    property int watched: 0               // how many times it was looked at since (it stops by itself)
+    property int remembered: 0            // answers of your own that are kept
+    property bool confirmForget: false
+    readonly property bool canOpenForm: !busy && !!last.frame
+    readonly property bool canShowFiles: !busy && last.ok === true && last.wants_file === true && last.has_files === true
+    readonly property bool canLearn: !busy && last.ok === true && last.can_learn === true
+    property bool appliedNow: false       // Mark applied was pressed for the job of the last answer
+    readonly property bool canApply: !busy && !appliedNow && last.ok === true && last.is_lead === true && (last.filled || []).length > 0
 
     ListModel { id: talk }                // {who: "bot" | "you", text, bad}
     ListModel { id: filledModel }         // {label, value, kind, check}
@@ -50,6 +62,7 @@ Dialog {
         jobs = [{ id: "", label: "Find the job from the page" }].concat(bridge.assistantJobs());
         jobBox.currentIndex = 0; jobId = "";
         loadDetails();
+        remembered = bridge.assistantMemory().count || 0; confirmForget = false;
         if (talk.count === 0)
             say("bot", detailsSaved ? "Hi! Open an application form in Chrome, bring its tab to the front, then ask me to fill it in."
                                     : "Hi! First tell me your details on the My details page. Then open an application form in Chrome and ask me to fill it in.");
@@ -69,11 +82,37 @@ Dialog {
         if (words.length > maxRequest) { askErr = "That is longer than " + maxRequest + " characters. Say it in a sentence."; return; }
         if (dirty) { askErr = "You changed your details and did not save them. Save them on the My details page first."; return; }
         askErr = ""; askBox.text = "";
-        filledModel.clear(); leftModel.clear();
+        filledModel.clear(); leftModel.clear(); last = ({}); nextPage = false; watchSign = ""; appliedNow = false;
         say("you", words, false);
         busy = true;
         bridge.askAssistant(words, jobId);
     }
+    function act(what, arg, words) {      // one of the buttons under an answer
+        if (busy) { askErr = "I am still working on the last request. Wait for the answer."; return; }
+        askErr = ""; confirmClose = false;
+        say("you", words, false);
+        busy = true;
+        bridge.assistantDo(what, arg || "", last.job_id || jobId);
+    }
+    function markApplied() {
+        if (busy || !last.job_id) return;
+        var id = last.job_id, name = last.job || "this job";
+        if (!bridge.applyJob(id)) { say("bot", "That job could not be moved. It may have been removed from the list.", true); return; }
+        appliedNow = true;
+        say("you", "Mark applied", false);
+        say("bot", "Moved " + name + " to Applications, as waiting. Replies will be filed to it when you scan your email.", false);
+        ticker.text = "Moved to Applications (waiting)."; win.reloadAll(); detailDialog.refresh();
+    }
+    function forget() {
+        if (!confirmForget) { confirmForget = true; detailsNote = ""; return; }
+        confirmForget = false; page = "ask";
+        act("forget", "", "Forget my remembered answers");
+    }
+    // After a fill the form is looked at every few seconds: when it shows other fields (the next step
+    // of a form with several pages), the assistant offers to fill those too. It stops after five minutes.
+    Timer { id: watcher; interval: 4000; repeat: true
+        running: assistantDialog.visible && !assistantDialog.busy && assistantDialog.watchSign !== "" && !assistantDialog.nextPage && assistantDialog.watched < 75
+        onTriggered: { assistantDialog.watched++; bridge.watchForm(); } }
     function tryClose() {
         if (busy) { askErr = "I am still working. Wait for the answer, then close."; page = "ask"; return; }
         if (dirty && !confirmClose) {
@@ -115,12 +154,23 @@ Dialog {
         detailsNote = "Saved, encrypted on this Mac. Forms are filled in with exactly this.";
     }
     Connections { target: bridge
+        function onFormWatched(res) {
+            if (!res.ok || assistantDialog.busy || assistantDialog.watchSign === "" || assistantDialog.nextPage) return;
+            if (assistantDialog.watchSign === "pending") { assistantDialog.watchSign = res.url + " " + res.sign; return; }
+            if (res.url + " " + res.sign === assistantDialog.watchSign || res.empty < 1) return;
+            assistantDialog.nextPage = true;
+            assistantDialog.say("bot", "The form in Chrome shows other fields now. Shall I fill in this page too?", false);
+        }
         function onAssistantReady(res) {
             if (!assistantDialog.busy) return;
             assistantDialog.busy = false;
             if (res.action === "details") assistantDialog.page = "details";
-            if (!res.ok) { assistantDialog.say("bot", res.msg || "That did not work.", true); return; }
+            if (res.action === "fill") assistantDialog.last = res;
+            if (res.action === "learn" || res.action === "forget") assistantDialog.remembered = bridge.assistantMemory().count || 0;
+            if (!res.ok) { stagePanel.assistant.shake(); assistantDialog.say("bot", res.msg || "That did not work.", true); return; }
+            stagePanel.assistant.nod();
             assistantDialog.say("bot", res.say || "Done.", false);
+            if (res.action === "fill") { assistantDialog.watchSign = "pending"; assistantDialog.watched = 0; bridge.watchForm(); }
             var filled = res.filled || [], left = res.left || [];
             for (var i = 0; i < filled.length; i++)
                 filledModel.append({ label: filled[i].label, value: filled[i].value, kind: filled[i].kind, check: filled[i].check || "" });
@@ -178,7 +228,7 @@ Dialog {
                     Row { visible: assistantDialog.busy; spacing: 8
                         BusyIndicator { running: assistantDialog.busy; width: 20; height: 20; palette.dark: theme.a6 }
                         Text { anchors.verticalCenter: parent.verticalCenter; color: theme.soft; font.pixelSize: 12
-                            text: "Reading the form in Chrome…" } }
+                            text: "Working on it…" } }
                     DetailCard { visible: filledModel.count > 0; heading: "Filled in (" + filledModel.count + ")"
                         Repeater { model: filledModel
                             ColumnLayout { Layout.fillWidth: true; spacing: 1
@@ -193,6 +243,20 @@ Dialog {
                             ColumnLayout { Layout.fillWidth: true; spacing: 1
                                 Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.ink; font.pixelSize: 12; font.bold: true; text: model.label }
                                 Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 12; text: model.why } } } }
+                    // what can be done next, offered only when it applies
+                    Flow { objectName: "asNext"; Layout.fillWidth: true; spacing: 6
+                        visible: assistantDialog.canOpenForm || assistantDialog.canShowFiles || assistantDialog.canLearn || assistantDialog.canApply || (assistantDialog.nextPage && !assistantDialog.busy)
+                        SmallButton { objectName: "asNextPage"; visible: assistantDialog.nextPage && !assistantDialog.busy; primaryStyle: true; text: "Fill in this page too"
+                            onClicked: assistantDialog.ask("Fill in the form in Chrome") }
+                        SmallButton { objectName: "asOpenForm"; visible: assistantDialog.canOpenForm; primaryStyle: true; text: "Open the form in its own tab"
+                            onClicked: assistantDialog.act("open_form", assistantDialog.last.frame, "Open the form in its own tab") }
+                        SmallButton { objectName: "asFiles"; visible: assistantDialog.canShowFiles; text: "Show my CV and letter in Finder"
+                            onClicked: assistantDialog.act("files", "", "Show my CV and letter in Finder") }
+                        SmallButton { objectName: "asLearn"; visible: assistantDialog.canLearn; text: "Remember what I changed on the page"
+                            onClicked: assistantDialog.act("learn", "", "Remember what I changed on the page") }
+                        SmallButton { objectName: "asApply"; visible: assistantDialog.canApply; text: "Mark applied"
+                            onClicked: assistantDialog.markApplied() }
+                    }
                 }
             }
             Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
@@ -204,7 +268,7 @@ Dialog {
                         onActivated: assistantDialog.jobId = assistantDialog.jobs[currentIndex] ? assistantDialog.jobs[currentIndex].id : "" } }
                 RowLayout { Layout.fillWidth: true; spacing: 8
                     TextField { id: askBox; objectName: "asBox"; Layout.fillWidth: true; implicitHeight: 34
-                        placeholderText: "Ask me, for example: fill in the form in Chrome"; placeholderTextColor: theme.faint
+                        placeholderText: "Ask me: fill in the form in Chrome · why did this score 62?"; placeholderTextColor: theme.faint
                         color: theme.ink; font.pixelSize: 13; selectByMouse: true; enabled: !assistantDialog.busy
                         background: Rectangle { radius: 9; color: theme.surface; border.width: 1
                             border.color: assistantDialog.askErr !== "" || askBox.text.length > assistantDialog.maxRequest ? theme.crit : (askBox.activeFocus ? theme.accent : theme.line) }
@@ -220,7 +284,7 @@ Dialog {
                     color: assistantDialog.askErr !== "" || askBox.text.length > assistantDialog.maxRequest ? theme.crit : theme.faint
                     text: assistantDialog.askErr !== "" ? assistantDialog.askErr
                         : askBox.text.length > assistantDialog.maxRequest ? (askBox.text.length - assistantDialog.maxRequest) + " characters too long (the limit is " + assistantDialog.maxRequest + ")"
-                        : "Only empty fields are filled. Nothing is clicked or sent: you read the form and press Submit yourself." }
+                        : "Only empty fields are filled, and the form is never sent: you read it and press Submit yourself. A question about a job or the app is answered by Claude." }
             }
         }
 
@@ -237,6 +301,14 @@ Dialog {
                     Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
                         text: "What application forms are filled in with. Typed once, kept encrypted on this Mac. A field you leave empty is left empty in the form too."
                               + (assistantDialog.offered > 0 ? " Fields marked “from your CV” were read from your CV and are not saved yet: check them, then save." : "") }
+                    RowLayout { Layout.fillWidth: true; spacing: 8; visible: assistantDialog.remembered > 0
+                        Text { objectName: "asMemory"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 12
+                            color: assistantDialog.confirmForget ? theme.crit : theme.soft; font.bold: assistantDialog.confirmForget
+                            text: assistantDialog.confirmForget
+                                ? "Forgetting removes " + assistantDialog.remembered + (assistantDialog.remembered === 1 ? " answer" : " answers") + " you wrote yourself. Press Forget them once more to go on."
+                                : assistantDialog.remembered + (assistantDialog.remembered === 1 ? " answer of your own is" : " answers of your own are")
+                                  + " remembered and used when another form asks the same question." }
+                        SmallButton { objectName: "asForget"; text: "Forget them"; onClicked: assistantDialog.forget() } }
                     GridLayout { Layout.fillWidth: true; columns: width > 520 ? 2 : 1; columnSpacing: 12; rowSpacing: 10
                         Repeater {
                             model: fieldModel

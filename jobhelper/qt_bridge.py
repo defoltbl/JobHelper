@@ -62,6 +62,7 @@ class Bridge(RunSlots, JobSlots, QObject):
     emailTested = Signal("QVariantMap")        # a saved mailbox was tried: {box, ok, msg}
     emailSaved = Signal("QVariantMap")         # a mailbox was tried and saved (or why not)
     assistantReady = Signal("QVariantMap")     # the assistant did what was asked (or says why not)
+    formWatched = Signal("QVariantMap")        # where the form in Chrome stands now (asked while the assistant's window waits)
 
     def __init__(self) -> None:
         super().__init__()

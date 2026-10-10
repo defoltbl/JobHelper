@@ -253,6 +253,9 @@ Inside the window:
   window) — fills in the application form that is open in Google Chrome: your details from its **My details** page,
   answers to open questions drafted from your CV for the job. It writes into empty fields only, lists what it left
   and why, and never sends the form. Once, in Chrome: View > Developer > Allow JavaScript from Apple Events.
+  It also chooses from lists, yes/no buttons and menus when your details or CV settle the answer, reuses answers
+  you rewrote, offers the next page of a long form, shows the CV and letter in Finder, and answers a question
+  about a job or the app (one Claude call).
 - **Form answers** (job window, and the last step of **Before you apply**) — paste the questions
   of that job's application form, one per line, and Claude drafts the answers in one call from
   your master CV, the posting and *About you* in Options. They are kept with the job and can be

@@ -349,7 +349,7 @@ Table 6.3 groups the other modules by what they are for.
 | Rules without a model call | `filters`, `prefilter`, `language`, `places`, `keywords`, `salary`, `merge`, `followup`, `planner` | Level, years, language, location, profession, pay, duplicates, reminders |
 | Writing | `cv_tailor`, `cover_letter`, `letters`, `form_answers`, `interview_prep`, `prep_doc`, `pdf` | The adapted CV, the letter, form answers, the interview sheet |
 | Mail | `email_client`, `mailhosts` | Reading mailboxes read-only; which server a mailbox is read from |
-| The assistant | `assistant`, `details`, `chrome`, `form_fill` | What a typed request means; the person's own details; the link to Google Chrome; reading a form, deciding what each field is, and filling it in |
+| The assistant | `assistant`, `details`, `chrome`, `form_fill`, `form_choices`, `answer_memory` | What a typed request means and the facts for a free question; the person's own details; the link to Google Chrome; reading a form, deciding what each field is, and filling it in; choosing from lists and menus; the person's own wording, remembered |
 | Claude | `llm`, `usage` | The one place that asks Claude; counting usage and knowing the limits |
 | Storage and safety | `store`, `db`, `vault`, `integrity`, `housekeeping`, `health`, `trouble` | The job list, the reply database, encryption, signed rule files, backups, the start-up check, the log of errors |
 | The window's back end | `ui_api`, `api_documents`, `api_interview`, `api_letters`, `api_assistant`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` holds the logic; `Bridge` exposes it to QML and runs long work in threads |
@@ -364,6 +364,8 @@ The assistant works on the tab that is in front in Google Chrome, in three steps
 2. `plan()` decides in plain code what each field is. The person's details come from `details`;
    open questions go to `form_answers` in one call; everything else is left, with the reason.
 3. A second script writes the values into fields that are still empty and outlines them.
+4. Lists, radio buttons and menus the page draws itself are choices: `form_choices` decides them,
+   and a third script opens a menu, reads its entries, and presses the chosen one.
 
 Table 6.4 gives the rules these steps keep. `tests/test_assistant.py` checks each of them.
 
@@ -371,15 +373,18 @@ The whole request is also tried in a test area: `tests/fixtures/fill_in_browser.
 forms in `tests/fixtures/forms/` from this machine, opens one in a browser engine, and runs the
 same code the window runs, with Claude replaced by prepared answers and the data in a temporary
 folder. There is a plain form, one built the way component libraries build them (each box
-keeps its own value and undoes what did not arrive like typing), a long one, and one that sits
-in a frame from another address. To check a kind of form the assistant gets wrong, add a page
+keeps its own value and undoes what did not arrive like typing; its lists are menus that hold
+nothing until they are opened), a long one with lists, radio buttons and a number, and one that
+sits in a frame from another address. To check a kind of form the assistant gets wrong, add a page
 there and a test that names what must be filled and what must be left.
 
 *Table 6.4 – The rules of filling in a form*
 
 | Rule | How it is kept |
 |---|---|
-| The form is never sent | Neither script clicks, ticks or submits anything; a test reads both scripts for those calls |
+| The form is never sent | No script presses a button. The one script that presses anything (`CHOOSE`) accepts three kinds of element: what opens a menu, an entry of a menu, a radio button, and refuses anything of the kind that sends. A test reads the scripts for those calls, and the test area checks on every form that nothing was sent |
+| A choice is made only when something settles it | `form_choices.settle` uses the person's details and the job; one call to Claude covers the rest, and an answer that is not one of the field's own options is dropped. Every choice is marked for checking |
+| Only the assistant's own answers are read back | To learn the person's corrections, `VALUES` is asked for the numbers of the fields the assistant filled as answers, and for nothing else |
 | Only empty fields are written | The filling script tests each field again just before it writes |
 | Values are data, never code | They travel as JSON inside the script, and the script travels as an argument of `osascript` |
 | What the page answers is not trusted | `read_answer` and `fill_answer` accept only the expected shape and cut every text to a fixed length |

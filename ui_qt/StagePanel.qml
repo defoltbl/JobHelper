@@ -162,6 +162,10 @@ Rectangle {
                     onTapped: assistantDialog.show() }
                 Connections { target: welcome
                     function onShownChanged() { if (!welcome.shown) helper.greet(); } }
+                // it follows the pointer with its eyes while the pointer is over the floor (this takes no click from anything)
+                HoverHandler { id: floorHover
+                    onPointChanged: if (hovered) helper.lookAt(point.position.x, point.position.y)
+                    onHoveredChanged: if (!hovered) helper.lookAhead() }
             }
         }
 

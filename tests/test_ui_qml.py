@@ -3324,3 +3324,111 @@ def test_the_assistant_takes_a_request_and_shows_what_it_filled(ui, monkeypatch)
     ui.js("assistantDialog.tryClose()")
     ui.wait(400)
     assert dialog.property("visible") is False and ui.warnings == []
+
+
+def test_the_assistant_looks_at_the_pointer_nods_and_shakes_its_head(ui):
+    bot = ui.find("assistantBot")
+    eyes, head = ui.drawn("assistantEyes", "stagePanel"), ui.drawn("assistantHead", "stagePanel")
+    rest_x, rest_y = eyes.property("x"), head.property("y")
+    ui.js("stagePanel.assistant.lookAt(100, 100)")                # far to the left and above
+    ui.wait(300)
+    assert bot.property("lookX") == -1 and bot.property("lookY") == -1 and eyes.property("x") < rest_x - 3
+    ui.js("stagePanel.assistant.lookAt(stagePanel.assistant.x + 60, stagePanel.assistant.y + 36)")
+    ui.wait(300)
+    assert 0 < bot.property("lookX") < 0.3, "a pointer close by moves the eyes a little"
+    ui.js("stagePanel.assistant.lookAhead()")
+    ui.wait(300)
+    assert bot.property("lookX") == 0 and abs(eyes.property("x") - rest_x) < 0.01
+    for move, part, name in (("nod", "y", "nodBy"), ("shake", "x", "shakeBy")):
+        start = head.property(part)
+        ui.js(f"stagePanel.assistant.{move}()")
+        seen = []
+        for _ in range(40):
+            seen.append(head.property(part) - start)
+            ui.wait(20)
+        assert max(abs(s) for s in seen) > 3, f"the head moved ({move})"
+        assert bot.property(name) == 0 and abs(head.property(part) - start) < 0.01, "and came back"
+    assert head.property("y") == rest_y and ui.warnings == []
+
+
+def _wait_idle(ui, dialog):
+    for _ in range(100):
+        if not dialog.property("busy"):
+            return
+        ui.wait(30)
+
+
+def test_after_a_fill_the_assistant_offers_what_applies(ui, monkeypatch):
+    dialog, did = ui.find("assistantDialog"), []
+    fill = {"ok": True, "action": "fill", "host": "careers.acme.example", "url": "https://careers.acme.example/apply", "job_id": "lead",
+            "job": "Junior Python Developer at Acme", "guessed": False, "kept": 0, "boxes": 0, "say": "I filled in 1 field.",
+            "filled": [{"label": "Why Acme?", "value": "Because.", "kind": "answer", "check": ""}],
+            "left": [{"label": "Resume/CV", "why": "Attach the file yourself: a page cannot be handed a file from outside."}],
+            "wants_file": True, "has_files": True, "is_lead": True, "can_learn": True}
+    monkeypatch.setattr(ui_api.Api, "assistant_ask", lambda self, text, job_id="": dict(fill))
+    monkeypatch.setattr(ui_api.Api, "assistant_watch", lambda self: {"ok": False, "url": "", "sign": "", "empty": 0})
+    monkeypatch.setattr(ui_api.Api, "assistant_files", lambda self, job_id: did.append(("files", job_id)) or {"ok": True, "say": "Shown in Finder: CV."})
+    monkeypatch.setattr(ui_api.Api, "assistant_learn", lambda self: did.append(("learn",)) or {"ok": True, "learned": 1, "say": "I will use your wording for 1 question."})
+    monkeypatch.setattr(ui_api.Api, "assistant_memory", lambda self: {"count": len([d for d in did if d[0] == "learn"])})
+    monkeypatch.setattr(ui_api.Api, "assistant_forget", lambda self: did.append(("forget",)) or {"ok": True, "say": "Forgotten: 1 remembered answers."})
+    ui.js("assistantDialog.show()")
+    ui.wait(450)
+    assert not ui.find("asNext").property("visible"), "nothing is offered before anything was done"
+    ui.js('assistantDialog.ask("fill the form")')
+    _wait_idle(ui, dialog)
+    assert all(dialog.property(name) for name in ("canShowFiles", "canLearn", "canApply")) and not dialog.property("canOpenForm")
+    assert ui.find("asNext").property("visible") and ui.find("asFiles").property("visible") and not ui.find("asOpenForm").property("visible")
+    ui.js('assistantDialog.act("files", "", "Show my CV and letter in Finder")')
+    _wait_idle(ui, dialog)
+    ui.js('assistantDialog.act("learn", "", "Remember what I changed on the page")')
+    _wait_idle(ui, dialog)
+    assert did == [("files", "lead"), ("learn",)] and dialog.property("remembered") == 1
+    assert ui.js("talk.get(talk.count - 1).text") == "I will use your wording for 1 question."
+    # the form moves on to its next page
+    assert dialog.property("watchSign") == "pending" and not dialog.property("nextPage")
+    ui.bridge.formWatched.emit({"ok": True, "url": "https://careers.acme.example/apply", "sign": "4:a|b", "empty": 2})
+    ui.bridge.formWatched.emit({"ok": True, "url": "https://careers.acme.example/apply", "sign": "4:a|b", "empty": 1})
+    ui.wait(100)
+    assert not dialog.property("nextPage"), "the same fields: the same page"
+    ui.bridge.formWatched.emit({"ok": True, "url": "https://careers.acme.example/apply", "sign": "3:c|d", "empty": 0})
+    assert not dialog.property("nextPage"), "other fields, but nothing empty to fill"
+    ui.bridge.formWatched.emit({"ok": False, "url": "", "sign": "", "empty": 0})
+    ui.bridge.formWatched.emit({"ok": True, "url": "https://careers.acme.example/apply", "sign": "3:c|d", "empty": 3})
+    ui.wait(100)
+    assert dialog.property("nextPage") and ui.find("asNextPage").property("visible")
+    assert "other fields now" in ui.js("talk.get(talk.count - 1).text")
+    # mark applied, from here
+    assert store.find(store.load_jobs(), "lead")["status"] in store.LEAD_STATUSES
+    ui.js("assistantDialog.markApplied()")
+    ui.wait(200)
+    assert store.find(store.load_jobs(), "lead")["status"] == "waiting" and not dialog.property("canApply")
+    assert "Moved Junior Python Developer at Acme to Applications" in ui.js("talk.get(talk.count - 1).text")
+    # the memory can be emptied, after asking once
+    ui.js('assistantDialog.page = "details"')
+    ui.wait(100)
+    assert "1 answer of your own is remembered" in ui.find("asMemory").property("text")
+    ui.js("assistantDialog.forget()")
+    assert dialog.property("confirmForget") and "once more" in ui.find("asMemory").property("text") and ("forget",) not in did
+    ui.js("assistantDialog.forget()")
+    _wait_idle(ui, dialog)
+    assert did[-1] == ("forget",) and ui.js("talk.get(talk.count - 1).text").startswith("Forgotten")
+    # a form in a frame: the button opens it; a failure makes the robot shake its head
+    opened = []
+    monkeypatch.setattr(ui_api.Api, "assistant_ask", lambda self, text, job_id="": {
+        "ok": False, "action": "fill", "msg": "The form on this page sits inside a frame.", "frame": "https://boards.example.net/embed?id=7"})
+    monkeypatch.setattr(ui_api.Api, "assistant_open_form", lambda self, url: opened.append(url) or {"ok": True, "say": "I opened the form in a new tab."})
+    ui.js('assistantDialog.ask("fill the form")')
+    moved = []
+    for _ in range(60):
+        moved.append(abs(ui.find("assistantBot").property("shakeBy")))
+        ui.wait(20)
+    assert max(moved) > 3, "it shook its head"
+    assert dialog.property("canOpenForm") and not dialog.property("canLearn") and ui.find("asOpenForm").property("visible")
+    ui.js('assistantDialog.act("open_form", assistantDialog.last.frame, "Open the form in its own tab")')
+    _wait_idle(ui, dialog)
+    assert opened == ["https://boards.example.net/embed?id=7"]
+    ui.js("assistantDialog.tryClose()")
+    ui.wait(400)
+    store.save_jobs([dict(j, status="letter_ready") if j["id"] == "lead" else j for j in store.load_jobs()])      # as the other tests expect it
+    ui.js("win.reloadAll()")
+    assert dialog.property("visible") is False and ui.warnings == []

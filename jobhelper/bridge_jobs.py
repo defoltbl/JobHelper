@@ -350,6 +350,31 @@ class JobSlots:
             self._post("assistantReady", result)
         threading.Thread(target=work, daemon=True).start()
 
+    @Slot(str, str, str)
+    def assistantDo(self, what, arg, job_id):
+        """One of the small things the assistant offers after a fill, in the background; the answer arrives as assistantReady."""
+        def work():
+            try:
+                result = {"open_form": lambda: self._api.assistant_open_form(arg), "files": lambda: self._api.assistant_files(job_id),
+                          "learn": self._api.assistant_learn, "forget": self._api.assistant_forget}[what]()
+            except Exception as e:  # noqa: BLE001 - the window must always get an answer
+                trouble.note(f"the assistant's request ({what})", e)
+                result = {"ok": False, "msg": str(e) or type(e).__name__}
+            result["action"] = what
+            self._post("assistantReady", result)
+        threading.Thread(target=work, daemon=True).start()
+
+    @Slot()
+    def watchForm(self):
+        """Looks at the form in Chrome in the background; the answer arrives as formWatched."""
+        def work():
+            self._post("formWatched", self._api.assistant_watch())
+        threading.Thread(target=work, daemon=True).start()
+
+    @Slot(result="QVariantMap")
+    def assistantMemory(self):
+        return self._api.assistant_memory()
+
     @Slot(result="QVariantMap")
     def weekSummary(self):
         return self._api.week_summary()

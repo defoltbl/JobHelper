@@ -28,6 +28,29 @@ Item {
     readonly property color agDark: Qt.darker(ag, 1.3)
     readonly property color steelC: theme ? theme.steel : "#6b7787"
     readonly property color screenC: "#0d141c"
+    property real lookX: 0              // where it looks: -1 (left) to 1 (right)
+    property real lookY: 0              // -1 (up) to 1 (down)
+    property real nodBy: 0              // the head going down and up: "done"
+    property real shakeBy: 0            // the head going left and right: "that did not work"
+    Behavior on lookX { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+    Behavior on lookY { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+    function lookAt(x, y) {             // a point in its parent's coordinates; far away counts as "that way"
+        var dx = x - (root.x + 42), dy = y - (root.y + 36);
+        lookX = Math.max(-1, Math.min(1, dx / 160)); lookY = Math.max(-1, Math.min(1, dy / 120));
+    }
+    function lookAhead() { lookX = 0; lookY = 0; }
+    function nod() { shaking.stop(); shakeBy = 0; nodding.restart(); }
+    function shake() { nodding.stop(); nodBy = 0; shaking.restart(); }
+    SequentialAnimation { id: nodding
+        NumberAnimation { target: root; property: "nodBy"; to: 5; duration: 130; easing.type: Easing.InOutSine }
+        NumberAnimation { target: root; property: "nodBy"; to: 0; duration: 150; easing.type: Easing.InOutSine }
+        NumberAnimation { target: root; property: "nodBy"; to: 5; duration: 130; easing.type: Easing.InOutSine }
+        NumberAnimation { target: root; property: "nodBy"; to: 0; duration: 170; easing.type: Easing.InOutSine } }
+    SequentialAnimation { id: shaking
+        NumberAnimation { target: root; property: "shakeBy"; to: -5; duration: 90; easing.type: Easing.InOutSine }
+        NumberAnimation { target: root; property: "shakeBy"; to: 5; duration: 150; easing.type: Easing.InOutSine }
+        NumberAnimation { target: root; property: "shakeBy"; to: -5; duration: 150; easing.type: Easing.InOutSine }
+        NumberAnimation { target: root; property: "shakeBy"; to: 0; duration: 110; easing.type: Easing.InOutSine } }
     signal tapped()
     function greet() { greeting = true; greetEnd.restart(); }
     Timer { id: greetEnd; interval: 4200; onTriggered: root.greeting = false }
@@ -78,7 +101,7 @@ Item {
         Rectangle { x: 26; y: 70; width: 8; height: 4 + body.lift * 0.6; radius: 3; color: root.agLight; opacity: 0.55 }
 
         // head
-        Item { id: head; x: 5; y: 0; width: 50; height: 38
+        Item { id: head; objectName: "assistantHead"; x: 5 + root.shakeBy; y: root.nodBy; width: 50; height: 38
             transformOrigin: Item.Bottom; rotation: root.waving ? 5 : 0
             Behavior on rotation { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
             Rectangle { x: 24; y: -9; width: 2; height: 10; color: root.steelC }
@@ -91,7 +114,7 @@ Item {
             Rectangle { anchors.fill: parent; radius: 17
                 gradient: Gradient { GradientStop { position: 0; color: root.agLight } GradientStop { position: 1; color: root.ag } } }
             Rectangle { x: 6; y: 8; width: 38; height: 22; radius: 11; color: root.screenC
-                Row { id: eyes; anchors.centerIn: parent; spacing: 9
+                Row { id: eyes; objectName: "assistantEyes"; x: (parent.width - width) / 2 + root.lookX * 4; y: (parent.height - height) / 2 + root.lookY * 2.5; spacing: 9
                     Repeater { model: 2
                         Rectangle { objectName: "assistantEye" + index; width: 8; height: Math.max(1.4, 10 * (1 - root.lid)); radius: Math.min(4, height / 2)
                             anchors.verticalCenter: parent.verticalCenter; color: "#ffffff" } } }

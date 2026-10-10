@@ -12,7 +12,7 @@ about you stays on your Mac, encrypted.
 ![UI](https://img.shields.io/badge/UI-Qt%20Quick%20(PySide6)-41CD52?logo=qt&logoColor=white)
 ![Model](https://img.shields.io/badge/model-Claude%20(subscription)-D97757)
 ![Storage](https://img.shields.io/badge/data-AES--256%20encrypted-2E7D32)
-![Tests](https://img.shields.io/badge/tests-1469%20offline-blue)
+![Tests](https://img.shields.io/badge/tests-1508%20offline-blue)
 
 ![The main window](docs/img/02_main.png)
 
@@ -69,7 +69,9 @@ profession, for any city.
   posting stated as experience is sent back to the model, and what remains is shown to you.
 - **An assistant that fills in the form.** Tap the robot at the end of the line and ask: it
   writes your details and answers drafted from your CV into the form that is open in Chrome,
-  outlines what it filled, lists what it left and why, and never presses Submit.
+  chooses from lists, yes/no buttons and menus when your CV or details settle the answer,
+  outlines what it filled, lists what it left and why, and never presses Submit. It reuses
+  answers you rewrote, follows a form onto its next page, and answers questions about a job.
 - **Applications tracked by your mailbox.** Replies are read (never changed), classified as
   invitation, rejection, offer or confirmation, and filed to the right application.
 - **Before and after applying.** A checklist per job, drafted answers for that job's form,
@@ -159,7 +161,7 @@ JobHelper/
 ├── run.py                    # the same search from the command line (used by the weekly run)
 ├── status.py                 # command-line tools: list, sync, security, usage …
 ├── weekly_jobhelper.sh       # what the weekly LaunchAgent runs
-├── jobhelper/                # all the logic, no window code (58 modules)
+├── jobhelper/                # all the logic, no window code (60 modules)
 │   ├── agent1_cv.py … agent5_responses.py     # the five agents
 │   ├── scrapers_*.py         # one module per kind of job source
 │   ├── filters.py, prefilter.py, language.py, places.py, keywords.py, salary.py
@@ -167,15 +169,15 @@ JobHelper/
 │   ├── cv_tailor.py, cover_letter.py, form_answers.py, interview_prep.py
 │   │                         # writing, each with its checks against the CV
 │   ├── email_client.py, mailhosts.py          # read-only mail; which server a mailbox uses
-│   ├── assistant.py, details.py, chrome.py, form_fill.py
-│   │                         # the assistant: your details, the link to Chrome, filling a form
+│   ├── assistant.py, details.py, chrome.py, form_fill.py, form_choices.py, answer_memory.py
+│   │                         # the assistant: your details, the link to Chrome, filling a form, choosing, your wording
 │   ├── llm.py, usage.py      # the one door to Claude; usage and limits
 │   ├── store.py, db.py, vault.py, integrity.py, housekeeping.py
 │   │                         # job list, replies, encryption, signed files, backups
 │   └── ui_api.py, api_*.py, qt_bridge.py, bridge_*.py
 │                             # what the window calls
 ├── ui_qt/                    # the window: one QML file per dialog or part (38 files)
-├── tests/                    # 1,469 tests, offline, in temporary folders
+├── tests/                    # 1,508 tests, offline, in temporary folders
 │   └── guide_shots.py        # takes the pictures of the user guide
 ├── scripts/                  # the PDF builder, the numbering check, the diagram, the lock file
 ├── docs/                     # user guide, technical documentation, their PDFs, pictures
@@ -288,7 +290,9 @@ the same names without `.example`. With a letter of your own as
   encrypted backup and can be put back; old copies go to the Trash.
 - **The mailbox is read-only.** Nothing is sent, deleted, moved or marked as read.
 - **Forms are filled, never sent.** The assistant writes into empty fields of the page you
-  opened and reads back only whether a field is empty. It touches no password, file, payment
+  opened; the only things it presses are a menu, an entry of a menu and a yes/no button. It
+  reads back whether a field is empty and, when you ask it to learn your changes, the answers
+  it wrote itself. It touches no password, file, payment
   or personal-status field, and it needs your consent in both Chrome and macOS.
 
 ## Testing
@@ -298,7 +302,7 @@ python -m pytest -q
 python -m pyflakes jobhelper tests scripts
 ```
 
-1,469 tests in about two and a half minutes, with no network. They never touch real data, the
+1,508 tests in about two and a half minutes, with no network. They never touch real data, the
 Keychain or `.env`, never ask Claude, never read a real job board or mail server, and never open
 a file or put anything in the Trash: every test works in temporary folders with stand-ins. The
 window itself is loaded without a screen and driven by the tests, and the documentation has
@@ -359,6 +363,7 @@ A few decisions worth highlighting:
   connected. Russian mail services are not used.
 - The built-in salary estimate covers software roles in Czechia; elsewhere you enter your own
   figure.
-- The assistant fills in forms in Google Chrome only, and leaves lists, tick boxes and file
-  uploads to you. It has been tested on a local form, not yet across real recruiting sites.
+- The assistant fills in forms in Google Chrome only, and leaves tick boxes, dates and file
+  uploads to you. It is tested on forms of its own test area, not yet across real recruiting
+  sites, where menus in particular are drawn in many ways.
 - The app is started from a terminal. Packaging it as an app that opens from Finder is planned.

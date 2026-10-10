@@ -868,8 +868,12 @@ when the app opens, and opens its window when you select it.
 *Figure 9.1 – The assistant at the end of the assembly line*
 
 The assistant fills in the form that is open in Google Chrome. It writes into empty fields
-only, it clicks nothing, and it never sends the form. You read what it wrote and send the
-form yourself.
+only. The only things it presses on a page are a menu, an entry of a menu and a yes/no
+button; it never presses a button that sends or continues, and it never sends the form. You
+read what it wrote and send the form yourself.
+
+When the pointer is over the assembly line, the assistant follows it with its eyes. It nods
+when a request worked and shakes its head when it did not.
 
 ### Prerequisites
 
@@ -903,6 +907,10 @@ written here (Figure 9.2).
 | **Street and number**, **City**, **Postcode**, **Country** | Your address. Leave out what you do not want to give | Letters for the city and the country |
 | **LinkedIn**, **GitHub** | The address of your profile. *https://* is added for you | An address at that site, with no spaces |
 | **Website or portfolio** | Any other page about your work | A web address with no spaces |
+| **Current employer**, **Current job title** | Where you work now and as what. Leave empty when you do not work | Length only |
+| **University or school**, **Degree** | Where you studied and what you hold, as you want it written in forms | Length only |
+| **Notice period** | How soon you can leave, like *1 month*. The assistant also picks it from a list that offers it | Length only |
+| **Salary expectation** | The sentence or figure you give when a form asks, like *60 000 CZK gross per month*. Leave it empty and the assistant drafts an answer from the figure in **Options** | Length only |
 
 A field you leave empty is left empty in the form too. When something is wrong, the field
 turns red and the line under it says what to change; nothing is saved until it is right.
@@ -933,18 +941,65 @@ Chrome does not let another app write into a page until you allow it. Do this on
    took.
 4. Select **Fill in the form in Chrome**, or type the request, for example *fill in the
    form*, and press Return.
-5. Read the answer (Figure 9.3). **Filled in** lists what was written; **Left for you** lists
-   what was not, each with the reason.
-6. Go to Chrome and read the form. Filled fields have a green outline; an answer that needs
-   your attention has an amber one.
+5. Read the answer (Figure 9.3). **Filled in** lists what was written and chosen; **Left for
+   you** lists what was not, each with the reason.
+6. Go to Chrome and read the form. Filled fields have a green outline. An answer that needs
+   your attention, and everything that was chosen for you, has an amber one.
 7. Complete what was left for you, then send the form yourself.
+8. Back in the app, use the buttons under the answer (Figure 9.4). Table 9.2 describes them.
 
 ![What the assistant filled in and what it left](img/38_assistant_fill.png)
 
 *Figure 9.3 – What the assistant filled in and what it left*
 
+![The buttons under the assistant's answer](img/40_assistant_next.png)
+
+*Figure 9.4 – The buttons under the assistant's answer*
+
+*Table 9.2 – What the assistant offers after it filled in a form*
+
+| Button | Shown when | What it does |
+|---|---|---|
+| **Show my CV and letter in Finder** | The form asks for a file and the job has documents from the app | Opens Finder with the PDF of the adapted CV and the letter selected, ready to drag onto the form |
+| **Remember what I changed on the page** | The assistant wrote at least one answer | Reads back the answers it wrote, keeps your changes with the job, and remembers your wording |
+| **Mark applied** | The job is still in **New Jobs** | Moves the job to **Applications** as waiting, as the button in the job's window does |
+| **Fill in this page too** | The form in Chrome moved on to other fields | Fills in the new page |
+| **Open the form in its own tab** | The form sits in a frame from another site | Opens that form in a new Chrome tab, where it can be filled in |
+
 To open the assistant for one job directly, select **Fill form in Chrome** in that job's
 window.
+
+### Fill in a form with several pages
+
+Many forms continue on a second and third page. After a fill, the assistant looks at the form
+every few seconds for five minutes. When you go on to the next page and it has empty fields,
+the assistant says so and offers **Fill in this page too**. It never moves to the next page
+itself: you press the form's own button.
+
+### Use your own wording again
+
+When you rewrite an answer, the assistant keeps your wording and uses it the next time a form
+asks the same question, at any company, without a Claude call.
+
+1. After a fill, change the answers on the page as you like.
+2. In the app, select **Remember what I changed on the page**.
+
+An answer you rewrite and save under **Form answers** (section 7) is remembered the same way.
+A remembered answer is marked for checking when it is used, and one that names the company it
+was written for is not used for another company. The **My details** page shows how many
+answers are remembered; **Forget them** removes them after asking once.
+
+> **Note**
+> To learn your changes, the assistant reads back only the answers it wrote itself. It does
+> not read your other fields, and a draft you did not change is not remembered.
+
+### Ask the assistant a question
+
+Type a question about a job or about the app, for example *why did this score 62?* or *how
+many applications are waiting?*, and press Return. For a question about one job, choose the
+job under **Answers are for** first. The answer comes from Claude in one call, from what the
+app knows: the job's score and its reason, its keywords, its status, and how the app works.
+When the app does not hold the answer, the assistant says so.
 
 > **Tip**
 > Answers the assistant drafts are kept with the job, under **Form answers** (section 7). Ask
@@ -952,31 +1007,33 @@ window.
 
 ### What the assistant fills in and what it leaves
 
-Table 9.2 shows what happens to each kind of field.
+Table 9.3 shows what happens to each kind of field.
 
-*Table 9.2 – What the assistant does with each kind of field*
+*Table 9.3 – What the assistant does with each kind of field*
 
 | Kind of field | What the assistant does |
 |---|---|
 | Name, email, phone, address, links | Writes them from **My details**. A phone field too short for the spaces gets the number without them |
-| A country list | Chooses your country, also when the list spells it another way (*Czech Republic* for Czechia) |
+| A list, a yes/no choice, or a menu the page draws itself | Chooses the entry when something settles it: **My details** (country, city, notice period, the country code of your phone), where the posting was found ("How did you hear about us?"), or your CV and **About you** (right to work, degree level). Marked for checking. When nothing settles it, it is left to you |
+| A number, such as years of experience with a tool | Counts it from your CV. Marked for checking |
+| A question you answered in your own words before | Uses your wording again, marked for checking |
 | An open question, such as "Why do you want to work here?" | Drafts the answer from your CV and the posting, in one Claude call for the whole form. Nothing outside your CV is claimed |
 | A cover letter box | Pastes the letter the app wrote for this job |
 | A field that already holds something | Leaves it as it is |
 | A file, such as your CV | Leaves it to you: a page cannot be handed a file from outside |
 | A password | Leaves it to you |
 | Date of birth, gender, origin, health, payment details | Leaves them to you |
-| Tick boxes, yes/no choices, other lists, and boxes that open a menu of their own | Leaves them to you |
-| The **Submit** button | Never pressed |
+| Tick boxes, such as agreeing to a privacy notice | Leaves them to you |
+| **Submit**, **Next** and every other button | Never pressed |
 
-The assistant understands a few plain requests: to fill in the form, to show your details,
-and to explain what it does. It does not chat about other things.
+The assistant understands plain requests: to fill in the form, to show your details, to explain
+what it does, and questions about a job or the app.
 
 ### If something is wrong
 
-Table 9.3 lists what the assistant may answer, and what to do.
+Table 9.4 lists what the assistant may answer, and what to do.
 
-*Table 9.3 – Problems while filling in a form, and what to do*
+*Table 9.4 – Problems while filling in a form, and what to do*
 
 | What the assistant says | Cause | What to do |
 |---|---|---|
@@ -984,7 +1041,9 @@ Table 9.3 lists what the assistant may answer, and what to do.
 | Chrome does not let other apps fill in pages yet | The switch in Chrome is off | **View** > **Developer** > **Allow JavaScript from Apple Events** |
 | macOS did not let JobHelper talk to Chrome | The question from macOS was answered with **Don't Allow** | **System Settings** > **Privacy & Security** > **Automation**: turn on **Google Chrome** for the app |
 | I found no form fields on this page | The tab in front is the posting, not the form | Open the form itself, usually with the site's **Apply** button |
-| The form sits inside a frame from another site | The company shows a form that lives on a recruiting site | Open the address the assistant names in its own tab, and ask again |
+| The form sits inside a frame from another site | The company shows a form that lives on a recruiting site | Select **Open the form in its own tab** under the answer, then ask again |
+| The menu did not open for me | The site draws its menu in a way the assistant does not know | Choose that one yourself |
+| I could not ask Claude | Claude's limit is used up, or there is no connection | The details are still filled in. Ask again after the reset time shown in the Usage card (section 17) |
 | The tab changed while I was working | You moved to another page in the meantime | Go back to the form and ask again |
 | An open question: choose the job this form is for | The page did not show which job it belongs to | Choose the job under **Answers are for** and ask again |
 | I do not know your details yet | **My details** is empty | Fill in **My details**, save, ask again |
