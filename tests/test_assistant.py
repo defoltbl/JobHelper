@@ -776,13 +776,14 @@ def _decision(monkeypatch, say="", action=None, show=()):
 def test_claudes_decision_is_checked_before_anything_happens():
     ids = {"nw1", "q1"}
     ok = assistant_brain.check({"say": "It scored 62 — fine.", "action": {"name": "mark_applied", "args": {"job": "nw1", "extra": 1}}, "show": ["q1", "ghost", 5]}, ids)
-    assert ok == {"say": "It scored 62 – fine.", "action": {"name": "mark_applied", "args": {"job": "nw1"}}, "show": ["q1"], "dropped": False}
+    assert ok == {"say": "It scored 62 – fine.", "action": {"name": "mark_applied", "args": {"job": "nw1"}}, "show": ["q1"], "dropped": False,
+                  "actions": [{"name": "mark_applied", "args": {"job": "nw1"}}]}
     for bad in ({"name": "delete_everything", "args": {}}, {"name": "mark_applied", "args": {"job": "ghost"}}, {"name": "set_status", "args": {"job": "nw1", "status": "hired"}},
                 {"name": "set_date", "args": {"job": "nw1", "day": "next Tuesday"}}, {"name": "rewrite_letter", "args": {"job": "nw1", "paragraph": "two", "how": "shorter"}},
                 {"name": "rewrite_letter", "args": {"job": "nw1", "paragraph": 2, "how": ""}}, {"name": "rewrite_answer", "args": {"job": "nw1", "how": "x"}},
                 {"name": "open", "args": {}}, "mark_applied", {"args": {"job": "nw1"}}):
         out = assistant_brain.check({"say": "I will do that.", "action": bad}, ids)
-        assert out["action"] is None and out["say"] == "I will do that.", bad
+        assert out["action"] is None and out["actions"] == [] and out["say"] == "I will do that.", bad
     assert assistant_brain.check({"say": "", "action": {"name": "set_date", "args": {"job": "q1", "day": "2026-10-13", "time": "11:30", "kind": "dinner", "note": " a  b "}}}, ids)["action"] == \
         {"name": "set_date", "args": {"job": "q1", "day": "2026-10-13", "time": "11:30", "kind": "interview", "note": "a b"}}
     assert assistant_brain.check({"say": "x", "action": {"name": "fill_form", "args": {"skip": ["Salary ", 5, ""]}}}, ids)["action"]["args"] == {"skip": ["salary", "5"]}
@@ -852,7 +853,7 @@ def test_nothing_of_yours_is_changed_without_your_yes(isolate, monkeypatch):
     assert "Only a lead" in api.assistant_talk("I am not interested in Quillon any more")["msg"]
     _decision(monkeypatch, "Done, I removed it.", {"name": "delete_job", "args": {"job": "q1"}})
     out = api.assistant_talk("delete Quillon from everything")
-    assert out["action"] == "say" and "could not carry that out" in out["say"] and store.find(store.load_jobs(), "q1"), "an action that does not exist changes nothing"
+    assert out["action"] == "say" and "could not carry out" in out["say"] and store.find(store.load_jobs(), "q1"), "an action that does not exist changes nothing"
     for forged in (None, {}, {"name": "mark_applied"}, {"name": "mark_applied", "args": {"job": "ghost"}}, {"name": "wipe", "args": {"job": "q1"}},
                    {"name": "set_status", "args": {"job": "q1", "status": "hired"}}, {"name": "save_letter", "args": {"job": "q1", "paragraphs": "x"}}):
         assert api.assistant_confirm(forged)["ok"] is False, forged
@@ -864,7 +865,7 @@ def test_actions_that_only_show_something_run_at_once(isolate, monkeypatch):
                                                                                              "questions": [{"question": "Tell me about SQL.", "answer": "I use it daily."}]})])
     api = ui_api.Api()
     _decision(monkeypatch, "Opening it.", {"name": "open", "args": {"job": "nw1", "what": "letter"}})
-    assert api.assistant_talk("open the letter for Northwind please") == {"ok": True, "action": "open", "job_id": "nw1", "what": "letter", "say": "Opening it.", "rows": []}
+    assert api.assistant_talk("open the letter for Northwind please") == {"ok": True, "action": "open", "job_id": "nw1", "what": "letter", "say": "Opening it.", "rows": [], "also": [], "then": []}
     _decision(monkeypatch, "Here.", {"name": "my_answers", "args": {}})
     assert api.assistant_talk("show me the answers I keep for forms")["page"] == "answers"
     # a brief and advice are a second call each, from facts the app holds
@@ -872,7 +873,7 @@ def test_actions_that_only_show_something_run_at_once(isolate, monkeypatch):
     monkeypatch.setattr(llm, "ask", lambda prompt, **kw: said.update(prompt=prompt, **kw) or "Northwind builds reporting tools — in SQL.")
     _decision(monkeypatch, "", {"name": "company_brief", "args": {"job": "nw1"}})
     out = api.assistant_talk("tell me about Northwind before I apply")
-    assert out == {"ok": True, "action": "say", "say": "Northwind builds reporting tools – in SQL.", "rows": []}
+    assert out == {"ok": True, "action": "say", "say": "Northwind builds reporting tools – in SQL.", "rows": [], "also": [], "then": []}
     assert "We build reporting tools in SQL." in said["prompt"] and "only use the facts given" in said["system"]
     _decision(monkeypatch, "", {"name": "advice", "args": {}})
     api.assistant_talk("what do my results say about my search?")
@@ -887,9 +888,16 @@ def test_actions_that_only_show_something_run_at_once(isolate, monkeypatch):
     _decision(monkeypatch, "", {"name": "practice", "args": {"job": "nw1"}})
     assert "no interview preparation" in api.assistant_talk("practise for Northwind")["msg"]
     seen = {}
-    monkeypatch.setattr(llm, "ask", lambda prompt, **kw: seen.update(prompt=prompt) or "Good that you name SQL. Add the report you built.")
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: seen.update(prompt=prompt) or {"rating": "weak", "feedback": "Good that you name SQL. Add the report you built."})
     good = api.assistant_practice_answer("q1", "Tell me about SQL.", "I write SQL every day for reports.")
-    assert good == {"ok": True, "action": "practice_feedback", "say": "Good that you name SQL. Add the report you built."}
+    assert good == {"ok": True, "action": "practice_feedback", "say": "Good that you name SQL. Add the report you built.", "rating": "weak"}
+    assert store.find(store.load_jobs(), "q1")["practice"]["Tell me about SQL."]["rating"] == "weak", "how it went is kept, not what you typed"
+    assert "I write SQL every day" not in json.dumps(store.find(store.load_jobs(), "q1"))
+    _decision(monkeypatch, "", {"name": "practice", "args": {"job": "q1"}})
+    again = api.assistant_talk("practise for Quillon again")
+    assert again["questions"] == ["Tell me about SQL.", "Why analytics?"] and again["last"] == ["weak", ""] and "the 1 that went badly last time" in again["say"]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: seen.update(prompt=prompt) or {"rating": "superb", "feedback": "Fine."})
+    assert api.assistant_practice_answer("q1", "Tell me about SQL.", "I write SQL every day for reports.")["rating"] == "ok", "a rating that does not exist counts as ok"
     assert "A good answer would draw on: I use it daily." in seen["prompt"] and "I write SQL every day" in seen["prompt"]
     assert "sentence or two" in api.assistant_practice_answer("q1", "Tell me about SQL.", "Yes.")["msg"]
     assert "3000" in api.assistant_practice_answer("q1", "Tell me about SQL.", "word " * 700)["msg"]
@@ -1221,3 +1229,190 @@ def test_noticing_a_form_is_off_until_you_turn_it_on_and_offers_each_page_once(i
     monkeypatch.setattr(chrome, "active_tab", lambda: (_ for _ in ()).throw(chrome.ChromeError(chrome.NO_CONSENT)))
     assert api.assistant_notice() == {"ok": False, "problem": chrome.NO_CONSENT}
     assert api.assistant_set_watch(False)["ok"] and api.assistant_notice() == {"ok": False, "off": True}
+
+
+# ── the assistant at "pro" level ────────────────────────────────────────────
+def _many(n):
+    order = ["waiting", "interview", "letter_ready", "found", "rejected"]
+    return [_job(id=f"j{i}", company=f"Company{i} Works", title=f"Role {i}", status=order[i % 5], match_score=i % 100, url="") for i in range(n)]
+
+
+def test_only_the_jobs_a_request_is_likely_about_are_sent(isolate, monkeypatch):
+    jobs = _many(200) + [_job(id="named", company="Brightpath", title="Developer", status="rejected", url="")]
+    shown = assistant_brain.relevant(jobs, "which applications are waiting longest?")
+    assert len(shown) == assistant_brain.MAX_JOBS and all(j["status"] != "rejected" for j in shown), "closed applications are not sent unless asked about"
+    assert shown[0]["status"] == "interview" and shown[-1]["status"] in ("waiting", "letter_ready", "found")
+    assert assistant_brain.relevant(jobs, "what did brightpath answer?")[0]["id"] == "named", "a company named in the talk comes first, whatever its state"
+    assert assistant_brain.relevant(jobs, "anything", context_id="j4")[0]["id"] == "j4", "and so does the job in front"
+    assert any(j["status"] == "rejected" for j in assistant_brain.relevant(jobs, "how many were rejected so far?", most=300))
+    lines, ids = assistant_brain.snapshot(jobs, [], words="what did brightpath answer?")
+    assert len(ids) == assistant_brain.MAX_JOBS and len(lines) < 9000, "a third of what sending every job took"
+    said = assistant_brain.totals(jobs, len(ids))
+    assert "40 waiting" in said and "41 rejected" in said and f"Listed below: {assistant_brain.MAX_JOBS} of 201" in said
+    store.save_jobs(jobs)
+    seen = _decision(monkeypatch, "Forty are waiting.", None)
+    ui_api.Api().assistant_talk("how many applications are waiting?")
+    assert "All jobs by status:" in seen["prompt"] and "40 waiting" in seen["prompt"]
+
+
+def test_several_things_in_one_request_are_asked_about_together_and_can_be_taken_back(isolate, monkeypatch):
+    from datetime import date, timedelta
+    soon = (date.today() + timedelta(days=10)).isoformat()
+    store.save_jobs([_job(), _job(id="twin", title="Junior Analyst", url="https://other.example/1"), _job(id="q1", company="Quillon", title="Data Analyst", url="")])
+    api = ui_api.Api()
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"say": "", "show": [], "actions": [
+        {"name": "mark_applied", "args": {"job": "nw1"}},
+        {"name": "set_date", "args": {"job": "nw1", "day": soon, "time": "", "kind": "other", "note": "Follow up"}},
+        {"name": "open", "args": {"job": "q1", "what": "job"}}, {"name": "wipe", "args": {}}]})
+    out = api.assistant_talk("mark northwind applied, remind me to follow up in ten days and open quillon")
+    assert out["action"] == "confirm" and out["pending"]["name"] == "many" and len(out["pending"]["args"]["actions"]) == 2
+    assert out["ask"].startswith("Shall I do these 2 things?\n1. Mark Junior Analyst at Northwind as applied?") and f"2. Put this date on Junior Analyst at Northwind: other on {soon} (Follow up)?" in out["ask"]
+    assert any("Opening" in text for text in out["also"]) and any("could not carry out" in text for text in out["also"]), "what only shows is done at once; what does not exist is said"
+    assert out["then"] == [{"action": "open", "job_id": "q1", "what": "job", "page": ""}], "the window still opens what was asked for"
+    assert store.find(store.load_jobs(), "nw1")["status"] == "letter_ready"
+    done = api.assistant_confirm(out["pending"])
+    assert done["ok"] and done["can_undo"] and "Moved Junior Analyst at Northwind to Applications" in done["say"] and "The date is set" in done["say"]
+    after = store.load_jobs()
+    assert store.find(after, "nw1")["status"] == "waiting" and store.find(after, "nw1")["event"]["note"] == "Follow up"
+    assert store.find(after, "twin") is None, "the app folds away the same role at the same company, as Mark applied always did"
+    back = api.assistant_undo()
+    restored = store.load_jobs()
+    assert back["ok"] and back["can_undo"] is False and "is as it was before" in back["say"]
+    assert store.find(restored, "nw1")["status"] == "letter_ready" and "event" not in store.find(restored, "nw1") and store.find(restored, "twin"), "everything is back, the folded lead too"
+    assert api.assistant_undo()["msg"] == "There is nothing to take back."
+    # one of several fails: said, and what was done before it can still be taken back
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"say": "", "show": [], "actions": [
+        {"name": "set_status", "args": {"job": "q1", "status": "waiting"}}, {"name": "set_status", "args": {"job": "q1", "status": "interview"}}]})
+    out = api.assistant_talk("quillon is waiting, no wait, it is an interview")
+    forged = {"name": "many", "args": {"actions": out["pending"]["args"]["actions"][:1] + [{"name": "set_status", "args": {"job": "ghost", "status": "offer"}}]}}
+    failed = api.assistant_confirm(forged)
+    assert failed["ok"] is False and failed["changed"] and failed["can_undo"] and "Before that:" in failed["msg"]
+    assert api.assistant_undo()["ok"] and store.find(store.load_jobs(), "q1")["status"] == "letter_ready"
+    for forged in ({"name": "many", "args": {"actions": []}}, {"name": "many", "args": {"actions": "all"}}, {"name": "many", "args": {"actions": [{}] * 4}}):
+        assert api.assistant_confirm(forged)["ok"] is False
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"say": "", "show": [], "actions": [
+        {"name": "mark_applied", "args": {"job": "q1"}}, {"name": "rewrite_letter", "args": {"job": "q1", "paragraph": 1, "how": "shorter"}}]})
+    assert "on its own" in api.assistant_talk("apply to quillon and shorten the letter")["msg"]
+
+
+def test_not_interested_and_a_running_search(isolate, monkeypatch):
+    store.save_jobs([_job()])
+    api = ui_api.Api()
+    _decision(monkeypatch, "", {"name": "not_interested", "args": {"job": "nw1"}})
+    out = api.assistant_talk("I am not interested in northwind")
+    assert "Remove Junior Analyst at Northwind from New Jobs" in out["ask"]
+    assert api.assistant_confirm(out["pending"])["can_undo"] and store.find(store.load_jobs(), "nw1")["status"] == store.NOT_INTERESTED
+    assert api.assistant_undo()["ok"] and store.find(store.load_jobs(), "nw1")["status"] == "found"
+    api.live = store.load_jobs()                # a search is running
+    assert "is running" in api.assistant_confirm({"name": "many", "args": {"actions": [{"name": "mark_applied", "args": {"job": "nw1"}}]}})["msg"]
+    api._undo = [{"kind": "added", "id": "x", "what": "x"}]
+    assert "is running" in api.assistant_undo()["msg"]
+
+
+def test_what_you_tell_it_to_remember_is_kept_between_sessions(isolate, monkeypatch):
+    from jobhelper import assistant_notes
+    assert assistant_notes.path() in vault.data_files() and assistant_notes.notes() == []
+    for bad, word in (("", "few words"), ("no", "few words"), ("x" * 201, "up to 200")):
+        assert word in assistant_notes.remember(bad)["msg"]
+    store.save_jobs([_job()])
+    api = ui_api.Api()
+    _decision(monkeypatch, "", {"name": "remember", "args": {"note": "No consulting firms"}})
+    out = api.assistant_talk("remember that I do not want consulting firms")
+    assert out["ok"] and out["notes_changed"] and "I will remember: No consulting firms" in out["say"] and "use Options" in out["say"]
+    assert "already knew" in api.assistant_talk("remember that I do not want consulting firms")["say"]
+    seen = _decision(monkeypatch, "Noted.", None)
+    fresh = ui_api.Api()                        # the app was closed and opened again
+    fresh.assistant_talk("which of my leads fit me best?")
+    assert "1. No consulting firms" in seen["prompt"], "the note is there the next day"
+    assert "Person: remember that I do not want consulting firms" in seen["prompt"], "and so is the talk"
+    assert api.assistant_notes_list() == {"notes": [{"text": "No consulting firms", "when": assistant_notes.notes()[0]["when"]}]}
+    _decision(monkeypatch, "I will forget it.", {"name": "forget_note", "args": {"number": 3}})
+    assert "could not carry out" in api.assistant_talk("forget the third note")["say"], "a note that is not there"
+    _decision(monkeypatch, "", {"name": "forget_note", "args": {"number": 1}})
+    assert "Forgotten: No consulting firms." in api.assistant_talk("forget the note about consulting")["say"] and assistant_notes.notes() == []
+    assert api.assistant_forget_note(1)["ok"] is False
+    for i in range(assistant_notes.MAX_NOTES):
+        assert assistant_notes.remember(f"note number {i}")["ok"]
+    assert "up to 40" in assistant_notes.remember("one more")["msg"]
+    assert api.assistant_new_talk()["ok"] and assistant_notes.turns() == []
+    assistant_notes.path().write_text("{ broken")
+    assert assistant_notes.notes() == [] and assistant_notes.turns() == []
+
+
+def test_a_reply_to_a_company_is_drafted_for_you_to_send(isolate, monkeypatch):
+    from jobhelper import db
+    store.save_jobs([_job(status="waiting")])
+    api = ui_api.Api()
+    _decision(monkeypatch, "", {"name": "draft_reply", "args": {"job": "nw1", "how": "accept the Tuesday slot"}})
+    monkeypatch.setattr(db, "all_responses", lambda: [])
+    assert "nothing to reply to" in api.assistant_talk("answer northwind that tuesday suits me")["msg"]
+    monkeypatch.setattr(db, "all_responses", lambda: [{"job_id": "nw1", "stage": "interview", "received_date": "Mon, 05 Oct 2026 10:00:00 +0000",
+                                                      "subject": "Interview invitation", "summary": "They offer Tuesday 10:00 or Thursday 14:00.", "next_step": "Pick a slot"}])
+    seen = {}
+    monkeypatch.setattr(llm, "ask", lambda prompt, **kw: seen.update(prompt=prompt, **kw) or "Dear team,\n\nTuesday at 10:00 suits me — thank you.\n\nAlex Novak")
+    out = api.assistant_talk("answer northwind that tuesday suits me")
+    assert out["action"] == "draft" and out["copy"] == "Dear team,\n\nTuesday at 10:00 suits me – thank you.\n\nAlex Novak" and "I never send mail" in out["say"]
+    assert "They offer Tuesday 10:00 or Thursday 14:00." in seen["prompt"] and "accept the Tuesday slot" in seen["prompt"] and "Alex Novak" in seen["prompt"]
+    assert "square brackets" in seen["system"] and "for one job applicant to send themselves" in seen["system"]
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: "  ")
+    assert "no draft" in api.assistant_talk("answer northwind that tuesday suits me")["msg"]
+
+
+POSTING = ("Junior Data Analyst\nNorthwind Systems, Brno\n" + "We are looking for a junior analyst who writes SQL and builds reports for our clients. " * 12)
+
+
+def test_a_posting_open_in_the_browser_is_scored_and_added_only_on_your_yes(isolate, monkeypatch):
+    from jobhelper import agent3_letters
+    store.save_jobs([_job()])
+    api = ui_api.Api()
+    page = {"url": "https://jobs.example.net/ads/777", "title": "Junior Data Analyst - Northwind Systems", "text": POSTING}
+    monkeypatch.setattr(chrome, "active_tab", lambda: {"url": page["url"], "title": page["title"]})
+    monkeypatch.setattr(chrome, "run", lambda script: json.dumps(page))
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"is_posting": True, "title": "Junior Data Analyst", "company": "Northwind Systems", "location": "Mars"})
+    scored = []
+
+    def rescore(jobs, ids, profile, cv_text="", **kw):
+        scored.append(dict(jobs[0]))
+        jobs[0].update(match_score=71, match_tier="strong", match_reason="Solid SQL; reports are your daily work.")
+        return {"scored": 1, "changed": [], "failed": 0}
+    monkeypatch.setattr(agent3_letters, "rescore", rescore)
+    out = api.assistant_judge_page()
+    assert out["action"] == "confirm" and out["ask"].startswith("Junior Data Analyst at Northwind Systems scores 71, above your limit of 50. Solid SQL")
+    assert scored[0]["title"] == "Junior Data Analyst" and scored[0]["location"] == "" and scored[0]["description"] == POSTING, \
+        "scored by the app's own scorer; a place that does not stand on the page is not taken"
+    assert len(store.load_jobs()) == 1, "asked, not added"
+    done = api.assistant_confirm(out["pending"])
+    added = [j for j in store.load_jobs() if j["source"] == "assistant"]
+    assert done["ok"] and "Added Junior Data Analyst at Northwind Systems to New Jobs with a score of 71" in done["say"] and len(added) == 1
+    assert added[0]["status"] == "found" and added[0]["url"] == page["url"] and added[0]["match_score"] == 71 and added[0]["id"].startswith("assistant-")
+    assert "in your list already" in api.assistant_confirm(out["pending"])["msg"]
+    again = api.assistant_judge_page()
+    assert again["action"] == "say" and "in your list already" in again["say"] and again["rows"][0]["id"] == added[0]["id"], "known by its address: no call"
+    assert api.assistant_undo()["ok"] and len(store.load_jobs()) == 1, "the added posting can be taken back"
+    for record in (None, {}, {"title": "x", "url": "javascript:1", "match_score": 5}, {"title": "", "url": "https://a.example/1", "match_score": 5},
+                   {"title": "x", "url": "https://a.example/1"}, {"title": "x", "url": "https://a.example/1", "match_score": 500}):
+        assert api.assistant_confirm({"name": "add_job", "args": {"record": record}})["ok"] is False, record
+    # every reason not to judge a page is said
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"is_posting": False, "title": "", "company": "", "location": ""})
+    assert "does not read like one job posting" in api.assistant_judge_page()["msg"]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"is_posting": True, "title": "Chief Wizard", "company": "Northwind Systems", "location": ""})
+    assert "does not read like one job posting" in api.assistant_judge_page()["msg"], "a title that is not on the page is not a posting"
+    page["text"] = "Too short."
+    assert "too little text" in api.assistant_judge_page()["msg"]
+    page.update(url="https://rabota.example.ru/1", text=POSTING)
+    assert "Russian services" in api.assistant_judge_page()["msg"]
+    monkeypatch.setattr(chrome, "active_tab", lambda: (_ for _ in ()).throw(chrome.ChromeError(chrome.NOT_RUNNING)))
+    assert api.assistant_judge_page()["msg"] == chrome.NOT_RUNNING
+    for never in (".click(", "submit(", "dispatchEvent", "fetch(", "cookie", "localStorage", "setAttribute", ".value"):
+        assert never not in form_fill.PAGE, never
+
+
+def test_the_window_is_told_what_is_being_done(isolate, monkeypatch):
+    store.save_jobs([_job()])
+    said = []
+    _decision(monkeypatch, "It is ready to send.", None)
+    ui_api.Api().assistant_talk("what about northwind?", progress=said.append)
+    assert said == ["Looking at your jobs…", "Asking Claude…", "Checking the answer…"]
+    said.clear()
+    ui_api.Api().assistant_talk("help", progress=said.append)
+    assert said == [], "a fixed request is answered at once"

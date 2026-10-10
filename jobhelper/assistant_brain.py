@@ -18,14 +18,15 @@ from typing import Any
 
 from . import db, llm, planner, store
 
-MAX_TURNS, MAX_TURN, MAX_JOBS, MAX_SHOWN = 6, 400, 220, 30
+MAX_TURNS, MAX_TURN, MAX_JOBS, MAX_SHOWN, MAX_ACTIONS = 6, 400, 70, 30, 3
 STATUSES = ("waiting", "interview", "offer", "rejected", "on_hold")
 
 # name -> (what it needs, does it change your data)
 ACTIONS = {
     "fill_form": ((), False), "my_details": ((), False), "my_answers": ((), False),
     "open": (("job",), False), "company_brief": (("job",), False), "advice": ((), False),
-    "practice": (("job",), False), "review_form": ((), False),
+    "practice": (("job",), False), "review_form": ((), False), "judge_page": ((), False), "draft_reply": (("job", "how"), False),
+    "remember": (("note",), False), "forget_note": (("number",), False),
     "mark_applied": (("job",), True), "set_status": (("job", "status"), True), "set_date": (("job", "day"), True),
     "not_interested": (("job",), True), "rewrite_letter": (("job", "paragraph", "how"), True),
     "rewrite_answer": (("job", "question", "how"), True),
@@ -33,7 +34,7 @@ ACTIONS = {
 
 SYSTEM = (
     "You are the assistant inside JobHelper, a desktop app for one person's job search. For each request you decide ONE "
-    "thing: an answer in words, or one action for the app to carry out. You only use the facts you are given: never "
+    "thing: an answer in words, or up to three actions for the app to carry out in order. You only use the facts you are given: never "
     "invent a job, a number, a date, a score or a reason, and never say that something was done (the app does it after "
     "you and reports it itself). When the request is not clear, or you cannot tell which job is meant, ask one short "
     "question instead of acting. Answers are at most five short sentences, plain words, no lists, no emojis; use an en "
@@ -42,7 +43,7 @@ SYSTEM = (
 
 PROMPT = """Today is {today}.
 
-What the app can do (one action at most):
+What the app can do (up to three actions, only when the person asked for each of them):
 - fill_form {{"skip": ["words of fields to leave out"]}} - fill in the application form that is open in Chrome
 - review_form {{}} - read the form in Chrome back and say what looks wrong before it is sent
 - my_details {{}} / my_answers {{}} - open those pages
@@ -56,14 +57,22 @@ What the app can do (one action at most):
 - company_brief {{"job": id}} - what is known about the company, in a few lines
 - advice {{}} - what the person's results so far say about their search
 - practice {{"job": id}} - practise the interview questions of that job
+- judge_page {{}} - read the job posting that is open in the browser, score it against the CV and offer to add it to New Jobs
+- draft_reply {{"job": id, "how": "what the person wants to say"}} - draft a reply to the company's last message, for the person to copy and send
+- remember {{"note": "a fact or wish of the person, in a few words"}} - keep it for later talks (only when they ask you to remember, or state a lasting wish)
+- forget_note {{"number": n}} - remove one of the notes below
 
 About the app:
 {about}
 
 The person's numbers: {numbers}
 
+What the person asked you to remember (use it in your answers; it changes nothing in the app by itself):
+{notes}
+
 {context}
 
+{totals}
 The jobs (id | company | title | status | score | applied | last reply | date set | documents):
 {jobs}
 
@@ -73,8 +82,9 @@ The talk so far:
 The request: {request}
 
 Return JSON with exactly this shape:
-{{"say": "<your answer, or what you are about to ask the app to do>", "action": null or {{"name": "<action>", "args": {{...}}}},
-  "show": [<ids of jobs the answer is about, to list for the person; [] when none>]}}"""
+{{"say": "<your answer, or what you are about to ask the app to do>", "actions": [{{"name": "<action>", "args": {{...}}}}],
+  "show": [<ids of jobs the answer is about, to list for the person; [] when none>]}}
+"actions" is [] when you only answer."""
 
 
 def job_line(job: dict[str, Any], last_reply: dict[str, Any] | None, today: date) -> str:
@@ -92,17 +102,44 @@ def job_line(job: dict[str, Any], last_reply: dict[str, Any] | None, today: date
                        "-" if score is None else str(score), (applied + ago) or "-", reply, when, docs])
 
 
-def snapshot(jobs: list[dict[str, Any]], responses: list[dict[str, Any]], today: date | None = None) -> tuple[str, set[str]]:
-    """The jobs as lines for the prompt, the ones that matter first, and the ids that may be named."""
+_ALL = re.compile(r"\b(?:reject\w*|declin\w*|refus\w*|said no|all|every|each|total|history|ever|so far|overall|how many)\b")
+
+
+def relevant(jobs: list[dict[str, Any]], words: str, context_id: str = "", most: int = MAX_JOBS) -> list[dict[str, Any]]:
+    """The jobs worth showing Claude for this request, the likeliest first: the one in front, the ones
+    named in the talk, what is open, then the best leads. Closed applications come only when the request
+    is about them or about everything. Sending every job with every request would spend the limit for nothing."""
+    from . import email_client
+    text = " " + " ".join(re.findall(r"[a-z0-9]+", str(words).lower())) + " "
+    order = {"interview": 0, "offer": 0, "waiting": 1, "on_hold": 1, "letter_ready": 2, "found": 3, "rejected": 4}
+    known = [j for j in jobs if j.get("status") in order]
+
+    def named(job) -> bool:
+        own = email_client.company_tokens(job.get("company", "")) - email_client.GENERIC_COMPANY_WORDS
+        return any(f" {w} " in text for w in own)
+    first = [j for j in known if j.get("id") == context_id] + [j for j in known if j.get("id") != context_id and named(j)]
+    rest = [j for j in known if j not in first and (j["status"] != "rejected" or _ALL.search(text))]
+    rest.sort(key=lambda j: (order[j["status"]], -(j.get("match_score") or 0)))
+    return (first + rest)[:most]
+
+
+def totals(jobs: list[dict[str, Any]], shown: int) -> str:
+    counts: dict[str, int] = {}
+    for j in jobs:
+        counts[str(j.get("status") or "")] = counts.get(str(j.get("status") or ""), 0) + 1
+    said = ", ".join(f"{n} {status.replace('_', ' ')}" for status, n in sorted(counts.items()) if status)
+    return f"All jobs by status: {said or 'none'}. Listed below: {shown} of {len(jobs)} (the ones this request is likely about)."
+
+
+def snapshot(jobs: list[dict[str, Any]], responses: list[dict[str, Any]], today: date | None = None,
+             words: str = "", context_id: str = "") -> tuple[str, set[str]]:
+    """The jobs as lines for the prompt and the ids that may be named."""
     today = today or date.today()
     last: dict[str, dict[str, Any]] = {}
     for r in responses:                              # newest first: the first one met for a job is its last reply
         if r.get("job_id") and r["job_id"] not in last:
             last[r["job_id"]] = r
-    order = {"interview": 0, "offer": 0, "waiting": 1, "on_hold": 1, "letter_ready": 2, "found": 3, "rejected": 4}
-    known = [j for j in jobs if j.get("status") in order]
-    known.sort(key=lambda j: (order[j["status"]], -(j.get("match_score") or 0)))
-    kept = known[:MAX_JOBS]
+    kept = relevant(jobs, words, context_id)
     return "\n".join(job_line(j, last.get(j["id"]), today) for j in kept) or "(no jobs yet)", {j["id"] for j in kept}
 
 
@@ -112,10 +149,12 @@ def turns_text(turns: list[tuple[str, str]]) -> str:
 
 
 def decide(request: str, jobs: list[dict[str, Any]], responses: list[dict[str, Any]], turns: list[tuple[str, str]],
-           about: str, numbers: str, context_job: dict[str, Any] | None = None, today: date | None = None) -> dict[str, Any]:
-    """{"say", "action": None | {"name", "args"}, "show": [ids]}: Claude's decision, checked."""
+           about: str, numbers: str, context_job: dict[str, Any] | None = None, today: date | None = None,
+           notes: list[str] | None = None) -> dict[str, Any]:
+    """{"say", "actions": [{"name", "args"}], "show": [ids], "dropped"}: Claude's decision, checked."""
     today = today or date.today()
-    lines, ids = snapshot(jobs, responses, today)
+    talk = " ".join([str(request)] + [text for _who, text in turns[-MAX_TURNS:]])
+    lines, ids = snapshot(jobs, responses, today, talk, context_job["id"] if context_job else "")
     context = "No job is open in the app right now."
     if context_job:
         ids.add(context_job["id"])
@@ -123,31 +162,36 @@ def decide(request: str, jobs: list[dict[str, Any]], responses: list[dict[str, A
                    f"{context_job.get('title', '')} at {context_job.get('company', '')}, status {context_job.get('status', '')}, "
                    f"score {context_job.get('match_score') if context_job.get('match_score') is not None else 'none'}. "
                    f"Why this score: {str(context_job.get('match_reason') or 'no reason stored')[:600]}")
+    kept = "\n".join(f"{n}. {text}" for n, text in enumerate(notes or [], 1)) or "(nothing yet)"
     data = llm.ask_json(PROMPT.format(today=f"{today.isoformat()}, a {today.strftime('%A')}", about=about, numbers=numbers, context=context,
-                                      jobs=lines, turns=turns_text(turns), request=" ".join(str(request).split())),
+                                      notes=kept, totals=totals(jobs, len(ids)), jobs=lines, turns=turns_text(turns),
+                                      request=" ".join(str(request).split())),
                         system=SYSTEM, tag="assistant")
-    return check(data, ids)
+    return check(data, ids, len(notes or []))
 
 
-def check(data: Any, ids: set[str]) -> dict[str, Any]:
-    """Claude's reply made safe: only words, one known action with arguments of the right kind, and ids that exist."""
+def check(data: Any, ids: set[str], notes: int = 0) -> dict[str, Any]:
+    """Claude's reply made safe: only words, known actions with arguments of the right kind, and ids that exist."""
     if not isinstance(data, dict):
         raise ValueError("Claude's answer could not be read. Ask again in other words.")
     say = " ".join(str(data.get("say") or "").replace("—", "–").split())[:1500]
     shown = [str(i) for i in (data.get("show") if isinstance(data.get("show"), list) else []) if str(i) in ids][:MAX_SHOWN]
-    action = data.get("action") if isinstance(data.get("action"), dict) else None
-    clean = None
-    if action and action.get("name") in ACTIONS:
-        raw = action.get("args") if isinstance(action.get("args"), dict) else {}
-        args = _args(action["name"], raw, ids)
-        if args is not None:
-            clean = {"name": action["name"], "args": args}
-    if not say and clean is None:
+    asked = data.get("actions") if isinstance(data.get("actions"), list) else ([data["action"]] if isinstance(data.get("action"), dict) else [])
+    clean, dropped = [], False
+    for action in asked:
+        args = None
+        if isinstance(action, dict) and action.get("name") in ACTIONS:
+            args = _args(action["name"], action.get("args") if isinstance(action.get("args"), dict) else {}, ids, notes)
+        if args is None or len(clean) >= MAX_ACTIONS:
+            dropped = True
+        else:
+            clean.append({"name": action["name"], "args": args})
+    if not say and not clean:
         raise ValueError("Claude gave no answer. Ask again in other words.")
-    return {"say": say, "action": clean, "show": shown, "dropped": bool(action) and clean is None}
+    return {"say": say, "actions": clean, "action": clean[0] if clean else None, "show": shown, "dropped": dropped}
 
 
-def _args(name: str, raw: dict[str, Any], ids: set[str]) -> dict[str, Any] | None:
+def _args(name: str, raw: dict[str, Any], ids: set[str], notes: int = 0) -> dict[str, Any] | None:
     needs, _changes = ACTIONS[name]
     out: dict[str, Any] = {}
     if "job" in needs:
@@ -176,9 +220,20 @@ def _args(name: str, raw: dict[str, Any], ids: set[str]) -> dict[str, Any] | Non
             return None
         if not 1 <= out["paragraph"] <= 12:
             return None
-    if name in ("rewrite_letter", "rewrite_answer"):
+    if name == "remember":
+        out["note"] = " ".join(str(raw.get("note") or "").split())[:200]
+        if len(out["note"]) < 3:
+            return None
+    if name == "forget_note":
+        try:
+            out["number"] = int(raw.get("number"))
+        except (TypeError, ValueError):
+            return None
+        if not 1 <= out["number"] <= max(notes, 0):
+            return None
+    if name in ("rewrite_letter", "rewrite_answer", "draft_reply"):
         out["how"] = " ".join(str(raw.get("how") or "").split())[:300]
-        if not out["how"]:
+        if not out["how"] and name != "draft_reply":
             return None
     if name == "rewrite_answer":
         out["question"] = " ".join(str(raw.get("question") or "").split())[:300]
@@ -286,6 +341,42 @@ Return JSON with exactly this shape (an empty list when nothing is wrong):
 {{"problems": [{{"field": "<the field's name as given>", "problem": "<what is wrong, one sentence>"}}]}}"""
 
 
+REPLY_SYSTEM = ("You draft a short email reply for one job applicant to send themselves. First person, polite, plain; at most 110 words; "
+                "no subject line. You only use the facts given. Whatever you do not know (a time, a date, a name, a phone number) "
+                "is written in square brackets for the person to fill in, like [time that suits you]. Never promise or claim "
+                "anything the facts do not show. Use an en dash, never an em dash; no emojis. Reply with only the email text.")
+
+REPLY_PROMPT = """The role: {title} at {company}
+The applicant's name: {name}
+
+The company's last message ({when}, {stage}):
+Subject: {subject}
+What it says: {summary}
+What they ask for next: {next_step}
+
+What the applicant wants to say: {how}"""
+
+POSTING_SYSTEM = ("You copy facts out of a web page that may be a job posting. You only copy what the page states: never add or guess. "
+                  "Reply with only the JSON object.")
+
+POSTING_PROMPT = """The page's title: {title}
+The page's address: {url}
+
+The page's text:
+---
+{text}
+---
+
+Return JSON with exactly this shape:
+{{"is_posting": true or false (is this one job posting, with what the job is?),
+  "title": "<the job's title, as written>", "company": "<the employer, as written>", "location": "<the place, or ''>"}}"""
+
+RATED_SYSTEM = PRACTICE_SYSTEM + (" Also rate the answer: good (it answers the question with something real from the CV), ok (it answers but is "
+                                  "thin or general), weak (it misses the question or says little). Reply with only the JSON object.")
+
+RATED_SHAPE = '\n\nReturn JSON with exactly this shape:\n{"rating": "good" | "ok" | "weak", "feedback": "<what is good and what is missing, at most four short sentences>"}'
+
+
 def _plain(text: Any, most: int = 1500) -> str:
     return " ".join(str(text or "").replace("—", "–").split())[:most]
 
@@ -304,11 +395,38 @@ def advice(numbers: dict[str, Any]) -> str:
     return _plain(llm.ask(ADVICE_PROMPT.format(numbers=json.dumps(numbers, ensure_ascii=False, default=str)[:7000]), system=ADVICE_SYSTEM, tag="assistant"))
 
 
-def feedback(job: dict[str, Any], cv_text: str, question: str, basis: str, answer: str) -> str:
-    return _plain(llm.ask(PRACTICE_PROMPT.format(title=job.get("title", ""), company=job.get("company", ""),
-                                                 posting=str(job.get("description") or "").strip()[:4000] or "(no posting text was saved)",
-                                                 cv_text=cv_text[:10000], question=_plain(question, 400), basis=_plain(basis, 800) or "(nothing prepared)",
-                                                 answer=str(answer).strip()[:3000]), system=PRACTICE_SYSTEM, tag="assistant"), 1200)
+def feedback(job: dict[str, Any], cv_text: str, question: str, basis: str, answer: str) -> dict[str, str]:
+    """{"feedback", "rating"} for one practice answer (one call). An unknown rating counts as "ok"."""
+    data = llm.ask_json(PRACTICE_PROMPT.format(title=job.get("title", ""), company=job.get("company", ""),
+                                               posting=str(job.get("description") or "").strip()[:4000] or "(no posting text was saved)",
+                                               cv_text=cv_text[:10000], question=_plain(question, 400), basis=_plain(basis, 800) or "(nothing prepared)",
+                                               answer=str(answer).strip()[:3000]) + RATED_SHAPE, system=RATED_SYSTEM, tag="assistant")
+    said = _plain(data.get("feedback") if isinstance(data, dict) else "", 1200)
+    rating = data.get("rating") if isinstance(data, dict) and data.get("rating") in ("good", "ok", "weak") else "ok"
+    return {"feedback": said, "rating": rating}
+
+
+def reply(job: dict[str, Any], message: dict[str, Any], how: str, name: str) -> str:
+    """A reply to the company's last message, for the person to copy and send themselves."""
+    text = llm.ask(REPLY_PROMPT.format(title=job.get("title", ""), company=job.get("company", ""), name=name or "[your name]",
+                                       when=db.received_at(message.get("received_date", "")).date().isoformat(), stage=message.get("stage") or "message",
+                                       subject=_plain(message.get("subject"), 200), summary=_plain(message.get("summary"), 800) or "(no summary stored)",
+                                       next_step=_plain(message.get("next_step"), 300) or "(nothing stated)",
+                                       how=_plain(how, 300) or "a polite, positive answer to what they ask"), system=REPLY_SYSTEM, tag="assistant")
+    return str(text or "").replace("—", "–").strip()[:2000]
+
+
+def posting(title: str, url: str, text: str) -> dict[str, Any]:
+    """What a page says about the job it advertises: {is_posting, title, company, location}. A title or a company
+    that does not stand on the page is dropped, so nothing is added to the list that the page does not say."""
+    data = llm.ask_json(POSTING_PROMPT.format(title=_plain(title, 300), url=_plain(url, 300), text=str(text)[:9000]), system=POSTING_SYSTEM, tag="assistant")
+    if not isinstance(data, dict):
+        return {"is_posting": False, "title": "", "company": "", "location": ""}
+    page = " ".join(f"{title} {text}".lower().split())
+    there = lambda value: " ".join(str(value or "").lower().split()) in page      # noqa: E731
+    out = {key: _plain(data.get(key), 120) for key in ("title", "company", "location")}
+    out = {key: value if value and there(value) else "" for key, value in out.items()}
+    return {"is_posting": bool(data.get("is_posting")) and bool(out["title"]), **out}
 
 
 def review(job: dict[str, Any] | None, cv_text: str, facts: str, fields: list[dict[str, str]], pay: str) -> list[dict[str, str]]:

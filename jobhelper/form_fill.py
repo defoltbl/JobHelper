@@ -433,6 +433,29 @@ def review_answer(text: str) -> dict[str, Any]:
     return {"url": str(data.get("url") or ""), "title": str(data.get("title") or "")[:300], "fields": fields}
 
 
+PAGE = r"""
+(function () {
+  function clean(t) { return String(t || '').replace(/[ \t\u00a0]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim(); }
+  var main = document.querySelector('main, article, [role=main]') || document.body;
+  var text = clean(main ? main.innerText : '');
+  if (text.length < 400 && document.body) text = clean(document.body.innerText);
+  return JSON.stringify({url: location.href, title: clean(document.title).slice(0, 300), text: text.slice(0, 12000)});
+})()
+""".strip()
+
+
+def page_answer(text: str) -> dict[str, str]:
+    """What the PAGE script gave back: the address, the title and the words of the page, as plain text."""
+    try:
+        data = json.loads(text or "")
+    except ValueError:
+        data = None
+    if not isinstance(data, dict):
+        raise ValueError("The page did not answer. Reload it and ask me again.")
+    return {"url": str(data.get("url") or "")[:2000], "title": " ".join(str(data.get("title") or "").split())[:300],
+            "text": str(data.get("text") or "")[:12000]}
+
+
 def values_script(numbers: list[int], url: str) -> str:
     """The VALUES script: what the fields with these numbers hold now. Asked only for fields the assistant itself filled in."""
     return VALUES.replace("__WANTED__", json.dumps([int(n) for n in numbers])).replace("__URL__", json.dumps(str(url)))
