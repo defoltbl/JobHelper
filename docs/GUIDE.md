@@ -889,9 +889,11 @@ written here (Figure 9.2).
 
 1. Select the assistant on the assembly line.
 2. Select **My details**. The first time, the window opens on this page by itself.
-3. Fill in the fields. Table 9.1 describes them. Fields marked **from your CV** were read from
-   the head of your CV and are not saved yet: check them.
-4. Select **Save**.
+3. Fill in the fields at the top. Table 9.1 describes them. Fields marked **from your CV** were
+   read from the head of your CV and are not saved yet: check them.
+4. List your jobs and your degrees, give your salary, and add the files forms ask for. The
+   tasks below describe each.
+5. Select **Save**.
 
 ![The My details page](img/39_my_details.png)
 
@@ -907,10 +909,7 @@ written here (Figure 9.2).
 | **Street and number**, **City**, **Postcode**, **Country** | Your address. Leave out what you do not want to give | Letters for the city and the country |
 | **LinkedIn**, **GitHub** | The address of your profile. *https://* is added for you | An address at that site, with no spaces |
 | **Website or portfolio** | Any other page about your work | A web address with no spaces |
-| **Current employer**, **Current job title** | Where you work now and as what. Leave empty when you do not work | Length only |
-| **University or school**, **Degree** | Where you studied and what you hold, as you want it written in forms | Length only |
 | **Notice period** | How soon you can leave, like *1 month*. The assistant also picks it from a list that offers it | Length only |
-| **Salary expectation** | The sentence or figure you give when a form asks, like *60 000 CZK gross per month*. Leave it empty and the assistant drafts an answer from the figure in **Options** | Length only |
 
 A field you leave empty is left empty in the form too. When something is wrong, the field
 turns red and the line under it says what to change; nothing is saved until it is right.
@@ -918,6 +917,82 @@ turns red and the line under it says what to change; nothing is saved until it i
 > **Note**
 > Your right to work and your start date are not on this page. They are under **Options** >
 > **About you** (section 15), because letters and answers use them as well.
+
+### List your jobs and your degrees
+
+Many forms have a section for work experience and one for education, with a row for each job
+and each degree. The assistant fills those rows from two lists (Figure 9.3).
+
+1. On the **My details** page, under **Work experience**, select **Add a job** for each job
+   you have had, or select **Read from my CV**: Claude copies the jobs and degrees your CV
+   states, in one call. Nothing is saved until you select **Save**, and a line the CV does
+   not back is left out.
+2. Fill in each job. Table 9.2 describes the fields. Turn on **I work here now** for every job
+   that goes on; several jobs may be current at once.
+3. Under **Education**, select **Add a degree** for each degree, the highest first.
+4. Select **Save**.
+
+![Jobs and degrees on the My details page](img/41_my_jobs_and_degrees.png)
+
+*Figure 9.3 – Jobs and degrees on the My details page*
+
+*Table 9.2 – The fields of a job and of a degree*
+
+| Field | What to enter | Checked for |
+|---|---|---|
+| **Employer**, **Job title** | As you want them written in forms | Both are needed for a job |
+| **University or school** | The name of the school | Needed for a degree |
+| **Degree**, **Field of study** | For example *Master* and *Computer science* | Length only |
+| **From**, **To** | A year, or a month and a year: *2023* or *03/2023* | The form of the date; **To** not before **From** |
+| **I work here now** | On for a job that goes on. **To** is then left empty | A current job has no end date |
+
+A form that asks for one employer gets your current job. A form with several rows gets your
+current jobs first, then the others in the order of the list; each row gets one job, whole.
+When a form has more rows than you have jobs, the extra rows are left to you.
+
+> **Note**
+> The assistant fills in the rows a form shows. It does not press **Add another job**, and it
+> leaves the dates of a job and the box **I currently work here** to you.
+
+### Give your salary and add your files
+
+Figure 9.4 shows the last two parts of the page.
+
+1. Under **Salary expectation**, enter the figure as a whole number, choose the currency, and
+   choose **per month** or **per year**. A form that asks then gets, for example, *60 000 CZK
+   gross per month*. Leave the figure empty and the assistant drafts an answer from the
+   figure in **Options**, or leaves the question to you.
+2. Under **Files for forms**, select **Add a file…** for each certificate, diploma or
+   reference a form may ask for, and give each a short name.
+3. Select **Save**.
+
+![The salary and the files on the My details page](img/42_my_salary_and_files.png)
+
+*Figure 9.4 – The salary and the files on the My details page*
+
+A page cannot be handed a file from outside. After a fill, **Show my CV and letter in Finder**
+shows these files too, selected in Finder, for you to drag onto the form.
+
+### Answer the questions every form asks
+
+Some questions come back in almost every form: when you can start, what your strengths are,
+why you are looking. Answer them once on the **My answers** page (Figure 9.5), and every form
+that asks gets your wording, without a Claude call.
+
+1. In the assistant's window, select **My answers**.
+2. Select one of the suggested questions, or **Add a question** and type the question as
+   forms ask it.
+3. Write the answer, or select **Draft with Claude**: Claude drafts it from your CV in one
+   call. Read the draft and make it yours.
+4. Select **Save** on the answer.
+
+![The My answers page](img/43_my_answers.png)
+
+*Figure 9.5 – The My answers page*
+
+An answer is marked for checking each time it is used. A question about one company, such as
+"Why do you want to work here?", cannot have one answer for all of them: the assistant drafts
+it for each job when it fills in that job's form (the next tasks).
 
 ### Let Chrome be filled in
 
@@ -941,26 +1016,26 @@ Chrome does not let another app write into a page until you allow it. Do this on
    took.
 4. Select **Fill in the form in Chrome**, or type the request, for example *fill in the
    form*, and press Return.
-5. Read the answer (Figure 9.3). **Filled in** lists what was written and chosen; **Left for
+5. Read the answer (Figure 9.6). **Filled in** lists what was written and chosen; **Left for
    you** lists what was not, each with the reason.
 6. Go to Chrome and read the form. Filled fields have a green outline. An answer that needs
    your attention, and everything that was chosen for you, has an amber one.
 7. Complete what was left for you, then send the form yourself.
-8. Back in the app, use the buttons under the answer (Figure 9.4). Table 9.2 describes them.
+8. Back in the app, use the buttons under the answer (Figure 9.7). Table 9.3 describes them.
 
 ![What the assistant filled in and what it left](img/38_assistant_fill.png)
 
-*Figure 9.3 – What the assistant filled in and what it left*
+*Figure 9.6 – What the assistant filled in and what it left*
 
 ![The buttons under the assistant's answer](img/40_assistant_next.png)
 
-*Figure 9.4 – The buttons under the assistant's answer*
+*Figure 9.7 – The buttons under the assistant's answer*
 
-*Table 9.2 – What the assistant offers after it filled in a form*
+*Table 9.3 – What the assistant offers after it filled in a form*
 
 | Button | Shown when | What it does |
 |---|---|---|
-| **Show my CV and letter in Finder** | The form asks for a file and the job has documents from the app | Opens Finder with the PDF of the adapted CV and the letter selected, ready to drag onto the form |
+| **Show my CV and letter in Finder** | The form asks for a file, and the job has documents from the app or you added files of your own | Opens Finder with the PDF of the adapted CV, the letter and your own files selected, ready to drag onto the form |
 | **Remember what I changed on the page** | The assistant wrote at least one answer | Reads back the answers it wrote, keeps your changes with the job, and remembers your wording |
 | **Mark applied** | The job is still in **New Jobs** | Moves the job to **Applications** as waiting, as the button in the job's window does |
 | **Fill in this page too** | The form in Chrome moved on to other fields | Fills in the new page |
@@ -986,8 +1061,9 @@ asks the same question, at any company, without a Claude call.
 
 An answer you rewrite and save under **Form answers** (section 7) is remembered the same way.
 A remembered answer is marked for checking when it is used, and one that names the company it
-was written for is not used for another company. The **My details** page shows how many
-answers are remembered; **Forget them** removes them after asking once.
+was written for is not used for another company. Every remembered answer is on the **My
+answers** page, where you can change or remove it. **Forget them** on the **My details** page
+removes all of them after asking once.
 
 > **Note**
 > To learn your changes, the assistant reads back only the answers it wrote itself. It does
@@ -1007,13 +1083,15 @@ When the app does not hold the answer, the assistant says so.
 
 ### What the assistant fills in and what it leaves
 
-Table 9.3 shows what happens to each kind of field.
+Table 9.4 shows what happens to each kind of field.
 
-*Table 9.3 – What the assistant does with each kind of field*
+*Table 9.4 – What the assistant does with each kind of field*
 
 | Kind of field | What the assistant does |
 |---|---|
 | Name, email, phone, address, links | Writes them from **My details**. A phone field too short for the spaces gets the number without them |
+| Employer, job title, school, degree, field of study | Writes them from your lists of jobs and degrees, row by row |
+| A salary question | Writes the figure with its currency from **My details** |
 | A list, a yes/no choice, or a menu the page draws itself | Chooses the entry when something settles it: **My details** (country, city, notice period, the country code of your phone), where the posting was found ("How did you hear about us?"), or your CV and **About you** (right to work, degree level). Marked for checking. When nothing settles it, it is left to you |
 | A number, such as years of experience with a tool | Counts it from your CV. Marked for checking |
 | A question you answered in your own words before | Uses your wording again, marked for checking |
@@ -1031,9 +1109,9 @@ what it does, and questions about a job or the app.
 
 ### If something is wrong
 
-Table 9.4 lists what the assistant may answer, and what to do.
+Table 9.5 lists what the assistant may answer, and what to do.
 
-*Table 9.4 – Problems while filling in a form, and what to do*
+*Table 9.5 – Problems while filling in a form, and what to do*
 
 | What the assistant says | Cause | What to do |
 |---|---|---|

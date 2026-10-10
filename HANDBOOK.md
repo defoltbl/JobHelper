@@ -150,8 +150,7 @@ data/                your data; only the *.example.* files are in git
   counts as "here" for a search).
 - **Writing:** `cv_tailor`, `cover_letter`, `letters` (your own letters), `form_answers`,
   `interview_prep`, `prep_doc`, `pdf`.
-- **The assistant:** `assistant` (what a typed request means), `details` (the person's own details,
-  encrypted), `chrome` (the tab in front in Google Chrome, through Apple events), `form_fill` (the page
+- **The assistant:** `assistant` (what a typed request means), `details` (the person's own details: contacts, jobs, degrees, salary with currency, files; encrypted), `chrome` (the tab in front in Google Chrome, through Apple events), `form_fill` (the page
   scripts, what each field is, which job a page belongs to), `form_choices` (lists, radio buttons, menus,
   numbers: settled by the details, else by one call to Claude), `answer_memory` (the person's own wording,
   reused for the same question elsewhere); its back end is `api_assistant`.
@@ -337,6 +336,10 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
   on a few real application forms; what it leaves or gets wrong there decides the next step.
 
 **Then, for the assistant**
+
+- Rows a form adds on a button (**Add another job**): the assistant never presses buttons, so it fills the rows
+  that are shown. Pressing such a button would be a new permission for the owner to give.
+- The dates of a job or a degree in a form (month and year lists differ on every site).
 
 - Whatever the trial on real sites shows. Menus are the likeliest: every component library draws them a little
   differently, and the script knows the common pattern (a box that opens a list of `role=option` entries).
