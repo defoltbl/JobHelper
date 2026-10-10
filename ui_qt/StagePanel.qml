@@ -93,10 +93,13 @@ Rectangle {
 
             Item {
                 id: design
-                width: 1000; height: 500
+                // The floor is drawn 1000 x 560 and scaled to the room it has, on a large screen too (it used to stop
+                // growing at 1.6, which left the robots and their words small on a 27-inch 4K monitor). The strip
+                // under the line (y 460 to 560) is the assistant's: what it says there never lies over the line.
+                width: 1000; height: 560
                 anchors.centerIn: parent
                 property real beltT: 0
-                scale: Math.min((parent.width - 28) / 1000, (parent.height - 28) / 500, 1.6)
+                scale: Math.min((parent.width - 28) / 1000, (parent.height - 28) / 560, 3.2)
 
                 NumberAnimation on beltT { running: win.working; from: 0; to: 1; duration: 7000; loops: Animation.Infinite }
 
@@ -157,7 +160,7 @@ Rectangle {
                 Robot { id: a4; objectName: "a4"; kind: "table"; theme: win.appTheme; ag: win.appTheme.a4; title: "Tracker"; role: "builds tables"; agent: "AGENT 4"; x: 540; y: 342 }
 
                 // the assistant: not a station of the line, it stands at its end and helps with the forms
-                AssistantBot { id: helper; objectName: "assistantBot"; theme: win.appTheme; x: 906; y: 396
+                AssistantBot { id: helper; objectName: "assistantBot"; theme: win.appTheme; x: 906; y: 448
                     busy: assistantDialog.busy
                     onTapped: assistantDialog.show() }
                 Connections { target: welcome

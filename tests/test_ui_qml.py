@@ -3216,7 +3216,7 @@ def test_new_jobs_can_be_reviewed_one_by_one(ui, monkeypatch):
 # ── the assistant ───────────────────────────────────────────────────────────
 def test_the_assistant_stands_on_the_line_blinks_and_waves(ui):
     bot = ui.find("assistantBot")
-    assert bot.property("visible") and bot.property("x") + bot.property("width") <= 1000 and bot.property("y") + bot.property("height") <= 500
+    assert bot.property("visible") and bot.property("x") + bot.property("width") <= 1000 and bot.property("y") + bot.property("height") <= 560
     for robot in ("a4", "a5"):                                  # it does not stand on a station of the line
         other = ui.find(robot)
         assert bot.property("x") > other.property("x") + 130
@@ -3236,6 +3236,19 @@ def test_the_assistant_stands_on_the_line_blinks_and_waves(ui):
     assert bot.property("greeting") and arm.property("rotation") < -100, "the arm is up, waving"
     assert bubble.property("opacity") == 1 and bot.property("says").startswith("Hi!")
     assert bubble.mapToItem(bot.parentItem(), 0, 0).x() >= 0, "the bubble stays on the floor"
+    floor = bot.parentItem()
+    for words in ("", "The interview for Junior Backend Developer at Brightline Works is in two days and there is no preparation yet. " * 2):
+        ui.js("stagePanel.assistant.tell(" + repr(words) + ")")
+        ui.wait(450)
+        top, left = bubble.mapToItem(floor, 0, 0).y(), bubble.mapToItem(floor, 0, 0).x()
+        assert top >= 452 and left >= 0 and top + bubble.property("height") <= 560, \
+            "what it says lies under the line (the line ends at y 450) and on the floor, however long it is"
+        for name in ("a4", "a5"):
+            other = ui.find(name)
+            assert top >= other.property("y") + 100, "and never over a robot"
+    ui.js("stagePanel.assistant.greet()")
+    ui.wait(300)
+    assert floor.property("height") == 560 and ui.js("stagePanel.assistant.parent.scale") > 0
     wide = bubble.property("width")
     bot.setProperty("greeting", False)
     sizes = []

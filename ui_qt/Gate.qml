@@ -40,7 +40,7 @@ Item {
     // counter on the beam
     Rectangle { visible: g.badge !== ""; x: 90 - width - 3; y: -3; height: 17; width: Math.max(20, bTxt.implicitWidth + 10)
         radius: 8.5; color: g.ag; border.color: theme.surface; border.width: 1.5
-        Text { id: bTxt; anchors.centerIn: parent; text: g.badge; color: "#ffffff"; font.pixelSize: 10; font.bold: true } }
+        Text { id: bTxt; anchors.centerIn: parent; text: g.badge; color: "#ffffff"; font.pixelSize: 11; font.bold: true } }
     // icon plate in the opening, sitting on the belt
     Rectangle { x: 26; y: 24; width: 42; height: 40; radius: 10
         color: theme.surface2; border.color: g.ag; border.width: 1.5
@@ -59,7 +59,7 @@ Item {
     }
     // labels
     Text { anchors.horizontalCenter: parent.horizontalCenter; y: 92
-        text: g.gtitle; color: theme.ink; font.pixelSize: 12; font.bold: true }
+        text: g.gtitle; color: theme.ink; font.pixelSize: 14; font.bold: true }
     Text { anchors.horizontalCenter: parent.horizontalCenter; y: 108
-        text: g.caption; color: g.ag; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1 }
+        text: g.caption; color: g.ag; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1 }
 }

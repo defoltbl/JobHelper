@@ -317,6 +317,13 @@ STATE = """JSON.stringify({
   outline: document.getElementById('fn').style.outline, amber: document.getElementById('why').style.outline})"""
 
 
+def test_a_page_states_its_job_for_search_engines_and_that_is_read():
+    page = form_fill.page_answer(_in_page(form_fill.PAGE)[0])
+    assert page["stated"] == {"title": "Junior Analyst", "company": "Northwind", "location": "Brno, CZ"}
+    assert page["title"] == "Junior Analyst - Northwind Careers" and "First name" in page["text"]
+    assert "secret-token" not in json.dumps(page) and "Already here" not in json.dumps(page), "the words of the page, not what its fields hold"
+
+
 def test_a_real_form_is_read_filled_and_never_sent():
     page = form_fill.read_answer(_in_page(form_fill.READ)[0])
     by_name = {f["name"]: f for f in page["fields"]}
@@ -1407,6 +1414,16 @@ def test_a_posting_open_in_the_browser_is_scored_and_added_only_on_your_yes(isol
     for record in (None, {}, {"title": "x", "url": "javascript:1", "match_score": 5}, {"title": "", "url": "https://a.example/1", "match_score": 5},
                    {"title": "x", "url": "https://a.example/1"}, {"title": "x", "url": "https://a.example/1", "match_score": 500}):
         assert api.assistant_confirm({"name": "add_job", "args": {"record": record}})["ok"] is False, record
+    # a page that states its job for search engines needs no call to be read: the scoring is the only one
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: pytest.fail("the page says what the job is"))
+    page.update(url="https://jobs.example.net/ads/778", stated={"title": "Data Engineer", "company": "Harbor Analytics", "location": "Brno, CZ"})
+    stated = api.assistant_judge_page()
+    assert stated["action"] == "confirm" and stated["ask"].startswith("Data Engineer at Harbor Analytics scores 71")
+    assert scored[-1]["company"] == "Harbor Analytics" and scored[-1]["location"] == "Brno, CZ"
+    page.pop("stated")
+    page["url"] = "https://jobs.example.net/ads/777"
+    assert form_fill.page_answer(json.dumps({"url": "u", "title": "t", "text": "x", "stated": "junk"}))["stated"] == {"title": "", "company": "", "location": ""}
+    assert "JSON.parse" in form_fill.PAGE and "JobPosting" in form_fill.PAGE
     # every reason not to judge a page is said
     monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"is_posting": False, "title": "", "company": "", "location": ""})
     assert "does not read like one job posting" in api.assistant_judge_page()["msg"]

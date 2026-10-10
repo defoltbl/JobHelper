@@ -232,7 +232,8 @@ Dialog {
     function act(what, arg, words) {      // one of the buttons under an answer
         if (busy) { askErr = "I am still working on the last request. Wait for the answer."; return; }
         if (what === "review") problemModel.clear();
-        doing = "";
+        if (what === "judge") { rowModel.clear(); canUndo = false; draftText = ""; }
+        doing = what === "judge" ? "Reading the page and scoring it…" : "";
         askErr = ""; confirmClose = false;
         say("you", words, false);
         busy = true;
@@ -645,7 +646,7 @@ Dialog {
                 Flow { objectName: "asStarters"; Layout.fillWidth: true; spacing: 6; visible: !assistantDialog.practising && !assistantDialog.busy && assistantDialog.pending === null
                     SmallButton { text: "What needs my attention?"; onClicked: assistantDialog.ask("What needs my attention today?") }
                     SmallButton { objectName: "asJudge"; text: "Is the posting in my browser worth applying to?"
-                        onClicked: assistantDialog.ask("Is the job posting open in my browser worth applying to?") }
+                        onClicked: assistantDialog.act("judge", "", "Is the job posting open in my browser worth applying to?") }
                     SmallButton { text: "New talk"; visible: talk.count > 2
                         onClicked: { bridge.newTalk(); talk.clear(); rowModel.clear(); problemModel.clear(); filledModel.clear(); leftModel.clear();
                                      assistantDialog.last = ({}); assistantDialog.canUndo = false; assistantDialog.draftText = "";

@@ -129,12 +129,13 @@ Item {
         id: bubble; objectName: "assistantBubble"
         visible: opacity > 0; opacity: root.talking ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 160 } }
-        width: Math.min(root.note !== "" && root.greeting ? 300 : 200, bubbleText.implicitWidth + 22); height: bubbleText.implicitHeight + 14
+        width: Math.min(root.note !== "" && root.greeting ? 420 : 250, bubbleText.implicitWidth + 24); height: bubbleText.implicitHeight + 16
         Behavior on width { enabled: bubble.opacity === 1; NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-        x: -width - 2; y: 52; radius: 10; z: 5
+        // beside it and never higher than its own head: the line and the robots above stay in view
+        x: -width - 2; y: Math.max(16, Math.min(40, root.height - height - 2)); radius: 10; z: 5
         color: root.theme ? root.theme.surface2 : "#1f2a37"; border.color: root.ag; border.width: 1
-        Text { id: bubbleText; x: 11; y: 7; width: (root.note !== "" && root.greeting ? 300 : 200) - 22; wrapMode: Text.WordWrap; text: root.shown
-            color: root.theme ? root.theme.ink : "#e7eef5"; font.pixelSize: root.note !== "" && root.greeting ? 12 : 11; font.bold: true }
+        Text { id: bubbleText; x: 12; y: 8; width: (root.note !== "" && root.greeting ? 420 : 250) - 24; wrapMode: Text.WordWrap; text: root.shown
+            color: root.theme ? root.theme.ink : "#e7eef5"; font.pixelSize: 13; font.bold: true }
         Rectangle { width: 9; height: 9; rotation: 45; color: parent.color; border.color: root.ag; border.width: 1; x: parent.width - 5; y: parent.height / 2 - 4.5 }
         Rectangle { width: 6; height: 14; color: parent.color; x: parent.width - 7; y: parent.height / 2 - 7 }
     }

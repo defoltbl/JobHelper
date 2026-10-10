@@ -337,15 +337,15 @@ Item {
             id: tcol
             anchors.centerIn: parent; spacing: 2
             Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.title
-                color: root.theme ? root.theme.ink : "#e7eef5"; font.bold: true; font.pixelSize: 13 }
+                color: root.theme ? root.theme.ink : "#e7eef5"; font.bold: true; font.pixelSize: 15 }
             Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.role
-                color: root.theme ? root.theme.soft : "#9fb0c1"; font.pixelSize: 11 }
+                color: root.theme ? root.theme.soft : "#9fb0c1"; font.pixelSize: 13 }
             Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.agent
-                color: root.theme ? root.theme.faint : "#6f7f90"; font.pixelSize: 8; font.letterSpacing: 1.2 }
+                color: root.theme ? root.theme.faint : "#6f7f90"; font.pixelSize: 10; font.letterSpacing: 1.2 }
             Row { anchors.horizontalCenter: parent.horizontalCenter; spacing: 5; topPadding: 2
                 Rectangle { width: 7; height: 7; radius: 3.5; color: root.stateColor; anchors.verticalCenter: parent.verticalCenter }
                 Text { text: root.stateText + (root.count !== "" ? " · " + root.count : "")
-                    color: root.stateColor; font.pixelSize: 11; font.bold: true }
+                    color: root.stateColor; font.pixelSize: 13; font.bold: true }
             }
         }
         // little downward pointer

@@ -190,7 +190,9 @@ class TalkApi:
                 "say": f"A reply to {job.get('company', '')} for you to copy. Fill in what stands in [square brackets], then send it yourself: I never send mail."}
 
     def assistant_judge_page(self):
-        """Read the job posting that is open in the browser, score it with the app's own scorer, and offer to add it."""
+        """Read the job posting that is open in the browser, score it with the app's own scorer, and offer to add it.
+        One call to Claude (the scoring) when the page states its job in the form search engines read, as most
+        job pages do; one more to read the title and the employer off the page when it does not."""
         def no(msg):
             return {"ok": False, "action": "say", "msg": msg}
         self._browser()
@@ -217,7 +219,10 @@ class TalkApi:
         if not cv_text.strip():
             return no("Your master CV could not be read, so I cannot compare the posting with it.")
         try:
-            facts = assistant_brain.posting(page["title"], page["url"], page["text"])
+            if page["stated"]["title"]:          # the page states the job for search engines: no call is needed to read it
+                facts = {"is_posting": True, **page["stated"]}
+            else:
+                facts = assistant_brain.posting(page["title"], page["url"], page["text"])
             if not facts["is_posting"]:
                 return no("This page does not read like one job posting. Open the posting itself and ask me again.")
             job = store.new_job(id="assistant-" + store.url_id(page["url"]), title=facts["title"], company=facts["company"] or host,

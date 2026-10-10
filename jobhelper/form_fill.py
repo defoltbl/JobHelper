@@ -487,7 +487,23 @@ PAGE = r"""
   var main = document.querySelector('main, article, [role=main]') || document.body;
   var text = clean(main ? main.innerText : '');
   if (text.length < 400 && document.body) text = clean(document.body.innerText);
-  return JSON.stringify({url: location.href, title: clean(document.title).slice(0, 300), text: text.slice(0, 12000)});
+  // Most job pages also state the job in a form meant for search engines: read there, nothing has to be guessed.
+  var stated = null, blocks = document.querySelectorAll('script[type="application/ld+json"]');
+  function one(v) { return Array.isArray(v) ? v[0] : v; }
+  function find(node) {
+    if (!node || typeof node !== 'object' || stated) return;
+    if (Array.isArray(node)) { node.forEach(find); return; }
+    var kind = node['@type'];
+    if (kind === 'JobPosting' || (Array.isArray(kind) && kind.indexOf('JobPosting') >= 0)) {
+      var org = one(node.hiringOrganization) || {}, place = one(node.jobLocation) || {}, addr = one(place.address) || {};
+      stated = {title: clean(node.title).slice(0, 160), company: clean(typeof org === 'string' ? org : org.name).slice(0, 120),
+                location: clean([addr.addressLocality, addr.addressCountry && (addr.addressCountry.name || addr.addressCountry)].filter(function (x) { return typeof x === 'string' && x; }).join(', ')).slice(0, 120)};
+      return;
+    }
+    if (node['@graph']) find(node['@graph']);
+  }
+  for (var i = 0; i < blocks.length && !stated; i++) { try { find(JSON.parse(blocks[i].textContent)); } catch (e) {} }
+  return JSON.stringify({url: location.href, title: clean(document.title).slice(0, 300), text: text.slice(0, 12000), stated: stated});
 })()
 """.strip()
 
@@ -500,8 +516,10 @@ def page_answer(text: str) -> dict[str, str]:
         data = None
     if not isinstance(data, dict):
         raise ValueError("The page did not answer. Reload it and ask me again.")
+    stated = data.get("stated") if isinstance(data.get("stated"), dict) else {}
     return {"url": str(data.get("url") or "")[:2000], "title": " ".join(str(data.get("title") or "").split())[:300],
-            "text": str(data.get("text") or "")[:12000]}
+            "text": str(data.get("text") or "")[:12000],
+            "stated": {key: " ".join(str(stated.get(key) or "").split())[:160] for key in ("title", "company", "location")}}
 
 
 def values_script(numbers: list[int], url: str) -> str:
