@@ -153,7 +153,7 @@ data/                your data; only the *.example.* files are in git
 - **The assistant:** `assistant` (what a typed request means), `details` (the person's own details: contacts, jobs, degrees, salary with currency, files; encrypted), `chrome` (the tab in front in Google Chrome, through Apple events), `form_fill` (the page
   scripts, what each field is, which job a page belongs to), `form_choices` (lists, radio buttons, menus,
   numbers: settled by the details, else by one call to Claude), `answer_memory` (the person's own wording,
-  reused for the same question elsewhere); its back end is `api_assistant`. `assistant_brain` is what Claude makes of a free request (an answer, or one
+  reused for the same question elsewhere); its back end is `api_assistant`. `assistant_notes` keeps what the person asked it to remember and the last turns of the talk. `assistant_brain` is what Claude makes of a free request (an answer, or one
   action from a fixed list, checked before anything happens) and `api_talk` carries it out: your yes before
   any change, the briefing, the reminders, noticing a form, interview practice.
 - **Keeping data safe:** `vault` (encryption, backups), `integrity` (signed rule files),
@@ -293,6 +293,9 @@ After every batch of changes, without being asked:
 | The assistant fills in forms in the person's own Chrome, through Apple events | The owner's choice ("I tap on him and ask to fill the form in Chrome"). The form is filled where the person is signed in; nothing is installed. A browser inside the app was removed earlier, and an extension would have to be installed by hand. |
 | The assistant presses only a menu, an entry of a menu, a radio button and a button that adds a row | The owner allowed menus on 10 October 2026 and rows on a button ("do all points") the same day. It still never presses a button that sends or continues, never ticks a box and never sends: the script that presses reads what it is given, and the words of an add button, again before it acts. |
 | A free request is decided by Claude and checked by the app | The owner chose this knowing it costs a call per request. Claude names one action from a fixed list; anything else is dropped. An action that changes data is asked about in the app's own words and done only after a yes. |
+| The one tick box the assistant may tick says that a job goes on | The owner allowed it on 10 October 2026 ("do all points"). A box that agrees to anything is refused by its words. |
+| Answers are not streamed word by word from Claude | A decision is one object that must be checked whole before anything of it is shown or done. The window says what is being done meanwhile and writes the checked answer out. |
+| A note the person asks the assistant to remember changes only its answers | Changing what a search finds through a sentence in a talk would be app logic nobody can see. The Options do that. |
 | Noticing a form in Chrome is off until turned on | It means looking at Chrome without being asked. When on, only the address, the title and the number of empty fields of the tab in front are looked at. |
 | A review reads the values of a form | The owner asked for it. Passwords and files are never read, and personal and payment values are not sent to Claude. |
 | Only what the person wrote or corrected is remembered as their wording | A draft nobody read is not their answer. An answer that names its company is not offered to another one. |
@@ -342,8 +345,9 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
 
 **Then, for the assistant**
 
-- Month and year lists for the dates of a job (two lists per date, named differently on every site).
-- The box "I currently work here" (a tick box: still the person's).
+- A real trial in the person's own browser: every form test so far ran in the test area. The prompts were tried
+  against the real Claude on invented data (19 calls, 10 October 2026).
+
 
 - Rows a form adds on a button (**Add another job**): the assistant never presses buttons, so it fills the rows
   that are shown. Pressing such a button would be a new permission for the owner to give.

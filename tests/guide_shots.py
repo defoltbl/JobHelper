@@ -419,6 +419,7 @@ def test_guide_shots(ui, monkeypatch):
                    "listed below with the reason. Read everything on the page, then send the form yourself. I never press Submit."})
         monkeypatch.setattr(ui_api.Api, "assistant_watch", lambda self: {"ok": False, "url": "", "sign": "", "empty": 0})
         monkeypatch.setattr(ui_api.Api, "assistant_memory", lambda self: {"count": 3})
+        monkeypatch.setattr(ui_api.Api, "assistant_notes_list", lambda self: {"notes": [{"text": "No consulting firms", "when": ""}, {"text": "Remote or Prague only", "when": ""}]})
         ui.js("assistantDialog.show()")
         ui.wait(500)
         ui.js('assistantDialog.ask("Fill in the form in Chrome")')
@@ -431,7 +432,7 @@ def test_guide_shots(ui, monkeypatch):
         ui.js("talkFlick.contentY = Math.max(0, talkFlick.contentHeight - talkFlick.height)")
         shot("40_assistant_next")
         # talking: a question about the data, then a request that changes something (asked first)
-        monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, context_job="", chosen_job="": {
+        monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, context_job="", chosen_job="", **kw: {
             "ok": True, "action": "say", "say": "Two applications have had no reply for more than two weeks: Harbor Analytics, sent 19 days ago, and Brightpath, sent 16 days ago. "
                                               "Both are past the point where most replies arrive, so a follow-up is due.",
             "rows": [{"id": "app2", "label": "Harbor Analytics · Data Engineer", "sub": "waiting · score 71"},

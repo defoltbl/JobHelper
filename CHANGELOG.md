@@ -5,6 +5,15 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **The assistant does several things in one request, and you can undo them.** "Mark it applied and remind me to follow up in ten days" is asked about in one question that lists both steps. After your yes, **Undo** puts the job back exactly as it was.
+- **The assistant remembers what you tell it.** "Remember that I do not want consulting firms" is kept for later talks, and a talk goes on where it stopped after the app was closed. The notes are on the My details page and can be removed there.
+- **Is this posting worth applying to?** With a job posting open in your browser, the assistant reads it, scores it against your CV with the same scorer a search uses, and adds it to New Jobs on your yes.
+- **A reply to a company, drafted for you.** "Answer Quillon that Tuesday suits me" gives a short reply to their last message with a Copy button. The app still never sends mail.
+- **Safari, Brave and Edge.** Choose the browser on the My details page under **How I work**; the switch to notice forms moved there too.
+- **More of a form is filled in:** a date asked as a month list and a year list, the box **I currently work here** for a job you marked as current, and fields on pages that throw away what was written the first time.
+- **Practice keeps score.** The questions that went badly last time come first, and the practice ends with how many answers were good, fair or weak. What you typed is not kept.
+- **The assistant says what it is doing** while you wait, writes its answer out as it appears, and sends Claude only the jobs a request is likely about instead of the whole list.
+- **Fixed: the assistant could read the day a reply arrived as the day of an interview**, and could guess why a job scored as it did. Found by trying the prompts against the real Claude on invented data.
 - **You can talk to the assistant in your own words.** Ask about your search ("which applications have had no reply for two weeks?"), about a job ("why did this score 62?"), or ask it to do something ("mark it applied", "set the interview for Tuesday at 11:30", "open the letter"). It remembers the last turns of the talk, and "this job" means the job whose window is open. Before anything of yours changes it asks, and waits for **Yes, do it**. Filling in a form and help still cost nothing; anything else is one Claude call.
 - **Rewrites by instruction.** "Make the second paragraph of this letter shorter" or "make my salary answer more formal": the assistant shows the new version, checked against your CV, and saves it only after your yes.
 - **Review before I send.** After a fill, the assistant reads the form back and lists what looks wrong: a required field left empty, a part still in square brackets, an email that is not yours, an answer that contradicts your CV or names another company.

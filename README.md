@@ -12,7 +12,7 @@ about you stays on your Mac, encrypted.
 ![UI](https://img.shields.io/badge/UI-Qt%20Quick%20(PySide6)-41CD52?logo=qt&logoColor=white)
 ![Model](https://img.shields.io/badge/model-Claude%20(subscription)-D97757)
 ![Storage](https://img.shields.io/badge/data-AES--256%20encrypted-2E7D32)
-![Tests](https://img.shields.io/badge/tests-1548%20offline-blue)
+![Tests](https://img.shields.io/badge/tests-1558%20offline-blue)
 
 ![The main window](docs/img/02_main.png)
 
@@ -76,7 +76,9 @@ profession, for any city.
   for two weeks?", "why did this score 62?", "mark it applied", "make the second paragraph
   shorter". It answers from your own data, asks before it changes anything, shows a rewrite
   before saving it, briefs you on a company, gives advice from your results and lets you
-  practise an interview. When the app opens it tells you what needs your attention.
+  practise an interview. It does several things in one request and can undo them, remembers what you tell it,
+  scores a posting that is open in your browser, and drafts a reply to a company for you to
+  send. When the app opens it tells you what needs your attention.
 - **Applications tracked by your mailbox.** Replies are read (never changed), classified as
   invitation, rejection, offer or confirmation, and filed to the right application.
 - **Before and after applying.** A checklist per job, drafted answers for that job's form,
@@ -151,7 +153,7 @@ A search runs the first four agents in order; an email scan runs the fifth.
 | Web | `requests`, `beautifulsoup4`, `lxml` | Reads the public pages of boards that have no common interface |
 | Mail | `imaplib` (IMAP, read-only) | Works with almost every provider and can promise never to change mail |
 | Security | AES-256-GCM (`cryptography`), macOS Keychain, HMAC-signed rule files | Private data; a tampered file is refused, not read |
-| Form filling | Apple events (`osascript`) to Google Chrome | Fills the form where you are signed in, with nothing to install |
+| Form filling | Apple events (`osascript`) to Chrome, Brave, Edge or Safari | Fills the form where you are signed in, with nothing to install |
 | Scheduling | macOS LaunchAgent | Runs with the window closed |
 | Quality | `pytest`, `pyflakes`, hash-pinned packages | Every change comes with tests; packages cannot change unnoticed |
 
@@ -166,7 +168,7 @@ JobHelper/
 ├── run.py                    # the same search from the command line (used by the weekly run)
 ├── status.py                 # command-line tools: list, sync, security, usage …
 ├── weekly_jobhelper.sh       # what the weekly LaunchAgent runs
-├── jobhelper/                # all the logic, no window code (62 modules)
+├── jobhelper/                # all the logic, no window code (63 modules)
 │   ├── agent1_cv.py … agent5_responses.py     # the five agents
 │   ├── scrapers_*.py         # one module per kind of job source
 │   ├── filters.py, prefilter.py, language.py, places.py, keywords.py, salary.py
@@ -182,7 +184,7 @@ JobHelper/
 │   └── ui_api.py, api_*.py, qt_bridge.py, bridge_*.py
 │                             # what the window calls
 ├── ui_qt/                    # the window: one QML file per dialog or part (40 files)
-├── tests/                    # 1,548 tests, offline, in temporary folders
+├── tests/                    # 1,558 tests, offline, in temporary folders
 │   └── guide_shots.py        # takes the pictures of the user guide
 ├── scripts/                  # the PDF builder, the numbering check, the diagram, the lock file
 ├── docs/                     # user guide, technical documentation, their PDFs, pictures
@@ -307,7 +309,7 @@ python -m pytest -q
 python -m pyflakes jobhelper tests scripts
 ```
 
-1,548 tests in about two and a half minutes, with no network. They never touch real data, the
+1,558 tests in about two and a half minutes, with no network. They never touch real data, the
 Keychain or `.env`, never ask Claude, never read a real job board or mail server, and never open
 a file or put anything in the Trash: every test works in temporary folders with stand-ins. The
 window itself is loaded without a screen and driven by the tests, and the documentation has
@@ -372,7 +374,7 @@ A few decisions worth highlighting:
   connected. Russian mail services are not used.
 - The built-in salary estimate covers software roles in Czechia; elsewhere you enter your own
   figure.
-- The assistant fills in forms in Google Chrome only, and leaves tick boxes, dates and file
-  uploads to you. It is tested on forms of its own test area, not yet across real recruiting
+- The assistant fills in forms in Chrome, Brave, Edge and Safari, and leaves tick boxes that
+  agree to something and file uploads to you. It is tested on forms of its own test area, not yet across real recruiting
   sites, where menus in particular are drawn in many ways.
 - The app is started from a terminal. Packaging it as an app that opens from Finder is planned.

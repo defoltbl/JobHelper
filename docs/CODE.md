@@ -134,7 +134,7 @@ Table 2.5 lists what protects the data and ties the app to macOS.
 | The macOS Keychain, through the `security` program | Keeping the data key and the mailbox passwords | Secrets are then protected by the Mac's login and are never written to a file of the project |
 | Signed rule files | The rules for CVs and letters, the letter template, the master CV | These files decide what is written in the person's name. A change made outside the app must be approved before the next run |
 | A LaunchAgent | The weekly run | It is how macOS starts a task on a schedule, also when the window is closed |
-| Apple events, through the `osascript` program | The assistant reads and fills in the form that is open in the person's Google Chrome | The form is filled in where the person is already signed in, with nothing to install. Chrome and macOS each ask for consent first, and the app can only do what a script in the page can do: it cannot attach files or read saved passwords |
+| Apple events, through the `osascript` program | The assistant reads and fills in the form that is open in the person's browser (Chrome, Brave, Edge or Safari) | The form is filled in where the person is already signed in, with nothing to install. Chrome and macOS each ask for consent first, and the app can only do what a script in the page can do: it cannot attach files or read saved passwords |
 | Hash-pinned packages in `requirements.lock` | Installing | Each package is checked against a fingerprint, so a changed package cannot be installed unnoticed |
 
 ### Quality
@@ -349,7 +349,7 @@ Table 6.3 groups the other modules by what they are for.
 | Rules without a model call | `filters`, `prefilter`, `language`, `places`, `keywords`, `salary`, `merge`, `followup`, `planner` | Level, years, language, location, profession, pay, duplicates, reminders |
 | Writing | `cv_tailor`, `cover_letter`, `letters`, `form_answers`, `interview_prep`, `prep_doc`, `pdf` | The adapted CV, the letter, form answers, the interview sheet |
 | Mail | `email_client`, `mailhosts` | Reading mailboxes read-only; which server a mailbox is read from |
-| The assistant | `assistant`, `assistant_brain`, `details`, `chrome`, `form_fill`, `form_choices`, `answer_memory` | The fixed requests and the facts about the app; what Claude makes of a free request, checked before anything happens; the person's own details; the link to Google Chrome; reading a form, deciding what each field is, and filling it in; choosing from lists and menus; the person's own wording, remembered |
+| The assistant | `assistant`, `assistant_brain`, `assistant_notes`, `details`, `chrome`, `form_fill`, `form_choices`, `answer_memory` | The fixed requests and the facts about the app; what Claude makes of a free request, checked before anything happens; the person's own details; the link to Google Chrome; reading a form, deciding what each field is, and filling it in; choosing from lists and menus; the person's own wording, remembered |
 | Claude | `llm`, `usage` | The one place that asks Claude; counting usage and knowing the limits |
 | Storage and safety | `store`, `db`, `vault`, `integrity`, `housekeeping`, `health`, `trouble` | The job list, the reply database, encryption, signed rule files, backups, the start-up check, the log of errors |
 | The window's back end | `ui_api`, `api_documents`, `api_interview`, `api_letters`, `api_assistant`, `api_talk`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` holds the logic; `Bridge` exposes it to QML and runs long work in threads |
@@ -382,7 +382,8 @@ there and a test that names what must be filled and what must be left.
 
 | Rule | How it is kept |
 |---|---|
-| The form is never sent | No script presses a button that sends. The one script that presses anything (`CHOOSE`) accepts four kinds of element: what opens a menu, an entry of a menu, a radio button, and a button whose words say that it adds a row for a job or a degree; it reads those words again before it presses, and refuses anything of the kind that sends, continues or uploads. A test reads the scripts for those calls, and the test area checks on every form that nothing was sent |
+| The form is never sent | No script presses a button that sends. The one script that presses anything (`CHOOSE`) accepts five kinds of element: what opens a menu, an entry of a menu, a radio button, a button whose words say that it adds a row for a job or a degree, and a tick box whose words say that a job goes on. It reads those words again before it acts, and refuses anything that sends, continues, uploads or agrees. A test reads the scripts for those calls, and the test area checks on every form that nothing was sent |
+| What a page throws away is noticed | After writing, `EMPTY` says which fields hold nothing; those are written again the way typing arrives; what is still empty is reported to the person, not counted as filled |
 | A choice is made only when something settles it | `form_choices.settle` uses the person's details and the job; one call to Claude covers the rest, and an answer that is not one of the field's own options is dropped. Every choice is marked for checking |
 | Only the assistant's own answers are read back | To learn the person's corrections, `VALUES` is asked for the numbers of the fields the assistant filled as answers, and for nothing else |
 | Only empty fields are written | The filling script tests each field again just before it writes |
@@ -403,7 +404,10 @@ gives the rules that keep this safe; `api_talk` carries them out.
 
 | Rule | How it is kept |
 |---|---|
-| Claude does nothing itself | It returns JSON. `check` keeps only words, one action from a fixed list, and arguments of the right kind; an unknown action or a job that is not in the list is dropped |
+| Claude does nothing itself | It returns JSON. `check` keeps only words, up to three actions from a fixed list, and arguments of the right kind; an unknown action or a job that is not in the list is dropped |
+| Only the jobs a request is likely about are sent | `relevant` picks the job in front, the companies named in the talk, what is open and the best leads, up to 70; closed applications come only when the request is about them. Sending every job with every request cost three times as much |
+| What was agreed to can be taken back | `assistant_confirm` keeps the job as it was, and any lead that marking it applied folded away; `assistant_undo` puts them back. Not offered while a search is running |
+| The prompts were tried against the real Claude | A trial on invented data showed a reply's date being read as an interview's date, and a guessed reason for a score. The job lines were reworded ("an invitation arrived", "no date set") and the rules tightened; run such a trial again after changing a prompt |
 | Nothing of the person's is changed without their yes | An action that changes data comes back to the window as a question, worded by the app from the checked arguments, not by Claude. `assistant_confirm` carries it out and checks it once more |
 | A rewrite is shown before it is saved | The new paragraph or answer is made first and travels with the question; saving is the confirmed action |
 | An answer comes from what the app holds | The prompt carries the jobs, their state and the facts about the app; a brief, advice, a review and practice feedback each have their own prompt with only their own facts |

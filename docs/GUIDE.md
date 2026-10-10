@@ -21,26 +21,27 @@ each control does, and what to do when something does not look right.
 7. [Check and edit your documents](#7-check-and-edit-your-documents)
 8. [Fix a score you cannot trust](#8-fix-a-score-you-cannot-trust)
 9. [Fill in an application form](#9-fill-in-an-application-form)
+10. [Talk to the assistant](#10-talk-to-the-assistant)
 
 **Track your applications**
 
-10. [Track an application](#10-track-an-application)
-11. [Read replies from companies](#11-read-replies-from-companies)
-12. [Prepare for an interview](#12-prepare-for-an-interview)
+11. [Track an application](#11-track-an-application)
+12. [Read replies from companies](#12-read-replies-from-companies)
+13. [Prepare for an interview](#13-prepare-for-an-interview)
 
 **Understand your results**
 
-13. [See what a search left out](#13-see-what-a-search-left-out)
-14. [Learn from your results](#14-learn-from-your-results)
+14. [See what a search left out](#14-see-what-a-search-left-out)
+15. [Learn from your results](#15-learn-from-your-results)
 
 **Configure and maintain**
 
-15. [Set your options](#15-set-your-options)
-16. [Schedule a weekly run](#16-schedule-a-weekly-run)
-17. [Watch your Claude usage and limits](#17-watch-your-claude-usage-and-limits)
-18. [Protect your data](#18-protect-your-data)
-19. [Troubleshoot problems](#19-troubleshoot-problems)
-20. [Look things up](#20-look-things-up)
+16. [Set your options](#16-set-your-options)
+17. [Schedule a weekly run](#17-schedule-a-weekly-run)
+18. [Watch your Claude usage and limits](#18-watch-your-claude-usage-and-limits)
+19. [Protect your data](#19-protect-your-data)
+20. [Troubleshoot problems](#20-troubleshoot-problems)
+21. [Look things up](#21-look-things-up)
 
 ---
 
@@ -83,7 +84,7 @@ You read, you decide, you send.
 
 The app works through your Claude subscription. There is no bill per search. What a search
 uses counts against your normal Claude limits, and the window shows how much is left
-(section 17).
+(section 18).
 
 > **Important**
 > The app refuses to run while a paid Claude key is set on the Mac, so that you are never
@@ -97,13 +98,13 @@ Table 1.2 shows a normal week with the app.
 
 | When | What you do | Section |
 |---|---|---|
-| Once | Set up the app and choose what you look for | 2, 15 |
+| Once | Set up the app and choose what you look for | 2, 16 |
 | Two or three times a week | Run a search, review the new jobs, apply to the good ones | 4 to 7 |
 | When you apply | Ask the assistant to fill in the company's form | 9 |
 | After each application | Press **Mark applied** | 5 |
-| Every day or two | Scan your email for replies | 11 |
-| Before an interview | Build the interview preparation | 12 |
-| Every few weeks | Look at Analytics and Insights and adjust Options | 11, 14, 15 |
+| Every day or two | Scan your email for replies | 12 |
+| Before an interview | Build the interview preparation | 13 |
+| Every few weeks | Look at Analytics and Insights and adjust Options | 12, 15, 16 |
 
 ### Read this guide
 
@@ -222,7 +223,7 @@ works except reading replies.
 | A company or another provider | The **IMAP server** you type | What that provider gives for reading mail by IMAP |
 | T-Online, Posteo, mailbox.org, Orange, Libero, Onet | The provider's server | What the line under the fields says for that provider |
 | A Russian mail service | Not used | The app does not work with Russian services. Connect a mailbox at another provider |
-| Outlook.com, Hotmail, Proton Mail, Tuta | Not possible | These cannot be read with a password. Forward your job mail to another mailbox and connect that one, or paste replies into their applications (section 10) |
+| Outlook.com, Hotmail, Proton Mail, Tuta | Not possible | These cannot be read with a password. Forward your job mail to another mailbox and connect that one, or paste replies into their applications (section 11) |
 
 > **Note**
 > An app password is a separate password that only lets a program read mail. You can cancel it
@@ -239,7 +240,7 @@ Use this when replies arrive at two addresses, for example an old address and a 
    provider than the first one.
 
 Both mailboxes are then read by every email scan. To find older replies in the new mailbox,
-run one longer scan (section 11, *Look further back once*). A problem with the second mailbox never
+run one longer scan (section 12, *Look further back once*). A problem with the second mailbox never
 stops the scan of the first one; the app tells you about it at the end of the scan.
 
 ### Save your recovery key
@@ -303,7 +304,7 @@ Table 2.3 lists problems while setting up, and what to do.
 ### Next steps
 
 - [Find your way around the main window](#3-find-your-way-around-the-main-window)
-- [Set your options](#15-set-your-options), to say what you are looking for
+- [Set your options](#16-set-your-options), to say what you are looking for
 
 ---
 
@@ -365,7 +366,7 @@ Table 3.3 lists the controls in the middle.
 | Control | What it does |
 |---|---|
 | **Run search** | Starts a search (section 4). While a run is going, it becomes **Stop** |
-| **Scan email** | Reads new replies (section 11) |
+| **Scan email** | Reads new replies (section 12) |
 | The sun or moon button | Switches between the dark and the light theme |
 | A robot | Lights up while its agent works and shows a tick when it is done. Point at it for its name, its job and its latest result |
 | The status line | Always says what is happening, or what just happened, with the time |
@@ -398,11 +399,11 @@ Table 3.4 lists the cards in the right column.
 | Card | What it tells you |
 |---|---|
 | **Claude** | The model in use, and that the subscription is used, not the paid API |
-| **Usage left** | How much of your Claude limit remains (section 17). **refresh** asks Claude for the current numbers |
+| **Usage left** | How much of your Claude limit remains (section 18). **refresh** asks Claude for the current numbers |
 | **Last run** | What the last search and the last email scan did (the table below) |
 | **Coming up** | The next dated event, such as an interview |
-| **Weekly run** | Whether a weekly run is scheduled. Select it to change the schedule (section 16) |
-| **Options** | Opens the settings (section 15) |
+| **Weekly run** | Whether a weekly run is scheduled. Select it to change the schedule (section 17) |
+| **Options** | Opens the settings (section 16) |
 | **Help** | A short version of this guide, and the list of changes |
 
 The rows of the **Last run** card (Table 3.5):
@@ -413,7 +414,7 @@ The rows of the **Last run** card (Table 3.5):
 |---|---|
 | **When** | Day and time of the last search |
 | **Found** | How many new postings it added |
-| **Filtered out** | How many postings it dropped. Select the number to see each one with its reason (section 13) |
+| **Filtered out** | How many postings it dropped. Select the number to see each one with its reason (section 14) |
 | **Letters**, **CVs** | How many of each were written |
 | **Email scan** | Day of the last email scan and how many new replies it filed |
 | **Emails read** | How many messages that scan went through, and how many of them were worth a question to Claude ("1224 · 43 asked"). It explains a "0 new": most mail was read before, or is not about an application |
@@ -434,7 +435,7 @@ and writes an adapted CV and a cover letter for each good one.
 ### Prerequisites
 
 - The **Claude account** and **Master CV** rows of the Account card are green.
-- A city and at least one search role are set in Options (section 15).
+- A city and at least one search role are set in Options (section 16).
 
 ### Start a search
 
@@ -486,7 +487,7 @@ is kept, and the next search continues with what was not done.
 
 ### If Claude's limit runs out
 
-The run pauses instead of failing. See [Watch your Claude usage and limits](#17-watch-your-claude-usage-and-limits).
+The run pauses instead of failing. See [Watch your Claude usage and limits](#18-watch-your-claude-usage-and-limits).
 
 ### If something is wrong
 
@@ -497,7 +498,7 @@ Table 4.2 lists problems with a search, and what to do.
 | What you see | Cause | What to do |
 |---|---|---|
 | "No city yet" | Options has no city | Open Options and choose a city |
-| The search finds nothing new | Your roles are too narrow, or everything was filtered | Open **Filtered out** on the Last run card (section 13) |
+| The search finds nothing new | Your roles are too narrow, or everything was filtered | Open **Filtered out** on the Last run card (section 14) |
 | Too many poor postings | The filters are too loose | Add words to **Skip titles with**, or set **Kinds of role you want** |
 | A source is missing from the results | That site turned programs away this time | Nothing to do. The app leaves such a site alone and tries again at the next search |
 
@@ -530,7 +531,7 @@ Table 5.1 explains how to read a row.
 | **moderate** | 50 to 59. A CV and a letter were written |
 | No badge | Below your limit. Listed so that you can judge for yourself; no documents were written |
 | **skipped** | Not scored at all, to save a Claude call (section 4) |
-| The grey line | When it was posted, the salary you ask for (section 15), and any warning about the score |
+| The grey line | When it was posted, the salary you ask for (section 16), and any warning about the score |
 | **closed** | The posting no longer accepts applications |
 | **scored from the title only**, **scored from a short summary** | The score rests on little text (section 8) |
 | **documents from a higher score** | The job fell below your limit after its documents were written (section 8) |
@@ -792,7 +793,7 @@ the job (Table 7.2).
 
 ### Next steps
 
-- [Track an application](#10-track-an-application), after you applied
+- [Track an application](#11-track-an-application), after you applied
 
 ---
 
@@ -867,10 +868,12 @@ when the app opens, and opens its window when you select it.
 
 *Figure 9.1 – The assistant at the end of the assembly line*
 
-The assistant fills in the form that is open in Google Chrome. It writes into empty fields
-only. The only things it presses on a page are a menu, an entry of a menu, a yes/no button
-and a button that adds a row for another job or degree; it never presses a button that sends
-or continues, and it never sends the form. You
+The assistant fills in the form that is open in Google Chrome, or in Brave, Edge or Safari
+when you choose one of them (section 10). It writes into empty fields only. The only things
+it presses on a page are a menu, an entry of a menu, a yes/no button, a button that adds a
+row for another job or degree, and the box that says you work at a job now; it never presses
+a button that sends or continues, never ticks a box that agrees to something, and never
+sends the form. You
 read what it wrote and send the form yourself.
 
 When the pointer is over the assembly line, the assistant follows it with its eyes. It nods
@@ -917,7 +920,7 @@ turns red and the line under it says what to change; nothing is saved until it i
 
 > **Note**
 > Your right to work and your start date are not on this page. They are under **Options** >
-> **About you** (section 15), because letters and answers use them as well.
+> **About you** (section 16), because letters and answers use them as well.
 
 ### List your jobs and your degrees
 
@@ -954,8 +957,8 @@ When a form has more rows than you have jobs, the extra rows are left to you.
 > **Note**
 > When a form shows fewer rows than you have jobs or degrees and has a button such as **Add
 > another job**, the assistant presses it once for each missing row. It presses no other
-> button. It writes the dates of a job where the form takes a month and a year, and leaves
-> the box **I currently work here** to you.
+> button. It writes the dates of a job where the form takes a month and a year, and ticks
+> the box **I currently work here** for a job you marked as current.
 
 ### Give your salary and add your files
 
@@ -1073,92 +1076,21 @@ removes all of them after asking once.
 > To learn your changes, the assistant reads back only the answers it wrote itself. It does
 > not read your other fields, and a draft you did not change is not remembered.
 
-### Talk to the assistant
-
-You can ask the assistant in your own words, and it remembers the last turns of the talk, so a
-second question may build on the first (Figure 9.8). When a job's window is open, "this job"
-means that job; otherwise choose the job under **Answers are for**, or name its company.
-
-1. Select the assistant and type what you need, then press Return.
-2. Read the answer. Jobs the answer is about are listed under it; select one to open it.
-3. When the assistant asks before it does something, select **Yes, do it** or **No**.
-
-![A talk with the assistant](img/44_assistant_talk.png)
-
-*Figure 9.8 – A talk with the assistant*
-
-Table 9.4 shows what you can ask for.
-
-*Table 9.4 – What you can ask the assistant*
-
-| You ask | Example | What happens |
-|---|---|---|
-| A question about your search | *Which applications have had no reply for two weeks?* | It answers from your jobs, their statuses, dates and replies, and lists the jobs |
-| A question about one job | *Why did this score 62?* | It answers from the job's score, its reason and its keywords |
-| To open something | *Open the letter for Northwind* | The job, its posting, its CV or its letter opens at once |
-| To change a job | *Mark it applied*; *set the interview for Tuesday at 11:30*; *Quillon said no* | It asks first, in the app's own words. Nothing changes until you select **Yes, do it** |
-| To rewrite a text | *Make the second paragraph of this letter shorter*; *make my answer about salary more formal* | It shows the new version first. It is saved only after your yes, and is checked against your CV like every text |
-| A brief about a company | *Tell me about Northwind before the interview* | A few lines from the posting, your notes and their messages |
-| Advice | *What do my results say?* | What works and what does not, from the numbers of your own applications |
-| To fill in a form, with exceptions | *Fill it in but skip the salary* | It fills in the form and leaves out what you named |
-| To practise | *Let us practise the interview for Quillon* | See the task below |
-
-> **Important**
-> Filling in a form, opening your details and asking for help cost nothing. Every other
-> request is one call to Claude, and a rewrite, a brief, advice and each practice answer are
-> one more. The calls count against your Claude limit like a search does (section 17).
-
-The assistant never changes anything on Claude's word alone. What Claude proposes is checked
-by the app: an action that does not exist, or a job that is not in your list, is dropped, and
-the assistant says that it could not do it.
-
 ### Review a form before you send it
 
 After a fill, select **Review before I send**, or ask *review the form*. The assistant reads
-the form back and lists what looks wrong (Figure 9.9): a required field that is still empty, a
+the form back and lists what looks wrong (Figure 9.8): a required field that is still empty, a
 part left in square brackets, an email that is not yours, and, in one Claude call, an answer
 that contradicts your CV or names another company.
 
 ![What a review found](img/45_assistant_review.png)
 
-*Figure 9.9 – What a review found*
+*Figure 9.8 – What a review found*
 
 > **Note**
 > For a review the assistant reads what the visible fields hold, which it does not do when it
 > fills in a form. It never reads a password or a file field, and the values of personal
 > questions and payment fields are not sent to Claude.
-
-### Practise an interview
-
-1. Build the interview preparation for the application first (section 12).
-2. Ask the assistant to practise for that job, for example *practise the interview for
-   Quillon*.
-3. The assistant asks the questions of the preparation one at a time. Type each answer as you
-   would say it and press Return.
-4. Read what it says about the answer: what is good, what is missing, and one real thing from
-   your CV you could add. Then it asks the next question.
-5. To end, type *stop* or select **Stop practising**.
-
-Each answer is one Claude call. Nothing you type in practice is saved.
-
-### Let the assistant speak first
-
-The assistant also tells you things without being asked. None of this uses Claude.
-
-- **When the app opens**, its bubble says what deserves your attention: a form you filled in
-  but did not mark as applied, an interview in the next two days with no preparation, an
-  invitation with no date set, or how many jobs are ready to send.
-- **In its window**, **For you today** lists the same reminders. Select **Open** to go to the
-  job, or **Do not remind me** to stop that reminder.
-- **Noticing a form.** Turn on the switch **Notice application forms in Chrome by myself** on
-  the **Ask** page. While the app is open, the assistant then looks at the address of the tab
-  in front in Chrome every 20 seconds. When it is the form of a job you track, its bubble
-  says so; select the assistant and it is ready to fill that form.
-
-> **Important**
-> The switch is off until you turn it on. When it is on, the assistant looks at the address
-> and title of the tab in front and counts its empty fields. It reads nothing else, opens
-> nothing, and says nothing about pages that belong to no job of yours.
 
 > **Tip**
 > Answers the assistant drafts are kept with the job, under **Form answers** (section 7). Ask
@@ -1166,9 +1098,9 @@ The assistant also tells you things without being asked. None of this uses Claud
 
 ### What the assistant fills in and what it leaves
 
-Table 9.5 shows what happens to each kind of field.
+Table 9.4 shows what happens to each kind of field.
 
-*Table 9.5 – What the assistant does with each kind of field*
+*Table 9.4 – What the assistant does with each kind of field*
 
 | Kind of field | What the assistant does |
 |---|---|
@@ -1184,10 +1116,12 @@ Table 9.5 shows what happens to each kind of field.
 | A file, such as your CV | Leaves it to you: a page cannot be handed a file from outside |
 | A password | Leaves it to you |
 | Date of birth, gender, origin, health, payment details | Leaves them to you |
-| The dates of a job or a degree | Writes them where the form takes a month and a year. Where it wants a full date, the first of the month is used and marked for checking. With only a year in **My details**, the date is left to you |
+| The dates of a job or a degree | Writes them where the form takes a month and a year, as one field or as two lists. Where it wants a full date, the first of the month is used and marked for checking. With only a year in **My details**, a month is left to you |
+| The box **I currently work here** | Ticked for a job you marked **I work here now**. Marked for checking |
+| A field that throws away what was written | Written a second time, the way typing arrives. If the page throws that away too, the field is left to you and the assistant says so |
 | A short field the app does not recognise | Asks Claude, with the lists and numbers, to copy the words from your CV or your details. Words that are not there are not written |
 | Other dates, such as the day you can start | Leaves them to you |
-| Tick boxes, such as agreeing to a privacy notice | Leaves them to you |
+| Every other tick box, such as agreeing to a privacy notice | Leaves it to you |
 | **Add another job**, **Add education** | Pressed once for each job or degree that has no row yet |
 | **Submit**, **Next** and every other button | Never pressed |
 
@@ -1195,9 +1129,9 @@ To fill in a form and leave something out, say so: *fill it in but skip the sala
 
 ### If something is wrong
 
-Table 9.6 lists what the assistant may answer, and what to do.
+Table 9.5 lists what the assistant may answer, and what to do.
 
-*Table 9.6 – Problems while filling in a form, and what to do*
+*Table 9.5 – Problems while filling in a form, and what to do*
 
 | What the assistant says | Cause | What to do |
 |---|---|---|
@@ -1207,7 +1141,7 @@ Table 9.6 lists what the assistant may answer, and what to do.
 | I found no form fields on this page | The tab in front is the posting, not the form | Open the form itself, usually with the site's **Apply** button |
 | The form sits inside a frame from another site | The company shows a form that lives on a recruiting site | Select **Open the form in its own tab** under the answer, then ask again |
 | The menu did not open for me | The site draws its menu in a way the assistant does not know | Choose that one yourself |
-| I could not ask Claude | Claude's limit is used up, or there is no connection | The details are still filled in. Ask again after the reset time shown in the Usage card (section 17) |
+| I could not ask Claude | Claude's limit is used up, or there is no connection | The details are still filled in. Ask again after the reset time shown in the Usage card (section 18) |
 | The tab changed while I was working | You moved to another page in the meantime | Go back to the form and ask again |
 | An open question: choose the job this form is for | The page did not show which job it belongs to | Choose the job under **Answers are for** and ask again |
 | I do not know your details yet | **My details** is empty | Fill in **My details**, save, ask again |
@@ -1215,30 +1149,189 @@ Table 9.6 lists what the assistant may answer, and what to do.
 
 ### Next steps
 
-- [Track an application](#10-track-an-application), after you sent the form
+- [Track an application](#11-track-an-application), after you sent the form
 
 ---
 
-## 10. Track an application
+## 10. Talk to the assistant
+
+The assistant is more than a form filler. You can ask it about your search in your own words,
+have it do things in the app after your yes, and let it tell you what needs attention. This
+chapter covers everything that is not filling in a form (section 9).
+
+### Prerequisites
+
+- For questions and requests: Claude is signed in. Each one is a call to Claude, unless this
+  chapter says otherwise.
+- For anything in the browser: the switch from section 9 is on.
+
+### Talk to the assistant
+
+You can ask the assistant in your own words, and it remembers the last turns of the talk, so a
+second question may build on the first (Figure 10.1). When a job's window is open, "this job"
+means that job; otherwise choose the job under **Answers are for**, or name its company.
+
+1. Select the assistant and type what you need, then press Return.
+2. Read the answer. While you wait, the line under the talk says what the assistant is doing.
+   Jobs the answer is about are listed under it; select one to open it.
+3. When the assistant asks before it does something, select **Yes, do it** or **No**.
+
+![A talk with the assistant](img/44_assistant_talk.png)
+
+*Figure 10.1 – A talk with the assistant*
+
+Table 10.1 shows what you can ask for.
+
+*Table 10.1 – What you can ask the assistant*
+
+| You ask | Example | What happens |
+|---|---|---|
+| A question about your search | *Which applications have had no reply for two weeks?* | It answers from your jobs, their statuses, dates and replies, and lists the jobs |
+| A question about one job | *Why did this score 62?* | It answers from the job's score, its reason and its keywords |
+| To open something | *Open the letter for Northwind* | The job, its posting, its CV or its letter opens at once |
+| To change a job | *Mark it applied*; *set the interview for Tuesday at 11:30*; *Quillon said no* | It asks first, in the app's own words. Nothing changes until you select **Yes, do it** |
+| To rewrite a text | *Make the second paragraph of this letter shorter*; *make my answer about salary more formal* | It shows the new version first. It is saved only after your yes, and is checked against your CV like every text |
+| A brief about a company | *Tell me about Northwind before the interview* | A few lines from the posting, your notes and their messages |
+| Advice | *What do my results say?* | What works and what does not, from the numbers of your own applications |
+| To fill in a form, with exceptions | *Fill it in but skip the salary* | It fills in the form and leaves out what you named |
+| Several things at once | *Mark it applied and remind me to follow up in ten days* | One question lists every step; see the next task |
+| To remember something | *Remember that I do not want consulting firms* | Kept for later talks; see below |
+| A posting in your browser | *Is this posting worth applying to?* | It is scored against your CV and can be added to **New Jobs**; see below |
+| A reply to a company | *Answer Quillon that Tuesday suits me* | A draft to copy; see below |
+| To practise | *Let us practise the interview for Quillon* | See the task below |
+
+> **Important**
+> Filling in a form, opening your details and asking for help cost nothing. Every other
+> request is one call to Claude, and a rewrite, a brief, advice, a reply, a posting and each
+> practice answer are one or two more. Only the jobs a request is likely about are sent with
+> it, not your whole list. The calls count against your Claude limit like a search does (section 18).
+
+The assistant never changes anything on Claude's word alone. What Claude proposes is checked
+by the app: an action that does not exist, or a job that is not in your list, is dropped, and
+the assistant says that it could not do it.
+
+### Do several things at once, and take them back
+
+One request may hold up to three things, for example *I sent the Northwind form: mark it
+applied and remind me to follow up in ten days*. What only shows something is done at once.
+What changes your data is asked about in one question that lists each step; **Yes, do it**
+carries them out in order.
+
+After a yes, **Undo** appears under the answer. It puts the job back exactly as it was: its
+status, its dates, and a lead that marking it applied had folded away. **Undo** takes back the
+last yes only, and is not offered while a search or a scan is running.
+
+### Tell the assistant what to remember
+
+Say *remember that I do not want consulting firms* and the assistant keeps the note. It uses
+your notes in its answers from then on, also after the app was closed, and it also remembers
+the last turns of a talk. The notes are listed on the **My details** page under **What you
+asked me to remember**; select **Forget** to remove one. **New talk** on the **Ask** page puts
+the earlier talk away.
+
+> **Note**
+> A note shapes what the assistant says. It does not change what a search finds or how a
+> posting is scored: for that, use **Options** (section 16).
+
+### Judge a posting that is open in your browser
+
+1. Open a job posting in your browser and leave its tab in front.
+2. In the assistant's window, select **Is the posting in my browser worth applying to?**
+3. The assistant reads the page, scores the posting against your CV with the same scorer a
+   search uses, and says the score and the reason.
+4. To keep it, select **Yes, do it**: the posting is added to **New Jobs**. The next search
+   writes its documents when the score is at or above your limit.
+
+This takes two calls to Claude: one to read what the page says about the job, one to score
+it. A posting that is in your list already is recognised by its address, without a call.
+
+### Draft a reply to a company
+
+Ask, for example, *answer Quillon that Tuesday suits me*. The assistant drafts a short reply
+to the company's last message that is filed under that application, and shows it with a
+**Copy** button. What it cannot know, such as a time, stands in square brackets for you to
+fill in.
+
+> **Important**
+> The assistant never sends mail. You paste the draft into your own mail program, read it,
+> and send it yourself.
+
+### Practise an interview
+
+1. Build the interview preparation for the application first (section 13).
+2. Ask the assistant to practise for that job, for example *practise the interview for
+   Quillon*.
+3. The assistant asks the questions of the preparation one at a time. Type each answer as you
+   would say it and press Return.
+4. Read what it says about the answer: what is good, what is missing, and one real thing from
+   your CV you could add. Then it asks the next question.
+5. To end, type *stop* or select **Stop practising**.
+
+Each answer is one Claude call. Nothing you type in practice is saved.
+
+The questions that went badly last time are asked first, then the ones you never practised.
+Only how each answer went is kept with the application (good, fair or weak), never what you
+typed. When the practice ends, the assistant says how many went well.
+
+### Let the assistant speak first
+
+The assistant also tells you things without being asked. None of this uses Claude.
+
+- **When the app opens**, its bubble says what deserves your attention: a form you filled in
+  but did not mark as applied, an interview in the next two days with no preparation, an
+  invitation with no date set, or how many jobs are ready to send.
+- **In its window**, **For you today** lists the same reminders. Select **Open** to go to the
+  job, or **Do not remind me** to stop that reminder.
+- **Noticing a form.** On the **My details** page, under **How I work**, turn on the switch
+  **Notice application forms by myself**. While the app is open, the assistant then looks at
+  the address of the tab in front in your browser every 20 seconds. When it is the form of a
+  job you track, its bubble says so; select the assistant and it is ready to fill that form.
+
+> **Important**
+> The switch is off until you turn it on. When it is on, the assistant looks at the address
+> and title of the tab in front and counts its empty fields. It reads nothing else, opens
+> nothing, and says nothing about pages that belong to no job of yours.
+
+### Choose your browser
+
+The assistant works in Google Chrome unless you choose another browser. On the **My details**
+page, under **How I work**, choose **Google Chrome**, **Brave Browser**, **Microsoft Edge** or
+**Safari**. The line beside the list says where that browser's switch is; turn it on once, as
+in section 9. The switch to notice forms is in the same place.
+
+### Speak instead of typing
+
+The assistant's box takes dictation like any text field on your Mac: select the box and press
+the dictation key (the microphone key, or the Fn key twice), then speak. What you say appears
+as text; press Return to send it. Dictation is a feature of macOS and is turned on under
+**System Settings** > **Keyboard** > **Dictation**.
+
+### Next steps
+
+- [Track an application](#11-track-an-application)
+
+---
+
+## 11. Track an application
 
 **Applications** lists where you applied, grouped by where each one stands: offers and
-interviews first, then waiting, then rejected (Figure 10.1).
+interviews first, then waiting, then rejected (Figure 11.1).
 
 ![The Applications list](img/11_applications.png)
 
-*Figure 10.1 – The Applications list*
+*Figure 11.1 – The Applications list*
 
 ### The application's window
 
-Select a row to open the application (Figure 10.2).
+Select a row to open the application (Figure 11.2).
 
 ![An application in full](img/12_application_window.png)
 
-*Figure 10.2 – An application in full*
+*Figure 11.2 – An application in full*
 
-Table 10.1 lists the fields of an application.
+Table 11.1 lists the fields of an application.
 
-*Table 10.1 – The fields of an application*
+*Table 11.1 – The fields of an application*
 
 | Field | What it is | When to change it |
 |---|---|---|
@@ -1254,11 +1347,11 @@ Table 10.1 lists the fields of an application.
    too.
 
 The date then shows on the **Coming up** card of the main window. You get a notification the
-day before and on the day. With a time, you also get one about three hours and one hour before (Figure 10.3).
+day before and on the day. With a time, you also get one about three hours and one hour before (Figure 11.3).
 
 ![Dates, pasted replies and notes](img/13_application_dates_notes.png)
 
-*Figure 10.3 – Dates, pasted replies and notes*
+*Figure 11.3 – Dates, pasted replies and notes*
 
 ### File a reply that did not come by email
 
@@ -1294,11 +1387,11 @@ one of them and choose **Merge into one** or **They are different**.
 
 ### Next steps
 
-- [Read replies from companies](#11-read-replies-from-companies)
+- [Read replies from companies](#12-read-replies-from-companies)
 
 ---
 
-## 11. Read replies from companies
+## 12. Read replies from companies
 
 An email scan reads new mail in your mailbox, works out which messages are answers to your
 applications, and files each one to its application.
@@ -1321,9 +1414,9 @@ applications, and files each one to its application.
 
 Most mail in a mailbox is not about your applications. Asking Claude about every message
 would waste your limit, so the app first decides, without Claude, which messages are worth a
-question (Table 11.1).
+question (Table 12.1).
 
-*Table 11.1 – Which messages are sent to Claude*
+*Table 12.1 – Which messages are sent to Claude*
 
 | A message is | Sent to Claude |
 |---|---|
@@ -1356,21 +1449,21 @@ The scan reads that period once. The setting **Scan emails from the last** stays
 
 ### Responses
 
-Figure 11.1 shows the Responses list.
+Figure 12.1 shows the Responses list.
 
 ![Every reply](img/15_responses.png)
 
-*Figure 11.1 – Every reply*
+*Figure 12.1 – Every reply*
 
-**Responses** lists every reply with what it was. Select one to read it in full (Figure 11.2).
+**Responses** lists every reply with what it was. Select one to read it in full (Figure 12.2).
 
 ![One reply in full](img/31_one_reply.png)
 
-*Figure 11.2 – One reply in full*
+*Figure 12.2 – One reply in full*
 
-Table 11.2 lists the fields of a reply.
+Table 12.2 lists the fields of a reply.
 
-*Table 11.2 – The fields of a reply*
+*Table 12.2 – The fields of a reply*
 
 | Field | Meaning |
 |---|---|
@@ -1388,12 +1481,12 @@ one company, or a recruiter who writes from an agency's address.
 
 1. In **Responses**, select the reply.
 2. Select **File under…** (or **File under another…**). The list of your applications opens
-   (Figure 11.3).
+   (Figure 12.3).
 3. Type a company or a role to narrow the list, then select the right application.
 
 ![Choosing the application a reply belongs to](img/34_file_reply.png)
 
-*Figure 11.3 – Choosing the application a reply belongs to*
+*Figure 12.3 – Choosing the application a reply belongs to*
 
 The application the reply moves to follows it in the usual way: an invitation makes it an
 interview, a rejection closes it. The application the reply leaves keeps its status, because
@@ -1403,15 +1496,15 @@ applications**.
 
 ### Analytics
 
-Figure 11.4 shows outcomes and rejection reasons.
+Figure 12.4 shows outcomes and rejection reasons.
 
 ![Outcomes and rejection reasons](img/16_analytics.png)
 
-*Figure 11.4 – Outcomes and rejection reasons*
+*Figure 12.4 – Outcomes and rejection reasons*
 
-**Analytics** adds the replies up (Table 11.3).
+**Analytics** adds the replies up (Table 12.3).
 
-*Table 11.3 – The parts of Analytics*
+*Table 12.3 – The parts of Analytics*
 
 | Part | What it shows |
 |---|---|
@@ -1425,20 +1518,20 @@ Figure 11.4 shows outcomes and rejection reasons.
 
 ### If something is wrong
 
-Table 11.4 lists problems with replies, and what to do.
+Table 12.4 lists problems with replies, and what to do.
 
-*Table 11.4 – Problems with replies, and what to do*
+*Table 12.4 – Problems with replies, and what to do*
 
 | What you see | Cause | What to do |
 |---|---|---|
 | "0 new" after a scan | No new replies in the period, or they were read by an earlier scan | Nothing. **Emails read** on the Last run card shows what the scan went through. To look further back, use **Look further back once** |
-| A rejection is missing | It did not arrive in a scanned mailbox, or it is in another folder | Turn on **Also archived mail and spam**, or paste the reply into the application (section 10) |
+| A rejection is missing | It did not arrive in a scanned mailbox, or it is in another folder | Turn on **Also archived mail and spam**, or paste the reply into the application (section 11) |
 | A reply was filed to the wrong application, or to none | Two applications at the same company, or a sender the app could not place | Open the reply and select **File under…** |
 | A warning about the second mailbox | Its password was cancelled or mistyped | Open the Account card and select **Change** for the second mailbox |
 
 ---
 
-## 12. Prepare for an interview
+## 13. Prepare for an interview
 
 For one interview the app builds a sheet from your CV and the posting.
 
@@ -1450,17 +1543,17 @@ For one interview the app builds a sheet from your CV and the posting.
 3. When the card says the questions and answers are ready, select **Open**.
 
 **Document** on the same card opens the sheet as a Word file. **Make again** builds a new one,
-for example after you changed your CV (Figure 12.1).
+for example after you changed your CV (Figure 13.1).
 
 ![The interview preparation](img/14_interview_preparation.png)
 
-*Figure 12.1 – The interview preparation*
+*Figure 13.1 – The interview preparation*
 
 ### What the sheet contains
 
-Table 12.1 lists the parts of the interview sheet.
+Table 13.1 lists the parts of the interview sheet.
 
-*Table 12.1 – The parts of the interview sheet*
+*Table 13.1 – The parts of the interview sheet*
 
 | Part | What it is |
 |---|---|
@@ -1478,9 +1571,9 @@ Table 12.1 lists the parts of the interview sheet.
 
 ### Use the sheet
 
-Table 12.2 lists the buttons of the interview sheet.
+Table 13.2 lists the buttons of the interview sheet.
 
-*Table 12.2 – The buttons of the interview sheet*
+*Table 13.2 – The buttons of the interview sheet*
 
 | Button | What it does |
 |---|---|
@@ -1493,7 +1586,7 @@ After the interview, the application's window offers a short **thank-you** note 
 
 ---
 
-## 13. See what a search left out
+## 14. See what a search left out
 
 A search that only shows you what it kept would be asking you to trust it blindly. Every
 posting a search drops is kept with the reason.
@@ -1502,18 +1595,18 @@ posting a search drops is kept with the reason.
 
 1. On the **Last run** card, select the number next to **Filtered out**.
 
-Figure 13.1 shows postings the last search filtered out.
+Figure 14.1 shows postings the last search filtered out.
 
 ![Postings the last search filtered out](img/17_filtered_out.png)
 
-*Figure 13.1 – Postings the last search filtered out*
+*Figure 14.1 – Postings the last search filtered out*
 
 ### Read the list
 
 Each row is one dropped posting with the reason in words. The chips at the top group the rows
-by reason (Table 13.1).
+by reason (Table 14.1).
 
-*Table 13.1 – Reasons a posting is filtered out, and where to change each rule*
+*Table 14.1 – Reasons a posting is filtered out, and where to change each rule*
 
 | Reason | Meaning | Where to change the rule |
 |---|---|---|
@@ -1534,17 +1627,17 @@ The posting goes to **New Jobs**, and the next search scores it.
 
 ---
 
-## 14. Learn from your results
+## 15. Learn from your results
 
-**Insights** is worked out on your Mac from your own applications. It asks Claude nothing (Figure 14.1).
+**Insights** is worked out on your Mac from your own applications. It asks Claude nothing (Figure 15.1).
 
 ![Insights](img/18_insights.png)
 
-*Figure 14.1 – Insights*
+*Figure 15.1 – Insights*
 
-Table 14.1 lists the parts of Insights.
+Table 15.1 lists the parts of Insights.
 
-*Table 14.1 – The parts of Insights*
+*Table 15.1 – The parts of Insights*
 
 | Part | The question it answers |
 |---|---|
@@ -1561,9 +1654,9 @@ Table 14.1 lists the parts of Insights.
 
 ### What to do with it
 
-Table 14.2 suggests what to do with what you see.
+Table 15.2 suggests what to do with what you see.
 
-*Table 14.2 – What to do with what Insights shows*
+*Table 15.2 – What to do with what Insights shows*
 
 | You see | Consider |
 |---|---|
@@ -1574,14 +1667,14 @@ Table 14.2 suggests what to do with what you see.
 
 ---
 
-## 15. Set your options
+## 16. Set your options
 
 Options is where you tell the app what you are looking for. Open it with **Options** in the
-right column, or with a chip under **Search** in the left column (Figure 15.1).
+right column, or with a chip under **Search** in the left column (Figure 16.1).
 
 ![Options: the search](img/19_options_search.png)
 
-*Figure 15.1 – Options: the search*
+*Figure 16.1 – Options: the search*
 
 > **Note**
 > A choice too long for its box is shown on two lines, never cut.
@@ -1593,9 +1686,9 @@ right column, or with a chip under **Search** in the left column (Figure 15.1).
 
 ### Search
 
-Table 15.1 lists the Search settings.
+Table 16.1 lists the Search settings.
 
-*Table 15.1 – The Search settings*
+*Table 16.1 – The Search settings*
 
 | Setting | What it does | Values | Why you would change it |
 |---|---|---|---|
@@ -1617,11 +1710,11 @@ Table 15.1 lists the Search settings.
 
 ### Your profession
 
-Figure 15.2 shows the roles you want and your profession in Options.
+Figure 16.2 shows the roles you want and your profession in Options.
 
 ![Options: the roles you want and your profession](img/20_options_roles.png)
 
-*Figure 15.2 – Options: the roles you want and your profession*
+*Figure 16.2 – Options: the roles you want and your profession*
 
 Under **Kinds of role you want**, chips show what the app takes as your profession. The app
 reads it from the roles you want (the outlined chip). It decides which titles are skipped as
@@ -1644,9 +1737,9 @@ Some companies publish their openings on their own career site. To read one dire
 
 ### Matching and follow-up
 
-Table 15.2 lists the Matching and Follow-up settings.
+Table 16.2 lists the Matching and Follow-up settings.
 
-*Table 15.2 – The Matching and Follow-up settings*
+*Table 16.2 – The Matching and Follow-up settings*
 
 | Setting | What it does | Values |
 |---|---|---|
@@ -1660,15 +1753,15 @@ Table 15.2 lists the Matching and Follow-up settings.
 
 ### About you
 
-Figure 15.3 shows the About you settings.
+Figure 16.3 shows the About you settings.
 
 ![Options: about you](img/32_options_about_you.png)
 
-*Figure 15.3 – Options: about you*
+*Figure 16.3 – Options: about you*
 
-Table 15.3 lists the About you settings.
+Table 16.3 lists the About you settings.
 
-*Table 15.3 – The About you settings*
+*Table 16.3 – The About you settings*
 
 | Setting | What it does |
 |---|---|
@@ -1685,15 +1778,15 @@ Table 15.3 lists the About you settings.
 
 ### Notifications and storage
 
-Figure 15.4 shows the Notifications and storage settings.
+Figure 16.4 shows the Notifications and storage settings.
 
 ![Options: notifications and storage](img/21_options_storage.png)
 
-*Figure 15.4 – Options: notifications and storage*
+*Figure 16.4 – Options: notifications and storage*
 
-Table 15.4 lists the Notifications and storage settings.
+Table 16.4 lists the Notifications and storage settings.
 
-*Table 15.4 – The Notifications and storage settings*
+*Table 16.4 – The Notifications and storage settings*
 
 | Setting | What it does | Values |
 |---|---|---|
@@ -1704,15 +1797,15 @@ Table 15.4 lists the Notifications and storage settings.
 
 ### Email scan
 
-Figure 15.5 shows the Email scan and Model settings.
+Figure 16.5 shows the Email scan and Model settings.
 
 ![Options: email and the model](img/33_options_email.png)
 
-*Figure 15.5 – Options: email and the model*
+*Figure 16.5 – Options: email and the model*
 
-Table 15.5 lists the Email scan settings.
+Table 16.5 lists the Email scan settings.
 
-*Table 15.5 – The Email scan settings*
+*Table 16.5 – The Email scan settings*
 
 | Setting | What it does | Values |
 |---|---|---|
@@ -1722,9 +1815,9 @@ Table 15.5 lists the Email scan settings.
 
 ### Model
 
-Table 15.6 describes the Model setting.
+Table 16.6 describes the Model setting.
 
-*Table 15.6 – The Model setting*
+*Table 16.6 – The Model setting*
 
 | Setting | What it does | Values |
 |---|---|---|
@@ -1734,7 +1827,7 @@ A larger model writes better and uses your limit faster. **sonnet** is a good de
 
 ---
 
-## 16. Schedule a weekly run
+## 17. Schedule a weekly run
 
 macOS can run a search and an email scan for you once a week, even with the window closed.
 
@@ -1745,16 +1838,16 @@ macOS can run a search and an email scan for you once a week, even with the wind
 3. Choose the day and the time.
 4. Select **Save**.
 
-Figure 16.1 shows the weekly run.
+Figure 17.1 shows the weekly run.
 
 ![The weekly run](img/22_weekly_run.png)
 
-*Figure 16.1 – The weekly run*
+*Figure 17.1 – The weekly run*
 
 You get a notification when the run is done. The **Last run** card shows its result the next
-time you open the window (Table 16.1).
+time you open the window (Table 17.1).
 
-*Table 16.1 – What happens at the scheduled time*
+*Table 17.1 – What happens at the scheduled time*
 
 | Situation at the scheduled time | What happens |
 |---|---|
@@ -1769,12 +1862,12 @@ Open the card again, turn **Enabled** off, and select **Save**.
 
 ---
 
-## 17. Watch your Claude usage and limits
+## 18. Watch your Claude usage and limits
 
 Your Claude subscription has two limits, and the app counts against both like any other use of
-Claude (Table 17.1).
+Claude (Table 18.1).
 
-*Table 17.1 – The two limits of a Claude subscription*
+*Table 18.1 – The two limits of a Claude subscription*
 
 | Limit | What it is |
 |---|---|
@@ -1784,15 +1877,15 @@ Claude (Table 17.1).
 ### Read the Usage left card
 
 Each window has a bar and a figure for what is left. The numbers come from Claude's last
-answer. **refresh** asks Claude for the current ones (Figure 17.1).
+answer. **refresh** asks Claude for the current ones (Figure 18.1).
 
 ![A limit that is used up](img/27_limit_used_up.png)
 
-*Figure 17.1 – A limit that is used up*
+*Figure 18.1 – A limit that is used up*
 
-Table 17.2 explains what the card shows.
+Table 18.2 explains what the card shows.
 
-*Table 17.2 – How to read the Usage left card*
+*Table 18.2 – How to read the Usage left card*
 
 | You see | Meaning |
 |---|---|
@@ -1810,11 +1903,11 @@ shown as free again without you pressing anything.
 
 ### When a run hits the limit
 
-The run pauses instead of failing, and everything done so far is saved (Figure 17.2).
+The run pauses instead of failing, and everything done so far is saved (Figure 18.2).
 
 ![The run paused on the limit](img/29_limit_pause.png)
 
-*Figure 17.2 – The run paused on the limit*
+*Figure 18.2 – The run paused on the limit*
 
 1. Read the window: it names the limit and the time it resets.
 2. Select **Close**. You can keep using the lists.
@@ -1824,9 +1917,9 @@ The run continues from where it stopped. Nothing that was finished is done again
 
 ### What a run costs
 
-The **Last run** card shows two rows about cost (Table 17.3).
+The **Last run** card shows two rows about cost (Table 18.3).
 
-*Table 17.3 – The two cost rows of the Last run card*
+*Table 18.3 – The two cost rows of the Last run card*
 
 | Row | Meaning |
 |---|---|
@@ -1836,20 +1929,20 @@ The **Last run** card shows two rows about cost (Table 17.3).
 ### See everything the app has used
 
 1. In the right column, select **Help**.
-2. Select the tab **Usage and problems** (Figure 17.3).
+2. Select the tab **Usage and problems** (Figure 18.3).
 
 The first card shows how many questions the app has asked Claude in all and by kind of work,
 with what the same work would have cost through the paid API. Nothing of it was billed.
 
 ![Usage and problems in Help](img/35_help_usage.png)
 
-*Figure 17.3 – Usage and problems in Help*
+*Figure 18.3 – Usage and problems in Help*
 
 ### Use less of your limit
 
-Table 17.4 lists ways to use less of your limit.
+Table 18.4 lists ways to use less of your limit.
 
-*Table 17.4 – Ways to use less of your limit*
+*Table 18.4 – Ways to use less of your limit*
 
 | Do this | Why it helps |
 |---|---|
@@ -1861,14 +1954,14 @@ Table 17.4 lists ways to use less of your limit.
 
 ---
 
-## 18. Protect your data
+## 19. Protect your data
 
 ### Where your data is
 
 Everything stays on your Mac. The only things that leave it are the questions put to Claude
-(your CV text and a posting), the requests to the job boards, and the reading of your mailbox (Table 18.1).
+(your CV text and a posting), the requests to the job boards, and the reading of your mailbox (Table 19.1).
 
-*Table 18.1 – Where your data is and what protects it*
+*Table 19.1 – Where your data is and what protects it*
 
 | What | Where | Protected by |
 |---|---|---|
@@ -1920,9 +2013,9 @@ your master CV are signed. If one of them is changed outside the app, the next r
 
 ### Nothing is thrown away
 
-Table 18.2 lists where data goes instead of being deleted.
+Table 19.2 lists where data goes instead of being deleted.
 
-*Table 18.2 – Where data goes instead of being deleted*
+*Table 19.2 – Where data goes instead of being deleted*
 
 | Action | Where the data goes |
 |---|---|
@@ -1933,13 +2026,13 @@ Table 18.2 lists where data goes instead of being deleted.
 
 ---
 
-## 19. Troubleshoot problems
+## 20. Troubleshoot problems
 
-Figure 19.1 shows the Help window.
+Figure 20.1 shows the Help window.
 
 ![Help inside the app](img/23_help.png)
 
-*Figure 19.1 – Help inside the app*
+*Figure 20.1 – Help inside the app*
 
 **Help** in the app has three tabs: **How it works** covers the same ground as this guide in
 short form, **What changed** lists the changes of each version, and **Usage and problems**
@@ -1947,9 +2040,9 @@ shows what the app has used and the small problems it carried on after.
 
 ### Starting and signing in
 
-Table 19.1 lists problems with starting and signing in.
+Table 20.1 lists problems with starting and signing in.
 
-*Table 19.1 – Problems with starting and signing in*
+*Table 20.1 – Problems with starting and signing in*
 
 | What you see | Cause | What to do |
 |---|---|---|
@@ -1959,9 +2052,9 @@ Table 19.1 lists problems with starting and signing in.
 
 ### Searching and scoring
 
-Table 19.2 lists problems with searching and scoring.
+Table 20.2 lists problems with searching and scoring.
 
-*Table 19.2 – Problems with searching and scoring*
+*Table 20.2 – Problems with searching and scoring*
 
 | What you see | Cause | What to do |
 |---|---|---|
@@ -1969,26 +2062,26 @@ Table 19.2 lists problems with searching and scoring.
 | Too many poor jobs | The filters are too loose | Add words to **Skip titles with**, set **Kinds of role you want**, or raise **Write letters above** |
 | Good jobs are skipped | The app read your profession wrong | Check the profession chips in Options; use **Score it anyway** on a single job |
 | A score looks wrong | The posting was read only in part, or your Options changed | Read **Why this score**; see section 8 |
-| The search paused | Claude's limit ran out | The window says when it resets; select **Resume** then (section 17) |
+| The search paused | Claude's limit ran out | The window says when it resets; select **Resume** then (section 18) |
 | The usage card says **0% left** | Claude refused a call for a used-up limit | Wait for the time shown, then select **refresh** |
 
 ### Replies
 
-Table 19.3 lists problems with replies.
+Table 20.3 lists problems with replies.
 
-*Table 19.3 – Problems with replies*
+*Table 20.3 – Problems with replies*
 
 | What you see | Cause | What to do |
 |---|---|---|
-| A rejection is missing | It did not arrive in a scanned mailbox or folder | Set the status by hand, or paste the reply (section 10) |
+| A rejection is missing | It did not arrive in a scanned mailbox or folder | Set the status by hand, or paste the reply (section 11) |
 | A scan finds "0 new" | Nothing new in the period | Use **Look further back once** in Options |
 | A scan takes long the first time | It reads a long period once | Later scans skip what was already read |
 
 ### Everything else
 
-Table 19.4 lists other problems.
+Table 20.4 lists other problems.
 
-*Table 19.4 – Other problems*
+*Table 20.4 – Other problems*
 
 | What you see | Cause | What to do |
 |---|---|---|
@@ -1997,13 +2090,13 @@ Table 19.4 lists other problems.
 
 ---
 
-## 20. Look things up
+## 21. Look things up
 
 ### Words the app uses
 
-Table 20.1 explains the words the app uses.
+Table 21.1 explains the words the app uses.
 
-*Table 20.1 – Words the app uses*
+*Table 21.1 – Words the app uses*
 
 | Word | Meaning |
 |---|---|
@@ -2019,9 +2112,9 @@ Table 20.1 explains the words the app uses.
 
 ### Where things are written
 
-Table 20.2 lists the folders the app writes to.
+Table 21.2 lists the folders the app writes to.
 
-*Table 20.2 – The folders the app writes to*
+*Table 21.2 – The folders the app writes to*
 
 | Folder | What is in it |
 |---|---|
@@ -2034,11 +2127,11 @@ Table 20.2 lists the folders the app writes to.
 
 ### The light theme
 
-Figure 20.1 shows the light theme.
+Figure 21.1 shows the light theme.
 
 ![The light theme](img/24_light_theme.png)
 
-*Figure 20.1 – The light theme*
+*Figure 21.1 – The light theme*
 
 The sun or moon button at the top of the main window switches between the dark and the light
 theme. Every window follows it.
