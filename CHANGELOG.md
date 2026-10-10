@@ -10,6 +10,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
   - A reply with a long summary no longer pushes its window past the edge of the app: the text scrolls, and the buttons and the **File under** list stay in view.
   - **Mark applied** no longer says "Moved to Applications" when the job was not moved (it was already an application, or it was gone from the list); it says so instead.
   - Titles and messages in the window use the short dash everywhere, as the documents do ("New Jobs – 12").
+  - In a small window the **Account** card no longer runs past the bottom edge when the mailbox editor or the list of changed lines is open: its content scrolls, and **Done** stays in view.
   - **Help** has a topic about the **assistant**: what it fills in, which browsers it works in, and what it never does.
   - In **Options**, a suggested search role can be chosen with the arrow keys and Return, and a long suggestion takes a second line.
   - The usage card never shows less than 0% left.

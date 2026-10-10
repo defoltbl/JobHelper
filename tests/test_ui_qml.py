@@ -9,7 +9,7 @@ import pytest
 pytest.importorskip("PySide6")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QMetaObject, QObject, QUrl  # noqa: E402
+from PySide6.QtCore import QMetaObject, QObject, QPointF, QUrl  # noqa: E402
 from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression, qmlContext  # noqa: E402
 from PySide6.QtQuick import QQuickItem  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -4077,3 +4077,21 @@ def test_the_window_uses_no_em_dash_in_what_it_says():
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             code = line.split("//")[0]
             assert " — " not in code, f"{path.name}:{number} has an em dash in its text"
+
+
+def test_the_account_card_stays_inside_the_smallest_window(ui):
+    """With the mailbox editor open the card is taller than a small window: it scrolls, and Done stays in view."""
+    size = (ui.win.width(), ui.win.height())
+    ui.win.setWidth(940); ui.win.setHeight(620); ui.wait(80)
+    try:
+        ui.js("welcome.openCard()"); ui.wait(700)
+        ui.js("welcome.editBox = 1; welcome.editEmail = true"); ui.wait(500)
+        done = ui.drawn("welcomeStart", "welcome")
+        if os.environ.get("JH_SHOT"):
+            ui.win.grabWindow().save(os.environ["JH_SHOT"] + "/card_small.png")
+        bottom = done.mapToScene(QPointF(0, done.height())).y()
+        assert bottom <= 620, f"the Done button ends at {bottom} in a window 620 high"
+        assert done.mapToScene(QPointF(0, 0)).y() > 0
+    finally:
+        ui.js("welcome.editEmail = false; welcome.finish()"); ui.wait(600)
+        ui.win.setWidth(size[0]); ui.win.setHeight(size[1]); ui.wait(80)

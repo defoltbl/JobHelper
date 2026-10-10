@@ -169,7 +169,7 @@ Item {
         Rectangle {
             id: card
             width: Math.min(470, parent.width - 60)
-            height: cardCol.implicitHeight + 44
+            height: cardFlick.height + 16 + cardFoot.implicitHeight + 44
             x: (parent.width - width) / 2 + shakeX
             y: Math.max(108, (parent.height - height) / 2 + 40) + (1 - appear) * 18
             radius: 20
@@ -195,9 +195,17 @@ Item {
             DropArea { id: drop; anchors.fill: parent
                 onDropped: function (d) { if (d.hasUrls && d.urls.length) win.applyCv(d.urls[0].toString()); } }
 
+            // In a small window the card can be taller than the room under the logo (the mailbox editor open, a long
+            // list of changed lines): then its content scrolls, and the buttons at the bottom are reached by scrolling.
+            Flickable {
+                id: cardFlick; objectName: "cardFlick"
+                x: 24; y: 22; width: parent.width - 48
+                height: Math.min(cardCol.implicitHeight, Math.max(160, wstage.height - 108 - 44 - 14 - 16 - cardFoot.implicitHeight))
+                contentHeight: cardCol.implicitHeight; clip: contentHeight > height; boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar { policy: cardFlick.contentHeight > cardFlick.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff }
             ColumnLayout {
                 id: cardCol
-                x: 24; y: 22; width: parent.width - 48; spacing: 16
+                width: cardFlick.width - (cardFlick.contentHeight > cardFlick.height ? 12 : 0); spacing: 16
 
                 ColumnLayout { Layout.fillWidth: true; spacing: 3
                     Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter
@@ -396,6 +404,12 @@ Item {
                         color: theme.crit; font.pixelSize: 11; font.bold: true; text: welcome.restoreErr }
                 }
 
+            }
+            }
+            // the buttons that close the card: under the scrolling part, always in view
+            ColumnLayout {
+                id: cardFoot
+                x: 24; y: 22 + cardFlick.height + 16; width: parent.width - 48; spacing: 16
                 Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line; opacity: 0.7 }
                 RowLayout { Layout.fillWidth: true; spacing: 10
                     opacity: Math.max(0, Math.min(1, card.appear * 2.2 - 1.05))
