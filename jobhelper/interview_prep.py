@@ -212,10 +212,20 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
     return prep
 
 
+def _items(value: Any, most: int) -> list[str]:
+    """A list the model was asked for, as cleaned texts. A model sometimes answers one sentence where a list was asked:
+    that is one item (read as a list it would become one item per letter); anything else that is not a list is nothing."""
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    return [cover_letter.clean(str(x)).strip() for x in value if isinstance(x, (str, int, float)) and str(x).strip()][:most]
+
+
 def _clean(data: Any) -> dict[str, Any]:
     data = data if isinstance(data, dict) else {}
     questions = []
-    for item in data.get("questions") or []:
+    for item in data.get("questions") if isinstance(data.get("questions"), list) else []:
         if not isinstance(item, dict):
             continue
         question, answer = cover_letter.clean(str(item.get("question", ""))).strip(), cover_letter.clean(str(item.get("answer", ""))).strip()
@@ -229,20 +239,18 @@ def _clean(data: Any) -> dict[str, Any]:
         questions.append({"audience": audience, "kind": kind, "question": question,
                           "why": cover_letter.clean(str(item.get("why", ""))).strip(), "answer": answer})
     questions.sort(key=lambda q: (AUDIENCES.index(q["audience"]), KINDS.index(q["kind"])))
-    texts = lambda key, n: [cover_letter.clean(str(x)).strip() for x in (data.get(key) or []) if str(x).strip()][:n]   # noqa: E731
+    texts = lambda key, n: _items(data.get(key), n)                                                                   # noqa: E731
     text = lambda key: cover_letter.clean(str(data.get(key, "") or "")).strip()                                        # noqa: E731
     key_q = data.get("key_question") if isinstance(data.get("key_question"), dict) else {}
     concepts = [{"term": cover_letter.clean(str(c.get("term", ""))).strip(), "meaning": cover_letter.clean(str(c.get("meaning", ""))).strip()}
-                for c in (data.get("concepts") or []) if isinstance(c, dict)]
+                for c in (data.get("concepts") if isinstance(data.get("concepts"), list) else []) if isinstance(c, dict)]
     experience = []
-    for e in data.get("experience") or []:
+    for e in data.get("experience") if isinstance(data.get("experience"), list) else []:
         if not isinstance(e, dict):
             continue
         entry = {"job": cover_letter.clean(str(e.get("job", "") or "")).strip(), "story": cover_letter.clean(str(e.get("story", "") or "")).strip(),
                  "plain": cover_letter.clean(str(e.get("plain", "") or "")).strip(),
-                 "gained": [cover_letter.clean(str(x)).strip() for x in (e.get("gained") or []) if str(x).strip()][:5],
-                 "typical": [cover_letter.clean(str(x)).strip() for x in (e.get("typical") or []) if str(x).strip()][:6],
-                 "if_true": [cover_letter.clean(str(x)).strip() for x in (e.get("if_true") or []) if str(x).strip()][:6],
+                 "gained": _items(e.get("gained"), 5), "typical": _items(e.get("typical"), 6), "if_true": _items(e.get("if_true"), 6),
                  "thin": cover_letter.clean(str(e.get("thin", "") or "")).strip()}
         if entry["job"] and entry["story"]:
             experience.append(entry)
@@ -268,7 +276,7 @@ def as_text(job: dict[str, Any], prep: dict[str, Any]) -> str:
         audience = q.get("audience") or ("technical" if q["kind"] in ("technical", "your projects") else "hr")
         if audience != who:
             who = audience
-            lines += [AUDIENCE_TITLES[who].upper(), ""]
+            lines += [AUDIENCE_TITLES.get(who, str(who)).upper(), ""]
         lines += [f"{n}. {q['question']}", q["answer"], ""]
     for key, title in (("ask_hr", "QUESTIONS TO ASK HR OR THE RECRUITER"), ("ask_technical", "QUESTIONS TO ASK THE PEOPLE YOU WOULD WORK WITH OR THE MANAGER"),
                        ("ask_them", "QUESTIONS TO ASK THEM")):

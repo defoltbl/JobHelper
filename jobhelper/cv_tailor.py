@@ -236,7 +236,7 @@ def _is_heading(text: str) -> bool:
     """A section heading as CVs write them: a short line in capitals, without a colon
     (a skills row is "Label: items"). Whatever the next section is called, it ends the rows."""
     text = (text or "").strip()
-    letters = re.sub(r"[^^\W\d_]", "", text) if False else "".join(ch for ch in text if ch.isalpha())
+    letters = "".join(ch for ch in text if ch.isalpha())
     return 3 <= len(letters) and len(text) <= 60 and letters.isupper() and ":" not in text
 
 
@@ -294,11 +294,14 @@ def build_docx(master_path, out_path, profile: str, skills: list[dict[str, str]]
             raise ValueError("The master CV has no PROFILE section.")
 
         runs = sec["profile"].findall(_R)
+        if not runs:                    # the paragraph's text sits inside a link or a content control: nothing to write into
+            raise ValueError("The PROFILE paragraph of the master CV is built in a way the app cannot rewrite "
+                             "(its text is inside a link or a form control). Retype that paragraph as plain text in Word.")
         _set_run_text(runs[0], profile)
         for r in runs[1:]:
             _set_run_text(r, "")
 
-        if skills and sec["rows"]:
+        if skills and sec["rows"] and sec["rows"][0].findall(_R):       # (a first row without plain text: the rows are left as they are)
             template = sec["rows"][0]
             anchor = body.index(template)
             for p in sec["rows"]:

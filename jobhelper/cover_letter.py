@@ -231,6 +231,9 @@ def _slots(body) -> dict[str, Any]:
 
 def _set_para(p, text: str) -> None:
     runs = p.findall(_R)
+    if not runs:                        # its text sits inside a link or a form control: there is nothing to write into
+        raise ValueError("A paragraph of the letter template is built in a way the app cannot fill in "
+                         "(its text is inside a link or a form control). Retype it as plain text in Word.")
     _set_run_text(runs[0], text)
     for r in runs[1:]:
         _set_run_text(r, "")

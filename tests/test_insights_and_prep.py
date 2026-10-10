@@ -607,3 +607,30 @@ def test_the_preparation_is_not_worded_for_one_profession():
     assert "engineer" not in " ".join(interview_prep.AUDIENCE_TITLES.values()).lower()
     source = Path(interview_prep.__file__).read_text(encoding="utf-8").lower()
     assert "engineer" not in source
+
+
+# ── found by reading the document modules line by line (10 October 2026) ────
+def test_one_sentence_where_a_list_was_asked_is_one_item_not_one_per_letter():
+    from jobhelper import interview_prep
+    prep = interview_prep._clean({
+        "questions": [{"question": "Why us?", "answer": "Because of your SQL reports.", "kind": "about you", "audience": "hr"}],
+        "company": "They build planning tools.", "fit": ["SQL reports", 3, None, {"x": 1}], "role": {"not": "a list"}, "revise": None,
+        "experience": [{"job": "Analyst, Northwind", "story": "I built reports.", "gained": "Care with numbers.", "typical": 7, "if_true": ["Did you test it?"]}],
+        "concepts": "none", "ask_hr": "How does the team work?"})
+    assert prep["company"] == ["They build planning tools."] and prep["ask_hr"] == ["How does the team work?"]
+    assert prep["fit"] == ["SQL reports", "3"] and prep["role"] == [] and prep["revise"] == [] and prep["concepts"] == []
+    assert prep["experience"][0]["gained"] == ["Care with numbers."] and prep["experience"][0]["typical"] == [] and prep["experience"][0]["if_true"] == ["Did you test it?"]
+    assert interview_prep._clean({"questions": "Why us?", "experience": "long ago"})["questions"] == []
+    old = {"questions": [{"audience": "panel", "kind": "about you", "question": "Q?", "answer": "A."}]}
+    assert "PANEL" in interview_prep.as_text({"title": "Dev", "company": "Acme"}, old), "a saved preparation with an audience nobody knows still prints"
+
+
+def test_a_cv_or_template_paragraph_that_cannot_be_rewritten_is_said_in_words(tmp_path):
+    """Text inside a link or a form control has no plain run to write into: the builders used to stop with "list index out of range"."""
+    from lxml import etree
+    from jobhelper import cover_letter, cv_tailor
+    W = cv_tailor.W
+    para = etree.fromstring(f'<w:p xmlns:w="{W}"><w:hyperlink><w:r><w:t>text in a link</w:t></w:r></w:hyperlink></w:p>')
+    with pytest.raises(ValueError, match="Retype it as plain text"):
+        cover_letter._set_para(para, "new")
+    assert cv_tailor._is_heading("WORK EXPERIENCE") and not cv_tailor._is_heading("Skills: Python") and not cv_tailor._is_heading("ab")
