@@ -153,7 +153,9 @@ data/                your data; only the *.example.* files are in git
 - **The assistant:** `assistant` (what a typed request means), `details` (the person's own details: contacts, jobs, degrees, salary with currency, files; encrypted), `chrome` (the tab in front in Google Chrome, through Apple events), `form_fill` (the page
   scripts, what each field is, which job a page belongs to), `form_choices` (lists, radio buttons, menus,
   numbers: settled by the details, else by one call to Claude), `answer_memory` (the person's own wording,
-  reused for the same question elsewhere); its back end is `api_assistant`.
+  reused for the same question elsewhere); its back end is `api_assistant`. `assistant_brain` is what Claude makes of a free request (an answer, or one
+  action from a fixed list, checked before anything happens) and `api_talk` carries it out: your yes before
+  any change, the briefing, the reminders, noticing a form, interview practice.
 - **Keeping data safe:** `vault` (encryption, backups), `integrity` (signed rule files),
   `housekeeping` (old backups, logs, the Trash), `store` and `db` (jobs and replies).
 - **Claude:** `llm` (every call goes through it; pauses at the limit), `usage`.
@@ -289,7 +291,10 @@ After every batch of changes, without being asked:
 | Outlook.com, Proton and Tuta are refused with an explanation | They cannot be read with a password; failing later would be worse than saying so at once. |
 | The salary estimate is used only for software roles in Czechia | It is a table of Prague junior software pay. Anywhere else no figure is better than a wrong one. |
 | The assistant fills in forms in the person's own Chrome, through Apple events | The owner's choice ("I tap on him and ask to fill the form in Chrome"). The form is filled where the person is signed in; nothing is installed. A browser inside the app was removed earlier, and an extension would have to be installed by hand. |
-| The assistant presses only a menu, an entry of a menu and a radio button | The owner allowed choosing from menus on 10 October 2026 ("do it"). It still never presses a button, never ticks a box and never sends: the script that presses checks what it is given. |
+| The assistant presses only a menu, an entry of a menu, a radio button and a button that adds a row | The owner allowed menus on 10 October 2026 and rows on a button ("do all points") the same day. It still never presses a button that sends or continues, never ticks a box and never sends: the script that presses reads what it is given, and the words of an add button, again before it acts. |
+| A free request is decided by Claude and checked by the app | The owner chose this knowing it costs a call per request. Claude names one action from a fixed list; anything else is dropped. An action that changes data is asked about in the app's own words and done only after a yes. |
+| Noticing a form in Chrome is off until turned on | It means looking at Chrome without being asked. When on, only the address, the title and the number of empty fields of the tab in front are looked at. |
+| A review reads the values of a form | The owner asked for it. Passwords and files are never read, and personal and payment values are not sent to Claude. |
 | Only what the person wrote or corrected is remembered as their wording | A draft nobody read is not their answer. An answer that names its company is not offered to another one. |
 | A free question to the assistant is one Claude call with facts from the app | So an answer cannot come from anywhere else; when the facts do not hold it, the assistant says so. |
 | A request to the assistant is understood by its words, not by a model | It costs nothing and always means the same. Only a form's open questions go to Claude, in one call. |
@@ -336,6 +341,9 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
   on a few real application forms; what it leaves or gets wrong there decides the next step.
 
 **Then, for the assistant**
+
+- Month and year lists for the dates of a job (two lists per date, named differently on every site).
+- The box "I currently work here" (a tick box: still the person's).
 
 - Rows a form adds on a button (**Add another job**): the assistant never presses buttons, so it fills the rows
   that are shown. Pressing such a button would be a new permission for the owner to give.

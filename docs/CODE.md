@@ -349,10 +349,10 @@ Table 6.3 groups the other modules by what they are for.
 | Rules without a model call | `filters`, `prefilter`, `language`, `places`, `keywords`, `salary`, `merge`, `followup`, `planner` | Level, years, language, location, profession, pay, duplicates, reminders |
 | Writing | `cv_tailor`, `cover_letter`, `letters`, `form_answers`, `interview_prep`, `prep_doc`, `pdf` | The adapted CV, the letter, form answers, the interview sheet |
 | Mail | `email_client`, `mailhosts` | Reading mailboxes read-only; which server a mailbox is read from |
-| The assistant | `assistant`, `details`, `chrome`, `form_fill`, `form_choices`, `answer_memory` | What a typed request means and the facts for a free question; the person's own details; the link to Google Chrome; reading a form, deciding what each field is, and filling it in; choosing from lists and menus; the person's own wording, remembered |
+| The assistant | `assistant`, `assistant_brain`, `details`, `chrome`, `form_fill`, `form_choices`, `answer_memory` | The fixed requests and the facts about the app; what Claude makes of a free request, checked before anything happens; the person's own details; the link to Google Chrome; reading a form, deciding what each field is, and filling it in; choosing from lists and menus; the person's own wording, remembered |
 | Claude | `llm`, `usage` | The one place that asks Claude; counting usage and knowing the limits |
 | Storage and safety | `store`, `db`, `vault`, `integrity`, `housekeeping`, `health`, `trouble` | The job list, the reply database, encryption, signed rule files, backups, the start-up check, the log of errors |
-| The window's back end | `ui_api`, `api_documents`, `api_interview`, `api_letters`, `api_assistant`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` holds the logic; `Bridge` exposes it to QML and runs long work in threads |
+| The window's back end | `ui_api`, `api_documents`, `api_interview`, `api_letters`, `api_assistant`, `api_talk`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` holds the logic; `Bridge` exposes it to QML and runs long work in threads |
 
 ### How the assistant fills in a form
 
@@ -382,7 +382,7 @@ there and a test that names what must be filled and what must be left.
 
 | Rule | How it is kept |
 |---|---|
-| The form is never sent | No script presses a button. The one script that presses anything (`CHOOSE`) accepts three kinds of element: what opens a menu, an entry of a menu, a radio button, and refuses anything of the kind that sends. A test reads the scripts for those calls, and the test area checks on every form that nothing was sent |
+| The form is never sent | No script presses a button that sends. The one script that presses anything (`CHOOSE`) accepts four kinds of element: what opens a menu, an entry of a menu, a radio button, and a button whose words say that it adds a row for a job or a degree; it reads those words again before it presses, and refuses anything of the kind that sends, continues or uploads. A test reads the scripts for those calls, and the test area checks on every form that nothing was sent |
 | A choice is made only when something settles it | `form_choices.settle` uses the person's details and the job; one call to Claude covers the rest, and an answer that is not one of the field's own options is dropped. Every choice is marked for checking |
 | Only the assistant's own answers are read back | To learn the person's corrections, `VALUES` is asked for the numbers of the fields the assistant filled as answers, and for nothing else |
 | Only empty fields are written | The filling script tests each field again just before it writes |
@@ -391,6 +391,24 @@ there and a test that names what must be filled and what must be left.
 | Private fields are left alone | Passwords, files, payment and personal-status fields are recognised by their kind or their label and never planned |
 | The right page gets the values | The filling script compares the page's address with the one that was read, and writes nothing when they differ |
 | Chrome is never started | The request first asks whether Chrome is running and stops there when it is not |
+
+### How the assistant decides what to do
+
+A request that is not one of the fixed ones ("fill in the form", "my details", "help") goes to
+`assistant_brain.decide`: one call to Claude, with the jobs as lines, the numbers, the last turns
+of the talk and the list of actions. Claude answers in words or names one action. Table 6.5
+gives the rules that keep this safe; `api_talk` carries them out.
+
+*Table 6.5 – The rules of acting on a request*
+
+| Rule | How it is kept |
+|---|---|
+| Claude does nothing itself | It returns JSON. `check` keeps only words, one action from a fixed list, and arguments of the right kind; an unknown action or a job that is not in the list is dropped |
+| Nothing of the person's is changed without their yes | An action that changes data comes back to the window as a question, worded by the app from the checked arguments, not by Claude. `assistant_confirm` carries it out and checks it once more |
+| A rewrite is shown before it is saved | The new paragraph or answer is made first and travels with the question; saving is the confirmed action |
+| An answer comes from what the app holds | The prompt carries the jobs, their state and the facts about the app; a brief, advice, a review and practice feedback each have their own prompt with only their own facts |
+| The fixed requests cost nothing | They are recognised by their words before any call is made |
+| Initiative uses no model | The briefing and the reminders are computed from the data; noticing a form is off until it is turned on, and looks only at the address and title of the tab in front and the number of its empty fields |
 
 ### How the window talks to the logic
 

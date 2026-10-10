@@ -868,8 +868,9 @@ when the app opens, and opens its window when you select it.
 *Figure 9.1 – The assistant at the end of the assembly line*
 
 The assistant fills in the form that is open in Google Chrome. It writes into empty fields
-only. The only things it presses on a page are a menu, an entry of a menu and a yes/no
-button; it never presses a button that sends or continues, and it never sends the form. You
+only. The only things it presses on a page are a menu, an entry of a menu, a yes/no button
+and a button that adds a row for another job or degree; it never presses a button that sends
+or continues, and it never sends the form. You
 read what it wrote and send the form yourself.
 
 When the pointer is over the assembly line, the assistant follows it with its eyes. It nods
@@ -951,8 +952,10 @@ current jobs first, then the others in the order of the list; each row gets one 
 When a form has more rows than you have jobs, the extra rows are left to you.
 
 > **Note**
-> The assistant fills in the rows a form shows. It does not press **Add another job**, and it
-> leaves the dates of a job and the box **I currently work here** to you.
+> When a form shows fewer rows than you have jobs or degrees and has a button such as **Add
+> another job**, the assistant presses it once for each missing row. It presses no other
+> button. It writes the dates of a job where the form takes a month and a year, and leaves
+> the box **I currently work here** to you.
 
 ### Give your salary and add your files
 
@@ -1040,6 +1043,7 @@ Chrome does not let another app write into a page until you allow it. Do this on
 | **Mark applied** | The job is still in **New Jobs** | Moves the job to **Applications** as waiting, as the button in the job's window does |
 | **Fill in this page too** | The form in Chrome moved on to other fields | Fills in the new page |
 | **Open the form in its own tab** | The form sits in a frame from another site | Opens that form in a new Chrome tab, where it can be filled in |
+| **Review before I send** | After every fill | Reads the form back and lists what looks wrong |
 
 To open the assistant for one job directly, select **Fill form in Chrome** in that job's
 window.
@@ -1069,13 +1073,92 @@ removes all of them after asking once.
 > To learn your changes, the assistant reads back only the answers it wrote itself. It does
 > not read your other fields, and a draft you did not change is not remembered.
 
-### Ask the assistant a question
+### Talk to the assistant
 
-Type a question about a job or about the app, for example *why did this score 62?* or *how
-many applications are waiting?*, and press Return. For a question about one job, choose the
-job under **Answers are for** first. The answer comes from Claude in one call, from what the
-app knows: the job's score and its reason, its keywords, its status, and how the app works.
-When the app does not hold the answer, the assistant says so.
+You can ask the assistant in your own words, and it remembers the last turns of the talk, so a
+second question may build on the first (Figure 9.8). When a job's window is open, "this job"
+means that job; otherwise choose the job under **Answers are for**, or name its company.
+
+1. Select the assistant and type what you need, then press Return.
+2. Read the answer. Jobs the answer is about are listed under it; select one to open it.
+3. When the assistant asks before it does something, select **Yes, do it** or **No**.
+
+![A talk with the assistant](img/44_assistant_talk.png)
+
+*Figure 9.8 – A talk with the assistant*
+
+Table 9.4 shows what you can ask for.
+
+*Table 9.4 – What you can ask the assistant*
+
+| You ask | Example | What happens |
+|---|---|---|
+| A question about your search | *Which applications have had no reply for two weeks?* | It answers from your jobs, their statuses, dates and replies, and lists the jobs |
+| A question about one job | *Why did this score 62?* | It answers from the job's score, its reason and its keywords |
+| To open something | *Open the letter for Northwind* | The job, its posting, its CV or its letter opens at once |
+| To change a job | *Mark it applied*; *set the interview for Tuesday at 11:30*; *Quillon said no* | It asks first, in the app's own words. Nothing changes until you select **Yes, do it** |
+| To rewrite a text | *Make the second paragraph of this letter shorter*; *make my answer about salary more formal* | It shows the new version first. It is saved only after your yes, and is checked against your CV like every text |
+| A brief about a company | *Tell me about Northwind before the interview* | A few lines from the posting, your notes and their messages |
+| Advice | *What do my results say?* | What works and what does not, from the numbers of your own applications |
+| To fill in a form, with exceptions | *Fill it in but skip the salary* | It fills in the form and leaves out what you named |
+| To practise | *Let us practise the interview for Quillon* | See the task below |
+
+> **Important**
+> Filling in a form, opening your details and asking for help cost nothing. Every other
+> request is one call to Claude, and a rewrite, a brief, advice and each practice answer are
+> one more. The calls count against your Claude limit like a search does (section 17).
+
+The assistant never changes anything on Claude's word alone. What Claude proposes is checked
+by the app: an action that does not exist, or a job that is not in your list, is dropped, and
+the assistant says that it could not do it.
+
+### Review a form before you send it
+
+After a fill, select **Review before I send**, or ask *review the form*. The assistant reads
+the form back and lists what looks wrong (Figure 9.9): a required field that is still empty, a
+part left in square brackets, an email that is not yours, and, in one Claude call, an answer
+that contradicts your CV or names another company.
+
+![What a review found](img/45_assistant_review.png)
+
+*Figure 9.9 – What a review found*
+
+> **Note**
+> For a review the assistant reads what the visible fields hold, which it does not do when it
+> fills in a form. It never reads a password or a file field, and the values of personal
+> questions and payment fields are not sent to Claude.
+
+### Practise an interview
+
+1. Build the interview preparation for the application first (section 12).
+2. Ask the assistant to practise for that job, for example *practise the interview for
+   Quillon*.
+3. The assistant asks the questions of the preparation one at a time. Type each answer as you
+   would say it and press Return.
+4. Read what it says about the answer: what is good, what is missing, and one real thing from
+   your CV you could add. Then it asks the next question.
+5. To end, type *stop* or select **Stop practising**.
+
+Each answer is one Claude call. Nothing you type in practice is saved.
+
+### Let the assistant speak first
+
+The assistant also tells you things without being asked. None of this uses Claude.
+
+- **When the app opens**, its bubble says what deserves your attention: a form you filled in
+  but did not mark as applied, an interview in the next two days with no preparation, an
+  invitation with no date set, or how many jobs are ready to send.
+- **In its window**, **For you today** lists the same reminders. Select **Open** to go to the
+  job, or **Do not remind me** to stop that reminder.
+- **Noticing a form.** Turn on the switch **Notice application forms in Chrome by myself** on
+  the **Ask** page. While the app is open, the assistant then looks at the address of the tab
+  in front in Chrome every 20 seconds. When it is the form of a job you track, its bubble
+  says so; select the assistant and it is ready to fill that form.
+
+> **Important**
+> The switch is off until you turn it on. When it is on, the assistant looks at the address
+> and title of the tab in front and counts its empty fields. It reads nothing else, opens
+> nothing, and says nothing about pages that belong to no job of yours.
 
 > **Tip**
 > Answers the assistant drafts are kept with the job, under **Form answers** (section 7). Ask
@@ -1083,9 +1166,9 @@ When the app does not hold the answer, the assistant says so.
 
 ### What the assistant fills in and what it leaves
 
-Table 9.4 shows what happens to each kind of field.
+Table 9.5 shows what happens to each kind of field.
 
-*Table 9.4 – What the assistant does with each kind of field*
+*Table 9.5 – What the assistant does with each kind of field*
 
 | Kind of field | What the assistant does |
 |---|---|
@@ -1101,17 +1184,20 @@ Table 9.4 shows what happens to each kind of field.
 | A file, such as your CV | Leaves it to you: a page cannot be handed a file from outside |
 | A password | Leaves it to you |
 | Date of birth, gender, origin, health, payment details | Leaves them to you |
+| The dates of a job or a degree | Writes them where the form takes a month and a year. Where it wants a full date, the first of the month is used and marked for checking. With only a year in **My details**, the date is left to you |
+| A short field the app does not recognise | Asks Claude, with the lists and numbers, to copy the words from your CV or your details. Words that are not there are not written |
+| Other dates, such as the day you can start | Leaves them to you |
 | Tick boxes, such as agreeing to a privacy notice | Leaves them to you |
+| **Add another job**, **Add education** | Pressed once for each job or degree that has no row yet |
 | **Submit**, **Next** and every other button | Never pressed |
 
-The assistant understands plain requests: to fill in the form, to show your details, to explain
-what it does, and questions about a job or the app.
+To fill in a form and leave something out, say so: *fill it in but skip the salary*.
 
 ### If something is wrong
 
-Table 9.5 lists what the assistant may answer, and what to do.
+Table 9.6 lists what the assistant may answer, and what to do.
 
-*Table 9.5 – Problems while filling in a form, and what to do*
+*Table 9.6 – Problems while filling in a form, and what to do*
 
 | What the assistant says | Cause | What to do |
 |---|---|---|

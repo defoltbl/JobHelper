@@ -454,7 +454,7 @@ Dialog {
             ColumnLayout { Layout.fillWidth: true; spacing: 2
                 Text { text: "Assistant"; color: theme.ink; font.pixelSize: 17; font.bold: true }
                 Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
-                    text: "Fills in the application form that is open in Google Chrome. You read it and send it." } }
+                    text: "Fills in forms in Google Chrome, answers questions about your search, and does things in the app after your yes." } }
             Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
                 Layout.alignment: Qt.AlignTop
                 Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }

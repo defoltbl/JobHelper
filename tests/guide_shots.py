@@ -430,6 +430,40 @@ def test_guide_shots(ui, monkeypatch):
         shot("38_assistant_fill")
         ui.js("talkFlick.contentY = Math.max(0, talkFlick.contentHeight - talkFlick.height)")
         shot("40_assistant_next")
+        # talking: a question about the data, then a request that changes something (asked first)
+        monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, context_job="", chosen_job="": {
+            "ok": True, "action": "say", "say": "Two applications have had no reply for more than two weeks: Harbor Analytics, sent 19 days ago, and Brightpath, sent 16 days ago. "
+                                              "Both are past the point where most replies arrive, so a follow-up is due.",
+            "rows": [{"id": "app2", "label": "Harbor Analytics · Data Engineer", "sub": "waiting · score 71"},
+                     {"id": "app3", "label": "Brightpath · Backend Developer", "sub": "waiting · score 66"}]} if "reply" in text else {
+            "ok": True, "action": "confirm", "say": "", "rows": [], "pending": {"name": "mark_applied", "args": {"job": "lead1"}},
+            "ask": "Mark Junior Python Developer at Northwind Systems as applied? It moves to Applications as waiting."})
+        ui.js("talk.clear(); filledModel.clear(); leftModel.clear(); assistantDialog.last = ({})")
+        ui.js('assistantDialog.ask("which applications have had no reply for two weeks?")')
+        for _ in range(100):
+            if not ui.find("assistantDialog").property("busy"):
+                break
+            ui.wait(30)
+        ui.js('assistantDialog.ask("I sent the Northwind form, mark it applied")')
+        for _ in range(100):
+            if not ui.find("assistantDialog").property("busy"):
+                break
+            ui.wait(30)
+        shot("44_assistant_talk")
+        ui.js("assistantDialog.no()")
+        monkeypatch.setattr(ui_api.Api, "assistant_review", lambda self, job_id="": {
+            "ok": True, "action": "review", "host": "careers.northwind.example", "job_id": "lead1",
+            "say": "I read the form on careers.northwind.example: 11 of 13 fields are filled in, and 3 things look wrong. Tick boxes, files and personal questions are yours to check. I did not send anything.",
+            "problems": [{"field": "Phone", "problem": "It is required and still empty."},
+                         {"field": "When can you start?", "problem": "It still has a part in [square brackets] to fill in."},
+                         {"field": "Why do you want to work at Northwind Systems?", "problem": "It says you led a team, which your CV does not show."}]})
+        ui.js("talk.clear(); rowModel.clear()")
+        ui.js('assistantDialog.act("review", "", "Review the form before I send it")')
+        for _ in range(100):
+            if not ui.find("assistantDialog").property("busy"):
+                break
+            ui.wait(30)
+        shot("45_assistant_review")
         ui.js('assistantDialog.page = "details"')
         shot("39_my_details")
         ui.js("detailsFlick.contentY = 500")
