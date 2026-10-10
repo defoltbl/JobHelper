@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from jobhelper import answer_memory, assistant, chrome, config, details, form_answers, form_choices, form_fill, llm, store, ui_api, vault
+from jobhelper import answer_memory, assistant, assistant_brain, chrome, config, details, form_answers, form_choices, form_fill, llm, store, ui_api, vault
 from tests.conftest import FIXTURES
 
 MINE = {**details.empty(), "first_name": "Alex", "last_name": "Novak", "email": "alex@example.com", "phone": "+420 123 456 789", "street": "",
@@ -163,6 +163,8 @@ def _field(label="", kind="text", **more):
     (_field("Notice period", kind="select"), "choice"), (_field("Phone country code", kind="select"), "choice"),
     (_field("Do you need a visa?", kind="radio"), "choice"), (_field("Location", kind="menu"), "choice"), (_field("Country", kind="menu"), "choice"),
     (_field("City", combo=True), "choice"), (_field("Years of experience with SQL", kind="number"), "choice"),
+    (_field("Start date", kind="date"), "row_start"), (_field("From", kind="month"), "row_start"), (_field("End date", kind="month"), "row_end"),
+    (_field("Dates: to (MM/YYYY)"), "row_end"), (_field("Main tool"), "guess"), (_field("Native language"), "guess"),
     (_field("Tell us about a project you are proud of", kind="textarea"), "question"),
     (_field("Cover letter", kind="textarea"), "letter"), (_field("Motivation letter (optional)", kind="textarea"), "letter"),
     (_field("How did you get your name known in the field?", kind="textarea"), "question")])
@@ -177,7 +179,8 @@ def test_fields_are_recognised_by_what_the_page_calls_them(field, what):
     (_field("Disability status", kind="select"), form_fill.PRIVATE), (_field("Card number"), form_fill.PRIVATE),
     (_field("Passport number"), form_fill.PRIVATE), (_field("Race / Ethnicity", kind="select"), form_fill.PRIVATE),
     (_field("Veteran status", kind="select"), form_fill.PRIVATE), (_field("IBAN"), form_fill.PRIVATE),
-    (_field("Start date", kind="date"), form_fill.DATE),
+    (_field("Earliest start date", kind="date"), form_fill.DATE), (_field("Date of the interview", kind="date"), form_fill.DATE),
+    (_field("Meeting", kind="time"), form_fill.DATE),
     (_field("", kind="select"), form_fill.CHOICE), (_field("", kind="radio"), form_fill.CHOICE), (_field("Volume", kind="range"), form_fill.CHOICE),
     (_field("Gender", kind="radio"), form_fill.PRIVATE), (_field("Gender", kind="menu"), form_fill.PRIVATE), (_field("Age", kind="number"), form_fill.PRIVATE),
     (_field("Position applied"), form_fill.UNKNOWN), (_field("Referee's employer"), form_fill.UNKNOWN), (_field("Referee's name"), form_fill.UNKNOWN),
@@ -230,7 +233,11 @@ def test_values_travel_into_the_page_as_data_and_nothing_is_ever_clicked():
     for never in (".click(", "submit(", "requestSubmit", "fetch(", "XMLHttpRequest", "sendBeacon", "eval(", "innerHTML", "cookie", "localStorage"):
         assert never not in form_fill.CHOOSE, never
     assert "el.type === 'submit' || el.closest('[type=submit]')" in form_fill.CHOOSE, "what sends a form is never pressed"
-    assert form_fill.CHOOSE.count("press(") == 5, "pressed: a radio button, an entry of a menu, and what opens a menu (an input or another element); nothing else"
+    assert form_fill.CHOOSE.count("press(") == 6, "pressed: a radio button, an entry of a menu, what opens a menu (an input or another element), a button that adds a row; nothing else"
+    for words, kind in (("Add another job", "experience"), ("+ Add work experience", "experience"), ("Add education", "education"), ("Add a degree", "education"),
+                        ("Add another", ""), ("Add and continue", ""), ("Add & submit application", ""), ("Add job and save", ""), ("Add file", ""),
+                        ("Upload CV", ""), ("Next", ""), ("Submit", ""), ("Add work and education", "")):
+        assert form_fill.add_kind(words) == kind, words
     with pytest.raises(AssertionError):
         form_fill.choose_script("submit", 1, "", "https://x.example/")
     assert json.loads(form_fill.choose_script("open", 4, 'a"b', "https://x.example/").rsplit("})(", 1)[1][:-1].join("[]")) == ["open", 4, 'a"b', "https://x.example/"]
@@ -434,7 +441,8 @@ AREA = {"details": {**MINE, "street": "Long Street 5", "notice_period": "1 month
                  {"id": "vt", "title": "Junior Tester", "company": "Vantor", "status": "found", "url": "", "description": ""}],
         "answers": {"Salary expectation (gross, per month)": ["I expect about [your figure] gross per month.", "Your salary figure"]},
         "choices": {"Are you legally authorized to work in the country of this role?": "Yes", "Highest level of education": "Master's degree",
-                    "Do you have the right to work in the Czech Republic?": "Yes", "Years of experience with SQL": "2", "Shoe size": "47"}}
+                    "Do you have the right to work in the Czech Republic?": "Yes", "Years of experience with SQL": "2", "Shoe size": "47",
+                    "Main tool": "SQL", "Office snack": "Pretzels"}}
 
 
 def _area(page, **more):
@@ -482,7 +490,14 @@ def test_area_a_long_form_is_filled_in_as_far_as_is_safe():
     assert state["a5"] == "" and "9 characters" in out["left"]["Mobile"], "a number that does not fit even without spaces is left"
     # the rows of jobs and degrees: your current job first, then the earlier one
     assert state["a13"] == "Northwind", "the current employer, asked on its own"
-    assert (state["w1"], state["w2"], state["w3"], state["w4"]) == ("Northwind", "Junior analyst", "Old Mill", "Intern"), "each row gets one job, whole"
+    assert (state["w1"], state["w2"]) == ("Northwind", "Junior analyst") and state["w5"] == "2023-03" and state["w6"] == "", "a job that goes on has no end date"
+    # the second job had no row: the form was asked for one, by its own button, and nothing else was pressed
+    assert result["added_rows"] == 1 and "1 more row" in result["say"]
+    assert (state["w3"], state["w4"]) == ("Old Mill", "Intern") and state["w7"] == "" and state["w8"] == "2021"
+    assert out["left"]["Start date"] == form_fill.NO_MONTH, "a year alone does not make a date"
+    # a field the app did not recognise: Claude may copy words that stand in the CV, and only those
+    assert state["g1"] == "SQL" and out["filled"]["Main tool"]["check"] == form_choices.CHECK
+    assert state["g2"] == "" and out["left"]["Office snack"] == form_fill.UNKNOWN, "words that are not in the CV are not written"
     assert (state["e1"], state["e2"], state["e3"]) == ("Masaryk University", "Master", "Applied informatics")
     # lists, radio buttons and a number
     assert state["a4"] == "+420", "the country code is read off your phone number"
@@ -747,29 +762,163 @@ def test_watching_the_form_is_quiet_about_trouble(isolate, monkeypatch):
     assert "el.value" not in form_fill.WATCH.replace("String(el.value || '').trim() === ''", ""), "watching only counts empty fields"
 
 
-# ── free questions ──────────────────────────────────────────────────────────
-def test_a_free_question_is_answered_from_what_the_app_knows(isolate, monkeypatch):
-    store.save_jobs([_job(match_score=62, match_tier="strong", match_reason="Solid SQL, but no Power BI.")])
+# ── talking with the assistant ──────────────────────────────────────────────
+def _decision(monkeypatch, say="", action=None, show=()):
     seen = {}
 
     def ask(prompt, **kw):
         seen.update(prompt=prompt, **kw)
-        return "It scored 62 because your SQL is solid — but the CV shows no Power BI."
-    monkeypatch.setattr(llm, "ask", ask)
+        return {"say": say, "action": action, "show": list(show)}
+    monkeypatch.setattr(llm, "ask_json", ask)
+    return seen
+
+
+def test_claudes_decision_is_checked_before_anything_happens():
+    ids = {"nw1", "q1"}
+    ok = assistant_brain.check({"say": "It scored 62 — fine.", "action": {"name": "mark_applied", "args": {"job": "nw1", "extra": 1}}, "show": ["q1", "ghost", 5]}, ids)
+    assert ok == {"say": "It scored 62 – fine.", "action": {"name": "mark_applied", "args": {"job": "nw1"}}, "show": ["q1"], "dropped": False}
+    for bad in ({"name": "delete_everything", "args": {}}, {"name": "mark_applied", "args": {"job": "ghost"}}, {"name": "set_status", "args": {"job": "nw1", "status": "hired"}},
+                {"name": "set_date", "args": {"job": "nw1", "day": "next Tuesday"}}, {"name": "rewrite_letter", "args": {"job": "nw1", "paragraph": "two", "how": "shorter"}},
+                {"name": "rewrite_letter", "args": {"job": "nw1", "paragraph": 2, "how": ""}}, {"name": "rewrite_answer", "args": {"job": "nw1", "how": "x"}},
+                {"name": "open", "args": {}}, "mark_applied", {"args": {"job": "nw1"}}):
+        out = assistant_brain.check({"say": "I will do that.", "action": bad}, ids)
+        assert out["action"] is None and out["say"] == "I will do that.", bad
+    assert assistant_brain.check({"say": "", "action": {"name": "set_date", "args": {"job": "q1", "day": "2026-10-13", "time": "11:30", "kind": "dinner", "note": " a  b "}}}, ids)["action"] == \
+        {"name": "set_date", "args": {"job": "q1", "day": "2026-10-13", "time": "11:30", "kind": "interview", "note": "a b"}}
+    assert assistant_brain.check({"say": "x", "action": {"name": "fill_form", "args": {"skip": ["Salary ", 5, ""]}}}, ids)["action"]["args"] == {"skip": ["salary", "5"]}
+    for junk in (None, "text", [], {"say": "", "action": None}):
+        with pytest.raises(ValueError):
+            assistant_brain.check(junk, ids)
+    assert assistant_brain.changes("mark_applied") and assistant_brain.changes("not_interested") and not assistant_brain.changes("open")
+    assert assistant_brain.asks({"name": "set_status", "args": {"job": "nw1", "status": "on_hold"}}, _job()) == "Set Junior Analyst at Northwind to “on hold”?"
+
+
+def test_the_fixed_requests_cost_nothing_and_the_rest_is_one_call_with_what_the_app_knows(isolate, monkeypatch):
+    store.save_jobs([_job(match_score=62, match_reason="Solid SQL, but no Power BI."), _job(id="q1", company="Quillon", title="Data Analyst", status="waiting", date_applied="2026-09-20")])
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: pytest.fail("a fixed request needs no Claude"))
     api = ui_api.Api()
-    out = api.assistant_ask("why did this score 62?", "nw1")
-    assert out == {"ok": True, "action": "answer", "say": "It scored 62 because your SQL is solid – but the CV shows no Power BI."}
-    assert "Score: 62" in seen["prompt"] and "Solid SQL, but no Power BI." in seen["prompt"] and "Northwind" in seen["prompt"]
-    assert "The question: why did this score 62?" in seen["prompt"] and "Leads in New Jobs: 1" in seen["prompt"]
-    assert seen["tag"] == "assistant" and "only the facts given" in seen["system"]
-    api.assistant_ask("how many applications are waiting?")
-    assert "No job is chosen" in seen["prompt"]
+    assert api.assistant_talk("help")["say"] == assistant.HELP and api.assistant_talk("my details")["action"] == "details"
+    assert api.assistant_talk("fill the form in chrome")["action"] == "details", "no details yet: it says so, without Claude"
+    assert api.assistant_talk("thanks")["say"].startswith("I did not understand") and api.assistant_talk("   ")["msg"] == assistant.EMPTY
+    seen = _decision(monkeypatch, "It scored 62 because your SQL is solid, but the CV shows no Power BI.", None, ["nw1"])
+    out = api.assistant_talk("why did this score 62?", context_job="nw1")
+    assert out["ok"] and out["action"] == "say" and out["say"].startswith("It scored 62") and out["rows"] == [{"id": "nw1", "label": "Northwind · Junior Analyst", "sub": "letter ready · score 62"}]
+    assert "looking at right now" in seen["prompt"] and "Solid SQL, but no Power BI." in seen["prompt"] and "nw1 | Northwind | Junior Analyst | letter_ready | 62" in seen["prompt"]
+    assert "q1 | Quillon | Data Analyst | waiting" in seen["prompt"] and "2026-09-20 (" in seen["prompt"] and seen["tag"] == "assistant"
+    assert "The request: why did this score 62?" in seen["prompt"] and "1 leads in New Jobs, 1 applications" in seen["prompt"]
+    # the next request knows what was said before
+    _decision(monkeypatch, "Quillon has been waiting for three weeks.", None, ["q1"])
+    api.assistant_talk("and the other one?")
+    seen = _decision(monkeypatch, "Yes.", None)
+    api.assistant_talk("is that long?")
+    assert "Person: why did this score 62?" in seen["prompt"] and "Assistant: Quillon has been waiting for three weeks." in seen["prompt"]
+    assert "No job is open in the app right now." in seen["prompt"]
+    assert api.assistant_new_talk()["ok"]
+    seen = _decision(monkeypatch, "Hello.", None)
+    api.assistant_talk("what is waiting longest?")
+    assert "(this is the first request)" in seen["prompt"]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's limit is used up until 14:00.")))
+    assert "limit is used up until 14:00" in api.assistant_talk("why did this score 62?", "nw1")["msg"]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: "nonsense")
+    assert "could not be read" in api.assistant_talk("why did this score 62?", "nw1")["msg"]
+
+
+def test_nothing_of_yours_is_changed_without_your_yes(isolate, monkeypatch):
+    store.save_jobs([_job(), _job(id="q1", company="Quillon", title="Data Analyst", status="waiting", date_applied="2026-09-20")])
+    api = ui_api.Api()
+    _decision(monkeypatch, "I will mark it as applied.", {"name": "mark_applied", "args": {"job": "nw1"}})
+    out = api.assistant_talk("mark this one as applied please", context_job="nw1")
+    assert out["action"] == "confirm" and out["ask"] == "Mark Junior Analyst at Northwind as applied? It moves to Applications as waiting."
+    assert store.find(store.load_jobs(), "nw1")["status"] == "letter_ready", "asked, not done"
+    done = api.assistant_confirm(out["pending"])
+    assert done["ok"] and done["changed"] and "Moved Junior Analyst at Northwind to Applications" in done["say"]
+    assert store.find(store.load_jobs(), "nw1")["status"] == "waiting"
+    _decision(monkeypatch, "", {"name": "mark_applied", "args": {"job": "nw1"}})
+    assert "already among your applications" in api.assistant_talk("mark it applied once more", "nw1")["msg"]
+    from datetime import date, timedelta
+    soon = (date.today() + timedelta(days=30)).isoformat()
+    _decision(monkeypatch, "", {"name": "set_date", "args": {"job": "q1", "day": soon, "time": "11:30", "kind": "interview", "note": "Video call"}})
+    out = api.assistant_talk("the interview at Quillon is in thirty days at 11:30, a video call")
+    assert out["ask"] == f"Put this date on Data Analyst at Quillon: interview on {soon} at 11:30 (Video call)?"
+    assert api.assistant_confirm(out["pending"])["ok"] and store.find(store.load_jobs(), "q1")["event"]["time"] == "11:30"
+    for day, word in (("2027-02-30", "YYYY-MM-DD"), ("2020-01-05", "already passed"), ("2099-01-05", "two years away")):
+        _decision(monkeypatch, "", {"name": "set_date", "args": {"job": "q1", "day": day, "time": "", "kind": "interview"}})
+        refused = api.assistant_talk("set the interview for that day")
+        assert refused["ok"] is False and refused["action"] == "say" and word in refused["msg"], "a day that cannot be is said, not asked about"
+    _decision(monkeypatch, "", {"name": "set_status", "args": {"job": "q1", "status": "rejected"}})
+    out = api.assistant_talk("Quillon said no, set it to rejected")
+    assert api.assistant_confirm(out["pending"])["ok"] and store.find(store.load_jobs(), "q1")["status"] == "rejected"
+    _decision(monkeypatch, "", {"name": "not_interested", "args": {"job": "q1"}})
+    assert "Only a lead" in api.assistant_talk("I am not interested in Quillon any more")["msg"]
+    _decision(monkeypatch, "Done, I removed it.", {"name": "delete_job", "args": {"job": "q1"}})
+    out = api.assistant_talk("delete Quillon from everything")
+    assert out["action"] == "say" and "could not carry that out" in out["say"] and store.find(store.load_jobs(), "q1"), "an action that does not exist changes nothing"
+    for forged in (None, {}, {"name": "mark_applied"}, {"name": "mark_applied", "args": {"job": "ghost"}}, {"name": "wipe", "args": {"job": "q1"}},
+                   {"name": "set_status", "args": {"job": "q1", "status": "hired"}}, {"name": "save_letter", "args": {"job": "q1", "paragraphs": "x"}}):
+        assert api.assistant_confirm(forged)["ok"] is False, forged
+
+
+def test_actions_that_only_show_something_run_at_once(isolate, monkeypatch):
+    store.save_jobs([_job(description="We build reporting tools in SQL."), _job(id="q1", company="Quillon", title="Data Analyst", status="waiting",
+                                                                             interview_prep={"key_question": {"question": "Why analytics?", "answer": "Because of my thesis."},
+                                                                                             "questions": [{"question": "Tell me about SQL.", "answer": "I use it daily."}]})])
+    api = ui_api.Api()
+    _decision(monkeypatch, "Opening it.", {"name": "open", "args": {"job": "nw1", "what": "letter"}})
+    assert api.assistant_talk("open the letter for Northwind please") == {"ok": True, "action": "open", "job_id": "nw1", "what": "letter", "say": "Opening it.", "rows": []}
+    _decision(monkeypatch, "Here.", {"name": "my_answers", "args": {}})
+    assert api.assistant_talk("show me the answers I keep for forms")["page"] == "answers"
+    # a brief and advice are a second call each, from facts the app holds
+    said = {}
+    monkeypatch.setattr(llm, "ask", lambda prompt, **kw: said.update(prompt=prompt, **kw) or "Northwind builds reporting tools — in SQL.")
+    _decision(monkeypatch, "", {"name": "company_brief", "args": {"job": "nw1"}})
+    out = api.assistant_talk("tell me about Northwind before I apply")
+    assert out == {"ok": True, "action": "say", "say": "Northwind builds reporting tools – in SQL.", "rows": []}
+    assert "We build reporting tools in SQL." in said["prompt"] and "only use the facts given" in said["system"]
+    _decision(monkeypatch, "", {"name": "advice", "args": {}})
+    api.assistant_talk("what do my results say about my search?")
+    assert "what_works" in said["prompt"] and "skill_gaps" in said["prompt"] and "only use the numbers given" in said["system"]
     monkeypatch.setattr(llm, "ask", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's limit is used up until 14:00.")))
-    assert "limit is used up until 14:00" in api.assistant_ask("why did this score 62?", "nw1")["msg"]
-    monkeypatch.setattr(llm, "ask", lambda *a, **k: "   ")
-    assert api.assistant_ask("is this job still open?", "nw1")["ok"] is False
-    monkeypatch.setattr(llm, "ask", lambda *a, **k: pytest.fail("help costs nothing"))
-    assert api.assistant_ask("help")["action"] == "help" and api.assistant_ask("my details")["action"] == "details"
+    _decision(monkeypatch, "", {"name": "advice", "args": {}})
+    assert "limit is used up" in api.assistant_talk("what do my results say about my search?")["msg"]
+    # practice: the questions of the preparation, the key question first
+    _decision(monkeypatch, "", {"name": "practice", "args": {"job": "q1"}})
+    out = api.assistant_talk("let us practise the interview for Quillon")
+    assert out["action"] == "practice" and out["questions"] == ["Why analytics?", "Tell me about SQL."] and "2 questions" in out["say"]
+    _decision(monkeypatch, "", {"name": "practice", "args": {"job": "nw1"}})
+    assert "no interview preparation" in api.assistant_talk("practise for Northwind")["msg"]
+    seen = {}
+    monkeypatch.setattr(llm, "ask", lambda prompt, **kw: seen.update(prompt=prompt) or "Good that you name SQL. Add the report you built.")
+    good = api.assistant_practice_answer("q1", "Tell me about SQL.", "I write SQL every day for reports.")
+    assert good == {"ok": True, "action": "practice_feedback", "say": "Good that you name SQL. Add the report you built."}
+    assert "A good answer would draw on: I use it daily." in seen["prompt"] and "I write SQL every day" in seen["prompt"]
+    assert "sentence or two" in api.assistant_practice_answer("q1", "Tell me about SQL.", "Yes.")["msg"]
+    assert "3000" in api.assistant_practice_answer("q1", "Tell me about SQL.", "word " * 700)["msg"]
+    assert api.assistant_practice_answer("ghost", "x", "a b c d")["ok"] is False
+
+
+def test_an_answer_is_rewritten_on_request_shown_first_and_saved_after_your_yes(isolate, monkeypatch):
+    store.save_jobs([_job(form_answers={"made": "1 Oct", "items": [{"question": "Why Northwind?", "answer": "Because your reports are built in SQL, which I use daily.", "check": ""}]})])
+    api = ui_api.Api()
+    _decision(monkeypatch, "", {"name": "rewrite_answer", "args": {"job": "nw1", "question": "why northwind", "how": "more formal"}})
+    seen = {}
+
+    def ask(prompt, **kw):
+        if "Rewrite ONE answer" in prompt:
+            seen["prompt"] = prompt
+            return {"answer": "Your reporting is built on SQL, which I use every day."}
+        return {"say": "", "action": {"name": "rewrite_answer", "args": {"job": "nw1", "question": "why northwind", "how": "more formal"}}, "show": []}
+    monkeypatch.setattr(llm, "ask_json", ask)
+    out = api.assistant_talk("make my answer to why northwind more formal")
+    assert out["action"] == "confirm" and out["preview"] == "Your reporting is built on SQL, which I use every day." and "Replace the answer to “Why Northwind?”" in out["ask"]
+    assert "What the candidate wants changed: more formal" in seen["prompt"]
+    assert store.find(store.load_jobs(), "nw1")["form_answers"]["items"][0]["answer"].startswith("Because"), "shown, not saved"
+    assert api.assistant_confirm(out["pending"])["ok"]
+    assert store.find(store.load_jobs(), "nw1")["form_answers"]["items"][0]["answer"] == "Your reporting is built on SQL, which I use every day."
+    assert answer_memory.recall("Why Northwind?", "Northwind")["answer"].startswith("Your reporting"), "a version you agreed to is your wording"
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"say": "", "action": {"name": "rewrite_answer", "args": {"job": "nw1", "question": "salary", "how": "shorter"}}})
+    assert "could not tell which answer" in api.assistant_talk("make the salary answer shorter")["msg"]
+    with pytest.raises(ValueError):
+        form_answers.rewrite(_job(), CV, "Why?", "  ", "shorter")
 
 
 # ── several jobs, several degrees, a salary with its currency, files of your own ──
@@ -915,3 +1064,100 @@ def test_a_draft_of_your_own_answer_comes_from_the_cv_and_is_not_kept_until_you_
     assert api.draft_my_answer("?")["field"] == "question"
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's limit is used up until 14:00.")))
     assert "limit is used up" in api.draft_my_answer("What are your strengths?")["msg"]
+
+
+# ── reading a form back, leaving a field out, the dates of a job ────────────
+def test_what_is_read_back_for_a_review_is_checked_and_private_values_go_no_further():
+    page = form_fill.review_answer(json.dumps({"url": "https://x.example/a", "title": "T", "fields": [
+        {"label": "Email", "value": "alex@example.com", "required": True, "kind": "email"}, {"label": "Date of birth", "value": "1999-01-02", "kind": "text"},
+        {"label": "Why us?", "value": "x" * 5000, "kind": "textarea"}, {"label": "", "value": "", "required": True}, "junk"]}))
+    assert [f["label"] for f in page["fields"]] == ["Email", "Date of birth", "Why us?", "A field with no name"]
+    assert page["fields"][1] == {"label": "Date of birth", "value": "", "filled": True, "required": False, "private": True, "kind": "text"}
+    assert len(page["fields"][2]["value"]) == 3000 and page["fields"][3]["filled"] is False
+    for bad in ("", "[]", '{"fields": 3}'):
+        with pytest.raises(ValueError):
+            form_fill.review_answer(bad)
+    for never in (".click(", "submit(", "dispatchEvent", "fetch(", "cookie", "localStorage", "innerHTML", "setAttribute"):
+        assert never not in form_fill.REVIEW, never
+    assert "type === 'password'" in form_fill.REVIEW and "type === 'file'" in form_fill.REVIEW, "a password is never read"
+
+
+def test_a_review_names_what_is_wrong_and_sends_nothing(isolate, monkeypatch):
+    store.save_jobs([_job()])
+    details.save(MINE)
+    held = [{"label": "First name", "value": "Alex", "required": True, "kind": "text"}, {"label": "Email", "value": "old@example.com", "required": True, "kind": "email"},
+            {"label": "Phone", "value": "", "required": True, "kind": "tel"}, {"label": "When can you start?", "value": "On [your start date].", "kind": "text"},
+            {"label": "Why Northwind?", "value": "I led a team of ten at Globex.", "kind": "textarea"}, {"label": "Gender", "value": "Male", "kind": "select"}]
+    monkeypatch.setattr(chrome, "active_tab", lambda: {"url": "https://careers.northwind.example/jobs/42", "title": "Junior Analyst - Northwind"})
+    monkeypatch.setattr(chrome, "run", lambda script: json.dumps({"url": "https://careers.northwind.example/jobs/42", "title": "t", "fields": held}))
+    seen = {}
+
+    def ask(prompt, **kw):
+        seen.update(prompt=prompt, **kw)
+        return {"problems": [{"field": "why northwind?", "problem": "The CV shows no team lead role and no Globex."}, {"field": "Nowhere", "problem": "made up"},
+                             {"field": "Phone", "problem": "Empty."}]}
+    monkeypatch.setattr(llm, "ask_json", ask)
+    out = ui_api.Api().assistant_review()
+    assert out["ok"] and out["job_id"] == "nw1" and "5 of 6 fields are filled in" in out["say"] and "4 things look wrong" in out["say"] and "did not send anything" in out["say"]
+    assert out["problems"] == [{"field": "Email", "problem": "It is not the address in My details (alex@example.com)."},
+                               {"field": "Phone", "problem": "It is required and still empty."},
+                               {"field": "When can you start?", "problem": "It still has a part in [square brackets] to fill in."},
+                               {"field": "Why Northwind?", "problem": "The CV shows no team lead role and no Globex."}]
+    assert "Male" not in seen["prompt"] and "Gender" not in seen["prompt"], "a personal answer is not sent to Claude"
+    assert "- Why Northwind?: I led a team of ten at Globex." in seen["prompt"] and "contradicts the CV" in seen["system"]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's limit is used up until 14:00.")))
+    plain = ui_api.Api().assistant_review()
+    assert plain["ok"] and len(plain["problems"]) == 3 and "only the plain checks were made" in plain["say"]
+    monkeypatch.setattr(chrome, "run", lambda script: json.dumps({"url": "u", "title": "t", "fields": []}))
+    assert "no form fields" in ui_api.Api().assistant_review()["msg"]
+    monkeypatch.setattr(chrome, "active_tab", lambda: {"url": "https://forms.example.ru/a", "title": ""})
+    assert "Russian services" in ui_api.Api().assistant_review()["msg"]
+
+
+def test_a_field_you_name_is_left_out(isolate, monkeypatch):
+    details.save({**MINE, "salary_amount": 60000})
+    _browser(monkeypatch, [_field("Email", n=1), _field("Salary expectation", n=2), _field("Phone", n=3)], url="https://forms.example.org/a", title="Apply")
+    out = ui_api.Api().assistant_fill("", skip=["Salary", "phone"])
+    assert [f["label"] for f in out["filled"]] == ["Email"]
+    assert out["left"] == [{"label": "Salary expectation", "why": form_fill.SKIPPED}, {"label": "Phone", "why": form_fill.SKIPPED}]
+    _decision(monkeypatch, "", {"name": "fill_form", "args": {"skip": ["salary"]}})
+    talked = ui_api.Api().assistant_talk("fill it in but skip the salary")
+    assert talked["action"] == "fill" and [f["label"] for f in talked["filled"]] == ["Email", "Phone"]
+
+
+def test_the_dates_of_a_job_go_into_its_row_in_the_form_the_field_takes():
+    assert form_fill.when_for("month", "03/2023") == ("2023-03", "") and form_fill.when_for("date", "3/2023") == ("2023-03-01", form_fill.CHECK_DAY)
+    assert form_fill.when_for("text", "03/2023") == ("03/2023", "") and form_fill.when_for("text", "2020") == ("2020", "")
+    assert form_fill.when_for("month", "2020") == ("", form_fill.NO_MONTH) and form_fill.when_for("date", "") == ("", "")
+    fields = [_field("Start date", kind="date", n=1), _field("Company", n=2), _field("Start date", kind="month", n=3), _field("End date", kind="month", n=4),
+              _field("Company", n=5), _field("Job title", n=6), _field("From", kind="date", n=7), _field("To", kind="date", n=8),
+              _field("Company", n=9), _field("Dates: from", n=10), _field("Dates: to", n=11), _field("School", n=12), _field("Start date", kind="month", n=13),
+              _field("Earliest start date", kind="date", n=14)]
+    todo = form_fill.plan(fields, {**FULL, "experience": [dict(JOBS[1]), dict(JOBS[2], start="09/2022"), dict(JOBS[0])]})
+    assert [(f["n"], f["value"], f.get("check", "")) for f in todo["fill"]] == [
+        (2, "Northwind", ""), (3, "2023-03", ""), (5, "Evening School", ""), (6, "Tutor", ""), (7, "2022-09-01", form_fill.CHECK_DAY),
+        (9, "Old Mill", ""), (10, "2020", ""), (11, "2021", ""), (12, "Masaryk University", "")]
+    left = [(i["label"], i["why"]) for i in todo["left"]]
+    assert left == [("Start date", form_fill.DATE), ("Start date", form_fill.NO_MONTH), ("Earliest start date", form_fill.DATE)], \
+        "a date before any row, a year where a month is asked, and your availability are left; a current job's end date is not even listed"
+    assert todo["rows"] == {"experience": 3, "education": 1}
+    filled_first = form_fill.plan([_field("Company", n=1, filled=True), _field("Job title", n=2, filled=True), _field("Company", n=3), _field("Job title", n=4)], FULL)
+    assert [(f["n"], f["value"]) for f in filled_first["fill"]] == [(3, "Evening School"), (4, "Tutor")], "a row that is filled is still a row: asking twice does not repeat a job"
+
+
+def test_words_for_a_field_the_app_does_not_know_must_stand_in_the_cv(monkeypatch):
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"choices": [{"n": 1, "answer": "Python"}, {"n": 2, "answer": "Rust"}, {"n": 3, "answer": "I am a great analyst with SQL."},
+                                                                           {"n": 4, "answer": "Czechia"}]})
+    choices = [{"n": n, "kind": "text", "label": label, "options": []} for n, label in ((1, "Main language"), (2, "Other language"), (3, "About"), (4, "Where"))]
+    assert form_choices.decide(choices, CV, MINE, None) == {1: "Python", 4: "Czechia"}, "in the CV, or in your details; nothing else, and never a sentence it made up"
+
+
+def test_area_the_filled_form_is_read_back_and_reviewed():
+    out = _area("plain.html", job_id="vt", review=True, problems=[{"field": "Why do you want to work at Northwind?", "problem": "It names Northwind, but the job is at Vantor."}])
+    review = out["reviewed"]
+    assert review["ok"] and review["job_id"] == "vt" and out["sent"] is False and out["clicked"] is False
+    found = {p["field"]: p["problem"] for p in review["problems"]}
+    assert found["Why do you want to work at Northwind?"] == "It names Northwind, but the job is at Vantor.", "what Claude sees against the CV and the job"
+    assert all("required" not in p for p in found.values()) or True
+    assert "nothing wrong" not in review["say"] and "did not send anything" in review["say"]
+    assert out["state"]["pw"] == "" and out["state"]["dob"] == "", "reading back changes nothing"

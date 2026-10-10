@@ -162,6 +162,45 @@ def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str
     return items
 
 
+REWRITE_PROMPT = """Rewrite ONE answer of a job application form the way the candidate asks. Change only what is asked;
+keep every fact and add none.
+
+Master CV (the only source of truth about the candidate):
+---
+{cv_text}
+---
+
+Job: {title} at {company}
+
+The form's question: {question}
+
+The answer as it is now:
+---
+{answer}
+---
+
+What the candidate wants changed: {how}
+
+Return JSON with exactly this shape:
+{{"answer": "<the rewritten answer, first person>"}}"""
+
+
+def rewrite(job: dict[str, Any], cv_text: str, question: str, answer: str, how: str, notes: str = "") -> dict[str, str]:
+    """One answer rewritten as asked (one call): {"answer", "check"}. Nothing is saved here.
+    Raises ValueError when there is nothing to rewrite or the reply is unusable."""
+    if not str(answer or "").strip():
+        raise ValueError("There is no answer to rewrite yet. Draft it first.")
+    data = llm.ask_json(REWRITE_PROMPT.format(
+        cv_text=cv_text[:12000] + (f"\n\nMore about the candidate's work, in their own words (true; use it like the CV):\n{notes}" if notes else ""),
+        title=job.get("title", ""), company=job.get("company", ""), question=str(question).strip()[:MAX_QUESTION],
+        answer=str(answer).strip()[:MAX_ANSWER], how=" ".join(str(how).split())[:300]), system=SYSTEM, tag="form_answers")
+    new = cover_letter.clean(str((data or {}).get("answer", "") if isinstance(data, dict) else "")).strip()[:MAX_ANSWER]
+    if not new:
+        raise ValueError("The model returned no answer.")
+    term = interview_prep._unbacked(new, cover_letter.unverified_terms(cv_text + "\n" + (notes or "")))
+    return {"answer": new, "check": f"Mentions {term} as experience, which is not in your CV." if term else ""}
+
+
 def _clean(data: Any, questions: list[str]) -> list[dict[str, str]]:
     """One entry per question, in order, whatever order or shape the reply came in."""
     rows = (data.get("answers") if isinstance(data, dict) else data) or []

@@ -9,7 +9,8 @@ The data folder is a temporary one and the Keychain is in memory, so nothing rea
 
 setup: {"details": {...}, "jobs": [...], "job_id": "", "answers": {"question": ["answer", "what to check"]},
         "choices": {"question": "the option or number Claude would choose"},
-        "edit": {"field id": "what the person types over the assistant's answer, before asking it to remember"}}
+        "edit": {"field id": "what the person types over the assistant's answer, before asking it to remember"},
+        "review": true, "problems": [what Claude would find in the review], "skip": ["words of fields to leave out"]}
 out:   {"result": what Api.assistant_fill returned, "state": every field's value afterwards,
         "sent": bool, "clicked": bool, "asked": the questions that went to Claude}
 """
@@ -96,6 +97,8 @@ def main() -> int:
     asked, chosen = [], []
 
     def ask_json(prompt, **kw):
+        if "What the form holds now" in prompt:   # the review before sending
+            return {"problems": setup.get("problems", [])}
         if "Fields:" in prompt:                 # the question about lists and numbers
             fields = re.findall(r"^(\d+)\. (.+)$", prompt[prompt.index("Fields:"):], re.M)
             chosen.extend(label for _n, label in fields)
@@ -139,7 +142,8 @@ def main() -> int:
         def go():
             api = ui_api.Api()
             before = api.assistant_watch()
-            result = api.assistant_fill(setup.get("job_id", ""))
+            result = api.assistant_fill(setup.get("job_id", ""), skip=setup.get("skip"))
+            reviewed = api.assistant_review(setup.get("job_id", "")) if setup.get("review") else None
             learned = None
             if setup.get("edit"):                    # the person rewrites fields on the page, then asks to have it remembered
                 for field, text in setup["edit"].items():
@@ -150,7 +154,7 @@ def main() -> int:
                 from jobhelper import answer_memory
                 learned["remembered"] = answer_memory.count()
             state = json.loads(run(STATE))
-            out = {"learned": learned, "watch": [before, api.assistant_watch()], "result": result, "state": state["fields"], "kept": state["kept"], "sent": state["sent"], "clicked": state["clicked"], "asked": asked,
+            out = {"reviewed": reviewed, "learned": learned, "watch": [before, api.assistant_watch()], "result": result, "state": state["fields"], "kept": state["kept"], "sent": state["sent"], "clicked": state["clicked"], "asked": asked,
                    "chosen": chosen, "menus": state["menus"], "opened": state["opened"]}
             if picture:                              # the page as a PDF: it can be drawn without a screen
                 loop = QEventLoop()

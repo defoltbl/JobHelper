@@ -20,10 +20,17 @@
   <p><label for="a12">Years of experience with SQL</label><input id="a12" name="years" type="number"></p>
   <p><label for="a13">Current employer</label><input id="a13" name="employer"></p>
   <h3>Work experience</h3>
-  <p><label for="w1">Company</label><input id="w1" name="work[0][company]"></p>
-  <p><label for="w2">Job title</label><input id="w2" name="work[0][title]"></p>
-  <p><label for="w3">Company</label><input id="w3" name="work[1][company]"></p>
-  <p><label for="w4">Job title</label><input id="w4" name="work[1][title]"></p>
+  <div id="work">
+    <p><label for="w1">Company</label><input id="w1" name="work[0][company]"></p>
+    <p><label for="w2">Job title</label><input id="w2" name="work[0][title]"></p>
+    <p><label for="w5">Start date</label><input id="w5" name="work[0][from]" type="month"></p>
+    <p><label for="w6">End date</label><input id="w6" name="work[0][to]" type="month"></p>
+  </div>
+  <!-- the second row is not in the page until this is pressed, as on many long forms -->
+  <button type="button" id="addjob">Add another job</button>
+  <button type="button" id="addnext">Add and continue</button>
+  <p><label for="g1">Main tool</label><input id="g1" name="tool"></p>
+  <p><label for="g2">Office snack</label><input id="g2" name="snack"></p>
   <h3>Education</h3>
   <p><label for="e1">School</label><input id="e1" name="edu[0][school]"></p>
   <p><label for="e2">Degree</label><input id="e2" name="edu[0][degree]"></p>
@@ -55,5 +62,16 @@
   many.innerHTML = html;
   window.sent = false; window.clicked = false;
   document.getElementById('send').addEventListener('click', function () { window.clicked = true; });
+  window.rows = 1;
+  document.getElementById('addjob').addEventListener('click', function () {
+    window.rows++;
+    var row = document.createElement('div');
+    row.innerHTML = '<p><label for="w3">Company</label><input id="w3" name="work[1][company]"></p>'
+                  + '<p><label for="w4">Job title</label><input id="w4" name="work[1][title]"></p>'
+                  + '<p><label for="w7">Start date</label><input id="w7" name="work[1][from]" type="date"></p>'
+                  + '<p><label for="w8">End date</label><input id="w8" name="work[1][to]"></p>';
+    if (window.rows === 2) document.getElementById('work').appendChild(row);
+  });
+  document.getElementById('addnext').addEventListener('click', function () { window.clicked = true; });
 </script>
 </body></html>

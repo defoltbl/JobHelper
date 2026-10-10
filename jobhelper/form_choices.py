@@ -41,6 +41,8 @@ Fields:
 For each field:
 - a field with options: answer with one option, copied exactly as written. Choose it only when the CV or the facts
   settle it (for example the right to work, a degree level, a language level, where the posting was found);
+- a field that takes a few words: copy them exactly from the CV or the facts (a language, a city, a tool, a job title).
+  Never write a sentence, and never write anything the CV and the facts do not state;
 - a number field: answer with digits only. Whole years may be counted from the dates in the CV; if the CV shows no
   use of the thing asked about, the answer is 0;
 - anything the CV and the facts do not settle: null.
@@ -116,13 +118,15 @@ def facts_block(cv_text: str, mine: dict[str, str], job: dict[str, Any] | None) 
 def decide(choices: list[dict[str, Any]], cv_text: str, mine: dict[str, str], job: dict[str, Any] | None) -> dict[int, str]:
     """{field number: answer} for the choices Claude could settle, in one call. An answer that is not
     one of the field's own options, or not a number where a number is asked, is dropped."""
-    todo = [c for c in choices if c.get("kind") == "number" or c.get("options")]
+    todo = [c for c in choices if c.get("kind") in ("number", "text") or c.get("options")]
     if not todo:
         return {}
     lines = []
     for c in todo:
         if c["kind"] == "number":
             lines.append(f"{c['n']}. {c['label']}\n   (a number)")
+        elif c["kind"] == "text":
+            lines.append(f"{c['n']}. {c['label']}\n   (a few words, copied from the CV or the facts)")
         else:
             lines.append(f"{c['n']}. {c['label']}\n   options: " + " | ".join(str(o) for o in c["options"][:60] if str(o).strip()))
     data = llm.ask_json(PROMPT.format(cv_text=cv_text[:12000], facts=facts_block(cv_text, mine, job),
@@ -130,6 +134,7 @@ def decide(choices: list[dict[str, Any]], cv_text: str, mine: dict[str, str], jo
                                       location=(job or {}).get("location", "not stated"), fields="\n".join(lines)),
                         system=SYSTEM, tag="form_answers")
     by_n = {c["n"]: c for c in todo}
+    backing = _norm(cv_text + "\n" + facts_block(cv_text, mine, job))
     out: dict[int, str] = {}
     for item in (data.get("choices") if isinstance(data, dict) else None) or []:
         if not isinstance(item, dict) or item.get("n") not in by_n or item.get("answer") in (None, "", "null"):
@@ -137,6 +142,9 @@ def decide(choices: list[dict[str, Any]], cv_text: str, mine: dict[str, str], jo
         choice, answer = by_n[item["n"]], " ".join(str(item["answer"]).split())
         if choice["kind"] == "number":
             if re.fullmatch(r"\d{1,3}(?:\.\d)?", answer):
+                out[choice["n"]] = answer
+        elif choice["kind"] == "text":              # a field the app did not recognise: only words that stand in the CV or the facts
+            if 2 <= len(answer) <= 120 and _norm(answer) in backing:
                 out[choice["n"]] = answer
         else:
             exact = [o for o in choice["options"] if _norm(o) == _norm(answer)]

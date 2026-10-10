@@ -31,7 +31,7 @@ MAX_FIELDS = 200
 
 READ = r"""
 (function () {
-  var MARK = 'data-jobhelper', OPT = 'data-jobhelper-opt', fields = [], frames = [], groups = {}, n = 0, boxes = 0;
+  var MARK = 'data-jobhelper', OPT = 'data-jobhelper-opt', ADD = 'data-jobhelper-add', fields = [], frames = [], groups = {}, adds = [], n = 0, boxes = 0;
   function clean(t) { return String(t || '').replace(/\s+/g, ' ').trim().slice(0, 300); }
   function text(el) { return el ? clean(el.innerText || el.textContent) : ''; }
   function shown(el) {
@@ -93,7 +93,15 @@ READ = r"""
       if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
         var role = el.getAttribute('role');
         el.removeAttribute(MARK);
+        el.removeAttribute(ADD);
         if (!shown(el)) continue;
+        if ((tag === 'BUTTON' || tag === 'A' || role === 'button') && el.type !== 'submit' && !el.disabled) {
+          var says = text(el).slice(0, 80);       // "Add another job": noted, so that a row can be asked for
+          if (/^\+?\s*add\b/i.test(says) && !/apply|submit|send|next|continue|save|finish|upload|file|attach/i.test(says)) {
+            el.setAttribute(ADD, String(adds.length));
+            adds.push({k: adds.length, text: says});
+          }
+        }
         if (role === 'combobox' || el.getAttribute('aria-haspopup') === 'listbox') {      // a menu drawn by the page itself
           var now = text(el);
           n++;
@@ -140,7 +148,7 @@ READ = r"""
     }
   }
   walk(document);
-  return JSON.stringify({url: location.href, title: clean(document.title), fields: fields, frames: frames.slice(0, 5), boxes: boxes});
+  return JSON.stringify({url: location.href, title: clean(document.title), fields: fields, frames: frames.slice(0, 5), boxes: boxes, adds: adds.slice(0, 20)});
 })()
 """.replace("__MOST__", str(MAX_FIELDS)).strip()
 
@@ -197,7 +205,7 @@ FILL = r"""
 CHOOSE = r"""
 (function (action, n, arg, url) {
   if (location.href !== url) return JSON.stringify({moved: true});
-  var MARK = 'data-jobhelper', OPT = 'data-jobhelper-opt', target = null, entries = [], marked = {};
+  var MARK = 'data-jobhelper', OPT = 'data-jobhelper-opt', ADD = 'data-jobhelper-add', target = null, entries = [], marked = {}, adders = {};
   function shown(el) {
     var r = el.getBoundingClientRect(), s = el.ownerDocument.defaultView.getComputedStyle(el);
     return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && s.display !== 'none';
@@ -215,6 +223,7 @@ CHOOSE = r"""
       }
       if (el.getAttribute(MARK) === String(n)) target = el;
       if (el.getAttribute(OPT)) marked[el.getAttribute(OPT)] = el;
+      if (el.getAttribute(ADD)) adders[el.getAttribute(ADD)] = el;
       if (el.getAttribute('role') === 'option' && shown(el)) entries.push(el);
     }
   }
@@ -233,6 +242,14 @@ CHOOSE = r"""
   }
   function mark(el) { el.style.outline = '2px solid #f59e0b'; el.style.outlineOffset = '1px'; }
   walk(document);
+  if (action === 'add') {
+    // A button that adds an empty row for another job or degree, and nothing else: its words are read again here.
+    var more = adders[String(arg)], words = more ? String(more.innerText || more.textContent || '').replace(/\s+/g, ' ').trim() : '';
+    if (!more || more.disabled || more.type === 'submit' || more.closest('[type=submit]') || !/^\+?\s*add\b/i.test(words)
+        || /apply|submit|send|next|continue|save|finish|upload|file|attach/i.test(words)) return JSON.stringify({ok: false});
+    press(more);
+    return JSON.stringify({ok: true});
+  }
   if (action === 'radio') {
     var radio = marked[n + ':' + arg];
     if (!may(radio) || radio.type !== 'radio') return JSON.stringify({ok: false});
@@ -288,8 +305,9 @@ CHOOSE = r"""
 
 def choose_script(action: str, n: int, arg: Any, url: str) -> str:
     """The CHOOSE script for one step with a menu or a radio button: "open" (arg: text to type, or ''),
-    "options", "pick" (arg: the entry's number), "close" (arg: true to clear typed text), "radio" (arg: the button's number)."""
-    assert action in ("open", "options", "pick", "close", "radio")
+    "options", "pick" (arg: the entry's number), "close" (arg: true to clear typed text), "radio" (arg: the button's number), "add" (arg: the number of a button
+    that adds a row for another job or degree; n is not used)."""
+    assert action in ("open", "options", "pick", "close", "radio", "add")
     return (CHOOSE.replace("__ACTION__", json.dumps(action)).replace("__N__", json.dumps(int(n)))
             .replace("__ARG__", json.dumps(arg)).replace("__URL__", json.dumps(str(url))))
 
@@ -354,6 +372,67 @@ WATCH = r"""
 """.strip()
 
 
+REVIEW = r"""
+(function () {
+  var out = [], seen = {};
+  function clean(t) { return String(t || '').replace(/\s+/g, ' ').trim(); }
+  function text(el) { return el ? clean(el.innerText || el.textContent) : ''; }
+  function name(el) {
+    if (el.labels && el.labels.length && text(el.labels[0])) return text(el.labels[0]);
+    if (el.getAttribute('aria-label')) return clean(el.getAttribute('aria-label'));
+    var node = el;
+    for (var i = 0; i < 3; i++) { node = node.parentElement; if (!node) break; var t = text(node); if (t.length > 160) break; if (t) return t; }
+    return clean(el.getAttribute('placeholder') || el.name || el.id);
+  }
+  function walk(root) {
+    var all = root.querySelectorAll('*');
+    for (var i = 0; i < all.length && out.length < 120; i++) {
+      var el = all[i], tag = el.tagName;
+      if (el.shadowRoot) walk(el.shadowRoot);
+      if (tag === 'IFRAME') { var inner = null; try { inner = el.contentDocument; } catch (e) { inner = null; } if (inner && inner.body) walk(inner); continue; }
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') continue;
+      var type = tag === 'INPUT' ? String(el.getAttribute('type') || 'text').toLowerCase() : tag.toLowerCase();
+      if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'reset' || type === 'image' || type === 'password' || type === 'file' || type === 'checkbox') continue;
+      var r = el.getBoundingClientRect();
+      if (type === 'radio') {
+        if (!el.name) continue;
+        var set = el.closest('fieldset'), asked = set && set.querySelector('legend') ? text(set.querySelector('legend')) : el.name;
+        if (seen[el.name] === undefined) { seen[el.name] = out.length; out.push({label: asked.slice(0, 200), value: '', required: !!el.required, kind: 'radio'}); }
+        if (el.checked) out[seen[el.name]].value = (el.labels && el.labels.length ? text(el.labels[0]) : clean(el.value)).slice(0, 200);
+        continue;
+      }
+      if (r.width < 2 || r.height < 2) continue;
+      var value = tag === 'SELECT' ? (el.selectedIndex > 0 ? clean(el.options[el.selectedIndex].text) : '') : String(el.value || '');
+      out.push({label: name(el).slice(0, 200), value: value.slice(0, 3000), required: !!(el.required || el.getAttribute('aria-required') === 'true'), kind: type});
+    }
+  }
+  walk(document);
+  return JSON.stringify({url: location.href, title: clean(document.title).slice(0, 300), fields: out});
+})()
+""".strip()
+
+
+def review_answer(text: str) -> dict[str, Any]:
+    """What the REVIEW script gave back, checked. A field whose name marks it as personal or as payment keeps
+    only whether it is filled in: its value goes no further."""
+    try:
+        data = json.loads(text or "")
+    except ValueError:
+        data = None
+    if not isinstance(data, dict) or not isinstance(data.get("fields"), list):
+        raise ValueError("The page did not answer the way a page with a form does. Reload it and ask me again.")
+    fields = []
+    for raw in data["fields"][:120]:
+        if not isinstance(raw, dict):
+            continue
+        label = " ".join(str(raw.get("label") or "").split())[:200]
+        value = str(raw.get("value") or "")[:3000]
+        private = bool(_PRIVATE.search(label.lower()))
+        fields.append({"label": label or "A field with no name", "value": "" if private else value, "filled": bool(value.strip()),
+                       "required": bool(raw.get("required")), "private": private, "kind": str(raw.get("kind") or "text")[:20]})
+    return {"url": str(data.get("url") or ""), "title": str(data.get("title") or "")[:300], "fields": fields}
+
+
 def values_script(numbers: list[int], url: str) -> str:
     """The VALUES script: what the fields with these numbers hold now. Asked only for fields the assistant itself filled in."""
     return VALUES.replace("__WANTED__", json.dumps([int(n) for n in numbers])).replace("__URL__", json.dumps(str(url)))
@@ -412,6 +491,12 @@ SOFT = ("employer", "job_title", "school", "degree", "study_field", "notice_peri
 LISTED = {"employer": ("experience", "employer"), "job_title": ("experience", "title"),
           "school": ("education", "school"), "degree": ("education", "degree"), "study_field": ("education", "field")}
 MORE_ROWS = "You listed {have} in My details, and this is one more. Add it there, or type it."
+_ROW_START = re.compile(r"\bstart(?:ed)?\b|\bfrom\b|\bbegan\b|date from|od\b")
+_ROW_END = re.compile(r"\bend(?:ed)?\b|\bto\b|\buntil\b|\bfinish|\bleft\b|date to|graduat")
+_NOT_A_ROW_DATE = re.compile(r"earliest|availab|can you|notice|birth|expected|preferred|interview|deadline|today|valid|expir|issue")
+NO_MONTH = "My details has only the year for this. Add the month there, or pick the date yourself."
+CHECK_DAY = "The day is not known, so the first of the month was used: check the date."
+SKIPPED = "You asked me to leave it out."
 _CURRENT = re.compile(r"\b(?:current|present|latest|most recent|last)\b")
 _NOT_THIS_JOB = re.compile(r"appl|desired|interested|preferred|referr|referee|emergency")
 _RULES = (("linkedin", re.compile(r"linked ?in")),
@@ -472,7 +557,15 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
         return "", FILE
     if _PRIVATE.search(words):
         return "", PRIVATE
-    if kind in ("date", "month", "week", "time", "datetime-local"):
+    if kind in ("date", "month") or (kind == "text" and re.search(r"\bdates?\b|mm.?yyyy", words)):
+        if not _NOT_A_ROW_DATE.search(words):
+            if _ROW_START.search(words):
+                return "row_start", ""
+            if _ROW_END.search(words):
+                return "row_end", ""
+        if kind != "text":
+            return "", DATE
+    if kind in ("week", "time", "datetime-local"):
         return "", DATE
     if kind in ("range", "color"):
         return "", CHOICE
@@ -503,7 +596,23 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
     label = str(field.get("label") or "").strip()
     if kind == "textarea" or "?" in label or len(label) >= 20:
         return ("question", "") if has_words else ("", UNKNOWN)
+    if has_words and kind in ("text", "search") and not _NOT_MINE.search(words) and not _NOT_THIS_JOB.search(words):
+        return "guess", ""                          # a few words Claude may copy from the CV; never somebody else's name or employer
     return "", UNKNOWN
+
+
+def when_for(kind: str, when: str) -> tuple[str, str]:
+    """A job's or a degree's date ("03/2023", "2023") in the form a field of this kind takes:
+    (value, what to check) or ('', why it is left)."""
+    parts = re.split(r"[./\-]", str(when or ""))
+    if not when:
+        return "", ""
+    year, month = parts[-1], (parts[0].zfill(2) if len(parts) == 2 else "")
+    if kind == "month":
+        return (f"{year}-{month}", "") if month else ("", NO_MONTH)
+    if kind == "date":
+        return (f"{year}-{month}-01", CHECK_DAY) if month else ("", NO_MONTH)
+    return (f"{month}/{year}" if month else year), ""
 
 
 def detail_of(field: dict[str, Any]) -> str:
@@ -549,8 +658,9 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
     """What to do with each field that is still empty:
     {"fill": [{n, label, value, kind}], "ask": [{n, label, most}], "choose": [{n, kind, typed, label, options, what, value}],
      "left": [{label, why}]}. Fields that already hold something are not touched and not listed."""
-    out: dict[str, list] = {"fill": [], "ask": [], "choose": [], "left": []}
+    out: dict[str, Any] = {"fill": [], "ask": [], "choose": [], "guess": [], "left": [], "rows": {"experience": 0, "education": 0}}
     asked: set[str] = set()
+    last = [""]                                     # the list whose row is being filled: its dates belong to that row
     # Jobs and degrees are asked row by row. A row ends where one of its fields comes round again:
     # the second "Company" starts your second job, whatever fields a row is made of.
     row = {"experience": 0, "education": 0}
@@ -564,6 +674,8 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
             row[name] += 1
             seen[name] = set()
         seen[name].add(what)
+        last[0] = name
+        out["rows"][name] = row[name] + 1
         return row[name]
 
     def ask(field, label, most) -> None:
@@ -579,12 +691,30 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
             out["ask"].append({"n": field["n"], "label": question, "most": most})
 
     for field in fields:
-        if field.get("filled"):
-            continue
         label, most = name_of(field), int(field.get("most") or 0)
         kind = str(field.get("type") or "text").lower()
         what, why = classify(field)
-        if not what:
+        if field.get("filled"):
+            if what in LISTED:
+                place(what, field)                  # a row that is filled already is still a row: the next one gets the next job
+            continue
+        if what in ("row_start", "row_end"):
+            name = last[0]
+            rows = (details.jobs(mine) if name == "experience" else details.degrees(mine)) if name else []
+            entry = rows[row[name]] if name and row[name] < len(rows) else None
+            if entry is None:
+                out["left"].append({"label": label, "why": DATE})
+            elif what == "row_end" and entry.get("current"):
+                continue                            # a job that goes on has no end date: the field stays empty, and that is right
+            else:
+                value, note = when_for(kind, entry.get("start" if what == "row_start" else "end", ""))
+                if value:
+                    out["fill"].append({"n": field["n"], "label": label, "value": value, "kind": "detail", "check": note})
+                else:
+                    out["left"].append({"label": label, "why": note or DATE})
+        elif what == "guess":
+            out["guess"].append({"n": field["n"], "label": label, "most": most})
+        elif not what:
             out["left"].append({"label": label, "why": why})
         elif what == "question":
             ask(field, label, most)
@@ -638,7 +768,19 @@ def read_answer(text: str) -> dict[str, Any]:
                        **{key: " ".join(str(raw.get(key) or "").split())[:300] for key in ("type", "name", "id", "auto", "label", "hint")}})
     return {"url": str(data.get("url") or ""), "title": str(data.get("title") or "")[:300], "fields": fields,
             "frames": [str(f)[:300] for f in (data.get("frames") or [])[:5]] if isinstance(data.get("frames"), list) else [],
-            "boxes": data.get("boxes") if isinstance(data.get("boxes"), int) else 0}
+            "boxes": data.get("boxes") if isinstance(data.get("boxes"), int) else 0,
+            "adds": [{"k": a["k"], "text": " ".join(str(a.get("text") or "").split())[:80], "kind": add_kind(str(a.get("text") or ""))}
+                     for a in (data.get("adds") or [])[:20] if isinstance(a, dict) and isinstance(a.get("k"), int)] if isinstance(data.get("adds"), list) else []}
+
+
+def add_kind(words: str) -> str:
+    """Which list a button adds a row to, by its words: "experience", "education" or '' (not clear: never pressed)."""
+    low = " ".join(str(words or "").lower().split())
+    if not re.match(r"\+?\s*add\b", low) or re.search(r"apply|submit|send|next|continue|save|finish|upload|file|attach", low):
+        return ""
+    work = bool(re.search(r"job|experience|position|employment|employer|work", low))
+    study = bool(re.search(r"education|degree|school|qualification|universit|stud", low))
+    return "experience" if work and not study else ("education" if study and not work else "")
 
 
 def fill_answer(text: str) -> dict[str, Any]:

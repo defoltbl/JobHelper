@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import os
+from datetime import date
 from typing import Any
 
-from . import answer_memory, assistant, chrome, config, cover_letter, details, form_answers, form_choices, form_fill, llm, mailhosts, salary, store
+from . import answer_memory, assistant, assistant_brain, chrome, config, cover_letter, details, form_answers, form_choices, form_fill, mailhosts, salary, store
 from .api_base import _guarded
 
 SHOWN = 90      # characters of a filled-in value shown in the report
@@ -107,29 +108,7 @@ class AssistantApi:
             return self.assistant_fill(job_id)
         if what == "details":
             return {"ok": True, "action": "details", "say": "Here are your details. Change what is wrong and save."}
-        if what == "question":
-            return self.assistant_answer(text, job_id)
         return {"ok": True, "action": "help", "say": assistant.HELP if what == "help" else assistant.UNKNOWN}
-
-    def assistant_answer(self, text, job_id=""):
-        """A free question about a job or the app, answered by Claude from facts the app holds (one call)."""
-        problem = assistant.check(text)
-        if problem:
-            return {"ok": False, "action": "none", "msg": problem}
-        job = self.job_detail(job_id) if job_id else None
-        counts = self.counts()
-        numbers = (f"- Leads in New Jobs: {counts.get('leads', 0)}\n- Applications: {counts.get('applications', 0)}\n"
-                   f"- Replies read: {counts.get('responses', 0)}\n- Follow-ups due: {counts.get('followups', 0)}")
-        try:
-            said = llm.ask(assistant.ANSWER_PROMPT.format(about=assistant.ABOUT, numbers=numbers, job=assistant.job_facts(job or None),
-                                                          question=" ".join(str(text).split())),
-                           system=assistant.ANSWER_SYSTEM, tag="assistant")
-        except Exception as e:  # noqa: BLE001 - said to the person as the reason
-            return {"ok": False, "action": "answer", "msg": f"I could not ask Claude: {str(e) or type(e).__name__}"}
-        said = " ".join(str(said or "").replace("—", "–").split())
-        if not said:
-            return {"ok": False, "action": "answer", "msg": "Claude gave no answer. Ask again in other words."}
-        return {"ok": True, "action": "answer", "say": said[:1500]}
 
     # ── small helpers the window offers after a fill ────────────
     def assistant_open_form(self, url):
@@ -274,9 +253,9 @@ class AssistantApi:
         """Decide and make the choices of a form. Returns (values for plain lists and number fields, to be
         written with the rest; what was chosen by pressing; what is left, with the reason)."""
         to_fill, chosen, left = [], [], []
-        for extra in choices[form_choices.MAX_CHOICES:]:
+        for extra in choices[form_choices.MAX_CHOICES + 8:]:
             left.append({"label": extra["label"], "why": form_choices.TOO_MANY})
-        choices = choices[:form_choices.MAX_CHOICES]
+        choices = choices[:form_choices.MAX_CHOICES + 8]
         for c in choices:                            # a menu shows its entries only once it is open
             if c["kind"] == "menu":
                 typed = (mine.get("city", "") if c["what"] in ("city", "location") else c["value"]) if c["typed"] else ""
@@ -288,7 +267,7 @@ class AssistantApi:
             if not picks[c["n"]] and c["options"]:
                 earlier = answer_memory.recall(c["label"], (job or {}).get("company", ""), c["options"])
                 picks[c["n"]] = earlier["answer"] if earlier else ""
-        open_ones = [c for c in choices if not picks[c["n"]] and (c["kind"] == "number" or c["options"])]
+        open_ones = [c for c in choices if not picks[c["n"]] and (c["kind"] in ("number", "text") or c["options"])]
         why = ""
         if open_ones:
             cv_text = self._cv_text()
@@ -303,8 +282,10 @@ class AssistantApi:
             pick = picks.get(c["n"], "")
             if not pick:
                 left.append({"label": c["label"], "why": form_choices.NO_MENU if c["kind"] == "menu" and not c["options"]
-                             else (why or form_choices.NOT_SETTLED)})
-            elif c["kind"] in ("select", "number"):
+                             else (why or (form_fill.UNKNOWN if c["kind"] == "text" else form_choices.NOT_SETTLED))})
+            elif c["kind"] == "text" and c.get("most") and len(pick) > c["most"]:
+                left.append({"label": c["label"], "why": form_fill.TOO_LONG.format(most=c["most"], size=len(pick))})
+            elif c["kind"] in ("select", "number", "text"):
                 to_fill.append({"n": c["n"], "label": c["label"], "value": pick, "kind": "choice", "check": form_choices.CHECK})
             elif c["kind"] == "radio":
                 done = form_fill.choose_answer(chrome.run(form_fill.choose_script("radio", c["n"], c["options"].index(pick), url)))
@@ -320,7 +301,73 @@ class AssistantApi:
                                                         if done["ok"] else {"label": c["label"], "why": "The page did not take the choice. Choose it yourself."})
         return to_fill, chosen, left
 
-    def assistant_fill(self, job_id=""):
+    def _more_rows(self, page: dict[str, Any], rows: dict[str, int], mine: dict[str, Any]) -> int:
+        """Ask the form for the rows it does not show yet: one press of "Add another job" for each job of yours that
+        has no row, the same for degrees. Returns how many rows were asked for. Nothing else is ever pressed."""
+        pressed = 0
+        for name, have in (("experience", len(mine.get("experience") or [])), ("education", len(mine.get("education") or []))):
+            button = next((a for a in page["adds"] if a["kind"] == name), None)
+            if not button:
+                continue
+            for _ in range(max(0, min(have - rows.get(name, 0), 6))):
+                done = form_fill.choose_answer(chrome.run(form_fill.choose_script("add", 0, button["k"], page["url"])))
+                if not done["ok"]:
+                    break
+                pressed += 1
+                chrome.pause(0.4)
+        return pressed
+
+    def assistant_review(self, job_id=""):
+        """Read the whole form back and say what looks wrong before it is sent: what a plain check finds (a required
+        field left empty, a part still in square brackets) and, in one call, what Claude sees against your CV.
+        The values of personal and payment fields are not looked at."""
+        def no(msg):
+            return {"ok": False, "action": "review", "msg": msg}
+        try:
+            tab = chrome.active_tab()
+            host = form_fill.host_of(tab["url"])
+            if not tab["url"].lower().startswith(("http://", "https://")) or not host:
+                return no("The tab in front is not a web page with a form. Bring the form to the front and ask me again.")
+            if mailhosts.never_used(host):
+                return no("This app does not work with Russian services, so I do not read forms on this site.")
+            page = form_fill.review_answer(chrome.run(form_fill.REVIEW))
+        except (chrome.ChromeError, ValueError) as e:
+            return no(str(e))
+        fields = page["fields"]
+        if not fields:
+            return no("I found no form fields on this page. Bring the form to the front and ask me again.")
+        jobs = store.load_jobs()
+        job = store.find(jobs, job_id) if job_id else store.find(jobs, form_fill.match_job(
+            [j for j in jobs if j.get("status") in store.LEAD_STATUSES | {"waiting", "interview", "on_hold"}], page["url"], page["title"]))
+        mine = details.load()
+        problems = []
+        for f in fields:
+            if f["required"] and not f["filled"]:
+                problems.append({"field": f["label"], "problem": "It is required and still empty."})
+            elif "[" in f["value"] and "]" in f["value"]:
+                problems.append({"field": f["label"], "problem": "It still has a part in [square brackets] to fill in."})
+            elif f["kind"] == "email" and mine.get("email") and f["value"].strip() and f["value"].strip().lower() != mine["email"].lower():
+                problems.append({"field": f["label"], "problem": f"It is not the address in My details ({mine['email']})."})
+        note = ""
+        cv_text = self._cv_text()
+        if cv_text.strip():
+            try:
+                seen = {p["field"] for p in problems}
+                problems += [p for p in assistant_brain.review(job, cv_text, self._facts(job), [f for f in fields if not f["private"]], self._pay(job))
+                             if p["field"] not in seen]
+            except Exception as e:  # noqa: BLE001 - the plain checks are still reported
+                note = f" Claude could not read it against your CV ({str(e) or type(e).__name__}), so only the plain checks were made."
+        else:
+            note = " Your master CV could not be read, so only the plain checks were made."
+        filled = sum(1 for f in fields if f["filled"])
+        if problems:
+            say = f"I read the form on {host}: {filled} of {len(fields)} fields are filled in, and {len(problems)} {'thing looks' if len(problems) == 1 else 'things look'} wrong."
+        else:
+            say = f"I read the form on {host}: {filled} of {len(fields)} fields are filled in, and I see nothing wrong."
+        return {"ok": True, "action": "review", "host": host, "problems": problems[:12], "job_id": job["id"] if job else "",
+                "say": say + note + " Tick boxes, files and personal questions are yours to check. I did not send anything."}
+
+    def assistant_fill(self, job_id="", skip=None):
         """Fill in the form in the Chrome tab in front. Only empty fields are written; the only things
         pressed are a menu, an entry of a menu and a radio button; the form is not sent.
         Returns what was filled, what was left and why."""
@@ -360,7 +407,33 @@ class AssistantApi:
             job = store.find(jobs, form_fill.match_job(open_ones, page["url"], page["title"]))
             guessed = job is not None
         todo = form_fill.plan(page["fields"], mine, self._letter_text(job), has_job=job is not None)
+        added = 0
+        if page["adds"]:                    # the form shows fewer rows than you have jobs or degrees: ask it for more, then read it again
+            try:
+                added = self._more_rows(page, todo["rows"], mine)
+                if added:
+                    again = form_fill.read_answer(chrome.run(form_fill.READ))
+                    if again["url"] == page["url"] and again["fields"]:
+                        page = again
+                        todo = form_fill.plan(page["fields"], mine, self._letter_text(job), has_job=job is not None)
+            except (chrome.ChromeError, ValueError) as e:
+                return no(str(e))
         fill, left = list(todo["fill"]), list(todo["left"])
+        leave = [w for w in (" ".join(str(s).lower().split()) for s in (skip or [])) if w]
+
+        def wanted(items):                  # "fill it in but skip the salary": what you named is left, and said so
+            kept = []
+            for item in items:
+                if any(w in item["label"].lower() or w == item.get("what", "") for w in leave):
+                    left.append({"label": item["label"], "why": form_fill.SKIPPED})
+                else:
+                    kept.append(item)
+            return kept
+        fill, todo["ask"], todo["choose"], todo["guess"] = wanted(fill), wanted(todo["ask"]), wanted(todo["choose"]), wanted(todo["guess"])
+        guesses = [{"n": g["n"], "kind": "text", "typed": False, "label": g["label"], "options": [], "what": "", "value": "", "most": g["most"]}
+                   for g in todo["guess"][:8]]
+        left += [{"label": g["label"], "why": form_fill.UNKNOWN} for g in todo["guess"][8:]]
+        todo["choose"] = todo["choose"] + guesses
         if todo["ask"]:
             answers, why = self._answers(job, todo["ask"])
             for q in todo["ask"]:
@@ -396,6 +469,9 @@ class AssistantApi:
                     left.append({"label": item["label"], "why": "The page did not take it: the field changed or was filled in the meantime. Type this one yourself."})
         kept = sum(1 for f in page["fields"] if f["filled"])
         label = f"{job.get('title', '')} at {job.get('company', '')}" if job else ""
+        if job and filled and job.get("status") in store.LEAD_STATUSES:
+            today = date.today().isoformat()        # so that the app can remind you when a filled form was never marked applied
+            self._change(job["id"], lambda jobs, j: j.__setitem__("form_filled", today), render=False)
         # what the assistant itself wrote as answers: the only fields it may read back later, to learn your corrections
         self._last_fill = {"url": page["url"], "job_id": job["id"] if job else "", "company": job.get("company", "") if job else "",
                            "items": [{"n": i["n"], "label": i["label"], "value": i["value"]} for i in fill
@@ -406,4 +482,6 @@ class AssistantApi:
                 "has_files": bool(mine["files"] or (job and (job.get("tailored_cv_file") or job.get("cover_letter_file")))),
                 "is_lead": bool(job and job.get("status") in store.LEAD_STATUSES), "can_learn": bool(self._last_fill["items"]),
                 "filled": filled, "left": left, "kept": kept, "boxes": page["boxes"],
-                "say": assistant.summary(host, filled, left, kept, page["boxes"], label, guessed)}
+                "added_rows": added,
+                "say": assistant.summary(host, filled, left, kept, page["boxes"], label, guessed)
+                       + (f" I asked the form for {added} more row{'' if added == 1 else 's'} for your jobs and degrees." if added else "")}
