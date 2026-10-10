@@ -5,6 +5,10 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Fixed on a real form: "Location" and "Role description" inside a job were filled wrongly.** The location got your own city and the description got a text Claude drafted about you in general. Each job in **My details** now has **Where it was** and **What you did there**; **Read from my CV** copies both from the CV, word for word. Forms get the job's own, and what is empty is left to you with the reason.
+- **Dates split into a month box and a year box are filled in.** The From and To of a job were left empty on forms that draw them this way.
+- **Languages.** **My details** has a list of your languages with a level each (Native, Fluent, Advanced, Intermediate, Basic). A form that asks for each language gets them row by row, with the level in the form's own words; where a form has no entry for Native, Fluent is chosen. The box "I am fluent in this language" is ticked for Native and Fluent.
+- **A field's visible label now decides before its inner name.** A box labelled "Location" whose inner name contained "school" was taken for the school.
 - **Found by reading the code line by line (second part: search, scoring, replies, documents):**
   - LinkedIn postings are now really asked whether they are still open. Postings from boards that cannot be asked used to fill the queue on every search, so most LinkedIn ones never were.
   - One job board that changed its pages no longer ends a whole search; the other sources go on, and the trouble log says which board failed.

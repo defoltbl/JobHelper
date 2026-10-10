@@ -930,8 +930,9 @@ and each degree. The assistant fills those rows from two lists (Figure 9.3).
 
 1. On the **My details** page, under **Work experience**, select **Add a job** for each job
    you have had, or select **Read from my CV**: Claude copies the jobs and degrees your CV
-   states, in one call. Nothing is saved until you select **Save**, and a line the CV does
-   not back is left out.
+   states, in one call, with the place of each job and the lines the CV writes under it, word
+   for word. Nothing is saved until you select **Save**, and a line the CV does not back is
+   left out.
 2. Fill in each job. Table 9.2 describes the fields. Turn on **I work here now** for every job
    that goes on; several jobs may be current at once.
 3. Under **Education**, select **Add a degree** for each degree, the highest first.
@@ -950,6 +951,8 @@ and each degree. The assistant fills those rows from two lists (Figure 9.3).
 | **Degree**, **Field of study** | For example *Master* and *Computer science* | Length only |
 | **From**, **To** | A year, or a month and a year: *2023* or *03/2023* | The form of the date; **To** not before **From** |
 | **I work here now** | On for a job that goes on. **To** is then left empty | A current job has no end date |
+| **Where it was** | The place of that job, for example *Brno, Czechia* | Length only |
+| **What you did there** | What your CV says under that job, one point per line. Forms ask for it inside each job, as "Role description" or "Responsibilities" | Up to 2,000 characters |
 
 A form that asks for one employer gets your current job. A form with several rows gets your
 current jobs first, then the others in the order of the list; each row gets one job, whole.
@@ -960,6 +963,21 @@ When a form has more rows than you have jobs, the extra rows are left to you.
 > another job**, the assistant presses it once for each missing row. It presses no other
 > button. It writes the dates of a job where the form takes a month and a year, and ticks
 > the box **I currently work here** for a job you marked as current.
+
+### List your languages
+
+Some forms ask for each language you speak and how well, in a block of its own for each one.
+
+1. On the **My details** page, under **Languages**, select **Add a language** for each one.
+   **Read from my CV** fills an empty list from your CV.
+2. Enter the language and its level: **Native**, **Fluent**, **Advanced**, **Intermediate** or
+   **Basic**. Any other word is refused.
+3. Select **Save**.
+
+The level is what forms are told, so set it as you would say it yourself. The assistant looks
+for that level in the form's own words: *Fluent* is also "Full professional" or "C1". When a
+form has no entry for *Native*, it chooses *Fluent*. A scale of bare numbers says nothing about
+their meaning, so such a list is left to you.
 
 ### Give your salary and add your files
 
@@ -1132,6 +1150,9 @@ Table 9.4 shows what happens to each kind of field.
 | Date of birth, gender, origin, health, payment details | Leaves them to you |
 | The dates of a job or a degree | Writes them where the form takes a month and a year, as one field or as two lists. Where it wants a full date, the first of the month is used and marked for checking. With only a year in **My details**, a month is left to you |
 | The box **I currently work here** | Ticked for a job you marked **I work here now**. Marked for checking |
+| **Location** and **Role description** inside a job's block | Writes where that job was and what you did there, from the job in **My details**. Never your own city, and never a text drafted about you in general. Empty in **My details**: left to you, with the reason |
+| A date split into a month box and a year box | Writes each part into its box |
+| A block for each language | Chooses the language, then its level in each list (comprehension, reading, speaking and so on), from your list of languages. Ticks **I am fluent in this language** for *Native* and *Fluent*. Levels are marked for checking |
 | A field that throws away what was written | Written a second time, the way typing arrives. If the page throws that away too, the field is left to you and the assistant says so |
 | A short field the app does not recognise | Asks Claude, with the lists and numbers, to copy the words from your CV or your details. Words that are not there are not written |
 | When you can start ("Earliest start date", "Available from", "When can you start?") | Writes what you entered under **Options** > **About you** > **You can start**. For a date picker it works out the day: *1 November 2026* as written, *immediately* as today, *one month* as a month from today. A worked-out day is marked for checking. Words it cannot turn into a day, and a day that has passed, leave the picker to you |

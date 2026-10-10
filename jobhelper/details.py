@@ -32,10 +32,13 @@ LINKS = {"linkedin": "linkedin.com", "github": "github.com", "website": ""}
 ROWS = {"experience": (("employer", "Employer", 100), ("title", "Job title", 100), ("start", "From", 10), ("end", "To", 10),
                        ("location", "Where it was", 80), ("description", "What you did there", 2000)),
         "education": (("school", "University or school", 120), ("degree", "Degree", 120), ("field", "Field of study", 120),
-                      ("start", "From", 10), ("end", "To", 10))}
-NEEDED = {"experience": ("employer", "title"), "education": ("school",)}
+                      ("start", "From", 10), ("end", "To", 10)),
+        "languages": (("language", "Language", 40), ("level", "Level", 20))}
+NEEDED = {"experience": ("employer", "title"), "education": ("school",), "languages": ("language",)}
+# How well you speak a language, in the words forms use. What you choose here is what forms are told: it is your own statement.
+LEVELS = ("Native", "Fluent", "Advanced", "Intermediate", "Basic")
 LONG = ("description",)         # row fields that hold several lines
-WORD = {"experience": "job", "education": "degree"}
+WORD = {"experience": "job", "education": "degree", "languages": "language"}
 MAX_ROWS, MAX_FILES, MAX_FILE_LABEL = 15, 20, 60
 PERIODS = ("month", "year")
 MAX_SALARY = 100_000_000
@@ -51,7 +54,7 @@ def path():
 
 
 def empty() -> dict[str, Any]:
-    return {**{key: "" for key in KEYS}, "experience": [], "education": [], "files": [],
+    return {**{key: "" for key in KEYS}, "experience": [], "education": [], "languages": [], "files": [],
             "salary_amount": 0, "salary_currency": "CZK", "salary_period": "month"}
 
 
@@ -73,7 +76,7 @@ def load() -> dict[str, Any]:
 
 def any_given(d: dict[str, Any]) -> bool:
     """Is there anything to fill a form with?"""
-    return any(d.get(key) for key in KEYS) or bool(d.get("experience") or d.get("education"))
+    return any(d.get(key) for key in KEYS) or bool(d.get("experience") or d.get("education") or d.get("languages"))
 
 
 def check(values: Any) -> tuple[dict[str, Any], dict[str, str]]:
@@ -129,6 +132,13 @@ def _rows(name: str, raw: Any) -> tuple[list[dict[str, Any]], dict[str, str]]:
                 return [], {"field": f"{name}.{i}.{key}", "msg": f"“{label}” is {len(value)} characters long; the most is {most}."}
             if key in ("start", "end") and value and not _WHEN.fullmatch(value):
                 return [], {"field": f"{name}.{i}.{key}", "msg": "Write a year, or a month and a year: 2023 or 03/2023."}
+            if key == "level" and value:
+                known = next((level for level in LEVELS if level.lower() == value.lower()), "")
+                if not known:
+                    return [], {"field": f"{name}.{i}.{key}", "msg": "Write one of: " + ", ".join(LEVELS) + "."}
+                value = known
+            if key == "language" and value and not re.fullmatch(r"[^\W\d_]+(?:[ '\-][^\W\d_]+)*", value):
+                return [], {"field": f"{name}.{i}.{key}", "msg": "Write the language's name in letters, for example English."}
             clean[key] = value
         if name == "experience":
             clean["current"] = bool(row.get("current"))
@@ -140,7 +150,9 @@ def _rows(name: str, raw: Any) -> tuple[list[dict[str, Any]], dict[str, str]]:
             if not clean[key]:
                 label = next(lab for k, lab, _most in ROWS[name] if k == key)
                 return [], {"field": f"{name}.{i}.{key}", "msg": f"“{label}” is missing in this {WORD[name]}. Fill it in, or remove the line."}
-        if clean["start"] and clean["end"] and _year(clean["end"]) < _year(clean["start"]):
+        if name == "languages" and any(clean["language"].lower() == other["language"].lower() for other in out):
+            return [], {"field": f"{name}.{i}.language", "msg": f"{clean['language']} is in the list twice. Remove one line."}
+        if clean.get("start") and clean.get("end") and _year(clean["end"]) < _year(clean["start"]):
             return [], {"field": f"{name}.{i}.end", "msg": "“To” is earlier than “From”."}
         out.append(clean)
     if len(out) > MAX_ROWS:
@@ -246,6 +258,11 @@ def degrees(d: dict[str, Any]) -> list[dict[str, Any]]:
     return list(d.get("education") or [])
 
 
+def languages(d: dict[str, Any]) -> list[dict[str, Any]]:
+    """Your languages in the order you listed them: {language, level}."""
+    return list(d.get("languages") or [])
+
+
 def salary_text(d: dict[str, Any]) -> str:
     """"60 000 CZK gross per month", or '' when no figure is given."""
     amount = int(d.get("salary_amount") or 0)
@@ -261,6 +278,8 @@ def facts(d: dict[str, Any]) -> list[str]:
     for row in degrees(d):
         what = ", ".join(part for part in (row.get("degree"), row.get("field")) if part) or "studies"
         lines.append(f"- Education: {what} at {row['school']} ({row.get('start') or '?'} to {row.get('end') or '?'})")
+    for row in languages(d):
+        lines.append(f"- Language: {row['language']}" + (f" ({row['level']})" if row.get("level") else ""))
     if salary_text(d):
         lines.append(f"- Salary expectation: {salary_text(d)}")
     return lines
@@ -306,11 +325,16 @@ Rules:
 - "location" is the place the CV gives for that job (a city, a country, "Remote"); "" when it gives none;
 - "description" is what the CV writes under that job: its lines or bullet points copied word for word, one per line,
   without the bullet signs; "" when the CV writes nothing under it. Never a summary, and nothing from the profile at the top;
-- personal projects, courses and certificates are not jobs and not degrees: leave them out.
+- personal projects, courses and certificates are not jobs and not degrees: leave them out;
+- "languages": every language the CV lists for the person, in the CV's order. "level" is one of Native, Fluent, Advanced,
+  Intermediate, Basic, taken from what the CV says (native or mother tongue: Native; fluent, proficient, C1 or C2: Fluent;
+  advanced, upper-intermediate or B2: Advanced; intermediate or B1: Intermediate; basic, beginner, A1 or A2: Basic);
+  "" when the CV gives no level. Programming languages are not languages.
 
 Return JSON with exactly this shape:
 {{"experience": [{{"employer": "", "title": "", "start": "", "end": "", "current": false, "location": "", "description": ""}}],
-  "education": [{{"school": "", "degree": "", "field": "", "start": "", "end": ""}}]}}"""
+  "education": [{{"school": "", "degree": "", "field": "", "start": "", "end": ""}}],
+  "languages": [{{"language": "", "level": ""}}]}}"""
 
 
 def lists_from_cv(cv_text: str) -> dict[str, list]:
@@ -322,8 +346,8 @@ def lists_from_cv(cv_text: str) -> dict[str, list]:
         raise ValueError("Your master CV could not be read.")
     data = llm.ask_json(LISTS_PROMPT.format(cv_text=text[:14000]), system=LISTS_SYSTEM, tag="assistant")
     plain = " ".join(text.lower().split())
-    out: dict[str, list] = {"experience": [], "education": []}
-    for name, key in (("experience", "employer"), ("education", "school")):
+    out: dict[str, list] = {"experience": [], "education": [], "languages": []}
+    for name, key in (("experience", "employer"), ("education", "school"), ("languages", "language")):
         for row in (data.get(name) if isinstance(data, dict) else None) or []:
             if not isinstance(row, dict):
                 continue
@@ -335,9 +359,13 @@ def lists_from_cv(cv_text: str) -> dict[str, list]:
                 kept = [line for line in lines if len(line) >= 8 and " ".join(line.lower().split()) in plain]
                 row = {**row, "location": str(row.get("location") or "") if place and place in plain else "",
                        "description": "\n".join(kept)[:2000]}
+            if name == "languages" and str(row.get("level") or "").strip().lower() not in [level.lower() for level in LEVELS]:
+                row = {**row, "level": ""}          # a level in words of its own: left for the person to choose
             rows, problem = _rows(name, [row])
             if problem or not rows or " ".join(rows[0][key].lower().split()) not in plain:
                 continue
+            if name == "languages" and any(rows[0]["language"].lower() == kept["language"].lower() for kept in out[name]):
+                continue
             out[name].append(rows[0])
-    out["experience"], out["education"] = out["experience"][:MAX_ROWS], out["education"][:MAX_ROWS]
+    out["experience"], out["education"], out["languages"] = out["experience"][:MAX_ROWS], out["education"][:MAX_ROWS], out["languages"][:MAX_ROWS]
     return out

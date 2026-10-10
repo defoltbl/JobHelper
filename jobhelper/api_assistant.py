@@ -24,7 +24,8 @@ class AssistantApi:
         return {"details": {key: kept[key] or offered.get(key, "") for key in details.KEYS}, "from_cv": from_cv,
                 "saved": details.any_given(kept),
                 "fields": [{"key": key, "label": label, "most": most} for key, label, most in details.FIELDS],
-                "experience": kept["experience"], "education": kept["education"],
+                "experience": kept["experience"], "education": kept["education"], "languages": kept["languages"],
+                "levels": list(details.LEVELS),
                 "files": [{**f, "name": os.path.basename(f["path"])} for f in kept["files"]],
                 "salary_amount": kept["salary_amount"], "salary_currency": kept["salary_currency"], "salary_period": kept["salary_period"],
                 "currencies": list(salary.CURRENCIES), "periods": list(details.PERIODS), "max_rows": details.MAX_ROWS}
@@ -35,9 +36,11 @@ class AssistantApi:
             found = details.lists_from_cv(self._cv_text())
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
             return {"ok": False, "msg": f"I could not read them from your CV: {str(e) or type(e).__name__}"}
-        if not found["experience"] and not found["education"]:
+        if not found["experience"] and not found["education"] and not found.get("languages"):
             return {"ok": False, "msg": "I found no jobs or degrees written in your CV in a way I can copy. Add them by hand."}
-        return {"ok": True, **found, "say": f"I read {len(found['experience'])} jobs and {len(found['education'])} degrees from your CV. "
+        spoken = len(found.get("languages") or [])
+        return {"ok": True, **found, "say": f"I read {len(found['experience'])} jobs and {len(found['education'])} degrees"
+                                              f"{f' and {spoken} languages' if spoken else ''} from your CV. "
                                               "They are on the My details page, not saved yet: check them, then save."}
 
     # ── answers of your own, for questions every form asks ──────
@@ -337,7 +340,8 @@ class AssistantApi:
         """Ask the form for the rows it does not show yet: one press of "Add another job" for each job of yours that
         has no row, the same for degrees. Returns how many rows were asked for. Nothing else is ever pressed."""
         pressed = 0
-        for name, have in (("experience", len(mine.get("experience") or [])), ("education", len(mine.get("education") or []))):
+        for name, have in (("experience", len(mine.get("experience") or [])), ("education", len(mine.get("education") or [])),
+                           ("languages", len(mine.get("languages") or []))):
             button = next((a for a in page["adds"] if a["kind"] == name), None)
             if not button:
                 continue

@@ -1249,7 +1249,7 @@ def test_the_dates_of_a_job_go_into_its_row_in_the_form_the_field_takes():
     left = [(i["label"], i["why"]) for i in todo["left"]]
     assert left == [("Start date", form_fill.DATE), ("Start date", form_fill.NO_MONTH), ("Earliest start date", form_fill.START_UNKNOWN)], \
         "a date before any row and a year where a month is asked are left; when you can start is asked for; a current job's end date is not even listed"
-    assert todo["rows"] == {"experience": 3, "education": 1}
+    assert todo["rows"] == {"experience": 3, "education": 1, "languages": 0}
     filled_first = form_fill.plan([_field("Company", n=1, filled=True), _field("Job title", n=2, filled=True), _field("Company", n=3), _field("Job title", n=4)], FULL)
     assert [(f["n"], f["value"]) for f in filled_first["fill"]] == [(3, "Evening School"), (4, "Tutor")], "a row that is filled is still a row: asking twice does not repeat a job"
 
@@ -1971,3 +1971,90 @@ def test_area_a_work_experience_page_gets_each_jobs_own_place_dates_and_descript
     assert state["s1"] == SCHOOLS[0]["school"] and state["sl1"] == "", "where the school was is not known: left, not your own city"
     assert out["asked"] == ["Why do you want to work at Northwind?"] and state["why"] == "Because of your SQL reports."
     assert out["sent"] is False and out["clicked"] is False
+
+
+# ── languages: which ones you speak and how well, row by row (a real form, 10 October 2026) ──
+SPOKEN = [{"language": "English", "level": "Fluent"}, {"language": "Ukrainian", "level": "Native"}, {"language": "Czech", "level": "Basic"}]
+SCALE = ["Select One", "1 - Beginner", "2 - Intermediate", "3 - Advanced", "4 - Fluent"]
+
+
+def test_languages_and_their_levels_are_checked_like_every_other_list():
+    clean, problem = details.check({**MINE, "languages": [{"language": "  english ", "level": "fluent"}, {"language": "Ukrainian", "level": ""},
+                                                          {"language": "", "level": ""}]})
+    assert problem == {} and clean["languages"] == [{"language": "english", "level": "Fluent"}, {"language": "Ukrainian", "level": ""}]
+    for rows, where, words in (([{"language": "English", "level": "very good"}], "languages.0.level", "Native, Fluent, Advanced, Intermediate, Basic"),
+                               ([{"language": "", "level": "Native"}], "languages.0.language", "is missing"),
+                               ([{"language": "C++", "level": ""}], "languages.0.language", "in letters"),
+                               ([{"language": "English", "level": ""}, {"language": "ENGLISH", "level": "Basic"}], "languages.1.language", "twice"),
+                               ([{"language": "x" * 41, "level": ""}], "languages.0.language", "the most is 40"), ("English", "languages", "as a list")):
+        clean, problem = details.check({**MINE, "languages": rows})
+        assert clean == {} and problem["field"] == where and words in problem["msg"], rows
+    assert details.any_given({**details.empty(), "languages": SPOKEN}) and "- Language: English (Fluent)" in details.facts({**details.empty(), "languages": SPOKEN})
+
+
+@pytest.mark.parametrize("level, options, entry", [
+    ("Native", SCALE, "4 - Fluent"), ("Fluent", SCALE, "4 - Fluent"), ("Advanced", SCALE, "3 - Advanced"), ("Intermediate", SCALE, "2 - Intermediate"),
+    ("Basic", SCALE, "1 - Beginner"), ("Native", ["Basic", "Native or bilingual", "Fluent"], "Native or bilingual"),
+    ("Native", ["Elementary", "Limited working", "Professional working", "Full professional"], ""),
+    ("Fluent", ["Elementary", "Limited working", "Professional working", "Full professional"], "Full professional"),
+    ("Intermediate", ["Beginner", "Pre-intermediate", "Intermediate", "Upper-Intermediate", "Advanced"], "Intermediate"),
+    ("Advanced", ["A1", "A2", "B1", "B2", "C1", "C2"], "C1"), ("Native", ["A1", "A2", "B1", "B2", "C1", "C2"], "C2"), ("Basic", ["A1", "A2", "B1"], "A2"),
+    ("Fluent", ["1", "2", "3", "4", "5"], ""), ("Fluent", [], ""), ("Superb", SCALE, ""), ("", SCALE, "")])
+def test_a_level_is_found_in_the_forms_own_words_or_left(level, options, entry):
+    """Asked for with the feature: when a form has no entry for Native, Fluent is the next best. A scale of bare numbers says nothing: left."""
+    assert form_fill.level_option(options, level) == entry
+
+
+def test_a_language_is_found_in_a_list_by_its_name():
+    options = ["Select One", "Czech", "English", "English (US)", "Russian", "Ukrainian (Українська)"]
+    assert form_fill.language_option(options, "english") == "English" and form_fill.language_option(options, "Ukrainian") == "Ukrainian (Українська)"
+    assert form_fill.language_option(options, "Polish") == "" and form_fill.language_option(options, "") == ""
+    assert form_fill.language_option(["English (UK)", "English (US)"], "English") == "", "two entries could be meant: you choose"
+
+
+def test_languages_go_into_their_rows_and_nothing_is_guessed():
+    mine = {**MINE, "languages": SPOKEN}
+    row = lambda n: [_field("Language*", kind="select", n=n, options=["Select One", "Czech", "English", "Russian", "Ukrainian"]),        # noqa: E731
+                     _field("I am fluent in this language.", kind="checkbox", n=n + 1), _field("Comprehension*", kind="select", n=n + 2, options=SCALE),
+                     _field("Overall*", kind="select", n=n + 3, options=SCALE), _field("Reading*", kind="select", n=n + 4, options=SCALE),
+                     _field("Speaking*", kind="select", n=n + 5, options=SCALE), _field("Writing*", kind="select", n=n + 6, options=SCALE)]
+    fields = [_field("First name", n=1)] + row(10) + row(20) + row(30) + row(40) + [_field("Preferred language of communication", kind="select", n=50, options=["English", "Czech"]),
+                                                                                     ] + [_field(f"Note {k}", n=51 + k, filled=True) for k in range(8)] + [
+        _field("Level", kind="select", n=60, options=SCALE)]
+    todo = form_fill.plan(fields, mine)
+    got = {i["n"]: i["value"] for i in todo["fill"]}
+    assert (got[10], got[12], got[13], got[14], got[15], got[16]) == ("English", "4 - Fluent", "4 - Fluent", "4 - Fluent", "4 - Fluent", "4 - Fluent")
+    assert (got[20], got[22], got[26]) == ("Ukrainian", "4 - Fluent", "4 - Fluent"), "no entry for Native: Fluent"
+    assert (got[30], got[32]) == ("Czech", "1 - Beginner") and not any(40 <= n < 50 for n in got)
+    assert sorted(t["n"] for t in todo["tick"]) == [11, 21], "fluent is ticked for Fluent and Native, never for Basic"
+    assert next(i for i in todo["fill"] if i["n"] == 12)["check"] == form_fill.LEVEL_CHECK.format(level="Fluent") and "check" not in next(i for i in todo["fill"] if i["n"] == 10)
+    left = [(i["label"], i["why"]) for i in todo["left"]]
+    assert ("Language*", form_fill.MORE_LANGUAGES.format(have="3 languages")) in left and len([1 for label, _why in left if label != "Language*"]) == 5
+    assert [c["label"] for c in todo["choose"]] == ["Preferred language of communication", "Level"], "a question about languages is not a row of yours; a level far from any language is a plain choice"
+    assert todo["rows"]["languages"] == 4
+    none = form_fill.plan(row(10), MINE)
+    assert none["left"][0]["why"] == form_fill.NO_DETAIL.format(what="languages") and not none["fill"] and not none["tick"]
+    unsure = form_fill.plan(row(10), {**MINE, "languages": [{"language": "Polish", "level": ""}]})
+    whys = [i["why"] for i in unsure["left"]]
+    assert whys[0] == form_fill.NO_LANGUAGE.format(language="Polish") and whys[1] == form_fill.NO_LEVEL.format(language="Polish") and not unsure["tick"]
+    drawn = form_fill.plan([_field("Language*", kind="menu", n=1), _field("Overall*", kind="menu", n=2)], mine)
+    assert [(c["what"], c["value"], c["kind"]) for c in drawn["choose"]] == [("lang_name", "English", "menu"), ("lang_level", "Fluent", "menu")]
+    assert form_choices.settle({"what": "lang_level", "value": "Native", "options": SCALE, "kind": "menu"}, mine, None) == "4 - Fluent"
+    assert form_choices.settle({"what": "lang_name", "value": "Ukrainian", "options": ["English", "Ukrainian"], "kind": "menu"}, mine, None) == "Ukrainian"
+    assert form_fill.add_kind("Add another language") == "languages" and form_fill.add_kind("Add language and submit") == ""
+    assert form_fill.classify(_field("I am fluent in this language.", kind="checkbox"))[0] == "fluent_box"
+    assert form_fill.classify(_field("I currently work here", kind="checkbox"))[0] == "current_box"
+
+
+def test_area_a_languages_page_gets_your_languages_their_levels_and_the_fluent_box():
+    out = _area("languages.html", details={**MINE, "languages": SPOKEN})
+    state, result = out["state"], out["result"]
+    assert result["ok"], result
+    text = lambda key: state[key]                                                    # noqa: E731
+    assert (text("language1"), text("overall1"), text("comprehension1"), text("writing1")) == ("3", "4", "4", "4") and state["fluent1"] is True, "English, Fluent"
+    assert (text("language2"), text("overall2"), text("reading2")) == ("10", "4", "4") and state["fluent2"] is True, "Ukrainian, Native: the form's best entry is Fluent"
+    assert out["menus"] == {"language3": "Czech", "comprehension3": "1 - Beginner", "overall3": "1 - Beginner", "reading3": "1 - Beginner",
+                            "speaking3": "1 - Beginner", "writing3": "1 - Beginner"}, "the third block is menus the page draws: opened and chosen the same way"
+    assert state["fluent3"] is False and state["agree"] is False, "not fluent in Czech; and a box that agrees to something is never ticked"
+    assert out["chosen"] == [], "nothing about your languages was asked of Claude"
+    assert out["left"] == {} and out["sent"] is False and out["clicked"] is False

@@ -156,7 +156,7 @@ READ = r"""
         if (!(shown(el) || (el.labels && el.labels.length))) continue;
         if (type === 'checkbox' && !el.disabled) {
           var says = clean(el.labels && el.labels.length ? text(el.labels[0]) : (el.getAttribute('aria-label') || '')).slice(0, 120);
-          if (/current|present|still work|i work here|ongoing|to date|till now|until now/i.test(says) && !/agree|consent|terms|privacy|policy|newsletter|subscribe|marketing/i.test(says)) {
+          if (/current|present|still work|i work here|ongoing|to date|till now|until now|fluent in this language|i am fluent|i speak this language fluently|native speaker/i.test(says) && !/agree|consent|terms|privacy|policy|newsletter|subscribe|marketing/i.test(says)) {
             n++;
             el.setAttribute(MARK, String(n));
             fields.push({n: n, type: 'checkbox', name: clean(el.name).slice(0, 80), id: clean(el.id).slice(0, 80), auto: '', label: says, hint: '',
@@ -387,7 +387,7 @@ CHOOSE = r"""
     // One kind of tick box only: "I currently work here". Its words are read again here; a box that agrees to anything is refused.
     var box = target, label = box && box.labels && box.labels.length ? String(box.labels[0].innerText || box.labels[0].textContent || '') : (box ? String(box.getAttribute('aria-label') || '') : '');
     if (!box || box.tagName !== 'INPUT' || box.type !== 'checkbox' || box.disabled
-        || !/current|present|still work|i work here|ongoing|to date|till now|until now/i.test(label)
+        || !/current|present|still work|i work here|ongoing|to date|till now|until now|fluent in this language|i am fluent|i speak this language fluently|native speaker/i.test(label)
         || /agree|consent|terms|privacy|policy|newsletter|subscribe|marketing/i.test(label)) return JSON.stringify({ok: false});
     if (!box.checked) press(box);
     if (box.checked) mark(box.labels && box.labels.length ? box.labels[0] : box);
@@ -770,9 +770,54 @@ _NOT_MINE = re.compile(r"company|employer|organi[sz]ation|school|universit|colle
 # what forms ask again and again; when it is not in My details, an open question is drafted instead
 SOFT = ("employer", "job_title", "school", "degree", "study_field", "notice_period", "salary", "start")
 # asked once per job or per degree: the first such field gets the first entry of the list, the next one the second
-LISTED = {"employer": ("experience", "employer"), "job_title": ("experience", "title"),
+LISTED = {"lang_name": ("languages", "language"),
+          "employer": ("experience", "employer"), "job_title": ("experience", "title"),
           "job_location": ("experience", "location"), "job_description": ("experience", "description"),
           "school": ("education", "school"), "degree": ("education", "degree"), "study_field": ("education", "field")}
+# Languages are asked row by row too: "Language", then how well ("Comprehension", "Overall", "Reading" ...), sometimes a "fluent" box.
+_FLUENT = re.compile(r"fluent in this language|i am fluent|i speak this language fluently|native speaker")
+_LANG_NAME = re.compile(r"(?:language|jazyk|sprache)(?: \d+)?(?: name)?")
+_LANG_LEVEL = re.compile(r"^(?:comprehension|overall|reading|writing|speaking|listening|spoken|written|proficiency|level|fluency|úroveň)\b|"
+                         r"\b(?:language )?(?:proficiency|level)$")
+LANG_NEAR = 8                  # a language's row is longer than a job's: name, a box, and up to six levels
+NO_LANGUAGE = "The list has no entry for {language}. Choose it yourself."
+NO_LEVEL = "My details does not say how well you speak {language}. Add the level there, or choose it yourself."
+NO_LEVEL_OPTION = "I could not tell which entry means {level}. Choose it yourself."
+MORE_LANGUAGES = "You listed {have} in My details, and this is one more. Add it there, or leave this one out."
+LEVEL_CHECK = "Chosen from the level you gave in My details ({level}): check it."
+# what a form may call each level, the nearest first: when a form has no "Native", "Fluent" is the next best, and so on down
+_LEVEL_WORDS = {"Native": ("native", "mother tongue", "bilingual", "fluent", "proficient", "c2", "advanced"),
+                "Fluent": ("fluent", "full professional", "proficient", "c2", "c1", "advanced"),
+                "Advanced": ("advanced", "professional working", "upper intermediate", "c1", "b2"),
+                "Intermediate": ("intermediate", "conversational", "limited working", "b1", "b2"),
+                "Basic": ("basic", "beginner", "elementary", "a2", "a1")}
+
+
+def language_option(options: list[str], language: str) -> str:
+    """The entry of a list that is this language ("Ukrainian", "Ukrainian (Українська)"), or ''."""
+    want = " ".join(str(language or "").lower().split())
+    if not want:
+        return ""
+    for option in options:
+        if " ".join(str(option).lower().split()) == want:
+            return str(option)
+    starts = [str(o) for o in options if re.match(rf"{re.escape(want)}\b", " ".join(str(o).lower().split()))]
+    return starts[0] if len(starts) == 1 else ""
+
+
+def level_option(options: list[str], level: str) -> str:
+    """The entry of a list that says how well you speak a language, for one of details.LEVELS, or ''.
+    The form's own words are tried from the nearest meaning to the next best; among entries with the word, the plainest
+    one is taken ("Intermediate" before "Upper Intermediate")."""
+    for word in _LEVEL_WORDS.get(str(level), ()):
+        found = [str(o) for o in options if re.search(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", re.sub(r"[-_/]", " ", str(o).lower()))]
+        if word == "intermediate":
+            found = [o for o in found if not re.search(r"upper|pre", o.lower())] or found
+        if found:
+            return min(found, key=len)
+    return ""
+
+
 # inside a job's row a form also asks where the job was and what you did there: the job's own, not yours and not an open question
 _ROW_TEXT = re.compile(r"descri(?:ption|be)|responsibilit|duties|what (?:did you|you did)|achievement|accomplishment|tasks?\b|summary of|"
                        r"náplň práce|popis")
@@ -971,8 +1016,10 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
                 what = key
                 break
     has_words = bool(re.search(r"[^\W\d_]{2}", str(field.get("label") or "")))
-    if kind == "checkbox":
-        return "current_box", ""                    # the only kind of tick box that is reported: "I work here now"
+    if kind == "checkbox":                          # the two kinds of tick box that are reported: "I work here now", "I am fluent in this language"
+        return ("fluent_box", "") if _FLUENT.search(words) else ("current_box", "")
+    if _LANG_NAME.fullmatch(_words({"label": field.get("label")}).strip(" *")):
+        return "lang_name", ""                      # "Language" in a list of languages: one of yours, row by row
     if kind == "select" and not _NOT_A_ROW_DATE.search(words) and re.search(r"month|year|date|\bfrom\b|\bto\b|start|end", words):
         if _ROW_START.search(words):
             return "row_start", ""
@@ -1103,13 +1150,14 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
     """What to do with each field that is still empty:
     {"fill": [{n, label, value, kind}], "ask": [{n, label, most}], "choose": [{n, kind, typed, label, options, what, value}],
      "left": [{label, why}]}. Fields that already hold something are not touched and not listed."""
-    out: dict[str, Any] = {"fill": [], "ask": [], "choose": [], "guess": [], "tick": [], "attach": [], "left": [], "rows": {"experience": 0, "education": 0}}
+    out: dict[str, Any] = {"fill": [], "ask": [], "choose": [], "guess": [], "tick": [], "attach": [], "left": [],
+                           "rows": {"experience": 0, "education": 0, "languages": 0}}
     asked: set[str] = set()
     last = [""]                                     # the list whose row is being filled: its dates belong to that row
     # Jobs and degrees are asked row by row. A row ends where one of its fields comes round again:
     # the second "Company" starts your second job, whatever fields a row is made of.
-    row = {"experience": 0, "education": 0}
-    seen: dict[str, set] = {"experience": set(), "education": set()}
+    row = {"experience": 0, "education": 0, "languages": 0}
+    seen: dict[str, set] = {"experience": set(), "education": set(), "languages": set()}
 
     def place(what: str, field: dict[str, Any]) -> int:
         name = LISTED[what][0]
@@ -1157,7 +1205,10 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
                 what, why = "", ROW_PLACE
             elif wordy:
                 what, why = "", ROW_WORDS
-        if what in LISTED or what in ("row_start", "row_end", "current_box"):
+        if last[0] == "languages" and at - row_at[0] <= LANG_NEAR and what != "lang_name" and kind != "checkbox" \
+                and _LANG_LEVEL.search(_words({"label": field.get("label")}).strip(" *")):
+            what = "lang_level"
+        if what in LISTED or what in ("row_start", "row_end", "current_box", "lang_level", "fluent_box"):
             row_at[0] = at
         if is_code_list(field) and str(mine.get("phone") or "").startswith("+"):
             # the list of calling codes beside a phone field: the code of your own number, and the number then goes in without it
@@ -1216,6 +1267,39 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
                     out["fill"].append({"n": field["n"], "label": label, "value": value, "kind": "detail", "check": note})
                 else:
                     out["left"].append({"label": label, "why": note or DATE})
+        elif what in ("lang_name", "lang_level", "fluent_box"):
+            spoken = details.languages(mine)
+            index = place(what, field) if what == "lang_name" else row["languages"]
+            entry = spoken[index] if last[0] == "languages" and index < len(spoken) else None
+            options, menu = list(field.get("options") or []), kind == "menu" or bool(field.get("combo"))
+            if entry is None:
+                if what != "fluent_box":
+                    count = f"{len(spoken)} language{'' if len(spoken) == 1 else 's'}"
+                    out["left"].append({"label": label, "why": MORE_LANGUAGES.format(have=count) if spoken else NO_DETAIL.format(what="languages")})
+            elif what == "fluent_box":
+                if entry.get("level") in ("Native", "Fluent"):
+                    out["tick"].append({"n": field["n"], "label": label})
+            elif what == "lang_level" and not entry.get("level"):
+                out["left"].append({"label": label, "why": NO_LEVEL.format(language=entry["language"])})
+            elif menu:                              # a menu the page draws: its entries are known only once it is open
+                out["choose"].append({"n": field["n"], "kind": "menu", "typed": bool(field.get("combo")), "label": label, "options": [],
+                                      "what": what, "value": entry["language"] if what == "lang_name" else entry["level"]})
+            elif kind in ("select", "radio"):
+                if what == "lang_name":
+                    value, why = language_option(options, entry["language"]), NO_LANGUAGE.format(language=entry["language"])
+                else:
+                    value, why = level_option(options, entry["level"]), NO_LEVEL_OPTION.format(level=entry["level"])
+                if not value:
+                    out["left"].append({"label": label, "why": why})
+                elif kind == "radio":
+                    out["choose"].append({"n": field["n"], "kind": "radio", "typed": False, "label": label, "options": options, "what": what,
+                                          "value": entry["language"] if what == "lang_name" else entry["level"]})
+                else:
+                    out["fill"].append({"n": field["n"], "label": label, "value": value, "kind": "detail",
+                                        **({"check": LEVEL_CHECK.format(level=entry["level"])} if what == "lang_level" else {})})
+            else:
+                out["fill"].append({"n": field["n"], "label": label, "kind": "detail",
+                                    "value": entry["language"] if what == "lang_name" else entry["level"]})
         elif what == "current_box":
             rows = details.jobs(mine) if last[0] == "experience" else []
             if last[0] == "experience" and row["experience"] < len(rows) and rows[row["experience"]].get("current"):
@@ -1296,6 +1380,9 @@ def add_kind(words: str) -> str:
         return ""
     work = bool(re.search(r"job|experience|position|employment|employer|work", low))
     study = bool(re.search(r"education|degree|school|qualification|universit|stud", low))
+    speak = bool(re.search(r"language", low))
+    if speak:
+        return "languages" if not work and not study else ""
     return "experience" if work and not study else ("education" if study and not work else "")
 
 

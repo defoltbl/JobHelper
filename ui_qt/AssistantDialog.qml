@@ -188,6 +188,7 @@ Dialog {
     ListModel { id: fieldModel }          // {key, label, most, value, fromCv}
     ListModel { id: jobModel }            // {employer, title, start, end, current}
     ListModel { id: schoolModel }         // {school, degree, field, start, end}
+    ListModel { id: langModel }           // {language, level}
     ListModel { id: fileModel }           // {label, path, name}
     ListModel { id: answerModel }         // {question, answer, was, check, dirty, err}
     property string salaryAmount: ""      // digits, "" = no figure
@@ -204,6 +205,8 @@ Dialog {
                                     { key: "location", label: "Where it was", most: 80, hint: "Brno, Czechia" },
                                     { key: "description", label: "What you did there (as your CV says it; forms ask for it inside each job)", most: 2000, area: true,
                                       hint: "One line per point, in your own words" }]
+    readonly property var langCols: [{ key: "language", label: "Language", most: 40, hint: "English" },
+                                     { key: "level", label: "Level", most: 20, hint: "Native, Fluent, Advanced, Intermediate or Basic" }]
     readonly property var schoolCols: [{ key: "school", label: "University or school", most: 120 }, { key: "degree", label: "Degree", most: 120 },
                                        { key: "field", label: "Field of study", most: 120 }, { key: "start", label: "From", most: 10, hint: "2019" },
                                        { key: "end", label: "To", most: 10, hint: "2023" }]
@@ -316,6 +319,7 @@ Dialog {
                                 value: shown[fields[i].key] || "", fromCv: fromCv.indexOf(fields[i].key) >= 0 });
         fillRows(jobModel, (d && d.experience) || [], jobCols, true);
         fillRows(schoolModel, (d && d.education) || [], schoolCols, false);
+        fillRows(langModel, (d && d.languages) || [], langCols, false);
         fileModel.clear();
         var files = (d && d.files) || [];
         for (var f = 0; f < files.length; f++) fileModel.append({ label: files[f].label, path: files[f].path, name: files[f].name });
@@ -349,6 +353,7 @@ Dialog {
         for (var i = 0; i < fieldModel.count; i++) out[fieldModel.get(i).key] = fieldModel.get(i).value;
         out.experience = rowsOf(jobModel, jobCols, true);
         out.education = rowsOf(schoolModel, schoolCols, false);
+        out.languages = rowsOf(langModel, langCols, false);
         out.files = [];
         for (var f = 0; f < fileModel.count; f++) out.files.push({ label: fileModel.get(f).label, path: fileModel.get(f).path });
         out.salary_amount = salaryAmount.trim() === "" ? 0 : salaryAmount;
@@ -447,7 +452,7 @@ Dialog {
     }
     function saveDetails() {
         confirmClose = false; detailsNote = "";
-        var empty = jobModel.count === 0 && schoolModel.count === 0 && fileModel.count === 0, all = values();
+        var empty = jobModel.count === 0 && schoolModel.count === 0 && langModel.count === 0 && fileModel.count === 0, all = values();
         for (var i = 0; i < fieldModel.count; i++) if (String(fieldModel.get(i).value).trim() !== "") empty = false;
         if (empty && !detailsSaved) { problem = { field: "first_name", msg: "Every field is empty. Fill in at least your name and email, then save." }; return; }
         var r = bridge.saveMyDetails(JSON.stringify(all));
@@ -485,6 +490,8 @@ Dialog {
                 if (res.ok) {
                     assistantDialog.fillRows(jobModel, res.experience || [], assistantDialog.jobCols, true);
                     assistantDialog.fillRows(schoolModel, res.education || [], assistantDialog.schoolCols, false);
+                    // the languages you listed yourself stay (their levels are your own word); an empty list takes the CV's
+                    if (langModel.count === 0) assistantDialog.fillRows(langModel, res.languages || [], assistantDialog.langCols, false);
                     assistantDialog.touched();
                     assistantDialog.detailsNote = "Read from your CV, not saved yet: check every line, then save.";
                 } else assistantDialog.problem = { field: "", msg: res.msg || "That did not work." };
@@ -873,6 +880,16 @@ Dialog {
                     Text { visible: schoolModel.count === 0; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
                         text: "No degrees listed. Add each one: the highest first, as forms ask for them." }
                     RowsEditor { objectName: "asSchools"; Layout.fillWidth: true; store: schoolModel; cols: assistantDialog.schoolCols; listName: "education"
+                        problem: assistantDialog.problem; onChanged: assistantDialog.touched() }
+
+                    // ── languages ──
+                    RowLayout { Layout.fillWidth: true; Layout.topMargin: 8; spacing: 6
+                        GroupTitle { text: "Languages"; Layout.fillWidth: true }
+                        SmallButton { objectName: "asAddLang"; text: "Add a language"; onClicked: assistantDialog.addRow(langModel, assistantDialog.langCols, false) } }
+                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
+                        text: langModel.count === 0 ? "No languages listed. Forms that ask for each language and how well you speak it are filled in from this list."
+                                                    : "The level is one of: Native, Fluent, Advanced, Intermediate, Basic. It is what forms are told, so set it as you would say it yourself. Where a form has no entry for Native, Fluent is chosen." }
+                    RowsEditor { objectName: "asLangs"; Layout.fillWidth: true; store: langModel; cols: assistantDialog.langCols; listName: "languages"
                         problem: assistantDialog.problem; onChanged: assistantDialog.touched() }
 
                     // ── the salary you ask for ──

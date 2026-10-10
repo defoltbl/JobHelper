@@ -82,6 +82,10 @@ def settle(choice: dict[str, Any], mine: dict[str, str], job: dict[str, Any] | N
         return ""
     if what == "country":
         return form_fill.country_option(options, mine.get("country", ""))
+    if what == "lang_name":                         # one of your languages, in a list the page draws itself
+        return form_fill.language_option(options, choice.get("value") or "")
+    if what == "lang_level":
+        return form_fill.level_option(options, choice.get("value") or "")
     if what in ("city", "location") and mine.get("city"):
         city = [o for o in options if re.search(rf"\b{re.escape(_norm(mine['city']))}\b", _norm(o))]
         named = _norm(mine["city"])                 # "Brno, Slovakia" is not home because Brno is: only the rest of the entry says the country

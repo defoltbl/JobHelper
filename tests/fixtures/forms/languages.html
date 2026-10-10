@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>My Experience - Vantor careers</title>
+<style>label, .lbl { display: block; font-weight: bold; margin-top: 10px; } .menu { border: 1px solid #999; padding: 6px; width: 300px; }</style></head>
+<body>
+<!-- Languages as a large applicant system asks for them: one block per language, with a "fluent" box and five lists for how well.
+     The lists have no entry "Native": the best they offer is "4 - Fluent". The third block is drawn with the page's own menus. -->
+<form id="f" onsubmit="window.sent = true; return false;">
+  <label for="fn">First name</label><input id="fn" name="first_name">
+  <h2>Languages</h2>
+  <h3>Languages 1</h3>
+  <label for="language1">Language*</label><select id="language1" name="language-1"><option value="">Select One</option><option value="1">Arabic</option><option value="2">Czech</option><option value="3">English</option><option value="4">French</option><option value="5">German</option><option value="6">Polish</option><option value="7">Russian</option><option value="8">Slovak</option><option value="9">Spanish</option><option value="10">Ukrainian</option></select>
+  <label for="fluent1">I am fluent in this language.</label><input type="checkbox" id="fluent1" name="fluent-1">
+  <label for="comprehension1">Comprehension*</label><select id="comprehension1" name="comprehension-1"><option value="">Select One</option><option value="1">1 - Beginner</option><option value="2">2 - Intermediate</option><option value="3">3 - Advanced</option><option value="4">4 - Fluent</option></select>
+  <label for="overall1">Overall*</label><select id="overall1" name="overall-1"><option value="">Select One</option><option value="1">1 - Beginner</option><option value="2">2 - Intermediate</option><option value="3">3 - Advanced</option><option value="4">4 - Fluent</option></select>
+  <label for="reading1">Reading*</label><select id="reading1" name="reading-1"><option value="">Select One</option><option value="1">1 - Beginner</option><option value="2">2 - Intermediate</option><option value="3">3 - Advanced</option><option value="4">4 - Fluent</option></select>
+  <label for="speaking1">Speaking*</label><select id="speaking1" name="speaking-1"><option value="">Select One</option><option value="1">1 - Beginner</option><option value="2">2 - Intermediate</option><option value="3">3 - Advanced</option><option value="4">4 - Fluent</option></select>
+  <label for="writing1">Writing*</label><select id="writing1" name="writing-1"><option value="">Select One</option><option value="1">1 - Beginner</option><option value="2">2 - Intermediate</option><option value="3">3 - Advanced</option><option value="4">4 - Fluent</option></select>
+  <h3>Languages 2</h3>
+  <label for="language2">Language*</label><select id="language2" name="language-2"><option value="">Select One</option><option value="1">Arabic</option><option value="2">Czech</option><option value="3">English</option><option value="4">French</option><option value="5">German</option><option value="6">Polish</option><option value="7">Russian</option><option value="8">Slovak</option><option value="9">Spanish</option><option value="10">Ukrainian</option></select>
+  <label for="fluent2">I am fluent in this language.</label><input type="checkbox" id="fluent2" name="fluent-2">
+  <label for="comprehension2">Comprehension*</label><select id="comprehension2" name="comprehension-2"><option value="">Select One</option><option value="1">1 - Beginner</option><option value="2">2 - Intermediate</option><option value="3">3 - Advanced</option><option value="4">4 - Fluent</option></select>
+  <label for="overall2">Overall*</label><select id="overall2" name="overall-2"><option value="">Select One</option><option value="1">1 - Beginner</option><option value="2">2 - Intermediate</option><option value="3">3 - Advanced</option><option value="4">4 - Fluent</option></select>
+  <label for="reading2">Reading*</label><select id="reading2" name="reading-2"><option value="">Select One</option><option value="1">1 - Beginner</option><option value="2">2 - Intermediate</option><option value="3">3 - Advanced</option><option value="4">4 - Fluent</option></select>
+  <label for="speaking2">Speaking*</label><select id="speaking2" name="speaking-2"><option value="">Select One</option><option value="1">1 - Beginner</option><option value="2">2 - Intermediate</option><option value="3">3 - Advanced</option><option value="4">4 - Fluent</option></select>
+  <label for="writing2">Writing*</label><select id="writing2" name="writing-2"><option value="">Select One</option><option value="1">1 - Beginner</option><option value="2">2 - Intermediate</option><option value="3">3 - Advanced</option><option value="4">4 - Fluent</option></select>
+  <h3>Languages 3</h3>
+  <span class="lbl" id="language3l">Language*</span><div class="menu" role="button" aria-haspopup="listbox" aria-labelledby="language3l" tabindex="0" id="language3" data-menu="Arabic|Czech|English|French|German|Polish|Russian|Slovak|Spanish|Ukrainian">Select One</div><div id="language3-list" role="listbox"></div>
+  <label for="fluent3">I am fluent in this language.</label><input type="checkbox" id="fluent3" name="fluent-3">
+  <span class="lbl" id="comprehension3l">Comprehension*</span><div class="menu" role="button" aria-haspopup="listbox" aria-labelledby="comprehension3l" tabindex="0" id="comprehension3" data-menu="1 - Beginner|2 - Intermediate|3 - Advanced|4 - Fluent">Select One</div><div id="comprehension3-list" role="listbox"></div>
+  <span class="lbl" id="overall3l">Overall*</span><div class="menu" role="button" aria-haspopup="listbox" aria-labelledby="overall3l" tabindex="0" id="overall3" data-menu="1 - Beginner|2 - Intermediate|3 - Advanced|4 - Fluent">Select One</div><div id="overall3-list" role="listbox"></div>
+  <span class="lbl" id="reading3l">Reading*</span><div class="menu" role="button" aria-haspopup="listbox" aria-labelledby="reading3l" tabindex="0" id="reading3" data-menu="1 - Beginner|2 - Intermediate|3 - Advanced|4 - Fluent">Select One</div><div id="reading3-list" role="listbox"></div>
+  <span class="lbl" id="speaking3l">Speaking*</span><div class="menu" role="button" aria-haspopup="listbox" aria-labelledby="speaking3l" tabindex="0" id="speaking3" data-menu="1 - Beginner|2 - Intermediate|3 - Advanced|4 - Fluent">Select One</div><div id="speaking3-list" role="listbox"></div>
+  <span class="lbl" id="writing3l">Writing*</span><div class="menu" role="button" aria-haspopup="listbox" aria-labelledby="writing3l" tabindex="0" id="writing3" data-menu="1 - Beginner|2 - Intermediate|3 - Advanced|4 - Fluent">Select One</div><div id="writing3-list" role="listbox"></div>
+  <label for="agree">I agree to the privacy notice</label><input type="checkbox" id="agree" name="agree">
+  <button id="send" type="submit" onclick="window.clicked = true">Save and Continue</button>
+</form>
+<script>
+  window.chosen = {}; window.opened = [];
+  document.querySelectorAll('[data-menu]').forEach(function (box) {
+    var list = document.getElementById(box.id + '-list');
+    box.addEventListener('mousedown', function () {
+      window.opened.push(box.id);
+      setTimeout(function () {
+        list.innerHTML = box.getAttribute('data-menu').split('|').map(function (w) { return '<div role="option" style="padding:4px">' + w + '</div>'; }).join('');
+        Array.prototype.forEach.call(list.children, function (item) {
+          item.addEventListener('mousedown', function () { window.chosen[box.id] = item.textContent; box.textContent = item.textContent; list.innerHTML = ''; });
+        });
+      }, 100);
+    });
+    box.addEventListener('keydown', function (e) { if (e.key === 'Escape') list.innerHTML = ''; });
+  });
+</script>
+</body></html>

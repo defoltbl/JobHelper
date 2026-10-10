@@ -3952,3 +3952,40 @@ def test_the_size_of_text_and_controls_is_an_option_used_at_the_next_start(ui, m
     ui.wait(350)
     api.save_options({"text_size": 100})
     assert ui.warnings == []
+
+
+def test_my_details_keeps_languages_and_what_you_did_in_each_job(ui):
+    """Forms ask, inside each job, where it was and what you did there, and they ask for each language and how well you speak it.
+    Both are kept on the My details page; a level in words of your own is refused where you typed it."""
+    from jobhelper import details
+    saved = {**details.empty(), "first_name": "Alex", "last_name": "Novak", "email": "alex@example.com",
+             "experience": [{"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True,
+                             "location": "Brno, Czechia", "description": "Built SQL reports\nAutomated the monthly close"}],
+             "languages": [{"language": "English", "level": "Fluent"}]}
+    assert details.save(saved)["ok"]
+    dialog = ui.find("assistantDialog")
+    ui.js("assistantDialog.show()")
+    ui.wait(500)
+    ui.js('assistantDialog.page = "details"')
+    ui.wait(300)
+    assert ui.js("jobModel.get(0).location") == "Brno, Czechia" and ui.js("jobModel.get(0).description") == "Built SQL reports\nAutomated the monthly close"
+    area = ui.drawn("rowArea_description", "asJobs")
+    assert area is not None and area.property("text").startswith("Built SQL reports") and area.property("height") >= 60, "a box of several lines, not one cut line"
+    assert ui.js("langModel.count") == 1 and ui.js("langModel.get(0).level") == "Fluent" and ui.find("asAddLang").property("visible")
+    ui.js("assistantDialog.addRow(langModel, assistantDialog.langCols, false)")
+    ui.js('assistantDialog.setRow(langModel, 1, "language", "Ukrainian"); assistantDialog.setRow(langModel, 1, "level", "mother tongue")')
+    ui.wait(150)
+    assert ui.js("assistantDialog.problem.field") == "languages.1.level" and "Native, Fluent, Advanced, Intermediate, Basic" in ui.js("assistantDialog.problem.msg")
+    ui.js("assistantDialog.saveDetails()")
+    assert len(details.load()["languages"]) == 1, "a wrong level is not saved"
+    ui.js('assistantDialog.setRow(langModel, 1, "level", "native")')
+    ui.wait(150)
+    assert ui.js("!assistantDialog.problem.msg")
+    ui.js('assistantDialog.setRow(jobModel, 0, "description", "Built SQL reports for finance")')
+    ui.js("assistantDialog.saveDetails()")
+    kept = details.load()
+    assert kept["languages"] == [{"language": "English", "level": "Fluent"}, {"language": "Ukrainian", "level": "Native"}]
+    assert kept["experience"][0]["description"] == "Built SQL reports for finance" and kept["experience"][0]["location"] == "Brno, Czechia"
+    ui.js("assistantDialog.tryClose()")
+    ui.wait(400)
+    assert dialog.property("visible") is False and ui.warnings == []
