@@ -137,7 +137,11 @@ def ask(prompt: str, system: str | None = None, model: str | None = None, tag: s
             status = usage.limit_status()
             raise LimitReached(limit_message(status), status["resets_at"] or until, status["window"]) from e
         raise
-    usage.record(rec, tag=tag)
+    try:
+        usage.record(rec, tag=tag)
+    except Exception as e:  # noqa: BLE001 - the answer is here: keeping count of it must never lose it
+        from . import trouble
+        trouble.note("noting a call to Claude in the usage counters", e)
     return text
 
 

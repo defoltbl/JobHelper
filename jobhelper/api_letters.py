@@ -2,6 +2,8 @@
 letter and CV in one PDF."""
 from __future__ import annotations
 
+import os
+
 from datetime import date
 
 from . import (agent3_letters, config, cover_letter, pdf, store, vault)
@@ -111,6 +113,10 @@ class LettersApi:
                     found = pdf.to_pdf(docx)
                 elif pdf.available():
                     found = docx                       # can be made when asked for
+            if found is None and base == config.LETTERS_DIR:
+                # a letter of your own: used when it is a PDF already (the app writes nothing into your own folder)
+                own = config.COVER_LETTERS_DIR / os.path.basename(str(name))
+                found = next((path for path in (own, own.with_suffix(".pdf")) if path.suffix.lower() == ".pdf" and path.is_file()), None)
             if found is None:
                 return None
             parts.append(found)
@@ -124,8 +130,8 @@ class LettersApi:
         j = store.find(store.load_jobs(), job_id)
         parts = self._pdf_parts(j, make=True) if j else None
         if not parts:
-            return {"ok": False, "msg": "A single PDF needs both a letter and an adapted CV as PDF. "
-                                        "Install LibreOffice so the app can make the PDF copies."}
+            return {"ok": False, "msg": "A single PDF needs both a letter and an adapted CV as PDF. The app makes those copies "
+                                        "with LibreOffice; a letter of your own must be a PDF already."}
         stem = _stem(j["tailored_cv_file"]).replace("_CV_", "_Application_")
         if "_Application_" not in stem:
             stem += "_application"

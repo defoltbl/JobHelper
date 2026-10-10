@@ -62,13 +62,35 @@ def _blank() -> dict[str, Any]:
     return d
 
 
+def _number(value: Any) -> float:
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+
 def _load() -> dict[str, Any]:
+    """The saved counters, always in the shape the rest expects. A file that is damaged, or was written by hand with
+    a part missing, must not make every answer from Claude fail when its use is noted."""
+    state: Any = None
     if config.USAGE_JSON.exists():
         try:
-            return json.loads(config.USAGE_JSON.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {"totals": _blank(), "by_tag": {}, "last_rate_limit": None, "runs": []}
+            state = json.loads(config.USAGE_JSON.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            state = None
+    if not isinstance(state, dict):
+        state = {}
+    totals = state.get("totals") if isinstance(state.get("totals"), dict) else {}
+    state["totals"] = {**_blank(), **{k: _number(v) for k, v in totals.items()}}
+    tags = state.get("by_tag") if isinstance(state.get("by_tag"), dict) else {}
+    state["by_tag"] = {str(tag): {**_blank(), **{k: _number(v) for k, v in d.items()}} for tag, d in tags.items() if isinstance(d, dict)}
+    state["runs"] = [r for r in state["runs"] if isinstance(r, dict)] if isinstance(state.get("runs"), list) else []
+    state.setdefault("last_rate_limit", None)
+    if not isinstance(state.get("last_rate_limit"), dict):
+        state["last_rate_limit"] = None
+    if "limit_block" in state and not isinstance(state["limit_block"], dict):
+        state.pop("limit_block")
+    return state
+
+
+_LOCK = threading.Lock()        # a search and a question to the assistant can both note a call at the same moment
 
 
 def _save(state: dict[str, Any]) -> None:
@@ -81,22 +103,23 @@ def _save(state: dict[str, Any]) -> None:
 
 def record(rec: dict[str, Any], tag: str = "general") -> None:
     """Add one model call's usage to the session, per-tag, and lifetime totals."""
-    state = _load()
-    for bucket in (state["totals"], state["by_tag"].setdefault(tag, _blank()), _SESSION):
-        bucket["calls"] += 1
-        for f in _FIELDS:
-            bucket[f] += rec.get(f, 0) or 0
-    if rec.get("rate_limit_info"):
-        state["last_rate_limit"] = {"at": datetime.now().isoformat(timespec="seconds"),
-                                    "info": rec["rate_limit_info"]}
-    state["runs"].append({
-        "at": datetime.now().isoformat(timespec="seconds"), "tag": tag,
-        "input_tokens": rec.get("input_tokens", 0), "output_tokens": rec.get("output_tokens", 0),
-        "cost_usd": rec.get("cost_usd", 0.0),
-    })
-    state["runs"] = state["runs"][-500:]  # keep the log bounded
-    state.pop("limit_block", None)        # Claude answered, so an earlier refusal is over
-    _save(state)
+    with _LOCK:
+        state = _load()
+        for bucket in (state["totals"], state["by_tag"].setdefault(tag, _blank()), _SESSION):
+            bucket["calls"] += 1
+            for f in _FIELDS:
+                bucket[f] += _number(rec.get(f))
+        if rec.get("rate_limit_info"):
+            state["last_rate_limit"] = {"at": datetime.now().isoformat(timespec="seconds"),
+                                        "info": rec["rate_limit_info"]}
+        state["runs"].append({
+            "at": datetime.now().isoformat(timespec="seconds"), "tag": tag,
+            "input_tokens": _number(rec.get("input_tokens")), "output_tokens": _number(rec.get("output_tokens")),
+            "cost_usd": _number(rec.get("cost_usd")),
+        })
+        state["runs"] = state["runs"][-500:]  # keep the log bounded
+        state.pop("limit_block", None)        # Claude answered, so an earlier refusal is over
+        _save(state)
 
 
 _WINDOW_WORDS = (("seven_day", re.compile(r"week|7[- ]?day|seven[- ]day", re.IGNORECASE)),
@@ -114,10 +137,11 @@ def window_named(message: str) -> str:
 
 def note_limit(until: float, message: str = "") -> None:
     """Remember that Claude refused a call because a limit was hit, until `until` (epoch)."""
-    state = _load()
-    state["limit_block"] = {"until": float(until), "message": message, "window": window_named(message),
-                            "at": datetime.now().isoformat(timespec="seconds")}
-    _save(state)
+    with _LOCK:
+        state = _load()
+        state["limit_block"] = {"until": float(until), "message": message, "window": window_named(message),
+                                "at": datetime.now().isoformat(timespec="seconds")}
+        _save(state)
 
 
 def windows(now: float | None = None) -> dict[str, dict[str, Any]]:
@@ -141,7 +165,7 @@ def windows(now: float | None = None) -> dict[str, dict[str, Any]]:
             used, resets = 0.0, 0.0
         out[name] = {"used": None if used is None else float(used), "resets_at": resets}
     block = state.get("limit_block") or {}
-    until = float(block.get("until") or 0)
+    until = float(_number(block.get("until")))
     if until > now:
         name = block.get("window") if block.get("window") in WINDOWS else ""
         if not name:            # the refusal did not say which: the fuller one, the short window when neither is known
