@@ -1,7 +1,7 @@
 """The tab you have open in your browser: where it is, and a way to run a script in it.
 
 macOS lets one app ask another to do something (Apple events). Google Chrome, Brave, Microsoft
-Edge, Opera, Opera GX and Safari answer the requests the assistant needs (Firefox does not): "which page is in front" and "run
+Edge, Opera and Safari answer the requests the assistant needs (Opera GX and Firefox do not): "which page is in front" and "run
 this script in it". Both need your consent: macOS asks once whether JobHelper may control the
 browser, and the browser has a switch, off by default, called "Allow JavaScript from Apple
 Events" (in Chrome, Brave and Edge under View > Developer; in Safari under Develop).
@@ -21,12 +21,14 @@ BROWSERS = {
     "brave": ("Brave Browser", "chromium", "View > Developer > Allow JavaScript from Apple Events"),
     "edge": ("Microsoft Edge", "chromium", "Tools > Developer > Allow JavaScript from Apple Events"),
     "opera": ("Opera", "chromium", "Developer > Allow JavaScript from Apple Events (the Developer menu is turned on under View > Show Developer Menu)"),
-    "opera_gx": ("Opera GX", "chromium", "Developer > Allow JavaScript from Apple Events (the Developer menu is turned on under View > Show Developer Menu)"),
     "safari": ("Safari", "safari", "Develop > Allow JavaScript from Apple Events (turn on the Develop menu first, under Settings > Advanced)"),
 }
-SHORT = {"chrome": "Chrome", "brave": "Brave", "edge": "Edge", "opera": "Opera", "opera_gx": "Opera GX", "safari": "Safari"}
+SHORT = {"chrome": "Chrome", "brave": "Brave", "edge": "Edge", "opera": "Opera", "safari": "Safari"}
 # Browsers people ask for that cannot be reached this way, with the reason: said plainly, not left out without a word.
-NOT_POSSIBLE = {"firefox": ("Firefox", "Firefox does not let another app read or fill in its pages (it has no such switch), so I cannot work in it. "
+NOT_POSSIBLE = {"opera_gx": ("Opera GX", "Opera GX tells another app which page is open, but it has switched off the part that lets one fill a page in "
+                                         "(tried on 10 October 2026: the request is refused before it is even sent). Open the application form in "
+                                         "Google Chrome or Safari; your Opera GX stays as it is."),
+                "firefox": ("Firefox", "Firefox does not let another app read or fill in its pages (it has no such switch), so I cannot work in it. "
                                        "Open the application form in one of the other browsers; your Firefox stays as it is.")}
 DEFAULT = "chrome"
 TIMEOUT = 20
@@ -42,6 +44,8 @@ _SAID = {
     "no_answer": "{short} did not answer in time. Bring the tab with the form to the front, then ask me again.",
     "no_osascript": "This Mac could not run the request to {short} (osascript is missing).",
     "refused": "{short} refused the request. Bring the tab with the form to the front, then ask me again.",
+    "cannot": ("{short} does not let another app fill in its pages: it has switched that part off, and there is no setting for it. "
+               "Choose another browser on the My details page (Google Chrome and Safari work), and open the form there."),
 }
 
 
@@ -99,12 +103,18 @@ def _osascript(lines: list[str], *args: str) -> str:
     except OSError as e:
         raise _fail("no_osascript") from e
     if done.returncode != 0:
-        raise _fail(_reason(done.stderr or ""))
+        kind = _reason(done.stderr or "")
+        if kind == "refused":                       # a reason this does not know: kept, so that it can be found out later
+            from . import trouble
+            trouble.note(f"asking {short()} about the page in front", RuntimeError(" ".join((done.stderr or "").split())[:300]))
+        raise _fail(kind)
     return (done.stdout or "").rstrip("\n")
 
 
 def _reason(error: str) -> str:
     low = error.lower()
+    if "-2741" in low or "-2740" in low or "syntax error" in low:
+        return "cannot"                             # the browser does not know the command at all (Opera GX has it switched off)
     if "-1743" in low or "not authorized" in low or "not authorised" in low or "not allowed to send" in low:
         return "no_consent"
     if "javascript" in low and ("turned off" in low or "apple events" in low or "allow javascript" in low):

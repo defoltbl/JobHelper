@@ -1492,19 +1492,40 @@ def test_other_browsers_are_spoken_to_in_their_own_way(isolate, monkeypatch):
             chrome.use(key)
             chrome.run("1")
             assert f'tell application "{app}"' in " ".join(calls[-1][0]) and "execute active tab of front window javascript" in " ".join(calls[-1][0])
-        for key, app in (("opera", "Opera"), ("opera_gx", "Opera GX")):
-            chrome.use(key)
+        chrome.use("opera")
+        chrome.run("1")
+        assert 'tell application "Opera"' in " ".join(calls[-1][0]) and chrome.short() == "Opera"
+        assert chrome.use("firefox") == "chrome" and chrome.use("opera_gx") == "chrome", "a browser that cannot be reached this way is never the one in use"
+        # a browser that does not know the command at all (the live trial with Opera GX): said for what it is, not as "bring the tab to the front"
+        _chrome(monkeypatch, _Done(err="162:172: syntax error: Expected “,” but found property. (-2741)", code=1))
+        chrome.use("opera")
+        with pytest.raises(chrome.ChromeError) as e:
             chrome.run("1")
-            assert f'tell application "{app}"' in " ".join(calls[-1][0]) and "execute active tab of front window javascript" in " ".join(calls[-1][0])
-            assert chrome.short() == app and "Developer > Allow JavaScript from Apple Events" in chrome.said("no_scripts")
-        assert chrome.use("firefox") == "chrome", "Firefox cannot be reached this way: it is never the browser in use"
+        assert e.value.kind == "cannot" and "does not let another app fill in its pages" in str(e.value) and "Google Chrome and Safari work" in str(e.value)
+        noted = []
+        from jobhelper import trouble
+        monkeypatch.setattr(trouble, "note", lambda what, error: noted.append((what, str(error))))
+        _chrome(monkeypatch, _Done(err="execution error: something nobody has seen before (-9999)", code=1))
+        with pytest.raises(chrome.ChromeError) as e:
+            chrome.run("1")
+        assert e.value.kind == "refused" and noted == [("asking Opera about the page in front", "execution error: something nobody has seen before (-9999)")], \
+            "a reason the app does not know is written down, so that it can be found out"
+        calls = _chrome(monkeypatch, _Done("x\ny\n"))
         assert chrome.use("netscape") == "chrome" and chrome.use(None) == "chrome"
         assert chrome.ChromeError(chrome.NOT_RUNNING).kind == "not_running" and chrome.ChromeError("something else").kind == "refused"
         # the choice is kept with the options and used from then on
         api = ui_api.Api()
-        assert api.assistant_browser()["key"] == "chrome" and [b["key"] for b in api.assistant_browser()["all"]] == ["chrome", "brave", "edge", "opera", "opera_gx", "safari", "firefox"]
+        assert api.assistant_browser()["key"] == "chrome" and [b["key"] for b in api.assistant_browser()["all"]] == ["chrome", "brave", "edge", "opera", "safari", "opera_gx", "firefox"]
         refused = api.assistant_set_browser("firefox")
         assert refused["ok"] is False and refused["msg"].startswith("Firefox does not let another app") and api.assistant_browser()["key"] == "chrome"
+        gx = api.assistant_set_browser("opera_gx")
+        assert gx["ok"] is False and "switched off the part that lets one fill a page in" in gx["msg"] and "Google Chrome or Safari" in gx["msg"]
+        api.save_options({"assistant_browser": "chrome"})
+        import json as _json
+        from jobhelper import vault as _vault
+        kept = _json.loads(_vault.read_text(config.DATA_DIR / "ui_settings.json"))
+        _vault.write_text(config.DATA_DIR / "ui_settings.json", _json.dumps({**kept, "assistant_browser": "opera_gx"}))
+        assert api.assistant_browser()["key"] == "chrome", "a choice saved before Opera GX was found not to work falls back to Chrome"
         assert api.assistant_set_browser("netscape")["ok"] is False and api.check_options({"assistant_browser": "firefox"})[1]
         out = api.assistant_set_browser("safari")
         assert out["ok"] and out["name"] == "Safari" and "Develop" in out["switch"] and api.options()["assistant_browser"] == "safari"

@@ -88,8 +88,8 @@ eyes, and tells you what needs your attention when the app opens.
 
 ![A talk with the assistant](docs/img/44_assistant_talk.png)
 
-**It fills in application forms** in the browser you already use (Chrome, Brave, Edge, Opera,
-Opera GX or Safari):
+**It fills in application forms** in the browser you already use (Chrome, Brave, Edge, Opera or
+Safari):
 
 - your name, contacts, address and links, your jobs and degrees row by row with their dates,
   and your salary with its currency, from a **My details** page;
@@ -253,7 +253,7 @@ JobHelper/
 - Python 3.10 or newer.
 - The Claude Code program, signed in with a Claude subscription.
 - Optional: LibreOffice, for PDF copies of the documents.
-- For the assistant's form filling: Chrome, Brave, Edge, Opera, Opera GX or Safari, with its
+- For the assistant's form filling: Chrome, Brave, Edge, Opera or Safari, with its
   switch **Allow JavaScript from Apple Events** turned on once.
 
 > **Do not set `ANTHROPIC_API_KEY`.** Leaving it unset is what makes the app use the
@@ -449,8 +449,8 @@ A few decisions worth highlighting:
   connected. Russian services are not used.
 - The built-in salary estimate covers software roles in Czechia; elsewhere you enter your own
   figure.
-- The assistant fills in forms in Chrome, Brave, Edge, Opera, Opera GX and Safari; Firefox does
-  not let another app fill its pages. It leaves file uploads and boxes that agree to something
+- The assistant fills in forms in Chrome, Brave, Edge, Opera and Safari; Opera GX and Firefox
+  do not let another app fill their pages. It leaves file uploads and boxes that agree to something
   to you. It is tested on the forms of its own test area, not yet across real recruiting sites,
   where menus in particular are drawn in many ways.
 - The app is started from a terminal. Packaging it as an app that opens from Finder is planned.

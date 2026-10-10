@@ -134,7 +134,7 @@ Table 2.5 lists what protects the data and ties the app to macOS.
 | The macOS Keychain, through the `security` program | Keeping the data key and the mailbox passwords | Secrets are then protected by the Mac's login and are never written to a file of the project |
 | Signed rule files | The rules for CVs and letters, the letter template, the master CV | These files decide what is written in the person's name. A change made outside the app must be approved before the next run |
 | A LaunchAgent | The weekly run | It is how macOS starts a task on a schedule, also when the window is closed |
-| Apple events, through the `osascript` program | The assistant reads and fills in the form that is open in the person's browser (Chrome, Brave, Edge, Opera, Opera GX or Safari; Firefox has no such door) | The form is filled in where the person is already signed in, with nothing to install. Chrome and macOS each ask for consent first, and the app can only do what a script in the page can do: it cannot attach files or read saved passwords |
+| Apple events, through the `osascript` program | The assistant reads and fills in the form that is open in the person's browser (Chrome, Brave, Edge, Opera or Safari; Opera GX has that door shut and Firefox never had it) | The form is filled in where the person is already signed in, with nothing to install. Chrome and macOS each ask for consent first, and the app can only do what a script in the page can do: it cannot attach files or read saved passwords |
 | Hash-pinned packages in `requirements.lock` | Installing | Each package is checked against a fingerprint, so a changed package cannot be installed unnoticed |
 
 ### Quality

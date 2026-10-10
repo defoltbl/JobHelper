@@ -212,6 +212,9 @@ data/                your data; only the *.example.* files are in git
 - **Qt says a paragraph begins where its box begins, not where its words stand.** A line that did not fit at the end of a
   page is drawn on the next one while the block still "starts" on the old one. The PDF builder asks for the first
   line's place (`top_of`); a heading was left alone at the bottom of a page before it did.
+- **A browser's scripting dictionary must be tried, not read.** Opera GX's file names the command that runs a script in a
+  page, inside a comment: a search for the words found it, and the first live request failed. Ask the browser a harmless
+  `1 + 1` before saying it works. A refusal the app does not know is now written to the trouble log with its text.
 - **A text field does not let go of the focus by itself.** In Qt Quick a press on empty space leaves the field
   outlined with its cursor blinking. Every window with a field needs `FocusCatcher {}` in its background and as the
   first child of each scroll area (it also covers the space under short content); a test fails for a window without one.
@@ -293,7 +296,7 @@ After every batch of changes, without being asked:
 | A mailbox is tried before it is saved | Only the form of the password was checked, so a wrong one showed up at the first scan. |
 | Outlook.com, Proton and Tuta are refused with an explanation | They cannot be read with a password; failing later would be worse than saying so at once. |
 | The salary estimate is used only for software roles in Czechia | It is a table of Prague junior software pay. Anywhere else no figure is better than a wrong one. |
-| The assistant fills in forms in the person's own browser, through Apple events (Chrome first; Brave, Edge, Opera, Opera GX and Safari since; Firefox has no such door and is said to be impossible) | The owner's choice ("I tap on him and ask to fill the form in Chrome"). The form is filled where the person is signed in; nothing is installed. A browser inside the app was removed earlier, and an extension would have to be installed by hand. |
+| The assistant fills in forms in the person's own browser, through Apple events (Chrome first; Brave, Edge, Opera and Safari since; Opera GX and Firefox cannot be reached this way and are said to be impossible) | The owner's choice ("I tap on him and ask to fill the form in Chrome"). The form is filled where the person is signed in; nothing is installed. A browser inside the app was removed earlier, and an extension would have to be installed by hand. |
 | The assistant presses only a menu, an entry of a menu, a radio button and a button that adds a row | The owner allowed menus on 10 October 2026 and rows on a button ("do all points") the same day. It still never presses a button that sends or continues, never ticks a box and never sends: the script that presses reads what it is given, and the words of an add button, again before it acts. |
 | A free request is decided by Claude and checked by the app | The owner chose this knowing it costs a call per request. Claude names one action from a fixed list; anything else is dropped. An action that changes data is asked about in the app's own words and done only after a yes. |
 | The one tick box the assistant may tick says that a job goes on | The owner allowed it on 10 October 2026 ("do all points"). A box that agrees to anything is refused by its words. |
@@ -346,8 +349,8 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
 - **A live trial of the assistant.** Turn on the browser's switch (Allow JavaScript from Apple Events; the My details
   page says where it is), save My details, and try it on a few real application forms and on real questions.
   Every form test so far ran in the test area; the prompts were tried against the real Claude on invented data
-  (19 calls, 10 October 2026). Opera and Opera GX were added from their scripting dictionary, which is the same
-  as Chrome's; Brave, Edge, Opera and Safari have not been tried on this Mac.
+  (19 calls, 10 October 2026). The first live try was in Opera GX and failed: its dictionary lists the command
+  that runs a script, but commented out. Chrome, Brave, Edge, Opera and Safari have not been tried live on this Mac.
 - The 19 jobs whose documents were moved to the backup on 9 October: they can be put back until about 16 October.
 - Whether the README should name its author (the rule keeps the name out of tracked files).
 - Whether the text of the next section may come forward in the PDFs to fill the space a figure left at the end

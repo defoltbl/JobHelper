@@ -556,7 +556,7 @@ class TalkApi:
                        + [{"key": k, "name": f"{v[0]} (not possible)"} for k, v in chrome.NOT_POSSIBLE.items()]}
 
     def assistant_set_browser(self, key):
-        """Choose the browser forms are filled in: Chrome, Brave, Edge, Opera, Opera GX or Safari."""
+        """Choose the browser forms are filled in: Chrome, Brave, Edge, Opera or Safari."""
         if key in chrome.NOT_POSSIBLE:
             return {"ok": False, "msg": chrome.NOT_POSSIBLE[key][1], **self.assistant_browser()}
         if key not in chrome.BROWSERS:

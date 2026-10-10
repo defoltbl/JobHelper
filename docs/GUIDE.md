@@ -868,8 +868,8 @@ when the app opens, and opens its window when you select it.
 
 *Figure 9.1 – The assistant at the end of the assembly line*
 
-The assistant fills in the form that is open in Google Chrome, or in Brave, Edge, Opera,
-Opera GX or Safari when you choose one of them (section 10). It writes into empty fields only. The only things
+The assistant fills in the form that is open in Google Chrome, or in Brave, Edge, Opera or
+Safari when you choose one of them (section 10). It cannot work in Opera GX or Firefox. It writes into empty fields only. The only things
 it presses on a page are a menu, an entry of a menu, a yes/no button, a button that adds a
 row for another job or degree, and the box that says you work at a job now; it never presses
 a button that sends or continues, never ticks a box that agrees to something, and never
@@ -1140,6 +1140,7 @@ Table 9.5 lists what the assistant may answer, and what to do.
 | Google Chrome is not open | Chrome is closed, or has no window | Open the form in Chrome and ask again |
 | Chrome does not let other apps fill in pages yet | The switch in Chrome is off | **View** > **Developer** > **Allow JavaScript from Apple Events** |
 | macOS did not let JobHelper talk to Chrome | The question from macOS was answered with **Don't Allow** | **System Settings** > **Privacy & Security** > **Automation**: turn on **Google Chrome** for the app |
+| The browser does not let another app fill in its pages | The browser has that part switched off (Opera GX), or never had it (Firefox) | On **My details**, choose **Google Chrome** or **Safari**, and open the form there |
 | I found no form fields on this page | The tab in front is the posting, not the form | Open the form itself, usually with the site's **Apply** button |
 | The form sits inside a frame from another site | The company shows a form that lives on a recruiting site | Select **Open the form in its own tab** under the answer, then ask again |
 | The menu did not open for me | The site draws its menu in a way the assistant does not know | Choose that one yourself |
@@ -1300,8 +1301,8 @@ The assistant also tells you things without being asked. None of this uses Claud
 
 The assistant works in Google Chrome unless you choose another browser. On the **My details**
 page, under **How I work**, choose **Google Chrome**, **Brave Browser**, **Microsoft Edge**,
-**Opera**, **Opera GX** or **Safari**. Firefox is in the list as not possible: it does not let
-another app read or fill in its pages, so open the form in one of the others. The line beside the list says where that browser's switch is; turn it on once, as
+**Opera** or **Safari**. Opera GX and Firefox are in the list as not possible: they do not let
+another app fill in their pages, so open the form in one of the others. The line beside the list says where that browser's switch is; turn it on once, as
 in section 9. The switch to notice forms is in the same place.
 
 ### Speak instead of typing

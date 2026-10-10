@@ -3834,9 +3834,9 @@ def test_the_assistant_at_pro_level_in_the_window(ui, monkeypatch):
     ui.js('assistantDialog.page = "details"; assistantDialog.setBrowser("firefox")')
     assert "Firefox does not let another app" in ui.find("asDetailsNote").property("text") and config.ui_settings().get("assistant_browser") == "safari"
     names = [b["name"] for b in dialog.property("browser")["all"]]
-    assert names == ["Google Chrome", "Brave Browser", "Microsoft Edge", "Opera", "Opera GX", "Safari", "Firefox (not possible)"]
+    assert names == ["Google Chrome", "Brave Browser", "Microsoft Edge", "Opera", "Safari", "Opera GX (not possible)", "Firefox (not possible)"]
     ui.js('assistantDialog.setBrowser("opera_gx")')
-    assert config.ui_settings().get("assistant_browser") == "opera_gx" and "Opera GX" in ui.find("asDetailsNote").property("text")
+    assert config.ui_settings().get("assistant_browser") == "safari" and "Opera GX tells another app which page is open" in ui.find("asDetailsNote").property("text")
     ui.js('assistantDialog.setBrowser("chrome")')
     ui.js("assistantDialog.dirty = false; assistantDialog.tryClose()")
     ui.wait(400)
