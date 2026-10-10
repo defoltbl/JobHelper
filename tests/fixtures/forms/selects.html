@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Apply for this job</title>
+<style>.select__control { border: 1px solid #999; padding: 8px; position: relative; } .req { opacity: 0; position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; }
+.select__input { border: 0; outline: 0; width: 60%; }</style></head>
+<body>
+<!-- Lists the way a widely used component draws them, found on a real application form: a text box inside a frame, the answer
+     shown beside the box, the entries drawn only while the list is open, and under each list an unseen box of the page's own
+     that checks something was chosen. The browser is not the window in front: entering a box says nothing to the page. -->
+<form id="f" onsubmit="window.sent = true; return false;">
+  <label for="fn">First Name*</label><input id="fn" name="first_name">
+  <div class="select" data-opens="press" data-options="Austria +43|Czech Republic +420|Germany +49">
+    <label id="l1">Country*</label>
+    <div class="select__control"><div class="select__value-container"><div class="select__placeholder">Select...</div>
+      <input class="select__input" id="s1" role="combobox" aria-autocomplete="list" aria-labelledby="l1" type="text"></div></div>
+    <input class="req" aria-hidden="true" tabindex="-1" required value=""></div>
+  <div class="select" data-opens="press" data-options="Yes|No">
+    <label id="l2">Do you have the right to work in the Czech Republic?</label>
+    <div class="select__control"><div class="select__value-container"><div class="select__placeholder">Select...</div>
+      <input class="select__input" id="s2" role="combobox" aria-autocomplete="list" aria-labelledby="l2" type="text"></div></div>
+    <input class="req" aria-hidden="true" tabindex="-1" required value=""></div>
+  <div class="select" data-opens="press" data-options="Prague, Czechia|Brno, Czechia">
+    <label id="l3">Location (City)*</label>
+    <div class="select__control"><div class="select__value-container"><div class="select__single-value">Prague, Czechia</div>
+      <input class="select__input" id="s3" role="combobox" aria-autocomplete="list" aria-labelledby="l3" type="text"></div></div>
+    <input class="req" aria-hidden="true" tabindex="-1" required value="x"></div>
+  <div class="select" data-opens="key" data-options="Austria|Czech Republic|Germany">
+    <label id="l4">Country of residence</label>
+    <div class="select__control"><div class="select__value-container"><div class="select__placeholder">Select...</div>
+      <input class="select__input" id="s4" role="combobox" aria-haspopup="listbox" aria-labelledby="l4" type="text" readonly></div></div></div>
+  <button id="send" type="submit" onclick="window.clicked = true">Submit application</button>
+</form>
+<script>
+  window.opened = []; window.chosen = {};
+  document.querySelectorAll('.select').forEach(function (root) {
+    var input = root.querySelector('.select__input'), holder = root.querySelector('.select__value-container'), mode = root.getAttribute('data-opens');
+    var all = root.getAttribute('data-options').split('|'), menu = null, entered = false, after = false;
+    input.focus = function () {};                         // the window is not in front: entering the box tells the page nothing
+    function close() { if (menu) { menu.remove(); menu = null; } }
+    function choose(words) {
+      var shown = holder.querySelector('.select__placeholder, .select__single-value');
+      shown.className = 'select__single-value'; shown.textContent = words;
+      window.chosen[input.id] = words; input.value = ''; close();
+    }
+    function open() {
+      close();
+      window.opened.push(input.id);
+      menu = document.createElement('div'); menu.className = 'select__menu'; menu.setAttribute('role', 'listbox');
+      root.appendChild(menu);
+      var typed = input.value.toLowerCase(), box = menu;
+      setTimeout(function () {
+        all.filter(function (w) { return !typed || w.toLowerCase().indexOf(typed) >= 0; }).forEach(function (words) {
+          var entry = document.createElement('div'); entry.className = 'select__option'; entry.setAttribute('role', 'option'); entry.style.padding = '4px'; entry.textContent = words;
+          entry.addEventListener('click', function () { choose(words); });
+          box.appendChild(entry);
+        });
+      }, 100);
+    }
+    root.querySelector('.select__control').addEventListener('mousedown', function () {
+      if (mode !== 'press') return;
+      if (!entered) { after = true; input.focus(); } else open();
+    });
+    input.addEventListener('focusin', function () { entered = true; if (after) { after = false; if (mode === 'press') open(); } });
+    input.addEventListener('input', function () { if (mode === 'press' && input.value) open(); else close(); });
+    input.addEventListener('keydown', function (e) { if (e.key === 'ArrowDown' && mode === 'key') open(); if (e.key === 'Escape') close(); });
+  });
+</script>
+</body></html>

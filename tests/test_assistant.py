@@ -1771,3 +1771,16 @@ def test_area_no_file_leaves_the_app_for_a_form_of_an_unknown_job():
     assert out["result"]["ok"] and out["result"]["job_id"] == "" and out["kept"] == {}
     assert out["left"]["Attach your Resume (supported formats: png, jpeg, jpg, pdf, doc, docx, txt)"] == form_fill.FILE_NO_JOB and out["left"]["Attach your Attachments (supported formats: png, jpeg, jpg, pdf, doc, docx, txt)"] == form_fill.FILE_NO_JOB
     assert out["state"]["resume"] == 0 and out["state"]["fn"] == "Alex", "your details are yours whatever the job; its documents are not"
+
+
+def test_area_lists_drawn_around_a_text_box_on_a_browser_that_is_not_in_front():
+    """From a real application form: three fields nobody could name (the page's own unseen boxes under its lists), a list that
+    did not open because the browser was behind the app, and a list that already showed its answer beside its box."""
+    out = _area("selects.html")
+    result = out["result"]
+    assert result["ok"], result
+    assert not any(label.startswith("Field ") for label in out["left"]), "a box the page hides from screen readers is not a field of the form"
+    assert out["menus"] == {"s1": "Czech Republic +420", "s2": "Yes", "s4": "Czech Republic"}, "opened by the word of entering, and by the arrow key"
+    assert "s3" not in out["opened"] and result["kept"] == 1, "Location shows Prague beside its box: it has its answer"
+    assert out["filled"]["Country*"]["value"] == "Czech Republic +420" and out["filled"]["Country of residence"]["value"] == "Czech Republic"
+    assert out["left"] == {} and out["state"]["fn"] == "Alex"

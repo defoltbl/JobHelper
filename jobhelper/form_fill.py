@@ -66,6 +66,17 @@ READ = r"""
     }
     return '';
   }
+  function beside_value(el) {                    // a list drawn around a text box shows its answer beside the box, not in it
+    if (el.getAttribute('role') !== 'combobox' && !el.getAttribute('aria-autocomplete')) return false;
+    var node = el;
+    for (var up = 0; up < 4; up++) {
+      node = node.parentElement;
+      if (!node || others(node, el)) return false;
+      var held = node.querySelector('[class*="single-value"], [class*="singleValue"], [class*="multi-value"], [class*="multiValue"]');
+      if (held && text(held)) return true;
+    }
+    return false;
+  }
   function others(node, el) {
     var all = node.querySelectorAll('input:not([type=hidden]), select, textarea');
     for (var i = 0; i < all.length; i++) if (all[i] !== el && !el.contains(all[i]) && all[i].getClientRects().length) return true;
@@ -137,6 +148,8 @@ READ = r"""
       el.removeAttribute(OPT);
       var type = tag === 'INPUT' ? String(el.getAttribute('type') || 'text').toLowerCase() : tag.toLowerCase();
       if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'reset' || type === 'image') continue;
+      // A box the page keeps out of sight of screen readers is its own tool (a list's check that something was chosen), not a field.
+      if (type !== 'file' && (el.getAttribute('aria-hidden') === 'true' || el.closest('[aria-hidden=true]'))) continue;
       if (type === 'checkbox' || type === 'radio') {
         if (!(shown(el) || (el.labels && el.labels.length))) continue;
         if (type === 'checkbox' && !el.disabled) {
@@ -163,22 +176,23 @@ READ = r"""
         continue;
       }
       if (type !== 'file' && !shown(el)) continue;
-      if (el.disabled || el.readOnly) continue;
+      if (el.disabled || (el.readOnly && el.getAttribute('role') !== 'combobox')) continue;       // a list's box is often read-only: it is pressed, not typed in
       n++;
       el.setAttribute(MARK, String(n));
       var options = [];
       if (tag === 'SELECT') for (var k = 0; k < el.options.length && k < 300; k++) options.push(clean(el.options[k].text).slice(0, 80));
       var filled = false;
       if (type === 'file') filled = !!(el.files && el.files.length);
-      else if (type !== 'password') filled = tag === 'SELECT' ? chosen(el) : String(el.value || '').trim() !== '';
+      else if (type !== 'password') filled = tag === 'SELECT' ? chosen(el) : (String(el.value || '').trim() !== '' || beside_value(el));
       var called = label(el, root), hint = clean(el.getAttribute('placeholder')).slice(0, 120);
       if (tag === 'SELECT' && !called && el.options.length && String(el.options[0].value) === '') hint = clean(el.options[0].text).slice(0, 120);   // "Select your country": all the name it has
+      if (el.readOnly) type = 'menu';             // a box that cannot be typed in and opens a list: a menu like any other
       fields.push({n: n, type: type, name: clean(el.name).slice(0, 80), id: clean(el.id).slice(0, 80),
                    auto: clean(el.getAttribute('autocomplete')).slice(0, 60), label: called,
                    hint: hint, accept: type === 'file' ? clean(el.getAttribute('accept')).slice(0, 200) : '',
                    required: !!(el.required || el.getAttribute('aria-required') === 'true'),
                    filled: filled, most: el.maxLength > 0 ? el.maxLength : 0, options: options,
-                   combo: el.getAttribute('role') === 'combobox' || !!el.getAttribute('aria-autocomplete') || el.getAttribute('aria-haspopup') === 'listbox'});
+                   combo: !el.readOnly && (el.getAttribute('role') === 'combobox' || !!el.getAttribute('aria-autocomplete') || el.getAttribute('aria-haspopup') === 'listbox')});
     }
   }
   walk(document);
@@ -384,6 +398,10 @@ CHOOSE = r"""
   if (action === 'open') {
     if (target.tagName === 'INPUT') {
       target.focus();
+      // A window that is not in front gets no word that the box was entered, and many lists open only on that word: it is said here.
+      var seen = target.ownerDocument.defaultView;
+      target.dispatchEvent(new seen.FocusEvent('focus', {bubbles: false}));
+      target.dispatchEvent(new seen.FocusEvent('focusin', {bubbles: true}));
       press(target);
       if (arg) {
         var view = target.ownerDocument.defaultView;
@@ -391,6 +409,12 @@ CHOOSE = r"""
         target.dispatchEvent(new view.Event('input', {bubbles: true}));
       }
     } else press(target);
+    return JSON.stringify({ok: true});
+  }
+  if (action === 'key') {                        // the other way a list opens: the arrow-down key, in the box that opens it
+    var down = {key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40, bubbles: true, cancelable: true}, win = target.ownerDocument.defaultView;
+    target.dispatchEvent(new win.KeyboardEvent('keydown', down));
+    target.dispatchEvent(new win.KeyboardEvent('keyup', down));
     return JSON.stringify({ok: true});
   }
   if (action === 'options') {
@@ -423,7 +447,7 @@ def choose_script(action: str, n: int, arg: Any, url: str) -> str:
     """The CHOOSE script for one step with a menu or a radio button: "open" (arg: text to type, or ''),
     "options", "pick" (arg: the entry's number), "close" (arg: true to clear typed text), "radio" (arg: the button's number), "add" (arg: the number of a button
     that adds a row for another job or degree; n is not used)."""
-    assert action in ("open", "options", "pick", "close", "radio", "add", "tick")
+    assert action in ("open", "key", "options", "pick", "close", "radio", "add", "tick")
     return (CHOOSE.replace("__ACTION__", json.dumps(action)).replace("__N__", json.dumps(int(n)))
             .replace("__ARG__", json.dumps(arg)).replace("__URL__", json.dumps(str(url))))
 

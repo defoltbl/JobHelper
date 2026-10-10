@@ -252,6 +252,13 @@ class AssistantApi:
             options = form_fill.choose_answer(chrome.run(form_fill.choose_script("options", n, "", url)))["options"]
             if options:
                 break
+        if not options:                     # some lists open on the arrow-down key, not on a press
+            chrome.run(form_fill.choose_script("key", n, "", url))
+            for wait in (0.4, 1.0):
+                chrome.pause(wait)
+                options = form_fill.choose_answer(chrome.run(form_fill.choose_script("options", n, "", url)))["options"]
+                if options:
+                    break
         return options
 
     def _choose(self, choices: list[dict[str, Any]], url: str, mine: dict[str, str], job) -> tuple[list[dict], list[dict], list[dict]]:
@@ -267,6 +274,10 @@ class AssistantApi:
                 c["search"] = typed
                 c["options"] = self._menu(c["n"], url, typed)
                 chrome.run(form_fill.choose_script("close", c["n"], bool(typed), url))
+                if typed and not c["options"]:      # the list knows your country under another name: all of its entries, then
+                    c["search"] = ""
+                    c["options"] = self._menu(c["n"], url, "")
+                    chrome.run(form_fill.choose_script("close", c["n"], False, url))
         picks = {c["n"]: form_choices.settle(c, mine, job) for c in choices}
         for c in choices:                            # what you chose for the same question before
             if not picks[c["n"]] and c["options"]:
