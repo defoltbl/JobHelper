@@ -1203,7 +1203,7 @@ Table 10.1 shows what you can ask for.
 > **Important**
 > Filling in a form, opening your details and asking for help cost nothing. Every other
 > request is one call to Claude, and a rewrite, a brief, advice, a reply, a posting and each
-> practice answer are one or two more. Only the jobs a request is likely about are sent with
+> practice answer are one more. Only the jobs a request is likely about are sent with
 > it, not your whole list. The calls count against your Claude limit like a search does (section 18).
 
 The assistant never changes anything on Claude's word alone. What Claude proposes is checked
@@ -1242,8 +1242,10 @@ the earlier talk away.
 4. To keep it, select **Yes, do it**: the posting is added to **New Jobs**. The next search
    writes its documents when the score is at or above your limit.
 
-This takes two calls to Claude: one to read what the page says about the job, one to score
-it. A posting that is in your list already is recognised by its address, without a call.
+This takes one call to Claude, for the scoring. Most job pages state the job's title and
+employer in a form that search engines read, and the assistant takes them from there; only
+when a page does not, one more call reads them off the page. A posting that is in your list
+already is recognised by its address, without a call.
 
 ### Draft a reply to a company
 

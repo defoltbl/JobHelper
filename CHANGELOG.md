@@ -5,6 +5,10 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **The assembly line grows with the window.** On a large screen the robots and their words used to stay small; the line now fills the room it has, and the words at the robots are larger. What the assistant says appears in a strip of its own under the line, so it never covers the line or a robot.
+- **Judging a posting costs one Claude call, not three.** The button reads the job's title and employer from what the page states for search engines, so only the scoring asks Claude.
+- **The PDF guides have no half-empty pages where text could stand.** When a figure or a table has to start on the next page, the text that follows it in the same section is brought forward. The entries of the contents, every "Figure 4.2" and "Table 9.1", and links to another chapter can be clicked, and the chapters are in the PDF's outline. List points have a heavy mark and steps a bold number.
+- **The technical documentation explains its processes with diagrams:** a search, the honesty checks, an email scan, the limit, data protection, filling in a form, a request to the assistant, the layers of the code and the making of the PDFs.
 - **The assistant does several things in one request, and you can undo them.** "Mark it applied and remind me to follow up in ten days" is asked about in one question that lists both steps. After your yes, **Undo** puts the job back exactly as it was.
 - **The assistant remembers what you tell it.** "Remember that I do not want consulting firms" is kept for later talks, and a talk goes on where it stopped after the app was closed. The notes are on the My details page and can be removed there.
 - **Is this posting worth applying to?** With a job posting open in your browser, the assistant reads it, scores it against your CV with the same scorer a search uses, and adds it to New Jobs on your yes.

@@ -108,6 +108,10 @@ def _body_html(source: Path, page_width: float, page_height: float) -> str:
     html = html[html.index("<body"):]
     html = re.sub(r"^<body[^>]*>|</body></html>\s*$", "", html)
     html = re.sub(r"<hr[^>]*>", "", html)                             # a chapter starts on a new page instead
+    # The points of a list stand out: a heavy square before each, a bold number before each step. The mark takes the
+    # weight of its item, so the item is made bold and its words are given back their own weight.
+    html = re.sub(r'<li( style="[^"]*)"', r'<li\1 font-weight:700; color:#0b1220;"', html)
+    html = re.sub(r"(<li[^>]*>)(.*?)(?=<(?:ul|ol|li|/li)\b)", r'\1<span style=" font-weight:400; color:#182230;">\2</span>', html, flags=re.S)
 
     def callout(match) -> str:
         kind, body = match.group(1), match.group(2)

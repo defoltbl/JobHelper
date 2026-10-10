@@ -209,6 +209,9 @@ data/                your data; only the *.example.* files are in git
   thousands of small steps in a worker (the Insights keywords were 59,000 searches) make every call from
   the window queue behind them. Give such work short rests (`keywords.read_ahead`), keep it away from
   animations (it starts after the welcome screen), and keep `sys.setswitchinterval` in `app_qt.py`.
+- **Qt says a paragraph begins where its box begins, not where its words stand.** A line that did not fit at the end of a
+  page is drawn on the next one while the block still "starts" on the old one. The PDF builder asks for the first
+  line's place (`top_of`); a heading was left alone at the bottom of a page before it did.
 - **A text field does not let go of the focus by itself.** In Qt Quick a press on empty space leaves the field
   outlined with its cursor blinking. Every window with a field needs `FocusCatcher {}` in its background and as the
   first child of each scroll area (it also covers the space under short content); a test fails for a window without one.

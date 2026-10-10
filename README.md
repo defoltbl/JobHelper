@@ -12,7 +12,7 @@ about you stays on your Mac, encrypted.
 ![UI](https://img.shields.io/badge/UI-Qt%20Quick%20(PySide6)-41CD52?logo=qt&logoColor=white)
 ![Model](https://img.shields.io/badge/model-Claude%20(subscription)-D97757)
 ![Storage](https://img.shields.io/badge/data-AES--256%20encrypted-2E7D32)
-![Tests](https://img.shields.io/badge/tests-1558%20offline-blue)
+![Tests](https://img.shields.io/badge/tests-1565%20offline-blue)
 
 ![The main window](docs/img/02_main.png)
 
@@ -184,7 +184,7 @@ JobHelper/
 │   └── ui_api.py, api_*.py, qt_bridge.py, bridge_*.py
 │                             # what the window calls
 ├── ui_qt/                    # the window: one QML file per dialog or part (40 files)
-├── tests/                    # 1,558 tests, offline, in temporary folders
+├── tests/                    # 1,565 tests, offline, in temporary folders
 │   └── guide_shots.py        # takes the pictures of the user guide
 ├── scripts/                  # the PDF builder, the numbering check, the diagram, the lock file
 ├── docs/                     # user guide, technical documentation, their PDFs, pictures
@@ -309,7 +309,7 @@ python -m pytest -q
 python -m pyflakes jobhelper tests scripts
 ```
 
-1,558 tests in about two and a half minutes, with no network. They never touch real data, the
+1,565 tests in about two and a half minutes, with no network. They never touch real data, the
 Keychain or `.env`, never ask Claude, never read a real job board or mail server, and never open
 a file or put anything in the Trash: every test works in temporary folders with stand-ins. The
 window itself is loaded without a screen and driven by the tests, and the documentation has

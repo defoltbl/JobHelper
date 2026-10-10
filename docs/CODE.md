@@ -337,6 +337,47 @@ Table 6.2 names the module of each agent and what it may ask Claude.
 | Tracker | `agent4_tracker` | Writes the Excel tables | Never |
 | Postman | `agent5_responses` | Reads replies and files each to its application | For new replies only |
 
+### What a search does with a posting
+
+Figure 6.1 follows one posting through a search. Everything before the scoring is plain code:
+a posting that does not fit the rules, or is plainly another profession, never costs a call
+to Claude, and it is kept with the reason so that the person can bring it back.
+
+![What a search does with a posting](img/code_search.png)
+
+*Figure 6.1 – What a search does with a posting*
+
+### How a text is kept inside what the CV shows
+
+An adapted CV, a letter, a form answer and an interview answer are all written by Claude and
+then checked in code (Figure 6.2). A prompt that says "do not invent" is not a guarantee, so
+the draft is read for technologies the CV does not show and for terms of the posting stated as
+experience. What is found is sent back once; what is still there is kept and shown to the
+person, never cut out silently.
+
+![How a text is kept inside what the CV shows](img/code_honesty.png)
+
+*Figure 6.2 – How a text is kept inside what the CV shows*
+
+### What an email scan does with a message
+
+Figure 6.3 shows the way of one message. The mailbox is opened read-only, and rules decide
+without a call which messages are worth a question to Claude.
+
+![What an email scan does with a message](img/code_scan.png)
+
+*Figure 6.3 – What an email scan does with a message*
+
+### How a run behaves at Claude's limit
+
+The limit of the subscription is a state of a run, not an error (Figure 6.4). Every call goes
+through `llm.ask`, which refuses to call when a limit is used up; the run saves its work,
+shows the reset time, and goes on from the same job when the person presses **Resume**.
+
+![The limit is a state, not an error](img/code_limit.png)
+
+*Figure 6.4 – The limit is a state, not an error*
+
 ### The modules around the agents
 
 Table 6.3 groups the other modules by what they are for.
@@ -356,8 +397,13 @@ Table 6.3 groups the other modules by what they are for.
 
 ### How the assistant fills in a form
 
-The assistant works on the tab that is in front in Google Chrome, in three steps, each in
-`form_fill`:
+The assistant works on the tab that is in front in the person's browser (Figure 6.5), in
+steps that are each small enough to check, all in `form_fill`:
+
+![How the assistant fills in a form](img/code_fill.png)
+
+*Figure 6.5 – How the assistant fills in a form*
+
 
 1. A script lists the fields of the page: what each is called, its kind, and whether it already
    holds something. It numbers them with an attribute and sends back no value the person typed.
@@ -395,6 +441,12 @@ there and a test that names what must be filled and what must be left.
 
 ### How the assistant decides what to do
 
+Figure 6.6 shows what happens to a request.
+
+![How the assistant decides what to do with a request](img/code_talk.png)
+
+*Figure 6.6 – How the assistant decides what to do with a request*
+
 A request that is not one of the fixed ones ("fill in the form", "my details", "help") goes to
 `assistant_brain.decide`: one call to Claude, with the jobs as lines, the numbers, the last turns
 of the talk and the list of actions. Claude answers in words or names one action. Table 6.5
@@ -416,6 +468,12 @@ gives the rules that keep this safe; `api_talk` carries them out.
 
 ### How the window talks to the logic
 
+Figure 6.7 shows the way of one press of a button through the layers and back.
+
+![A press of a button, from the window to the data and back](img/code_layers.png)
+
+*Figure 6.7 – A press of a button, from the window to the data and back*
+
 The window never touches a file. Every action goes through three layers:
 
 1. A QML file in `ui_qt/` calls a slot of `bridge`, for example `bridge.saveOptions(...)`.
@@ -430,6 +488,14 @@ Long work (a search, a scan, a rewrite) runs in a thread and answers through a s
 > field, and again in the `Api` method, so that nothing unusable is saved whatever sent it.
 
 ## 7. Work with the data files
+
+Figure 7.1 shows how the data is kept safe: every read and write goes through `vault`, the key
+lives in the Keychain, a backup is made before a bulk change, and a rule file changed outside
+the app must be approved.
+
+![How the data is kept safe](img/code_safety.png)
+
+*Figure 7.1 – How the data is kept safe*
 
 Everything a person makes with the app is in `data/` (Table 7.1). The folder is not part of the
 code and is never committed.
@@ -531,13 +597,20 @@ The text refers to each by its number.
 
 ### Build the PDFs
 
+Figure 9.1 shows how a PDF is made from its text.
+
+![How a PDF of the documentation is made](img/code_docs.png)
+
+*Figure 9.1 – How a PDF of the documentation is made*
+
 ```bash
 python scripts/guide_pdf.py
 ```
 
 The script makes `docs/GUIDE.pdf` and `docs/CODE.pdf`. It lays each one out like a thesis: a
 title page, the contents with dotted lines that lead to the page numbers, then the text with
-its page number at the top right. A caption stands centred under its picture and above its
+its page number at the top right. The entries of the contents, references to figures and
+tables, and links to another chapter can be selected and lead to their place. A caption stands centred under its picture and above its
 table. There are no lists of figures and tables. The script keeps the page rules in
 Table 9.1.
 A test fails while a PDF is older than its text.
@@ -548,6 +621,9 @@ A test fails while a PDF is older than its text.
 |---|---|
 | A figure is never split across two pages | A picture and its caption are one block; a block that would cross a page starts on the next one |
 | A table stays on one page | The same, with the caption above it |
+| No page is left half empty because a figure or a table had to start on the next one | The text that follows it in the same section is brought forward to fill the space; a figure, a table or a note comes forward only if all of it fits. Text never crosses a heading. A table longer than a page begins where its page has room, and a picture that almost fits is shown a little smaller |
+| What names a place leads to it | A PDF library adds a link for every entry of the contents, every mention of a figure or a table, and every link to another chapter, and writes the chapters into the PDF's outline |
+| The points of a list stand out | A heavy square before each point, a bold number before each step |
 | A table longer than a page continues between two rows | It is cut into parts that fit, each under the line "Continuation of Table" with its number, and with the heading row repeated |
 | A heading is never left alone at the bottom of a page | A heading whose text would start on the next page moves there too |
 

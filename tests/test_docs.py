@@ -114,7 +114,20 @@ def test_the_pictures_exist_and_come_from_their_scripts():
     shots = (ROOT / "tests" / "guide_shots.py").read_text(encoding="utf-8")
     assert set(re.findall(r'shot\("([^"]+)"', shots)) == {name[:-4] for name in used}, "every picture the script takes is in the guide, and the other way round"
     drawn = re.findall(r"\]\(img/([^)]+)\)", code)
-    assert drawn == ["code_pipeline.png"] and "code_pipeline.png" in (ROOT / "scripts" / "code_diagram.py").read_text(encoding="utf-8")
+    diagrams = _script("code_diagram")
+    assert drawn[0] == "code_pipeline.png" and sorted(drawn[1:]) == sorted(f"{name}.png" for name in diagrams.DIAGRAMS), \
+        "every diagram the script draws is in the document, and the other way round"
+    assert len(drawn) >= 10, "the technical documentation explains its processes with diagrams"
+    for name, spec in diagrams.DIAGRAMS.items():
+        assert spec["title"] in code, f"the caption of {name} is its title"
+        for start, end, _words in spec["arrows"]:
+            assert start in spec["nodes"] and end in spec["nodes"], (name, start, end)
+        places = [(c, r) for c, r, _kind, _words in spec["nodes"].values()]
+        assert len(set(places)) == len(places), f"{name}: two boxes in one place"
+        for start, end, _words in spec["arrows"]:                 # an arrow between two boxes of a row or a column runs through no third box
+            (c1, r1), (c2, r2) = spec["nodes"][start][:2], spec["nodes"][end][:2]
+            between = [(c, r) for c, r in places if (r == r1 == r2 and min(c1, c2) < c < max(c1, c2)) or (c == c1 == c2 and min(r1, r2) < r < max(r1, r2))]
+            assert not between, f"{name}: the arrow {start} -> {end} runs through a box"
     assert sorted(p.name for p in (DOCS / "img").glob("*.png")) == sorted(used + drawn), "no picture is left over in docs/img"
 
 
@@ -234,7 +247,7 @@ def test_the_pdf_matches_its_text(name):
         assert part in text, part
     assert "List of figures" not in text and "List of tables" not in text
     pictures = sum(len(page.images) for page in reader.pages)
-    assert pictures >= (33 if name == "GUIDE" else 1)
+    assert pictures >= (33 if name == "GUIDE" else 10)
     last = " ".join(reader.pages[-1].extract_text().split())
     assert str(len(reader.pages)) in last.split(), "every page carries its number"
 
@@ -308,3 +321,16 @@ def test_the_pdf_answers_to_a_click(tmp_path):
         assert "1. Overview" in " ".join(reader.pages[goal].extract_text().split()), "the first entry of the contents leads to chapter 1"
         assert goal > 1 and len(reader.outline) >= 5, "and the chapters stand in the PDF's own outline"
         assert guide_pdf.fingerprint(DOCS / f"{name}.md") in (reader.metadata.creator or ""), "what the PDF was made from is still written in it"
+
+
+def test_the_points_of_a_list_stand_out(laid_out):
+    """A heavy square before each point and a bold number before each step, while the words keep their own weight."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtGui import QGuiApplication
+    app = QGuiApplication.instance() or QGuiApplication([])
+    body = guide_pdf._body_html(DOCS / "GUIDE.md", 500.0, 700.0)
+    items = re.findall(r"<li[^>]*>.*?</li>", body, re.S)
+    assert len(items) > 150 and "list-style-type: square" in guide_pdf.CSS
+    for item in items[:60]:
+        assert re.match(r'<li style="[^"]*font-weight:700; color:#0b1220;"><span style=" font-weight:400; color:#182230;">', item), item[:160]
+    _ = app, laid_out
