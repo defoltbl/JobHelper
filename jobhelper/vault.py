@@ -199,13 +199,13 @@ def data_key() -> bytes:
     if stored:
         key = _decode_key(stored)
         if marker.get("key_id") and marker["key_id"] != _key_id(key):
-            raise VaultError("The key in the Keychain does not match this data. "
-                             "Run: python status.py security restore-key")
+            raise VaultError("The key in the Keychain does not match this data. Paste your recovery key in the Account card "
+                             "(or run: python status.py security restore-key).")
     else:
         if marker.get("key_id") or any(file_is_encrypted(path) for path in data_files()):
             # (the second test: the note of the key, vault.json, is gone but the data is plainly encrypted)
-            raise VaultError("This data is encrypted, but its key is not in the Keychain. "
-                             "Run: python status.py security restore-key")
+            raise VaultError("This data is encrypted, but its key is not in the Keychain. Paste your recovery key in the "
+                             "Account card (or run: python status.py security restore-key).")
         key = os.urandom(32)
         keychain().set(KEY_ACCOUNT, base64.urlsafe_b64encode(key).decode("ascii"))
     if not marker.get("key_id"):

@@ -22,8 +22,8 @@ def _check(name: str, fn) -> dict[str, Any]:
 def _data_key() -> str:
     state = vault.state()
     if state == "locked":
-        return ("The key for your data is not in the Keychain, so nothing can be opened. "
-                "Put it back with: python status.py security restore-key")
+        return ("The key for your data is not in the Keychain, so nothing can be opened. Open the Account card and paste your "
+                "recovery key there (or run: python status.py security restore-key).")
     return ""            # 'off' is a choice (or no Keychain on this system), not a fault
 
 
@@ -31,7 +31,7 @@ def _jobs() -> str:
     try:
         jobs = store.load_jobs()
     except vault.VaultError:
-        return "Your job list cannot be decrypted. Restore the key (python status.py security restore-key)."
+        return "Your job list cannot be decrypted. Paste your recovery key in the Account card (or run: python status.py security restore-key)."
     except ValueError:
         return "Your job list (data/jobs.json) is damaged. Restore it from data/backups (python status.py security restore)."
     broken = [j for j in jobs if not isinstance(j, dict) or not j.get("id") or "status" not in j]
@@ -47,7 +47,7 @@ def _responses() -> str:
     try:
         db.all_responses()
     except vault.VaultError:
-        return "The replies database cannot be decrypted. Restore the key (python status.py security restore-key)."
+        return "The replies database cannot be decrypted. Paste your recovery key in the Account card (or run: python status.py security restore-key)."
     except Exception:  # noqa: BLE001
         return "The replies database (data/responses.db) is damaged. Restore it from data/backups."
     return ""
@@ -62,7 +62,7 @@ def _settings() -> str:
         if not isinstance(json.loads(vault.read_text(path)), dict):
             raise ValueError
     except vault.VaultError:
-        return "Your Options cannot be decrypted, so the defaults are used. Restore the key."
+        return "Your Options cannot be decrypted, so the defaults are used. Paste your recovery key in the Account card."
     except ValueError:
         return "Your saved Options are damaged, so the defaults are used. Open Options and press Save to write them again."
     return ""
