@@ -305,6 +305,82 @@ def choose_answer(text: str) -> dict[str, Any]:
     return {"ok": bool(data.get("ok")), "moved": bool(data.get("moved")), "options": [" ".join(str(o).split())[:80] for o in options[:300]]}
 
 
+VALUES = r"""
+(function (wanted, url) {
+  if (location.href !== url) return JSON.stringify({moved: true});
+  var MARK = 'data-jobhelper', out = {};
+  function walk(root) {
+    var all = root.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.shadowRoot) walk(el.shadowRoot);
+      if (el.tagName === 'IFRAME') {
+        var inner = null;
+        try { inner = el.contentDocument; } catch (e) { inner = null; }
+        if (inner && inner.body) walk(inner);
+        continue;
+      }
+      var mark = el.getAttribute(MARK);
+      if (!mark || wanted.indexOf(Number(mark)) < 0 || el.type === 'password' || el.type === 'file') continue;
+      if (el.tagName === 'SELECT') out[mark] = el.selectedIndex >= 0 ? String(el.options[el.selectedIndex].text).replace(/\s+/g, ' ').trim() : '';
+      else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') out[mark] = String(el.value || '').slice(0, 3000);
+    }
+  }
+  walk(document);
+  return JSON.stringify({values: out});
+})(__WANTED__, __URL__)
+""".strip()
+
+WATCH = r"""
+(function () {
+  var names = [], empty = 0;
+  function walk(root) {
+    var all = root.querySelectorAll('input, textarea, select, iframe, *');
+    for (var i = 0; i < all.length && names.length < 400; i++) {
+      var el = all[i];
+      if (el.shadowRoot) walk(el.shadowRoot);
+      if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && el.tagName !== 'SELECT') continue;
+      var type = String(el.getAttribute('type') || '').toLowerCase();
+      if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'password' || type === 'file' || type === 'checkbox' || type === 'radio') continue;
+      var r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) continue;
+      names.push(el.name || el.id || el.tagName);
+      if (el.tagName === 'SELECT' ? el.selectedIndex <= 0 : String(el.value || '').trim() === '') empty++;
+    }
+  }
+  walk(document);
+  return JSON.stringify({url: location.href, fields: names.length, first: names.slice(0, 12).join('|').slice(0, 400), empty: empty});
+})()
+""".strip()
+
+
+def values_script(numbers: list[int], url: str) -> str:
+    """The VALUES script: what the fields with these numbers hold now. Asked only for fields the assistant itself filled in."""
+    return VALUES.replace("__WANTED__", json.dumps([int(n) for n in numbers])).replace("__URL__", json.dumps(str(url)))
+
+
+def values_answer(text: str) -> dict[int, str]:
+    try:
+        data = json.loads(text or "")
+    except ValueError:
+        return {}
+    values = data.get("values") if isinstance(data, dict) else None
+    return {int(k): str(v)[:3000] for k, v in values.items() if str(k).isdigit()} if isinstance(values, dict) else {}
+
+
+def watch_answer(text: str) -> dict[str, Any]:
+    """Where the form stands: {url, sign, empty}. `sign` changes when the page shows other fields."""
+    try:
+        data = json.loads(text or "")
+    except ValueError:
+        data = None
+    if not isinstance(data, dict):
+        return {"url": "", "sign": "", "empty": 0}
+    count = data.get("fields") if isinstance(data.get("fields"), int) else 0
+    return {"url": str(data.get("url") or "")[:500], "sign": f"{count}:{str(data.get('first') or '')[:400]}",
+            "empty": data.get("empty") if isinstance(data.get("empty"), int) else 0}
+
+
 def fill_script(items: list[dict[str, Any]], url: str) -> str:
     """The FILL script for these values. They travel as data (JSON), never as code."""
     data = [{"n": int(i["n"]), "value": str(i["value"]), "check": bool(i.get("check"))} for i in items]

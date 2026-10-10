@@ -3,7 +3,7 @@ application form and the interview preparation."""
 from __future__ import annotations
 
 
-from . import (agent1_cv, cv_tailor, form_answers, prep_doc, config, db, followup, interview_prep, planner, store,
+from . import (agent1_cv, answer_memory, cv_tailor, form_answers, prep_doc, config, db, followup, interview_prep, planner, store,
                vault)
 from .api_base import _guarded
 
@@ -121,6 +121,8 @@ class InterviewApi:
                 return {"ok": False, "msg": f"The answer to “{question}” is {len(answer)} characters long; "
                                             f"the most is {form_answers.MAX_ANSWER}. Shorten it."}
         clean = form_answers.tidy(list(items or []))
+        before = store.find(store.load_jobs(), job_id) or {}
+        earlier = {i["question"].lower(): i["answer"] for i in form_answers.tidy((before.get("form_answers") or {}).get("items"))}
 
         def go(jobs, j):
             made = (j.get("form_answers") or {}).get("made") or form_answers.stamp()
@@ -129,6 +131,10 @@ class InterviewApi:
             else:
                 j.pop("form_answers", None)
         saved = self._change(job_id, go, render=False)
+        if saved.get("ok"):                 # an answer you rewrote is yours: it is used for the same question elsewhere
+            for item in clean:
+                if item["question"].lower() in earlier and answer_memory.changed(earlier[item["question"].lower()], item["answer"]):
+                    answer_memory.remember(item["question"], item["answer"], before.get("company", ""))
         return {"ok": bool(saved.get("ok")), "count": len(clean)}
 
     # ── interview preparation ───────────────────────────────────

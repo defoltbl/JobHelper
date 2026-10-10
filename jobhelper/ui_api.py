@@ -645,7 +645,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi):
 
     # ── what the app used, what went wrong, and backups: all without a terminal ──
     USAGE_NAMES = {"agent1_cv": "Reading your CV", "agent3_letters": "Scoring jobs and writing letters", "agent3_cv": "Adapting CVs",
-                   "agent5_responses": "Reading replies", "form_answers": "Form answers", "interview_prep": "Interview preparation",
+                   "agent5_responses": "Reading replies", "form_answers": "Form answers", "assistant": "Questions to the assistant", "interview_prep": "Interview preparation",
                    "usage_ping": "Asking how much is left", "limit_check": "Asking how much is left", "general": "Other"}
 
     def usage_overview(self):

@@ -300,7 +300,7 @@ def data_files() -> list[Path]:
     from . import config
     return [config.JOBS_JSON, config.PROFILE_JSON, config.DATA_DIR / "ui_settings.json", config.RESPONSES_DB,
             config.DATA_DIR / "last_run.json", config.DATA_DIR / "company_notes.json",
-            config.DATA_DIR / "filtered_out.json", config.DATA_DIR / "my_details.json"]
+            config.DATA_DIR / "filtered_out.json", config.DATA_DIR / "my_details.json", config.DATA_DIR / "answer_memory.json"]
 
 
 def encrypt_file(path: Path) -> bool:

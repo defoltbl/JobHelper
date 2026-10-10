@@ -91,6 +91,11 @@ def run(script: str) -> str:
     return "" if answer == "missing value" else answer
 
 
+def open_tab(url: str) -> None:
+    """Open an address in a new tab of the window in front (the person asked for it by a button)."""
+    _checked(_osascript(_wrap('make new tab at end of tabs of front window with properties {URL:(item 1 of argv)}'), url))
+
+
 def pause(seconds: float) -> None:
     """Give the page a moment (a menu that was just opened draws its entries a little later)."""
     time.sleep(seconds)

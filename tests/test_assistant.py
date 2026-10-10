@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from jobhelper import assistant, chrome, config, details, form_answers, form_choices, form_fill, llm, store, ui_api, vault
+from jobhelper import answer_memory, assistant, chrome, config, details, form_answers, form_choices, form_fill, llm, store, ui_api, vault
 from tests.conftest import FIXTURES
 
 MINE = {**details.empty(), "first_name": "Alex", "last_name": "Novak", "email": "alex@example.com", "phone": "+420 123 456 789", "street": "",
@@ -21,6 +21,11 @@ def isolate(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
     monkeypatch.setattr(config, "JOBS_JSON", tmp_path / "jobs.json")
     monkeypatch.setattr(config, "LETTERS_DIR", tmp_path / "letters")
+    for name, value in (("RESPONSES_DB", tmp_path / "responses.db"), ("PROFILE_JSON", tmp_path / "profile.json"), ("CV_DIR", tmp_path / "cv"),
+                        ("TAILORED_CV_DIR", tmp_path / "tailored"), ("EXCEL_PATH", tmp_path / "a.xlsx"), ("NEW_JOBS_EXCEL", tmp_path / "n.xlsx")):
+        monkeypatch.setattr(config, name, value)          # nothing of the real data folder is in reach
+    for folder in ("cv", "tailored", "letters"):
+        (tmp_path / folder).mkdir()
     monkeypatch.setattr(config, "ensure_dirs", lambda: None)
     monkeypatch.setattr(ui_api.agent4_tracker, "render_all", lambda jobs: None)
     monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
@@ -255,7 +260,9 @@ def test_a_page_is_matched_to_a_job_only_when_it_is_plain():
 @pytest.mark.parametrize("text, what", [
     ("fill form in chrome", "fill"), ("Please fill in the form", "fill"), ("help me apply", "fill"), ("complete this application", "fill"),
     ("fill in my details on the form", "fill"), ("my details", "details"), ("change my phone", "details"), ("show my contacts", "details"),
-    ("hi", "help"), ("what can you do?", "help"), ("how does this work", "help"), ("sing a song", "unknown"), ("", "unknown")])
+    ("hi", "help"), ("what can you do?", "help"), ("how does this work", "help"), ("thanks", "unknown"), ("", "unknown"),
+    ("why did this score 62?", "question"), ("how many applications are waiting", "question"), ("is this job still open?", "question"),
+    ("tell me about this company", "question"), ("what does the limit mean?", "question")])
 def test_a_request_is_understood_by_its_words(text, what):
     assert assistant.intent(text) == what
 
@@ -266,6 +273,7 @@ def test_requests_are_checked_before_anything_is_done(isolate):
     assert api.assistant_ask("x" * 301)["msg"] == assistant.TOO_LONG and api.assistant_ask(None)["ok"] is False
     assert api.assistant_ask("my details")["action"] == "details"
     assert api.assistant_ask("hello")["say"] == assistant.HELP and api.assistant_ask("sing")["say"].startswith("I did not understand")
+    assert "lists, menus and yes/no" in assistant.HELP
     refused = api.assistant_ask("fill the form in chrome")
     assert refused["ok"] is False and refused["action"] == "details" and "My details" in refused["msg"], "nothing to fill in with yet"
 
@@ -502,6 +510,15 @@ def test_area_the_plain_form_and_a_chosen_job():
     assert state["terms"] is False and state["pw"] == "" and state["dob"] == "" and state["visa"] is False
 
 
+def test_area_what_you_rewrite_on_the_page_is_learned_and_the_form_is_watched():
+    out = _area("components.html", edit={"c9": "I like that Brightpath publishes its API design notes.", "c3": "other@example.com"})
+    learned, (before, after) = out["learned"], out["watch"]
+    assert learned["ok"] and learned["learned"] == 1 and learned["remembered"] == 1, "the answer you rewrote; not the email you changed"
+    assert "What interests you about Brightpath?" in learned["say"]
+    assert before["ok"] and after["ok"] and before["url"] == after["url"] and before["sign"] == after["sign"], "the same page: the same fields"
+    assert before["empty"] > after["empty"] > 0, "fewer empty fields after filling, some still left for you"
+
+
 # ── choosing ────────────────────────────────────────────────────────────────
 def test_an_option_is_matched_only_when_one_says_the_same():
     assert form_choices.match_option(["Immediately", "1 month", "2 months"], "1 month") == "1 month"
@@ -594,3 +611,152 @@ def test_a_country_is_found_in_a_list_however_it_is_spelt():
     assert todo["fill"] == [] and todo["left"] == [{"label": "Country", "why": form_fill.NO_COUNTRY.format(country="Czechia")}]
     short = form_fill.plan([_field("Mobile", kind="tel", most=13)], MINE)
     assert short["fill"][0]["value"] == "+420123456789", "a short field gets the same number without its spaces"
+
+
+# ── your own wording, remembered ────────────────────────────────────────────
+def test_only_your_own_wording_is_remembered_and_only_where_it_fits(isolate):
+    assert answer_memory.key("Why do you want to work at Northwind?", "Northwind") == answer_memory.key("why do you want to work at  QUILLON ?!", "Quillon")
+    assert answer_memory.recall("When can you start?") is None and answer_memory.count() == 0
+    assert answer_memory.remember("When can you start?", "  Within two weeks of an offer. ", "Northwind")
+    assert answer_memory.recall("when can you start", "Quillon")["answer"] == "Within two weeks of an offer."
+    assert answer_memory.path() in vault.data_files()
+    for question, answer in (("When?", ""), ("Notice?", "It is [your notice period]."), ("?", "x"), ("Long?", "y" * 3001)):
+        assert answer_memory.remember(question, answer) is False, (question, answer[:20])
+    assert answer_memory.remember("Why do you want to work at Northwind?", "Because Northwind builds reporting tools I use.", "Northwind")
+    assert answer_memory.recall("Why do you want to work at Northwind?", "Northwind")["answer"].startswith("Because Northwind")
+    assert answer_memory.recall("Why do you want to work at Quillon?", "Quillon") is None, "an answer that names another company is not offered"
+    assert answer_memory.remember("Why do you want to work at Northwind?", "I like building reports people use.", "Northwind")
+    assert answer_memory.recall("Why do you want to work at Quillon?", "Quillon")["answer"] == "I like building reports people use."
+    assert answer_memory.remember("Do you need sponsorship?", "No")
+    assert answer_memory.recall("Do you need sponsorship?", options=["Yes", "no"])["answer"] == "no"
+    assert answer_memory.recall("Do you need sponsorship?", options=["Ja", "Nein"]) is None, "only when it is one of this form's options"
+    assert answer_memory.count() == 3 and answer_memory.forget_all() == 3 and answer_memory.count() == 0
+    for i in range(answer_memory.MAX_ENTRIES + 5):
+        answer_memory.remember(f"Question number {i} in words", "An answer.")
+    assert answer_memory.count() == answer_memory.MAX_ENTRIES and answer_memory.recall("Question number 0 in words") is None
+    answer_memory.path().write_text("{ broken")
+    assert answer_memory.count() == 0 and answer_memory.recall("anything at all") is None
+    assert answer_memory.changed("a  b", "a b") is False and answer_memory.changed("a", "b")
+
+
+def test_an_answer_you_rewrote_is_used_at_the_next_company_without_claude(isolate, monkeypatch):
+    store.save_jobs([_job(form_answers={"made": "1 Oct", "items": [{"question": "When can you start?", "answer": "I can start on [date].", "check": "x"},
+                                                                 {"question": "Why Northwind?", "answer": "A draft.", "check": ""}]}),
+                     _job(id="q1", company="Quillon", title="Data Analyst", url="")])
+    details.save(MINE)
+    api = ui_api.Api()
+    assert api.save_form_answers("nw1", [{"question": "When can you start?", "answer": "Two weeks after an offer.", "check": ""},
+                                         {"question": "Why Northwind?", "answer": "A draft.", "check": ""}])["ok"]
+    assert answer_memory.count() == 1, "the one you rewrote, not the draft you left as it was"
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: pytest.fail("your own answer is there: nothing to draft"))
+    _browser(monkeypatch, [_field("When can you start?", n=1)], url="https://jobs.quillon.example/apply", title="Data Analyst - Quillon")
+    out = api.assistant_fill("q1")
+    assert out["filled"] == [{"label": "When can you start?", "kind": "answer", "check": answer_memory.CHECK, "value": "Two weeks after an offer."}]
+    assert out["can_learn"] and out["is_lead"] and not out["wants_file"] and not out["has_files"]
+
+
+def test_what_you_change_on_the_page_is_learned_from_the_assistants_own_fields_only(isolate, monkeypatch):
+    store.save_jobs([_job()])
+    details.save(MINE)
+    api = ui_api.Api()
+    assert api.assistant_learn()["ok"] is False, "nothing was filled in yet"
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"answers": [{"n": 1, "answer": "A first draft.", "needs_you": ""}]})
+    url = "https://careers.northwind.example/jobs/42"
+    monkeypatch.setattr(chrome, "active_tab", lambda: {"url": url, "title": "Junior Analyst - Northwind"})
+    asked_for = []
+
+    def run(script):
+        if script == form_fill.READ:
+            return json.dumps({"url": url, "title": "t", "frames": [], "boxes": 0, "fields": [_field("Email", n=1), _field("Why Northwind?", kind="textarea", n=2)]})
+        tail = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
+        if isinstance(tail[0], list) and tail[0] and isinstance(tail[0][0], dict):
+            return json.dumps({"done": [i["n"] for i in tail[0]], "skipped": []})
+        asked_for.append(tail[0])
+        return json.dumps({"values": {"2": "Because your reports are built in SQL.", "1": "someone@else.example"}})
+    monkeypatch.setattr(chrome, "run", run)
+    assert api.assistant_fill("nw1")["can_learn"]
+    out = api.assistant_learn()
+    assert asked_for == [[2]], "only the answer the assistant wrote is read back, never your email or anything else"
+    assert out["ok"] and out["learned"] == 1 and "Why Northwind?" in out["say"]
+    assert store.find(store.load_jobs(), "nw1")["form_answers"]["items"][0]["answer"] == "Because your reports are built in SQL."
+    assert answer_memory.recall("Why Northwind?", "Northwind")["answer"] == "Because your reports are built in SQL."
+    assert api.assistant_learn()["learned"] == 0, "the same text twice is nothing new"
+    monkeypatch.setattr(chrome, "run", lambda script: json.dumps({"moved": True}))
+    assert "not in front any more" in api.assistant_learn()["msg"]
+    assert api.assistant_memory() == {"count": 1} and "1 remembered" in api.assistant_forget()["say"] and api.assistant_memory() == {"count": 0}
+
+
+# ── the small helpers around a fill ─────────────────────────────────────────
+def test_a_framed_form_is_opened_in_its_own_tab_only_at_a_web_address(isolate, monkeypatch):
+    opened = []
+    monkeypatch.setattr(chrome, "open_tab", lambda url: opened.append(url))
+    api = ui_api.Api()
+    for bad in ("", "javascript:alert(1)", "file:///etc/passwd", "chrome://settings", "https://", "https://x.example/" + "a" * 2000):
+        assert api.assistant_open_form(bad)["ok"] is False
+    assert "Russian services" in api.assistant_open_form("https://forms.example.ru/a")["msg"] and opened == []
+    assert api.assistant_open_form("https://boards.example.net/embed?id=7")["ok"] and opened == ["https://boards.example.net/embed?id=7"]
+    monkeypatch.setattr(chrome, "open_tab", lambda url: (_ for _ in ()).throw(chrome.ChromeError(chrome.NOT_RUNNING)))
+    assert api.assistant_open_form("https://boards.example.net/a")["msg"] == chrome.NOT_RUNNING
+    details.save(MINE)
+    _browser(monkeypatch, [], frames=["https://boards.frames.example/embed/job?id=7"])
+    assert api.assistant_fill()["frame"] == "https://boards.frames.example/embed/job?id=7"
+
+
+def test_opening_a_tab_asks_chrome_with_the_address_as_an_argument(monkeypatch):
+    calls = _chrome(monkeypatch, _Done(""))
+    chrome.open_tab("https://boards.example.net/a?b=\"c\"")
+    command = calls[0][0]
+    assert command[-1] == 'https://boards.example.net/a?b="c"' and any("make new tab" in part for part in command) and not any("example" in part for part in command[:-1])
+
+
+def test_the_cv_and_letter_are_shown_in_finder_pdf_first(isolate, monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "TAILORED_CV_DIR", tmp_path / "cvs")
+    for folder in (config.TAILORED_CV_DIR, config.LETTERS_DIR):
+        folder.mkdir(exist_ok=True)
+    (config.TAILORED_CV_DIR / "cv_nw.docx").write_bytes(b"x")
+    (config.TAILORED_CV_DIR / "cv_nw.pdf").write_bytes(b"x")
+    (config.LETTERS_DIR / "letter_nw.docx").write_bytes(b"x")
+    store.save_jobs([_job(tailored_cv_file="cv_nw.docx", cover_letter_file="letter_nw.docx"), _job(id="bare")])
+    shown = []
+    monkeypatch.setattr(ui_api.Api, "_reveal", lambda self, path: shown.append(path.name))
+    api = ui_api.Api()
+    out = api.assistant_files("nw1")
+    assert out["ok"] and shown == ["cv_nw.pdf", "letter_nw.docx"] and "Drag them" in out["say"]
+    assert api.assistant_files("bare")["ok"] is False and api.assistant_files("gone")["ok"] is False and len(shown) == 2
+
+
+def test_watching_the_form_is_quiet_about_trouble(isolate, monkeypatch):
+    monkeypatch.setattr(chrome, "run", lambda script: json.dumps({"url": "https://x.example/step2", "fields": 4, "first": "a|b", "empty": 3}))
+    assert ui_api.Api().assistant_watch() == {"ok": True, "url": "https://x.example/step2", "sign": "4:a|b", "empty": 3}
+    monkeypatch.setattr(chrome, "run", lambda script: (_ for _ in ()).throw(chrome.ChromeError(chrome.NOT_RUNNING)))
+    assert ui_api.Api().assistant_watch()["ok"] is False
+    assert form_fill.watch_answer("junk") == {"url": "", "sign": "", "empty": 0} and form_fill.values_answer("junk") == {}
+    for code in (form_fill.WATCH, form_fill.VALUES):
+        for never in (".click(", "submit(", "dispatchEvent", "fetch(", "cookie", "localStorage", "innerHTML"):
+            assert never not in code, never
+    assert "el.value" not in form_fill.WATCH.replace("String(el.value || '').trim() === ''", ""), "watching only counts empty fields"
+
+
+# ── free questions ──────────────────────────────────────────────────────────
+def test_a_free_question_is_answered_from_what_the_app_knows(isolate, monkeypatch):
+    store.save_jobs([_job(match_score=62, match_tier="strong", match_reason="Solid SQL, but no Power BI.")])
+    seen = {}
+
+    def ask(prompt, **kw):
+        seen.update(prompt=prompt, **kw)
+        return "It scored 62 because your SQL is solid — but the CV shows no Power BI."
+    monkeypatch.setattr(llm, "ask", ask)
+    api = ui_api.Api()
+    out = api.assistant_ask("why did this score 62?", "nw1")
+    assert out == {"ok": True, "action": "answer", "say": "It scored 62 because your SQL is solid – but the CV shows no Power BI."}
+    assert "Score: 62" in seen["prompt"] and "Solid SQL, but no Power BI." in seen["prompt"] and "Northwind" in seen["prompt"]
+    assert "The question: why did this score 62?" in seen["prompt"] and "Leads in New Jobs: 1" in seen["prompt"]
+    assert seen["tag"] == "assistant" and "only the facts given" in seen["system"]
+    api.assistant_ask("how many applications are waiting?")
+    assert "No job is chosen" in seen["prompt"]
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's limit is used up until 14:00.")))
+    assert "limit is used up until 14:00" in api.assistant_ask("why did this score 62?", "nw1")["msg"]
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: "   ")
+    assert api.assistant_ask("is this job still open?", "nw1")["ok"] is False
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: pytest.fail("help costs nothing"))
+    assert api.assistant_ask("help")["action"] == "help" and api.assistant_ask("my details")["action"] == "details"

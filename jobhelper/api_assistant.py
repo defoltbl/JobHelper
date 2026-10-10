@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import assistant, chrome, config, cover_letter, details, form_answers, form_choices, form_fill, mailhosts, store
+from . import answer_memory, assistant, chrome, config, cover_letter, details, form_answers, form_choices, form_fill, llm, mailhosts, store
 from .api_base import _guarded
 
 SHOWN = 90      # characters of a filled-in value shown in the report
@@ -47,7 +47,115 @@ class AssistantApi:
             return self.assistant_fill(job_id)
         if what == "details":
             return {"ok": True, "action": "details", "say": "Here are your details. Change what is wrong and save."}
+        if what == "question":
+            return self.assistant_answer(text, job_id)
         return {"ok": True, "action": "help", "say": assistant.HELP if what == "help" else assistant.UNKNOWN}
+
+    def assistant_answer(self, text, job_id=""):
+        """A free question about a job or the app, answered by Claude from facts the app holds (one call)."""
+        problem = assistant.check(text)
+        if problem:
+            return {"ok": False, "action": "none", "msg": problem}
+        job = self.job_detail(job_id) if job_id else None
+        counts = self.counts()
+        numbers = (f"- Leads in New Jobs: {counts.get('leads', 0)}\n- Applications: {counts.get('applications', 0)}\n"
+                   f"- Replies read: {counts.get('responses', 0)}\n- Follow-ups due: {counts.get('followups', 0)}")
+        try:
+            said = llm.ask(assistant.ANSWER_PROMPT.format(about=assistant.ABOUT, numbers=numbers, job=assistant.job_facts(job or None),
+                                                          question=" ".join(str(text).split())),
+                           system=assistant.ANSWER_SYSTEM, tag="assistant")
+        except Exception as e:  # noqa: BLE001 - said to the person as the reason
+            return {"ok": False, "action": "answer", "msg": f"I could not ask Claude: {str(e) or type(e).__name__}"}
+        said = " ".join(str(said or "").replace("—", "–").split())
+        if not said:
+            return {"ok": False, "action": "answer", "msg": "Claude gave no answer. Ask again in other words."}
+        return {"ok": True, "action": "answer", "say": said[:1500]}
+
+    # ── small helpers the window offers after a fill ────────────
+    def assistant_open_form(self, url):
+        """Open a form that sits in a frame in a tab of its own (the address comes from the page that was read)."""
+        url = str(url or "").strip()
+        host = form_fill.host_of(url)
+        if not url.lower().startswith(("http://", "https://")) or not host or len(url) > 2000:
+            return {"ok": False, "msg": "That is not a web address I can open."}
+        if mailhosts.never_used(host):
+            return {"ok": False, "msg": "This app does not work with Russian services, so I do not open this site."}
+        try:
+            chrome.open_tab(url)
+        except chrome.ChromeError as e:
+            return {"ok": False, "msg": str(e)}
+        return {"ok": True, "say": f"I opened the form from {host} in a new tab. Ask me to fill it in when it has loaded."}
+
+    def assistant_files(self, job_id):
+        """Show the CV and the letter of a job in Finder, ready to be dragged into the form."""
+        j = store.find(store.load_jobs(), job_id)
+        if not j:
+            return {"ok": False, "msg": "That job is not in the list any more."}
+        shown = []
+        for what, base, name in (("CV", config.TAILORED_CV_DIR, j.get("tailored_cv_file", "")), ("letter", config.LETTERS_DIR, j.get("cover_letter_file", ""))):
+            if not name:
+                continue
+            docx = (base / name).with_suffix(".docx")
+            for path in (docx.with_suffix(".pdf"), docx, config.COVER_LETTERS_DIR / name):
+                if path.is_file():
+                    self._reveal(path)
+                    shown.append(f"{what} ({path.name})")
+                    break
+        if not shown:
+            return {"ok": False, "msg": "This job has no CV or letter from the app. Attach your own files."}
+        return {"ok": True, "say": f"Shown in Finder: {' and '.join(shown)}. Drag {'it' if len(shown) == 1 else 'them'} onto the form's file field."}
+
+    def assistant_watch(self):
+        """Where the form in front stands now: quiet on any trouble (it is asked every few seconds while the window waits)."""
+        try:
+            return {"ok": True, **form_fill.watch_answer(chrome.run(form_fill.WATCH))}
+        except Exception:  # noqa: BLE001 - not being able to look is not something to report
+            return {"ok": False, "url": "", "sign": "", "empty": 0}
+
+    def assistant_learn(self):
+        """Take over what the person changed on the page in the answers the assistant wrote: kept with the job and
+        remembered for the same question elsewhere. Only those fields are read back, nothing else on the page."""
+        last = getattr(self, "_last_fill", None)
+        if not last or not last.get("items"):
+            return {"ok": False, "msg": "There is nothing to compare with yet. Ask me to fill in a form first."}
+        try:
+            now = form_fill.values_answer(chrome.run(form_fill.values_script([i["n"] for i in last["items"]], last["url"])))
+        except chrome.ChromeError as e:
+            return {"ok": False, "msg": str(e)}
+        if not now:
+            return {"ok": False, "msg": "The form is not in front any more, so I cannot see what you changed. Go back to it and ask again."}
+        learned = []
+        for item in last["items"]:
+            value = now.get(item["n"], "").strip()
+            if value and answer_memory.changed(item["value"], value) and answer_memory.remember(item["label"], value, last.get("company", "")):
+                learned.append({"question": item["label"], "answer": value})
+                item["value"] = value
+        if learned and last.get("job_id"):
+            new = {i["question"].lower(): i for i in learned}
+
+            def keep(jobs, j):          # may run twice (the running search's copy): the result is the same
+                items = form_answers.tidy((j.get("form_answers") or {}).get("items"))
+                for it in items:
+                    if it["question"].lower() in new:
+                        it["answer"], it["check"] = new[it["question"].lower()]["answer"], ""
+                have = {it["question"].lower() for it in items}
+                items += [{"question": i["question"], "answer": i["answer"], "check": ""} for i in learned if i["question"].lower() not in have]
+                j["form_answers"] = {"made": (j.get("form_answers") or {}).get("made") or form_answers.stamp(), "items": items}
+            self._change(last["job_id"], keep, render=False)
+        if not learned:
+            return {"ok": True, "learned": 0, "say": "You changed none of the answers I wrote, so there is nothing new to remember."}
+        return {"ok": True, "learned": len(learned),
+                "say": f"I will use your wording for {len(learned)} {'question' if len(learned) == 1 else 'questions'} from now on: "
+                       + "; ".join(i["question"][:60] for i in learned[:4]) + ("…" if len(learned) > 4 else ".")}
+
+    def assistant_memory(self):
+        try:
+            return {"count": answer_memory.count()}
+        except Exception:  # noqa: BLE001
+            return {"count": 0}
+
+    def assistant_forget(self):
+        return {"ok": True, "say": f"Forgotten: {answer_memory.forget_all()} remembered answers. New ones are drafted from your CV again."}
 
     # ── filling in the form in Chrome ───────────────────────────
     def _letter_text(self, j) -> str:
@@ -63,6 +171,11 @@ class AssistantApi:
         """Answers for the open questions of a form: those kept with the job are used again, the
         rest are drafted in one call and kept. Returns ({question: item}, why some are missing)."""
         kept = {i["question"].lower(): i for i in form_answers.tidy((job.get("form_answers") or {}).get("items")) if i["answer"]}
+        for q in asked:                      # your own wording for the same question elsewhere comes before a new draft
+            if q["label"].lower() not in kept:
+                mine = answer_memory.recall(q["label"], job.get("company", ""))
+                if mine:
+                    kept[q["label"].lower()] = {"question": q["label"], "answer": mine["answer"], "check": answer_memory.CHECK}
         fresh = [q["label"] for q in asked if q["label"].lower() not in kept]
         if not fresh:
             return kept, ""
@@ -106,6 +219,10 @@ class AssistantApi:
                 c["options"] = self._menu(c["n"], url, typed)
                 chrome.run(form_fill.choose_script("close", c["n"], bool(typed), url))
         picks = {c["n"]: form_choices.settle(c, mine, job) for c in choices}
+        for c in choices:                            # what you chose for the same question before
+            if not picks[c["n"]] and c["options"]:
+                earlier = answer_memory.recall(c["label"], (job or {}).get("company", ""), c["options"])
+                picks[c["n"]] = earlier["answer"] if earlier else ""
         open_ones = [c for c in choices if not picks[c["n"]] and (c["kind"] == "number" or c["options"])]
         why = ""
         if open_ones:
@@ -164,7 +281,8 @@ class AssistantApi:
             if page["frames"]:
                 inner = form_fill.host_of(page["frames"][0]) or "another site"
                 return no(f"The form on this page sits inside a frame from {inner}, which cannot be reached from outside. "
-                          f"Open the form on its own page (the Apply button often does that), or open this address in a tab: {page['frames'][0]}")
+                          f"Open the form on its own page (the Apply button often does that), or open this address in a tab: {page['frames'][0]}",
+                          frame=page["frames"][0])
             return no(f"I found no form fields on this page ({page['title'] or host}). Open the page with the application form and ask me again.")
         jobs = store.load_jobs()
         job, guessed = None, False
@@ -189,7 +307,7 @@ class AssistantApi:
                                  + " The answer is kept under Form answers for this job."})
                 else:
                     fill.append({"n": q["n"], "label": q["label"], "value": item["answer"], "kind": "answer", "check": item["check"]})
-        filled = []
+        filled, done = [], {"done": []}
         if todo["choose"]:
             try:
                 values, chosen, open_ones = self._choose(todo["choose"], page["url"], mine, job)
@@ -213,7 +331,14 @@ class AssistantApi:
                     left.append({"label": item["label"], "why": "The page did not take it: the field changed or was filled in the meantime. Type this one yourself."})
         kept = sum(1 for f in page["fields"] if f["filled"])
         label = f"{job.get('title', '')} at {job.get('company', '')}" if job else ""
+        # what the assistant itself wrote as answers: the only fields it may read back later, to learn your corrections
+        self._last_fill = {"url": page["url"], "job_id": job["id"] if job else "", "company": job.get("company", "") if job else "",
+                           "items": [{"n": i["n"], "label": i["label"], "value": i["value"]} for i in fill
+                                     if i["kind"] in ("answer", "choice") and i["n"] in (done["done"] if fill else [])]}
         return {"ok": True, "action": "fill", "host": host, "url": page["url"],
                 "job_id": job["id"] if job else "", "job": label, "guessed": guessed,
+                "wants_file": any(i["why"] == form_fill.FILE for i in left),
+                "has_files": bool(job and (job.get("tailored_cv_file") or job.get("cover_letter_file"))),
+                "is_lead": bool(job and job.get("status") in store.LEAD_STATUSES), "can_learn": bool(self._last_fill["items"]),
                 "filled": filled, "left": left, "kept": kept, "boxes": page["boxes"],
                 "say": assistant.summary(host, filled, left, kept, page["boxes"], label, guessed)}

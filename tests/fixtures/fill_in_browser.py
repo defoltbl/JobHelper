@@ -8,7 +8,8 @@ tab in front is that page, and scripts run in it. Claude is replaced by the answ
 The data folder is a temporary one and the Keychain is in memory, so nothing real is read or changed.
 
 setup: {"details": {...}, "jobs": [...], "job_id": "", "answers": {"question": ["answer", "what to check"]},
-        "choices": {"question": "the option or number Claude would choose"}}
+        "choices": {"question": "the option or number Claude would choose"},
+        "edit": {"field id": "what the person types over the assistant's answer, before asking it to remember"}}
 out:   {"result": what Api.assistant_fill returned, "state": every field's value afterwards,
         "sent": bool, "clicked": bool, "asked": the questions that went to Claude}
 """
@@ -136,9 +137,20 @@ def main() -> int:
             return
 
         def go():
-            result = ui_api.Api().assistant_fill(setup.get("job_id", ""))
+            api = ui_api.Api()
+            before = api.assistant_watch()
+            result = api.assistant_fill(setup.get("job_id", ""))
+            learned = None
+            if setup.get("edit"):                    # the person rewrites fields on the page, then asks to have it remembered
+                for field, text in setup["edit"].items():
+                    run("(function(){var el=document.getElementById(%s); var p=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;"
+                        "Object.getOwnPropertyDescriptor(p,'value').set.call(el,%s); el.dispatchEvent(new Event('input',{bubbles:true}));})()"
+                        % (json.dumps(field), json.dumps(text)))
+                learned = api.assistant_learn()
+                from jobhelper import answer_memory
+                learned["remembered"] = answer_memory.count()
             state = json.loads(run(STATE))
-            out = {"result": result, "state": state["fields"], "kept": state["kept"], "sent": state["sent"], "clicked": state["clicked"], "asked": asked,
+            out = {"learned": learned, "watch": [before, api.assistant_watch()], "result": result, "state": state["fields"], "kept": state["kept"], "sent": state["sent"], "clicked": state["clicked"], "asked": asked,
                    "chosen": chosen, "menus": state["menus"], "opened": state["opened"]}
             if picture:                              # the page as a PDF: it can be drawn without a screen
                 loop = QEventLoop()

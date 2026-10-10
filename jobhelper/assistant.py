@@ -20,8 +20,53 @@ HELP = ("I fill in application forms. Open the form in Google Chrome, bring its 
         "I leave files, passwords, tick boxes and personal questions to you, and I never send a form.")
 UNKNOWN = "I did not understand that. " + HELP
 
+# What the assistant may say about the app when asked a free question: facts, kept short. It is
+# given to Claude with the question, so an answer never comes from anywhere else.
+ABOUT = """JobHelper is a desktop app for a job search. It runs on the person's Claude subscription.
+- Run search: reads job boards, filters postings without a model call (language, level, years of experience, age, location), scores the rest from 0 to 100 against the CV, and writes an adapted CV and a cover letter for postings at or above the limit set in Options.
+- A score has a reason in words (Why this score) and a list of the posting's keywords that are and are not in the CV. A required language the CV does not show caps the score at 25; a posting scored from its title only is capped at 40 and gets no documents.
+- New Jobs lists leads; Mark applied moves one to Applications. Statuses of an application: waiting, interview, offer, rejected, on hold.
+- Scan email reads replies read-only and files them to applications. Nothing is ever sent, deleted or marked.
+- Filtered out (Last run card) lists every posting a search dropped, with the reason.
+- Options sets the city, roles, limit, skip words, About you (right to work, start date, more about your work) and the salary you ask for.
+- Form answers drafts answers to a form's questions from the CV. The assistant fills in the form that is open in Google Chrome and never sends it.
+- Nothing is claimed in a CV, letter or answer that the master CV or the person's own notes do not show.
+- When Claude's limit is used up, a run pauses and can be resumed after the reset time shown in the Usage card."""
+
+ANSWER_SYSTEM = ("You are the assistant inside the JobHelper app. Answer the person's question in at most five short sentences, "
+                 "in plain words, using only the facts given. If the facts do not hold the answer, say that you do not know and "
+                 "where in the app to look. Never invent a number, a date, a score or a reason. No lists, no emojis; use an en dash, never an em dash.")
+
+ANSWER_PROMPT = """Facts about the app:
+{about}
+
+The person's numbers right now:
+{numbers}
+
+{job}
+
+The question: {question}"""
+
+
+def job_facts(job: dict[str, Any] | None) -> str:
+    """What is known about the chosen job, as lines for the prompt."""
+    if not job:
+        return "No job is chosen, so questions about one particular job cannot be answered: say so and ask the person to choose the job."
+    missing = ", ".join(str(w) for w in (job.get("missing") or [])[:20]) or "none listed"
+    matched = ", ".join(str(w) for w in (job.get("matched") or [])[:20]) or "none listed"
+    return "\n".join(["The job the question is about:", f"- Title: {job.get('title', '')}", f"- Company: {job.get('company', '')}",
+                      f"- Location: {job.get('location', '') or 'not stated'}", f"- Status: {job.get('status', '')}",
+                      f"- Score: {job.get('score') if job.get('score') is not None else 'not scored'} (documents are written from {job.get('threshold', '')})",
+                      f"- Why this score: {job.get('reason', '') or 'no reason stored'}",
+                      f"- What the score rests on: {job.get('basis', '') or 'the full posting'}",
+                      f"- Keywords of the posting in the CV: {matched}", f"- Keywords of the posting not in the CV: {missing}",
+                      f"- Applied on: {job.get('applied', '') or 'not applied'}", f"- Posted: {job.get('posted', '') or 'not stated'}",
+                      f"- Has a CV and letter from the app: {'yes' if job.get('cv') or job.get('letter') else 'no'}"])
+
 _FILL = re.compile(r"\b(?:fill|complete|populate|autofill)\w*|\bform\b|chrome|\bapply|\bapplication")
 _DETAILS = re.compile(r"detail|my (?:info|data|name|phone|address|email|links?)|contacts?\b|about me")
+_ASKS = re.compile(r"^(?:why|when|where|which|who|how (?:many|much|long|often)|is|are|was|were|did|does|do|can|could|should|will|what(?! can you))\b|\?$")
+_ABOUT_ME = re.compile(r"^(?:hi|hello|hey)\b|^help$|what can you|who are you|how (?:does this|do you) work")
 _HELP = re.compile(r"\b(?:hi|hello|hey|help|how|what can you|who are you)\b")
 
 
@@ -34,15 +79,22 @@ def check(text: Any) -> str:
 
 
 def intent(text: Any) -> str:
-    """"fill", "details", "help" or "unknown"."""
+    """"fill", "details", "help", "question" (something to answer with Claude) or "unknown"."""
     words = " ".join(str(text or "").lower().split())
-    if _DETAILS.search(words) and not re.search(r"\bfill|\bform\b|chrome", words):
+    about_form = bool(re.search(r"\bfill|\bform\b|chrome", words))
+    if _DETAILS.search(words) and not about_form:
         return "details"
+    if _ABOUT_ME.search(words):
+        return "help"
+    if _ASKS.search(words) and len(words.split()) >= 3 and not about_form:
+        return "question"                           # "why did this score 62?", "how many applications are waiting?"
     if _FILL.search(words):
         return "fill"
     if _DETAILS.search(words):
         return "details"
-    return "help" if _HELP.search(words) else "unknown"
+    if _HELP.search(words):
+        return "help"
+    return "question" if len(words.split()) >= 3 else "unknown"
 
 
 def _count(n: int, one: str, many: str = "") -> str:
