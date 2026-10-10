@@ -5,6 +5,16 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Found by reading the code line by line (second part: search, scoring, replies, documents):**
+  - LinkedIn postings are now really asked whether they are still open. Postings from boards that cannot be asked used to fill the queue on every search, so most LinkedIn ones never were.
+  - One job board that changed its pages no longer ends a whole search; the other sources go on, and the trouble log says which board failed.
+  - A status you set by hand is no longer set back by an older email on every scan. An email newer than your change still counts.
+  - Text from an email or a posting that begins with "=" is written into the Excel tables as text, never as a formula.
+  - A reply Claude answered in an unexpected shape is still filed, and one email with an undecodable subject no longer ends a scan.
+  - "Claude's limit is used up" is now said when you ask for one job's documents, instead of "Nothing could be written this time".
+  - A LinkedIn posting's date is read from its own date line only; before, words elsewhere on the page could make an old posting look new.
+  - For someone searching in India, Canada or a country the app has no table for, local postings written "City, IN" are no longer taken for the United States.
+  - The Replies report lists applications in the order of their dates.
 - **Found by reading the code line by line (first part):**
   - A CV that keeps its jobs or skills in a table is now read whole; before, only its paragraphs were, so true experience could look like something the CV does not say.
   - A Keychain that is locked or does not answer is no longer taken for an empty one, and no new data key is ever made for data that is already encrypted.

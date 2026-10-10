@@ -1,7 +1,7 @@
 """What the assistant makes of a request that is not one of its fixed ones.
 
-One call to Claude decides one thing: an answer in words, or ONE action for the app to carry
-out. Claude is given what the app knows (the jobs, their state, the last few turns of the
+One call to Claude decides one thing: an answer in words, or up to three actions for the app to
+carry out in order. Claude is given what the app knows (the jobs, their state, the last few turns of the
 talk) and the list of actions; it does nothing itself. What it returns is checked here before
 anything happens: an action that is not on the list, a job that does not exist or an argument
 of the wrong kind is thrown away, and only the words are kept.
