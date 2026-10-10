@@ -89,7 +89,7 @@ Dialog {
             ColumnLayout { Layout.fillWidth: true; spacing: 2
                 Text { text: "Cover letter"; color: theme.ink; font.pixelSize: 17; font.bold: true }
                 Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 12
-                    text: (letterDialog.meta.company || "") + "  ·  " + (letterDialog.meta.title_line || letterDialog.meta.title || "") } }
+                    text: (letterDialog.meta.company || "") + "  ·  " + (letterDialog.meta.title || letterDialog.meta.title_line || "") } }
             Text { objectName: "letterWords"; font.pixelSize: 12; font.bold: true
                 color: (letterDialog.words < (letterDialog.meta.min_words || 0) || letterDialog.words > (letterDialog.meta.max_words || 9999)) ? theme.warn : theme.soft
                 text: letterDialog.words + " words" }

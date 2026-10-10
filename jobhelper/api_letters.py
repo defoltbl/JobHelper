@@ -61,7 +61,8 @@ class LettersApi:
         parts = cover_letter.read_letter(path)
         draft = path.with_name(path.stem + ".editing.docx")
         try:
-            cover_letter.build_docx(config.LETTER_TEMPLATE, draft, parts["title_line"], texts, date_text=parts["date_text"])
+            cover_letter.build_docx(config.LETTER_TEMPLATE, draft, cover_letter.own_title(self._cv_text()) or parts["title_line"], texts,
+                                    date_text=parts["date_text"])
             # Only a damaged file stops the save. Wording that breaks a letter rule is
             # your call in a hand edit: it comes back as a warning below.
             problems = [x for x in cover_letter.verify(config.LETTER_TEMPLATE, draft, []) if "admits a gap" not in x]

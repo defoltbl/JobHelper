@@ -75,9 +75,40 @@ def test_write_end_to_end_with_mocked_model(isolate_data, monkeypatch):
     name = cover_letter.write(job, _master_text(), MASTER)
     assert name == "Candidate_CoverLetter_DeutscheBorse_MiddlewareAdmin.docx"
     got = [p.text for p in docx.Document(str(config.LETTERS_DIR / name)).paragraphs]
-    assert got[1] == title and got[7:12] == body
+    assert got[1] == "Junior Software Developer" != title, "under the name stands what the CV says you are, not the role applied for"
+    assert got[7:12] == body
     assert got[5] == cover_letter.letter_date()            # today's date
-    assert got[:5] == example_paras[:5] and got[12:] == example_paras[12:]   # head + closing untouched
+    assert got[0] == example_paras[0] and got[2:5] == example_paras[2:5] and got[12:] == example_paras[12:]   # head + closing untouched
+    job2 = store.new_job(id="jobscz-2", title="Junior Middleware Administrator (f/m/d)", company="Northwind", description="Linux")
+    bare = "\n".join(line for i, line in enumerate(_master_text().splitlines()) if i != 1)      # a CV with no line under the name
+    assert cover_letter.own_title(bare) == ""
+    name2 = cover_letter.write(job2, bare, MASTER)
+    assert docx.Document(str(config.LETTERS_DIR / name2)).paragraphs[1].text == title, "then the role, as before"
+
+
+@pytest.mark.parametrize("second, title", [
+    ("Junior Software Developer", "Junior Software Developer"), ("  Data   Analyst  ", "Data Analyst"), ("QA Engineer | Python, SQL", "QA Engineer | Python, SQL"),
+    ("alex@example.com · +420 123 456 789", ""), ("Brno, Czechia · linkedin.com/in/alexnovak", ""), ("+420 123 456 789", ""), ("PROFILE", ""),
+    ("SUMMARY", ""), ("I am a developer who likes clean code and good tests.", ""), ("https://alexnovak.example", ""), ("2019 - 2024", ""),
+    ("A very long line that goes on about many things and is clearly not a title of a person at all", "")])
+def test_your_own_title_is_the_line_under_your_name(second, title):
+    assert cover_letter.own_title(f"Alex Novak\n\n{second}\nPROFILE\nBuilds services.") == title
+    assert cover_letter.own_title("Alex Novak") == "" and cover_letter.own_title("") == "" and cover_letter.own_title(None) == ""
+
+
+def test_the_title_of_a_written_letter_can_be_corrected_and_nothing_else_changes(tmp_path):
+    title, body, example_paras = _example()
+    out = tmp_path / "letter.docx"
+    cover_letter.build_docx(TEMPLATE, out, "Group Full-Stack Developer – Payments", body, when=date(2026, 10, 6))
+    assert cover_letter.set_title(out, "Junior Software Developer") is True
+    got = [p.text for p in docx.Document(str(out)).paragraphs]
+    assert got[1] == "Junior Software Developer" and got[:1] + got[2:] == example_paras[:1] + example_paras[2:]
+    assert cover_letter.verify(TEMPLATE, out, []) == [] and list(tmp_path.iterdir()) == [out], "a sound letter, and no draft left behind"
+    assert cover_letter.set_title(out, "Junior Software Developer") is False and cover_letter.set_title(out, "  ") is False
+    short = tmp_path / "short.docx"
+    docx.Document().save(str(short))
+    with pytest.raises(ValueError):
+        cover_letter.set_title(short, "Anything")           # not built from the letter template: refused, not rewritten
 
 
 # ── first person only (the first real run produced a letter about "Alex ... he") ──

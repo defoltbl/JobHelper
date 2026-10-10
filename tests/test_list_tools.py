@@ -174,7 +174,9 @@ def test_saving_changes_only_the_paragraphs_and_keeps_the_old_version(api):
     assert result["ok"] is True
     after = cover_letter.read_letter(path)
     assert after["paragraphs"][2].startswith("I built a REST API") and "—" not in after["paragraphs"][2]    # em dash cleaned
-    assert (after["title_line"], after["date_text"]) == (before["title_line"], before["date_text"])
+    assert after["date_text"] == before["date_text"]
+    assert before["title_line"] == "Junior Developer" and after["title_line"] == cover_letter.own_title(api._cv_text()) != "", \
+        "the head carries your own title from your CV, also in a letter written before that was so"
     assert after["paragraphs"][0] == PARAS[0]
     assert cover_letter.verify(config.LETTER_TEMPLATE, path, []) == []                 # layout identical to the template
     old = list((vault.backups_dir() / "letter_versions").iterdir())

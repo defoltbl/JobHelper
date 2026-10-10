@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 import zipfile
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from lxml import etree
@@ -71,7 +72,7 @@ Job posting:
 {feedback}
 Return JSON with exactly these keys:
 {{
-  "title_line": "<the role applied for, without (m/f/d) or location>",
+  "title_line": "<the role applied for, without (m/f/d) or location: used only when the CV has no title line under the name>",
   "paragraphs": ["<hook>", "<strongest evidence>", "<second theme>", "<learning and fit>", "<close>"],
   "role_short": "<the role in 1-3 words, e.g. Middleware Admin>"
 }}
@@ -256,6 +257,46 @@ def build_docx(template_path, out_path, title_line: str, paragraphs: list[str], 
             for item in zin.infolist():
                 data = new_xml if item.filename == "word/document.xml" else zin.read(item.filename)
                 zout.writestr(item, data, compress_type=zipfile.ZIP_DEFLATED)
+
+
+_NOT_A_TITLE = re.compile(r"@|https?:|www\.|\.(?:com|cz|org|net|io|dev)\b|\d{4,}|[.!?]$")
+
+
+def own_title(cv_text: str) -> str:
+    """What you call yourself: the line under your name in your CV ("Junior Software Developer"), or '' when the CV
+    has no such line (the second line is then contacts or a heading). The head of a letter says who writes, so it
+    carries this line, the same one your CV and your profiles on the web show, not the role applied for."""
+    lines = [" ".join(line.split()) for line in (cv_text or "").splitlines() if line.strip()]
+    if len(lines) < 2:
+        return ""
+    line = lines[1]
+    if len(line) > 70 or len(line.split()) > 8 or _NOT_A_TITLE.search(line.lower()) or (line.isupper() and len(line.split()) <= 3):
+        return ""
+    return line if re.search(r"[^\W\d_]{3}", line) else ""
+
+
+def set_title(path, title: str) -> bool:
+    """Put another line under the name of a letter this app built; nothing else in the file changes. False = it already says so."""
+    title = clean(str(title)).strip()
+    if not title:
+        return False
+    with zipfile.ZipFile(path) as zin:
+        root = etree.fromstring(zin.read("word/document.xml"))
+        slot = _slots(root.find(f"{{{W}}}body"))["title"]
+        if _text(slot).strip() == title:
+            return False
+        _set_para(slot, title)
+        new_xml = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+        items = [(item, new_xml if item.filename == "word/document.xml" else zin.read(item.filename)) for item in zin.infolist()]
+    draft = Path(path).with_name(Path(path).stem + ".retitling.docx")
+    try:
+        with zipfile.ZipFile(draft, "w") as zout:
+            for item, data in items:
+                zout.writestr(item, data, compress_type=zipfile.ZIP_DEFLATED)
+        draft.replace(path)
+    finally:
+        draft.unlink(missing_ok=True)
+    return True
 
 
 def read_letter(path) -> dict[str, Any]:
@@ -448,8 +489,8 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
         job["letter_check"] = left[:8]
     else:
         job.pop("letter_check", None)
-    if not title_line:
-        title_line = re.sub(r"\s*\(.*?\)", "", job["title"]).strip()
+    # The line under the name says who writes: your own title, as your CV has it. Only a CV without such a line gets the role.
+    title_line = own_title(cv_text) or title_line or re.sub(r"\s*\(.*?\)", "", job["title"]).strip()
 
     config.ensure_dirs()
     stem = file_stem(master_path or "Candidate_CV_EN.docx", job, role_short)
