@@ -14,8 +14,9 @@ ColumnLayout {
     property string err: ""
     property color chipTone: theme.ink
     ListModel { id: teModel }
-    function setAll(arr) { teModel.clear(); for (var i = 0; i < (arr || []).length; i++) teModel.append({ text: "" + arr[i] }); err = ""; }
+    function setAll(arr) { teModel.clear(); for (var i = 0; i < (arr || []).length; i++) teModel.append({ text: "" + arr[i] }); err = ""; teField.text = ""; }
     readonly property int tagCount: teModel.count
+    readonly property string typed: teField.text.trim()      // typed into the box and not added to the list (yet)
     function all() { var out = []; for (var i = 0; i < teModel.count; i++) out.push("" + teModel.get(i).text); return out; }
     function add(txt) {
         var t = (txt || "").trim().toLowerCase();

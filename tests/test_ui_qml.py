@@ -4120,3 +4120,29 @@ def test_saving_one_part_of_the_job_window_keeps_what_was_typed_in_the_others(ui
         ui.bridge._api.set_event("app", "", "", "interview", "")
         ui.bridge._api.save_company_notes("Beta", {"contact": "", "salary": "", "asked": "", "notes": ""})
         ui.js("detailDialog.confirmClose = true; detailDialog.close()"); ui.wait(350)
+
+
+def test_options_says_when_something_was_typed_but_not_added(ui):
+    """A role or a word typed into a box with its own Add button is not saved: Save says so instead of dropping it."""
+    start = ui.bridge.options()
+    ui.js("optsData = bridge.options(); optDialog.open()"); ui.wait(450)
+    try:
+        assert ui.js("optDialog.notAdded()") == ""
+        ui.js('roleField.text = "junior qa tester"')
+        said = ui.js("optDialog.notAdded()")
+        assert "“junior qa tester”" in said and "Search roles" in said and "not added" in said
+        ui.js('roleField.text = ""')
+        ui.js('skipTags.setAll(["intern"])')
+        field = [item for item in ui.seen("optScroll") if item.property("placeholderText") == "e.g. intern"]
+        assert len(field) == 1
+        field[0].setProperty("text", "trainee"); ui.wait(20)
+        said = ui.js("optDialog.notAdded()")
+        assert "“trainee”" in said and "Skip titles with" in said
+        assert "Save" in ROOT.joinpath("ui_qt", "OptionsDialog.qml").read_text(encoding="utf-8").split("var left = optDialog.notAdded();")[0][-3000:]   # asked on Save
+        ui.js("optDialog.close()"); ui.wait(350)
+        ui.js("optDialog.open()"); ui.wait(450)                       # opened again: the half-typed word is gone
+        assert ui.js("optDialog.notAdded()") == "" and ui.js("skipTags.typed") == ""
+    finally:
+        ui.js("optDialog.close()"); ui.wait(350)
+        ui.bridge.saveOptions(start)
+        ui.js("optsData = bridge.options()")

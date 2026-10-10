@@ -212,6 +212,17 @@ Dialog {
         else { shelfNote = (r && r.msg) || "The old copies could not be moved to the Trash."; var keep = shelfNote; readShelf(); shelfBad = true; shelfNote = keep;
                if (r && r.changed && (shelf.old || 0) > 0) confirmTidy = true; }
     }
+    // Something typed into a box that has its own Add button, and not added: Save would leave it out without a word.
+    function notAdded() {
+        var boxes = [[roleField.text, "Search roles"], [skipTags.typed, skipTags.label], [keepTags.typed, keepTags.label],
+                     [wantedTags.typed, wantedTags.label], [unwantedTags.typed, unwantedTags.label], [levelTags.typed, levelTags.label],
+                     [coToken.text || coName.text, "Company career sites"], [payRole.text, "A different figure for"]];
+        for (var i = 0; i < boxes.length; i++) {
+            var t = ("" + (boxes[i][0] || "")).trim();
+            if (t !== "") return "“" + t.substring(0, 40) + "” is typed under “" + boxes[i][1].replace(/^…/, "") + "” but not added. Press Add next to it, or empty the box, then save.";
+        }
+        return "";
+    }
     function tryClose() {                 // the ✕ and the Esc key: ask once before throwing changes away
         if (changed() && !confirmClose) {
             confirmClose = true;
@@ -263,6 +274,7 @@ Dialog {
         for (var k = 0; k < cs.length; k++)
             companiesModel.append({ name: cs[k].name, ats: cs[k].ats, token: cs[k].token });
         coErr = ""; optErr = ""; roleErr = ""; confirmClose = false;
+        roleField.text = ""; coName.text = ""; coToken.text = ""; pendingRole = "";      // nothing half-typed is left from the last time
         loaded = JSON.stringify(collect());
         optSink.forceActiveFocus();                    // no field is pre-selected when the window opens
         if (optScroll && optScroll.contentItem) {      // always open at the top
@@ -707,6 +719,8 @@ Dialog {
                     }
                     var clash = optDialog.roleClash(qs, skipTags.all(), keepTags.all());
                     if (clash !== "") { optDialog.optErr = clash; return; }
+                    var left = optDialog.notAdded();
+                    if (left !== "") { optDialog.optErr = left; return; }
                     var all = optDialog.collect();
                     var saved = bridge.saveOptions(all.options);
                     if (!(saved && saved.ok)) { optDialog.optErr = (saved && saved.msg) || "The Options could not be saved."; return; }

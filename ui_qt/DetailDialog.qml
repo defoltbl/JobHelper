@@ -587,7 +587,8 @@ Dialog {
                             onClicked: { var d = detailDialog.job.duplicate;
                                          var r = bridge.mergeJobs(d.keep, d.drop);
                                          if (r && r.ok) { ticker.text = "Merged into one application.";
-                                             win.countsData = bridge.counts(); win.refreshOpenView(); detailDialog.show(d.keep); } } }
+                                             win.countsData = bridge.counts(); win.refreshOpenView(); detailDialog.show(d.keep); }
+                                         else ticker.text = (r && r.msg) || "The two could not be merged."; } }
                     }
                 }
 
@@ -904,8 +905,9 @@ Dialog {
             SmallButton { objectName: "notInterested"; visible: detailDialog.job.is_lead === true; text: "Not interested"
                 onClicked: detailDialog.notInterested() }
             SmallButton { visible: detailDialog.job.is_dismissed === true; primaryStyle: true; text: "Restore to New Jobs"
-                onClicked: { bridge.restoreJob(detailDialog.job.id); detailDialog.refresh();
-                             win.countsData = bridge.counts(); win.refreshOpenView(); ticker.text = "Back in New Jobs."; } }
+                onClicked: { var back = bridge.restoreJob(detailDialog.job.id); detailDialog.refresh();
+                             win.countsData = bridge.counts(); win.refreshOpenView();
+                             ticker.text = (back && back.ok) ? "Back in New Jobs." : ((back && back.msg) || "Couldn't restore that job."); } }
             PillButton { objectName: "applyBottom"; visible: detailDialog.job.is_lead === true; primaryStyle: true; text: "Mark applied"
                 onClicked: detailDialog.markApplied() }
         }
