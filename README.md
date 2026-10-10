@@ -451,7 +451,15 @@ A few decisions worth highlighting:
 - The built-in salary estimate covers software roles in Czechia; elsewhere you enter your own
   figure.
 - The assistant fills in forms in Chrome, Brave, Edge, Opera and Safari; Opera GX and Firefox
-  do not let another app fill their pages. It leaves file uploads and boxes that agree to something
-  to you. It is tested on the forms of its own test area, not yet across real recruiting sites,
-  where menus in particular are drawn in many ways.
+  do not let another app fill their pages. It attaches the CV and the letter of the job, and
+  leaves other files and boxes that agree to something to you. It has been tried on a few real
+  recruiting sites; menus in particular are drawn in many ways, and a new site may need a fix.
 - The app is started from a terminal. Packaging it as an app that opens from Finder is planned.
+
+## Author
+
+**Andrii Maksymenko**, Junior Software Developer, Prague.
+
+- Portfolio: [andrii-maksymenko.com](https://andrii-maksymenko.com)
+- LinkedIn: [linkedin.com/in/andrii-maksymenko-83628932a](https://www.linkedin.com/in/andrii-maksymenko-83628932a)
+- GitHub: [github.com/defoltbl](https://github.com/defoltbl)

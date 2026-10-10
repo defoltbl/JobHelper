@@ -26,7 +26,33 @@ Dialog {
     property bool busy: false             // a request is being worked on (Chrome, perhaps Claude)
     property string askErr: ""            // what is wrong with the request, in red under the box
     property string jobId: ""             // the job the answers are for ("" = find it from the page)
-    property var jobs: []
+    property var jobs: []                 // what the list shows: all open jobs, or those that match what was typed
+    property var allJobs: []
+    property string jobFindErr: ""
+    readonly property int maxJobFind: 80
+    // Typing part of a company or a title narrows the list; when one job is left, it is chosen and its full name shown.
+    function findJob(typed) {
+        var words = String(typed || "").toLowerCase().split(/\s+/).filter(function (w) { return w !== ""; }), kept = [], was = jobId;
+        jobFindErr = "";
+        if (String(typed || "").length > maxJobFind) { jobFindErr = "That is too long for a name: " + maxJobFind + " characters at most."; return; }
+        for (var i = 1; i < allJobs.length; i++) {
+            var label = allJobs[i].label.toLowerCase(), all = true;
+            for (var w = 0; w < words.length; w++) if (label.indexOf(words[w]) < 0) { all = false; break; }
+            if (all) kept.push(allJobs[i]);
+        }
+        jobs = [allJobs[0]].concat(kept);
+        var at = 0;
+        if (words.length > 0 && kept.length === 1) at = 1;
+        else for (var k = 1; k < jobs.length; k++) if (jobs[k].id === was) at = k;
+        jobBox.currentIndex = at; jobId = jobs[at].id;
+        if (words.length > 0 && kept.length === 0)
+            jobFindErr = "None of your open jobs has \"" + String(typed).trim() + "\" in its company or title. Check the spelling, or let me find the job from the page.";
+    }
+    function chooseJob(id) {              // by the app itself: the whole list again, and this job in it
+        jobFind.text = ""; jobFindErr = ""; jobs = allJobs;
+        for (var i = 0; i < jobs.length; i++) if (jobs[i].id === id) { jobBox.currentIndex = i; jobId = id; return true; }
+        return false;
+    }
     readonly property int maxRequest: 300
     // My details
     property bool dirty: false            // a detail was changed and not saved
@@ -185,7 +211,8 @@ Dialog {
     }
     function show() {
         askErr = ""; confirmClose = false; busy = false;
-        jobs = [{ id: "", label: "Find the job from the page" }].concat(bridge.assistantJobs());
+        allJobs = [{ id: "", label: "Find the job from the page" }].concat(bridge.assistantJobs());
+        jobs = allJobs; jobFind.text = ""; jobFindErr = "";
         jobBox.currentIndex = 0; jobId = "";
         loadDetails(); loadAnswers();
         remembered = bridge.assistantMemory().count || 0; confirmForget = false;
@@ -201,14 +228,14 @@ Dialog {
                                     : "Hi! First tell me your details on the My details page. Then open an application form in Chrome and ask me to fill it in.");
         page = detailsSaved ? "ask" : "details";
         if (noticedJob !== "") {              // it noticed a form by itself: the answers are for that job
-            for (var j = 0; j < jobs.length; j++) if (jobs[j].id === noticedJob) { jobBox.currentIndex = j; jobId = noticedJob; }
+            chooseJob(noticedJob);
             noticedJob = "";
         }
         open();
     }
     function forJob(id) {                 // opened from a job's window: the answers are for that job
         show();
-        for (var i = 0; i < jobs.length; i++) if (jobs[i].id === id) { jobBox.currentIndex = i; jobId = id; }
+        chooseJob(id);
         if (jobId !== id) askErr = "That application is closed, so it is not in the list. Choose a job, or let me find it from the page.";
     }
     function ask(text) {
@@ -657,9 +684,19 @@ Dialog {
                                      assistantDialog.say("bot", "A new talk: I have put the earlier one away.", false); } } }
                 RowLayout { Layout.fillWidth: true; spacing: 8
                     Text { text: "Answers are for"; color: theme.soft; font.pixelSize: 12 }
+                    TextField { id: jobFind; objectName: "asJobFind"; Layout.preferredWidth: 190; implicitHeight: 32
+                        placeholderText: "Type a company or a title"; placeholderTextColor: theme.faint
+                        color: theme.ink; font.pixelSize: 12; selectByMouse: true; enabled: !assistantDialog.busy
+                        Accessible.name: "Find one of your jobs by typing part of its company or title"
+                        background: Rectangle { radius: 7; color: theme.surface; border.width: 1
+                            border.color: assistantDialog.jobFindErr !== "" ? theme.crit : (jobFind.activeFocus ? theme.accent : theme.line) }
+                        onTextEdited: assistantDialog.findJob(text)
+                        Keys.onEscapePressed: { text = ""; assistantDialog.findJob("") } }
                     ThemedCombo { id: jobBox; objectName: "asJob"; Layout.fillWidth: true; enabled: !assistantDialog.busy
                         model: assistantDialog.jobs; textRole: "label"
                         onActivated: assistantDialog.jobId = assistantDialog.jobs[currentIndex] ? assistantDialog.jobs[currentIndex].id : "" } }
+                Text { objectName: "asJobFindErr"; visible: assistantDialog.jobFindErr !== ""; text: assistantDialog.jobFindErr
+                    Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.crit; font.pixelSize: 12 }
                 RowLayout { Layout.fillWidth: true; spacing: 8
                     TextField { id: askBox; objectName: "asBox"; Layout.fillWidth: true; implicitHeight: 34
                         placeholderText: assistantDialog.practising ? "Your answer, as you would say it (or: stop)" : "Ask me: fill in the form · why did this score 62? · mark it applied"

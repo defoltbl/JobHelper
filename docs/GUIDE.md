@@ -1020,7 +1020,9 @@ switch is (section 10).
 
 1. In your browser, open the application form and leave its tab in front.
 2. In the app, select the assistant.
-3. Optional: under **Answers are for**, choose the job. With **Find the job from the page**
+3. Optional: under **Answers are for**, choose the job. To find it quickly, type part of its
+   company or title in the box beside the list: the list narrows, and when one job is left it
+   is chosen. With **Find the job from the page**
    the assistant works it out and tells you which job it took. A form is rarely at the address
    of its posting, because **Apply** leads to another page, so the assistant also looks at the
    page that led there, at the company and the job title in the words of the page, and at the

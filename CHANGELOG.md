@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Find a job for the assistant by typing.** Next to **Answers are for** there is a box: type part of a company or a title and the list narrows; when one job is left it is chosen and its full name shown. A name none of your jobs has is said in red.
+- **The README names its author.**
 - **Fixed on a real application form: "Field 5 - I did not recognise this field".** Some pages put an unseen box of their own under each list, to check that something was chosen. Those were listed as fields nobody could name. They are no longer counted.
 - **Fixed: "The menu did not open for me" while the browser was behind the app.** Many lists open only when the page hears that their box was entered, and a window that is not in front is never told. The assistant now says so to the page itself, tries the arrow-down key when a press opens nothing, and asks for all entries when the list does not know your country under the name you gave. A list that already shows its answer beside its box is left alone.
 - **A letter's head carries your own title.** The line under your name used to be the role applied for, so every letter called you something else. It is now the line under your name in your CV, the same one your CV and your profiles on the web show. Only a CV without such a line still gets the role. A letter you edit and save in the app is corrected the same way.

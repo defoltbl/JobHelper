@@ -3843,3 +3843,58 @@ def test_the_assistant_at_pro_level_in_the_window(ui, monkeypatch):
     from jobhelper import chrome
     chrome.use("chrome")
     assert ui.warnings == []
+
+
+def test_a_job_is_found_for_the_assistant_by_typing_part_of_its_name(ui, monkeypatch):
+    """Among 150 open jobs the list alone is slow to use: typing part of a company or a title narrows it, and when one job is
+    left its full name is shown and it is chosen. A name no job has is said in red, where it was typed."""
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    jobs = [{"id": "nw", "label": "Northwind Systems · Junior Python Developer"}, {"id": "nw2", "label": "Northwind Systems · Data Analyst"},
+            {"id": "vt", "label": "Vantor · Junior Tester"}, {"id": "bp", "label": "Brightpath s.r.o. · Machine Learning Engineer"}]
+    monkeypatch.setattr(ui_api.Api, "assistant_jobs", lambda self: jobs)
+    ui.js("assistantDialog.show()")
+    ui.wait(500)
+    ui.js('assistantDialog.page = "ask"')
+    ui.wait(100)
+    dialog, find, combo, err = ui.find("assistantDialog"), ui.find("asJobFind"), ui.find("asJob"), ui.find("asJobFindErr")
+    assert find.property("visible") is True and find.property("width") >= 150 and combo.property("count") == 5 and combo.property("currentText") == "Find the job from the page"
+    QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, find.mapToScene(QPointF(20, find.height() / 2)).toPoint())
+    ui.wait(100)
+    def type_in(words):                             # key by key, the way a person types
+        for letter in words:
+            QTest.keyClick(ui.win, Qt.Key_Space if letter == " " else Qt.Key(ord(letter.upper())), Qt.ShiftModifier if letter.isupper() else Qt.NoModifier)
+    type_in("northw")
+    ui.wait(150)
+    assert combo.property("count") == 3 and dialog.property("jobId") == "", "two jobs at Northwind: narrowed, not chosen for you"
+    type_in(" ANALYST")
+    ui.wait(150)
+    assert combo.property("count") == 2 and dialog.property("jobId") == "nw2", "one job left: it is chosen"
+    assert combo.property("currentText") == "Northwind Systems · Data Analyst", "and its full name is shown"
+    assert err.property("visible") is False
+    ui.js("text = 'zzz'; assistantDialog.findJob(text)", find)
+    ui.wait(100)
+    assert dialog.property("jobId") == "" and combo.property("count") == 1 and err.property("visible") is True
+    assert '"zzz"' in err.property("text") and "Check the spelling" in err.property("text")
+    assert 0 < err.property("width") <= dialog.property("width") and err.property("lineCount") >= 1 and err.property("truncated") is False, "the message wraps, it is not cut"
+    ui.js("text = '" + "x" * 81 + "'; assistantDialog.findJob(text)", find)
+    assert "too long" in dialog.property("jobFindErr")
+    ui.js("text = 'tester'; assistantDialog.findJob(text)", find)
+    assert dialog.property("jobId") == "vt" and dialog.property("jobFindErr") == ""
+    ui.js("text = ''; assistantDialog.findJob('')", find)
+    assert combo.property("count") == 5 and dialog.property("jobId") == "vt", "the whole list again, and what you chose stays chosen"
+    ui.js("text = 'north'; assistantDialog.findJob(text)", find)
+    assert dialog.property("jobId") == "" and combo.property("currentIndex") == 0, "the chosen job is not among these: none is chosen, and the list says so"
+    ui.js("assistantDialog.forJob('bp')")               # opened from a job's window: the typed words are put away
+    ui.wait(300)
+    assert find.property("text") == "" and combo.property("count") == 5 and dialog.property("jobId") == "bp"
+    # the recurring bug: the box lets go of the cursor on a press beside it
+    ui.js("forceActiveFocus()", find)
+    ui.wait(100)
+    box = ui.find("asBox")
+    spot = box.mapToScene(QPointF(box.width() / 2, -170)).toPoint()
+    QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, QPoint(spot.x(), spot.y()))
+    ui.wait(150)
+    assert find.property("activeFocus") is False
+    ui.js("assistantDialog.tryClose()")
+    ui.wait(400)
+    assert ui.warnings == []

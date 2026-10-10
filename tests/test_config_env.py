@@ -129,6 +129,11 @@ def test_no_personal_name_in_code_or_docs():
     files = [*root.glob("*.py"), *root.glob("*.md"), *root.glob("*.sh"), *(root / "jobhelper").glob("*.py"),
              *(root / "ui_qt").glob("*.qml"), *(root / "tests").glob("*.py"), *(root / "scripts").glob("*.py"),
              root / ".env.example", root / "requirements.txt"]
+    readme = (root / "README.md").read_text(encoding="utf-8").splitlines()
+    signed = readme.index("## Author") + 1 if "## Author" in readme else len(readme) + 1     # the one place that names the author, at their wish
+    assert "## Author" not in readme or not any(line.startswith("## ") for line in readme[signed:]), "the Author section is the last one"
     found = [f"{f.relative_to(root)}:{n}" for f in files if f.is_file()
-             for n, line in enumerate(f.read_text(encoding="utf-8", errors="ignore").splitlines(), 1) if owner.search(line)]
+             for n, line in enumerate(f.read_text(encoding="utf-8", errors="ignore").splitlines(), 1)
+             if owner.search(line) and not (f.name == "README.md" and f.parent == root and n > signed)]
     assert found == [], "a personal name is written into: " + ", ".join(found[:8])
+    assert not any("@" in line or "+420" in line for line in readme[signed:]), "a name and public profiles, never an email address or a phone number"

@@ -359,6 +359,7 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
   Every form test so far ran in the test area; the prompts were tried against the real Claude on invented data
   (19 calls, 10 October 2026). The first live try was in Opera GX and failed: its dictionary lists the command
   that runs a script, but commented out. Chrome, Brave, Edge, Opera and Safari have not been tried live on this Mac.
+- The README's Author section is the one tracked place that names the person (they asked for it on 10 October 2026). Code, tests and the other documents still name nobody.
 - The 19 jobs whose documents were moved to the backup on 9 October: they can be put back until about 16 October.
 - Whether the README should name its author (the rule keeps the name out of tracked files).
 - Whether the text of the next section may come forward in the PDFs to fill the space a figure left at the end
