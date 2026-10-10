@@ -418,3 +418,34 @@ def test_career_site_records_are_complete():
 def test_career_site_jobs_abroad_are_left_out(location, fits):
     from jobhelper import filters
     assert filters.location_fits(location, "Prague") is fits
+
+
+# ── found by reading the bridges line by line (11 October 2026) ─────────────
+def test_stop_pressed_while_a_run_waits_on_the_limit_ends_it_and_costs_no_job_a_try(isolate_data, monkeypatch):
+    """Stop during a pause is raised from inside the step that was waiting. The agents catch ordinary errors around each job
+    ("could not score this one, go on"), so the run went on to the next job, and the job it was on lost a try at its documents."""
+    from jobhelper import agent3_letters, agent5_responses, bridge_runs, email_client, llm, store
+    assert issubclass(bridge_runs.RunCancelled, BaseException) and not issubclass(bridge_runs.RunCancelled, Exception)
+    text = "We build planning tools in Python and SQL. " * 30
+    jobs = [store.new_job(id=f"j{i}", title="Python Developer", company=f"Acme {i}", description=text, match_score=70) for i in range(3)]
+    asked = []
+
+    def limit(*a, **k):
+        asked.append(1)
+        raise llm.LimitReached("Claude's 5-hour limit is used up (100%).")
+
+    def stop(error):
+        raise bridge_runs.RunCancelled()
+    monkeypatch.setattr(agent3_letters, "_make_tailored_cv", limit)
+    monkeypatch.setattr(agent3_letters, "_make_letter", limit)
+    with pytest.raises(bridge_runs.RunCancelled):
+        agent3_letters.process(jobs, {"summary": "x"}, threshold=50, cv_text="Alex Novak\nPython, SQL.", on_limit=stop)
+    assert len(asked) == 1, "the run ended at the step it was on, not after trying every job"
+    assert [j.get("doc_attempts", 0) for j in jobs] == [1, 0, 0] or [j.get("doc_attempts", 0) for j in jobs] == [0, 0, 0]
+    monkeypatch.setattr(email_client, "fetch_recent", lambda *a, **k: [
+        {"msg_id": f"<m{i}@acme>", "date": "Mon, 05 Oct 2026 10:00:00 +0200", "sender": "hr@acme.com", "subject": "Your application", "body": "About your application."} for i in range(3)])
+    monkeypatch.setattr(llm, "ask_json", limit)
+    asked.clear()
+    with pytest.raises(bridge_runs.RunCancelled):
+        agent5_responses.process_inbox([store.new_job(id="a", company="Acme", title="Dev", status="waiting")], on_limit=stop)
+    assert len(asked) == 1

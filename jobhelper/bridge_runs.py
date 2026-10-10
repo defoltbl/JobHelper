@@ -16,8 +16,12 @@ from PySide6.QtCore import QMetaObject, Qt, Slot
 from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, config, letters, notify, store, trouble, usage)
 
 
-class RunCancelled(Exception):
-    """The user pressed Stop; raised at the next safe point between two steps."""
+class RunCancelled(BaseException):
+    """The user pressed Stop; raised at the next safe point between two steps.
+
+    Not an ordinary error: the agents catch `Exception` around each job or email ("could not score this one, go on"), and a
+    Stop pressed while a run waits on Claude's limit is raised from inside such a step. As an ordinary error it was taken
+    for a failed job (and cost that job one of its two tries at documents) and the run went on to the next one."""
 
 
 class RunSlots:
@@ -427,6 +431,7 @@ class RunSlots:
         except imaplib.IMAP4.error:
             self.runFinished.emit("scan", "Couldn't sign in to your email — check its password in the Account card.")
         except RuntimeError as e:
+            self._save_partial(jobs)
             self.runFinished.emit("scan", str(e))
         except Exception as e:  # noqa: BLE001
             self._save_partial(jobs)                             # statuses changed by the replies read so far are kept
