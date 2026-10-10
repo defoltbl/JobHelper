@@ -230,8 +230,8 @@ Dialog {
         if (talk.count === 0 && today && (today.lines || []).length > 0)
             say("bot", "Today: " + today.lines.join("; ") + ".", false);
         if (talk.count === 0)
-            say("bot", detailsSaved ? "Hi! Open an application form in Chrome, bring its tab to the front, then ask me to fill it in."
-                                    : "Hi! First tell me your details on the My details page. Then open an application form in Chrome and ask me to fill it in.");
+            say("bot", detailsSaved ? "Hi! Open an application form in " + browser.short + ", bring its tab to the front, then ask me to fill it in."
+                                    : "Hi! First tell me your details on the My details page. Then open an application form in " + browser.short + " and ask me to fill it in.");
         page = detailsSaved ? "ask" : "details";
         if (noticedJob !== "") {              // it noticed a form by itself: the answers are for that job
             chooseJob(noticedJob);
@@ -248,7 +248,7 @@ Dialog {
         confirmClose = false;
         if (busy) { askErr = "I am still working on the last request. Wait for the answer."; return; }
         var words = (text || "").trim();
-        if (words === "") { askErr = "Write what you need, or press Fill in the form in Chrome."; return; }
+        if (words === "") { askErr = "Write what you need, or press Fill in the form."; return; }
         if (words.length > maxRequest) { askErr = "That is longer than " + maxRequest + " characters. Say it in a sentence."; return; }
         if (dirty) { askErr = "You changed your details and did not save them. Save them on the My details page first."; return; }
         if (pending !== null) { askErr = "First answer the question above: Yes, do it or No."; return; }
@@ -415,6 +415,7 @@ Dialog {
     }
     function setAnswer(index, key, value) {
         answerModel.setProperty(index, key, value); answerModel.setProperty(index, "dirty", true); answerModel.setProperty(index, "err", "");
+        if (answerModel.get(index).check === "remove") answerModel.setProperty(index, "check", "");      // typing takes back the first press on Remove
         answersNote = ""; answersErr = "";
     }
     function unsavedAnswers() { var n = 0; for (var i = 0; i < answerModel.count; i++) if (answerModel.get(i).dirty) n++; return n; }
@@ -429,6 +430,12 @@ Dialog {
     }
     function removeAnswer(index) {
         var row = answerModel.get(index);
+        // an answer that is kept (or one you have written something into) is not thrown away on one press
+        if ((row.was !== "" || row.answer.trim() !== "") && row.check !== "remove") {
+            answerModel.setProperty(index, "check", "remove");
+            answerModel.setProperty(index, "err", "This removes your answer for good. Press Remove once more to go on.");
+            answersNote = ""; return;
+        }
         if (row.was !== "") bridge.deleteMyAnswer(row.was);
         answerModel.remove(index);
         remembered = bridge.assistantMemory().count || 0;
@@ -468,7 +475,7 @@ Dialog {
             if (assistantDialog.watchSign === "pending") { assistantDialog.watchSign = res.url + " " + res.sign; return; }
             if (res.url + " " + res.sign === assistantDialog.watchSign || res.empty < 1) return;
             assistantDialog.nextPage = true;
-            assistantDialog.say("bot", "The form in Chrome shows other fields now. Shall I fill in this page too?", false);
+            assistantDialog.say("bot", "The form in " + assistantDialog.browser.short + " shows other fields now. Shall I fill in this page too?", false);
         }
         function onAssistantProgress(res) { if (assistantDialog.busy) assistantDialog.doing = res.text || ""; }
         function onAssistantReady(res) {
@@ -769,7 +776,7 @@ Dialog {
                                         text: model.answer
                                         onTextChanged: if (activeFocus) assistantDialog.setAnswer(index, "answer", text)
                                         Text { visible: aBox.text === ""; text: "Your answer"; color: theme.faint; font.pixelSize: 12 } } }
-                                Text { visible: model.err !== "" || (model.check !== "" && model.check !== "replace"); Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                Text { visible: model.err !== "" || (model.check !== "" && model.check !== "replace" && model.check !== "remove"); Layout.fillWidth: true; wrapMode: Text.WordWrap
                                     color: model.err !== "" ? theme.crit : theme.warn; font.pixelSize: 11; font.bold: true
                                     text: model.err !== "" ? model.err : "Check: " + model.check }
                                 RowLayout { Layout.fillWidth: true; spacing: 6

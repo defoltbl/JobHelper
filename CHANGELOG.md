@@ -10,6 +10,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
   - **Options** says so when you typed a role, a word or a company into a box and pressed **Save** without adding it. Before, it was left out without a word.
   - A job that could not be restored or merged now says why in the status line.
   - **Analytics** has a row for offer emails, so the rows under **Reply emails** add up again.
+  - In the assistant's **My answers**, **Remove** asks once before it deletes an answer you keep. Before, one press removed it for good.
+  - The assistant names the browser you chose in what it says, not always Chrome.
   - A number box (years, days, scores in **Options**) shows the right number again after you typed one and then pressed + or -. Before, the value changed but the box kept showing what you had typed.
   - A reply with a long summary no longer pushes its window past the edge of the app: the text scrolls, and the buttons and the **File under** list stay in view.
   - **Mark applied** no longer says "Moved to Applications" when the job was not moved (it was already an application, or it was gone from the list); it says so instead.

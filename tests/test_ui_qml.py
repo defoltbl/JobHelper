@@ -423,7 +423,7 @@ def test_dialogs_open_and_close(ui, name):
     assert ui.warnings == []
 
 
-@pytest.mark.parametrize("view, rows", [("new", 1), ("app", 1), ("resp", 0), ("ana", 21)])       # 2 headings + 5 lines for the last 7 days + 14 all-time rows
+@pytest.mark.parametrize("view, rows", [("new", 1), ("app", 1), ("resp", 0), ("ana", 22)])       # 2 headings + 5 lines for the last 7 days + 14 all-time rows
 def test_views_list_the_data(ui, view, rows):
     ui.js(f'openView("{view}")')
     ui.wait(450)
@@ -3619,10 +3619,19 @@ def test_my_answers_are_written_drafted_saved_and_removed(ui, monkeypatch):
     assert ui.js("answerModel.get(0).err") == "This question is about one company." and "one company" in ui.find("asAnswersNote").property("text")
     ui.js("assistantDialog.tryClose()")
     assert dialog.property("opened") and "not saved" in ui.find("asAnswersNote").property("text"), "unsaved answers: asked once"
-    ui.js("assistantDialog.removeAnswer(0); assistantDialog.removeAnswer(0)")
-    assert ui.js("answerModel.count") == 1 and ui.js("answerModel.get(0).question") == "When can you start?"
+    ui.js("assistantDialog.removeAnswer(0)")                          # an empty row that was never kept: gone at once
+    assert ui.js("answerModel.count") == 2
+    ui.js("assistantDialog.removeAnswer(0)")                          # one with words in it: asked once
+    assert ui.js("answerModel.count") == 2 and "once more" in ui.js("answerModel.get(0).err")
     ui.js("assistantDialog.removeAnswer(0)")
-    assert answer_memory.count() == 0 and dialog.property("remembered") == 0
+    assert ui.js("answerModel.count") == 1 and ui.js("answerModel.get(0).question") == "When can you start?"
+    ui.js("assistantDialog.removeAnswer(0)")                          # a kept answer is not deleted on one press
+    assert answer_memory.count() == 1 and "for good" in ui.js("answerModel.get(0).err")
+    ui.js('assistantDialog.setAnswer(0, "answer", "Two weeks after an offer!")')      # typing takes the first press back
+    ui.js("assistantDialog.removeAnswer(0)")
+    assert answer_memory.count() == 1 and ui.js("answerModel.count") == 1
+    ui.js("assistantDialog.removeAnswer(0)")
+    assert answer_memory.count() == 0 and dialog.property("remembered") == 0 and ui.js("answerModel.count") == 0
     ui.js("assistantDialog.tryClose()")
     ui.wait(400)
     assert dialog.property("visible") is False and ui.warnings == []
