@@ -169,14 +169,14 @@ LISTING = [b'(\\HasNoChildren) "/" "INBOX"', b'(\\All \\HasNoChildren) "/" "[Gma
 
 
 class FakeImap:
-    """A mailbox with three folders; records what was done to it."""
+    """A mailbox with three folders; records what was done to it (and the time limit it was given)."""
     boxes = {}
     listing = []
     gm_raw = True
     broken = ()
     log = []
 
-    def __init__(self, *a):
+    def __init__(self, *a, timeout=None):
         self.folder = None
 
     def login(self, user, password):
