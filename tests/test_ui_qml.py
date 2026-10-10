@@ -3228,6 +3228,8 @@ def test_the_assistant_stands_on_the_line_blinks_and_waves(ui):
             break
     assert max(lids) > 0.6 and lids[-1] < 0.2, "it blinked"
     arm, bubble = ui.drawn("assistantArm", "stagePanel"), ui.drawn("assistantBubble", "stagePanel")
+    bot.setProperty("greeting", False)                          # it may still be telling the morning's briefing
+    ui.wait(500)
     assert arm.property("rotation") > -40 and bubble.property("opacity") == 0
     ui.js("stagePanel.assistant.greet()")
     ui.wait(500)
@@ -3601,7 +3603,7 @@ def test_the_assistant_asks_before_it_changes_anything_and_shows_what_it_found(u
     dialog, did = ui.find("assistantDialog"), []
     talk = {"ok": True, "action": "confirm", "say": "", "ask": "Mark Junior Python Developer at Acme as applied? It moves to Applications as waiting.",
             "pending": {"name": "mark_applied", "args": {"job": "lead"}}, "rows": []}
-    monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, context_job="", chosen_job="": did.append(("talk", text, context_job, chosen_job)) or dict(talk))
+    monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, context_job="", chosen_job="", **kw: did.append(("talk", text, context_job, chosen_job)) or dict(talk))
     monkeypatch.setattr(ui_api.Api, "assistant_confirm", lambda self, pending: did.append(("confirm", pending)) or {
         "ok": True, "action": "done", "say": "Moved Junior Python Developer at Acme to Applications, as waiting.", "job_id": "lead", "changed": True})
     monkeypatch.setattr(ui_api.Api, "assistant_briefing", lambda self: {"headline": "", "lines": [], "nudges": []})
@@ -3632,7 +3634,7 @@ def test_the_assistant_asks_before_it_changes_anything_and_shows_what_it_found(u
     assert dialog.property("pendingPreview") == "I build reports people use." and ui.find("asConfirm").property("visible")
     ui.js("assistantDialog.no()")
     # an answer with jobs: listed, and a click opens the job; the open job is passed on as "this job"
-    monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, context_job="", chosen_job="": did.append(("talk", text, context_job, chosen_job)) or {
+    monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, context_job="", chosen_job="", **kw: did.append(("talk", text, context_job, chosen_job)) or {
         "ok": True, "action": "say", "say": "Beta has waited 20 days.", "rows": [{"id": "app", "label": "Beta · QA Engineer", "sub": "waiting · score 64"}]})
     ui.js('assistantDialog.forJob("app"); assistantDialog.page = "ask"')
     ui.js('assistantDialog.ask("which application waits longest?")')
@@ -3656,7 +3658,7 @@ def test_the_assistant_asks_before_it_changes_anything_and_shows_what_it_found(u
 def test_practising_an_interview_goes_question_by_question(ui, monkeypatch):
     dialog, did = ui.find("assistantDialog"), []
     monkeypatch.setattr(ui_api.Api, "assistant_briefing", lambda self: {"headline": "", "lines": [], "nudges": []})
-    monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, context_job="", chosen_job="": {
+    monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, context_job="", chosen_job="", **kw: {
         "ok": True, "action": "practice", "job_id": "app", "job": "QA Engineer at Beta", "questions": ["Why testing?", "Tell me about Docker."], "say": "Let us practise: 2 questions."})
 
     def feedback(self, job_id, question, answer):
@@ -3737,4 +3739,80 @@ def test_the_assistant_speaks_first_reviews_a_form_and_notices_one_only_when_tol
     bot.setProperty("greeting", False)
     ui.js("assistantDialog.tryClose()")
     ui.wait(400)
+    assert ui.warnings == []
+
+
+def test_the_assistant_at_pro_level_in_the_window(ui, monkeypatch):
+    from jobhelper import config
+    dialog, did = ui.find("assistantDialog"), []
+    monkeypatch.setattr(ui_api.Api, "assistant_briefing", lambda self: {"headline": "", "lines": [], "nudges": []})
+
+    def talk(self, text, context_job="", chosen_job="", progress=None):
+        did.append(text)
+        progress("Asking Claude…")
+        if "reply" in text:
+            return {"ok": True, "action": "draft", "copy": "Dear team,\nTuesday suits me.\nAlex", "preview": "x", "say": "A reply for you to copy. I never send mail.", "also": [], "then": []}
+        if "remember" in text:
+            return {"ok": True, "action": "say", "say": "I will remember: No consulting firms.", "notes_changed": True, "also": [], "then": []}
+        return {"ok": True, "action": "confirm", "say": "", "ask": "Shall I do these 2 things?\n1. Mark it applied?\n2. Set a date?",
+                "pending": {"name": "many", "args": {"actions": [{"name": "mark_applied", "args": {"job": "lead"}}]}},
+                "also": ["Opening QA Engineer at Beta."], "then": [{"action": "open", "job_id": "app", "what": "job", "page": ""}], "rows": []}
+    monkeypatch.setattr(ui_api.Api, "assistant_talk", talk)
+    monkeypatch.setattr(ui_api.Api, "assistant_confirm", lambda self, pending: did.append(("confirm", pending["name"])) or {
+        "ok": True, "action": "done", "say": "Moved it to Applications. The date is set.", "job_id": "lead", "changed": True, "can_undo": True})
+    monkeypatch.setattr(ui_api.Api, "assistant_undo", lambda self: did.append("undo") or {"ok": True, "action": "done", "say": "It is as it was before.", "changed": True, "can_undo": False})
+    notes = [{"text": "No consulting firms", "when": "2026-10-10"}]
+    monkeypatch.setattr(ui_api.Api, "assistant_notes_list", lambda self: {"notes": list(notes)})
+    monkeypatch.setattr(ui_api.Api, "assistant_forget_note", lambda self, number: did.append(("forget", number)) or (notes.clear() or {"ok": True, "text": "x"}))
+    ui.js("talk.clear(); assistantDialog.show()")
+    ui.wait(450)
+    ui.js('assistantDialog.page = "ask"')
+    assert ui.find("asFill").property("text") == "Fill in the form in Chrome" and ui.find("asStarters").property("visible")
+    # several things at once: what only shows is done, the rest is one question; then it can be taken back
+    ui.js('assistantDialog.ask("mark acme applied, set a date and open beta")')
+    _wait_idle(ui, dialog)
+    ui.wait(500)
+    assert ui.find("detailDialog").property("visible"), "what was to be opened is opened"
+    assert ui.js("talk.get(talk.count - 2).text") == "Opening QA Engineer at Beta." and ui.find("asConfirm").property("visible")
+    assert not ui.find("asStarters").property("visible"), "a question is open: nothing else is offered"
+    ui.js("assistantDialog.yes()")
+    _wait_idle(ui, dialog)
+    assert ("confirm", "many") in did and dialog.property("canUndo") and ui.find("asUndo").property("visible")
+    ui.js('assistantDialog.act("undo", "", "Undo that")')
+    _wait_idle(ui, dialog)
+    assert did[-1] == "undo" and not dialog.property("canUndo") and ui.js("talk.get(talk.count - 1).text") == "It is as it was before."
+    ui.js("detailDialog.close()")
+    # a reply to copy
+    ui.js('assistantDialog.ask("draft a reply to beta")')
+    _wait_idle(ui, dialog)
+    assert ui.find("asDraft").property("visible") and dialog.property("draftText").startswith("Dear team,")
+    ui.js("bridge.copyText(assistantDialog.draftText)")
+    # a long answer is written out, and whole in the end
+    monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, *a, **kw: {"ok": True, "action": "say", "say": "word " * 60, "also": [], "then": [], "rows": []})
+    ui.js('assistantDialog.ask("what needs my attention today?")')
+    _wait_idle(ui, dialog)
+    assert dialog.property("typingIndex") >= 0 or ui.js("talk.get(talk.count - 1).text.length") == 300
+    ui.wait(900)
+    assert dialog.property("typingIndex") == -1 and ui.js("talk.get(talk.count - 1).text.length") == 300
+    monkeypatch.setattr(ui_api.Api, "assistant_talk", talk)
+    # notes: listed on the My details page, and one can be forgotten there
+    ui.js('assistantDialog.ask("remember that I do not want consulting firms")')
+    _wait_idle(ui, dialog)
+    ui.js('assistantDialog.page = "details"')
+    ui.wait(150)
+    assert ui.js("noteModel.count") == 1 and ui.find("asNotes").property("visible")
+    ui.js("assistantDialog.forgetNote(0)")
+    assert ("forget", 1) in did and ui.js("noteModel.count") == 0
+    # the browser is chosen here, and the button says which
+    ui.js('assistantDialog.setBrowser("safari")')
+    assert config.ui_settings().get("assistant_browser") == "safari" and "Develop" in ui.find("asDetailsNote").property("text")
+    ui.js('assistantDialog.page = "ask"')
+    assert ui.find("asFill").property("text") == "Fill in the form in Safari"
+    ui.js('assistantDialog.setBrowser("netscape")')
+    assert config.ui_settings().get("assistant_browser") == "safari" and dialog.property("browser")["key"] == "safari"
+    ui.js('assistantDialog.setBrowser("chrome")')
+    ui.js("assistantDialog.dirty = false; assistantDialog.tryClose()")
+    ui.wait(400)
+    from jobhelper import chrome
+    chrome.use("chrome")
     assert ui.warnings == []

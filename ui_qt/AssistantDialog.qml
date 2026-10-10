@@ -51,6 +51,45 @@ Dialog {
     ListModel { id: talk }                // {who: "bot" | "you", text, bad}
     ListModel { id: filledModel }         // {label, value, kind, check}
     ListModel { id: leftModel }           // {label, why}
+    ListModel { id: noteModel }           // what it was told to remember: {text, when}
+    property string doing: ""             // what is being done right now, said under the talk while it waits
+    property bool canUndo: false          // the last yes can be taken back
+    property string draftText: ""         // a reply drafted for you to copy
+    property var browser: ({ key: "chrome", name: "Google Chrome", short: "Chrome", switch: "", all: [] })
+    property var practiceLast: []         // how each question went the last time ("" = never practised)
+    property var practiceNow: []          // how each went this time
+    // an answer appears as if it were being written: quickly, and whole at once under test or when it is short
+    property int typingIndex: -1
+    property int typingShown: 0
+    Timer { id: typist; interval: 16; repeat: true
+        running: assistantDialog.typingIndex >= 0 && assistantDialog.visible
+        onTriggered: {
+            if (assistantDialog.typingIndex >= talk.count) { assistantDialog.typingIndex = -1; return; }
+            var whole = talk.get(assistantDialog.typingIndex).text.length;
+            assistantDialog.typingShown += Math.max(10, Math.ceil(whole / 24));
+            if (assistantDialog.typingShown >= whole) assistantDialog.typingIndex = -1;
+            talkFlick.contentY = Math.max(0, talkFlick.contentHeight - talkFlick.height);
+        } }
+    function write(text) {                // an answer from Claude, written out
+        say("bot", text, false);
+        if (text.length > 60) { typingIndex = talk.count - 1; typingShown = 0; }
+    }
+    function loadNotes() {
+        var d = bridge.assistantNotes(), notes = (d && d.notes) || [];
+        noteModel.clear();
+        for (var i = 0; i < notes.length; i++) noteModel.append({ text: notes[i].text, when: notes[i].when || "" });
+    }
+    function forgetNote(index) {
+        var r = bridge.forgetNote(index + 1);
+        if (!(r && r.ok)) { problem = { field: "", msg: (r && r.msg) || "That note could not be removed." }; return; }
+        loadNotes(); detailsNote = "Forgotten.";
+    }
+    function setBrowser(key) {
+        var r = bridge.setAssistantBrowser(key);
+        if (!(r && r.ok)) { problem = { field: "", msg: (r && r.msg) || "That browser could not be chosen." }; browser = bridge.assistantBrowser(); return; }
+        browser = r; watchProblem = "";
+        detailsNote = "I now work in " + r.name + ". Its switch: " + r.switch + ".";
+    }
     ListModel { id: rowModel }            // jobs an answer is about: {id, label, sub}
     ListModel { id: problemModel }        // what a review found: {field, problem}
     ListModel { id: nudgeModel }          // things to look at today: {text, job_id, kind}
@@ -95,13 +134,22 @@ Dialog {
         }
         detailDialog.show(id);
     }
+    function practiceSummary() {
+        var n = { good: 0, ok: 0, weak: 0 };
+        for (var i = 0; i < practiceNow.length; i++) n[practiceNow[i]] = (n[practiceNow[i]] || 0) + 1;
+        if (practiceNow.length === 0) return "No answer was given this time.";
+        return "This time: " + n.good + " good, " + n.ok + " fair, " + n.weak + " weak."
+               + (n.weak > 0 ? " The weak ones come first next time." : "");
+    }
     function endPractice(words) {
         if (!practising) return;
         practising = false;
-        say("bot", words || "Practice ended. Ask me to practise again whenever you like.", false);
+        say("bot", words || ("Practice ended. " + practiceSummary()), false);
     }
     function askQuestion() {
-        say("bot", "Question " + (practiceIndex + 1) + " of " + practiceQuestions.length + ": " + practiceQuestions[practiceIndex], false);
+        var before = practiceLast[practiceIndex] || "";
+        say("bot", "Question " + (practiceIndex + 1) + " of " + practiceQuestions.length + (before === "weak" ? " (it went badly last time)" : before === "good" ? " (it went well last time)" : "")
+                   + ": " + practiceQuestions[practiceIndex], false);
     }
     function dropNudge(index) {
         var n = nudgeModel.get(index);
@@ -137,7 +185,8 @@ Dialog {
         jobBox.currentIndex = 0; jobId = "";
         loadDetails(); loadAnswers();
         remembered = bridge.assistantMemory().count || 0; confirmForget = false;
-        watching = bridge.assistantWatching();
+        watching = bridge.assistantWatching(); browser = bridge.assistantBrowser(); loadNotes();
+        doing = ""; typingIndex = -1;
         nudgeModel.clear();
         var today = bridge.assistantBriefing(), nudges = (today && today.nudges) || [];
         for (var n = 0; n < nudges.length; n++) nudgeModel.append({ text: nudges[n].text, job_id: nudges[n].job_id, kind: nudges[n].kind });
@@ -175,7 +224,7 @@ Dialog {
             return;
         }
         filledModel.clear(); leftModel.clear(); rowModel.clear(); problemModel.clear();
-        last = ({}); nextPage = false; watchSign = ""; appliedNow = false;
+        last = ({}); nextPage = false; watchSign = ""; appliedNow = false; canUndo = false; draftText = ""; doing = "";
         say("you", words, false);
         busy = true;
         bridge.askAssistant(words, contextJob(), jobId);
@@ -183,6 +232,7 @@ Dialog {
     function act(what, arg, words) {      // one of the buttons under an answer
         if (busy) { askErr = "I am still working on the last request. Wait for the answer."; return; }
         if (what === "review") problemModel.clear();
+        doing = "";
         askErr = ""; confirmClose = false;
         say("you", words, false);
         busy = true;
@@ -380,9 +430,19 @@ Dialog {
             assistantDialog.nextPage = true;
             assistantDialog.say("bot", "The form in Chrome shows other fields now. Shall I fill in this page too?", false);
         }
+        function onAssistantProgress(res) { if (assistantDialog.busy) assistantDialog.doing = res.text || ""; }
         function onAssistantReady(res) {
             if (!assistantDialog.busy) return;
-            assistantDialog.busy = false;
+            assistantDialog.busy = false; assistantDialog.doing = "";
+            var also = res.also || [];                    // what was said or done before this, in the same request
+            for (var s = 0; s < also.length; s++) assistantDialog.say("bot", also[s], false);
+            var then = res.then || [];
+            for (var o = 0; o < then.length; o++) {
+                if (then[o].action === "open") assistantDialog.openThing(then[o].job_id, then[o].what);
+                if (then[o].action === "page") assistantDialog.page = then[o].page;
+            }
+            if (res.notes_changed) assistantDialog.loadNotes();
+            if (res.can_undo !== undefined) assistantDialog.canUndo = res.can_undo === true;
             if (res.action === "details") assistantDialog.page = "details";
             if (res.action === "fill") assistantDialog.last = res;
             if (res.action === "learn" || res.action === "forget") { assistantDialog.remembered = bridge.assistantMemory().count || 0; assistantDialog.loadAnswers(); }
@@ -412,7 +472,9 @@ Dialog {
                 assistantDialog.pending = res.pending; assistantDialog.pendingAsk = res.ask || ""; assistantDialog.pendingPreview = res.preview || "";
                 assistantDialog.say("bot", res.ask || "Shall I?", false); return;
             }
-            assistantDialog.say("bot", res.say || "Done.", false);
+            if (res.action === "say" || res.action === "review") assistantDialog.write(res.say || "Done.");
+            else assistantDialog.say("bot", res.say || "Done.", false);
+            if (res.action === "draft") assistantDialog.draftText = res.copy || "";
             var rows = res.rows || [];
             rowModel.clear();
             for (var r = 0; r < rows.length; r++) rowModel.append({ id: rows[r].id, label: rows[r].label, sub: rows[r].sub || "" });
@@ -427,11 +489,13 @@ Dialog {
             if (res.action === "practice") {
                 assistantDialog.practising = true; assistantDialog.practiceJob = res.job_id; assistantDialog.practiceName = res.job || "";
                 assistantDialog.practiceQuestions = res.questions || []; assistantDialog.practiceIndex = 0;
+                assistantDialog.practiceLast = res.last || []; assistantDialog.practiceNow = [];
                 assistantDialog.askQuestion();
             }
             if (res.action === "practice_feedback" && assistantDialog.practising) {
+                var went = assistantDialog.practiceNow.slice(); went.push(res.rating || "ok"); assistantDialog.practiceNow = went;
                 if (assistantDialog.practiceIndex + 1 >= assistantDialog.practiceQuestions.length)
-                    assistantDialog.endPractice("That was the last question. Well done: " + assistantDialog.practiceQuestions.length + " answered.");
+                    assistantDialog.endPractice("That was the last question. " + assistantDialog.practiceSummary());
                 else { assistantDialog.practiceIndex++; assistantDialog.askQuestion(); }
             }
             if (res.action === "fill") { assistantDialog.watchSign = "pending"; assistantDialog.watched = 0; bridge.watchForm(); }
@@ -496,7 +560,8 @@ Dialog {
                             color: model.who === "you" ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, 0.16) : (model.bad ? theme.critbg : theme.surface2)
                             border.width: 1; border.color: model.who === "you" ? theme.accent : (model.bad ? theme.crit : theme.line)
                             Text { id: line; x: 12; y: 9; width: Math.min(implicitWidth, talkCol.width * 0.86 - 24); wrapMode: Text.Wrap
-                                text: model.text; color: model.bad ? theme.crit : theme.ink; font.pixelSize: 13; font.bold: model.bad }
+                                text: index === assistantDialog.typingIndex ? ("" + (model.text || "")).substring(0, assistantDialog.typingShown) : (model.text || "")
+                                color: model.bad ? theme.crit : theme.ink; font.pixelSize: 13; font.bold: model.bad }
                         }
                     }
                     // what waits for your yes
@@ -511,7 +576,16 @@ Dialog {
                     Row { visible: assistantDialog.busy; spacing: 8
                         BusyIndicator { running: assistantDialog.busy; width: 20; height: 20; palette.dark: theme.a6 }
                         Text { anchors.verticalCenter: parent.verticalCenter; color: theme.soft; font.pixelSize: 12
-                            text: "Working on it…" } }
+                            text: assistantDialog.doing !== "" ? assistantDialog.doing : "Working on it…" } }
+                    // a reply drafted for you: to copy, never sent
+                    ColumnLayout { objectName: "asDraft"; visible: assistantDialog.draftText !== "" && !assistantDialog.busy; Layout.fillWidth: true; spacing: 6
+                        Rectangle { Layout.fillWidth: true; radius: 10; color: theme.inset; border.color: theme.line; border.width: 1
+                            implicitHeight: draftBody.implicitHeight + 18
+                            TextEdit { id: draftBody; x: 10; y: 9; width: parent.width - 20; wrapMode: TextEdit.Wrap; readOnly: true; selectByMouse: true
+                                color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent; text: assistantDialog.draftText } }
+                        RowLayout { spacing: 6
+                            SmallButton { objectName: "asCopy"; primaryStyle: true; text: "Copy"
+                                onClicked: { bridge.copyText(assistantDialog.draftText); assistantDialog.say("bot", "Copied. Paste it into your mail and send it yourself.", false); } } } }
                     DetailCard { objectName: "asRows"; visible: rowModel.count > 0; heading: "Jobs (" + rowModel.count + ")"
                         Repeater { model: rowModel
                             Rectangle { Layout.fillWidth: true; radius: 8; color: rowMa.containsMouse ? theme.inset : "transparent"; implicitHeight: rowCol.implicitHeight + 10
@@ -543,12 +617,14 @@ Dialog {
                                 Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 12; text: model.why } } } }
                     // what can be done next, offered only when it applies
                     Flow { objectName: "asNext"; Layout.fillWidth: true; spacing: 6
-                        visible: assistantDialog.canOpenForm || assistantDialog.canShowFiles || assistantDialog.canLearn || assistantDialog.canApply
+                        visible: assistantDialog.canOpenForm || assistantDialog.canShowFiles || assistantDialog.canLearn || assistantDialog.canApply || (assistantDialog.canUndo && !assistantDialog.busy)
                                  || (assistantDialog.last.ok === true && !assistantDialog.busy) || (assistantDialog.nextPage && !assistantDialog.busy)
                         SmallButton { objectName: "asNextPage"; visible: assistantDialog.nextPage && !assistantDialog.busy; primaryStyle: true; text: "Fill in this page too"
                             onClicked: assistantDialog.ask("Fill in the form in Chrome") }
                         SmallButton { objectName: "asOpenForm"; visible: assistantDialog.canOpenForm; primaryStyle: true; text: "Open the form in its own tab"
                             onClicked: assistantDialog.act("open_form", assistantDialog.last.frame, "Open the form in its own tab") }
+                        SmallButton { objectName: "asUndo"; visible: assistantDialog.canUndo && !assistantDialog.busy; text: "Undo"
+                            onClicked: assistantDialog.act("undo", "", "Undo that") }
                         SmallButton { objectName: "asReview"; visible: assistantDialog.last.ok === true && !assistantDialog.busy; text: "Review before I send"
                             onClicked: assistantDialog.act("review", "", "Review the form before I send it") }
                         SmallButton { objectName: "asFiles"; visible: assistantDialog.canShowFiles; text: "Show my CV and letter in Finder"
@@ -566,13 +642,14 @@ Dialog {
                     Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.a6; font.pixelSize: 12; font.bold: true
                         text: "Practising for " + assistantDialog.practiceName + " · question " + (assistantDialog.practiceIndex + 1) + " of " + assistantDialog.practiceQuestions.length }
                     SmallButton { text: "Stop practising"; enabled: !assistantDialog.busy; onClicked: assistantDialog.endPractice("") } }
-                RowLayout { Layout.fillWidth: true; spacing: 8
-                    ThemedSwitch { objectName: "asWatch"; checked: assistantDialog.watching; onToggled: assistantDialog.setWatch(checked) }
-                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
-                        color: assistantDialog.watchProblem !== "" ? theme.crit : theme.soft; font.bold: assistantDialog.watchProblem !== ""
-                        text: assistantDialog.watchProblem !== "" ? assistantDialog.watchProblem
-                            : assistantDialog.watching ? "Noticing forms: while the app is open I look at the address of the tab in front in Chrome every 20 seconds and tell you when it is the form of a job you track."
-                            : "Notice application forms in Chrome by myself (off: I look at Chrome only when you ask)." } }
+                Flow { objectName: "asStarters"; Layout.fillWidth: true; spacing: 6; visible: !assistantDialog.practising && !assistantDialog.busy && assistantDialog.pending === null
+                    SmallButton { text: "What needs my attention?"; onClicked: assistantDialog.ask("What needs my attention today?") }
+                    SmallButton { objectName: "asJudge"; text: "Is the posting in my browser worth applying to?"
+                        onClicked: assistantDialog.ask("Is the job posting open in my browser worth applying to?") }
+                    SmallButton { text: "New talk"; visible: talk.count > 2
+                        onClicked: { bridge.newTalk(); talk.clear(); rowModel.clear(); problemModel.clear(); filledModel.clear(); leftModel.clear();
+                                     assistantDialog.last = ({}); assistantDialog.canUndo = false; assistantDialog.draftText = "";
+                                     assistantDialog.say("bot", "A new talk: I have put the earlier one away.", false); } } }
                 RowLayout { Layout.fillWidth: true; spacing: 8
                     Text { text: "Answers are for"; color: theme.soft; font.pixelSize: 12 }
                     ThemedCombo { id: jobBox; objectName: "asJob"; Layout.fillWidth: true; enabled: !assistantDialog.busy
@@ -590,8 +667,8 @@ Dialog {
                         Keys.onEnterPressed: assistantDialog.ask(text) }
                     SmallButton { objectName: "asSend"; implicitHeight: 34; text: "Ask"; enabled: !assistantDialog.busy; onClicked: assistantDialog.ask(askBox.text) }
                     PillButton { objectName: "asFill"; primaryStyle: true; enabled: !assistantDialog.busy
-                        text: assistantDialog.busy ? "Working…" : "Fill in the form in Chrome"
-                        onClicked: assistantDialog.ask("Fill in the form in Chrome") } }
+                        text: assistantDialog.busy ? "Working…" : "Fill in the form in " + assistantDialog.browser.short
+                        onClicked: assistantDialog.ask("Fill in the form") } }
                 Text { objectName: "asErr"; Layout.fillWidth: true; wrapMode: Text.WordWrap
                     font.pixelSize: assistantDialog.askErr !== "" ? 12 : 11; font.bold: assistantDialog.askErr !== ""
                     color: assistantDialog.askErr !== "" || askBox.text.length > assistantDialog.maxRequest ? theme.crit : theme.faint
@@ -681,6 +758,29 @@ Dialog {
                     Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
                         text: "What application forms are filled in with. Typed once, kept encrypted on this Mac. A field you leave empty is left empty in the form too."
                               + (assistantDialog.offered > 0 ? " Fields marked “from your CV” were read from your CV and are not saved yet: check them, then save." : "") }
+                    // ── how the assistant works: which browser, and whether it looks by itself ──
+                    GroupTitle { text: "How I work" }
+                    RowLayout { Layout.fillWidth: true; spacing: 8
+                        Text { text: "Browser"; color: theme.ink; font.pixelSize: 12; font.bold: true }
+                        ThemedCombo { objectName: "asBrowser"; Layout.preferredWidth: 190; model: assistantDialog.browser.all || []; textRole: "name"
+                            currentIndex: { var all = assistantDialog.browser.all || []; for (var i = 0; i < all.length; i++) if (all[i].key === assistantDialog.browser.key) return i; return 0; }
+                            onActivated: assistantDialog.setBrowser(assistantDialog.browser.all[currentIndex].key) }
+                        Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 11
+                            text: "Its switch, once: " + (assistantDialog.browser.switch || "") } }
+                    RowLayout { Layout.fillWidth: true; spacing: 8
+                        ThemedSwitch { objectName: "asWatch"; checked: assistantDialog.watching; onToggled: assistantDialog.setWatch(checked) }
+                        Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
+                            color: assistantDialog.watchProblem !== "" ? theme.crit : theme.soft; font.bold: assistantDialog.watchProblem !== ""
+                            text: assistantDialog.watchProblem !== "" ? assistantDialog.watchProblem
+                                : assistantDialog.watching ? "Noticing forms: while the app is open I look at the address of the tab in front in " + assistantDialog.browser.short + " every 20 seconds and tell you when it is the form of a job you track."
+                                : "Notice application forms in " + assistantDialog.browser.short + " by myself (off: I look at the browser only when you ask)." } }
+                    ColumnLayout { objectName: "asNotes"; Layout.fillWidth: true; spacing: 4; visible: noteModel.count > 0
+                        Text { text: "What you asked me to remember"; color: theme.ink; font.pixelSize: 12; font.bold: true }
+                        Repeater { model: noteModel
+                            RowLayout { Layout.fillWidth: true; spacing: 8
+                                Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12; text: (index + 1) + ". " + model.text }
+                                SmallButton { text: "Forget"; onClicked: assistantDialog.forgetNote(index) } } } }
+                    GroupTitle { text: "My details"; Layout.topMargin: 6 }
                     RowLayout { Layout.fillWidth: true; spacing: 8; visible: assistantDialog.remembered > 0
                         Text { objectName: "asMemory"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 12
                             color: assistantDialog.confirmForget ? theme.crit : theme.soft; font.bold: assistantDialog.confirmForget

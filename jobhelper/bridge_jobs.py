@@ -354,7 +354,8 @@ class JobSlots:
         `context_job` is the job whose window is open, `chosen_job` the one picked in the assistant's own list."""
         def work():
             try:
-                result = self._api.assistant_talk(text, context_job, chosen_job)
+                result = self._api.assistant_talk(text, context_job, chosen_job,
+                                                  progress=lambda words: self._post("assistantProgress", {"text": str(words)}))
             except Exception as e:  # noqa: BLE001 - the window must always get an answer
                 trouble.note("the assistant's request", e)
                 result = {"ok": False, "action": "none", "msg": str(e) or type(e).__name__}
@@ -371,6 +372,7 @@ class JobSlots:
                           "cv_lists": self._api.assistant_cv_lists, "draft": lambda: self._api.draft_my_answer(arg),
                           "confirm": lambda: self._api.assistant_confirm(self._details(arg)),
                           "review": lambda: self._api.assistant_review(job_id),
+                          "undo": self._api.assistant_undo, "judge": self._api.assistant_judge_page,
                           "practice": lambda: self._api.assistant_practice(job_id),
                           "practice_answer": lambda: self._api.assistant_practice_answer(
                               job_id, (self._details(arg) or {}).get("question", ""), (self._details(arg) or {}).get("answer", ""))}[what]()
@@ -408,6 +410,22 @@ class JobSlots:
     @Slot(bool, result="QVariantMap")
     def setAssistantWatch(self, on):
         return self._api.assistant_set_watch(bool(on))
+
+    @Slot(result="QVariantMap")
+    def assistantNotes(self):
+        return self._api.assistant_notes_list()
+
+    @Slot(int, result="QVariantMap")
+    def forgetNote(self, number):
+        return self._api.assistant_forget_note(number)
+
+    @Slot(result="QVariantMap")
+    def assistantBrowser(self):
+        return self._api.assistant_browser()
+
+    @Slot(str, result="QVariantMap")
+    def setAssistantBrowser(self, key):
+        return self._api.assistant_set_browser(key)
 
     @Slot()
     def newTalk(self):
