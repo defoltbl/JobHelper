@@ -161,7 +161,18 @@ Rectangle {
                     busy: assistantDialog.busy
                     onTapped: assistantDialog.show() }
                 Connections { target: welcome
-                    function onShownChanged() { if (!welcome.shown) helper.greet(); } }
+                    function onShownChanged() { if (!welcome.shown) helper.tell(bridge.assistantBriefing().headline || ""); } }
+                // Only when you turned it on in the assistant's window: every little while it looks whether the tab in
+                // front in Chrome is the form of a job you track, and says so once per page.
+                Timer { id: noticer; interval: 20000; repeat: true
+                    running: assistantDialog.watching && !welcome.shown && !assistantDialog.visible && !win.working
+                    onTriggered: bridge.noticeForm() }
+                Connections { target: bridge
+                    function onFormNoticed(res) {
+                        if (res.problem) assistantDialog.watchProblem = res.problem;
+                        if (!res.ok) return;
+                        assistantDialog.watchProblem = ""; assistantDialog.noticedJob = res.job_id;
+                        helper.tell(res.say); } }
                 // it follows the pointer with its eyes while the pointer is over the floor (this takes no click from anything)
                 HoverHandler { id: floorHover
                     onPointChanged: if (hovered) helper.lookAt(point.position.x, point.position.y)

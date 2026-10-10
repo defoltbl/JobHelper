@@ -348,12 +348,13 @@ class JobSlots:
     def assistantJobs(self):
         return self._api.assistant_jobs()
 
-    @Slot(str, str)
-    def askAssistant(self, text, job_id):
-        """Runs in the background (it talks to Chrome and may ask Claude); the answer arrives as assistantReady."""
+    @Slot(str, str, str)
+    def askAssistant(self, text, context_job, chosen_job):
+        """Runs in the background (it talks to Chrome and may ask Claude); the answer arrives as assistantReady.
+        `context_job` is the job whose window is open, `chosen_job` the one picked in the assistant's own list."""
         def work():
             try:
-                result = self._api.assistant_ask(text, job_id)
+                result = self._api.assistant_talk(text, context_job, chosen_job)
             except Exception as e:  # noqa: BLE001 - the window must always get an answer
                 trouble.note("the assistant's request", e)
                 result = {"ok": False, "action": "none", "msg": str(e) or type(e).__name__}
@@ -367,13 +368,50 @@ class JobSlots:
             try:
                 result = {"open_form": lambda: self._api.assistant_open_form(arg), "files": lambda: self._api.assistant_files(job_id),
                           "learn": self._api.assistant_learn, "forget": self._api.assistant_forget,
-                          "cv_lists": self._api.assistant_cv_lists, "draft": lambda: self._api.draft_my_answer(arg)}[what]()
+                          "cv_lists": self._api.assistant_cv_lists, "draft": lambda: self._api.draft_my_answer(arg),
+                          "confirm": lambda: self._api.assistant_confirm(self._details(arg)),
+                          "review": lambda: self._api.assistant_review(job_id),
+                          "practice": lambda: self._api.assistant_practice(job_id),
+                          "practice_answer": lambda: self._api.assistant_practice_answer(
+                              job_id, (self._details(arg) or {}).get("question", ""), (self._details(arg) or {}).get("answer", ""))}[what]()
             except Exception as e:  # noqa: BLE001 - the window must always get an answer
                 trouble.note(f"the assistant's request ({what})", e)
                 result = {"ok": False, "msg": str(e) or type(e).__name__}
-            result["action"] = what
+            result.setdefault("action", what)
+            if what in ("open_form", "files", "learn", "forget", "cv_lists", "draft"):
+                result["action"] = what
             self._post("assistantReady", result)
         threading.Thread(target=work, daemon=True).start()
+
+    @Slot()
+    def noticeForm(self):
+        """Looks whether the tab in front is the form of a tracked job (only when turned on); the answer arrives as formNoticed."""
+        def work():
+            try:
+                self._post("formNoticed", self._api.assistant_notice())
+            except Exception as e:  # noqa: BLE001 - looking must never disturb anything
+                trouble.note("noticing a form in Chrome", e)
+        threading.Thread(target=work, daemon=True).start()
+
+    @Slot(result="QVariantMap")
+    def assistantBriefing(self):
+        return self._api.assistant_briefing()
+
+    @Slot(str, str, result=bool)
+    def nudgeDone(self, job_id, kind):
+        return bool(self._api.assistant_nudge_done(job_id, kind).get("ok"))
+
+    @Slot(result=bool)
+    def assistantWatching(self):
+        return self._api.assistant_watching()
+
+    @Slot(bool, result="QVariantMap")
+    def setAssistantWatch(self, on):
+        return self._api.assistant_set_watch(bool(on))
+
+    @Slot()
+    def newTalk(self):
+        self._api.assistant_new_talk()
 
     @Slot()
     def watchForm(self):

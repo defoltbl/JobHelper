@@ -51,6 +51,62 @@ Dialog {
     ListModel { id: talk }                // {who: "bot" | "you", text, bad}
     ListModel { id: filledModel }         // {label, value, kind, check}
     ListModel { id: leftModel }           // {label, why}
+    ListModel { id: rowModel }            // jobs an answer is about: {id, label, sub}
+    ListModel { id: problemModel }        // what a review found: {field, problem}
+    ListModel { id: nudgeModel }          // things to look at today: {text, job_id, kind}
+    // an action that changes your data waits here for your yes
+    property var pending: null
+    property string pendingAsk: ""
+    property string pendingPreview: ""
+    // practising an interview: one question at a time
+    property bool practising: false
+    property string practiceJob: ""
+    property string practiceName: ""
+    property var practiceQuestions: []
+    property int practiceIndex: 0
+    // noticing a form in Chrome by itself: off until you turn it on
+    property bool watching: false
+    property string watchProblem: ""
+    property string noticedJob: ""
+    function contextJob() { return detailDialog.visible && detailDialog.job && detailDialog.job.id ? detailDialog.job.id : ""; }
+    function setWatch(on) {
+        var r = bridge.setAssistantWatch(on);
+        if (!(r && r.ok)) { askErr = (r && r.msg) || "That could not be changed."; watching = bridge.assistantWatching(); return; }
+        watching = on; watchProblem = "";
+    }
+    function yes() {                      // your yes to what the assistant asked about
+        if (busy || pending === null) return;
+        var what = JSON.stringify(pending);
+        pending = null; pendingAsk = ""; pendingPreview = "";
+        say("you", "Yes", false);
+        busy = true; bridge.assistantDo("confirm", what, "");
+    }
+    function no() {
+        if (pending === null) return;
+        pending = null; pendingAsk = ""; pendingPreview = "";
+        say("you", "No", false); say("bot", "Left as it was.", false);
+    }
+    function openThing(id, what) {
+        if (what === "posting") { var r = bridge.openUrl(id); if (!(r && r.ok)) say("bot", "There is no link saved for this job.", true); return; }
+        if (what === "cv" || what === "letter") {
+            var d = bridge.jobDetail(id), name = d ? d[what] : "";
+            if (!name) { say("bot", "This job has no " + (what === "cv" ? "CV" : "letter") + " from the app.", true); return; }
+            bridge.openDoc(d[what + "_pdf"] === true ? what + "_pdf" : what, name); return;
+        }
+        detailDialog.show(id);
+    }
+    function endPractice(words) {
+        if (!practising) return;
+        practising = false;
+        say("bot", words || "Practice ended. Ask me to practise again whenever you like.", false);
+    }
+    function askQuestion() {
+        say("bot", "Question " + (practiceIndex + 1) + " of " + practiceQuestions.length + ": " + practiceQuestions[practiceIndex], false);
+    }
+    function dropNudge(index) {
+        var n = nudgeModel.get(index);
+        bridge.nudgeDone(n.job_id, n.kind); nudgeModel.remove(index);
+    }
     ListModel { id: fieldModel }          // {key, label, most, value, fromCv}
     ListModel { id: jobModel }            // {employer, title, start, end, current}
     ListModel { id: schoolModel }         // {school, degree, field, start, end}
@@ -81,10 +137,20 @@ Dialog {
         jobBox.currentIndex = 0; jobId = "";
         loadDetails(); loadAnswers();
         remembered = bridge.assistantMemory().count || 0; confirmForget = false;
+        watching = bridge.assistantWatching();
+        nudgeModel.clear();
+        var today = bridge.assistantBriefing(), nudges = (today && today.nudges) || [];
+        for (var n = 0; n < nudges.length; n++) nudgeModel.append({ text: nudges[n].text, job_id: nudges[n].job_id, kind: nudges[n].kind });
+        if (talk.count === 0 && today && (today.lines || []).length > 0)
+            say("bot", "Today: " + today.lines.join("; ") + ".", false);
         if (talk.count === 0)
             say("bot", detailsSaved ? "Hi! Open an application form in Chrome, bring its tab to the front, then ask me to fill it in."
                                     : "Hi! First tell me your details on the My details page. Then open an application form in Chrome and ask me to fill it in.");
         page = detailsSaved ? "ask" : "details";
+        if (noticedJob !== "") {              // it noticed a form by itself: the answers are for that job
+            for (var j = 0; j < jobs.length; j++) if (jobs[j].id === noticedJob) { jobBox.currentIndex = j; jobId = noticedJob; }
+            noticedJob = "";
+        }
         open();
     }
     function forJob(id) {                 // opened from a job's window: the answers are for that job
@@ -99,14 +165,24 @@ Dialog {
         if (words === "") { askErr = "Write what you need, or press Fill in the form in Chrome."; return; }
         if (words.length > maxRequest) { askErr = "That is longer than " + maxRequest + " characters. Say it in a sentence."; return; }
         if (dirty) { askErr = "You changed your details and did not save them. Save them on the My details page first."; return; }
+        if (pending !== null) { askErr = "First answer the question above: Yes, do it or No."; return; }
         askErr = ""; askBox.text = "";
-        filledModel.clear(); leftModel.clear(); last = ({}); nextPage = false; watchSign = ""; appliedNow = false;
+        if (practising) {                     // an answer to the question that was asked
+            if (/^(stop|end|quit|enough|finish)\b/i.test(words)) { say("you", words, false); endPractice(""); return; }
+            say("you", words, false);
+            busy = true;
+            bridge.assistantDo("practice_answer", JSON.stringify({ question: practiceQuestions[practiceIndex], answer: words }), practiceJob);
+            return;
+        }
+        filledModel.clear(); leftModel.clear(); rowModel.clear(); problemModel.clear();
+        last = ({}); nextPage = false; watchSign = ""; appliedNow = false;
         say("you", words, false);
         busy = true;
-        bridge.askAssistant(words, jobId);
+        bridge.askAssistant(words, contextJob(), jobId);
     }
     function act(what, arg, words) {      // one of the buttons under an answer
         if (busy) { askErr = "I am still working on the last request. Wait for the answer."; return; }
+        if (what === "review") problemModel.clear();
         askErr = ""; confirmClose = false;
         say("you", words, false);
         busy = true;
@@ -327,9 +403,37 @@ Dialog {
                 }
                 if (!res.ok) assistantDialog.answersErr = res.msg || "That did not work.";
             }
+            if (res.action === "practice_feedback" && !res.ok && assistantDialog.practising) {     // the answer was not taken: the same question stays
+                assistantDialog.askErr = res.msg || "That did not work."; return;
+            }
             if (!res.ok) { stagePanel.assistant.shake(); assistantDialog.say("bot", res.msg || "That did not work.", true); return; }
             stagePanel.assistant.nod();
+            if (res.action === "confirm") {             // something of yours would change: asked first, in the app's own words
+                assistantDialog.pending = res.pending; assistantDialog.pendingAsk = res.ask || ""; assistantDialog.pendingPreview = res.preview || "";
+                assistantDialog.say("bot", res.ask || "Shall I?", false); return;
+            }
             assistantDialog.say("bot", res.say || "Done.", false);
+            var rows = res.rows || [];
+            rowModel.clear();
+            for (var r = 0; r < rows.length; r++) rowModel.append({ id: rows[r].id, label: rows[r].label, sub: rows[r].sub || "" });
+            if (res.action === "page") assistantDialog.page = res.page;
+            if (res.action === "open") assistantDialog.openThing(res.job_id, res.what);
+            if (res.action === "done") { win.reloadAll(); detailDialog.refresh(); }
+            if (res.action === "review") {
+                problemModel.clear();
+                var found = res.problems || [];
+                for (var p = 0; p < found.length; p++) problemModel.append({ field: found[p].field, problem: found[p].problem });
+            }
+            if (res.action === "practice") {
+                assistantDialog.practising = true; assistantDialog.practiceJob = res.job_id; assistantDialog.practiceName = res.job || "";
+                assistantDialog.practiceQuestions = res.questions || []; assistantDialog.practiceIndex = 0;
+                assistantDialog.askQuestion();
+            }
+            if (res.action === "practice_feedback" && assistantDialog.practising) {
+                if (assistantDialog.practiceIndex + 1 >= assistantDialog.practiceQuestions.length)
+                    assistantDialog.endPractice("That was the last question. Well done: " + assistantDialog.practiceQuestions.length + " answered.");
+                else { assistantDialog.practiceIndex++; assistantDialog.askQuestion(); }
+            }
             if (res.action === "fill") { assistantDialog.watchSign = "pending"; assistantDialog.watched = 0; bridge.watchForm(); }
             var filled = res.filled || [], left = res.left || [];
             for (var i = 0; i < filled.length; i++)
@@ -377,6 +481,12 @@ Dialog {
                 ColumnLayout {
                     id: talkCol
                     x: 16; y: 14; width: talkFlick.width - 32; spacing: 10
+                    DetailCard { objectName: "asNudges"; visible: nudgeModel.count > 0; heading: "For you today (" + nudgeModel.count + ")"
+                        Repeater { model: nudgeModel
+                            RowLayout { Layout.fillWidth: true; spacing: 6
+                                Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.ink; font.pixelSize: 12; text: model.text }
+                                SmallButton { text: "Open"; onClicked: detailDialog.show(model.job_id) }
+                                SmallButton { text: "Do not remind me"; onClicked: assistantDialog.dropNudge(index) } } } }
                     Repeater {
                         model: talk
                         Rectangle {
@@ -389,10 +499,34 @@ Dialog {
                                 text: model.text; color: model.bad ? theme.crit : theme.ink; font.pixelSize: 13; font.bold: model.bad }
                         }
                     }
+                    // what waits for your yes
+                    ColumnLayout { objectName: "asConfirm"; visible: assistantDialog.pending !== null && !assistantDialog.busy; Layout.fillWidth: true; spacing: 6
+                        Rectangle { visible: assistantDialog.pendingPreview !== ""; Layout.fillWidth: true; radius: 10; color: theme.inset; border.color: theme.line; border.width: 1
+                            implicitHeight: previewText.implicitHeight + 18
+                            Text { id: previewText; x: 10; y: 9; width: parent.width - 20; wrapMode: Text.Wrap; color: theme.ink; font.pixelSize: 12
+                                text: assistantDialog.pendingPreview } }
+                        RowLayout { spacing: 6
+                            PillButton { objectName: "asYes"; primaryStyle: true; text: "Yes, do it"; onClicked: assistantDialog.yes() }
+                            SmallButton { objectName: "asNo"; implicitHeight: 34; text: "No"; onClicked: assistantDialog.no() } } }
                     Row { visible: assistantDialog.busy; spacing: 8
                         BusyIndicator { running: assistantDialog.busy; width: 20; height: 20; palette.dark: theme.a6 }
                         Text { anchors.verticalCenter: parent.verticalCenter; color: theme.soft; font.pixelSize: 12
                             text: "Working on it…" } }
+                    DetailCard { objectName: "asRows"; visible: rowModel.count > 0; heading: "Jobs (" + rowModel.count + ")"
+                        Repeater { model: rowModel
+                            Rectangle { Layout.fillWidth: true; radius: 8; color: rowMa.containsMouse ? theme.inset : "transparent"; implicitHeight: rowCol.implicitHeight + 10
+                                ColumnLayout { id: rowCol; x: 6; y: 5; width: parent.width - 12; spacing: 0
+                                    Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.ink; font.pixelSize: 12; font.bold: true; text: model.label }
+                                    Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 11; text: model.sub } }
+                                MouseArea { id: rowMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                    onClicked: detailDialog.show(model.id) } } } }
+                    DetailCard { objectName: "asProblems"; visible: problemModel.count > 0; heading: "Look at these before you send (" + problemModel.count + ")"
+                        Repeater { model: problemModel
+                            ColumnLayout { Layout.fillWidth: true; spacing: 1
+                                RowLayout { Layout.fillWidth: true; spacing: 6
+                                    Rectangle { implicitWidth: 8; implicitHeight: 8; radius: 4; color: theme.warn }
+                                    Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.ink; font.pixelSize: 12; font.bold: true; text: model.field } }
+                                Text { Layout.fillWidth: true; Layout.leftMargin: 14; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 12; text: model.problem } } } }
                     DetailCard { visible: filledModel.count > 0; heading: "Filled in (" + filledModel.count + ")"
                         Repeater { model: filledModel
                             ColumnLayout { Layout.fillWidth: true; spacing: 1
@@ -409,11 +543,14 @@ Dialog {
                                 Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 12; text: model.why } } } }
                     // what can be done next, offered only when it applies
                     Flow { objectName: "asNext"; Layout.fillWidth: true; spacing: 6
-                        visible: assistantDialog.canOpenForm || assistantDialog.canShowFiles || assistantDialog.canLearn || assistantDialog.canApply || (assistantDialog.nextPage && !assistantDialog.busy)
+                        visible: assistantDialog.canOpenForm || assistantDialog.canShowFiles || assistantDialog.canLearn || assistantDialog.canApply
+                                 || (assistantDialog.last.ok === true && !assistantDialog.busy) || (assistantDialog.nextPage && !assistantDialog.busy)
                         SmallButton { objectName: "asNextPage"; visible: assistantDialog.nextPage && !assistantDialog.busy; primaryStyle: true; text: "Fill in this page too"
                             onClicked: assistantDialog.ask("Fill in the form in Chrome") }
                         SmallButton { objectName: "asOpenForm"; visible: assistantDialog.canOpenForm; primaryStyle: true; text: "Open the form in its own tab"
                             onClicked: assistantDialog.act("open_form", assistantDialog.last.frame, "Open the form in its own tab") }
+                        SmallButton { objectName: "asReview"; visible: assistantDialog.last.ok === true && !assistantDialog.busy; text: "Review before I send"
+                            onClicked: assistantDialog.act("review", "", "Review the form before I send it") }
                         SmallButton { objectName: "asFiles"; visible: assistantDialog.canShowFiles; text: "Show my CV and letter in Finder"
                             onClicked: assistantDialog.act("files", "", "Show my CV and letter in Finder") }
                         SmallButton { objectName: "asLearn"; visible: assistantDialog.canLearn; text: "Remember what I changed on the page"
@@ -425,6 +562,17 @@ Dialog {
             }
             Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
             ColumnLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 8
+                RowLayout { objectName: "asPractice"; visible: assistantDialog.practising; Layout.fillWidth: true; spacing: 8
+                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.a6; font.pixelSize: 12; font.bold: true
+                        text: "Practising for " + assistantDialog.practiceName + " · question " + (assistantDialog.practiceIndex + 1) + " of " + assistantDialog.practiceQuestions.length }
+                    SmallButton { text: "Stop practising"; enabled: !assistantDialog.busy; onClicked: assistantDialog.endPractice("") } }
+                RowLayout { Layout.fillWidth: true; spacing: 8
+                    ThemedSwitch { objectName: "asWatch"; checked: assistantDialog.watching; onToggled: assistantDialog.setWatch(checked) }
+                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
+                        color: assistantDialog.watchProblem !== "" ? theme.crit : theme.soft; font.bold: assistantDialog.watchProblem !== ""
+                        text: assistantDialog.watchProblem !== "" ? assistantDialog.watchProblem
+                            : assistantDialog.watching ? "Noticing forms: while the app is open I look at the address of the tab in front in Chrome every 20 seconds and tell you when it is the form of a job you track."
+                            : "Notice application forms in Chrome by myself (off: I look at Chrome only when you ask)." } }
                 RowLayout { Layout.fillWidth: true; spacing: 8
                     Text { text: "Answers are for"; color: theme.soft; font.pixelSize: 12 }
                     ThemedCombo { id: jobBox; objectName: "asJob"; Layout.fillWidth: true; enabled: !assistantDialog.busy
@@ -432,7 +580,8 @@ Dialog {
                         onActivated: assistantDialog.jobId = assistantDialog.jobs[currentIndex] ? assistantDialog.jobs[currentIndex].id : "" } }
                 RowLayout { Layout.fillWidth: true; spacing: 8
                     TextField { id: askBox; objectName: "asBox"; Layout.fillWidth: true; implicitHeight: 34
-                        placeholderText: "Ask me: fill in the form in Chrome · why did this score 62?"; placeholderTextColor: theme.faint
+                        placeholderText: assistantDialog.practising ? "Your answer, as you would say it (or: stop)" : "Ask me: fill in the form · why did this score 62? · mark it applied"
+                    placeholderTextColor: theme.faint
                         color: theme.ink; font.pixelSize: 13; selectByMouse: true; enabled: !assistantDialog.busy
                         background: Rectangle { radius: 9; color: theme.surface; border.width: 1
                             border.color: assistantDialog.askErr !== "" || askBox.text.length > assistantDialog.maxRequest ? theme.crit : (askBox.activeFocus ? theme.accent : theme.line) }
@@ -448,7 +597,7 @@ Dialog {
                     color: assistantDialog.askErr !== "" || askBox.text.length > assistantDialog.maxRequest ? theme.crit : theme.faint
                     text: assistantDialog.askErr !== "" ? assistantDialog.askErr
                         : askBox.text.length > assistantDialog.maxRequest ? (askBox.text.length - assistantDialog.maxRequest) + " characters too long (the limit is " + assistantDialog.maxRequest + ")"
-                        : "Only empty fields are filled, and the form is never sent: you read it and press Submit yourself. A question about a job or the app is answered by Claude." }
+                        : "Filling in a form costs nothing; anything else you ask is one Claude call. I ask before I change anything of yours, and I never send a form." }
             }
         }
 

@@ -3595,3 +3595,146 @@ def test_my_answers_are_written_drafted_saved_and_removed(ui, monkeypatch):
     ui.js("assistantDialog.tryClose()")
     ui.wait(400)
     assert dialog.property("visible") is False and ui.warnings == []
+
+
+def test_the_assistant_asks_before_it_changes_anything_and_shows_what_it_found(ui, monkeypatch):
+    dialog, did = ui.find("assistantDialog"), []
+    talk = {"ok": True, "action": "confirm", "say": "", "ask": "Mark Junior Python Developer at Acme as applied? It moves to Applications as waiting.",
+            "pending": {"name": "mark_applied", "args": {"job": "lead"}}, "rows": []}
+    monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, context_job="", chosen_job="": did.append(("talk", text, context_job, chosen_job)) or dict(talk))
+    monkeypatch.setattr(ui_api.Api, "assistant_confirm", lambda self, pending: did.append(("confirm", pending)) or {
+        "ok": True, "action": "done", "say": "Moved Junior Python Developer at Acme to Applications, as waiting.", "job_id": "lead", "changed": True})
+    monkeypatch.setattr(ui_api.Api, "assistant_briefing", lambda self: {"headline": "", "lines": [], "nudges": []})
+    ui.js("assistantDialog.show()")
+    ui.wait(450)
+    ui.js('assistantDialog.page = "ask"')
+    assert not ui.find("asConfirm").property("visible")
+    ui.js('assistantDialog.ask("mark the Acme job as applied")')
+    _wait_idle(ui, dialog)
+    assert did == [("talk", "mark the Acme job as applied", "", "")]
+    assert ui.find("asConfirm").property("visible") and dialog.property("pendingAsk").startswith("Mark Junior Python Developer at Acme as applied?")
+    assert ui.js("talk.get(talk.count - 1).text") == talk["ask"]
+    ui.js('assistantDialog.ask("and another thing")')
+    assert "Yes, do it or No" in ui.find("asErr").property("text") and len(did) == 1, "an open question is answered first"
+    ui.js("assistantDialog.no()")
+    assert not ui.find("asConfirm").property("visible") and ui.js("talk.get(talk.count - 1).text") == "Left as it was." and len(did) == 1
+    ui.js('assistantDialog.ask("mark the Acme job as applied")')
+    _wait_idle(ui, dialog)
+    ui.js("assistantDialog.yes()")
+    _wait_idle(ui, dialog)
+    assert did[-1] == ("confirm", {"name": "mark_applied", "args": {"job": "lead"}}) and not ui.find("asConfirm").property("visible")
+    assert ui.js("talk.get(talk.count - 1).text").startswith("Moved Junior Python Developer at Acme")
+    # a rewrite is shown before it is saved
+    talk.update(ask="Replace paragraph 2 of the letter for Acme with this version?", preview="I build reports people use.",
+                pending={"name": "save_letter", "args": {"job": "lead", "paragraphs": ["a", "b"]}})
+    ui.js('assistantDialog.ask("make the second paragraph shorter")')
+    _wait_idle(ui, dialog)
+    assert dialog.property("pendingPreview") == "I build reports people use." and ui.find("asConfirm").property("visible")
+    ui.js("assistantDialog.no()")
+    # an answer with jobs: listed, and a click opens the job; the open job is passed on as "this job"
+    monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, context_job="", chosen_job="": did.append(("talk", text, context_job, chosen_job)) or {
+        "ok": True, "action": "say", "say": "Beta has waited 20 days.", "rows": [{"id": "app", "label": "Beta · QA Engineer", "sub": "waiting · score 64"}]})
+    ui.js('assistantDialog.forJob("app"); assistantDialog.page = "ask"')
+    ui.js('assistantDialog.ask("which application waits longest?")')
+    _wait_idle(ui, dialog)
+    assert did[-1] == ("talk", "which application waits longest?", "", "app")
+    assert ui.find("asRows").property("visible") and ui.js("rowModel.get(0).label") == "Beta · QA Engineer"
+    ui.js("assistantDialog.tryClose()")
+    ui.wait(400)
+    ui.js('detailDialog.show("app")')
+    ui.wait(400)
+    ui.js("assistantDialog.show()")
+    ui.wait(400)
+    ui.js('assistantDialog.ask("why did this score 64?")')
+    _wait_idle(ui, dialog)
+    assert did[-1] == ("talk", "why did this score 64?", "app", ""), "the job whose window is open is “this job”"
+    ui.js("assistantDialog.tryClose(); detailDialog.close()")
+    ui.wait(400)
+    assert ui.warnings == []
+
+
+def test_practising_an_interview_goes_question_by_question(ui, monkeypatch):
+    dialog, did = ui.find("assistantDialog"), []
+    monkeypatch.setattr(ui_api.Api, "assistant_briefing", lambda self: {"headline": "", "lines": [], "nudges": []})
+    monkeypatch.setattr(ui_api.Api, "assistant_talk", lambda self, text, context_job="", chosen_job="": {
+        "ok": True, "action": "practice", "job_id": "app", "job": "QA Engineer at Beta", "questions": ["Why testing?", "Tell me about Docker."], "say": "Let us practise: 2 questions."})
+
+    def feedback(self, job_id, question, answer):
+        did.append((job_id, question, answer))
+        if answer == "Yes.":
+            return {"ok": False, "action": "practice_feedback", "msg": "Answer in a sentence or two, as you would in the interview."}
+        return {"ok": True, "action": "practice_feedback", "say": "Good. Add the pipeline you built."}
+    monkeypatch.setattr(ui_api.Api, "assistant_practice_answer", feedback)
+    ui.js("assistantDialog.show()")
+    ui.wait(450)
+    ui.js('assistantDialog.page = "ask"; assistantDialog.ask("practise the interview for Beta")')
+    _wait_idle(ui, dialog)
+    assert dialog.property("practising") and ui.find("asPractice").property("visible") and ui.js("talk.get(talk.count - 1).text") == "Question 1 of 2: Why testing?"
+    ui.js('assistantDialog.ask("Yes.")')
+    _wait_idle(ui, dialog)
+    assert "sentence or two" in ui.find("asErr").property("text") and dialog.property("practiceIndex") == 0, "an answer that was not taken keeps the question"
+    ui.js('assistantDialog.ask("Because I like finding what breaks.")')
+    _wait_idle(ui, dialog)
+    assert did[-1] == ("app", "Why testing?", "Because I like finding what breaks.") and dialog.property("practiceIndex") == 1
+    assert ui.js("talk.get(talk.count - 2).text") == "Good. Add the pipeline you built." and ui.js("talk.get(talk.count - 1).text") == "Question 2 of 2: Tell me about Docker."
+    ui.js('assistantDialog.ask("I run the tests in containers.")')
+    _wait_idle(ui, dialog)
+    assert not dialog.property("practising") and "last question" in ui.js("talk.get(talk.count - 1).text")
+    ui.js('assistantDialog.ask("practise the interview for Beta")')
+    _wait_idle(ui, dialog)
+    ui.js('assistantDialog.ask("stop")')
+    assert not dialog.property("practising") and len(did) == 3 and "Practice ended" in ui.js("talk.get(talk.count - 1).text")
+    ui.js("assistantDialog.tryClose()")
+    ui.wait(400)
+    assert ui.warnings == []
+
+
+def test_the_assistant_speaks_first_reviews_a_form_and_notices_one_only_when_told_to(ui, monkeypatch):
+    dialog, bot, did = ui.find("assistantDialog"), ui.find("assistantBot"), []
+    monkeypatch.setattr(ui_api.Api, "assistant_briefing", lambda self: {
+        "headline": "You filled in the form for QA Engineer at Beta yesterday but did not mark it applied.", "lines": ["2 jobs are ready to send", "1 follow-up due"],
+        "nudges": [{"kind": "apply", "job_id": "lead", "text": "You filled in the form for Junior Python Developer at Acme yesterday but did not mark it applied."}]})
+    monkeypatch.setattr(ui_api.Api, "assistant_nudge_done", lambda self, job_id, kind: did.append(("done", job_id, kind)) or {"ok": True})
+    # the bubble carries the briefing when the app opens
+    ui.js("welcome.shown = true")
+    ui.wait(200)
+    ui.js("welcome.finish()")
+    ui.wait(1200)
+    assert bot.property("note").startswith("You filled in the form for QA Engineer at Beta") and bot.property("greeting") and bot.property("shown") == bot.property("note")
+    bubble = ui.drawn("assistantBubble", "stagePanel")
+    assert bubble.mapToItem(bot.parentItem(), 0, 0).x() >= 0, "the longer bubble still stays on the floor"
+    bot.setProperty("greeting", False)
+    # the window lists what to look at, and a nudge can be told to stop
+    ui.js("talk.clear(); assistantDialog.show()")
+    ui.wait(450)
+    ui.js('assistantDialog.page = "ask"')
+    assert ui.find("asNudges").property("visible") and ui.js("nudgeModel.count") == 1 and ui.js("talk.get(0).text") == "Today: 2 jobs are ready to send; 1 follow-up due."
+    ui.js("assistantDialog.dropNudge(0)")
+    assert did == [("done", "lead", "apply")] and not ui.find("asNudges").property("visible")
+    # a review lists what is wrong
+    monkeypatch.setattr(ui_api.Api, "assistant_review", lambda self, job_id="": {"ok": True, "action": "review", "say": "I read the form: 1 thing looks wrong.",
+                                                                             "problems": [{"field": "Phone", "problem": "It is required and still empty."}]})
+    ui.js('assistantDialog.page = "ask"; assistantDialog.act("review", "", "Review the form before I send it")')
+    _wait_idle(ui, dialog)
+    assert ui.find("asProblems").property("visible") and ui.js("problemModel.get(0).field") == "Phone"
+    # noticing a form: off until the switch is on; a problem is said beside the switch
+    from jobhelper import config
+    assert dialog.property("watching") is False and not config.ui_settings().get("assistant_watch")
+    ui.js("assistantDialog.setWatch(true)")
+    assert dialog.property("watching") is True and config.ui_settings().get("assistant_watch") is True
+    ui.js("assistantDialog.tryClose()")
+    ui.wait(400)
+    ui.bridge.formNoticed.emit({"ok": False, "problem": "Chrome does not let other apps fill in pages yet."})
+    assert dialog.property("watchProblem").startswith("Chrome does not let")
+    ui.bridge.formNoticed.emit({"ok": True, "job_id": "app", "job": "QA Engineer at Beta", "say": "This looks like the form for QA Engineer at Beta. Tap me and I fill it in."})
+    ui.wait(300)
+    assert bot.property("note").startswith("This looks like the form for QA Engineer at Beta") and bot.property("greeting") and dialog.property("watchProblem") == ""
+    ui.js("stagePanel.assistant.tapped()")
+    ui.wait(450)
+    assert dialog.property("jobId") == "app", "the form it noticed is the job the answers are for"
+    ui.js("assistantDialog.setWatch(false)")
+    assert config.ui_settings().get("assistant_watch") is False
+    bot.setProperty("greeting", False)
+    ui.js("assistantDialog.tryClose()")
+    ui.wait(400)
+    assert ui.warnings == []

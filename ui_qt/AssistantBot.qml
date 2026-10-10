@@ -17,7 +17,8 @@ Item {
     property bool hovered: false
     property real lid: 0                // 0 = eyes open, 1 = closed
     readonly property bool waving: greeting || hovered
-    readonly property string says: busy ? "Working on it…" : (greeting ? "Hi! Tap me to fill in a form." : "Assistant · tap to ask")
+    property string note: ""             // what it has to tell: the morning's briefing, or a form it noticed
+    readonly property string says: busy ? "Working on it…" : (greeting ? (note !== "" ? note : "Hi! Tap me to fill in a form.") : "Assistant · tap to ask")
     // The bubble keeps the words it came up with while it fades out: changing them at that moment
     // (the greeting ending) made it change size and jump on its way out.
     readonly property bool talking: greeting || hovered || busy
@@ -52,8 +53,9 @@ Item {
         NumberAnimation { target: root; property: "shakeBy"; to: -5; duration: 150; easing.type: Easing.InOutSine }
         NumberAnimation { target: root; property: "shakeBy"; to: 0; duration: 110; easing.type: Easing.InOutSine } }
     signal tapped()
-    function greet() { greeting = true; greetEnd.restart(); }
-    Timer { id: greetEnd; interval: 4200; onTriggered: root.greeting = false }
+    function greet() { note = ""; greeting = true; greetEnd.restart(); }                      // a plain hello
+    function tell(text) { note = text || ""; greeting = true; greetEnd.restart(); }           // hello, with something to say
+    Timer { id: greetEnd; interval: root.note !== "" ? 9000 : 4200; onTriggered: root.greeting = false }
 
     // the eyes close and open by themselves every few seconds, twice now and then
     SequentialAnimation on lid {
@@ -127,11 +129,11 @@ Item {
         id: bubble; objectName: "assistantBubble"
         visible: opacity > 0; opacity: root.talking ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 160 } }
-        width: Math.min(200, bubbleText.implicitWidth + 22); height: bubbleText.implicitHeight + 14
+        width: Math.min(root.note !== "" && root.greeting ? 300 : 200, bubbleText.implicitWidth + 22); height: bubbleText.implicitHeight + 14
         Behavior on width { enabled: bubble.opacity === 1; NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
         x: -width - 2; y: 52; radius: 10; z: 5
         color: root.theme ? root.theme.surface2 : "#1f2a37"; border.color: root.ag; border.width: 1
-        Text { id: bubbleText; x: 11; y: 7; width: 178; wrapMode: Text.WordWrap; text: root.shown
+        Text { id: bubbleText; x: 11; y: 7; width: (root.note !== "" && root.greeting ? 300 : 200) - 22; wrapMode: Text.WordWrap; text: root.shown
             color: root.theme ? root.theme.ink : "#e7eef5"; font.pixelSize: 11; font.bold: true }
         Rectangle { width: 9; height: 9; rotation: 45; color: parent.color; border.color: root.ag; border.width: 1; x: parent.width - 5; y: parent.height / 2 - 4.5 }
         Rectangle { width: 6; height: 14; color: parent.color; x: parent.width - 7; y: parent.height / 2 - 7 }
