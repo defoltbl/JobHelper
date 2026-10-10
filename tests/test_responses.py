@@ -466,3 +466,19 @@ def test_one_header_or_message_nobody_can_decode_does_not_end_a_scan(monkeypatch
     assert email_client._read(Box(), b"1", "me@example.com", "inbox")["subject"] == "Hi"
     monkeypatch.setattr(email_client, "_message", lambda *a: (_ for _ in ()).throw(ValueError("broken")))
     assert email_client._read(Box(), b"1", "me@example.com", "inbox") is None, "left out; the other messages are still read"
+
+
+def test_two_writers_to_the_replies_at_once_lose_nothing(isolate_data):
+    """Found by reading db.py: every change rewrites the whole stored image. A scan filing replies while a reply is pasted in
+    by hand were two writers, and the later image undid the earlier one."""
+    import threading
+    def file(start):
+        for n in range(start, start + 15):
+            db.upsert_response({"msg_id": f"<{n}@x>", "company": "Acme", "stage": "acknowledged"})
+            db.mark_seen(f"<{n}@x>")
+    workers = [threading.Thread(target=file, args=(k * 100,)) for k in range(4)]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join()
+    assert db.total() == 60 and all(db.is_seen(f"<{k * 100 + n}@x>") for k in range(4) for n in range(15))

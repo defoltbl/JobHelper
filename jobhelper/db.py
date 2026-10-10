@@ -7,6 +7,7 @@ back to the tracked job where possible.
 from __future__ import annotations
 
 import sqlite3
+import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -42,12 +43,20 @@ REJECTION_CATEGORIES = [
 ]
 
 
+_WRITING = threading.RLock()
+
+
 @contextmanager
 def _connect(write: bool = False):
     """Open the database in memory; the file on disk only ever holds the
     encrypted image. With write=True the image is saved back on success."""
     config.ensure_dirs()
     path = config.RESPONSES_DB
+    # A change reads the whole image, alters it and writes the whole image back. Two changes at once (an email scan
+    # filing a reply while you paste one in by hand) would each write its own image, and the later one would undo the
+    # earlier: one at a time.
+    if write:
+        _WRITING.acquire()
     conn = sqlite3.connect(":memory:")
     try:
         if path.exists() and path.stat().st_size:
@@ -60,6 +69,8 @@ def _connect(write: bool = False):
             vault.write_bytes(path, conn.serialize())
     finally:
         conn.close()
+        if write:
+            _WRITING.release()
 
 
 def is_seen(msg_id: str) -> bool:
