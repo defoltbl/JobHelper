@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""JobHelper — Agent 4 status tools (run any time, independent of the pipeline).
+"""JobHelper: status tools (run any time, independent of the pipeline).
 
     python status.py list                     # show tracked jobs + statuses
-    python status.py update adzuna-123 applied # set a status by hand
+    python status.py apply adzuna-123          # you applied: the lead becomes an application (status "waiting")
     python status.py update adzuna-123 interview --note "call on Fri 10:00"
     python status.py sync                      # read inbox replies & auto-update
     python status.py rebuild                   # regenerate the Excel table
     python status.py usage                      # show Claude usage (tokens / cost)
     python status.py usage --reset             # reset the usage counters
 
-Statuses: found, letter_ready, applied, interview, offer, rejected, on_hold
+Statuses: found, letter_ready, not_interested, waiting, interview, offer, rejected, on_hold
+(`python status.py --help` lists every command.)
 """
 from __future__ import annotations
 
@@ -52,7 +53,7 @@ def cmd_update(args) -> int:
     if args.note:
         job["notes"] = (f"[{date.today().isoformat()}] {args.note}\n" + job.get("notes", "")).strip()
     store.save_jobs(jobs)
-    agent4_tracker.render_excel(jobs)
+    agent4_tracker.render_all(jobs)
     print(f"✓ {job['title']} @ {job['company']} → {args.status}")
     return 0
 
@@ -63,6 +64,10 @@ def cmd_apply(args) -> int:
     job = store.find(jobs, args.job_id)
     if not job:
         print(f"✗ No job with id '{args.job_id}'. Try: python status.py list")
+        return 1
+    if job.get("status") not in store.LEAD_STATUSES:
+        print(f"✗ {job['title']} @ {job['company']} is not a new job any more (status: {job.get('status')}). "
+              f"To change the status of an application: python status.py update {job['id']} <status>")
         return 1
     job["status"] = "waiting"
     job["last_update"] = date.today().isoformat()
@@ -178,7 +183,12 @@ def cmd_responses(args) -> int:
     if args.scan:
         print(f"Reading inbox ({config.IMAP_USER}) — read-only …")
         try:
-            stats = agent5_responses.process_inbox(jobs, lookback_days=args.days)
+            stats = agent5_responses.process_inbox(jobs, lookback_days=args.days or scan_days())
+        except llm.LimitReached as e:
+            store.save_jobs(jobs)                    # the replies read so far have already changed these jobs
+            agent4_tracker.render_excel(jobs)
+            print(f"⏸  {e}\n   What was read is saved. Run it again after the reset: nothing is read twice.")
+            return 3
         except RuntimeError as e:
             print(f"✗ {e}")
             return 1
@@ -300,7 +310,11 @@ def cmd_repair_emails(args) -> int:
     older version filed wrongly because it could not read HTML-only emails."""
     from jobhelper import agent5_responses, email_client, vault
     print("Reading the inbox (read-only) …")
-    emails = email_client.fetch_recent(args.days)
+    try:
+        emails = email_client.fetch_recent(args.days)
+    except RuntimeError as e:                        # no mailbox connected, or it could not be reached: said, nothing changed
+        print(f"✗ {e}")
+        return 1
     jobs = store.load_jobs()
     backup = vault.make_backup("before_email_repair")
     stats = agent5_responses.repair_unread_bodies(jobs, emails)
@@ -343,7 +357,7 @@ def cmd_security(args) -> int:
             for path in vault.data_files():
                 if path.exists():
                     print(f"  {'encrypted' if vault.file_is_encrypted(path) else 'PLAIN    '}  {path.name}")
-            print(f"Gmail app password in Keychain: {'yes' if vault.get_secret(vault.IMAP_ACCOUNT) else 'no'}")
+            print(f"Mailbox password in the Keychain: {'yes' if vault.get_secret(vault.IMAP_ACCOUNT) else 'no'}")
             for f in integrity.check():
                 print(f"  {f['state']:<9}  {f['title']}" + (f"  ({f['file']})" if f["file"] else ""))
         elif args.action == "protect":
@@ -389,7 +403,7 @@ def cmd_security(args) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="JobHelper status tools (Agent 4).")
+    parser = argparse.ArgumentParser(description="JobHelper status tools.")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("list", help="List tracked jobs").set_defaults(func=cmd_list)

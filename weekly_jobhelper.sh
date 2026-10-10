@@ -1,7 +1,7 @@
 #!/bin/zsh
 # JobHelper: the weekly run (started by the LaunchAgent the app's Weekly run card installs).
 #   1. Job search : run.py           (search, score, write letters and adapted CVs)
-#   2. Email scan : status.py sync   (read replies, update statuses, send the week's summary)
+#   2. Email scan : status.py sync   (read replies, update statuses, show the week's summary as one notification)
 # Both use the Options saved in the app. Nothing here is specific to one computer:
 # the project folder is wherever this file is, and Python is the project's own .venv.
 

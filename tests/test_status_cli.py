@@ -47,3 +47,59 @@ def test_pdf_command_converts_generated_documents_only(isolate_data, monkeypatch
     assert _run(monkeypatch, "pdf") == 0
     assert sorted(made) == ["app_letter.docx", "cv.docx"]            # not the user's own letter, not the existing PDF
     assert "already there: 1" in capsys.readouterr().out
+
+
+# ── found by reading the file line by line (10 October 2026) ────────────────
+def test_apply_is_for_a_new_job_and_does_not_reopen_an_application(isolate_data, monkeypatch, capsys):
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="lead", title="Dev", company="Acme", status="letter_ready"),
+                     store.new_job(id="closed", title="QA", company="Beta", status="rejected", date_applied="2026-09-01")])
+    assert _run(monkeypatch, "apply", "closed") == 1
+    out = capsys.readouterr().out
+    assert "not a new job any more (status: rejected)" in out and "status.py update closed" in out
+    assert store.find(store.load_jobs(), "closed")["status"] == "rejected", "a rejection is not turned into a waiting application by a slip"
+    assert _run(monkeypatch, "apply", "lead") == 0
+    applied = store.find(store.load_jobs(), "lead")
+    assert applied["status"] == "waiting" and applied["date_applied"] == date.today().isoformat()
+    assert _run(monkeypatch, "apply", "nobody") == 1 and "No job with id" in capsys.readouterr().out
+    assert _run(monkeypatch, "update", "lead", "applied") == 1 and "Unknown status 'applied'" in capsys.readouterr().out
+    assert "update adzuna-123 applied" not in status.__doc__ and "waiting" in status.__doc__, "the file's own examples are commands that work"
+
+
+def test_responses_scan_keeps_what_was_read_when_the_limit_is_reached(isolate_data, monkeypatch, capsys):
+    from jobhelper import agent5_responses, llm
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="waiting", date_applied="2026-09-01")])
+    asked = []
+
+    def read(jobs, lookback_days=None, **kw):
+        asked.append(lookback_days)
+        jobs[0]["status"] = "interview"                     # one reply was read before the limit
+        raise llm.LimitReached("Claude's 5-hour limit is used up (100%).")
+    monkeypatch.setattr(agent5_responses, "process_inbox", read)
+    assert _run(monkeypatch, "responses", "--scan") == 3
+    assert "What was read is saved" in capsys.readouterr().out and store.find(store.load_jobs(), "a")["status"] == "interview"
+    assert asked == [status.scan_days()], "without --days it looks as far back as the app's Options say, not nowhere"
+    monkeypatch.setattr(agent5_responses, "process_inbox", lambda jobs, lookback_days=None, **kw: (_ for _ in ()).throw(RuntimeError("No mailbox is connected.")))
+    assert _run(monkeypatch, "responses", "--scan") == 1 and "No mailbox is connected." in capsys.readouterr().out
+
+
+def test_repair_emails_says_why_it_cannot_read_the_mailbox(isolate_data, monkeypatch, capsys):
+    from jobhelper import email_client, vault
+    config.ensure_dirs()
+    backups = []
+    monkeypatch.setattr(vault, "make_backup", lambda label: backups.append(label))
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: (_ for _ in ()).throw(RuntimeError("No mailbox is connected. Add your job email in the app's Account card.")))
+    assert _run(monkeypatch, "repair-emails") == 1
+    assert "No mailbox is connected" in capsys.readouterr().out and backups == [], "nothing was read, so nothing is backed up or changed"
+
+
+def test_the_package_and_the_example_settings_describe_the_app_as_it_is():
+    import jobhelper
+    from pathlib import Path
+    root = Path(status.__file__).resolve().parent
+    assert "Agent 5" in jobhelper.__doc__ and "4-agent" not in jobhelper.__doc__ and "form" in jobhelper.__doc__
+    env = (root / ".env.example").read_text(encoding="utf-8")
+    assert "Email sync (Agent 5" in env and "ANTHROPIC_API_KEY=" not in env.replace("Do NOT set ANTHROPIC_API_KEY", "")
+    script = (root / "weekly_jobhelper.sh").read_text(encoding="utf-8")
+    assert "send the week" not in script, "the app never sends anything: the summary is a notification"
