@@ -471,6 +471,7 @@ class AssistantApi:
         self._browser()
         if not details.any_given(mine):
             return no("I do not know your details yet. Fill in My details once, save, then ask me again.", action="details")
+        mine["start"] = str(self.options().get("about_start") or "").strip()      # when you can start: said once, under Options, About you
         try:
             tab = chrome.active_tab()
         except chrome.ChromeError as e:

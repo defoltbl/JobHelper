@@ -20,9 +20,11 @@ is yours.
 """
 from __future__ import annotations
 
+import calendar
 import json
 import os
 import re
+from datetime import date, timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -754,7 +756,7 @@ _PRIVATE = re.compile(r"passw|captcha|card ?number|credit card|\bcvv\b|\bcvc\b|\
 _NOT_MINE = re.compile(r"company|employer|organi[sz]ation|school|universit|college|referr|referee|reference|emergency|manager|recruiter"
                        r"|supervisor|\btitle\b|position|\brole\b|degree|skill|user ?name|login|nick")
 # what forms ask again and again; when it is not in My details, an open question is drafted instead
-SOFT = ("employer", "job_title", "school", "degree", "study_field", "notice_period", "salary")
+SOFT = ("employer", "job_title", "school", "degree", "study_field", "notice_period", "salary", "start")
 # asked once per job or per degree: the first such field gets the first entry of the list, the next one the second
 LISTED = {"employer": ("experience", "employer"), "job_title": ("experience", "title"),
           "school": ("education", "school"), "degree": ("education", "degree"), "study_field": ("education", "field")}
@@ -762,6 +764,67 @@ MORE_ROWS = "You listed {have} in My details, and this is one more. Add it there
 _ROW_START = re.compile(r"\bstart(?:ed)?\b|\bfrom\b|\bbegan\b|date from|od\b")
 _ROW_END = re.compile(r"\bend(?:ed)?\b|\bto\b|\buntil\b|\bfinish|\bleft\b|date to|graduat")
 _NOT_A_ROW_DATE = re.compile(r"earliest|availab|can you|notice|birth|expected|preferred|interview|deadline|today|valid|expir|issue")
+# when you can start: asked as "earliest start date", "available from", "when can you start" (a plain "start date" may be a job's)
+_AVAILABLE = re.compile(r"earliest (?:possible )?(?:start|date)|availab|when (?:can|could|would) you (?:start|join|begin)|(?:possible|desired|preferred|expected|proposed) start"
+                        r"|date of (?:joining|entry)|joining date|can you start|start working|nástup")
+_LONE_START = re.compile(r"\bstart(?:ing)? date\b|\bdate of start\b")
+START_UNKNOWN = "Tell me when you can start under Options, About you, and ask me again. Or pick the date yourself."
+START_NO_DATE = "I cannot turn “{text}” (Options, About you) into a date. Pick the date yourself."
+START_CHECK = "Worked out from “{text}” in Options: check the date."
+_MONTHS = {name.lower(): n for n, name in enumerate(calendar.month_name) if name}
+_MONTHS.update({name.lower(): n for n, name in enumerate(calendar.month_abbr) if name})
+_COUNT = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
+
+
+def start_day(text: str, today: date | None = None) -> tuple[date | None, bool]:
+    """The day meant by what you wrote about when you can start: (the day, whether it was worked out and needs a look).
+    "2026-11-01", "1.11.2026", "1 November 2026" are taken as written; "November 2026" is its first day; "immediately" is
+    today; "one month", "2 weeks' notice" count from today. Anything else, and a day that has passed, gives (None, False)."""
+    today = today or date.today()
+    low = " ".join(str(text or "").lower().replace(",", " ").split())
+    found, worked = None, False
+    try:
+        m = re.search(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", low)
+        if m:
+            found = date(int(m[1]), int(m[2]), int(m[3]))
+        if not found:
+            m = re.search(r"\b(\d{1,2})[./](\d{1,2})[./](\d{4})\b", low)
+            if m:
+                found = date(int(m[3]), int(m[2]), int(m[1]))
+        if not found:
+            names = "|".join(sorted(_MONTHS, key=len, reverse=True))
+            m = re.search(rf"\b(\d{{1,2}})(?:st|nd|rd|th)? (?:of )?({names})\.? (\d{{4}})\b", low) or None
+            if m:
+                found = date(int(m[3]), _MONTHS[m[2]], int(m[1]))
+            else:
+                m = re.search(rf"\b({names})\.? (\d{{1,2}})(?:st|nd|rd|th)? (\d{{4}})\b", low)
+                if m:
+                    found = date(int(m[3]), _MONTHS[m[1]], int(m[2]))
+                else:
+                    m = re.search(rf"\b({names})\.? (\d{{4}})\b", low)
+                    if m:
+                        found, worked = date(int(m[2]), _MONTHS[m[1]], 1), True
+    except ValueError:
+        return None, False                          # the 31st of a month that has 30 days
+    if not found:
+        if re.search(r"immediate|asap|as soon as possible|right away|at once|straight away|\bnow\b|ihned", low):
+            found, worked = today, True
+        else:
+            m = re.search(r"\b(\d{1,2}|" + "|".join(_COUNT) + r")[ -](day|week|month)s?\b", low)
+            if m:
+                count = int(m[1]) if m[1].isdigit() else _COUNT[m[1]]
+                if m[2] == "month":
+                    months = today.month - 1 + count
+                    year, month = today.year + months // 12, months % 12 + 1
+                    found = date(year, month, min(today.day, calendar.monthrange(year, month)[1]))
+                else:
+                    found = today + timedelta(days=count * (7 if m[2] == "week" else 1))
+                worked = True
+    if not found or found < today:
+        return None, False
+    return found, worked
+
+
 NO_MONTH = "My details has only the year for this. Add the month there, or pick the date yourself."
 CHECK_DAY = "The day is not known, so the first of the month was used: check the date."
 SKIPPED = "You asked me to leave it out."
@@ -794,6 +857,7 @@ _RULES = (("linkedin", re.compile(r"linked ?in")),
           ("email", re.compile(r"e ?mail")),
           ("phone", re.compile(r"phone|mobile|\bcell\b|telefon|\btel\b")),
           ("notice_period", re.compile(r"notice period|period of notice|výpovědní")),
+          ("start", _AVAILABLE),
           ("salary", re.compile(r"salary|compensation|remuneration|expected pay|pay expectation")),
           ("employer", re.compile(r"(?:current|present|latest|most recent|last) (?:employer|company|organi[sz]ation)|\bemployer\b|^company\b|company ?name")),
           ("job_title", re.compile(r"(?:current|present|latest|most recent|last) (?:job ?)?(?:title|position|role)|\bjob ?title\b|^position\b|^title\b")),
@@ -847,6 +911,8 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
         return "file", ""
     if _PRIVATE.search(words):
         return "", PRIVATE
+    if kind in ("date", "month") and _AVAILABLE.search(words):
+        return "start", ""
     if kind in ("date", "month") or (kind == "text" and re.search(r"\bdates?\b|mm.?yyyy", words)):
         if not _NOT_A_ROW_DATE.search(words):
             if _ROW_START.search(words):
@@ -987,10 +1053,26 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
             asked.add(question.lower())
             out["ask"].append({"n": field["n"], "label": question, "most": most})
 
-    for field in fields:
+    kinds = [classify(f)[0] for f in fields]
+    for at, field in enumerate(fields):
         label, most = name_of(field), int(field.get("most") or 0)
         kind = str(field.get("type") or "text").lower()
         what, why = classify(field)
+        # a "Start date" that belongs to no job (no end date, employer or school near it) asks when you can start
+        if what == "row_start" and kind in ("date", "month") and _LONE_START.search(_words(field)) and not field.get("filled") \
+                and not {"row_end", "employer", "job_title", "school", "degree", "study_field"} & set(kinds[max(0, at - 4):at] + kinds[at + 1:at + 5]):
+            what = "start"
+        if what == "start" and kind in ("date", "month") and not field.get("filled"):
+            said = str(mine.get("start") or "").strip()
+            day, worked = start_day(said)
+            if not said:
+                out["left"].append({"label": label, "why": START_UNKNOWN})
+            elif not day:
+                out["left"].append({"label": label, "why": START_NO_DATE.format(text=said[:60])})
+            else:
+                out["fill"].append({"n": field["n"], "label": label, "value": day.isoformat()[:7 if kind == "month" else 10], "kind": "detail",
+                                    "check": START_CHECK.format(text=said[:60]) if worked else ""})
+            continue
         if field.get("filled"):
             if what in LISTED:
                 place(what, field)                  # a row that is filled already is still a row: the next one gets the next job
@@ -1051,7 +1133,7 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
             if not value and what in SOFT and (len(str(field.get("label") or "")) >= 20 or "?" in str(field.get("label") or "")):
                 ask(field, label, most)                              # not in My details: drafted like any other question
             elif not value:
-                out["left"].append({"label": label, "why": NO_LETTER if what == "letter" else NO_DETAIL.format(what=WHAT.get(what, what))})
+                out["left"].append({"label": label, "why": NO_LETTER if what == "letter" else (START_UNKNOWN if what == "start" else NO_DETAIL.format(what=WHAT.get(what, what)))})
             elif most and len(value) > most:
                 out["left"].append({"label": label, "why": TOO_LONG.format(most=most, size=len(value))})
             else:

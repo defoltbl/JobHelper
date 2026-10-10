@@ -920,7 +920,8 @@ turns red and the line under it says what to change; nothing is saved until it i
 
 > **Note**
 > Your right to work and your start date are not on this page. They are under **Options** >
-> **About you** (section 16), because letters and answers use them as well.
+> **About you** (section 16), because letters and answers use them as well. The assistant
+> takes your start date from there when a form asks for it.
 
 ### List your jobs and your degrees
 
@@ -1131,7 +1132,8 @@ Table 9.4 shows what happens to each kind of field.
 | The box **I currently work here** | Ticked for a job you marked **I work here now**. Marked for checking |
 | A field that throws away what was written | Written a second time, the way typing arrives. If the page throws that away too, the field is left to you and the assistant says so |
 | A short field the app does not recognise | Asks Claude, with the lists and numbers, to copy the words from your CV or your details. Words that are not there are not written |
-| Other dates, such as the day you can start | Leaves them to you |
+| When you can start ("Earliest start date", "Available from", "When can you start?") | Writes what you entered under **Options** > **About you** > **You can start**. For a date picker it works out the day: *1 November 2026* as written, *immediately* as today, *one month* as a month from today. A worked-out day is marked for checking. Words it cannot turn into a day, and a day that has passed, leave the picker to you |
+| Other dates | Leaves them to you |
 | Every other tick box, such as agreeing to a privacy notice | Leaves it to you |
 | **Add another job**, **Add education** | Pressed once for each job or degree that has no row yet |
 | **Submit**, **Next** and every other button | Never pressed |
@@ -1783,7 +1785,7 @@ Table 16.3 lists the About you settings.
 | **Salary you ask for** | Your expected pay, gross per month, with its currency. Form answers give it as your expectation, the job window and the lists show it, and Insights compares what postings pay with it. 0 = none given: the app then uses its own estimate, which it has for software roles in Czechia only, and otherwise leaves the figure for you to fill in |
 | **A different figure for** | A salary of its own for one kind of role, used instead of the general one when the words are in the job's title (*support* for "IT Support Specialist"). Enter the kind of role and the figure, then select **+ Add** |
 | **Right to work** | How letters and answers should say it. Empty = not mentioned |
-| **You can start** | When you can start. Empty = not mentioned |
+| **You can start** | When you can start, for example *immediately*, *one month* or *1 November 2026*. Letters and answers say it this way, and the assistant fills it into forms. Empty = not mentioned |
 | **More about your work** | What you really did in each job beyond what the CV says, in your own words. The app may use it like the CV |
 | **Your own letters** | The folder for letters you wrote yourself (section 7) |
 
@@ -1805,6 +1807,7 @@ Table 16.4 lists the Notifications and storage settings.
 
 | Setting | What it does | Values |
 |---|---|---|
+| **Size of text and controls** | Draws everything in the window larger, for a large or very sharp screen. It is used the next time you open the app | 100%, 110%, 125% or 150% |
 | **Notifications** | A macOS notification when a run finishes, pauses on the limit, or an interview invitation arrives | On or off |
 | **Keep backups** | How many automatic backups are kept; older ones are removed | 0 to 200; 0 = keep all |
 | **Back up everything** | **Back up now** makes one encrypted backup of everything. **Check backups** proves that a backup can be restored. **Save a readable copy…** puts the newest full backup, not encrypted, into an empty folder you choose | Three buttons |

@@ -549,7 +549,7 @@ Dialog {
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
                                     border.color: rightField.activeFocus ? theme.accent : theme.line } } }
                         Sep {}
-                        SRow { label: "You can start"; hint: "empty = not mentioned"
+                        SRow { label: "You can start"; hint: "also filled into forms · empty = not mentioned"
                             TextField { id: startField; objectName: "startField"; implicitWidth: 250; implicitHeight: 30
                                 placeholderText: "e.g. within two weeks"; placeholderTextColor: theme.faint
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 60

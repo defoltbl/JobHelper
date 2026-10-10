@@ -5,6 +5,10 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Size of text and controls.** Options has a new setting that draws everything in the window larger (110%, 125% or 150%), for a large or very sharp screen. It is used the next time you open the app.
+- **The assistant fills in when you can start.** "Earliest start date", "Available from" and "When can you start?" get what you entered under Options, About you. A date picker gets the day itself: a date as written, *immediately* as today, *one month* as a month from today, marked for checking when it was worked out.
+- **Fewer half-empty pages in the PDFs.** When a figure or a table has to start on the next page and its own section has no more text, the next section of the same chapter now begins in the space. A figure never leaves its chapter and never goes further than the section after its own.
+- **The README lists the known limits by area.**
 - **Find a job for the assistant by typing.** Next to **Answers are for** there is a box: type part of a company or a title and the list narrows; when one job is left it is chosen and its full name shown. A name none of your jobs has is said in red.
 - **The README names its author.**
 - **Fixed on a real application form: "Field 5 - I did not recognise this field".** Some pages put an unseen box of their own under each list, to check that something was chosen. Those were listed as fields nobody could name. They are no longer counted.

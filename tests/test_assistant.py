@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import subprocess
+from datetime import date
 import sys
 
 import pytest
@@ -179,7 +180,7 @@ def test_fields_are_recognised_by_what_the_page_calls_them(field, what):
     (_field("Disability status", kind="select"), form_fill.PRIVATE), (_field("Card number"), form_fill.PRIVATE),
     (_field("Passport number"), form_fill.PRIVATE), (_field("Race / Ethnicity", kind="select"), form_fill.PRIVATE),
     (_field("Veteran status", kind="select"), form_fill.PRIVATE), (_field("IBAN"), form_fill.PRIVATE),
-    (_field("Earliest start date", kind="date"), form_fill.DATE), (_field("Date of the interview", kind="date"), form_fill.DATE),
+    (_field("Date of the interview", kind="date"), form_fill.DATE),
     (_field("Meeting", kind="time"), form_fill.DATE),
     (_field("", kind="select"), form_fill.CHOICE), (_field("", kind="radio"), form_fill.CHOICE), (_field("Volume", kind="range"), form_fill.CHOICE),
     (_field("Gender", kind="radio"), form_fill.PRIVATE), (_field("Gender", kind="menu"), form_fill.PRIVATE), (_field("Age", kind="number"), form_fill.PRIVATE),
@@ -578,7 +579,7 @@ def test_area_a_long_form_is_filled_in_as_far_as_is_safe():
     assert "Notice period" not in out["chosen"] and "Phone country code" not in out["chosen"] and "Gender" not in out["chosen"]
     assert all(out["filled"][label]["check"] == form_choices.CHECK and state[key + "#outline"] == "amber"
                for label, key in (("Notice period", "a19"), ("Highest level of education", "a20"), ("Years of experience with SQL", "a12")))
-    assert state["a11"] == "" and out["left"]["Earliest start date"] == form_fill.DATE
+    assert state["a11"] == "" and out["left"]["Earliest start date"] == form_fill.START_UNKNOWN
     assert state["a15"] == "60 000 CZK gross per month" and state["a15#outline"] == "green", "the figure and currency from My details, no draft"
     assert state["a16"] != "" and state["a17"] == "" and "same question" in out["left"]["Why do you want this role?"]
     assert len(out["asked"]) == form_answers.MAX_QUESTIONS and sum(1 for why in out["left"].values() if why == form_fill.TOO_MANY) == 3
@@ -1217,8 +1218,8 @@ def test_the_dates_of_a_job_go_into_its_row_in_the_form_the_field_takes():
         (2, "Northwind", ""), (3, "2023-03", ""), (5, "Evening School", ""), (6, "Tutor", ""), (7, "2022-09-01", form_fill.CHECK_DAY),
         (9, "Old Mill", ""), (10, "2020", ""), (11, "2021", ""), (12, "Masaryk University", "")]
     left = [(i["label"], i["why"]) for i in todo["left"]]
-    assert left == [("Start date", form_fill.DATE), ("Start date", form_fill.NO_MONTH), ("Earliest start date", form_fill.DATE)], \
-        "a date before any row, a year where a month is asked, and your availability are left; a current job's end date is not even listed"
+    assert left == [("Start date", form_fill.DATE), ("Start date", form_fill.NO_MONTH), ("Earliest start date", form_fill.START_UNKNOWN)], \
+        "a date before any row and a year where a month is asked are left; when you can start is asked for; a current job's end date is not even listed"
     assert todo["rows"] == {"experience": 3, "education": 1}
     filled_first = form_fill.plan([_field("Company", n=1, filled=True), _field("Job title", n=2, filled=True), _field("Company", n=3), _field("Job title", n=4)], FULL)
     assert [(f["n"], f["value"]) for f in filled_first["fill"]] == [(3, "Evening School"), (4, "Tutor")], "a row that is filled is still a row: asking twice does not repeat a job"
@@ -1784,3 +1785,53 @@ def test_area_lists_drawn_around_a_text_box_on_a_browser_that_is_not_in_front():
     assert "s3" not in out["opened"] and result["kept"] == 1, "Location shows Prague beside its box: it has its answer"
     assert out["filled"]["Country*"]["value"] == "Czech Republic +420" and out["filled"]["Country of residence"]["value"] == "Czech Republic"
     assert out["left"] == {} and out["state"]["fn"] == "Alex"
+
+
+# ── when you can start: said once under Options, About you ──────────────────
+@pytest.mark.parametrize("said, day, worked", [
+    ("2026-11-01", date(2026, 11, 1), False), ("1.11.2026", date(2026, 11, 1), False), ("01/11/2026", date(2026, 11, 1), False),
+    ("1 November 2026", date(2026, 11, 1), False), ("from 1st of Nov 2026", date(2026, 11, 1), False), ("November 1, 2026", date(2026, 11, 1), False),
+    ("November 2026", date(2026, 11, 1), True), ("immediately", date(2026, 10, 10), True), ("ASAP", date(2026, 10, 10), True),
+    ("one month", date(2026, 11, 10), True), ("after 2 weeks' notice", date(2026, 10, 24), True), ("3 months", date(2027, 1, 10), True),
+    ("in 10 days", date(2026, 10, 20), True), ("a month", date(2026, 11, 10), True),
+    ("", None, False), ("when we agree", None, False), ("1.9.2026", None, False), ("31.11.2026", None, False), ("2026-13-01", None, False)])
+def test_what_you_wrote_about_starting_is_turned_into_a_day(said, day, worked):
+    assert form_fill.start_day(said, date(2026, 10, 10)) == (day, worked), "a day that has passed, or that does not exist, is not a start date"
+    assert form_fill.start_day("one month", date(2027, 1, 31)) == (date(2027, 2, 28), True), "a month from 31 January is the last day of February"
+
+
+def test_when_you_can_start_goes_into_text_fields_and_date_pickers():
+    today = date.today()
+    fields = [_field("Earliest start date", kind="date", n=1), _field("Available from", kind="month", n=2), _field("Availability", n=3),
+              _field("When can you start?", n=4), _field("Date of birth", kind="date", n=6),
+              _field("Start date", kind="date", n=7), _field("End date", kind="date", n=8), _field("Start date", kind="date", n=9), _field("Company", n=10),
+              _field("Earliest start date", kind="date", n=11, filled=True), _field("Phone", n=12, filled=True), _field("Email", n=13, filled=True),
+              _field("City", n=14, filled=True), _field("Start date", kind="date", n=5)]
+    todo = form_fill.plan(fields, {**MINE, "start": "one month"}, has_job=True)
+    day = form_fill.start_day("one month")[0]
+    assert day > today and [(i["n"], i["value"]) for i in todo["fill"]] == [(1, day.isoformat()), (2, day.isoformat()[:7]), (3, "one month"), (4, "one month"), (5, day.isoformat())]
+    assert todo["fill"][0]["check"] == form_fill.START_CHECK.format(text="one month") and todo["fill"][2].get("check", "") == "", "a worked-out date is marked; your own words are not"
+    left = {i["label"]: i["why"] for i in todo["left"]}
+    assert left["Date of birth"] == form_fill.PRIVATE and left["Start date"] == form_fill.DATE and left["End date"] == form_fill.DATE, \
+        "a start date with an end date or an employer beside it is a job's, not yours"
+    assert not todo["ask"], "nothing is sent to Claude for what you already said"
+    exact = form_fill.plan(fields[:1], {**MINE, "start": f"1 January {today.year + 1}"})["fill"][0]
+    assert exact["value"] == f"{today.year + 1}-01-01" and exact["check"] == ""
+    vague = form_fill.plan(fields[:4], {**MINE, "start": "when we agree"}, has_job=True)
+    assert [i["why"] for i in vague["left"]] == [form_fill.START_NO_DATE.format(text="when we agree")] * 2 and [i["value"] for i in vague["fill"]] == ["when we agree"] * 2
+    none = form_fill.plan(fields[:4], MINE, has_job=True)
+    assert [i["why"] for i in none["left"]] == [form_fill.START_UNKNOWN] * 3, "a date picker and a short field: you are told where to say it once"
+    assert [q["label"] for q in none["ask"]] == ["When can you start?"], "a question is still drafted from your CV and facts, as before"
+
+
+def test_the_start_date_comes_from_options(isolate, monkeypatch):
+    store.save_jobs([_job()])
+    details.save(MINE)
+    api = ui_api.Api()
+    assert api.save_options({"about_start": "1 March 2031"})["ok"]
+    ran = _browser(monkeypatch, [_field("First name", n=1), _field("Earliest start date", kind="date", n=2), _field("Available from", n=3)])
+    out = api.assistant_fill()
+    filled = {i["label"]: i["value"] for i in out["filled"]}
+    assert filled == {"First name": "Alex", "Earliest start date": "2031-03-01", "Available from": "1 March 2031"} and not out["left"]
+    assert details.load().get("start") is None and "start" not in details.empty(), "it stays an option: My details is not given a second place for it"
+    _ = ran

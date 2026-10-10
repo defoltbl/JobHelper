@@ -443,18 +443,56 @@ A few decisions worth highlighting:
 
 ## Known limits
 
+**The app as a whole**
+
 - macOS only.
+- It is started from a terminal. Packaging it as an app that opens from Finder is planned.
+- It needs a Claude subscription and the Claude Code CLI. When the 5-hour or the weekly limit
+  of the subscription is used up, writing, scoring and the assistant's answers wait for the
+  reset; a running search pauses and goes on by itself.
+- The size of text and controls (100% to 150%) is read when the app starts, so a change needs
+  a restart.
+
+**Finding and scoring jobs**
+
 - The job boards with full support are Czech (jobs.cz, prace.cz); other countries rely on
   LinkedIn, company career sites and the remote boards.
-- Outlook.com, Proton and Tuta mailboxes cannot be read with a password, so they cannot be
-  connected. Russian services are not used.
+- A board that changes its pages can stop giving results until its reader is updated.
 - The built-in salary estimate covers software roles in Czechia; elsewhere you enter your own
   figure.
-- The assistant fills in forms in Chrome, Brave, Edge, Opera and Safari; Opera GX and Firefox
-  do not let another app fill their pages. It attaches the CV and the letter of the job, and
-  leaves other files and boxes that agree to something to you. It has been tried on a few real
-  recruiting sites; menus in particular are drawn in many ways, and a new site may need a fix.
-- The app is started from a terminal. Packaging it as an app that opens from Finder is planned.
+- Russian services are not used: no such mail provider, job board or site.
+
+**Email**
+
+- Outlook.com, Proton and Tuta mailboxes cannot be read with a password, so they cannot be
+  connected.
+- The mailbox is only read. The app never sends, deletes or marks a message, so replies are
+  written by you.
+
+**Documents**
+
+- CVs and letters are written from a Word (`.docx`) master CV and letter template. A CV with an
+  unusual layout may lose less-common sections from the adaptation; the app then leaves them as
+  they were.
+- PDFs are made with LibreOffice; without it only the Word files are written.
+- A letter or CV never claims what the master CV and your notes do not say, so a posting far
+  from your experience gives a short, plain letter.
+
+**The assistant**
+
+- It works in Chrome, Brave, Edge, Opera and Safari, after the browser's switch **Allow
+  JavaScript from Apple Events** is turned on and macOS is allowed to control the browser.
+  Opera GX and Firefox do not let another app fill their pages.
+- It has been tried on a few real recruiting sites. Lists in particular are drawn in many ways,
+  and a new site may need a fix.
+- It cannot reach a form inside a frame from another site (it offers to open the frame in its
+  own tab), or an uploader that has no file field until its button is pressed (it then shows
+  the files in Finder).
+- It attaches the CV and the letter of the job only when it knows which job the form is for,
+  and only files up to 4 MB. Certificates, a photo or a passport are yours to add.
+- It never presses Submit or Next, never ticks a box that agrees to something, and never fills
+  in a password, a payment field or a personal-status question.
+- An answer comes back whole, not word by word, because the app checks it before showing it.
 
 ## Author
 
