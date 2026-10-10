@@ -14,7 +14,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
   - The counters under **Usage and problems** survive a damaged file and two questions answered at the same moment.
   - A reply filed by hand while an email scan is saving is no longer lost.
   - Merging two entries of the same job keeps the date to remember, the interview preparation, the form answers and a status you set by hand.
-  - The salary estimate matches whole words, so "intern" no longer matches "international".
+  - The salary estimate matches whole words, so "ai" is no longer found in "Thai" or "ios" in "kiosk".
   - **One PDF** works when your own letter is already a PDF.
   - A message about a missing data key says where to paste the recovery key in the **Account** card.
 
