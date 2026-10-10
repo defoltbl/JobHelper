@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from . import config, details, form_fill, llm
+from . import config, details, form_fill, llm, places
 
 MAX_CHOICES = 12
 CHECK = "Chosen for you: check it."
@@ -119,6 +119,22 @@ def facts_block(cv_text: str, mine: dict[str, str], job: dict[str, Any] | None) 
     return "\n".join(lines)
 
 
+_PERMIT = re.compile(r"authori[sz]ed to work|right to work|work (?:permit|authori[sz]ation|visa)|(?:eligible|entitled|allowed|permitted) to work|"
+                     r"legally work|\bsponsor", re.IGNORECASE)
+
+
+def another_country(label: str, mine: dict[str, Any]) -> str:
+    """The country a right-to-work question names when it is not the one you live in ('' otherwise, and when the app does
+    not know your country). What you said about your right to work is about your own country: it settles nothing about
+    another one, so such a question is never answered for you. (A form for a job in Prague asked about the United Kingdom.)"""
+    if not _PERMIT.search(str(label or "")):
+        return ""
+    home = places.country_of(str(mine.get("country") or "")) or places.country_of(config.search_country()) \
+        or places.country_of(str(config.ui_settings().get("where") or ""))
+    named = places.named_countries(str(label))
+    return sorted(named)[0].title() if home and named and home not in named else ""
+
+
 def decide(choices: list[dict[str, Any]], cv_text: str, mine: dict[str, str], job: dict[str, Any] | None) -> dict[int, str]:
     """{field number: answer} for the choices Claude could settle, in one call. An answer that is not
     one of the field's own options, or not a number where a number is asked, is dropped."""
@@ -141,9 +157,12 @@ def decide(choices: list[dict[str, Any]], cv_text: str, mine: dict[str, str], jo
     backing = _norm(cv_text + "\n" + facts_block(cv_text, mine, job))
     out: dict[int, str] = {}
     for item in (data.get("choices") if isinstance(data, dict) else None) or []:
-        if not isinstance(item, dict) or item.get("n") not in by_n or item.get("answer") in (None, "", "null"):
+        if not isinstance(item, dict) or not isinstance(item.get("n"), int) or item["n"] not in by_n \
+                or not isinstance(item.get("answer"), (str, int, float)) or item["answer"] in ("", "null"):
             continue
         choice, answer = by_n[item["n"]], " ".join(str(item["answer"]).split())
+        if another_country(choice["label"], mine):
+            continue                                # the right to work somewhere else: yours to answer, whatever the model said
         if choice["kind"] == "number":
             if re.fullmatch(r"\d{1,3}(?:\.\d)?", answer):
                 out[choice["n"]] = answer

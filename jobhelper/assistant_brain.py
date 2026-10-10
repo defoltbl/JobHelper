@@ -188,7 +188,7 @@ def check(data: Any, ids: set[str], notes: int = 0) -> dict[str, Any]:
     clean, dropped = [], False
     for action in asked:
         args = None
-        if isinstance(action, dict) and action.get("name") in ACTIONS:
+        if isinstance(action, dict) and isinstance(action.get("name"), str) and action["name"] in ACTIONS:
             args = _args(action["name"], action.get("args") if isinstance(action.get("args"), dict) else {}, ids, notes)
         if args is None or len(clean) >= MAX_ACTIONS:
             dropped = True
@@ -210,9 +210,9 @@ def _args(name: str, raw: dict[str, Any], ids: set[str], notes: int = 0) -> dict
         skip = raw.get("skip") if isinstance(raw.get("skip"), list) else []
         out["skip"] = [" ".join(str(w).lower().split())[:40] for w in skip if str(w).strip()][:8]
     if name == "open":
-        out["what"] = raw.get("what") if raw.get("what") in ("job", "posting", "cv", "letter") else "job"
+        out["what"] = raw["what"] if isinstance(raw.get("what"), str) and raw["what"] in ("job", "posting", "cv", "letter") else "job"
     if name == "set_status":
-        if raw.get("status") not in STATUSES:
+        if not isinstance(raw.get("status"), str) or raw["status"] not in STATUSES:
             return None
         out["status"] = raw["status"]
     if name == "set_date":
@@ -220,7 +220,7 @@ def _args(name: str, raw: dict[str, Any], ids: set[str], notes: int = 0) -> dict
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
             return None
         out.update(day=day, time=str(raw.get("time") or "").strip()[:5],
-                   kind=raw.get("kind") if raw.get("kind") in planner.KINDS else "interview", note=" ".join(str(raw.get("note") or "").split())[:200])
+                   kind=raw["kind"] if isinstance(raw.get("kind"), str) and raw["kind"] in planner.KINDS else "interview", note=" ".join(str(raw.get("note") or "").split())[:200])
     if name == "rewrite_letter":
         try:
             out["paragraph"] = int(raw.get("paragraph"))

@@ -2058,3 +2058,46 @@ def test_area_a_languages_page_gets_your_languages_their_levels_and_the_fluent_b
     assert state["fluent3"] is False and state["agree"] is False, "not fluent in Czech; and a box that agrees to something is never ticked"
     assert out["chosen"] == [], "nothing about your languages was asked of Claude"
     assert out["left"] == {} and out["sent"] is False and out["clicked"] is False
+
+
+# ── found by reading the assistant's modules line by line (11 October 2026) ─
+def test_the_review_names_a_long_list_by_the_words_beside_it():
+    """The review before sending read a field's name the old way: for a list of 250 countries whose label is only written beside
+    it, the entries crowded the label out and the review listed it under the page's inner name ("field_17")."""
+    fields = form_fill.review_answer(_in_page(form_fill.REVIEW, page="lists.html")[0])["fields"]
+    names = [f["label"] for f in fields]
+    assert "Country of residence*:" in names and "Country (already chosen)" in names and "field_17" not in names
+    taken = next(f for f in fields if f["label"] == "Country (already chosen)")
+    assert taken["value"] == "Germany" and taken["filled"] and not next(f for f in fields if f["label"] == "Country of residence*:")["filled"]
+
+
+def test_an_action_claude_names_in_the_wrong_shape_is_dropped_not_a_crash():
+    ids = {"nw1"}
+    odd = {"say": "Here.", "actions": [{"name": ["open"], "args": {"job": "nw1"}}, {"name": "open", "args": {"job": "nw1", "what": ["cv"]}},
+                                       {"name": "set_status", "args": {"job": "nw1", "status": ["waiting"]}},
+                                       {"name": "set_date", "args": {"job": "nw1", "day": "2026-11-02", "kind": {"a": 1}}}, "open", None]}
+    got = assistant_brain.check(odd, ids)
+    assert [(a["name"], a["args"].get("what"), a["args"].get("kind")) for a in got["actions"]] == [("open", "job", None), ("set_date", None, "interview")]
+    assert got["dropped"] is True and got["say"] == "Here."
+
+
+def test_a_right_to_work_question_about_another_country_is_never_answered_for_you(monkeypatch):
+    """From a real form: the job was in Prague, the questions asked about the United Kingdom. What you said about your right to
+    work is about your own country, so nothing settles the answer for another one, whatever a model would choose."""
+    mine = {**MINE, "country": "Czechia"}
+    for label, country in (("Are you currently legally authorized to work in United Kingdom for any employer?", "United Kingdom"),
+                           ("If selected, will you be able to provide evidence of your right to work in United Kingdom by your start date?", "United Kingdom"),
+                           ("Do you require visa sponsorship to work in Germany?", "Germany"),
+                           ("Do you have the right to work in the Czech Republic?", ""), ("Will you now or in the future require sponsorship?", ""),
+                           ("Have you lived in Germany?", ""), ("Which country do you live in: Germany or Austria?", "")):
+        assert form_choices.another_country(label, mine) == country, label
+    assert form_choices.another_country("Are you authorized to work in United Kingdom?", {**MINE, "country": "United Kingdom"}) == ""
+    monkeypatch.setattr(config, "search_country", lambda: "")
+    monkeypatch.setattr(config, "ui_settings", lambda: {})
+    assert form_choices.another_country("Are you authorized to work in United Kingdom?", {**MINE, "country": ""}) == "", "your country is not known: nothing is assumed"
+    asked = [{"n": 1, "kind": "select", "label": "Are you currently legally authorized to work in United Kingdom for any employer?", "options": ["Yes", "No"]},
+             {"n": 2, "kind": "select", "label": "Do you have the right to work in the Czech Republic?", "options": ["Yes", "No"]},
+             {"n": 3, "kind": "select", "label": "Will you submit to a background check?", "options": ["Yes", "No"]}]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"choices": [{"n": 1, "answer": "No"}, {"n": 2, "answer": "Yes"}, {"n": [3], "answer": "Yes"},
+                                                                               {"n": 3, "answer": ["Yes"]}, {"n": 3, "answer": None}]})
+    assert form_choices.decide(asked, CV, mine, None) == {2: "Yes"}, "the question about another country stays open, and so does an answer in the wrong shape"

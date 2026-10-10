@@ -159,7 +159,7 @@ class AssistantApi:
                 self._reveal(extra["path"])
                 shown.append(f"{extra['label']} ({os.path.basename(extra['path'])})")
         for what, base, name in (("CV", config.TAILORED_CV_DIR, j.get("tailored_cv_file", "")), ("letter", config.LETTERS_DIR, j.get("cover_letter_file", ""))):
-            if not name:
+            if not name or os.path.basename(str(name)) != str(name):       # a file name, never a path out of the folder
                 continue
             docx = (base / name).with_suffix(".docx")
             for path in (docx.with_suffix(".pdf"), docx, config.COVER_LETTERS_DIR / name):

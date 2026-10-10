@@ -536,8 +536,17 @@ REVIEW = r"""
     if (el.labels && el.labels.length && text(el.labels[0])) return text(el.labels[0]);
     if (el.getAttribute('aria-label')) return clean(el.getAttribute('aria-label'));
     var node = el;
-    for (var i = 0; i < 3; i++) { node = node.parentElement; if (!node) break; var t = text(node); if (t.length > 160) break; if (t) return t; }
+    for (var i = 0; i < 3; i++) { node = node.parentElement; if (!node) break; var t = beside(node, el); if (t.length > 160) break; if (t) return t; }
     return clean(el.getAttribute('placeholder') || el.name || el.id);
+  }
+  function beside(node, el) {                    // the words around a field without any list's own entries (250 countries are not a name)
+    var walker = el.ownerDocument.createTreeWalker(node, 4, null), out = '', t;
+    while ((t = walker.nextNode()) && out.length < 400) {
+      var p = t.parentElement;
+      if (!p || el.contains(t) || /^(OPTION|OPTGROUP|SELECT|SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(p.tagName) || p.closest('button') || !p.getClientRects().length) continue;
+      out += ' ' + t.nodeValue;
+    }
+    return clean(out);
   }
   function walk(root) {
     var all = root.querySelectorAll('*');
