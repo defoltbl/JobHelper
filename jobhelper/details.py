@@ -67,6 +67,18 @@ def load() -> dict[str, Any]:
             clean, problem = check(kept)
             if not problem:
                 out = clean
+            elif isinstance(kept, dict):
+                # One saved value no longer passes a check (a rule that became stricter, a file edited by hand): that
+                # one is left out and everything else is kept. Reading it all as empty would show a blank page, and the
+                # next Save would then write the blank page over what was there.
+                for key in list(out):
+                    part, wrong = check({key: kept.get(key)} if key not in ("salary_amount", "salary_currency", "salary_period")
+                                        else {k: kept.get(k) for k in ("salary_amount", "salary_currency", "salary_period")})
+                    if not wrong:
+                        out[key] = part[key]
+                for name in ROWS:                   # a list with one bad row keeps its good rows
+                    if not out[name] and isinstance(kept.get(name), list):
+                        out[name] = [rows[0] for rows, wrong in (_rows(name, [row]) for row in kept[name][:MAX_ROWS]) if not wrong and rows]
     except vault.VaultError:
         raise
     except Exception:  # noqa: BLE001 - an unreadable file is the same as none: the page shows empty fields

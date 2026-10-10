@@ -2101,3 +2101,19 @@ def test_a_right_to_work_question_about_another_country_is_never_answered_for_yo
     monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"choices": [{"n": 1, "answer": "No"}, {"n": 2, "answer": "Yes"}, {"n": [3], "answer": "Yes"},
                                                                                {"n": 3, "answer": ["Yes"]}, {"n": 3, "answer": None}]})
     assert form_choices.decide(asked, CV, mine, None) == {2: "Yes"}, "the question about another country stays open, and so does an answer in the wrong shape"
+
+
+def test_one_saved_value_that_no_longer_passes_does_not_blank_my_details(isolate):
+    """Found by reading the code: when anything in the saved file failed a check, all of My details was read as empty. The page
+    then showed blank fields, and the next Save would have written them over everything."""
+    import json as _json
+    saved = {**FULL, "languages": [{"language": "English", "level": "Fluent"}, {"language": "Ukrainian", "level": "mother tongue"}],
+             "email": "not an email", "experience": JOBS + [{"employer": "", "title": "Ghost", "start": "", "end": ""}]}
+    vault.write_text(details.path(), _json.dumps(saved))
+    got = details.load()
+    assert got["first_name"] == "Alex" and got["phone"] == MINE["phone"] and got["email"] == "", "only the value that is wrong is left out"
+    assert got["experience"] == JOBS and got["education"] == SCHOOLS, "a list keeps its good rows"
+    assert got["languages"] == [{"language": "English", "level": "Fluent"}] and got["salary_amount"] == 60000
+    vault.write_text(details.path(), "[1, 2]")
+    assert details.load() == details.empty(), "a file that is not details at all is still read as none"
+    assert details.save(FULL)["ok"] and details.load()["email"] == MINE["email"]
