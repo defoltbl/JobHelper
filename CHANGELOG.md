@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Fixed: a long country list was left empty.** On a first real form the list of some 250 countries was not filled in. Its label is only written beside it, and the list's own entries crowded the label out, so the assistant could not tell what the list asked. A list is now named by the words beside it without its own entries, or by its first line ("Select your Country") when there are no words at all. A greyed-out "Please choose" line is no longer taken for an answer.
 - **Opera GX cannot be used by the assistant, and the app now says so.** A first try showed that Opera GX has switched off the part that lets another app fill in a page; it is listed as not possible, like Firefox, with the advice to use Google Chrome or Safari. The refusal used to read "bring the tab to the front", which was wrong. Opera itself stays in the list. The button reads **Fill in the form**, and the line under the box says which browser is used.
 - **Fixed: a list kept its outline after you clicked somewhere else,** like text fields did before. A press on empty space now lets go of it.
 - **The assembly line grows with the window.** On a large screen the robots and their words used to stay small; the line now fills the room it has, and the words at the robots are larger. What the assistant says appears in a strip of its own under the line, so it never covers the line or a robot.

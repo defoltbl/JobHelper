@@ -62,12 +62,14 @@ def safe_environment(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(agent2_search, "posting_closed", lambda job: None)        # nor ask one whether a posting is still open
     from jobhelper import email_client
     monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0, host="": {"ok": True, "msg": ""})   # never a real mail server
-    from jobhelper import chrome
+    from jobhelper import chrome, trouble
 
     def no_chrome(*args, **kwargs):
         raise AssertionError("A test tried to talk to the real Chrome. Replace chrome.active_tab / chrome.run instead.")
 
     monkeypatch.setattr(chrome, "_osascript", no_chrome)      # never reach into the browser of whoever runs the tests
+    real_data, spare = config.DATA_DIR, tmp_path_factory.mktemp("trouble")
+    monkeypatch.setattr(trouble, "_folder", lambda: spare if config.DATA_DIR == real_data else config.DATA_DIR)   # never a line in the real trouble log
     from jobhelper import housekeeping
     trash = tmp_path_factory.mktemp("trash")
     monkeypatch.setattr(housekeeping, "trash_dir", lambda path: trash)             # never put anything in the real Trash

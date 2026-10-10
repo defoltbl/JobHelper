@@ -215,6 +215,12 @@ data/                your data; only the *.example.* files are in git
 - **A browser's scripting dictionary must be tried, not read.** Opera GX's file names the command that runs a script in a
   page, inside a comment: a search for the words found it, and the first live request failed. Ask the browser a harmless
   `1 + 1` before saying it works. A refusal the app does not know is now written to the trouble log with its text.
+- **A list's own entries must not be part of its name.** A label that is only written beside a list is found by reading the
+  words around it. With 250 countries the entries filled the 300 characters read, the label was lost and the list was left
+  (first real form, 10 October 2026). `beside()` in `form_fill.READ` reads the words without any list's entries and stops at a
+  block that holds other fields; test forms need lists as long as real ones (`tests/fixtures/forms/lists.html`).
+- **The trouble log is data too.** `trouble.note` is sent to a spare folder by the test guard; two test lines reached the real
+  log before that.
 - **A text field does not let go of the focus by itself.** In Qt Quick a press on empty space leaves the field
   outlined with its cursor blinking. Every window with a field needs `FocusCatcher {}` in its background and as the
   first child of each scroll area (it also covers the space under short content); a test fails for a window without one.

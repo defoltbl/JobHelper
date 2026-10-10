@@ -293,8 +293,8 @@ def test_requests_are_checked_before_anything_is_done(isolate):
 
 
 # ── filling in, end to end (Chrome replaced by a real browser engine on a local page) ──
-def _in_page(*scripts):
-    done = subprocess.run([sys.executable, str(FIXTURES / "run_in_page.py"), str(FIXTURES / "forms" / "plain.html")],
+def _in_page(*scripts, page="plain.html"):
+    done = subprocess.run([sys.executable, str(FIXTURES / "run_in_page.py"), str(FIXTURES / "forms" / page)],
                           input=json.dumps(list(scripts)), capture_output=True, text=True, timeout=120,
                           env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
     if done.returncode != 0:
@@ -315,6 +315,39 @@ STATE = """JSON.stringify({
   github: document.getElementById('inner').contentDocument.getElementById('gh').value,
   heard: window.heard, sent: !!window.sent, clicked: !!window.clicked,
   outline: document.getElementById('fn').style.outline, amber: document.getElementById('why').style.outline})"""
+
+
+LISTS = """JSON.stringify({
+  home: document.getElementById('home').selectedOptions[0].text, bare: document.getElementById('bare').selectedOptions[0].text,
+  greyed: document.getElementById('greyed').selectedOptions[0].text, taken: document.getElementById('taken').selectedOptions[0].text,
+  sent: !!window.sent, clicked: !!window.clicked})"""
+
+
+def test_a_long_country_list_is_named_by_the_words_beside_it_and_filled():
+    """Found on a real site: 250 countries in a list whose label is only written next to it. The entries crowded the label out, the
+    list had no name, and it was left. Its name is now read without its own entries, or from its "Select your Country" line."""
+    page = form_fill.read_answer(_in_page(form_fill.READ, page="lists.html")[0])
+    by_id = {f["id"]: f for f in page["fields"]}
+    assert by_id["home"]["label"] == "Country of residence*:" and by_id["taken"]["label"] == "Country (already chosen)"
+    assert by_id["bare"]["label"] == "" and by_id["bare"]["hint"] == "Select your Country", "a list with no words near it is named by its first line"
+    assert by_id["greyed"]["label"] == "Country you live in", "words the page hides are not part of the name"
+    assert by_id["home"]["hint"] == "", "a list that has a name does not need its first line as one"
+    assert not by_id["home"]["filled"] and not by_id["bare"]["filled"] and by_id["taken"]["filled"]
+    assert not by_id["greyed"]["filled"], "a greyed-out 'Please choose' further down the list is not an answer"
+    assert all(form_fill.classify(by_id[i]) == ("country", "") for i in ("home", "bare", "greyed"))
+    todo = form_fill.plan(page["fields"], MINE)
+    assert {i["n"]: i["value"] for i in todo["fill"]} == {by_id[i]["n"]: "Czech Republic" for i in ("home", "bare", "greyed")}
+    assert not todo["left"] and not todo["choose"], "your own country is not a question for Claude"
+    numbers = [by_id[i]["n"] for i in ("home", "bare", "greyed", "taken")]
+    before, _read, done, state, empty = _in_page(form_fill.READ + ";" + form_fill.empty_script(numbers, page["url"]), form_fill.READ,
+                                                 form_fill.fill_script(todo["fill"], page["url"]), LISTS,
+                                                 form_fill.empty_script(numbers, page["url"]), page="lists.html")
+    assert sorted(form_fill.empty_answer(before)) == sorted(numbers[:3]), "three lists wait for an answer, one has it"
+    state = json.loads(state)
+    assert state["home"] == state["bare"] == state["greyed"] == "Czech Republic" and state["taken"] == "Germany", "a list with an answer keeps it"
+    assert sorted(form_fill.fill_answer(done)["done"]) == sorted(by_id[i]["n"] for i in ("home", "bare", "greyed"))
+    assert state["sent"] is False and state["clicked"] is False
+    assert form_fill.empty_answer(empty) == [], "and afterwards none of them is empty"
 
 
 def test_a_page_states_its_job_for_search_engines_and_that_is_read():
@@ -1535,3 +1568,13 @@ def test_other_browsers_are_spoken_to_in_their_own_way(isolate, monkeypatch):
         assert api.check_options({"assistant_browser": "lynx"})[1].startswith("“assistant browser” must be one of")
     finally:
         chrome.use("chrome")
+
+
+def test_a_test_never_writes_into_the_real_trouble_log():
+    """A refusal nobody recognises is kept in the trouble log; from a test it must land in a spare folder, not in data/."""
+    from jobhelper import config, trouble
+    before = (config.DATA_DIR / trouble.LOG_NAME).stat().st_size if (config.DATA_DIR / trouble.LOG_NAME).exists() else 0
+    trouble.note("a test", "a line that must not reach the real log")
+    after = (config.DATA_DIR / trouble.LOG_NAME).stat().st_size if (config.DATA_DIR / trouble.LOG_NAME).exists() else 0
+    assert before == after and trouble._folder() != config.DATA_DIR
+    assert "must not reach" in (trouble._folder() / trouble.LOG_NAME).read_text(encoding="utf-8")

@@ -29,8 +29,13 @@ from . import details, email_client, form_answers, places
 
 MAX_FIELDS = 200
 
+# A list counts as chosen when what it shows is a real entry: not its first line, not a "Select..." line without a value, not a greyed-out one.
+_CHOSEN = ("function chosen(el) { var o = el.options[el.selectedIndex]; "
+           "return el.selectedIndex > 0 && !!o && !o.disabled && String(o.value) !== ''; }")
+
 READ = r"""
 (function () {
+  __CHOSEN__
   var MARK = 'data-jobhelper', OPT = 'data-jobhelper-opt', ADD = 'data-jobhelper-add', fields = [], frames = [], groups = {}, adds = [], n = 0, boxes = 0;
   function clean(t) { return String(t || '').replace(/\s+/g, ' ').trim().slice(0, 300); }
   function text(el) { return el ? clean(el.innerText || el.textContent) : ''; }
@@ -49,15 +54,30 @@ READ = r"""
       if (parts.length) return clean(parts.join(' '));
     }
     if (el.getAttribute('aria-label')) return clean(el.getAttribute('aria-label'));
-    var own = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? '' : text(el), node = el;     // a list's own entries are not its name
+    var node = el;
     for (var i = 0; i < 3; i++) {
       node = node.parentElement;
       if (!node) break;
-      var around = clean(text(node).replace(own, ''));
+      if (others(node, el)) break;                // further out the words belong to other fields as well
+      var around = beside(node, el);
       if (around.length > 160) break;
       if (around) return around;
     }
     return '';
+  }
+  function others(node, el) {
+    var all = node.querySelectorAll('input:not([type=hidden]), select, textarea');
+    for (var i = 0; i < all.length; i++) if (all[i] !== el && !el.contains(all[i]) && all[i].getClientRects().length) return true;
+    return false;
+  }
+  function beside(node, el) {                    // the words in `node` that are not the field's own: a list's 250 countries are not its name
+    var walker = el.ownerDocument.createTreeWalker(node, 4, null), out = '', t;
+    while ((t = walker.nextNode()) && out.length < 400) {
+      var p = t.parentElement;
+      if (!p || el.contains(t) || /^(OPTION|OPTGROUP|SELECT|SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(p.tagName) || !p.getClientRects().length) continue;
+      out += ' ' + t.nodeValue;
+    }
+    return clean(out);
   }
   function without(whole, parts) {
     parts.forEach(function (part) { if (part) whole = whole.replace(part, ' '); });
@@ -148,10 +168,12 @@ READ = r"""
       var options = [];
       if (tag === 'SELECT') for (var k = 0; k < el.options.length && k < 300; k++) options.push(clean(el.options[k].text).slice(0, 80));
       var filled = false;
-      if (type !== 'password' && type !== 'file') filled = tag === 'SELECT' ? el.selectedIndex > 0 : String(el.value || '').trim() !== '';
+      if (type !== 'password' && type !== 'file') filled = tag === 'SELECT' ? chosen(el) : String(el.value || '').trim() !== '';
+      var called = label(el, root), hint = clean(el.getAttribute('placeholder')).slice(0, 120);
+      if (tag === 'SELECT' && !called && el.options.length && String(el.options[0].value) === '') hint = clean(el.options[0].text).slice(0, 120);   // "Select your country": all the name it has
       fields.push({n: n, type: type, name: clean(el.name).slice(0, 80), id: clean(el.id).slice(0, 80),
-                   auto: clean(el.getAttribute('autocomplete')).slice(0, 60), label: label(el, root),
-                   hint: clean(el.getAttribute('placeholder')).slice(0, 120),
+                   auto: clean(el.getAttribute('autocomplete')).slice(0, 60), label: called,
+                   hint: hint,
                    required: !!(el.required || el.getAttribute('aria-required') === 'true'),
                    filled: filled, most: el.maxLength > 0 ? el.maxLength : 0, options: options,
                    combo: el.getAttribute('role') === 'combobox' || !!el.getAttribute('aria-autocomplete') || el.getAttribute('aria-haspopup') === 'listbox'});
@@ -160,10 +182,11 @@ READ = r"""
   walk(document);
   return JSON.stringify({url: location.href, title: clean(document.title), fields: fields, frames: frames.slice(0, 5), boxes: boxes, adds: adds.slice(0, 20)});
 })()
-""".replace("__MOST__", str(MAX_FIELDS)).strip()
+""".replace("__MOST__", str(MAX_FIELDS)).replace("__CHOSEN__", _CHOSEN).strip()
 
 FILL = r"""
 (function (items, url, typed) {
+  __CHOSEN__
   if (location.href !== url) return JSON.stringify({moved: true});
   var MARK = 'data-jobhelper', found = {}, done = [], skipped = [];
   function walk(root) {
@@ -189,7 +212,7 @@ FILL = r"""
     if (!el || el.disabled || el.readOnly) { skipped.push(item.n); return; }
     var view = el.ownerDocument.defaultView;
     if (el.tagName === 'SELECT') {
-      if (el.selectedIndex > 0) { skipped.push(item.n); return; }
+      if (chosen(el)) { skipped.push(item.n); return; }
       var want = norm(item.value), pick = -1;
       for (var k = 0; k < el.options.length; k++) {
         if (norm(el.options[k].text) === want || norm(el.options[k].value) === want) { pick = k; break; }
@@ -217,10 +240,11 @@ FILL = r"""
   });
   return JSON.stringify({done: done, skipped: skipped});
 })(__ITEMS__, __URL__, __TYPED__)
-""".strip()
+""".replace("__CHOSEN__", _CHOSEN).strip()
 
 EMPTY = r"""
 (function (wanted, url) {
+  __CHOSEN__
   if (location.href !== url) return JSON.stringify({moved: true});
   var MARK = 'data-jobhelper', empty = [];
   function walk(root) {
@@ -231,13 +255,13 @@ EMPTY = r"""
       if (el.tagName === 'IFRAME') { var inner = null; try { inner = el.contentDocument; } catch (e) { inner = null; } if (inner && inner.body) walk(inner); continue; }
       var mark = Number(el.getAttribute(MARK));
       if (!mark || wanted.indexOf(mark) < 0) continue;
-      if (el.tagName === 'SELECT' ? el.selectedIndex <= 0 : String(el.value || '').trim() === '') empty.push(mark);
+      if (el.tagName === 'SELECT' ? !chosen(el) : String(el.value || '').trim() === '') empty.push(mark);
     }
   }
   walk(document);
   return JSON.stringify({empty: empty});
 })(__WANTED__, __URL__)
-""".strip()
+""".replace("__CHOSEN__", _CHOSEN).strip()
 
 
 CHOOSE = r"""
@@ -399,6 +423,7 @@ VALUES = r"""
 
 WATCH = r"""
 (function () {
+  __CHOSEN__
   var names = [], empty = 0;
   function walk(root) {
     var all = root.querySelectorAll('input, textarea, select, iframe, *');
@@ -411,17 +436,18 @@ WATCH = r"""
       var r = el.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) continue;
       names.push(el.name || el.id || el.tagName);
-      if (el.tagName === 'SELECT' ? el.selectedIndex <= 0 : String(el.value || '').trim() === '') empty++;
+      if (el.tagName === 'SELECT' ? !chosen(el) : String(el.value || '').trim() === '') empty++;
     }
   }
   walk(document);
   return JSON.stringify({url: location.href, fields: names.length, first: names.slice(0, 12).join('|').slice(0, 400), empty: empty});
 })()
-""".strip()
+""".replace("__CHOSEN__", _CHOSEN).strip()
 
 
 REVIEW = r"""
 (function () {
+  __CHOSEN__
   var out = [], seen = {};
   function clean(t) { return String(t || '').replace(/\s+/g, ' ').trim(); }
   function text(el) { return el ? clean(el.innerText || el.textContent) : ''; }
@@ -450,14 +476,14 @@ REVIEW = r"""
         continue;
       }
       if (r.width < 2 || r.height < 2) continue;
-      var value = tag === 'SELECT' ? (el.selectedIndex > 0 ? clean(el.options[el.selectedIndex].text) : '') : String(el.value || '');
+      var value = tag === 'SELECT' ? (chosen(el) ? clean(el.options[el.selectedIndex].text) : '') : String(el.value || '');
       out.push({label: name(el).slice(0, 200), value: value.slice(0, 3000), required: !!(el.required || el.getAttribute('aria-required') === 'true'), kind: type});
     }
   }
   walk(document);
   return JSON.stringify({url: location.href, title: clean(document.title).slice(0, 300), fields: out});
 })()
-""".strip()
+""".replace("__CHOSEN__", _CHOSEN).strip()
 
 
 def review_answer(text: str) -> dict[str, Any]:

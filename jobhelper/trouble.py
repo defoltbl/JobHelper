@@ -21,14 +21,19 @@ def _safe(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()[:_MAX_LINE]
 
 
+def _folder():
+    from . import config
+    return config.DATA_DIR
+
+
 def note(where: str, error: BaseException | str) -> None:
     """Remember that `where` failed with `error`, and carry on."""
     try:
-        from . import config
         what = f"{type(error).__name__}: {error}" if isinstance(error, BaseException) else str(error)
         line = f"{datetime.now().strftime('%Y-%m-%d %H:%M')}  {_safe(where)}: {_safe(what)}\n"
-        config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        with open(config.DATA_DIR / LOG_NAME, "a", encoding="utf-8") as f:
+        folder = _folder()
+        folder.mkdir(parents=True, exist_ok=True)
+        with open(folder / LOG_NAME, "a", encoding="utf-8") as f:
             f.write(line)
     except Exception:  # noqa: BLE001 - the last line of defence must not fail loudly
         return
