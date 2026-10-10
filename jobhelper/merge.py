@@ -111,6 +111,21 @@ def merge(jobs: list[dict[str, Any]], keep_id: str, drop_id: str) -> bool:
     for field in ("url", "description", "location", "followup_date", "next_step", "stages_path", "salary"):
         if drop.get(field) and not keep.get(field):
             keep[field] = drop[field]
+    # Everything else the dropped record knew and the kept one does not: the date of an interview, the interview
+    # preparation, the answers drafted for its form, what was practised, the score. (Only the fields named above used to be
+    # carried over, and two records that are surely one are merged without asking: an interview date could vanish.)
+    if (drop.get("event") or {}).get("date") and not (keep.get("event") or {}).get("date"):
+        for field in ("event", "event_marks", "event_notified", "thanked_for"):
+            if field in drop:
+                keep[field] = drop[field]
+    for field, value in drop.items():
+        if field in ("id", "status", "notes", "last_update", "not_duplicate_of", "own_letter", "source", "event", "event_marks",
+                     "event_notified", "thanked_for", "date_applied", "date_applied_source", "date_found", "title", "company"):
+            continue
+        if value not in (None, "", [], {}) and keep.get(field) in (None, "", [], {}):
+            keep[field] = value
+    if drop.get("status_by_hand") and str(drop["status_by_hand"]) > str(keep.get("status_by_hand") or ""):
+        keep["status_by_hand"] = drop["status_by_hand"]        # the later of the two times you set a status yourself
     notes = [n for n in (keep.get("notes"), drop.get("notes")) if n]
     keep["notes"] = "\n".join(dict.fromkeys(notes)).strip()
     keep["last_update"] = max(keep.get("last_update") or "", drop.get("last_update") or "")

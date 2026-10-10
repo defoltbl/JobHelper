@@ -253,3 +253,30 @@ def test_no_mailbox_at_all_explains_what_to_do(mail, monkeypatch):
     monkeypatch.setattr(config, "IMAP_USER", "")
     with pytest.raises(RuntimeError, match="Account card"):
         email_client.fetch_recent(10)
+
+
+# ── found by reading merge.py line by line (10 October 2026) ────────────────
+def test_merging_two_records_of_one_application_loses_nothing_either_knew(isolate_data):
+    """Only a fixed handful of fields was carried over, and two records that are surely one application are merged without
+    asking (at every email scan). The record that was dropped could hold the interview date, the preparation or the form answers."""
+    from jobhelper import merge, store
+    keep = store.new_job(id="keep", title="Data Analyst", company="Acme", status="interview", date_applied="2026-09-10", url="https://acme.example/job/1")
+    drop = store.new_job(id="drop", title="(from email response)", company="Acme s.r.o.", status="waiting", date_applied="2026-09-12")
+    drop.update(event={"date": "2026-10-20", "time": "10:00", "kind": "interview", "note": "second round"}, event_marks=["2026-10-19:1"],
+                interview_prep={"questions": [{"question": "Why us?", "answer": "Because."}]}, practice={"Why us?": {"rating": "good"}},
+                form_answers={"made": "2026-10-01", "items": [{"question": "Salary?", "answer": "60 000", "check": ""}]},
+                status_by_hand="2026-10-05T09:00:00", match_score=71, match_reason="a good fit", nudged=["date"])
+    jobs = [keep, drop]
+    assert merge.confidence(keep, drop) == "sure" and merge.merge(jobs, "keep", "drop") is True and [j["id"] for j in jobs] == ["keep"]
+    one = jobs[0]
+    assert one["event"]["date"] == "2026-10-20" and one["event_marks"] == ["2026-10-19:1"], "the interview date came along"
+    assert one["interview_prep"]["questions"] and one["practice"] and one["form_answers"]["items"] and one["nudged"] == ["date"]
+    assert one["status_by_hand"] == "2026-10-05T09:00:00" and one["match_score"] == 71 and one["match_reason"] == "a good fit"
+    assert (one["title"], one["company"], one["status"], one["date_applied"], one["url"]) == ("Data Analyst", "Acme", "interview", "2026-09-10", "https://acme.example/job/1")
+    # what the kept record already has is never replaced by the other's
+    a = store.new_job(id="a", title="Dev", company="Borg", status="waiting", match_score=55)
+    a["event"] = {"date": "2026-11-01", "time": "", "kind": "call", "note": ""}
+    b = store.new_job(id="b", title="Dev", company="Borg", status="waiting", match_score=80)
+    b["event"] = {"date": "2026-12-01", "time": "", "kind": "interview", "note": ""}
+    both = [a, b]
+    assert merge.merge(both, "a", "b") and both[0]["match_score"] == 55 and both[0]["event"]["date"] == "2026-11-01"
