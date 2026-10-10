@@ -237,3 +237,74 @@ def test_the_pdf_matches_its_text(name):
     assert pictures >= (33 if name == "GUIDE" else 1)
     last = " ".join(reader.pages[-1].extract_text().split())
     assert str(len(reader.pages)) in last.split(), "every page carries its number"
+
+
+# ── no half-empty pages; places that can be selected ────────────────────────
+def _piece(kind, words=40):
+    if kind == "h3":
+        return '<h3 style="margin:0px;">A heading</h3>'
+    if kind == "figure":
+        return ('<table data-kind="figure" data-number="1.1" width="100%" cellspacing="0" cellpadding="4"><tr><td class="figure" align="center">'
+                + "<br>".join(["line"] * words) + "<br>Figure 1.1 – A picture</td></tr></table>")
+    return '<p style="margin-top:6px; margin-bottom:6px;">' + ("word " * words).strip() + "</p>"
+
+
+def test_text_of_the_same_section_fills_the_space_a_figure_left(laid_out):
+    """A figure that has to start on the next page no longer leaves the rest of its page empty: what follows it in
+    its own section is brought forward. Text never crosses a heading, and the pieces keep their order."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtGui import QGuiApplication
+    app = QGuiApplication.instance() or QGuiApplication([])
+    width, height = 500.0, 700.0
+    after = [_piece("p", 90).replace("word", f"after{i}") for i in range(8)]
+    body = _piece("p", 260) + _piece("figure", 28) + "".join(after) + _piece("h3") + _piece("p", 30).replace("word", "next")
+    _doc, before = guide_pdf._layout(body, DOCS, width, height)
+    assert before["figures"][0]["gap"] > 150, "written as it is, the figure leaves a good part of its page empty"
+    filled, moves = guide_pdf._fill_gaps(body, DOCS, width, height)
+    _doc, now = guide_pdf._layout(filled, DOCS, width, height)
+    assert moves >= 2 and now["figures"][0]["gap"] < guide_pdf.MIN_GAP
+    order = [filled.index(word) for word in ("after0 ", "after1 ", 'data-kind="figure"', "A heading", "next")]
+    assert order == sorted(order), "the text came before the figure, in its own order, and stayed on its side of the heading"
+    assert filled.index("after7 ") < filled.index("A heading") and filled.count("<p") == body.count("<p") and len(filled) == len(body)
+    alone = _piece("p", 260) + _piece("figure", 28) + _piece("h3") + _piece("p", 60).replace("word", "next")
+    kept, moves = guide_pdf._fill_gaps(alone, DOCS, width, height)
+    assert kept == alone and moves == 0, "with nothing after it in its section, nothing is taken from the next one"
+    assert guide_pdf._fill_gaps("<p>one</p><table><tr><td>x</td></tr>", DOCS, width, height) == ("<p>one</p><table><tr><td>x</td></tr>", 0)
+    _ = app
+    name, report = laid_out
+    if name == "GUIDE":
+        assert report["moved"] >= 40, "the user guide has many such places"
+    for item in report["figures"] + report["tables"]:
+        assert item["gap"] < report["page_height"] * 0.7, f"{item['number']} leaves most of a page empty"
+
+
+def test_a_long_table_begins_where_its_page_has_room():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtGui import QGuiApplication
+    app = QGuiApplication.instance() or QGuiApplication([])
+    opening = '<table border="1" cellspacing="0" cellpadding="4">'
+    head = "<tr><td>Setting</td><td>What it does</td></tr>"
+    rows = [f"<tr><td>Row {i}</td><td>{'words ' * 30}</td></tr>" for i in range(40)]
+    whole = guide_pdf._split_rows(opening, head, rows, DOCS, 500, 400)
+    fitted = guide_pdf._split_rows(opening, head, rows, DOCS, 500, 400, first=160)
+    assert 0 < len(fitted[0]) < len(whole[0]) and [r for part in fitted for r in part] == rows, "a shorter first part, and every row once"
+    assert len(fitted[1]) == len(whole[0]), "the parts after it take a whole page again"
+    _ = app
+
+
+def test_the_pdf_answers_to_a_click(tmp_path):
+    """The entries of the contents, references to figures and tables, and links to another chapter lead to their place."""
+    from pypdf import PdfReader
+    assert guide_pdf.slug("4. Run a search") == "4-run-a-search" and guide_pdf.slug("If Claude's limit runs out") == "if-claudes-limit-runs-out"
+    for name in ("GUIDE", "CODE"):
+        reader = PdfReader(str(DOCS / f"{name}.pdf"))
+        links = [(number, a.get_object()) for number, page in enumerate(reader.pages) for a in (page.get("/Annots") or [])]
+        links = [(number, a) for number, a in links if a.get("/Subtype") == "/Link"]
+        text = (DOCS / f"{name}.md").read_text(encoding="utf-8")
+        chapters = len(re.findall(r"^##+ ", text, re.M)) - 1                       # without "In this guide"
+        assert len(links) >= chapters + len(guide_number.captions(text, "Table")), f"{name}: {len(links)} places can be selected"
+        first = next(a for number, a in links if number == 1)                     # the first line of the contents, on page 2
+        goal = next(i for i, p in enumerate(reader.pages) if p.indirect_reference.idnum == first["/Dest"][0].idnum)
+        assert "1. Overview" in " ".join(reader.pages[goal].extract_text().split()), "the first entry of the contents leads to chapter 1"
+        assert goal > 1 and len(reader.outline) >= 5, "and the chapters stand in the PDF's own outline"
+        assert guide_pdf.fingerprint(DOCS / f"{name}.md") in (reader.metadata.creator or ""), "what the PDF was made from is still written in it"

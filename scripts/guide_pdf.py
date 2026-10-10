@@ -13,7 +13,13 @@ are numbered inside their chapter: "Figure 4.2 – Title" stands centred under a
 - a table stays on one page, with its caption; only a table longer than a page continues on
   the next one, and then between two rows, under the line "Continuation of Table 4.2" and with
   its heading row repeated there;
-- a heading is never left alone at the bottom of a page.
+- a heading is never left alone at the bottom of a page;
+- no page is left half empty because a figure or a table had to start on the next one: the text
+  that follows it in the same section is brought forward to fill the space, as in a thesis. Text
+  never crosses a heading to do so.
+
+In the PDF the entries of the contents, references such as "Figure 4.2" and "Table 9.1", and links
+to another chapter can be selected: they lead to that place. The chapters are also in the PDF's own outline.
 
 Uses Qt, which the app already needs: no other program is started. Run it again whenever a
 document or a picture changes; a test fails when a PDF is older than its text.
@@ -34,6 +40,7 @@ DOCUMENTS = {"GUIDE": "User guide", "CODE": "Technical documentation"}
 PICTURE_SCALE = 0.5        # a picture is taken at twice the size it is shown at
 MAX_PICTURE_HEIGHT = 0.62  # of the page, so a picture and its caption always fit on one
 MAX_TABLE_HEIGHT = 0.86    # of the page: a longer table is continued on the next page, between two rows
+MIN_GAP = 46               # points of empty page worth filling (about three lines)
 MARGIN, HEADER = 48, 24    # points around the text; room above it for the page number
 NUMBER = r"\d+\.\d+"       # of a figure or a table: its chapter, then its place in the chapter
 CONTINUED = "Continuation of Table "
@@ -54,6 +61,7 @@ td.note { font-size: 10pt; }
 td.figure { font-size: 9.5pt; color: #45556b; }
 p.caption { font-size: 9.5pt; color: #45556b; margin-top: 10px; margin-bottom: 3px; }
 a { color: #1d4ed8; text-decoration: none; }
+ul { list-style-type: square; }
 """
 
 # A note in the text ("> **Tip**" and the lines after it) becomes a tinted box with a coloured edge.
@@ -71,11 +79,24 @@ def fingerprint(source: Path = GUIDE) -> str:
     return digest.hexdigest()[:20]
 
 
+_LONG: dict[str, dict] = {}       # the tables longer than a page, by their number
+
+
+def _table_parts(number: str, title: str, opening: str, head: str, parts: list[list[str]]) -> list[str]:
+    out = []
+    for i, part in enumerate(parts):
+        mark = f' data-caption="{number}"' if i == 0 else ' data-continued="1"'
+        label = f"Table {number} – {title}" if i == 0 else f"{CONTINUED}{number}"
+        out.append(f'<p class="caption"{mark}>{label}</p>{opening}{head}{"".join(part)}</table>')
+    return out
+
+
 # ── from Markdown to the HTML that is laid out ──────────────────────────────
 def _body_html(source: Path, page_width: float, page_height: float) -> str:
     from PySide6.QtCore import QUrl
     from PySide6.QtGui import QImage, QTextDocument
 
+    _LONG.clear()
     text = source.read_text(encoding="utf-8")
     text = re.sub(r"\]\(\.\./([^)#]+)\)", r"](\1)", text)            # links to other documents: by name, they are not in the PDF
     text = re.sub(r"^# .*\n", "", text, count=1)                      # the title has a page of its own
@@ -117,12 +138,9 @@ def _body_html(source: Path, page_width: float, page_height: float) -> str:
         head = re.sub(r"<td>", lambda _m: f'<td bgcolor="#e8edf3" width="{next(shares)}%">', first_row)
         opening = f'<table data-kind="data" data-number="{number}" width="100%" border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;">'
         parts = _split_rows(opening, head, rows, source.parent, page_width, page_height * MAX_TABLE_HEIGHT)
-        out = ""
-        for i, part in enumerate(parts):
-            mark = f' data-caption="{number}"' if i == 0 else ' data-continued="1"'
-            label = f"Table {number} – {title}" if i == 0 else f"{CONTINUED}{number}"
-            out += f'<p class="caption"{mark}>{label}</p>{opening}{head}{"".join(part)}</table>'
-        return out
+        if len(parts) > 1:                           # kept, so that it can be cut again where it really begins on its page
+            _LONG[number] = {"opening": opening, "head": head, "rows": rows, "title": title}
+        return "".join(_table_parts(number, title, opening, head, parts))
     html = re.sub(r'<p[^>]*>\s*<span style=" font-style:italic;">Table (' + NUMBER + r') – (.*?)</span>\s*</p>\s*(<table[^>]*>)\s*(<tr>.*?</tr>)(.*?</table>)',
                   table, html, flags=re.S)
     return html
@@ -148,9 +166,10 @@ def _column_shares(rows: list[str]) -> list[int]:
     return shares
 
 
-def _split_rows(opening: str, head: str, rows: list[str], base: Path, width: float, most: float) -> list[list[str]]:
+def _split_rows(opening: str, head: str, rows: list[str], base: Path, width: float, most: float, first: float = 0) -> list[list[str]]:
     """The rows of a table in as few parts as fit on a page each (with the heading row). A table
-    that fits is one part. Rows are never cut: a part ends between two rows."""
+    that fits is one part. Rows are never cut: a part ends between two rows. `first` is the room the
+    first part has when the table begins in the middle of a page (0 = a whole page)."""
     from PySide6.QtCore import QSizeF, QUrl
     from PySide6.QtGui import QTextDocument, QTextTable
 
@@ -170,13 +189,124 @@ def _split_rows(opening: str, head: str, rows: list[str], base: Path, width: flo
     heights = [tops[i + 1] - tops[i] for i in range(frame.rows())]          # heights[0] is the heading row
     parts, current, used = [], [], heights[0]
     for row, tall in zip(rows, heights[1:]):
-        if current and used + tall > most:
+        if current and used + tall > (first if first and not parts else most):
             parts.append(current)
             current, used = [], heights[0]
         current.append(row)
         used += tall
     parts.append(current)
     return parts
+
+
+_BLOCK = re.compile(r"<(/?)(p|h[1-6]|ul|ol|pre|table|div|blockquote)\b[^>]*>")
+
+
+def _segments(html: str) -> list[dict]:
+    """The body as the pieces that follow each other on a page: a heading, a paragraph, a list, a figure,
+    a table with its caption, a note. Each says what it is and whether it may be cut by a page end."""
+    out, depth, start = [], 0, 0
+    for m in _BLOCK.finditer(html):
+        if not m.group(1):
+            if depth == 0:
+                start = m.start()
+            depth += 1
+        else:
+            depth -= 1
+            if depth == 0:
+                piece = html[start:m.end()]
+                tag = m.group(2)
+                kind = "text"
+                if tag in ("h2", "h3"):
+                    kind = tag
+                elif tag == "table":
+                    kind = re.search(r'data-kind="(\w+)"', piece).group(1) if 'data-kind="' in piece else "data"
+                out.append({"html": piece, "kind": kind, "tries": 0})
+    merged: list[dict] = []
+    for seg in out:                                  # a table's caption is the paragraph above it: one piece
+        if seg["kind"] == "data" and merged and 'class="caption"' in merged[-1]["html"] and merged[-1]["kind"] == "text":
+            cap = merged.pop()
+            seg = {"html": cap["html"] + seg["html"], "kind": "more" if "data-continued" in cap["html"] else "data", "tries": 0}
+        merged.append(seg)
+    return merged
+
+
+def _height(seg: dict, base: Path, width: float) -> float:
+    """How tall a piece is on a page of this width (measured once)."""
+    if "height" not in seg:
+        from PySide6.QtCore import QSizeF, QUrl
+        from PySide6.QtGui import QTextDocument
+        doc = QTextDocument()
+        doc.setBaseUrl(QUrl.fromLocalFile(str(base) + "/"))
+        doc.setDefaultStyleSheet(CSS)
+        doc.setDocumentMargin(0)
+        doc.setHtml(seg["html"])
+        doc.setPageSize(QSizeF(width, 10_000_000))
+        seg["height"] = doc.size().height()
+    return seg["height"]
+
+
+def _fill_gaps(body: str, base: Path, width: float, height: float) -> tuple[str, int]:
+    """The body with text brought forward wherever a figure or a table had to start on the next page and left
+    the rest of its page empty. Only text of the same section moves (never across a heading), a figure, a table
+    or a note moves only whole, and the order of the moved pieces among themselves stays. Returns (body, moves)."""
+    segs = _segments(body)
+    if "".join(s["html"] for s in segs).count("<table") != body.count("<table"):
+        return body, 0                               # a shape this does not know: the document is left as it was written
+    moves = 0
+    for _round in range(12):
+        _doc, report = _layout("".join(s["html"] for s in segs), base, width, height)
+        owners = [s for s in segs if s["kind"] in ("figure", "data", "more", "callout", "list")]
+        if len(owners) != len(report["gaps"]):
+            break
+        changed = False
+        for owner, gap in reversed(list(zip(owners, report["gaps"]))):          # from the end, so that earlier places stay where they are
+            if owner["kind"] not in ("figure", "data") or gap < MIN_GAP or owner["tries"] >= 4:
+                continue
+            i = next(k for k, s in enumerate(segs) if s is owner)
+            end = next((k for k in range(i + 1, len(segs)) if segs[k]["kind"] in ("h2", "h3")), len(segs))
+            owner["tries"] += 1
+            # 1. text of the same section comes forward; a figure, a table or a note comes only if all of it fits,
+            #    and otherwise keeps its place after this one (figures and tables stay in their order)
+            room, taken, stay = gap - 4, [], []
+            for seg in segs[i + 1:end]:
+                tall = _height(seg, base, width)
+                if room <= 0 or seg["kind"] == "more" or (seg["kind"] != "text" and tall > room) or (stay and seg["kind"] != "text"):
+                    stay.append(seg)
+                    continue
+                taken.append(seg)
+                room -= tall
+            if taken:
+                segs[i:end] = taken + [owner] + stay
+                moves += len(taken)
+                changed = True
+                continue
+            # 2. a table longer than a page begins where the page has room, and goes on overleaf
+            number = (re.search(r'data-number="([\d.]+)"', owner["html"]) or [None, ""])[1]
+            if owner["kind"] == "data" and number in _LONG and gap > 150:
+                long = _LONG[number]
+                parts = _split_rows(long["opening"], long["head"], long["rows"], base, width, height * MAX_TABLE_HEIGHT, first=gap - 34)
+                last = next((k for k in range(i + 1, len(segs)) if segs[k]["kind"] != "more"), len(segs))
+                if len(parts[0]) >= 2:
+                    fresh = _table_parts(number, long["title"], long["opening"], long["head"], parts)
+                    segs[i:last] = [{"html": h, "kind": "data" if n == 0 else "more", "tries": owner["tries"]} for n, h in enumerate(fresh)]
+                    moves += 1
+                    changed = True
+                    continue
+            # 3. a picture that almost fits is shown a little smaller instead of leaving most of a page empty
+            if owner["kind"] == "figure":
+                size = re.search(r'<img src="[^"]+" width="(\d+)" height="(\d+)"', owner["html"])
+                if size:
+                    wide, tall = int(size.group(1)), int(size.group(2))
+                    factor = (gap - 34) / tall
+                    if 0.66 <= factor < 1:
+                        owner["html"] = owner["html"].replace(size.group(0), size.group(0).replace(f'width="{wide}" height="{tall}"', f'width="{round(wide * factor)}" height="{round(tall * factor)}"'))
+                        owner.pop("height", None)
+                        owner["tries"] = 9
+                        moves += 1
+                        changed = True
+        if not changed:
+            break
+    return "".join(s["html"] for s in segs), moves
 
 
 def _entries(html: str) -> list[tuple[str, str]]:
@@ -231,6 +361,13 @@ def _layout(html: str, base: Path, width: float, height: float):
     def page_of(y: float) -> int:
         return int(y // height)
 
+    def top_of(block) -> float:
+        """Where a block's first line really stands. A paragraph whose line did not fit at the end of a page begins,
+        for Qt, on that page, while its words stand on the next one: the place of the first line is what counts."""
+        box = layout.blockBoundingRect(block)
+        lines = block.layout()
+        return box.top() + (lines.lineAt(0).y() if lines.lineCount() else 0.0)
+
     def caption_of(frame):
         """The caption of a data table: the block just above it, which moves with it."""
         block = doc.findBlock(frame.firstPosition() - 1)
@@ -274,8 +411,7 @@ def _layout(html: str, base: Path, width: float, height: float):
         while block.isValid():
             following = text_after(block)
             if block.blockFormat().headingLevel() and following.isValid():
-                here, there = layout.blockBoundingRect(block), layout.blockBoundingRect(following)
-                if page_of(here.top()) != page_of(there.top()) and block.blockFormat().pageBreakPolicy() == QTextFormat.PageBreak_Auto:
+                if page_of(top_of(block)) != page_of(top_of(following)) and block.blockFormat().pageBreakPolicy() == QTextFormat.PageBreak_Auto:
                     return lambda b=block: break_before_block(b)
             block = block.next()
         return None
@@ -288,16 +424,37 @@ def _layout(html: str, base: Path, width: float, height: float):
     else:
         raise RuntimeError("the pages would not settle")
 
-    report = {"pages": doc.pageCount(), "page_height": height, "figures": [], "tables": [], "headings": [], "leaders": []}
+    def gap_before(frame, top: float) -> float:
+        """The empty space at the end of the page before the one this begins: only when it stands at the top of
+        its page with at most a heading and a line of text above it."""
+        page = page_of(top)
+        if page == 0 or top - page * height > height * 0.22:
+            return 0.0
+        block = doc.findBlock(frame.firstPosition() - 1)
+        while block.isValid() and top_of(block) >= page * height - 0.5:
+            block = block.previous()
+        if not block.isValid():
+            return 0.0
+        end = layout.blockBoundingRect(block).bottom()
+        inside = block.document().frameAt(block.position())
+        while inside is not None and isinstance(inside, QTextTable) is False and inside.parentFrame() is not None:
+            inside = inside.parentFrame()
+        if isinstance(inside, QTextTable):
+            end = max(end, layout.frameBoundingRect(inside).bottom())
+        return max(0.0, page * height - end) if page_of(end - 0.5) == page - 1 else 0.0
+
+    report = {"pages": doc.pageCount(), "page_height": height, "figures": [], "tables": [], "headings": [], "leaders": [], "gaps": []}
     for frame, (kind, number) in zip(tables, kinds):
         rect = layout.frameBoundingRect(frame)
         top = rect.top()
         caption = caption_of(frame) if kind == "data" else None
         if caption is not None:
             top = layout.blockBoundingRect(caption).top()
+        report["gaps"].append(gap_before(frame, top))
         if kind == "list":
             report["leaders"] = [_leader(layout, frame, row) for row in range(frame.rows())]
         item = {"number": number, "caption": caption.text() if caption is not None else "", "first_page": page_of(top) + 1, "last_page": page_of(rect.bottom() - 1) + 1,
+                "top": top, "gap": report["gaps"][-1],
                 "height": rect.bottom() - top, "heading": frame.cellAt(0, 0).firstCursorPosition().block().text() if kind == "data" else ""}
         if kind == "figure":
             report["figures"].append(item)
@@ -309,10 +466,55 @@ def _layout(html: str, base: Path, width: float, height: float):
         level = block.blockFormat().headingLevel()
         if level in (2, 3):
             following = text_after(block)
-            report["headings"].append({"text": block.text(), "level": level, "page": page_of(layout.blockBoundingRect(block).top()) + 1,
-                                       "next_page": page_of(layout.blockBoundingRect(following).top()) + 1 if following.isValid() else 0})
+            report["headings"].append({"text": block.text(), "level": level, "page": page_of(top_of(block)) + 1, "top": top_of(block),
+                                       "next_page": page_of(top_of(following)) + 1 if following.isValid() else 0})
         block = block.next()
+    report["spots"] = _spots(doc, layout)
     return doc, report
+
+
+_REFERENCE = re.compile(r"\b(Figure|Table) (\d+\.\d+)\b")
+
+
+def _spots(doc, layout) -> list[dict]:
+    """The places in the text that lead somewhere when selected: a link to another chapter ("#4-run-a-search"),
+    and every mention of a figure or a table by its number. Each is {"x0", "x1", "top", "bottom", "to"} in the
+    document's own coordinates; `to` is "#slug", "Figure 4.2" or "Table 9.1"."""
+    out = []
+
+    def place(block, start: int, end: int, to: str) -> None:
+        lines = block.layout()
+        line = lines.lineForTextPosition(start)
+        if not line.isValid():
+            return
+        box = layout.blockBoundingRect(block)
+        last = min(end, line.textStart() + line.textLength())
+        x0, x1 = line.cursorToX(start), line.cursorToX(last)
+        x0, x1 = (x0[0] if isinstance(x0, tuple) else x0), (x1[0] if isinstance(x1, tuple) else x1)
+        if x1 - x0 > 2:
+            out.append({"x0": box.left() + x0, "x1": box.left() + x1, "top": box.top() + line.y(), "bottom": box.top() + line.y() + line.height(), "to": to})
+
+    block = doc.begin()
+    while block.isValid():
+        text = block.text()
+        it = block.begin()
+        while not it.atEnd():
+            piece = it.fragment()
+            fmt = piece.charFormat()
+            if piece.isValid() and fmt.isAnchor() and fmt.anchorHref().startswith("#"):
+                at = piece.position() - block.position()
+                place(block, at, at + piece.length(), fmt.anchorHref())
+            it += 1
+        caption = re.match(r"(Figure|Table) \d+\.\d+ \u2013 ", text) or text.startswith(CONTINUED)
+        for m in ([] if caption else _REFERENCE.finditer(text)):
+            place(block, m.start(), m.end(), m.group(0))
+        block = block.next()
+    return out
+
+
+def slug(heading: str) -> str:
+    """A heading as a link names it: "4. Run a search" -> "4-run-a-search"."""
+    return re.sub(r"[^a-z0-9 -]", "", heading.lower()).replace(" ", "-")
 
 
 def _leader(layout, frame, row: int) -> dict:
@@ -338,7 +540,7 @@ def compose(source: Path = GUIDE):
     text = source.read_text(encoding="utf-8")
     title = re.search(r"^# (.+)$", text, re.M).group(1).strip()
     subtitle = {"GUIDE": "How to use every part of the app, step by step", "CODE": "How the app is built, run and tested"}.get(source.stem, "")
-    body = _body_html(source, width, height)
+    body, moved = _fill_gaps(_body_html(source, width, height), source.parent, width, height)
     entries = _entries(body)
     pages = ["000"] * len(entries)
     doc = report = None
@@ -355,6 +557,7 @@ def compose(source: Path = GUIDE):
         raise RuntimeError("the page numbers in the contents would not settle")
     report["contents"] = pages
     report["title"] = title
+    report["moved"] = moved
     _ = app
     return doc, report, title
 
@@ -399,7 +602,68 @@ def build(source: Path = GUIDE, out: Path | None = None) -> Path:
             painter.drawText(QRectF(MARGIN, MARGIN - 6, width, HEADER), Qt.AlignRight | Qt.AlignTop, str(page + 1))
     painter.end()
     del writer
+    _link_up(out, report, MARGIN, top)
     return out
+
+
+def _link_up(path: Path, report: dict, left: float, top: float) -> int:
+    """Make the PDF answer to a click: every entry of the contents, every link to another chapter and every mention
+    of a figure or a table leads to its place, and the chapters stand in the PDF's own outline. Returns how many
+    places were made. (Qt writes the pages; a PDF library that the app already uses adds the links.)"""
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.annotations import Link
+    from pypdf.generic import ArrayObject, Fit, FloatObject, NameObject, NullObject
+
+    reader = PdfReader(str(path))
+    writer = PdfWriter(clone_from=reader)
+    tall = float(reader.pages[0].mediabox.height)
+    height = report["page_height"]
+
+    def on_page(y: float) -> tuple[int, float]:
+        """A height in the laid-out document as (page, height from the bottom of that page)."""
+        page = int(y // height)
+        return page, tall - (top + (y - page * height))
+
+    targets: dict[str, float] = {}
+    for h in report["headings"]:
+        targets.setdefault("#" + slug(h["text"]), h["top"])
+    for f in report["figures"]:
+        targets.setdefault(f"Figure {f['number']}", f["top"])
+    for t in report["tables"]:
+        if not t["continued"]:
+            targets.setdefault(f"Table {t['number']}", t["top"])
+    spots = list(report["spots"])
+    chapters = [h for h in report["headings"]][1:]                 # without the contents themselves
+    for leader, heading in zip(report["leaders"], chapters):       # a whole line of the contents
+        spots.append({"x0": 0, "x1": leader["to"], "top": leader["base"] - 11, "bottom": leader["base"] + 4, "to": heading["top"]})
+    made = 0
+    for spot in spots:
+        goal = spot["to"] if isinstance(spot["to"], float) else targets.get(spot["to"])
+        if goal is None:
+            continue
+        page, upper = on_page(spot["top"])
+        _same, lower = on_page(spot["bottom"] - 0.01)
+        to_page, to_top = on_page(goal)
+        if page >= len(writer.pages) or to_page >= len(writer.pages):
+            continue
+        added = writer.add_annotation(page_number=page, annotation=Link(rect=(left + spot["x0"], lower, left + spot["x1"], upper), border=[0, 0, 0],
+                                                                        target_page_index=to_page, fit=Fit.xyz(left=left - 6, top=min(tall, to_top + 14))))
+        # the page itself, not its number: that is what a place inside the same PDF must name for every reader to follow it
+        added[NameObject("/Dest")] = ArrayObject([writer.pages[to_page].indirect_reference, NameObject("/XYZ"), FloatObject(left - 6),
+                                                  FloatObject(min(tall, to_top + 14)), NullObject()])
+        made += 1
+    parent = None
+    for heading in chapters:
+        to_page, to_top = on_page(heading["top"])
+        item = writer.add_outline_item(heading["text"], to_page, parent=None if heading["level"] == 2 else parent, fit=Fit.xyz(left=left - 6, top=min(tall, to_top + 14)))
+        if heading["level"] == 2:
+            parent = item
+    if reader.metadata:
+        writer.add_metadata({k: str(v) for k, v in reader.metadata.items()})
+    with open(path, "wb") as handle:
+        writer.write(handle)
+    report["links"] = made
+    return made
 
 
 if __name__ == "__main__":
