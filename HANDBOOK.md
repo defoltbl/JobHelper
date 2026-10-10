@@ -293,13 +293,13 @@ After every batch of changes, without being asked:
 | A mailbox is tried before it is saved | Only the form of the password was checked, so a wrong one showed up at the first scan. |
 | Outlook.com, Proton and Tuta are refused with an explanation | They cannot be read with a password; failing later would be worse than saying so at once. |
 | The salary estimate is used only for software roles in Czechia | It is a table of Prague junior software pay. Anywhere else no figure is better than a wrong one. |
-| The assistant fills in forms in the person's own Chrome, through Apple events | The owner's choice ("I tap on him and ask to fill the form in Chrome"). The form is filled where the person is signed in; nothing is installed. A browser inside the app was removed earlier, and an extension would have to be installed by hand. |
+| The assistant fills in forms in the person's own browser, through Apple events (Chrome first; Brave, Edge, Opera, Opera GX and Safari since; Firefox has no such door and is said to be impossible) | The owner's choice ("I tap on him and ask to fill the form in Chrome"). The form is filled where the person is signed in; nothing is installed. A browser inside the app was removed earlier, and an extension would have to be installed by hand. |
 | The assistant presses only a menu, an entry of a menu, a radio button and a button that adds a row | The owner allowed menus on 10 October 2026 and rows on a button ("do all points") the same day. It still never presses a button that sends or continues, never ticks a box and never sends: the script that presses reads what it is given, and the words of an add button, again before it acts. |
 | A free request is decided by Claude and checked by the app | The owner chose this knowing it costs a call per request. Claude names one action from a fixed list; anything else is dropped. An action that changes data is asked about in the app's own words and done only after a yes. |
 | The one tick box the assistant may tick says that a job goes on | The owner allowed it on 10 October 2026 ("do all points"). A box that agrees to anything is refused by its words. |
 | Answers are not streamed word by word from Claude | A decision is one object that must be checked whole before anything of it is shown or done. The window says what is being done meanwhile and writes the checked answer out. |
 | A note the person asks the assistant to remember changes only its answers | Changing what a search finds through a sentence in a talk would be app logic nobody can see. The Options do that. |
-| Noticing a form in Chrome is off until turned on | It means looking at Chrome without being asked. When on, only the address, the title and the number of empty fields of the tab in front are looked at. |
+| Noticing a form in the browser is off until turned on | It means looking at the browser without being asked. When on, only the address, the title and the number of empty fields of the tab in front are looked at. |
 | A review reads the values of a form | The owner asked for it. Passwords and files are never read, and personal and payment values are not sent to Claude. |
 | Only what the person wrote or corrected is remembered as their wording | A draft nobody read is not their answer. An answer that names its company is not offered to another one. |
 | A free question to the assistant is one Claude call with facts from the app | So an answer cannot come from anywhere else; when the facts do not hold it, the assistant says so. |
@@ -336,29 +336,29 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
    be cut and the finds were fixed; it was not read line by line. The window tests and the guide's pictures cover it.
 
 6. **The assistant was tested in its test area** (`tests/fixtures/forms/`: a plain form, a component-built one, a long
-   one, a framed one, each filled in a browser engine by the real code), **not yet on real sites in the person's Chrome.**
+   one, a framed one, each filled in a browser engine by the real code), **not yet on real sites in the person's browser.**
    Sites that build their fields in unusual ways (their own drop-downs, forms inside a frame from another site,
    pages that rebuild a field after it is written) will need a look one by one. Tick boxes, dates and file
    uploads are left to the person on purpose.
 
 **Needs the person**
 
-- Turning on Chrome's switch (View > Developer > Allow JavaScript from Apple Events) and trying the assistant
-  on a few real application forms; what it leaves or gets wrong there decides the next step.
+- **A live trial of the assistant.** Turn on the browser's switch (Allow JavaScript from Apple Events; the My details
+  page says where it is), save My details, and try it on a few real application forms and on real questions.
+  Every form test so far ran in the test area; the prompts were tried against the real Claude on invented data
+  (19 calls, 10 October 2026). Opera and Opera GX were added from their scripting dictionary, which is the same
+  as Chrome's; Brave, Edge, Opera and Safari have not been tried on this Mac.
+- The 19 jobs whose documents were moved to the backup on 9 October: they can be put back until about 16 October.
+- Whether the README should name its author (the rule keeps the name out of tracked files).
+- Whether the text of the next section may come forward in the PDFs to fill the space a figure left at the end
+  of its own section (today it may not, so some pages keep a gap).
 
 **Then, for the assistant**
 
-- A real trial in the person's own browser: every form test so far ran in the test area. The prompts were tried
-  against the real Claude on invented data (19 calls, 10 October 2026).
-
-
-- Rows a form adds on a button (**Add another job**): the assistant never presses buttons, so it fills the rows
-  that are shown. Pressing such a button would be a new permission for the owner to give.
-- The dates of a job or a degree in a form (month and year lists differ on every site).
-
-- Whatever the trial on real sites shows. Menus are the likeliest: every component library draws them a little
+- Whatever the live trial shows. Menus are the likeliest: every component library draws them a little
   differently, and the script knows the common pattern (a box that opens a list of `role=option` entries).
-- Date fields (a start date from About you).
+- A date that is not part of a job or a degree (the day you can start, from About you).
+- A text size for the whole window: the assembly line grows with the window, the side columns do not.
 
 **Last**
 

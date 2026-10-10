@@ -134,7 +134,7 @@ Table 2.5 lists what protects the data and ties the app to macOS.
 | The macOS Keychain, through the `security` program | Keeping the data key and the mailbox passwords | Secrets are then protected by the Mac's login and are never written to a file of the project |
 | Signed rule files | The rules for CVs and letters, the letter template, the master CV | These files decide what is written in the person's name. A change made outside the app must be approved before the next run |
 | A LaunchAgent | The weekly run | It is how macOS starts a task on a schedule, also when the window is closed |
-| Apple events, through the `osascript` program | The assistant reads and fills in the form that is open in the person's browser (Chrome, Brave, Edge or Safari) | The form is filled in where the person is already signed in, with nothing to install. Chrome and macOS each ask for consent first, and the app can only do what a script in the page can do: it cannot attach files or read saved passwords |
+| Apple events, through the `osascript` program | The assistant reads and fills in the form that is open in the person's browser (Chrome, Brave, Edge, Opera, Opera GX or Safari; Firefox has no such door) | The form is filled in where the person is already signed in, with nothing to install. Chrome and macOS each ask for consent first, and the app can only do what a script in the page can do: it cannot attach files or read saved passwords |
 | Hash-pinned packages in `requirements.lock` | Installing | Each package is checked against a fingerprint, so a changed package cannot be installed unnoticed |
 
 ### Quality
@@ -437,7 +437,7 @@ there and a test that names what must be filled and what must be left.
 | What the page answers is not trusted | `read_answer` and `fill_answer` accept only the expected shape and cut every text to a fixed length |
 | Private fields are left alone | Passwords, files, payment and personal-status fields are recognised by their kind or their label and never planned |
 | The right page gets the values | The filling script compares the page's address with the one that was read, and writes nothing when they differ |
-| Chrome is never started | The request first asks whether Chrome is running and stops there when it is not |
+| The browser is never started | The request first asks whether the browser is running and stops there when it is not |
 
 ### How the assistant decides what to do
 
@@ -554,7 +554,7 @@ what stands in for it.
 | Claude | A function that returns a prepared answer |
 | Job boards and mail servers | Functions that return prepared postings and messages |
 | Notifications, Finder, the Trash, the browser | Functions that only record that they were called |
-| The person's Google Chrome | A guard that fails the test. The scripts that read and fill in a form run in a browser engine on a local page, `tests/fixtures/forms/` |
+| The person's browser | A guard that fails the test. The scripts that read and fill in a form run in a browser engine on a local page, `tests/fixtures/forms/` |
 
 ### Test the window
 

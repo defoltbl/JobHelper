@@ -2,10 +2,11 @@
 
 A desktop assistant for a job search, for macOS. Five cooperating agents find postings, score
 them against your CV, write an adapted CV and a cover letter for the good ones, and keep track
-of what you applied to and what the companies answered. A sixth, the assistant, fills in the
-company's application form in your own Chrome when you ask it. It runs on **your Claude subscription**
-through the Claude Code program – no API key, no per-token bill – and everything it knows
-about you stays on your Mac, encrypted.
+of what you applied to and what the companies answered. A sixth, the assistant, fills in a
+company's application form in your own browser, answers questions about your search, and does
+things in the app after your yes. It runs on **your Claude subscription** through the Claude
+Code program – no API key, no per-token bill – and everything it knows about you stays on your
+Mac, encrypted.
 
 ![Platform](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
@@ -22,6 +23,7 @@ about you stays on your Mac, encrypted.
 
 - [Overview](#overview)
 - [Key features](#key-features)
+- [The assistant](#the-assistant)
 - [Architecture](#architecture)
 - [How it works](#how-it-works)
 - [Tech stack](#tech-stack)
@@ -39,15 +41,15 @@ about you stays on your Mac, encrypted.
 
 ## Overview
 
-Looking for a job means doing the same five things over and over: reading postings, deciding
-which ones fit, rewriting the CV and a letter for each, keeping a list of where you applied,
-and reading the answers. JobHelper does the repetitive part of all five and leaves the
-decisions to the person.
+Looking for a job means doing the same things over and over: reading postings, deciding which
+ones fit, rewriting the CV and a letter for each, typing the same details into every company's
+form, keeping a list of where you applied, and reading the answers. JobHelper does the
+repetitive part of all of them and leaves the decisions to the person.
 
 It is built around three promises:
 
-- **It never acts in your name.** It does not apply, does not send email, and opens the mailbox
-  read-only. You read, you decide, you send.
+- **It never acts in your name.** It does not apply, does not send email or a form, and opens
+  the mailbox read-only. You read, you decide, you send.
 - **It never claims what your CV does not show.** Every adapted CV, letter, form answer and
   interview answer is checked in plain code against your own CV after the model wrote it.
 - **It never bills per use.** Every model call goes through the Claude Code program and so
@@ -67,18 +69,6 @@ profession, for any city.
   untouched) and a cover letter in your own letter's layout, as Word files and PDFs.
 - **Honesty checks.** A required language the CV does not show caps the score; a term of the
   posting stated as experience is sent back to the model, and what remains is shown to you.
-- **An assistant that fills in the form.** Tap the robot at the end of the line and ask: it
-  writes your details and answers drafted from your CV into the form that is open in Chrome,
-  chooses from lists, yes/no buttons and menus when your CV or details settle the answer,
-  outlines what it filled, lists what it left and why, and never presses Submit. It reuses
-  answers you rewrote, follows a form onto its next page, and reviews the form before you send.
-- **An assistant you can talk to.** Ask in your own words: "which applications have had no reply
-  for two weeks?", "why did this score 62?", "mark it applied", "make the second paragraph
-  shorter". It answers from your own data, asks before it changes anything, shows a rewrite
-  before saving it, briefs you on a company, gives advice from your results and lets you
-  practise an interview. It does several things in one request and can undo them, remembers what you tell it,
-  scores a posting that is open in your browser, and drafts a reply to a company for you to
-  send. When the app opens it tells you what needs your attention.
 - **Applications tracked by your mailbox.** Replies are read (never changed), classified as
   invitation, rejection, offer or confirmation, and filed to the right application.
 - **Before and after applying.** A checklist per job, drafted answers for that job's form,
@@ -91,6 +81,46 @@ profession, for any city.
 - **Pauses, never fails, on the limit.** When the subscription limit is used up the run saves,
   says when the limit resets, and resumes from the same job.
 
+## The assistant
+
+A sixth robot stands at the end of the assembly line. It blinks, follows the pointer with its
+eyes, and tells you what needs your attention when the app opens.
+
+![A talk with the assistant](docs/img/44_assistant_talk.png)
+
+**It fills in application forms** in the browser you already use (Chrome, Brave, Edge, Opera,
+Opera GX or Safari):
+
+- your name, contacts, address and links, your jobs and degrees row by row with their dates,
+  and your salary with its currency, from a **My details** page;
+- answers to the form's open questions, drafted from your CV for that job, or taken from
+  **My answers**, where you answer once what every form asks;
+- lists, yes/no buttons and menus that sites draw themselves, when your details or your CV
+  settle the answer;
+- then it lists what it filled and what it left and why, and can read the form back and say
+  what looks wrong before you send.
+
+It writes into empty fields only. The only things it presses are a menu, an entry of a menu, a
+yes/no button, a button that adds a row for another job, and the box that says you work
+somewhere now. It never presses Submit or Next, never ticks a box that agrees to something,
+and never touches a password, a file or a personal question.
+
+**You can talk to it** in your own words:
+
+| You say | What happens |
+|---|---|
+| *Which applications have had no reply for two weeks?* | It answers from your own data and lists the jobs |
+| *Why did this score 62?* | It explains from the stored reason and keywords |
+| *I sent it: mark it applied and remind me in ten days* | One question lists both steps; nothing changes before your yes, and **Undo** takes it back |
+| *Make the second paragraph of this letter shorter* | The new version is shown first and saved after your yes |
+| *Is the posting in my browser worth applying to?* | It is scored with the same scorer a search uses and can be added to New Jobs |
+| *Answer Quillon that Tuesday suits me* | A reply to copy; the app never sends mail |
+| *Let us practise the interview for Quillon* | Question by question, with feedback; weak answers come first next time |
+| *Remember that I do not want consulting firms* | Kept for later talks |
+
+Filling in a form costs nothing. Anything else is one call to Claude, with only the jobs the
+request is likely about.
+
 ## Architecture
 
 ```mermaid
@@ -99,20 +129,23 @@ flowchart LR
     B["Bridge<br/>slots, signals, threads"]
     A["Api<br/>checks input, does the work"]
     AG["Five agents"]
+    AS["Assistant"]
     C["Claude Code program<br/>(subscription)"]
     S["Job boards<br/>career sites"]
-    G["Google Chrome<br/>the open form"]
     M["Mailbox<br/>IMAP, read-only"]
+    G["Your browser<br/>the open form"]
     D[("data/<br/>encrypted files")]
     K["macOS Keychain<br/>keys and passwords"]
 
     W -->|"calls a slot"| B
     B -->|"calls a method"| A
     A --> AG
+    A --> AS
     AG -->|"score, write"| C
+    AS -->|"draft, decide"| C
     AG -->|"read postings"| S
     AG -->|"read replies"| M
-    A -->|"read fields, fill empty ones"| G
+    AS -->|"read fields, fill empty ones"| G
     A -->|"store, db, vault"| D
     D -.->|"data key"| K
 ```
@@ -120,6 +153,8 @@ flowchart LR
 The window never touches a file. A QML file calls a slot of the bridge, the slot calls a method
 of `Api`, and the method checks the input, does the work and answers with a plain dictionary.
 Long work (a search, a scan, a rewrite) runs in a thread and answers through a signal.
+
+![A press of a button, from the window to the data and back](docs/img/code_layers.png)
 
 ## How it works
 
@@ -140,6 +175,20 @@ A search runs the first four agents in order; an email scan runs the fifth.
    question (on 150 days of real mail: 242 messages, down from 661 under the earlier rule, with
    every filed reply still getting through), and files each reply to its application.
 
+![What a search does with a posting](docs/img/code_search.png)
+
+What Claude writes is never taken on trust:
+
+![How a text is kept inside what the CV shows](docs/img/code_honesty.png)
+
+The assistant works the same way. A form is read, planned in plain code, filled, and checked:
+
+![How the assistant fills in a form](docs/img/code_fill.png)
+
+And a request in free words is decided by Claude but carried out by the app:
+
+![How the assistant decides what to do with a request](docs/img/code_talk.png)
+
 ## Tech stack
 
 | Layer | Technology | Why |
@@ -152,8 +201,8 @@ A search runs the first four agents in order; an email scan runs the fifth.
 | Storage | Encrypted JSON files and SQLite | One person's data is small; no server to install |
 | Web | `requests`, `beautifulsoup4`, `lxml` | Reads the public pages of boards that have no common interface |
 | Mail | `imaplib` (IMAP, read-only) | Works with almost every provider and can promise never to change mail |
+| Form filling | Apple events (`osascript`) to the person's browser | Fills the form where you are signed in, with nothing to install |
 | Security | AES-256-GCM (`cryptography`), macOS Keychain, HMAC-signed rule files | Private data; a tampered file is refused, not read |
-| Form filling | Apple events (`osascript`) to Chrome, Brave, Edge or Safari | Fills the form where you are signed in, with nothing to install |
 | Scheduling | macOS LaunchAgent | Runs with the window closed |
 | Quality | `pytest`, `pyflakes`, hash-pinned packages | Every change comes with tests; packages cannot change unnoticed |
 
@@ -176,8 +225,10 @@ JobHelper/
 │   ├── cv_tailor.py, cover_letter.py, form_answers.py, interview_prep.py
 │   │                         # writing, each with its checks against the CV
 │   ├── email_client.py, mailhosts.py          # read-only mail; which server a mailbox uses
-│   ├── assistant.py, details.py, chrome.py, form_fill.py, form_choices.py, answer_memory.py
-│   │                         # the assistant: your details, the link to Chrome, filling a form, choosing, your wording
+│   ├── assistant.py, assistant_brain.py, assistant_notes.py
+│   │                         # the assistant: fixed requests, what Claude makes of a free one, what it remembers
+│   ├── details.py, answer_memory.py, chrome.py, form_fill.py, form_choices.py
+│   │                         # your details and your own answers, the link to the browser, filling a form
 │   ├── llm.py, usage.py      # the one door to Claude; usage and limits
 │   ├── store.py, db.py, vault.py, integrity.py, housekeeping.py
 │   │                         # job list, replies, encryption, signed files, backups
@@ -185,8 +236,9 @@ JobHelper/
 │                             # what the window calls
 ├── ui_qt/                    # the window: one QML file per dialog or part (40 files)
 ├── tests/                    # 1,565 tests, offline, in temporary folders
-│   └── guide_shots.py        # takes the pictures of the user guide
-├── scripts/                  # the PDF builder, the numbering check, the diagram, the lock file
+│   ├── guide_shots.py        # takes the pictures of the user guide
+│   └── fixtures/forms/       # the assistant's test area: forms it must fill and must not send
+├── scripts/                  # the PDF builder, the numbering check, the diagrams, the lock file
 ├── docs/                     # user guide, technical documentation, their PDFs, pictures
 ├── data/                     # your data (never in git; only the *.example.* files are)
 ├── requirements.txt          # dependencies
@@ -201,6 +253,8 @@ JobHelper/
 - Python 3.10 or newer.
 - The Claude Code program, signed in with a Claude subscription.
 - Optional: LibreOffice, for PDF copies of the documents.
+- For the assistant's form filling: Chrome, Brave, Edge, Opera, Opera GX or Safari, with its
+  switch **Allow JavaScript from Apple Events** turned on once.
 
 > **Do not set `ANTHROPIC_API_KEY`.** Leaving it unset is what makes the app use the
 > subscription, and the app refuses to run a search while it is set.
@@ -238,10 +292,11 @@ app, **Account** card → *Data protection* → **Recovery key**.
 | Find and score new postings | **Run search** |
 | Decide what to apply to | **New Jobs** → a row → *Why this score*, the CV, the letter |
 | Go through many jobs quickly | **New Jobs** → narrow the list → **Review these … one by one** |
-| Fill in a company's application form | Open it in Chrome, tap the assistant, **Fill in the form in Chrome** |
+| Fill in a company's application form | Open it in your browser, select the assistant, **Fill in the form** |
+| Ask about your search, or have something done | Select the assistant and type it |
 | Record an application | **Mark applied** |
 | Read replies from companies | **Scan email**, then **Responses** and **Applications** |
-| Prepare for an interview | An application → **Interview preparation** |
+| Prepare for an interview | An application → **Interview preparation**, then ask the assistant to practise |
 | See what a search left out, and why | **Last run** card → **Filtered out** |
 | Learn what works | **Insights** and **Analytics** |
 | Say what you look for | **Options** |
@@ -287,20 +342,26 @@ the same names without `.example`. With a letter of your own as
 
 ## Security and privacy
 
-- **Everything stays on your Mac.** Only three things leave it: the questions put to Claude
-  (your CV text and a posting), the requests to the job boards, and the reading of your mailbox.
-- **Encrypted on disk:** the job list, the profile, the settings, the replies and all backups
-  (AES-256-GCM). The key and the mailbox passwords are in the macOS Keychain.
+![How the data is kept safe](docs/img/code_safety.png)
+
+- **Everything stays on your Mac.** Only these leave it: the questions put to Claude (your CV
+  text and a posting, or a request to the assistant with the jobs it is about), the requests to
+  the job boards, and the reading of your mailbox.
+- **Encrypted on disk:** the job list, the profile, the settings, your details and answers, the
+  replies and all backups (AES-256-GCM). The key and the mailbox passwords are in the macOS
+  Keychain.
 - **Signed rule files:** the files that decide what is written in your name are signed. A
   change made outside the app is shown line by line and must be approved before the next run.
 - **Nothing is deleted:** data is backed up before any bulk change; documents are moved to an
   encrypted backup and can be put back; old copies go to the Trash.
 - **The mailbox is read-only.** Nothing is sent, deleted, moved or marked as read.
 - **Forms are filled, never sent.** The assistant writes into empty fields of the page you
-  opened; the only things it presses are a menu, an entry of a menu and a yes/no button. It
-  reads back whether a field is empty and, when you ask it to learn your changes, the answers
-  it wrote itself. It touches no password, file, payment
-  or personal-status field, and it needs your consent in both Chrome and macOS.
+  opened and needs your consent in both the browser and macOS. It reads back whether a field
+  is empty; what a field holds only when you ask it to review the form or to learn your
+  changes, and then never a password or a file, and never a personal answer to Claude.
+- **Claude proposes, the app decides.** A request to the assistant comes back from Claude as
+  an answer or as actions from a fixed list. The app checks them, asks you in its own words,
+  and changes nothing before your yes.
 
 ## Testing
 
@@ -309,18 +370,25 @@ python -m pytest -q
 python -m pyflakes jobhelper tests scripts
 ```
 
-1,565 tests in about two and a half minutes, with no network. They never touch real data, the
-Keychain or `.env`, never ask Claude, never read a real job board or mail server, and never open
-a file or put anything in the Trash: every test works in temporary folders with stand-ins. The
-window itself is loaded without a screen and driven by the tests, and the documentation has
-tests of its own (numbered figures and tables, nothing split across pages in the PDFs).
+1,565 tests in about four minutes, with no network. They never touch real data, the Keychain
+or `.env`, never ask Claude, never read a real job board or mail server, never reach into a
+real browser, and never open a file or put anything in the Trash: every test works in
+temporary folders with stand-ins.
+
+- The window itself is loaded without a screen and driven by the tests.
+- The assistant has a **test area**: application forms served on this machine and opened in a
+  real browser engine, filled by the same code the window runs. One is built the way component
+  libraries build forms, one is long, one sits in a frame from another address. On every one
+  the tests check that nothing was sent and no button was pressed.
+- The documentation has tests of its own: numbered figures and tables, nothing split across
+  pages in the PDFs, links that lead somewhere, diagrams whose arrows cross no box.
 
 ## Documentation
 
 | Document | For |
 |---|---|
 | [User guide](docs/GUIDE.md) ([PDF](docs/GUIDE.pdf)) | Using the app: every screen, step by step, with pictures. No terminal needed |
-| [Technical documentation](docs/CODE.md) ([PDF](docs/CODE.pdf)) | Installing, the command line, the tech stack and its reasons, the structure of the code, tests |
+| [Technical documentation](docs/CODE.md) ([PDF](docs/CODE.pdf)) | Installing, the command line, the tech stack and its reasons, the structure of the code with a diagram for each process, tests |
 | [Command reference](COMMANDS.md) | Every command and option |
 | [Handbook](HANDBOOK.md) | The rules the app is built by, decisions already made, what is left to do |
 | [Changelog](CHANGELOG.md) | What changed, day by day. The app shows it under **Help** |
@@ -338,6 +406,21 @@ A few decisions worth highlighting:
   the posting's terms ("cost center data") as experience; the check that came out of it finds a
   two-word term of the posting that the CV knows nothing of, sends the draft back once, and
   shows what remains to the person instead of cutting sentences out.
+- **Claude proposes, the app disposes.** A free request to the assistant is one call that
+  returns an answer or up to three actions from a fixed list. The app checks them (a made-up
+  action or job is dropped), words the question itself, and changes nothing until the person
+  says yes. Tests with forged replies confirm that none of them changes data.
+- **A prompt is tried against the real model, not only against stand-ins.** A trial on invented
+  data showed Claude reading the day a reply arrived as the day of an interview. The fix was
+  not another instruction but the data itself: the line now says "an invitation arrived" and
+  "no date set", which cannot be misread.
+- **A page is filled in by small scripts that are tested on a real page.** One lists the
+  fields without sending back what they hold; plain code decides what each field is; another
+  writes values that travel as data, never as code, and only into the page that was read. The
+  one script that presses anything accepts five kinds of element and reads their words again
+  before it acts. The test area found what unit tests had missed: "Czechia" in a list that says
+  "Czech Republic", a job's employer paired with another job's title, a page that throws away
+  whatever did not arrive as typing.
 - **A background thread still blocks the window in Python.** Preparing the Insights view was
   59,000 small text searches; although it ran in a worker, the welcome animation stuttered for
   half a second because every call from the window queued behind it. The work now starts after
@@ -352,18 +435,10 @@ A few decisions worth highlighting:
   Czech Republic" share a word, and so do "Reed Specialist Recruitment" and an "IT Support
   Specialist" role elsewhere. Words many names share do not count; measured on 150 days of real
   mail, that moved eight replies to the right company and lost none.
-- **Claude proposes, the app disposes.** A free request is one call that returns an answer
-  or one action from a fixed list. The app checks it (a made-up action or job is dropped),
-  words the question itself, and changes nothing until the person says yes. Measured in
-  tests with forged replies: none of them changes data.
-- **A page is filled in by two small scripts that are tested on a real page.** One lists the
-  fields without sending back what they hold; plain code decides what each field is; the other
-  writes values that travel as data, never as code, and only into the page that was read. The
-  tests run both in a browser engine on a local form and read them for anything that clicks.
 - **The documentation is built and tested like code.** The user guide's pictures are taken by
   a script from invented data, figures and tables are numbered by a tool, and the PDF builder
-  lays pages out itself so that a figure or a table is never split; tests fail when any of
-  that drifts.
+  lays pages out itself: a figure or a table is never split, the text that follows it fills the
+  space it left, and every entry of the contents can be clicked.
 
 ## Known limits
 
@@ -371,10 +446,11 @@ A few decisions worth highlighting:
 - The job boards with full support are Czech (jobs.cz, prace.cz); other countries rely on
   LinkedIn, company career sites and the remote boards.
 - Outlook.com, Proton and Tuta mailboxes cannot be read with a password, so they cannot be
-  connected. Russian mail services are not used.
+  connected. Russian services are not used.
 - The built-in salary estimate covers software roles in Czechia; elsewhere you enter your own
   figure.
-- The assistant fills in forms in Chrome, Brave, Edge and Safari, and leaves tick boxes that
-  agree to something and file uploads to you. It is tested on forms of its own test area, not yet across real recruiting
-  sites, where menus in particular are drawn in many ways.
+- The assistant fills in forms in Chrome, Brave, Edge, Opera, Opera GX and Safari; Firefox does
+  not let another app fill its pages. It leaves file uploads and boxes that agree to something
+  to you. It is tested on the forms of its own test area, not yet across real recruiting sites,
+  where menus in particular are drawn in many ways.
 - The app is started from a terminal. Packaging it as an app that opens from Finder is planned.

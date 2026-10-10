@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Opera and Opera GX.** The assistant fills in forms in them too; choose the browser on the My details page. Firefox is listed as not possible, with the reason: it does not let another app read or fill in its pages. The button now reads **Fill in the form**, and the line under the box says which browser is used.
+- **Fixed: a list kept its outline after you clicked somewhere else,** like text fields did before. A press on empty space now lets go of it.
 - **The assembly line grows with the window.** On a large screen the robots and their words used to stay small; the line now fills the room it has, and the words at the robots are larger. What the assistant says appears in a strip of its own under the line, so it never covers the line or a robot.
 - **Judging a posting costs one Claude call, not three.** The button reads the job's title and employer from what the page states for search engines, so only the scoring asks Claude.
 - **The PDF guides have no half-empty pages where text could stand.** When a figure or a table has to start on the next page, the text that follows it in the same section is brought forward. The entries of the contents, every "Figure 4.2" and "Table 9.1", and links to another chapter can be clicked, and the chapters are in the PDF's outline. List points have a heavy mark and steps a bold number.

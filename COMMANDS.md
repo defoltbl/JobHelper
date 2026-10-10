@@ -250,9 +250,9 @@ Inside the window:
   application that is still open. Plain template, no Claude; copy it, add one real detail,
   send it yourself, then **Mark as sent**.
 - **The assistant** (the light-blue robot at the end of the assembly line, or **Fill the form** in a job's
-  window) — fills in the application form that is open in Google Chrome: your details from its **My details** page,
+  window) — fills in the application form that is open in your browser (Chrome, Brave, Edge, Opera, Opera GX or Safari; not Firefox): your details from its **My details** page,
   answers to open questions drafted from your CV for the job. It writes into empty fields only, lists what it left
-  and why, and never sends the form. Once, in Chrome: View > Developer > Allow JavaScript from Apple Events.
+  and why, and never sends the form. Once, in the browser: turn on Allow JavaScript from Apple Events (the My details page says where that switch is).
   It also chooses from lists, yes/no buttons and menus when your details or CV settle the answer, reuses answers
   you rewrote, offers the next page of a long form, shows the CV and letter in Finder, and answers a question
   about a job or the app (one Claude call). It can be talked to in your own words: it answers from your data, and

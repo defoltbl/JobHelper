@@ -881,7 +881,7 @@ when a request worked and shakes its head when it did not.
 
 ### Prerequisites
 
-- Google Chrome, with the application form open in a tab.
+- Google Chrome or another browser the assistant works in (section 10), with the application form open in a tab.
 - Your details saved in the assistant's window (the first task below).
 - For answers to the form's own questions: the job is in **New Jobs** or **Applications**, and
   your master CV is set.
@@ -1000,9 +1000,11 @@ An answer is marked for checking each time it is used. A question about one comp
 "Why do you want to work here?", cannot have one answer for all of them: the assistant drafts
 it for each job when it fills in that job's form (the next tasks).
 
-### Let Chrome be filled in
+### Let your browser be filled in
 
-Chrome does not let another app write into a page until you allow it. Do this once.
+A browser does not let another app write into a page until you allow it. Do this once. The
+steps are for Google Chrome; for another browser, the **My details** page says where its
+switch is (section 10).
 
 1. In Chrome's menu bar, select **View** > **Developer** > **Allow JavaScript from Apple
    Events**. A tick appears next to it.
@@ -1010,12 +1012,12 @@ Chrome does not let another app write into a page until you allow it. Do this on
    control Google Chrome. Select **OK**.
 
 > **Important**
-> This switch lets apps on your Mac write into the page that is open in Chrome. Turn it off
+> This switch lets apps on your Mac write into the page that is open in the browser. Turn it off
 > again in the same menu whenever you like; the assistant then tells you that it is off.
 
 ### Fill in a form
 
-1. In Chrome, open the application form and leave its tab in front.
+1. In your browser, open the application form and leave its tab in front.
 2. In the app, select the assistant.
 3. Optional: under **Answers are for**, choose the job. With **Find the job from the page**
    the assistant works it out from the page's address and title, and tells you which job it
@@ -1024,7 +1026,7 @@ Chrome does not let another app write into a page until you allow it. Do this on
    form*, and press Return.
 5. Read the answer (Figure 9.6). **Filled in** lists what was written and chosen; **Left for
    you** lists what was not, each with the reason.
-6. Go to Chrome and read the form. Filled fields have a green outline. An answer that needs
+6. Go to the browser and read the form. Filled fields have a green outline. An answer that needs
    your attention, and everything that was chosen for you, has an amber one.
 7. Complete what was left for you, then send the form yourself.
 8. Back in the app, use the buttons under the answer (Figure 9.7). Table 9.3 describes them.
@@ -1045,7 +1047,7 @@ Chrome does not let another app write into a page until you allow it. Do this on
 | **Remember what I changed on the page** | The assistant wrote at least one answer | Reads back the answers it wrote, keeps your changes with the job, and remembers your wording |
 | **Mark applied** | The job is still in **New Jobs** | Moves the job to **Applications** as waiting, as the button in the job's window does |
 | **Fill in this page too** | The form in your browser moved on to other fields | Fills in the new page |
-| **Open the form in its own tab** | The form sits in a frame from another site | Opens that form in a new Chrome tab, where it can be filled in |
+| **Open the form in its own tab** | The form sits in a frame from another site | Opens that form in a new tab of the browser, where it can be filled in |
 | **Review before I send** | After every fill | Reads the form back and lists what looks wrong |
 
 To open the assistant for one job directly, select **Fill the form** in that job's
