@@ -5,6 +5,9 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **A form inside a frame: one press.** The button now reads **Open the form in its own tab and fill it in**, and does both. The message no longer prints the long address.
+- **A phone number beside a list of country codes.** The assistant chooses the code of your number in the list and writes the number without it. When the list already shows another country, it leaves the list alone, writes the whole number and marks both for checking.
+- **File fields the page hides behind its own buttons** are reported once, with what to do, not as several fields called "afile".
 - **Size of text and controls.** Options has a new setting that draws everything in the window larger (110%, 125% or 150%), for a large or very sharp screen. It is used the next time you open the app.
 - **The assistant fills in when you can start.** "Earliest start date", "Available from" and "When can you start?" get what you entered under Options, About you. A date picker gets the day itself: a date as written, *immediately* as today, *one month* as a month from today, marked for checking when it was worked out.
 - **Fewer half-empty pages in the PDFs.** When a figure or a table has to start on the next page and its own section has no more text, the next section of the same chapter now begins in the space. A figure never leaves its chapter and never goes further than the section after its own.

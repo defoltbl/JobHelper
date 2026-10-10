@@ -367,7 +367,7 @@ class JobSlots:
         """One of the small things the assistant offers after a fill, in the background; the answer arrives as assistantReady."""
         def work():
             try:
-                result = {"open_form": lambda: self._api.assistant_open_form(arg), "files": lambda: self._api.assistant_files(job_id),
+                result = {"open_form": lambda: self._api.assistant_open_form(arg, job_id), "files": lambda: self._api.assistant_files(job_id),
                           "learn": self._api.assistant_learn, "forget": self._api.assistant_forget,
                           "cv_lists": self._api.assistant_cv_lists, "draft": lambda: self._api.draft_my_answer(arg),
                           "confirm": lambda: self._api.assistant_confirm(self._details(arg)),
@@ -380,7 +380,7 @@ class JobSlots:
                 trouble.note(f"the assistant's request ({what})", e)
                 result = {"ok": False, "msg": str(e) or type(e).__name__}
             result.setdefault("action", what)
-            if what in ("open_form", "files", "learn", "forget", "cv_lists", "draft"):
+            if what in ("files", "learn", "forget", "cv_lists", "draft"):
                 result["action"] = what
             self._post("assistantReady", result)
         threading.Thread(target=work, daemon=True).start()

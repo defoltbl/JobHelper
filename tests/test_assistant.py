@@ -322,6 +322,8 @@ STATE = """JSON.stringify({
 LISTS = """JSON.stringify({
   home: document.getElementById('home').selectedOptions[0].text, bare: document.getElementById('bare').selectedOptions[0].text,
   greyed: document.getElementById('greyed').selectedOptions[0].text, taken: document.getElementById('taken').selectedOptions[0].text,
+  mobcode: document.getElementById('mobcode').value, mob: document.getElementById('mob').value,
+  tel2code: document.getElementById('tel2code').value, tel2: document.getElementById('tel2').value,
   sent: !!window.sent, clicked: !!window.clicked})"""
 
 
@@ -338,16 +340,25 @@ def test_a_long_country_list_is_named_by_the_words_beside_it_and_filled():
     assert not by_id["greyed"]["filled"], "a greyed-out 'Please choose' further down the list is not an answer"
     assert all(form_fill.classify(by_id[i]) == ("country", "") for i in ("home", "bare", "greyed"))
     todo = form_fill.plan(page["fields"], MINE)
-    assert {i["n"]: i["value"] for i in todo["fill"]} == {by_id[i]["n"]: "Czech Republic" for i in ("home", "bare", "greyed")}
+    values = {i["n"]: i["value"] for i in todo["fill"]}
+    assert {n: v for n, v in values.items() if v == "Czech Republic"} == {by_id[i]["n"]: "Czech Republic" for i in ("home", "bare", "greyed")}
+    # the phone: its country code is chosen in the list beside it, and the number goes in without the code
+    assert by_id["mobcode"]["code"] == "" and by_id["tel2code"]["code"] == "+358" and by_id["home"]["code"] == "", "only a list of calling codes says what it shows"
+    assert values[by_id["mobcode"]["n"]] == "Czech Republic 🇨🇿 +420" and values[by_id["mob"]["n"]] == "123 456 789"
+    evening = next(i for i in todo["fill"] if i["n"] == by_id["tel2"]["n"])
+    assert evening["value"] == MINE["phone"] and evening["check"] == form_fill.PHONE_CODE and by_id["tel2code"]["n"] not in values, \
+        "a list that shows another country is not changed: the whole number is written and both are marked"
     assert not todo["left"] and not todo["choose"], "your own country is not a question for Claude"
     numbers = [by_id[i]["n"] for i in ("home", "bare", "greyed", "taken")]
+    assert len(page["fields"]) == 8
     before, _read, done, state, empty = _in_page(form_fill.READ + ";" + form_fill.empty_script(numbers, page["url"]), form_fill.READ,
                                                  form_fill.fill_script(todo["fill"], page["url"]), LISTS,
                                                  form_fill.empty_script(numbers, page["url"]), page="lists.html")
     assert sorted(form_fill.empty_answer(before)) == sorted(numbers[:3]), "three lists wait for an answer, one has it"
     state = json.loads(state)
     assert state["home"] == state["bare"] == state["greyed"] == "Czech Republic" and state["taken"] == "Germany", "a list with an answer keeps it"
-    assert sorted(form_fill.fill_answer(done)["done"]) == sorted(by_id[i]["n"] for i in ("home", "bare", "greyed"))
+    assert (state["mobcode"], state["mob"], state["tel2code"], state["tel2"]) == ("+420", "123 456 789", "+358", "+420 123 456 789")
+    assert sorted(form_fill.fill_answer(done)["done"]) == sorted(by_id[i]["n"] for i in ("home", "bare", "greyed", "mobcode", "mob", "tel2"))
     assert state["sent"] is False and state["clicked"] is False
     assert form_fill.empty_answer(empty) == [], "and afterwards none of them is empty"
 
@@ -590,7 +601,7 @@ def test_area_a_long_form_is_filled_in_as_far_as_is_safe():
 def test_area_a_form_in_a_frame_from_another_site_is_named_not_guessed():
     out = _area("framed.html")
     assert out["result"]["ok"] is False and out["state"] == {} and out["asked"] == []
-    assert "inside a frame from localhost" in out["result"]["msg"] and "/plain.html" in out["result"]["msg"]
+    assert "inside a frame from localhost" in out["result"]["msg"] and "/plain.html" in out["result"]["frame"]
 
 
 def test_area_the_plain_form_and_a_chosen_job():
@@ -791,12 +802,29 @@ def test_a_framed_form_is_opened_in_its_own_tab_only_at_a_web_address(isolate, m
     for bad in ("", "javascript:alert(1)", "file:///etc/passwd", "chrome://settings", "https://", "https://x.example/" + "a" * 2000):
         assert api.assistant_open_form(bad)["ok"] is False
     assert "Russian services" in api.assistant_open_form("https://forms.example.ru/a")["msg"] and opened == []
-    assert api.assistant_open_form("https://boards.example.net/embed?id=7")["ok"] and opened == ["https://boards.example.net/embed?id=7"]
+    waited = []
+    monkeypatch.setattr(chrome, "pause", waited.append)
+    monkeypatch.setattr(chrome, "active_tab", lambda: (_ for _ in ()).throw(chrome.ChromeError(chrome.NO_ANSWER)))       # the new tab is not there yet
+    slow = api.assistant_open_form("https://boards.example.net/embed?id=7")
+    assert slow["ok"] and slow["action"] == "open_form" and "still loading" in slow["say"] and opened == ["https://boards.example.net/embed?id=7"]
+    assert 5 <= sum(waited) <= 10 and len(waited) == 5, "a page that does not come is waited for a few seconds, not for ever"
     monkeypatch.setattr(chrome, "open_tab", lambda url: (_ for _ in ()).throw(chrome.ChromeError(chrome.NOT_RUNNING)))
     assert api.assistant_open_form("https://boards.example.net/a")["msg"] == chrome.NOT_RUNNING
     details.save(MINE)
     _browser(monkeypatch, [], frames=["https://boards.frames.example/embed/job?id=7"])
-    assert api.assistant_fill()["frame"] == "https://boards.frames.example/embed/job?id=7"
+    framed = api.assistant_fill()
+    assert framed["frame"] == "https://boards.frames.example/embed/job?id=7" and "Press the button below" in framed["msg"]
+    assert "embed/job" not in framed["msg"], "the long address is the button's business, not something to read"
+    # one press: the tab is opened, the page is waited for, and the form is filled in there
+    store.save_jobs([_job()])
+    monkeypatch.setattr(chrome, "open_tab", lambda url: opened.append(url))
+    _browser(monkeypatch, [_field("First name", n=1), _field("Email", n=2)], url="https://boards.frames.example/embed/job?id=7", title="Apply - Northwind")
+    waited.clear()
+    done = api.assistant_open_form("https://boards.frames.example/embed/job?id=7", "nw1")
+    assert done["ok"] and done["action"] == "fill" and done["job_id"] == "nw1" and [i["value"] for i in done["filled"]] == ["Alex", "alex@example.com"]
+    assert done["say"].startswith("I opened the form from boards.frames.example in a tab of its own. I filled in 2 fields") and waited[0] == 1.0, "the page was there at the first look"
+    _browser(monkeypatch, [_field("First name", n=1)], url="https://elsewhere.example/other", title="Another page")
+    assert "still loading" in api.assistant_open_form("https://boards.frames.example/embed/job?id=7")["say"], "another tab in front is not the form"
 
 
 def test_opening_a_tab_asks_chrome_with_the_address_as_an_argument(monkeypatch):
@@ -1615,7 +1643,8 @@ def test_a_file_field_says_which_file_it_wants(label, kind):
     field = _field(label, kind="file")
     assert form_fill.classify(field) == ("file", "") and form_fill.file_kind(field) == kind
     todo = form_fill.plan([field], MINE)
-    assert [i["kind"] for i in todo["attach"]] == ([kind] if kind else []) and [i["why"] for i in todo["left"]] == ([] if kind else [form_fill.FILE])
+    assert [i["kind"] for i in todo["attach"]] == ([kind] if kind else []) \
+        and [i["why"] for i in todo["left"]] == ([] if kind else [form_fill.FILE if label else form_fill.FILE_BUTTON])
     assert not form_fill.plan([{**field, "filled": True}], MINE)["attach"], "a field that holds a file is not given another"
 
 
@@ -1835,3 +1864,43 @@ def test_the_start_date_comes_from_options(isolate, monkeypatch):
     assert filled == {"First name": "Alex", "Earliest start date": "2031-03-01", "Available from": "1 March 2031"} and not out["left"]
     assert details.load().get("start") is None and "start" not in details.empty(), "it stays an option: My details is not given a second place for it"
     _ = ran
+
+
+@pytest.mark.parametrize("phone, country, entry, code", [
+    ("+420 123 456 789", "Czechia", "Czech Republic 🇨🇿 +420", "+420"), ("+1 684 555 0100", "", "American Samoa 🇦🇸 +1684", "+1684"),
+    ("+1 212 555 0100", "United States", "United States 🇺🇸 +1", "+1"), ("+1 212 555 0100", "Canada", "Canada 🇨🇦 +1", "+1"),
+    ("+1 212 555 0100", "", "", ""), ("+1 212 555 0100", "Czechia", "", ""), ("123 456 789", "Czechia", "", ""), ("+999 123 456 789", "Czechia", "", ""),
+    ("+420", "Czechia", "", ""), ("", "Czechia", "", "")])
+def test_the_country_code_of_your_number_is_found_in_a_list_of_codes(phone, country, entry, code):
+    options = ["Select...", "American Samoa 🇦🇸 +1684", "Canada 🇨🇦 +1", "Czech Republic 🇨🇿 +420", "Slovakia 🇸🇰 +421", "United States 🇺🇸 +1"]
+    assert form_fill.code_option(options, phone, country) == (entry, code), "the longest code; among countries that share one, yours; else none"
+
+
+def test_a_number_beside_a_list_of_codes_goes_in_without_its_code():
+    assert form_fill.national("+420 123 456 789", "+420") == "123 456 789" and form_fill.national("+420-123456789", "+420") == "123456789"
+    assert form_fill.national("123 456 789", "+420") == "123 456 789" and form_fill.national("+420 123 456 789", "") == "+420 123 456 789"
+    codes = ["Select..."] + [f"Land {n} +{n}" for n in range(30, 45)] + ["Czech Republic +420"]
+    plain = _field("Country", kind="select", options=["Select...", "Austria", "Czech Republic", "Germany"] + [f"Land {n}" for n in range(12)])
+    assert form_fill.is_code_list(_field("Code", kind="select", options=codes)) and not form_fill.is_code_list(plain)
+    assert not form_fill.is_code_list(_field("Code", options=codes)), "a text field is not a list"
+    fields = [_field("Mobile", kind="select", options=codes, n=1), _field("Mobile", n=2), _field("City", n=3), _field("Phone", n=4)]
+    todo = form_fill.plan(fields, MINE)
+    assert [(i["n"], i["value"]) for i in todo["fill"]][:2] == [(1, "Czech Republic +420"), (2, "123 456 789")]
+    assert next(i["value"] for i in todo["fill"] if i["n"] == 4) == MINE["phone"], "a phone field with no list beside it gets the whole number, as before"
+    shown = form_fill.plan([{**fields[0], "filled": True, "code": "+420"}, fields[1]], MINE)
+    assert [(i["n"], i["value"], i.get("check", "")) for i in shown["fill"]] == [(2, "123 456 789", "")], "the list already shows your code: only the number"
+    other = form_fill.plan([{**fields[0], "filled": True, "code": "+43"}, fields[1]], MINE)
+    assert [(i["value"], i["check"]) for i in other["fill"]] == [(MINE["phone"], form_fill.PHONE_CODE)]
+    none = form_fill.plan(fields[:2], {**MINE, "phone": "+999 123 456 789"})
+    assert none["left"] == [{"label": "Mobile", "why": form_fill.NO_CODE}] and none["fill"][0]["check"] == form_fill.PHONE_CODE
+    local = form_fill.plan(fields[:2], {**MINE, "phone": "123 456 789"})
+    assert [i["n"] for i in local["fill"]] == [2] and local["fill"][0]["value"] == "123 456 789", "a number without a code says nothing about the list"
+
+
+def test_file_fields_with_no_words_are_one_line_not_one_each():
+    """A real applicant system keeps two unseen file fields at the end of the page, both called "afile", behind its "Select file"
+    buttons. They were reported as two fields nobody could make sense of."""
+    fields = [_field("", kind="file", name="afile", n=1), _field("", kind="file", name="afile", n=2), _field("Photo", kind="file", n=3)]
+    todo = form_fill.plan(fields, MINE)
+    assert todo["left"] == [{"label": "Files", "why": form_fill.FILE_BUTTON}, {"label": "Photo", "why": form_fill.FILE}] and not todo["attach"]
+    assert form_fill.FILE_BUTTON in form_fill.FILE_REASONS, "the button that shows your files in Finder is offered for it"

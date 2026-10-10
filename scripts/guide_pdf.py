@@ -40,6 +40,7 @@ DOCUMENTS = {"GUIDE": "User guide", "CODE": "Technical documentation"}
 PICTURE_SCALE = 0.5        # a picture is taken at twice the size it is shown at
 MAX_PICTURE_HEIGHT = 0.62  # of the page, so a picture and its caption always fit on one
 MAX_TABLE_HEIGHT = 0.86    # of the page: a longer table is continued on the next page, between two rows
+NEARLY_A_PAGE = 0.6        # of the page: a table this long may begin on the page before and go on overleaf
 MIN_GAP = 46               # points of empty page worth filling (about three lines)
 MARGIN, HEADER = 48, 24    # points around the text; room above it for the page number
 NUMBER = r"\d+\.\d+"       # of a figure or a table: its chapter, then its place in the chapter
@@ -79,7 +80,7 @@ def fingerprint(source: Path = GUIDE) -> str:
     return digest.hexdigest()[:20]
 
 
-_LONG: dict[str, dict] = {}       # the tables longer than a page, by their number
+_LONG: dict[str, dict] = {}       # the tables that may go on overleaf (longer than most of a page), by their number
 
 
 def _table_parts(number: str, title: str, opening: str, head: str, parts: list[list[str]]) -> list[str]:
@@ -142,7 +143,9 @@ def _body_html(source: Path, page_width: float, page_height: float) -> str:
         head = re.sub(r"<td>", lambda _m: f'<td bgcolor="#e8edf3" width="{next(shares)}%">', first_row)
         opening = f'<table data-kind="data" data-number="{number}" width="100%" border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;">'
         parts = _split_rows(opening, head, rows, source.parent, page_width, page_height * MAX_TABLE_HEIGHT)
-        if len(parts) > 1:                           # kept, so that it can be cut again where it really begins on its page
+        # kept, so that it can be cut again where it really begins on its page: a table longer than a page, and one that
+        # fills most of a page (alone it would push itself to the next page and leave this one nearly empty)
+        if len(parts) > 1 or len(_split_rows(opening, head, rows, source.parent, page_width, page_height * NEARLY_A_PAGE)) > 1:
             _LONG[number] = {"opening": opening, "head": head, "rows": rows, "title": title}
         return "".join(_table_parts(number, title, opening, head, parts))
     html = re.sub(r'<p[^>]*>\s*<span style=" font-style:italic;">Table (' + NUMBER + r') – (.*?)</span>\s*</p>\s*(<table[^>]*>)\s*(<tr>.*?</tr>)(.*?</table>)',
@@ -261,14 +264,18 @@ def _fill_gaps(body: str, base: Path, width: float, height: float) -> tuple[str,
     for seg in segs:                                 # which section each piece was written in: a heading opens the next one
         section += seg["kind"] in ("h2", "h3")
         seg["sec"] = section
-    for _round in range(12):
+    for _round in range(16):
         _doc, report = _layout("".join(s["html"] for s in segs), base, width, height)
         owners = [s for s in segs if s["kind"] in ("figure", "data", "more", "callout", "list")]
         if len(owners) != len(report["gaps"]):
             break
         changed = False
         for owner, gap in reversed(list(zip(owners, report["gaps"]))):          # from the end, so that earlier places stay where they are
-            if owner["kind"] not in ("figure", "data") or gap < MIN_GAP or owner["tries"] >= 4:
+            number = (re.search(r'data-number="([\d.]+)"', owner["html"]) or [None, ""])[1]
+            # a table that may go on overleaf is cut again whenever what stands before it has moved (its own count, so that
+            # the tries spent on bringing text forward do not leave it cut for a place it no longer has)
+            recut = owner["kind"] == "data" and number in _LONG and gap > 150 and owner.get("cuts", 0) < 8
+            if owner["kind"] not in ("figure", "data") or gap < MIN_GAP or (owner["tries"] >= 4 and not recut):
                 continue
             i = next(k for k, s in enumerate(segs) if s is owner)
             end = next((k for k in range(i + 1, len(segs)) if segs[k]["kind"] == "h2"), len(segs))       # never out of its chapter
@@ -300,20 +307,25 @@ def _fill_gaps(body: str, base: Path, width: float, height: float) -> tuple[str,
                 room -= tall
             if taken and taken[-1]["kind"] == "h3":     # a heading whose text did not come with it goes back
                 stay.insert(0, taken.pop())
+            if owner["tries"] > 4:
+                taken = []                              # its tries at bringing text forward are spent: only the cut is left
             if taken:
                 segs[i:end] = taken + [owner] + stay
                 moves += len(taken)
                 changed = True
                 continue
             # 2. a table longer than a page begins where the page has room, and goes on overleaf
-            number = (re.search(r'data-number="([\d.]+)"', owner["html"]) or [None, ""])[1]
-            if owner["kind"] == "data" and number in _LONG and gap > 150:
+            if recut:
                 long = _LONG[number]
-                parts = _split_rows(long["opening"], long["head"], long["rows"], base, width, height * MAX_TABLE_HEIGHT, first=gap - 34)
+                # the space is measured as if the page were empty, but a heading and a line of text may stand above the table:
+                # each further try leaves more room for them
+                parts = _split_rows(long["opening"], long["head"], long["rows"], base, width, height * MAX_TABLE_HEIGHT,
+                                    first=gap - 34 - 55 * owner.get("cuts", 0))
                 last = next((k for k in range(i + 1, len(segs)) if segs[k]["kind"] != "more"), len(segs))
                 if len(parts[0]) >= 2:
                     fresh = _table_parts(number, long["title"], long["opening"], long["head"], parts)
-                    segs[i:last] = [{"html": h, "kind": "data" if n == 0 else "more", "tries": owner["tries"], "sec": owner["sec"]} for n, h in enumerate(fresh)]
+                    segs[i:last] = [{"html": h, "kind": "data" if n == 0 else "more", "tries": owner["tries"], "sec": owner["sec"], "cuts": owner.get("cuts", 0) + 1}
+                                    for n, h in enumerate(fresh)]
                     moves += 1
                     changed = True
                     continue

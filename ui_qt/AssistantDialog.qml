@@ -653,8 +653,8 @@ Dialog {
                                  || (assistantDialog.last.ok === true && !assistantDialog.busy) || (assistantDialog.nextPage && !assistantDialog.busy)
                         SmallButton { objectName: "asNextPage"; visible: assistantDialog.nextPage && !assistantDialog.busy; primaryStyle: true; text: "Fill in this page too"
                             onClicked: assistantDialog.ask("Fill in the form in Chrome") }
-                        SmallButton { objectName: "asOpenForm"; visible: assistantDialog.canOpenForm; primaryStyle: true; text: "Open the form in its own tab"
-                            onClicked: assistantDialog.act("open_form", assistantDialog.last.frame, "Open the form in its own tab") }
+                        SmallButton { objectName: "asOpenForm"; visible: assistantDialog.canOpenForm; primaryStyle: true; text: "Open the form in its own tab and fill it in"
+                            onClicked: assistantDialog.act("open_form", assistantDialog.last.frame, "Open the form in its own tab and fill it in") }
                         SmallButton { objectName: "asUndo"; visible: assistantDialog.canUndo && !assistantDialog.busy; text: "Undo"
                             onClicked: assistantDialog.act("undo", "", "Undo that") }
                         SmallButton { objectName: "asReview"; visible: assistantDialog.last.ok === true && !assistantDialog.busy; text: "Review before I send"

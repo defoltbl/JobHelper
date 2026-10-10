@@ -3432,7 +3432,11 @@ def test_after_a_fill_the_assistant_offers_what_applies(ui, monkeypatch):
     opened = []
     monkeypatch.setattr(ui_api.Api, "assistant_ask", lambda self, text, job_id="": {
         "ok": False, "action": "fill", "msg": "The form on this page sits inside a frame.", "frame": "https://boards.example.net/embed?id=7"})
-    monkeypatch.setattr(ui_api.Api, "assistant_open_form", lambda self, url: opened.append(url) or {"ok": True, "say": "I opened the form in a new tab."})
+    monkeypatch.setattr(ui_api.Api, "assistant_open_form", lambda self, url, job_id="": opened.append(url) or {
+        "ok": True, "action": "fill", "host": "boards.example.net", "url": url, "job_id": "", "job": "", "guessed": False, "wants_file": False, "has_files": False,
+        "is_lead": False, "can_learn": False, "kept": 0, "boxes": 0, "added_rows": 0, "left": [],
+        "filled": [{"label": "First name", "value": "Alex", "kind": "detail", "check": ""}],
+        "say": "I opened the form from boards.example.net in a tab of its own. I filled in 1 field on boards.example.net."})
     ui.js('assistantDialog.ask("fill the form")')
     moved = []
     for _ in range(60):
@@ -3440,9 +3444,12 @@ def test_after_a_fill_the_assistant_offers_what_applies(ui, monkeypatch):
         ui.wait(20)
     assert max(moved) > 3, "it shook its head"
     assert dialog.property("canOpenForm") and not dialog.property("canLearn") and ui.find("asOpenForm").property("visible")
-    ui.js('assistantDialog.act("open_form", assistantDialog.last.frame, "Open the form in its own tab")')
+    assert ui.find("asOpenForm").property("text") == "Open the form in its own tab and fill it in"
+    ui.js('assistantDialog.act("open_form", assistantDialog.last.frame, "Open the form in its own tab and fill it in")')
     _wait_idle(ui, dialog)
     assert opened == ["https://boards.example.net/embed?id=7"]
+    assert not dialog.property("canOpenForm") and ui.js("filledModel.count") == 1, "one press: the form is open and what was filled is listed"
+    assert "in a tab of its own" in ui.js("talk.get(talk.count - 1).text") or ui.js("assistantDialog.typingIndex") >= 0
     ui.js("assistantDialog.tryClose()")
     ui.wait(400)
     store.save_jobs([dict(j, status="letter_ready") if j["id"] == "lead" else j for j in store.load_jobs()])      # as the other tests expect it

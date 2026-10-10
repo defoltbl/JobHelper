@@ -113,8 +113,9 @@ class AssistantApi:
         return {"ok": True, "action": "help", "say": assistant.HELP if what == "help" else assistant.UNKNOWN}
 
     # ── small helpers the window offers after a fill ────────────
-    def assistant_open_form(self, url):
-        """Open a form that sits in a frame in a tab of its own (the address comes from the page that was read)."""
+    def assistant_open_form(self, url, job_id=""):
+        """Open a form that sits in a frame in a tab of its own (the address comes from the page that was read), and fill
+        it in there once it has loaded: one press for what used to be a press and a second request."""
         url = str(url or "").strip()
         host = form_fill.host_of(url)
         if not url.lower().startswith(("http://", "https://")) or not host or len(url) > 2000:
@@ -126,7 +127,22 @@ class AssistantApi:
             chrome.open_tab(url)
         except chrome.ChromeError as e:
             return {"ok": False, "msg": str(e)}
-        return {"ok": True, "say": f"I opened the form from {host} in a new tab. Ask me to fill it in when it has loaded."}
+        ready = False
+        for wait in (1.0, 1.0, 1.5, 2.0, 2.5):          # the page gets time to load; a slow one is left to a second request
+            chrome.pause(wait)
+            try:
+                tab = chrome.active_tab()
+                ready = form_fill.host_of(tab["url"]) == host and bool(form_fill.read_answer(chrome.run(form_fill.READ))["fields"])
+            except (chrome.ChromeError, ValueError):
+                ready = False
+            if ready:
+                break
+        if not ready:
+            return {"ok": True, "action": "open_form", "say": f"I opened the form from {host} in a new tab. It is still loading: ask me to fill it in when you see it."}
+        result = self.assistant_fill(job_id)
+        if result.get("ok"):
+            result["say"] = f"I opened the form from {host} in a tab of its own. " + result["say"]
+        return result
 
     def assistant_files(self, job_id):
         """Show the CV and the letter of a job, and your own files (certificates, diplomas), in Finder,
@@ -488,8 +504,8 @@ class AssistantApi:
         if not page["fields"]:
             if page["frames"]:
                 inner = form_fill.host_of(page["frames"][0]) or "another site"
-                return no(f"The form on this page sits inside a frame from {inner}, which cannot be reached from outside. "
-                          f"Open the form on its own page (the Apply button often does that), or open this address in a tab: {page['frames'][0]}",
+                return no(f"The form on this page sits inside a frame from {inner}, which I cannot reach from outside. "
+                          "Press the button below: I open the form in a tab of its own and fill it in there.",
                           frame=page["frames"][0])
             return no(f"I found no form fields on this page ({page['title'] or host}). Open the page with the application form and ask me again.")
         jobs = store.load_jobs()

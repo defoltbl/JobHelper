@@ -189,9 +189,12 @@ READ = r"""
       var called = label(el, root), hint = clean(el.getAttribute('placeholder')).slice(0, 120);
       if (tag === 'SELECT' && !called && el.options.length && String(el.options[0].value) === '') hint = clean(el.options[0].text).slice(0, 120);   // "Select your country": all the name it has
       if (el.readOnly) type = 'menu';             // a box that cannot be typed in and opens a list: a menu like any other
+      var code = '';                              // a list of calling codes says which one it shows: the number beside it depends on it
+      if (tag === 'SELECT' && filled && options.length >= 10 && options.filter(function (o) { return /\+\d{1,4}\b/.test(o); }).length > options.length * 0.7)
+        code = (clean(el.options[el.selectedIndex].text).match(/\+\d{1,4}\b/) || [''])[0];
       fields.push({n: n, type: type, name: clean(el.name).slice(0, 80), id: clean(el.id).slice(0, 80),
                    auto: clean(el.getAttribute('autocomplete')).slice(0, 60), label: called,
-                   hint: hint, accept: type === 'file' ? clean(el.getAttribute('accept')).slice(0, 200) : '',
+                   hint: hint, accept: type === 'file' ? clean(el.getAttribute('accept')).slice(0, 200) : '', code: code,
                    required: !!(el.required || el.getAttribute('aria-required') === 'true'),
                    filled: filled, most: el.maxLength > 0 ? el.maxLength : 0, options: options,
                    combo: !el.readOnly && (el.getAttribute('role') === 'combobox' || !!el.getAttribute('aria-autocomplete') || el.getAttribute('aria-haspopup') === 'listbox')});
@@ -729,6 +732,7 @@ def empty_answer(text: str) -> list[int]:
 # ── what a field is ─────────────────────────────────────────────────────────
 PASSWORD = "A password is yours to type."
 FILE = "I cannot tell which of your files this field wants. Attach it yourself."
+FILE_BUTTON = "This page takes files only through its own buttons, so I cannot attach them. Press its button and choose each file yourself."
 FILE_NO_JOB = "Choose the job this form is for, and I will attach its CV and its letter."
 FILE_NO_CV = "I found no CV file to attach. Attach it yourself."
 FILE_NO_LETTER = "There is no letter file for this job. Attach your own."
@@ -738,7 +742,7 @@ FILE_BIG = "The file {name} is larger than 4 MB. Attach it yourself."
 FILE_REFUSED = "The page did not take the file. Attach it yourself."
 FILE_CHECK = "Look that the page shows the file."
 FILE_MASTER = "This is your own CV, not one adapted to this job. " + FILE_CHECK
-FILE_REASONS = (FILE, FILE_NO_JOB, FILE_NO_CV, FILE_NO_LETTER, FILE_OTHER, FILE_BIG, FILE_REFUSED)
+FILE_REASONS = (FILE, FILE_BUTTON, FILE_NO_JOB, FILE_NO_CV, FILE_NO_LETTER, FILE_OTHER, FILE_BIG, FILE_REFUSED)
 PRIVATE = "Personal or payment information: fill it in yourself."
 CHOICE = "Choose it yourself."
 DATE = "Pick the date yourself."
@@ -1006,6 +1010,42 @@ def value_for(what: str, mine: dict[str, Any], index: int = 0) -> str:
     return str(mine.get(what) or "")
 
 
+_CODE = re.compile(r"\+\d{1,4}\b")
+PHONE_CODE = "The list beside this field shows another country's code than your number has: check both."
+NO_CODE = "The list has no entry for the country code of your phone number. Choose it yourself."
+
+
+def is_code_list(field: dict[str, Any]) -> bool:
+    """Whether a list is one of calling codes ("Czech Republic +420"): most of its entries carry one."""
+    options = field.get("options") or []
+    return str(field.get("type")) == "select" and len(options) >= 10 and sum(1 for o in options if _CODE.search(str(o))) > len(options) * 0.7
+
+
+def code_option(options: list[str], phone: str, country: str = "") -> tuple[str, str]:
+    """(the entry of a list of calling codes that your number begins with, that code), or ('', ''). The longest code wins
+    ("+1684" before "+1"); among countries that share a code, yours."""
+    digits = "+" + re.sub(r"\D", "", str(phone or "")) if str(phone or "").strip().startswith("+") else ""
+    best: list[str] = []
+    code = ""
+    for option in options:
+        found = _CODE.search(str(option))
+        if found and digits.startswith(found.group(0)) and len(digits) > len(found.group(0)) + 3:
+            if len(found.group(0)) > len(code):
+                best, code = [str(option)], found.group(0)
+            elif len(found.group(0)) == len(code):
+                best.append(str(option))
+    if len(best) > 1 and country:
+        mine = country_option([_CODE.sub("", re.sub(r"[^\w\s+().'-]", " ", o)).strip(" ()") for o in best], country)
+        best = [o for o in best if mine and mine in _CODE.sub("", re.sub(r"[^\w\s+().'-]", " ", o))] or best
+    return (best[0], code) if len(best) == 1 else ("", "")
+
+
+def national(phone: str, code: str) -> str:
+    """Your number without its country code, for a field that has the code in a list beside it."""
+    rest = str(phone or "").strip()
+    return rest[len(code):].lstrip(" -.") if code and rest.startswith(code) else rest
+
+
 def country_option(options: list[str], country: str) -> str:
     """The entry of a list that is this country, however the list spells it ("Czech Republic" for Czechia), or ''."""
     want = " ".join(str(country or "").lower().split())
@@ -1054,6 +1094,7 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
             out["ask"].append({"n": field["n"], "label": question, "most": most})
 
     kinds = [classify(f)[0] for f in fields]
+    codes: dict[int, str] = {}                      # where a list of calling codes stands, and the code it shows
     for at, field in enumerate(fields):
         label, most = name_of(field), int(field.get("most") or 0)
         kind = str(field.get("type") or "text").lower()
@@ -1062,6 +1103,19 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
         if what == "row_start" and kind in ("date", "month") and _LONE_START.search(_words(field)) and not field.get("filled") \
                 and not {"row_end", "employer", "job_title", "school", "degree", "study_field"} & set(kinds[max(0, at - 4):at] + kinds[at + 1:at + 5]):
             what = "start"
+        if is_code_list(field) and str(mine.get("phone") or "").startswith("+"):
+            # the list of calling codes beside a phone field: the code of your own number, and the number then goes in without it
+            if field.get("filled"):
+                codes[at] = str(field.get("code") or "")
+            else:
+                entry, code = code_option(field.get("options") or [], mine["phone"], mine.get("country", ""))
+                if entry:
+                    codes[at] = code
+                    out["fill"].append({"n": field["n"], "label": label, "value": entry, "kind": "detail"})
+                else:
+                    codes[at] = ""
+                    out["left"].append({"label": label, "why": NO_CODE})
+            continue
         if what == "start" and kind in ("date", "month") and not field.get("filled"):
             said = str(mine.get("start") or "").strip()
             day, worked = start_day(said)
@@ -1081,6 +1135,10 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
             wants = file_kind(field)
             if wants:
                 out["attach"].append({"n": field["n"], "label": label, "kind": wants, "accept": str(field.get("accept") or "")})
+            elif not str(field.get("label") or field.get("hint") or "").strip():
+                # a file field with no words of its own is the page's tool behind its "Select file" buttons: said once, not once per field
+                if not any(i["why"] == FILE_BUTTON for i in out["left"]):
+                    out["left"].append({"label": "Files", "why": FILE_BUTTON})
             else:
                 out["left"].append({"label": label, "why": FILE})
             continue
@@ -1128,6 +1186,13 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
                 if not value:
                     out["left"].append({"label": label, "why": NO_COUNTRY.format(country=mine["country"])})
                     continue
+            near = [codes[k] for k in (at - 1, at - 2, at + 1) if k in codes]
+            check = ""
+            if value and what == "phone" and near and kind in ("text", "tel"):
+                if near[0] and value.startswith(near[0]):
+                    value = national(value, near[0])
+                else:
+                    check = PHONE_CODE
             if value and what == "phone" and most and len(value) > most:
                 value = re.sub(r"[ ()./\-]", "", value)             # a short field: the same number without its spaces
             if not value and what in SOFT and (len(str(field.get("label") or "")) >= 20 or "?" in str(field.get("label") or "")):
@@ -1137,7 +1202,8 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
             elif most and len(value) > most:
                 out["left"].append({"label": label, "why": TOO_LONG.format(most=most, size=len(value))})
             else:
-                out["fill"].append({"n": field["n"], "label": label, "value": value, "kind": "letter" if what == "letter" else "detail"})
+                out["fill"].append({"n": field["n"], "label": label, "value": value, "kind": "letter" if what == "letter" else "detail",
+                                    **({"check": check} if check else {})})
     return out
 
 
@@ -1156,7 +1222,7 @@ def read_answer(text: str) -> dict[str, Any]:
         fields.append({"n": raw["n"], "filled": bool(raw.get("filled")), "required": bool(raw.get("required")), "combo": bool(raw.get("combo")),
                        "most": raw.get("most") if isinstance(raw.get("most"), int) else 0,
                        "options": [str(o)[:80] for o in (raw.get("options") or [])[:300]] if isinstance(raw.get("options"), list) else [],
-                       **{key: " ".join(str(raw.get(key) or "").split())[:300] for key in ("type", "name", "id", "auto", "label", "hint", "accept")}})
+                       **{key: " ".join(str(raw.get(key) or "").split())[:300] for key in ("type", "name", "id", "auto", "label", "hint", "accept", "code")}})
     return {"url": str(data.get("url") or ""), "title": str(data.get("title") or "")[:300], "from": str(data.get("from") or "")[:2000], "fields": fields,
             "frames": [str(f)[:300] for f in (data.get("frames") or [])[:5]] if isinstance(data.get("frames"), list) else [],
             "boxes": data.get("boxes") if isinstance(data.get("boxes"), int) else 0,
