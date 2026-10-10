@@ -4095,3 +4095,28 @@ def test_the_account_card_stays_inside_the_smallest_window(ui):
     finally:
         ui.js("welcome.editEmail = false; welcome.finish()"); ui.wait(600)
         ui.win.setWidth(size[0]); ui.win.setHeight(size[1]); ui.wait(80)
+
+
+def test_saving_one_part_of_the_job_window_keeps_what_was_typed_in_the_others(ui):
+    """A date typed and not saved yet must still be there after the company notes are saved (and the other way round)."""
+    _open_job(ui, "app")
+    try:
+        ui.js('evDate.text = "2026-11-03"; evTime.text = "10:30"; evNote.text = "second round"; detailDialog.eventKind = "call"')
+        ui.js('cnNotes.text = "They pay monthly."')
+        ui.js("detailDialog.saveNotes()"); ui.wait(60)
+        assert ui.js("detailDialog.notesBad") is False
+        assert ui.js("evDate.text") == "2026-11-03" and ui.js("evTime.text") == "10:30" and ui.js("evNote.text") == "second round"
+        assert ui.js("detailDialog.eventKind") == "call"
+        assert ui.js("detailDialog.pending.join('|')") == "the date to remember"          # the notes are saved, the date is still open
+        ui.js('cnAsked.text = "about my last project"')
+        ui.js("detailDialog.saveEvent()"); ui.wait(60)
+        assert ui.js("detailDialog.eventErr") == ""
+        assert ui.js("cnAsked.text") == "about my last project"
+        assert ui.js("detailDialog.pending.join('|')") == "the notes about the company"
+        ui.js('dateField.text = "2026-09-01"')
+        ui.js("detailDialog.refresh()"); ui.wait(30)                                       # what a finished scoring or a ticked step does
+        assert ui.js("dateField.text") == "2026-09-01" and ui.js("cnAsked.text") == "about my last project"
+    finally:
+        ui.bridge._api.set_event("app", "", "", "interview", "")
+        ui.bridge._api.save_company_notes("Beta", {"contact": "", "salary": "", "asked": "", "notes": ""})
+        ui.js("detailDialog.confirmClose = true; detailDialog.close()"); ui.wait(350)

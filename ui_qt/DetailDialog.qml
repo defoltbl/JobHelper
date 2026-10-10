@@ -259,7 +259,7 @@ Dialog {
     function saveEvent() {
         eventErr = "";
         var r = bridge.setEvent(job.id, evDate.text, evTime.text, eventKind, evNote.text);
-        if (r && r.ok) { refresh(); win.upcomingData = bridge.upcoming(); ticker.text = "Date saved. You will be reminded the day before."; }
+        if (r && r.ok) { refresh("event"); win.upcomingData = bridge.upcoming(); ticker.text = "Date saved. You will be reminded the day before."; }
         else eventErr = (r && r.msg) ? r.msg : "Couldn't save that date.";
     }
     function saveNotes() {
@@ -270,7 +270,7 @@ Dialog {
         var r = bridge.saveCompanyNotes(job.company || "", { contact: cnContact.text, salary: cnSalary.text, asked: cnAsked.text, notes: cnNotes.text });
         notesBad = !(r && r.ok);
         notesInfo = (r && r.ok) ? "Saved for " + (job.company || "this company") + "." : ((r && r.msg) || "Couldn't save the notes.");
-        if (r && r.ok) refresh();
+        if (r && r.ok) refresh("notes");
     }
     function fileReply() {
         replyErr = ""; replyInfo = "";
@@ -315,7 +315,7 @@ Dialog {
     function saveDate() {
         dateErr = "";
         var r = bridge.setApplyDate(job.id, dateField.text);
-        if (r && r.ok) { refresh(); win.countsData = bridge.counts(); win.refreshOpenView(); ticker.text = "Apply date saved."; }
+        if (r && r.ok) { refresh("date"); win.countsData = bridge.counts(); win.refreshOpenView(); ticker.text = "Apply date saved."; }
         else dateErr = (r && r.msg) ? r.msg : "Couldn't save that date.";
     }
     onJobChanged: {
@@ -337,7 +337,25 @@ Dialog {
         detailFlick.contentY = 0;
         open();
     }
-    function refresh() { var d = bridge.jobDetail(job.id); if (d && d.id) job = d; }
+    // The job is read again after every change. What is typed in this window and not saved yet stays as it is:
+    // saving the notes must not empty a date you were still writing. `saved` names the part that was just saved
+    // ("notes", "event", "date"), which then shows what was stored.
+    function refresh(saved) {
+        var d = bridge.jobDetail(job.id);
+        if (!(d && d.id)) return;
+        var n = job.company_notes || {}, e = job.event || {};
+        var notes = saved !== "notes" && (cnContact.text !== (n.contact || "") || cnSalary.text !== (n.salary || "") || cnAsked.text !== (n.asked || "")
+                                          || cnNotes.text !== (n.notes || ""))
+                    ? [cnContact.text, cnSalary.text, cnAsked.text, cnNotes.text] : null;
+        var event = saved !== "event" && (evDate.text !== (e.date || "") || evTime.text !== (e.time || "") || evNote.text !== (e.note || "")
+                                          || eventKind !== (e.kind || "interview"))
+                    ? [evDate.text, evTime.text, evNote.text, eventKind] : null;
+        var day = saved !== "date" && dateField.text !== (job.applied || "") ? dateField.text : null;
+        job = d;                              // fills every field from what is stored (onJobChanged)
+        if (notes) { cnContact.text = notes[0]; cnSalary.text = notes[1]; cnAsked.text = notes[2]; cnNotes.text = notes[3]; }
+        if (event) { evDate.text = event[0]; evTime.text = event[1]; evNote.text = event[2]; eventKind = event[3]; }
+        if (day !== null) dateField.text = day;
+    }
     background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1
         FocusCatcher {} }
     contentItem: ColumnLayout {
@@ -650,7 +668,7 @@ Dialog {
                                 if (c && c.ok) ticker.text = "Opened a calendar file. Confirm it in Calendar and it syncs to your phone.";
                                 else detailDialog.eventErr = (c && c.msg) || "Couldn't make the calendar file."; } }
                         SmallButton { visible: !!(detailDialog.job.event && detailDialog.job.event.date); text: "Clear"
-                            onClicked: { bridge.clearEvent(detailDialog.job.id); detailDialog.refresh(); win.upcomingData = bridge.upcoming(); } }
+                            onClicked: { bridge.clearEvent(detailDialog.job.id); detailDialog.refresh("event"); win.upcomingData = bridge.upcoming(); } }
                     }
                     Text { objectName: "eventErr"; visible: detailDialog.eventErr !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
                         color: theme.crit; font.pixelSize: 11; font.bold: true; text: detailDialog.eventErr }
