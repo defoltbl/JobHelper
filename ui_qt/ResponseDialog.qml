@@ -18,6 +18,7 @@ Dialog {
         NumberAnimation { property: "scale"; from: 1; to: 0.96; duration: 170; easing.type: Easing.InCubic } } }
     Overlay.modal: Rectangle { color: win.dimColor; Behavior on opacity { NumberAnimation { duration: 200 } } }
     width: Math.min(620, win.width - 80); padding: 0
+    height: Math.min(implicitHeight, win.height - 40)
     property var r: ({})
     property bool picking: false          // the list of applications to file this reply under is open
     property var targets: []
@@ -26,7 +27,7 @@ Dialog {
     function show(msgId) {
         var d = bridge.responseDetail(msgId);
         if (!d || !d.id) { ticker.text = "That reply could not be opened."; return; }
-        r = d; picking = false; fileNote = ""; fileBad = false; open();
+        r = d; picking = false; fileNote = ""; fileBad = false; respFlick.contentY = 0; open();
     }
     function startPicking() {
         fileNote = ""; fileBad = false;
@@ -63,7 +64,12 @@ Dialog {
                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: responseDialog.close() } }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-        ColumnLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
+        // what the email says can be long: it scrolls, so the buttons and the list under it are never pushed out of the window
+        Flickable { id: respFlick; objectName: "respFlick"
+            Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 90; implicitHeight: respCol.implicitHeight + 32
+            clip: true; contentHeight: respCol.implicitHeight + 32; boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ScrollBar {}
+        ColumnLayout { id: respCol; x: 16; y: 16; width: respFlick.width - 32; spacing: 12
             DetailCard { heading: "What it says"
                 Text { objectName: "responseSummary"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; lineHeight: 1.25
                     text: responseDialog.r.summary || "No summary was saved for this email." } }
@@ -78,6 +84,7 @@ Dialog {
                     color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                     text: "Subject: " + (responseDialog.r.subject || "—") + "\nFrom: " + (responseDialog.r.sender || "—")
                           + "\nReceived: " + (responseDialog.r.date || "—") } }
+        }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         RowLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 6

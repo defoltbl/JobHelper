@@ -52,7 +52,7 @@ SpinBox {
                 sp.value = v < sp.from ? sp.from : sp.to;
                 sp.noteBad = false; sp.note = "Changed to " + sp.value + ", the " + (v < sp.from ? "lowest" : "highest") + " allowed"; noteTimer.restart();
             } else { sp.value = v; sp.note = ""; }
-            text = sp.displayText;
+            text = Qt.binding(function () { return sp.displayText; });     // bound again, so + and - go on changing what is shown
         }
     }
     down.indicator: Rectangle {

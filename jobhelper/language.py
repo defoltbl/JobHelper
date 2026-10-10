@@ -37,10 +37,6 @@ _ENGLISH_WORDS = {
 }
 
 
-def _words(text: str) -> list[str]:
-    return re.findall(r"[a-zA-ZěščřžýáíéúůňťďĚŠČŘŽÝÁÍÉÚŮŇŤĎ]+", text.lower())
-
-
 # The most common words of other languages an ad may be written in. Words that are also
 # ordinary English ("in", "a", "per", "to") are left out, so English text scores nothing here.
 _OTHER_WORDS = {

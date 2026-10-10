@@ -66,6 +66,12 @@ Dialog {
             "<b>Add to calendar</b> opens a saved date in Calendar, so your phone reminds you too. From the day of an interview the window offers a <b>thank-you</b> draft.",
             "<b>Form answers</b>: paste the questions of that job's application form and Claude drafts the answers from your CV and the posting. They are kept with the job; anything it cannot know is marked for you to fill in.",
             "For a new job, <b>Before you apply</b> lists the steps in order and ticks off what you have done. <b>One PDF</b> joins the letter and the CV when a form takes a single file." ] },
+        { title: "The assistant", lines: [
+            "The light-blue robot at the end of the line fills in application forms. Select it to open its window.",
+            "First save <b>My details</b> once: your contacts, jobs, degrees, languages and files. \"<b>Read from my CV</b>\" fills most of it in; check it before you save.",
+            "Open the form in <b>Google Chrome</b> (Brave, Edge, Opera and Safari work too; Opera GX and Firefox do not) and ask the assistant to fill it in. The first time, Chrome needs <b>View, Developer, Allow JavaScript from Apple Events</b>, and macOS asks once for permission.",
+            "It writes into <b>empty fields only</b>, chooses from a list or a yes/no question when your details settle it, and attaches the CV and the letter of that job.",
+            "It <b>never sends</b> a form, never presses Continue and never ticks a box that agrees to something. Passwords, payment and questions about your personal status are left to you. Read what it wrote, then send the form yourself." ] },
         { title: "Your CV and letters", lines: [
             "The app <b>never invents experience</b>. An adapted CV changes only the Profile and Key Skills parts of your <b>master CV</b>, and a letter may only use what your CV shows.",
             "Change your <b>master CV</b> in the <b>Account card</b>. The rules the app follows are in two files in the data folder; if you edit them by hand, approve the change in the <b>Account</b> card." ] },

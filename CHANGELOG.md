@@ -3,6 +3,21 @@
 The newest changes are first. The Help window in the app shows this file under "What changed".
 Format: a `## date` line, then one `- ` line per change; `**words**` are shown in bold.
 
+## 11 October 2026
+
+- **Found by reading the code line by line (fourth part: the smaller modules and the window's files):**
+  - A number box (years, days, scores in **Options**) shows the right number again after you typed one and then pressed + or -. Before, the value changed but the box kept showing what you had typed.
+  - A reply with a long summary no longer pushes its window past the edge of the app: the text scrolls, and the buttons and the **File under** list stay in view.
+  - **Help** has a topic about the **assistant**: what it fills in, which browsers it works in, and what it never does.
+  - In **Options**, a suggested search role can be chosen with the arrow keys and Return, and a long suggestion takes a second line.
+  - The usage card never shows less than 0% left.
+  - The counters under **Usage and problems** survive a damaged file and two questions answered at the same moment.
+  - A reply filed by hand while an email scan is saving is no longer lost.
+  - Merging two entries of the same job keeps the date to remember, the interview preparation, the form answers and a status you set by hand.
+  - The salary estimate matches whole words, so "intern" no longer matches "international".
+  - **One PDF** works when your own letter is already a PDF.
+  - A message about a missing data key says where to paste the recovery key in the **Account** card.
+
 ## 10 October 2026
 
 - **Found by reading the code line by line (third part: the assistant, the window's back end, the bridges):**

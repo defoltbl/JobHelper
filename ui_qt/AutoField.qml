@@ -14,6 +14,15 @@ Item {
     signal add(string value)
     signal edited()
     implicitHeight: 32; implicitWidth: 180
+    // The arrow keys mark a suggestion and Return takes it; with none marked, Return takes what was typed.
+    readonly property int marked: sugList.currentIndex
+    function suggest() { sugPop.refresh(); }
+    function down() { if (sugModel.count && sugList.currentIndex < sugModel.count - 1) sugList.currentIndex++; }
+    function take() {
+        var i = sugList.currentIndex;
+        af.add(i >= 0 && i < sugModel.count ? sugModel.get(i).t : tf.text);
+        sugPop.close();
+    }
     TextField {
         id: tf; anchors.fill: parent
         placeholderText: af.placeholder; color: theme.ink; font.pixelSize: 12; selectByMouse: true
@@ -21,9 +30,10 @@ Item {
             border.color: tf.activeFocus ? theme.accent : theme.line }
         onTextEdited: { af.edited(); sugPop.refresh(); }
         onActiveFocusChanged: if (!activeFocus) sugPop.close()
-        Keys.onReturnPressed: { af.add(tf.text); sugPop.close(); }
-        Keys.onEnterPressed: { af.add(tf.text); sugPop.close(); }
-        Keys.onDownPressed: if (sugPop.opened) sugList.incrementCurrentIndex()
+        Keys.onReturnPressed: af.take()
+        Keys.onEnterPressed: af.take()
+        Keys.onDownPressed: af.down()
+        Keys.onUpPressed: if (sugList.currentIndex >= 0) sugList.currentIndex--
     }
     Popup {
         id: sugPop
@@ -35,6 +45,7 @@ Item {
         function refresh() {
             var q = tf.text.toLowerCase().trim();   // case-insensitive
             sugModel.clear();
+            sugList.currentIndex = -1;
             if (q.length < 1) { close(); return; }
             var n = 0;
             for (var i = 0; i < af.suggestions.length && n < 8; i++) {
@@ -44,11 +55,12 @@ Item {
             if (n > 0) open(); else close();
         }
         contentItem: ListView {
-            id: sugList; clip: true; implicitHeight: contentHeight; model: sugModel
+            id: sugList; clip: true; implicitHeight: contentHeight; model: sugModel; currentIndex: -1
             delegate: ItemDelegate {
-                width: sugList.width; height: 30
-                contentItem: Text { text: t; color: theme.ink; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter; leftPadding: 8 }
-                background: Rectangle { color: hovered ? theme.surface2 : "transparent" }
+                width: sugList.width; height: Math.max(30, sugLine.implicitHeight + 10)      // a long suggestion takes a second line
+                contentItem: Text { id: sugLine; text: t; color: theme.ink; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter; leftPadding: 8
+                    wrapMode: Text.Wrap }
+                background: Rectangle { color: hovered || sugList.currentIndex === index ? theme.surface2 : "transparent" }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
                 onClicked: { af.add(t); sugPop.close(); }
             }

@@ -9,7 +9,7 @@ import pytest
 pytest.importorskip("PySide6")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QObject, QUrl  # noqa: E402
+from PySide6.QtCore import QMetaObject, QObject, QUrl  # noqa: E402
 from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression, qmlContext  # noqa: E402
 from PySide6.QtQuick import QQuickItem  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -929,9 +929,10 @@ def test_help_opens_from_the_button_and_covers_the_app(ui):
     ui.wait(500)
     assert dialog.property("opened") is True
     titles = ui.js("topics.map(function (t) { return t.title; }).join('|')", dialog)
-    for expected in ("What JobHelper does", "A normal week", "Scores and labels", "Claude and the limit", "Privacy and safety"):
+    for expected in ("What JobHelper does", "A normal week", "Scores and labels", "The assistant", "Claude and the limit", "Privacy and safety"):
         assert expected in titles
     text = ui.js("topics.map(function (t) { return t.lines.join(' '); }).join(' ')", dialog)
+    assert "empty fields only" in text and "Opera GX and Firefox do not" in text      # the assistant is explained as well
     assert "never sends" in text and "never invents experience" in text and "recovery key" in text
     assert "—" not in text                                             # en dash rule applies to the help too
     ui.js("close()", dialog)
@@ -3989,3 +3990,67 @@ def test_my_details_keeps_languages_and_what_you_did_in_each_job(ui):
     ui.js("assistantDialog.tryClose()")
     ui.wait(400)
     assert dialog.property("visible") is False and ui.warnings == []
+
+
+def test_number_box_follows_its_buttons_after_typing(ui):
+    """After a number was typed and the box left, + and - must still change the number that is shown."""
+    ui.js("optDialog.open()"); ui.wait(450)
+    spin = ui.find("yearsSpin")
+    box = spin.property("contentItem")
+    spin.setProperty("value", 4); ui.wait(30)
+    box.setProperty("text", "7")
+    QMetaObject.invokeMethod(box, "textEdited"); ui.wait(30)
+    QMetaObject.invokeMethod(box, "editingFinished"); ui.wait(30)
+    assert spin.property("value") == 7 and box.property("text") == "7"
+    QMetaObject.invokeMethod(spin, "increase"); ui.wait(30)
+    assert spin.property("value") == 8
+    assert box.property("text") == "8", "the box still shows the typed number"
+    ui.js("optDialog.close()"); ui.wait(300)
+
+
+def test_a_suggestion_can_be_chosen_with_the_keyboard(ui):
+    """Arrow down marks a suggested role and Return takes it; without the arrow Return takes what was typed."""
+    ui.js("optDialog.open()"); ui.wait(450)
+    ui.js("roleField.suggestions = ['junior python developer', 'junior data analyst']")
+    roles = lambda: ui.js("(function () { var o = []; for (var i = 0; i < rolesModel.count; i++) o.push(rolesModel.get(i).text); return o.join('|'); })()")  # noqa: E731
+    try:
+        ui.js("roleField.text = 'junior'"); ui.js("roleField.suggest()"); ui.wait(60)
+        assert ui.js("roleField.marked") == -1
+        ui.js("roleField.down()"); ui.js("roleField.down()"); ui.js("roleField.down()"); ui.wait(30)
+        assert ui.js("roleField.marked") == 1                       # it stops at the last one
+        ui.js("roleField.take()"); ui.wait(30)
+        assert "junior data analyst" in roles().split("|") and "junior" not in roles().split("|")
+        ui.js("roleField.text = 'junior qa tester'"); ui.js("roleField.suggest()"); ui.wait(30)
+        ui.js("roleField.take()"); ui.wait(30)
+        assert "junior qa tester" in roles().split("|")
+    finally:
+        ui.js("roleField.text = ''; optDialog.roleErr = ''")
+        ui.js("roleField.suggestions = Qt.binding(function () { return win.roleSuggestions; })")
+    ui.js("optDialog.close()"); ui.wait(300)
+
+
+def test_a_long_reply_fits_the_smallest_window(ui):
+    """A long summary with the list of applications open must not push the reply window past the app window."""
+    from jobhelper import db
+    db.upsert_response({"msg_id": "<tall>", "received_date": "Tue, 18 Aug 2026 10:00:00 +0200", "from_addr": "hr@beta.example", "subject": "Your application",
+                        "job_id": "", "company": "Beta", "role": "QA Engineer", "stage": "rejection", "rejection_category": "other",
+                        "rejection_reason": "They chose somebody with more years in the field. " * 6,
+                        "next_step": "Nothing to do now; they keep the CV for later openings. " * 4,
+                        "summary": "They thank you for the time you took and say the team was impressed, and then explain at length. " * 9})
+    size = (ui.win.width(), ui.win.height())
+    ui.win.setWidth(940); ui.win.setHeight(620); ui.wait(80)
+    try:
+        ui.js('responseDialog.show("<tall>")'); ui.wait(400)
+        ui.js("responseDialog.startPicking()"); ui.wait(120)
+        dialog = ui.find("responseDialog")
+        assert dialog.property("opened") is True
+        assert dialog.property("height") <= 580, f"the reply window is {dialog.property('height')} high in a window of 620"
+        flick, picker = ui.find("respFlick"), ui.find("filePicker")
+        assert flick.property("contentHeight") > flick.property("height") >= 90          # the long text scrolls
+        assert picker.property("height") >= picker.property("implicitHeight") > 60       # and the list under it keeps its room
+        assert ui.find("pickFilter").property("height") >= 30
+    finally:
+        ui.js("responseDialog.close()"); ui.wait(300)
+        ui.win.setWidth(size[0]); ui.win.setHeight(size[1]); ui.wait(80)
+        with db._connect(write=True) as conn:
+            conn.execute("DELETE FROM responses WHERE msg_id = ?", ("<tall>",))

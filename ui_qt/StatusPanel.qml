@@ -45,10 +45,10 @@ Rectangle {
                     Item { Layout.fillWidth: true }
                     Text { objectName: "usageLeft_" + modelData.key; font.pixelSize: 11
                         color: modelData.used >= 100 ? theme.crit : theme.soft; font.bold: modelData.used >= 100
-                        text: modelData.used === undefined || modelData.used === null ? "—" : (100 - modelData.used) + "% left" } }
+                        text: modelData.used === undefined || modelData.used === null ? "—" : Math.max(0, 100 - modelData.used) + "% left" } }
                 Rectangle { Layout.fillWidth: true; implicitHeight: 8; radius: 4; color: theme.inset
                     Rectangle { height: parent.height; radius: 4
-                        width: parent.width * ((modelData.used === undefined || modelData.used === null ? 0 : modelData.used) / 100)
+                        width: parent.width * Math.max(0, Math.min(1, (modelData.used === undefined || modelData.used === null ? 0 : modelData.used) / 100))
                         gradient: Gradient { orientation: Gradient.Horizontal
                             GradientStop { position: 0; color: modelData.c1 } GradientStop { position: 1; color: modelData.c2 } } } }
                 // when little is left: the time it comes back, on its own line so the card keeps its width
