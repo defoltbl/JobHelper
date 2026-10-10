@@ -359,11 +359,11 @@ def test_a_search_asks_the_pages_of_new_jobs_whether_they_are_still_open(monkeyp
     answers = {"gone": True, "docs": True, "open": False, "silent": None}
     asked = []
     monkeypatch.setattr(agent2_search, "posting_closed", lambda job: asked.append(job["id"]) or answers.get(job["id"]))
-    jobs = [store.new_job(id="gone", title="Dev", company="A", url="https://x/1"),
-            store.new_job(id="docs", title="Dev", company="B", url="https://x/2", status="letter_ready", cover_letter_file="L.docx"),
-            store.new_job(id="open", title="Dev", company="C", url="https://x/3"),
-            store.new_job(id="silent", title="Dev", company="D", url="https://x/4"),
-            store.new_job(id="app", title="Dev", company="E", url="https://x/5", status="waiting")]
+    jobs = [store.new_job(id="gone", title="Dev", company="A", url="https://www.linkedin.com/jobs/view/1"),
+            store.new_job(id="docs", title="Dev", company="B", url="https://www.linkedin.com/jobs/view/2", status="letter_ready", cover_letter_file="L.docx"),
+            store.new_job(id="open", title="Dev", company="C", url="https://www.linkedin.com/jobs/view/3"),
+            store.new_job(id="silent", title="Dev", company="D", url="https://www.linkedin.com/jobs/view/4"),
+            store.new_job(id="app", title="Dev", company="E", url="https://www.linkedin.com/jobs/view/5", status="waiting")]
     jobs[2]["closed"] = True                                         # was marked earlier and is open again
     dropped = []
     stats = agent2_search.check_closed(jobs, dropped=dropped, today="2026-10-09", pause=0)
@@ -385,7 +385,7 @@ def test_a_search_asks_the_pages_of_new_jobs_whether_they_are_still_open(monkeyp
 def test_only_so_many_pages_are_asked_per_search_longest_unchecked_first(monkeypatch):
     asked = []
     monkeypatch.setattr(agent2_search, "posting_closed", lambda job: asked.append(job["id"]) or False)
-    jobs = [store.new_job(id=f"j{i:03}", title="Dev", company="A", url="https://x") for i in range(agent2_search.CLOSED_PER_SEARCH + 5)]
+    jobs = [store.new_job(id=f"j{i:03}", title="Dev", company="A", url="https://www.linkedin.com/jobs/view/1") for i in range(agent2_search.CLOSED_PER_SEARCH + 5)]
     for j in jobs[:5]:
         j["closed_checked"] = "2026-09-01"                            # asked long ago; the rest never
     agent2_search.check_closed(jobs, today="2026-10-09", pause=0)
@@ -393,6 +393,47 @@ def test_only_so_many_pages_are_asked_per_search_longest_unchecked_first(monkeyp
     asked.clear()
     agent2_search.check_closed(jobs, today="2026-10-09", pause=0)
     assert sorted(asked) == [j["id"] for j in jobs[:5]]               # the next search does the others
+
+
+def test_postings_that_cannot_be_asked_do_not_take_the_places_of_those_that_can(monkeypatch):
+    """Found by reading the code: a posting from a board that cannot be asked was never marked as asked, so on every search
+    such postings stood at the head of the line and used up the forty places. On real data 72 LinkedIn postings had never
+    been asked whether they were still open."""
+    asked = []
+    monkeypatch.setattr(agent2_search, "posting_closed", lambda job: asked.append(job["id"]) or False)
+    others = [store.new_job(id=f"jobscz-{i}", title="Dev", company="A", url=f"https://www.jobs.cz/rpd/{i}/") for i in range(60)]
+    linked = [store.new_job(id=f"linkedin-{4000000 + i}", title="Dev", company="B", url="") for i in range(30)]
+    jobs = others + linked
+    stats = agent2_search.check_closed(jobs, today="2026-10-10", pause=0)
+    assert sorted(asked) == sorted(j["id"] for j in linked) and stats["asked"] == 30, "every posting that can be asked was, and no other"
+    assert all(agent2_search.can_ask_if_closed(j) for j in linked) and not any(agent2_search.can_ask_if_closed(j) for j in others)
+    assert agent2_search.can_ask_if_closed({"id": "x", "url": "https://www.linkedin.com/jobs/view/123456"}) and not agent2_search.can_ask_if_closed({})
+
+
+def test_one_board_that_cannot_be_read_does_not_end_the_search(monkeypatch, capsys):
+    """A board that changed its pages makes its reader stumble over something no network error covers. The search used to end there."""
+    from jobhelper import scrapers_ats, scrapers_cz, scrapers_intl
+    good = store.new_job(id="jobscz-1", title="Junior Python Developer", company="Northwind", location="Prague", url="https://www.jobs.cz/rpd/1/",
+                         description="We build services in Python. " * 20)
+    monkeypatch.setattr(scrapers_cz, "jobs_cz", lambda q, where, n: [dict(good)])
+    monkeypatch.setattr(scrapers_cz, "prace_cz", lambda q, where, n: (_ for _ in ()).throw(AttributeError("'NoneType' object has no attribute 'find_all'")))
+    monkeypatch.setattr(scrapers_intl, "linkedin", lambda q, where, n, max_age_days=0: [{"title": "no id at all"}])
+    monkeypatch.setattr(scrapers_ats, "load_companies", lambda: [])
+    found = agent2_search.search(["python"], where="Prague")
+    assert [j["id"] for j in found] == ["jobscz-1"], "what the other boards gave is kept"
+    out = capsys.readouterr().out
+    assert "prace.cz could not be read for 'python' (AttributeError)" in out and "linkedin could not be read" in out
+
+
+def test_a_damaged_list_of_filtered_postings_reads_as_empty(isolate_data):
+    from jobhelper import config, vault
+    config.ensure_dirs()
+    path = config.DATA_DIR / "filtered_out.json"
+    for text, rows, total in (("[1, 2]", 0, 0), ('{"rows": "none", "total": "many"}', 0, 0), ('{"rows": [{"title": "A"}, 7], "total": "x"}', 1, 1),
+                              ('{"rows": [{"title": "A"}], "total": 900, "when": 5}', 1, 900), ('{"rows": [{"title": "A"}], "total": true}', 1, 1)):
+        vault.write_text(path, text)
+        got = agent2_search.load_dropped()
+        assert (len(got["rows"]), got["total"]) == (rows, total) and isinstance(got["when"], str), text
 
 
 def test_only_boards_that_give_a_clear_answer_are_asked(monkeypatch):

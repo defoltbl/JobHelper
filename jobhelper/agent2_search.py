@@ -1,15 +1,15 @@
-"""Agent 2 — search for jobs (multi-provider).
+"""Agent 2: search for jobs on several sources, and filter what comes back.
 
-Providers:
-  • Jooble  — free API, COVERS THE CZECH REPUBLIC (Prague). Aggregates Czech
-              boards such as jobs.cz / prace.cz. Get a key at
-              https://jooble.org/api/about  → set JOOBLE_API_KEY in .env
-  • Adzuna  — free API, does NOT support Czech; good for pl/de/gb/at/... Set
-              ADZUNA_COUNTRY accordingly.
+Sources (see `active_providers`):
+  • jobs.cz, prace.cz   read from their search pages (scrapers_cz); no key needed
+  • LinkedIn            its public job search (scrapers_intl)
+  • RemoteOK, We Work Remotely   remote roles (scrapers_remote)
+  • career sites        the companies in data/companies.json (scrapers_ats)
+  • Jooble, Adzuna      search APIs, used only when their keys are in .env
+                        (Adzuna does not cover Czechia; set ADZUNA_COUNTRY)
 
-The provider(s) are chosen automatically from what's configured and whether the
-country is supported. All results are normalised to job records and de-duped.
-Deterministic HTTP — spends no Claude subscription usage.
+All results become job records and are de-duplicated; every posting a filter removes is
+kept with its reason for the "Filtered out" list. Plain HTTP: no Claude usage is spent here.
 """
 from __future__ import annotations
 
@@ -254,10 +254,15 @@ CLOSED_PER_SEARCH = 40         # and at most this many pages per search, the lon
 CLOSED_REASON = "The posting no longer accepts applications."
 
 
+def can_ask_if_closed(job: dict[str, Any]) -> bool:
+    """Whether this posting's board is one whose page says if it still accepts applications (LinkedIn)."""
+    return str(job.get("id") or "").startswith("linkedin-") or "linkedin.com" in (job.get("url") or "")
+
+
 def posting_closed(job: dict[str, Any]) -> bool | None:
     """Ask a posting's own page whether it still accepts applications.
     True / False, or None when the board gives no clear answer (or is not one the app can ask)."""
-    if not (job.get("id", "").startswith("linkedin-") or "linkedin.com" in (job.get("url") or "")):
+    if not can_ask_if_closed(job):
         return None
     number = re.search(r"(\d{6,})", job.get("id", "") + " " + (job.get("url") or ""))
     if not number:
@@ -287,7 +292,9 @@ def check_closed(jobs: list[dict[str, Any]], dropped: list | None = None, networ
             verdict[id(j)] = True
     stats = {"asked": 0, "removed": 0, "marked": 0}
     if network:
-        due = [j for j in leads if id(j) not in verdict and str(j.get("closed_checked") or "") <= stale]
+        # only postings whose board can be asked stand in line: the others used to take the places at its head on
+        # every search (they are never marked as asked), so most of the ones that can be asked never were
+        due = [j for j in leads if id(j) not in verdict and can_ask_if_closed(j) and str(j.get("closed_checked") or "") <= stale]
         due.sort(key=lambda j: str(j.get("closed_checked") or ""))
         for j in due[:CLOSED_PER_SEARCH]:
             answer = posting_closed(j)
@@ -485,9 +492,12 @@ def load_dropped() -> dict[str, Any]:
         data = json.loads(vault.read_text(_dropped_path()))
     except (OSError, ValueError, vault.VaultError):
         return {"when": "", "total": 0, "rows": []}
-    rows = [r for r in data.get("rows", []) if isinstance(r, dict)] if isinstance(data, dict) else []
-    return {"when": str(data.get("when", "")) if isinstance(data, dict) else "", "rows": rows,
-            "total": int(data.get("total", len(rows))) if isinstance(data, dict) else len(rows)}
+    if not isinstance(data, dict):
+        return {"when": "", "total": 0, "rows": []}
+    rows = [r for r in data["rows"] if isinstance(r, dict)] if isinstance(data.get("rows"), list) else []
+    total = data.get("total")
+    return {"when": str(data.get("when", "")), "rows": rows,
+            "total": total if isinstance(total, int) and not isinstance(total, bool) and total >= len(rows) else len(rows)}
 
 
 def search(
@@ -553,6 +563,10 @@ def search(
                 print(f"  ! {name} error for '{q}': {safe_error(e)}")
             except requests.RequestException as e:
                 print(f"  ! {name} network error for '{q}': {safe_error(e)}")
+            except Exception as e:  # noqa: BLE001 - a board that changed its pages must not end the whole search
+                from . import trouble
+                trouble.note(f"reading {name} for a search", RuntimeError(safe_error(f"{type(e).__name__}: {e}")))
+                print(f"  ! {name} could not be read for '{q}' ({type(e).__name__}); the other sources go on")
         print(f"  · {name}: +{got} new listings")
 
     results = list(found.values())
