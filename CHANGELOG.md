@@ -5,6 +5,11 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 10 October 2026
 
+- **Found by reading the code line by line (first part):**
+  - A CV that keeps its jobs or skills in a table is now read whole; before, only its paragraphs were, so true experience could look like something the CV does not say.
+  - A Keychain that is locked or does not answer is no longer taken for an empty one, and no new data key is ever made for data that is already encrypted.
+  - An email scan can no longer wait for ever on a mail server that stopped answering (one minute per answer at most).
+  - On the command line, `apply` works only for a new job, a reached Claude limit keeps what was read, and a mailbox that refuses or cannot be reached is one sentence, not a traceback.
 - **A form inside a frame: one press.** The button now reads **Open the form in its own tab and fill it in**, and does both. The message no longer prints the long address.
 - **A phone number beside a list of country codes.** The assistant chooses the code of your number in the list and writes the number without it. When the list already shows another country, it leaves the list alone, writes the whole number and marks both for checking.
 - **File fields the page hides behind its own buttons** are reported once, with what to do, not as several fields called "afile".

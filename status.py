@@ -130,6 +130,16 @@ def scan_days() -> int:
     return saved if saved > 0 else config.IMAP_LOOKBACK_DAYS
 
 
+def mail_problem(error: Exception) -> str:
+    """Why the mailbox could not be read, in a sentence (the password is never part of it)."""
+    import imaplib
+    if isinstance(error, imaplib.IMAP4.error):
+        return "Couldn't sign in to your email. Check its password in the app's Account card."
+    if isinstance(error, OSError):
+        return "The mail server could not be reached. Check your connection and run this again."
+    return f"The mailbox could not be read ({type(error).__name__})."
+
+
 def cmd_sync(args) -> int:
     jobs = store.load_jobs()
     if not jobs:
@@ -146,6 +156,9 @@ def cmd_sync(args) -> int:
         return 3
     except RuntimeError as e:
         print(f"✗ {e}")
+        return 1
+    except Exception as e:  # noqa: BLE001 - the weekly run's log gets a sentence, not a traceback
+        print(f"✗ {mail_problem(e)}")
         return 1
     agent5_responses.backfill_roles(jobs)
     agent5_responses.annotate_progress(jobs)
@@ -191,6 +204,9 @@ def cmd_responses(args) -> int:
             return 3
         except RuntimeError as e:
             print(f"✗ {e}")
+            return 1
+        except Exception as e:  # noqa: BLE001
+            print(f"✗ {mail_problem(e)}")
             return 1
         agent5_responses.annotate_progress(jobs)
         store.save_jobs(jobs)
@@ -312,8 +328,11 @@ def cmd_repair_emails(args) -> int:
     print("Reading the inbox (read-only) …")
     try:
         emails = email_client.fetch_recent(args.days)
-    except RuntimeError as e:                        # no mailbox connected, or it could not be reached: said, nothing changed
+    except RuntimeError as e:                        # no mailbox connected: said, nothing changed
         print(f"✗ {e}")
+        return 1
+    except Exception as e:  # noqa: BLE001
+        print(f"✗ {mail_problem(e)}")
         return 1
     jobs = store.load_jobs()
     backup = vault.make_backup("before_email_repair")

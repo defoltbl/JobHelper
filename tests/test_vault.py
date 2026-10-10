@@ -384,3 +384,50 @@ def test_backup_everything_refuses_when_the_key_is_missing(isolate_data, monkeyp
     with _pytest.raises(vault.VaultError, match="key is missing"):
         vault.backup_everything()
     assert not list(vault.backups_dir().glob("everything_*")) if vault.backups_dir().is_dir() else True
+
+
+# ── found by reading vault.py line by line (10 October 2026) ────────────────
+def test_a_keychain_that_cannot_be_read_is_not_taken_for_an_empty_one(monkeypatch):
+    """Any failure of the system tool used to mean "no such secret". For the data key that is dangerous: "no key yet" is
+    the one case in which a new key is made."""
+    import subprocess
+    from types import SimpleNamespace
+    answers = []
+    monkeypatch.setattr(vault.subprocess, "run", lambda cmd, **kw: answers.pop(0))
+    mac = vault.MacKeychain()
+    answers.append(SimpleNamespace(returncode=0, stdout="s3cret\n", stderr=""))
+    assert mac.get("data_key") == "s3cret"
+    answers.append(SimpleNamespace(returncode=44, stdout="", stderr="security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain."))
+    assert mac.get("data_key") is None, "truly not there"
+    answers.append(SimpleNamespace(returncode=36, stdout="", stderr="security: SecKeychainSearchCopyNext: User interaction is not allowed."))
+    with pytest.raises(vault.VaultError, match="could not be read"):
+        mac.get("data_key")
+
+    def slow(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, 20)
+    monkeypatch.setattr(vault.subprocess, "run", slow)
+    with pytest.raises(vault.VaultError, match="did not answer"):
+        mac.get("data_key")
+    vault.use_keychain(mac)
+    try:
+        assert vault.get_secret("imap_password") == "", "a mailbox password that cannot be read is simply not there for now"
+        assert vault.state() == "locked", "and the data is locked, not given a new key"
+    finally:
+        vault.use_keychain(vault.MemoryKeychain())
+
+
+def test_no_new_key_is_made_for_data_that_is_already_encrypted(isolate_data):
+    """The note of which key a folder uses (vault.json) can be lost. With it gone and the key not in the Keychain, the app
+    used to start a new key, and the encrypted data could never be opened again."""
+    config.ensure_dirs()
+    vault.write_text(config.JOBS_JSON, "[]")
+    assert vault.file_is_encrypted(config.JOBS_JSON) and vault.state() == "ok"
+    first = vault.recovery_key()
+    (config.DATA_DIR / "vault.json").unlink()
+    vault.use_keychain(vault.MemoryKeychain())               # a new Mac: the Keychain is empty
+    with pytest.raises(vault.VaultError, match="restore-key"):
+        vault.data_key()
+    assert vault.state() == "locked" and vault.keychain().get(vault.KEY_ACCOUNT) is None, "nothing was written over"
+    vault.restore_key(first)
+    assert vault.read_text(config.JOBS_JSON) == "[]" and vault.state() == "ok"
+    assert "Gmail" not in " ".join(vault.LABELS.values()), "any provider's mailbox, not one company's"

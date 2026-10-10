@@ -163,6 +163,14 @@ def _read(imap, num, user: str, folder: str) -> dict[str, Any] | None:
     }
 
 
+SERVER_TIMEOUT = 60.0       # seconds a mail server gets for one answer
+
+
+def _numbers(data) -> list[bytes]:
+    """The message numbers of a search answer; a server that answers with nothing found nothing."""
+    return data[0].split() if data and isinstance(data[0], (bytes, bytearray)) else []
+
+
 def try_login(user: str, password: str, timeout: float = 8.0, host: str = "") -> dict[str, Any]:
     """Sign in to the mailbox and out again, to learn whether the address and password work.
 
@@ -193,7 +201,8 @@ def _fetch_box(user: str, password: str, since: str, all_folders: bool = False, 
     archived mail and spam (not Sent or Drafts, and nothing you wrote yourself).
     Read-only: folders are opened read-only and messages are fetched with PEEK,
     so nothing is marked, moved or changed."""
-    imap = imaplib.IMAP4_SSL(host or config.imap_host(1), config.IMAP_PORT)
+    # a time limit on every step: a server that stops answering must end the scan with an error, not hold it for ever
+    imap = imaplib.IMAP4_SSL(host or config.imap_host(1), config.IMAP_PORT, timeout=SERVER_TIMEOUT)
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
 
@@ -208,7 +217,7 @@ def _fetch_box(user: str, password: str, since: str, all_folders: bool = False, 
         imap.login(user, password)
         imap.select("INBOX", readonly=True)
         _typ, data = imap.search(None, f'(SINCE "{since}")')
-        for num in reversed(data[0].split()):  # newest first; the Inbox keeps mail you sent to yourself too
+        for num in reversed(_numbers(data)):   # newest first; the Inbox keeps mail you sent to yourself too
             item = _read(imap, num, user, "inbox")
             if item and item["msg_id"] not in seen:
                 seen.add(item["msg_id"])
@@ -223,14 +232,14 @@ def _fetch_box(user: str, password: str, since: str, all_folders: bool = False, 
                         _typ, data = imap.search(None, "X-GM-RAW", f'"-in:inbox -in:sent -in:drafts -in:chats after:{after}"')
                     except imaplib.IMAP4.error:
                         _typ, data = imap.search(None, f'(SINCE "{since}")')
-                    take("archive", data[0].split())
+                    take("archive", _numbers(data))
                 except imaplib.IMAP4.error:
                     last_warnings.append(f"The archive folder of {user} could not be read.")
             if extra.get("spam"):
                 try:
                     imap.select(extra["spam"], readonly=True)
                     _typ, data = imap.search(None, f'(SINCE "{since}")')
-                    take("spam", data[0].split())
+                    take("spam", _numbers(data))
                 except imaplib.IMAP4.error:
                     last_warnings.append(f"The spam folder of {user} could not be read.")
     finally:

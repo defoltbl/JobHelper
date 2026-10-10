@@ -103,3 +103,37 @@ def test_the_package_and_the_example_settings_describe_the_app_as_it_is():
     assert "Email sync (Agent 5" in env and "ANTHROPIC_API_KEY=" not in env.replace("Do NOT set ANTHROPIC_API_KEY", "")
     script = (root / "weekly_jobhelper.sh").read_text(encoding="utf-8")
     assert "send the week" not in script, "the app never sends anything: the summary is a notification"
+
+
+def test_a_mailbox_that_refuses_or_cannot_be_reached_is_one_sentence_in_the_log(isolate_data, monkeypatch, capsys):
+    """The weekly run writes what these commands print into its log. A wrong password or no network used to leave a traceback."""
+    import imaplib
+    from jobhelper import agent5_responses, email_client
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="waiting", date_applied="2026-09-01")])
+    for error, words in ((imaplib.IMAP4.error("[AUTHENTICATIONFAILED] hunter2"), "Couldn't sign in to your email"),
+                         (TimeoutError("timed out"), "could not be reached"), (KeyError("odd"), "could not be read (KeyError)")):
+        monkeypatch.setattr(agent5_responses, "process_inbox", lambda jobs, lookback_days=None, _e=error, **kw: (_ for _ in ()).throw(_e))
+        monkeypatch.setattr(email_client, "fetch_recent", lambda days=None, _e=error: (_ for _ in ()).throw(_e))
+        for command in (("sync",), ("responses", "--scan"), ("repair-emails",)):
+            assert _run(monkeypatch, *command) == 1
+            out = capsys.readouterr().out
+            assert words in out and "Traceback" not in out and "hunter2" not in out, (command, out)
+
+
+def test_the_mail_server_gets_a_time_limit_and_an_empty_answer_is_no_mail(monkeypatch):
+    from jobhelper import email_client
+    made = {}
+
+    class Server:
+        def __init__(self, host, port, timeout=None):
+            made.update(host=host, timeout=timeout)
+
+        def login(self, user, password): pass
+        def select(self, folder, readonly=False): made["readonly"] = readonly
+        def search(self, *args): return "OK", [None]
+        def logout(self): made["out"] = True
+    monkeypatch.setattr(email_client.imaplib, "IMAP4_SSL", Server)
+    assert email_client._fetch_box("me@example.com", "pw", "01-Oct-2026", host="imap.example.com") == []
+    assert made == {"host": "imap.example.com", "timeout": email_client.SERVER_TIMEOUT, "readonly": True, "out": True}
+    assert email_client._numbers([b"1 2 3"]) == [b"1", b"2", b"3"] and email_client._numbers([]) == [] and email_client._numbers(None) == []

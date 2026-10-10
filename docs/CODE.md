@@ -145,7 +145,7 @@ Table 2.6 lists what keeps the code correct.
 
 | Technology | Used for | Why it was chosen |
 |---|---|---|
-| `pytest` | More than 1,300 tests | Every change comes with tests. The suite needs no network and never touches real data, so it can be run at any time |
+| `pytest` | More than 1,600 tests | Every change comes with tests. The suite needs no network and never touches real data, so it can be run at any time |
 | The window loaded without a screen | Tests of the window | The real QML is loaded and driven, so a broken binding or a missing name fails a test instead of reaching the person |
 | `pyflakes` | Unused and undefined names | It finds a whole kind of mistake in a second, before a test has to |
 | Git, kept on the Mac only | The history of changes | Every finished step is a commit that can be gone back to. There is no remote copy, because the project holds a real CV |

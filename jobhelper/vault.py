@@ -1,6 +1,6 @@
 """Secrets and encryption at rest.
 
-* Secrets (the Gmail app password, the data key) live in the macOS Keychain,
+* Secrets (the mailbox passwords, the data key) live in the macOS Keychain,
   never in a file inside the project.
 * Data files (jobs, profile, options, the responses database) and everything
   under ``data/backups/`` are stored AES-256-GCM encrypted with the data key.
@@ -34,8 +34,8 @@ IMAP_ACCOUNT = "imap_password"
 IMAP_ACCOUNT_2 = "imap_password_2"
 LABELS = {
     KEY_ACCOUNT: "JobHelper: data encryption key",
-    IMAP_ACCOUNT: "JobHelper: Gmail app password",
-    IMAP_ACCOUNT_2: "JobHelper: Gmail app password (second mailbox)",
+    IMAP_ACCOUNT: "JobHelper: mailbox password",
+    IMAP_ACCOUNT_2: "JobHelper: mailbox password (second mailbox)",
     "integrity_baseline": "JobHelper: tamper-check baseline",
 }
 
@@ -74,11 +74,20 @@ class MacKeychain:
     """The login Keychain, through the system ``security`` tool."""
     available = True
 
+    NOT_THERE = 44          # what `security` answers when the Keychain has no such item
+
     def get(self, account: str) -> str | None:
-        r = subprocess.run(["security", "find-generic-password", "-s", SERVICE, "-a", account, "-w"],
-                           capture_output=True, text=True, timeout=20)
-        if r.returncode != 0:
+        """The secret, or None when the Keychain holds none under this name. A Keychain that cannot be read (locked,
+        not answering) is an error, not "none": taking it for "none" could start a new data key over the real one."""
+        try:
+            r = subprocess.run(["security", "find-generic-password", "-s", SERVICE, "-a", account, "-w"],
+                               capture_output=True, text=True, timeout=20)
+        except (subprocess.TimeoutExpired, OSError) as e:
+            raise VaultError("The Keychain did not answer. Unlock it (log in to this Mac again) and try once more.") from e
+        if r.returncode == self.NOT_THERE or (r.returncode != 0 and "could not be found" in (r.stderr or "")):
             return None
+        if r.returncode != 0:
+            raise VaultError("The Keychain could not be read (it may be locked). Unlock it and try once more.")
         return r.stdout.rstrip("\n")
 
     def set(self, account: str, value: str) -> None:
@@ -193,7 +202,8 @@ def data_key() -> bytes:
             raise VaultError("The key in the Keychain does not match this data. "
                              "Run: python status.py security restore-key")
     else:
-        if marker.get("key_id"):
+        if marker.get("key_id") or any(file_is_encrypted(path) for path in data_files()):
+            # (the second test: the note of the key, vault.json, is gone but the data is plainly encrypted)
             raise VaultError("This data is encrypted, but its key is not in the Keychain. "
                              "Run: python status.py security restore-key")
         key = os.urandom(32)

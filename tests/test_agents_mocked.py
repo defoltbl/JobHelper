@@ -313,3 +313,32 @@ def test_a_low_title_only_score_is_left_as_it_is():
     job = store.new_job(id="t", title="Economist", company="Acme")
     assert agent3_letters.apply_score(job, {"match_score": 20, "match_reason": "Another field."}) is True
     assert job["match_score"] == 20 and "score_capped" not in job and job["match_reason"] == "Another field."
+
+
+# ── found by reading agent1_cv line by line (10 October 2026) ───────────────
+def test_a_cv_that_keeps_its_jobs_in_a_table_is_read_whole(tmp_path, isolate_data):
+    """Only the paragraphs of a Word CV were read. Many CVs keep their jobs or skills in a table: those lines were missing
+    from everything the app knows about the person, so true experience looked like a claim the CV does not back."""
+    import docx as word
+    from jobhelper import agent1_cv, config, vault
+    cv = word.Document()
+    cv.add_paragraph("Alex Novak")
+    cv.add_paragraph("Junior Software Developer")
+    table = cv.add_table(rows=2, cols=2)
+    table.cell(0, 0).text, table.cell(0, 1).text = "2023 - 2025", "Backend developer at Northwind: Python, PostgreSQL"
+    table.cell(1, 0).merge(table.cell(1, 1)).text = "Skills: Docker, Kafka"
+    cv.add_paragraph("Education")
+    path = tmp_path / "cv.docx"
+    cv.save(str(path))
+    lines = agent1_cv.read_cv_text(path).splitlines()
+    assert lines == ["Alex Novak", "Junior Software Developer", "2023 - 2025 | Backend developer at Northwind: Python, PostgreSQL", "Skills: Docker, Kafka",
+                     "Education"], "in the order of the page, a merged cell once"
+    plain = word.Document()
+    for text in ("Alex Novak", "", "Profile"):
+        plain.add_paragraph(text)
+    plain.save(str(path))
+    assert agent1_cv.read_cv_text(path) == "Alex Novak\n\nProfile", "a CV without tables reads exactly as before"
+    config.ensure_dirs()
+    for damaged in ("not json at all", "[1, 2]", '"text"'):
+        vault.write_text(config.PROFILE_JSON, damaged)
+        assert agent1_cv.load_profile() is None and agent1_cv.load_profile(current_only=True) is None, "a damaged analysis is made again, not crashed on"

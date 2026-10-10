@@ -52,8 +52,20 @@ def read_cv_text(path: Path) -> str:
     if suffix == ".docx":
         import docx
 
+        from docx.table import Table
+        from docx.text.paragraph import Paragraph
+
         doc = docx.Document(str(path))
-        return "\n".join(p.text for p in doc.paragraphs)
+        lines: list[str] = []
+        for child in doc.element.body.iterchildren():       # in the order of the page: many CVs keep their jobs or skills in a table
+            if child.tag.endswith("}p"):
+                lines.append(Paragraph(child, doc).text)
+            elif child.tag.endswith("}tbl"):
+                for row in Table(child, doc).rows:
+                    cells = list(dict.fromkeys(cell.text.strip() for cell in row.cells if cell.text.strip()))   # a merged cell is given once
+                    if cells:
+                        lines.append(" | ".join(cells))
+        return "\n".join(lines)
     # txt / md / anything text-like
     return path.read_text(encoding="utf-8", errors="ignore")
 
@@ -118,7 +130,12 @@ def load_profile(current_only: bool = False) -> dict[str, Any] | None:
     (new dates, new titles) is analysed again instead of scored from old facts."""
     if not config.PROFILE_JSON.exists():
         return None
-    profile = json.loads(vault.read_text(config.PROFILE_JSON))
+    try:
+        profile = json.loads(vault.read_text(config.PROFILE_JSON))
+    except ValueError:
+        return None                                  # a damaged file: the CV is analysed again
+    if not isinstance(profile, dict):
+        return None
     if current_only:
         cv = find_cv()
         if cv is not None and profile.get("_cv_sha") != _sha(cv):
