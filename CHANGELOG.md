@@ -3,6 +3,16 @@
 The newest changes are first. The Help window in the app shows this file under "What changed".
 Format: a `## date` line, then one `- ` line per change; `**words**` are shown in bold.
 
+## 11 October 2026
+
+- **Found by reading the code line by line (third part: the assistant, the window's back end, the bridges):**
+  - A right-to-work question that names another country than yours is never answered for you. What you said about your right to work is about your own country.
+  - Stop pressed while a run waits on Claude's limit now ends the run at once. Before, the run went on to the next job, and the job it was on lost one of its two tries at documents.
+  - **Mark applied** works for a new job only: a stray press no longer sets an answered application back to waiting.
+  - **My details** is no longer read as empty when one saved value fails a check; only that value is left out.
+  - The review before sending names a long list by the words beside it, not by the page's inner name.
+  - The back end now refuses a career-site token that is not a plain slug, and a model or search source it does not know, whatever sent them.
+
 ## 10 October 2026
 
 - **Fixed on a real form: "Location" and "Role description" inside a job were filled wrongly.** The location got your own city and the description got a text Claude drafted about you in general. Each job in **My details** now has **Where it was** and **What you did there**; **Read from my CV** copies both from the CV, word for word. Forms get the job's own, and what is empty is left to you with the reason.
