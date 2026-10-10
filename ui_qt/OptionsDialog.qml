@@ -86,7 +86,7 @@ Dialog {
         if (win.hasNonLatin(name)) { coErr = "Write the company name in Latin letters."; return false; }
         if ((name || "").trim().length > 60) { coErr = "The company name is " + (name || "").trim().length + " characters long; the most is 60."; return false; }
         if (!tok) { coErr = "Enter the company's token (the slug in its career-site URL)."; return false; }
-        if (!win.isSlug(tok)) { coErr = "Token looks wrong — use the URL slug only (letters, digits, - or _), no spaces or https://."; return false; }
+        if (!win.isSlug(tok)) { coErr = "Token looks wrong – use the URL slug only (letters, digits, - or _), no spaces or https://."; return false; }
         for (var i = 0; i < companiesModel.count; i++)
             if (companiesModel.get(i).token.toLowerCase() === tok.toLowerCase()
                 && companiesModel.get(i).ats === ats) { coErr = "That company is already in the list."; return false; }

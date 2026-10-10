@@ -64,7 +64,10 @@ Dialog {
     function markApplied() {
         if (!mayLeave("apply", "Mark applied")) return;
         var wasReviewing = reviewing;
-        bridge.applyJob(job.id); ticker.text = "Moved to Applications (waiting).";
+        if (!bridge.applyJob(job.id)) {           // refused (already an application, or gone): say so, do not claim it moved
+            ticker.text = "That job was not moved: it is already among your applications, or it is no longer in the list."; close(); win.reloadAll(); return;
+        }
+        ticker.text = "Moved to Applications (waiting).";
         if (wasReviewing) { reviewAfterDecision("Moved to Applications."); win.reloadAll(); return; }
         close(); tableDialog.close(); win.reloadAll();
     }

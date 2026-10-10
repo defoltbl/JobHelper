@@ -125,8 +125,8 @@ Dialog {
         listView.model = out;
         var total = allRows.filter(function (r) { return r.hidden !== true; }).length;
         titleTxt.text = sorts.length === 0 ? baseTitle
-                      : (out.length === total && g === "" && q === "") ? (baseTitle + " — " + total)
-                      : (baseTitle + " — " + out.length + " of " + total);
+                      : (out.length === total && g === "" && q === "") ? (baseTitle + " – " + total)
+                      : (baseTitle + " – " + out.length + " of " + total);
     }
     background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1
         FocusCatcher {} }
@@ -134,7 +134,7 @@ Dialog {
         spacing: 0
         RowLayout {
             Layout.fillWidth: true; Layout.margins: 16
-            Text { id: titleTxt; color: theme.ink; font.pixelSize: 16; font.bold: true; Layout.fillWidth: true }
+            Text { id: titleTxt; color: theme.ink; font.pixelSize: 16; font.bold: true; Layout.fillWidth: true; wrapMode: Text.Wrap }
             // New Jobs only: go through the jobs that are listed now (after the search box and the filter), one after another
             SmallButton { objectName: "reviewStart"; visible: tableDialog.excelKey === "leads" && tableDialog.reviewIds().length > 1
                 text: "Review these " + tableDialog.reviewIds().length + " one by one"
@@ -270,8 +270,8 @@ Dialog {
                             primaryStyle: modelData.kind === "apply"
                             onClicked: {
                                 if (modelData.kind === "apply") {
-                                    bridge.applyJob(modelData.arg);
-                                    ticker.text = "Moved to Applications (waiting).";
+                                    ticker.text = bridge.applyJob(modelData.arg) ? "Moved to Applications (waiting)."
+                                                                                 : "That job was not moved: it is already among your applications, or it is no longer in the list.";
                                     tableDialog.close(); win.reloadAll();
                                 } else if (modelData.kind === "restore") {
                                     var back = bridge.restoreJob(modelData.arg);

@@ -8,6 +8,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 - **Found by reading the code line by line (fourth part: the smaller modules and the window's files):**
   - A number box (years, days, scores in **Options**) shows the right number again after you typed one and then pressed + or -. Before, the value changed but the box kept showing what you had typed.
   - A reply with a long summary no longer pushes its window past the edge of the app: the text scrolls, and the buttons and the **File under** list stay in view.
+  - **Mark applied** no longer says "Moved to Applications" when the job was not moved (it was already an application, or it was gone from the list); it says so instead.
+  - Titles and messages in the window use the short dash everywhere, as the documents do ("New Jobs – 12").
   - **Help** has a topic about the **assistant**: what it fills in, which browsers it works in, and what it never does.
   - In **Options**, a suggested search role can be chosen with the arrow keys and Return, and a long suggestion takes a second line.
   - The usage card never shows less than 0% left.

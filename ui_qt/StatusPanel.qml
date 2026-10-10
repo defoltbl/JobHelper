@@ -20,7 +20,7 @@ Rectangle {
                 Text { anchors.centerIn: parent; text: "✶"; color: theme.a1; font.pixelSize: 16 } }
             ColumnLayout { spacing: 0
                 Text { text: "Claude · " + (usageData.model || ""); color: theme.ink; font.pixelSize: 14; font.bold: true }
-                Text { text: connData.paid_api ? "PAID API — unset the key" : "subscription · not paid API"
+                Text { text: connData.paid_api ? "PAID API – unset the key" : "subscription · not paid API"
                     color: theme.faint; font.pixelSize: 11 } }
         }
         RowLayout {

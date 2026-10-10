@@ -418,7 +418,7 @@ ApplicationWindow {
     function applyCv(url) {
         var r = bridge.setMasterCV(url);
         welcome.cvErr = (r && r.ok) ? "" : (r && r.msg ? r.msg : "Couldn't set that file as your CV.");
-        ticker.text = (r && r.ok) ? ("✓ Master CV updated — " + r.name) : welcome.cvErr;
+        ticker.text = (r && r.ok) ? ("✓ Master CV updated – " + r.name) : welcome.cvErr;
         bridge.checkConnections();
     }
     FileDialog {

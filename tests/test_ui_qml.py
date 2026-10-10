@@ -769,7 +769,7 @@ def test_tables_can_be_searched_filtered_and_sorted(ui):
         ui.js('openView("new")')
         ui.wait(450)
         dialog, search = ui.find("tableDialog"), ui.find("searchField")
-        assert len(_titles(ui)) == 4 and ui.js("titleTxt.text", dialog).endswith("— 4")
+        assert len(_titles(ui)) == 4 and ui.js("titleTxt.text", dialog).endswith("– 4")
         assert _titles(ui)[0].startswith("Junior Python Developer")              # best score first
         search.setProperty("text", "python")
         assert len(_titles(ui)) == 2 and ui.js("titleTxt.text", dialog).endswith("2 of 4")
@@ -4054,3 +4054,26 @@ def test_a_long_reply_fits_the_smallest_window(ui):
         ui.win.setWidth(size[0]); ui.win.setHeight(size[1]); ui.wait(80)
         with db._connect(write=True) as conn:
             conn.execute("DELETE FROM responses WHERE msg_id = ?", ("<tall>",))
+
+
+def test_a_refused_mark_applied_is_not_reported_as_done(ui, monkeypatch):
+    """When the back end refuses (the job is already an application, or gone), the status line must not say it moved."""
+    monkeypatch.setattr(qt_bridge.Bridge, "applyJob", qt_bridge.Slot(str, result=bool)(lambda self, job_id: False))
+    ui.js('detailDialog.show("lead")'); ui.wait(450)
+    ui.js("detailDialog.markApplied()"); ui.wait(350)
+    said = ui.js("ticker.text")
+    assert "was not moved" in said and "Moved to Applications" not in said
+    assert ui.find("detailDialog").property("opened") is False
+    ui.js("tableDialog.close()"); ui.wait(300)
+    for name in ("DetailDialog.qml", "TableDialog.qml"):                    # neither place ignores the answer
+        source = (ROOT / "ui_qt" / name).read_text(encoding="utf-8")
+        assert "bridge.applyJob(" in source and "\n        bridge.applyJob(" not in source and "\n                                    bridge.applyJob(" not in source
+
+
+def test_the_window_uses_no_em_dash_in_what_it_says():
+    """The dash rule of the documents holds for the window: an en dash, never an em dash, inside a sentence.
+    (A lone "—" for "no value" is a sign, not a sentence, and stays.)"""
+    for path in sorted((ROOT / "ui_qt").glob("*.qml")):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            code = line.split("//")[0]
+            assert " — " not in code, f"{path.name}:{number} has an em dash in its text"
