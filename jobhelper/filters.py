@@ -1,7 +1,8 @@
-"""Seniority filtering — keep listings realistic for the candidate's level.
+"""The filters of a search that need no model call: level, years of experience, language,
+closed postings, part-time, location, and the words you skip. Applied to every source.
 
-A junior/mid candidate shouldn't be shown (or spend scoring calls on) senior,
-lead, principal, manager, or architect roles. Applied to every source.
+A junior/mid candidate shouldn't be shown (or spend scoring calls on) senior, lead, principal,
+manager or architect roles; what counts as "above your level" comes from Options.
 """
 from __future__ import annotations
 
@@ -97,12 +98,30 @@ def is_closed(text: str) -> bool:
 # in a European search it means Germany, not Delaware.
 _US_STATES = ("AL AK AZ AR CA CO CT FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ "
               "NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC").split()
-_US_LOCATION = re.compile(r",\s*(?:%s)\b(?!\w)|\bUnited States\b|\bUSA\b" % "|".join(_US_STATES))
+_US_NAMED = re.compile(r"\bUnited States\b|\bUSA\b")
+_US_STATE = re.compile(r",\s*(%s)\b(?!\w)" % "|".join(_US_STATES))
+# Countries the app knows whose own two-letter code is also a state's ("Bangalore, IN", "Toronto, CA").
+_OWN_CODE = {"india": "IN", "canada": "CA"}
 
 
-def is_us_location(location: str) -> bool:
-    """True for a location in the United States: a search for "Prague" also finds Prague, Nebraska."""
-    return bool(_US_LOCATION.search(location or ""))
+def is_us_location(location: str, where: str | None = None) -> bool:
+    """True for a location in the United States: a search for "Prague" also finds Prague, Nebraska.
+
+    `where` is the city of the search. A state's code is also the code of some country (IN is Indiana and
+    India, IL is Illinois and Israel), so for someone searching in such a country, or in one the app has
+    no table for, only a location that names the United States counts. Without `where`: any state code."""
+    text = location or ""
+    if _US_NAMED.search(text):
+        return True
+    state = _US_STATE.search(text)
+    if not state:
+        return False
+    if where is None:
+        return True
+    home = places.country_of(config.search_country()) or places.country_of(where)
+    if not home:
+        return False                    # a country the app does not know: its own code may look like a state's
+    return _OWN_CODE.get(home) != state.group(1)
 
 
 def searching_in_the_us(where: str) -> bool:

@@ -117,9 +117,12 @@ def load_companies() -> list[dict[str, str]]:
         return []
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
-        return [c for c in data if c.get("ats") in _FETCHERS and c.get("token")]
-    except Exception:
+    except Exception:  # noqa: BLE001 - a file that cannot be read lists no company
         return []
+    if not isinstance(data, list):
+        return []
+    # entry by entry: one line that is not a company (a note, a typo) must not hide all the others
+    return [c for c in data if isinstance(c, dict) and c.get("ats") in _FETCHERS and isinstance(c.get("token"), str) and c["token"].strip()]
 
 
 def _company_jobs(name: str, ats: str, token: str) -> list[dict[str, Any]]:
@@ -128,6 +131,10 @@ def _company_jobs(name: str, ats: str, token: str) -> list[dict[str, Any]]:
         try:
             _cache[key] = _FETCHERS[ats](name, token)
         except requests.RequestException:
+            _cache[key] = []
+        except Exception as e:  # noqa: BLE001 - one career site that answers in a shape nobody expects must not stop the others
+            from . import trouble
+            trouble.note(f"reading the career site of {name}", RuntimeError(type(e).__name__))
             _cache[key] = []
         time.sleep(_DELAY)
     return _cache[key]

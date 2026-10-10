@@ -245,7 +245,12 @@ def jobs_cz(keyword: str, where: str, limit: int, with_description: bool = True)
         if len(jobs) >= limit:
             break
         params = {"q[]": keyword} if page == 1 else {"q[]": keyword, "page": page}
-        page_jobs = parse_jobs_cz(_get(url, params=params).text, where, 1000)
+        try:
+            page_jobs = parse_jobs_cz(_get(url, params=params).text, where, 1000)
+        except requests.RequestException:
+            if page == 1:
+                raise                       # the board cannot be reached at all: the search says so
+            break                           # a later page failed: what the earlier pages gave is kept
         new = [j for j in page_jobs if j["id"] not in seen]
         if not new:
             break   # no more results
@@ -295,7 +300,12 @@ def prace_cz(keyword: str, where: str, limit: int, with_description: bool = True
         if len(jobs) >= limit:
             break
         params = {"q": keyword} if page == 1 else {"q": keyword, "page": page}
-        page_jobs = parse_prace_cz(_get(url, params=params).text, where, 1000)
+        try:
+            page_jobs = parse_prace_cz(_get(url, params=params).text, where, 1000)
+        except requests.RequestException:
+            if page == 1:
+                raise                       # the board cannot be reached at all: the search says so
+            break                           # a later page failed: what the earlier pages gave is kept
         new = [j for j in page_jobs if j["id"] not in seen]
         if not new:
             break

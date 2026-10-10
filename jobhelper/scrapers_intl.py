@@ -121,8 +121,10 @@ def _fetch_detail(job_id: str) -> tuple[str, bool, str]:
         t = soup.select_one("time[datetime], .posted-time-ago__text")
         if t and t.get("datetime"):
             posted = t["datetime"].strip()[:10]
-        if not posted:
-            posted = _relative_to_date(r.text)
+        if not posted and t is not None:
+            # only the words of the posting's own date ("3 weeks ago"): the whole page has "today" and "hours ago"
+            # somewhere (other postings, "apply today"), and read from there every old posting looked new
+            posted = _relative_to_date(t.get_text(" ", strip=True))
         return desc, closed, posted
     except requests.RequestException:
         return "", False, ""

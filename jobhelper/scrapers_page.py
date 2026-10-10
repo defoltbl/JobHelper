@@ -86,5 +86,5 @@ def posting_text(url: str) -> str:
                 if len(body) >= _MAX_PAGE:
                     break
             return parse_posting(body.decode(resp.encoding or "utf-8", errors="replace"))
-    except (requests.RequestException, ValueError):
+    except (requests.RequestException, ValueError, LookupError):      # LookupError: a page that names an encoding nobody knows
         return ""

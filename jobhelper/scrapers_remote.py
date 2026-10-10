@@ -82,13 +82,13 @@ def _remoteok_payload() -> tuple[dict[str, Any], ...]:
     r = requests.get("https://remoteok.com/api", headers=_HEADERS, timeout=_TIMEOUT)
     r.raise_for_status()
     data = r.json()
-    return tuple(data[1:])  # [0] is a legal notice
+    return tuple(item for item in data[1:] if isinstance(item, dict)) if isinstance(data, list) else ()   # [0] is a legal notice
 
 
 def remoteok(keyword: str, where: str, limit: int, with_description: bool = True) -> list[dict[str, Any]]:
     try:
         payload = _remoteok_payload()
-    except requests.RequestException:
+    except (requests.RequestException, ValueError):      # ValueError: the board answered with something that is not its list
         return []
     out: list[dict[str, Any]] = []
     for raw in payload:
@@ -96,6 +96,7 @@ def remoteok(keyword: str, where: str, limit: int, with_description: bool = True
         if not _matches(keyword, position):  # match on title only to reduce noise
             continue
         smin = raw.get("salary_min")
+        smin = smin if isinstance(smin, (int, float)) and not isinstance(smin, bool) else 0      # a board may send words here
         out.append(store.new_job(
             id=f"remoteok-{raw.get('id')}",
             title=_clean(position),
@@ -113,7 +114,7 @@ def remoteok(keyword: str, where: str, limit: int, with_description: bool = True
 
 
 # ── We Work Remotely ────────────────────────────────────────────────────────
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=16)      # more than the board has lists: none is fetched twice in one search
 def _wwr_feed(url: str) -> str:
     r = requests.get(url, headers=_HEADERS, timeout=_TIMEOUT)
     r.raise_for_status()

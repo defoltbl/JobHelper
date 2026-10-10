@@ -583,3 +583,18 @@ def test_an_address_needs_a_password_the_first_time(isolate_data, monkeypatch):
     assert "Enter the password" in bridge._save_email_checked(1, "me@gmail.com", "  ")["msg"]
     assert "Enter the password" in bridge._save_email_checked(2, "two@gmail.com", "")["msg"]
     assert bridge._save_email_checked(1, "me@gmail.com", "abcdabcdabcdabcd")["ok"] is True and saved == [("me@gmail.com", "abcdabcdabcdabcd")]
+
+
+# ── found by reading filters.py line by line (10 October 2026) ──────────────
+@pytest.mark.parametrize("location, where, country, us", [
+    ("Prague, NE", "Prague", "", True), ("Austin, TX", "Prague", "", True), ("Remote, USA", "Bangalore", "India", True),
+    ("Bangalore, IN", "Bangalore", "India", False), ("Indianapolis, IN", "Prague", "", True), ("Toronto, CA", "Toronto", "", False),
+    ("San Jose, CA", "Brno", "", True), ("Tel Aviv, IL", "Tel Aviv", "Israel", False), ("Jakarta, ID", "Jakarta", "", False),
+    ("Chicago, IL, United States", "Tel Aviv", "Israel", True), ("Praha", "Prague", "", False)])
+def test_a_state_code_is_not_the_united_states_for_someone_whose_country_has_that_code(location, where, country, us, monkeypatch):
+    """IN is Indiana and India, CA is California and Canada, IL is Illinois and Israel. For someone searching in such a country
+    every local posting written "City, XX" was filtered out as "Located in the United States"."""
+    from jobhelper import config
+    monkeypatch.setattr(config, "search_country", lambda: country)
+    assert filters.is_us_location(location, where) is us
+    assert filters.is_us_location("Bangalore, IN") is True, "without a search city the old, wide reading stays"
