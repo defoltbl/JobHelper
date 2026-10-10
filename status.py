@@ -106,15 +106,21 @@ def cmd_retailor(args) -> int:
             print("Nothing to do — every qualifying lead already has a letter + tailored CV.")
             return 0
 
-    made = 0
+    stopped = ""
     for job in targets:
-        done = agent3_letters.generate_for(job, cv_text=cv_text, cv_path=cv_path,
-                                           rewrite_letter=args.letters)
+        try:
+            done = agent3_letters.generate_for(job, cv_text=cv_text, cv_path=cv_path,
+                                               rewrite_letter=args.letters)
+        except (llm.LimitReached, llm.PaidApiRefused) as e:      # nothing more can be written now: what is done is saved
+            stopped = str(e)
+            break
         tag = ", ".join(k for k, v in done.items() if v) or "nothing new"
         print(f"  {job['title']} @ {job['company']}: {tag}")
-        made += 1 if any(done.values()) else 0
     store.save_jobs(jobs)
     agent4_tracker.render_all(jobs)
+    if stopped:
+        print(f"\n⏸  {stopped}\n   What was written is saved. Run this again later: jobs that have their documents are not done twice.")
+        return 3
     print(f"\nProcessed {len(targets)} job(s). CVs/letters in {config.TAILORED_CV_DIR} / {config.LETTERS_DIR}")
     print(usage.format_report())
     return 0

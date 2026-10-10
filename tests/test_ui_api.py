@@ -903,3 +903,51 @@ def test_the_kept_copies_are_not_cleaned_up_as_old_backups(isolate_data):
     assert "approved" not in [p.name for p in housekeeping.backup_entries()]
     housekeeping.prune_backups(keep=1)
     assert (vault.backups_dir() / "approved" / "cv_rules.txt").is_file()
+
+
+def test_a_reached_limit_is_said_when_documents_are_asked_for_one_job(isolate_data, monkeypatch, capsys):
+    """Found by reading the code: the writer for one job swallowed every error, so "Claude's limit is used up" came out as
+    "Nothing could be written this time. Try again in a moment." - with no word on why or until when."""
+    from jobhelper import agent1_cv, agent3_letters, llm
+    import status
+    text = "We build planning tools in Python and SQL. " * 30
+    store.save_jobs([store.new_job(id="a", title="Python Developer", company="Acme", status="found", match_score=65, description=text),
+                     store.new_job(id="b", title="Tester", company="Borg", status="found", match_score=62, description=text)])
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython, SQL.")
+    monkeypatch.setattr(agent1_cv, "find_cv", lambda: None)
+    limit = llm.LimitReached("Claude's 5-hour limit is used up (100%). It resets at 18:00 on 10 Oct.")
+
+    def no_cv(job, cv_text, cv_path, fields):
+        raise limit
+    monkeypatch.setattr(agent3_letters, "_make_tailored_cv", no_cv)
+    api = ui_api.Api()
+    result = api.write_documents("a")
+    assert result == {"ok": False, "msg": "Claude's 5-hour limit is used up (100%). It resets at 18:00 on 10 Oct."}
+    assert store.find(store.load_jobs(), "a")["tailored_cv_file"] == "", "nothing half-written is recorded"
+    # the CV was made and the limit came with the letter: the CV is kept and the letter is named as not written
+    monkeypatch.setattr(agent3_letters, "_make_tailored_cv", lambda job, cv_text, cv_path, fields: "CV_a.docx")
+    monkeypatch.setattr(agent3_letters, "_make_letter", no_cv)
+    result = api.write_documents("a")
+    assert result["ok"] is True and result["msg"] == "Written: the CV. Not written: the letter; try again in a moment."
+    assert store.find(store.load_jobs(), "a")["tailored_cv_file"] == "CV_a.docx"
+    # the command line stops at the limit, keeps what was done and says so (exit code 3, as a search does)
+    monkeypatch.setattr(agent3_letters, "_make_tailored_cv", no_cv)
+    monkeypatch.setattr(agent1_cv, "read_cv_text", lambda path: "Alex Novak\nPython, SQL.")
+    monkeypatch.setattr(agent1_cv, "find_cv", lambda: __import__("pathlib").Path("cv.docx"))
+    monkeypatch.setattr("sys.argv", ["status.py", "retailor"])
+    assert status.main() == 3
+    out = capsys.readouterr().out
+    assert "limit is used up" in out and "What was written is saved" in out and "Traceback" not in out
+
+
+def test_the_plain_letter_written_without_a_template_carries_your_own_title(isolate_data):
+    import docx
+    from jobhelper import agent3_letters, config
+    config.ensure_dirs()
+    job = store.new_job(id="j1", title="Group Full-Stack Developer – Payments (m/f/d)", company="Northwind")
+    cv = "Alex Novak\nJunior Software Developer\nalex@example.com | +420 123 456 789\nPROFILE\nBuilds services."
+    name = agent3_letters._save_letter(job, "Dear Hiring Team,\nI apply.\nYours sincerely,", cv_text=cv)
+    lines = [p.text for p in docx.Document(str((config.LETTERS_DIR / name).with_suffix(".docx"))).paragraphs]
+    assert lines[:2] == ["Alex Novak", "Junior Software Developer"], "who writes, not the role applied for"
+    bare = agent3_letters._save_letter(dict(job, id="j2"), "Dear Hiring Team,\nI apply.\nYours sincerely,", cv_text="Alex Novak\nalex@example.com\nPROFILE")
+    assert [p.text for p in docx.Document(str((config.LETTERS_DIR / bare).with_suffix(".docx"))).paragraphs][1] == "Group Full-Stack Developer", "a CV without such a line: the role, as before"

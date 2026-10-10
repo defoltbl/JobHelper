@@ -146,7 +146,8 @@ def _save_letter(job: dict[str, Any], letter: str, cv_text: str = "") -> str:
     config.ensure_dirs()
     base = f"{store.slugify(job['company'])}-{store.slugify(job['title'])}-{job['id']}"
     name, email, phone = _extract_contact(cv_text)
-    role = _clean_role(job["title"])
+    # under the name stands what the person is (the line under the name in their CV); the role only when the CV has no such line
+    role = cover_letter.own_title(cv_text) or _clean_role(job["title"])
 
     config.LETTERS_DIR.joinpath(f"{base}.md").write_text(letter, encoding="utf-8")
 
@@ -465,6 +466,8 @@ def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
             if name:
                 job["tailored_cv_file"] = name
                 done["cv"] = True
+        except (llm.LimitReached, llm.PaidApiRefused):
+            raise                                       # the reason nothing can be written now: the caller says it
         except Exception as e:
             print(f"  ! tailored CV failed for {job['company']}: {e}")
 
@@ -475,6 +478,10 @@ def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
             if name:
                 job["cover_letter_file"] = name
                 done["letter"] = True
+        except (llm.LimitReached, llm.PaidApiRefused):
+            if not done["cv"]:
+                raise
+            print(f"  ! letter not written for {job['company']}: Claude's limit was reached after the CV")   # the CV that was made is kept
         except Exception as e:
             print(f"  ! letter failed for {job['company']}: {e}")
 
