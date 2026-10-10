@@ -44,8 +44,8 @@ SYSTEM = (
 PROMPT = """Today is {today}.
 
 What the app can do (up to three actions, only when the person asked for each of them):
-- fill_form {{"skip": ["words of fields to leave out"]}} - fill in the application form that is open in Chrome
-- review_form {{}} - read the form in Chrome back and say what looks wrong before it is sent
+- fill_form {{"skip": ["words of fields to leave out"]}} - fill in the application form that is open in the browser
+- review_form {{}} - read the form in the browser back and say what looks wrong before it is sent
 - my_details {{}} / my_answers {{}} - open those pages
 - open {{"job": id, "what": "job" | "posting" | "cv" | "letter"}}
 - mark_applied {{"job": id}} - move a lead to Applications

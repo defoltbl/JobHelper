@@ -119,6 +119,7 @@ class AssistantApi:
             return {"ok": False, "msg": "That is not a web address I can open."}
         if mailhosts.never_used(host):
             return {"ok": False, "msg": "This app does not work with Russian services, so I do not open this site."}
+        self._browser()
         try:
             chrome.open_tab(url)
         except chrome.ChromeError as e:
@@ -152,6 +153,7 @@ class AssistantApi:
     def assistant_watch(self):
         """Where the form in front stands now: quiet on any trouble (it is asked every few seconds while the window waits)."""
         try:
+            self._browser()
             return {"ok": True, **form_fill.watch_answer(chrome.run(form_fill.WATCH))}
         except Exception:  # noqa: BLE001 - not being able to look is not something to report
             return {"ok": False, "url": "", "sign": "", "empty": 0}
@@ -162,6 +164,7 @@ class AssistantApi:
         last = getattr(self, "_last_fill", None)
         if not last or not last.get("items"):
             return {"ok": False, "msg": "There is nothing to compare with yet. Ask me to fill in a form first."}
+        self._browser()
         try:
             now = form_fill.values_answer(chrome.run(form_fill.values_script([i["n"] for i in last["items"]], last["url"])))
         except chrome.ChromeError as e:
@@ -242,7 +245,7 @@ class AssistantApi:
         """Open a menu the page draws itself and read its entries (they are numbered on the page for the pick that follows)."""
         chrome.run(form_fill.choose_script("open", n, typed, url))
         options: list[str] = []
-        for wait in (0.35, 0.7):
+        for wait in (0.35, 0.7, 1.2):
             chrome.pause(wait)
             options = form_fill.choose_answer(chrome.run(form_fill.choose_script("options", n, "", url)))["options"]
             if options:
@@ -323,6 +326,7 @@ class AssistantApi:
         The values of personal and payment fields are not looked at."""
         def no(msg):
             return {"ok": False, "action": "review", "msg": msg}
+        self._browser()
         try:
             tab = chrome.active_tab()
             host = form_fill.host_of(tab["url"])
@@ -374,6 +378,7 @@ class AssistantApi:
         def no(msg, **more):
             return {"ok": False, "action": "fill", "msg": msg, **more}
         mine = details.load()
+        self._browser()
         if not details.any_given(mine):
             return no("I do not know your details yet. Fill in My details once, save, then ask me again.", action="details")
         try:
@@ -382,7 +387,7 @@ class AssistantApi:
             return no(str(e))
         host = form_fill.host_of(tab["url"])
         if not tab["url"].lower().startswith(("http://", "https://")) or not host:
-            return no("The tab in front is not a web page with a form. Open the application form in Chrome, bring its tab to the front, and ask me again.")
+            return no(f"The tab in front is not a web page with a form. Open the application form in {chrome.short()}, bring its tab to the front, and ask me again.")
         if mailhosts.never_used(host):
             return no("This app does not work with Russian services, so I do not fill in forms on this site.")
         try:
@@ -454,6 +459,16 @@ class AssistantApi:
             fill += values
             filled += chosen
             left += open_ones
+        for box in wanted(todo["tick"]):               # "I work here now", for a job of yours that goes on: the one tick box it may tick
+            try:
+                ticked = form_fill.choose_answer(chrome.run(form_fill.choose_script("tick", box["n"], "", page["url"])))
+            except chrome.ChromeError as e:
+                return no(str(e))
+            if ticked["ok"]:
+                filled.append({"label": box["label"], "value": "Ticked", "kind": "choice", "check": form_choices.CHECK})
+            else:
+                left.append({"label": box["label"], "why": "The page did not take the tick. Tick it yourself."})
+        thrown: list[int] = []
         if fill:
             try:
                 done = form_fill.fill_answer(chrome.run(form_fill.fill_script(fill, page["url"])))
@@ -461,10 +476,25 @@ class AssistantApi:
                 return no(str(e))
             if done["moved"]:
                 return no("The tab changed while I was working, so I wrote nothing. Go back to the form and ask me again.")
+            # some pages throw away what did not arrive as typing: look again, and write those the way typing arrives
+            try:
+                texts = [i["n"] for i in fill if i["n"] in done["done"]]
+                if texts:
+                    chrome.pause(0.35)
+                    lost = set(form_fill.empty_answer(chrome.run(form_fill.empty_script(texts, page["url"]))))
+                    if lost:
+                        chrome.run(form_fill.fill_script([i for i in fill if i["n"] in lost], page["url"], typed=True))
+                        chrome.pause(0.35)
+                        thrown = form_fill.empty_answer(chrome.run(form_fill.empty_script(sorted(lost), page["url"])))
+            except chrome.ChromeError:
+                thrown = []                          # looking again failed: what was written is reported as it was
+            done["done"] = [n for n in done["done"] if n not in thrown]
             for item in fill:
                 if item["n"] in done["done"]:
                     filled.append({"label": item["label"], "kind": item["kind"], "check": item.get("check", ""),
                                    "value": item["value"] if len(item["value"]) <= SHOWN else item["value"][:SHOWN].rstrip() + "…"})
+                elif item["n"] in thrown:
+                    left.append({"label": item["label"], "why": form_fill.THROWN})
                 else:
                     left.append({"label": item["label"], "why": "The page did not take it: the field changed or was filled in the meantime. Type this one yourself."})
         kept = sum(1 for f in page["fields"] if f["filled"])

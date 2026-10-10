@@ -226,14 +226,19 @@ def test_what_a_page_answers_is_never_trusted():
 def test_values_travel_into_the_page_as_data_and_nothing_is_ever_clicked():
     nasty = 'Alex"); document.forms[0].submit(); ("\n</script> `${1}`'
     script = form_fill.fill_script([{"n": 3, "value": nasty, "check": "look"}], 'https://x.example/a"b')
-    tail = script[script.rindex("})(") + 3:-1]
-    items, _sep, url = tail.rpartition(", ")
-    assert json.loads(items) == [{"n": 3, "value": nasty, "check": True}] and json.loads(url) == 'https://x.example/a"b'
+    items, url, typed = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
+    assert items == [{"n": 3, "value": nasty, "check": True}] and url == 'https://x.example/a"b' and typed is False
+    assert json.loads("[" + form_fill.fill_script([], "u", typed=True).rsplit("})(", 1)[1][:-1] + "]") == [[], "u", True]
+    assert json.loads("[" + form_fill.empty_script([3, 4], "u").rsplit("})(", 1)[1][:-1] + "]") == [[3, 4], "u"]
+    assert form_fill.empty_answer('{"empty": [3, "x"]}') == [3] and form_fill.empty_answer("junk") == []
+    assert "el.value" not in form_fill.EMPTY.replace("String(el.value || '').trim() === ''", ""), "looking again says only empty or not"
     assert " " not in script and "\n</script>" not in script
     for never in (".click(", "submit(", "requestSubmit", "fetch(", "XMLHttpRequest", "sendBeacon", "eval(", "innerHTML", "cookie", "localStorage"):
         assert never not in form_fill.CHOOSE, never
     assert "el.type === 'submit' || el.closest('[type=submit]')" in form_fill.CHOOSE, "what sends a form is never pressed"
-    assert form_fill.CHOOSE.count("press(") == 6, "pressed: a radio button, an entry of a menu, what opens a menu (an input or another element), a button that adds a row; nothing else"
+    assert form_fill.CHOOSE.count("press(") == 7, ("pressed: a radio button, an entry of a menu, what opens a menu (an input or another element), "
+                                                   "a button that adds a row, the tick box of a current job; nothing else")
+    assert "agree|consent|terms|privacy" in form_fill.CHOOSE, "a box that agrees to something is never ticked"
     for words, kind in (("Add another job", "experience"), ("+ Add work experience", "experience"), ("Add education", "education"), ("Add a degree", "education"),
                         ("Add another", ""), ("Add and continue", ""), ("Add & submit application", ""), ("Add job and save", ""), ("Add file", ""),
                         ("Upload CV", ""), ("Next", ""), ("Submit", ""), ("Add work and education", "")):
@@ -345,10 +350,12 @@ def _browser(monkeypatch, fields, url="https://careers.northwind.example/jobs/42
     monkeypatch.setattr(chrome, "active_tab", lambda: {"url": url, "title": title})
 
     def run(script):
+        if "empty.push" in script:               # the look after a fill: everything stayed where it was written
+            return json.dumps({"empty": []})
         ran.append(script)
         if script == form_fill.READ:
             return json.dumps({"url": url, "title": title, "fields": fields, "frames": list(frames), "boxes": boxes})
-        items = json.loads(script[script.rindex("})(") + 3:-1].rpartition(", ")[0])
+        items = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")[0]
         return json.dumps(done if done is not None else {"done": [i["n"] for i in items], "skipped": []})
     monkeypatch.setattr(chrome, "run", run)
     return ran
@@ -433,7 +440,7 @@ def test_the_job_list_for_the_assistant_holds_open_jobs_only(isolate):
 AREA = {"details": {**MINE, "street": "Long Street 5", "notice_period": "1 month",
                     "experience": [{"employer": "Old Mill", "title": "Intern", "start": "2020", "end": "2021", "current": False},
                                    {"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True}],
-                    "education": [{"school": "Masaryk University", "degree": "Master", "field": "Applied informatics", "start": "2021", "end": "2023"}],
+                    "education": [{"school": "Masaryk University", "degree": "Master", "field": "Applied informatics", "start": "09/2021", "end": "06/2023"}],
                     "salary_amount": 60000, "salary_currency": "CZK", "salary_period": "month"},
         "jobs": [{"id": "bp", "title": "Backend Developer", "company": "Brightpath", "status": "letter_ready", "source": "linkedin",
                   "url": "https://www.linkedin.com/jobs/view/1", "description": "FastAPI services."},
@@ -496,6 +503,12 @@ def test_area_a_long_form_is_filled_in_as_far_as_is_safe():
     assert (state["w3"], state["w4"]) == ("Old Mill", "Intern") and state["w7"] == "" and state["w8"] == "2021"
     assert out["left"]["Start date"] == form_fill.NO_MONTH, "a year alone does not make a date"
     # a field the app did not recognise: Claude may copy words that stand in the CV, and only those
+    # the box "I currently work here" is ticked for the job that goes on, and no other box is touched
+    assert state["wc"] is True and out["filled"]["I currently work here"]["value"] == "Ticked" and state["nl"] is False
+    # a date asked as two lists: the month and the year of the degree
+    assert (state["em"], state["ey"]) == ("9", "2021") and (state["xm"], state["xy"]) == ("6", "2023")
+    # a field that throws away what does not arrive as typing gets it the second way
+    assert state["st"] == "602 00", "written again the way typing arrives"
     assert state["g1"] == "SQL" and out["filled"]["Main tool"]["check"] == form_choices.CHECK
     assert state["g2"] == "" and out["left"]["Office snack"] == form_fill.UNKNOWN, "words that are not in the CV are not written"
     assert (state["e1"], state["e2"], state["e3"]) == ("Masaryk University", "Master", "Applied informatics")
@@ -693,6 +706,8 @@ def test_what_you_change_on_the_page_is_learned_from_the_assistants_own_fields_o
     def run(script):
         if script == form_fill.READ:
             return json.dumps({"url": url, "title": "t", "frames": [], "boxes": 0, "fields": [_field("Email", n=1), _field("Why Northwind?", kind="textarea", n=2)]})
+        if "empty.push" in script:
+            return json.dumps({"empty": []})
         tail = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
         if isinstance(tail[0], list) and tail[0] and isinstance(tail[0][0], dict):
             return json.dumps({"done": [i["n"] for i in tail[0]], "skipped": []})
@@ -1416,3 +1431,61 @@ def test_the_window_is_told_what_is_being_done(isolate, monkeypatch):
     said.clear()
     ui_api.Api().assistant_talk("help", progress=said.append)
     assert said == [], "a fixed request is answered at once"
+
+
+def test_a_date_asked_as_two_lists_and_the_box_of_a_current_job():
+    months = ["Month", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    years = ["Year", "2019", "2020", "2021", "2022", "2023", "2024"]
+    assert form_fill.date_option(months, "03/2023") == ("March", "") and form_fill.date_option(years, "03/2023") == ("2023", "")
+    assert form_fill.date_option(["01", "02", "03"], "3/2023") == ("03", "") and form_fill.date_option(["Jan", "Feb", "Mar"], "03/2023") == ("Mar", "")
+    assert form_fill.date_option(["1 - January", "3 - March"], "03/2020") == ("3 - March", "") and form_fill.date_option(months, "2023") == ("", form_fill.NO_MONTH)
+    assert form_fill.date_option(years, "1999") == ("", "") and form_fill.date_option(months, "") == ("", "")
+    fields = [_field("Company", n=1), _field("Job title", n=2), _field("Start date", kind="select", n=3, options=months), _field("Start date", kind="select", n=4, options=years),
+              _field("End date", kind="select", n=5, options=months), _field("I currently work here", kind="checkbox", n=6),
+              _field("Company", n=7), _field("Job title", n=8), _field("From (month)", kind="select", n=9, options=months), _field("I currently work here", kind="checkbox", n=10),
+              _field("Company", n=11), _field("To year", kind="select", n=12, options=years), _field("I currently work here", kind="checkbox", n=13),
+              _field("Notice period", kind="select", n=14, options=["1 month"])]
+    todo = form_fill.plan(fields, {**FULL, "experience": [dict(JOBS[1]), dict(JOBS[2]), dict(JOBS[0])]})
+    filled = {f["n"]: f["value"] for f in todo["fill"]}
+    assert filled[3] == "March" and filled[4] == "2023" and 5 not in filled, "the job goes on: its end stays empty"
+    assert 9 not in filled and filled[12] == "2021"
+    assert todo["tick"] == [{"n": 6, "label": "I currently work here"}, {"n": 10, "label": "I currently work here"}], "ticked for the two jobs that go on, not for the one that ended"
+    assert ("From (month)", form_fill.NO_MONTH) in [(i["label"], i["why"]) for i in todo["left"]]
+    assert [c["label"] for c in todo["choose"]] == ["Notice period"], "a list that is not a date is still a choice"
+    assert form_fill.plan([_field("I currently work here", kind="checkbox", n=1)], FULL)["tick"] == [], "a box before any job row belongs to no job"
+
+
+def test_other_browsers_are_spoken_to_in_their_own_way(isolate, monkeypatch):
+    calls = _chrome(monkeypatch, _Done("https://jobs.example.com/apply/7\nApply - Example\n"))
+    try:
+        assert chrome.use("safari") == "safari" and chrome.name() == "Safari" and chrome.short() == "Safari"
+        assert chrome.active_tab() == {"url": "https://jobs.example.com/apply/7", "title": "Apply - Example"}
+        said = " ".join(calls[-1][0])
+        assert 'tell application "Safari"' in said and "URL of current tab of front window" in said and "name of current tab" in said
+        chrome.run("1 + 1")
+        assert "do JavaScript (item 1 of argv) in current tab of front window" in " ".join(calls[-1][0]) and calls[-1][0][-1] == "1 + 1"
+        chrome.open_tab("https://x.example/a")
+        assert "set current tab to (make new tab" in " ".join(calls[-1][0])
+        _chrome(monkeypatch, _Done(err="execution error: Safari got an error: You must enable 'Allow JavaScript from Apple Events' in the Develop menu", code=1))
+        with pytest.raises(chrome.ChromeError) as e:
+            chrome.run("1")
+        assert e.value.kind == "no_scripts" and "In Safari's menu bar choose Develop > Allow JavaScript from Apple Events" in str(e.value)
+        calls = _chrome(monkeypatch, _Done("x\ny\n"))
+        for key, app in (("brave", "Brave Browser"), ("edge", "Microsoft Edge"), ("chrome", "Google Chrome")):
+            chrome.use(key)
+            chrome.run("1")
+            assert f'tell application "{app}"' in " ".join(calls[-1][0]) and "execute active tab of front window javascript" in " ".join(calls[-1][0])
+        assert chrome.use("netscape") == "chrome" and chrome.use(None) == "chrome"
+        assert chrome.ChromeError(chrome.NOT_RUNNING).kind == "not_running" and chrome.ChromeError("something else").kind == "refused"
+        # the choice is kept with the options and used from then on
+        api = ui_api.Api()
+        assert api.assistant_browser()["key"] == "chrome" and [b["key"] for b in api.assistant_browser()["all"]] == ["chrome", "brave", "edge", "safari"]
+        assert api.assistant_set_browser("firefox")["ok"] is False and api.assistant_browser()["key"] == "chrome"
+        out = api.assistant_set_browser("safari")
+        assert out["ok"] and out["name"] == "Safari" and "Develop" in out["switch"] and api.options()["assistant_browser"] == "safari"
+        details.save(MINE)
+        monkeypatch.setattr(chrome, "active_tab", lambda: (_ for _ in ()).throw(chrome.ChromeError(chrome.said("not_running"), "not_running")))
+        assert ui_api.Api().assistant_fill()["msg"] == "Safari is not open. Open the application form in Safari, then ask me again."
+        assert api.check_options({"assistant_browser": "lynx"})[1].startswith("“assistant browser” must be one of")
+    finally:
+        chrome.use("chrome")

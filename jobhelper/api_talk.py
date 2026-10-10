@@ -193,6 +193,7 @@ class TalkApi:
         """Read the job posting that is open in the browser, score it with the app's own scorer, and offer to add it."""
         def no(msg):
             return {"ok": False, "action": "say", "msg": msg}
+        self._browser()
         try:
             tab = chrome.active_tab()
             host = form_fill.host_of(tab["url"])
@@ -536,6 +537,26 @@ class TalkApi:
             j["nudged"] = sorted(set(j.get("nudged") or []) | {kind})
         return {"ok": bool(self._change(job_id, go, render=False).get("ok"))}
 
+    def _browser(self) -> str:
+        """Speak to the browser chosen in the assistant's settings (Chrome unless another one was chosen)."""
+        try:
+            return chrome.use(self.options().get("assistant_browser"))
+        except Exception:  # noqa: BLE001 - unreadable settings: Chrome
+            return chrome.use(None)
+
+    def assistant_browser(self):
+        key = self._browser()
+        return {"key": key, "name": chrome.name(key), "short": chrome.short(key), "switch": chrome.BROWSERS[key][2],
+                "all": [{"key": k, "name": v[0]} for k, v in chrome.BROWSERS.items()]}
+
+    def assistant_set_browser(self, key):
+        """Choose the browser forms are filled in: Chrome, Brave, Edge or Safari."""
+        if key not in chrome.BROWSERS:
+            return {"ok": False, "msg": "Choose one of: " + ", ".join(v[0] for v in chrome.BROWSERS.values()) + "."}
+        saved = self.save_options({"assistant_browser": key})
+        self._noticed = set()
+        return {"ok": bool(saved.get("ok")), "msg": saved.get("msg", ""), **self.assistant_browser()}
+
     def assistant_watching(self):
         return bool(self.options().get("assistant_watch"))
 
@@ -553,10 +574,11 @@ class TalkApi:
         page is offered once. Looks at the tab's address and title and counts its empty fields; reads nothing else."""
         if not self.assistant_watching():
             return {"ok": False, "off": True}
+        self._browser()
         try:
             tab = chrome.active_tab()
         except chrome.ChromeError as e:
-            quiet = str(e) in (chrome.NOT_RUNNING, chrome.NO_WINDOW)      # Chrome simply not in use is nothing to report
+            quiet = e.kind in ("not_running", "no_window")      # the browser simply not in use is nothing to report
             return {"ok": False, "problem": "" if quiet else str(e)}
         url = tab["url"]
         seen = getattr(self, "_noticed", set())

@@ -11,9 +11,9 @@ from typing import Any
 
 MAX_REQUEST = 300
 EMPTY = "Write what you need, or press one of the buttons."
-TOO_LONG = f"That is longer than {MAX_REQUEST} characters. Say it in a sentence, for example: fill in the form in Chrome."
-GREETING = "Hi! Open an application form in Chrome, then ask me to fill it in."
-HELP = ("I fill in application forms. Open the form in Google Chrome, bring its tab to the front, and ask me to fill it in. "
+TOO_LONG = f"That is longer than {MAX_REQUEST} characters. Say it in a sentence, for example: fill in the form."
+GREETING = "Hi! Open an application form in your browser, then ask me to fill it in."
+HELP = ("I fill in application forms. Open the form in your browser, bring its tab to the front, and ask me to fill it in. "
         "Your name, contacts and links come from My details; open questions are answered from your CV for the job you choose. "
         "I choose from lists and yes/no questions only when your CV or your details settle the answer. "
         "I choose from lists, menus and yes/no questions only when your CV or your details settle the answer. "

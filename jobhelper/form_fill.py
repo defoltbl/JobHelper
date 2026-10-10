@@ -118,6 +118,16 @@ READ = r"""
       if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'reset' || type === 'image') continue;
       if (type === 'checkbox' || type === 'radio') {
         if (!(shown(el) || (el.labels && el.labels.length))) continue;
+        if (type === 'checkbox' && !el.disabled) {
+          var says = clean(el.labels && el.labels.length ? text(el.labels[0]) : (el.getAttribute('aria-label') || '')).slice(0, 120);
+          if (/current|present|still work|i work here|ongoing|to date|till now|until now/i.test(says) && !/agree|consent|terms|privacy|policy|newsletter|subscribe|marketing/i.test(says)) {
+            n++;
+            el.setAttribute(MARK, String(n));
+            fields.push({n: n, type: 'checkbox', name: clean(el.name).slice(0, 80), id: clean(el.id).slice(0, 80), auto: '', label: says, hint: '',
+                         required: false, filled: !!el.checked, most: 0, options: [], combo: false});
+            continue;
+          }
+        }
         if (type === 'checkbox' || !el.name || el.disabled) { boxes++; continue; }
         var group = groups[el.name];              // the radio buttons of one question are one field
         if (!group) {
@@ -153,7 +163,7 @@ READ = r"""
 """.replace("__MOST__", str(MAX_FIELDS)).strip()
 
 FILL = r"""
-(function (items, url) {
+(function (items, url, typed) {
   if (location.href !== url) return JSON.stringify({moved: true});
   var MARK = 'data-jobhelper', found = {}, done = [], skipped = [];
   function walk(root) {
@@ -188,17 +198,45 @@ FILL = r"""
       el.selectedIndex = pick;
     } else {
       if (String(el.value || '').trim() !== '') { skipped.push(item.n); return; }
-      var proto = el.tagName === 'TEXTAREA' ? view.HTMLTextAreaElement.prototype : view.HTMLInputElement.prototype;
-      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, item.value);
+      var proto = el.tagName === 'TEXTAREA' ? view.HTMLTextAreaElement.prototype : view.HTMLInputElement.prototype, put = false;
+      if (typed) {              // the way typing arrives: some pages believe nothing else
+        el.focus();
+        try { put = el.ownerDocument.execCommand('insertText', false, item.value) && String(el.value || '') !== ''; } catch (e) { put = false; }
+        if (!put) {             // the page is not in front: the same events typing makes, made by hand
+          Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, item.value);
+          el.dispatchEvent(new view.InputEvent('input', {bubbles: true, inputType: 'insertText', data: item.value}));
+          put = true;
+        }
+      } else Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, item.value);
     }
-    tell(el, 'input');
+    if (!(typed && el.tagName !== 'SELECT')) tell(el, 'input');
     tell(el, 'change');
     el.style.outline = '2px solid ' + (item.check ? '#f59e0b' : '#22c55e');
     el.style.outlineOffset = '1px';
     done.push(item.n);
   });
   return JSON.stringify({done: done, skipped: skipped});
-})(__ITEMS__, __URL__)
+})(__ITEMS__, __URL__, __TYPED__)
+""".strip()
+
+EMPTY = r"""
+(function (wanted, url) {
+  if (location.href !== url) return JSON.stringify({moved: true});
+  var MARK = 'data-jobhelper', empty = [];
+  function walk(root) {
+    var all = root.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.shadowRoot) walk(el.shadowRoot);
+      if (el.tagName === 'IFRAME') { var inner = null; try { inner = el.contentDocument; } catch (e) { inner = null; } if (inner && inner.body) walk(inner); continue; }
+      var mark = Number(el.getAttribute(MARK));
+      if (!mark || wanted.indexOf(mark) < 0) continue;
+      if (el.tagName === 'SELECT' ? el.selectedIndex <= 0 : String(el.value || '').trim() === '') empty.push(mark);
+    }
+  }
+  walk(document);
+  return JSON.stringify({empty: empty});
+})(__WANTED__, __URL__)
 """.strip()
 
 
@@ -249,6 +287,16 @@ CHOOSE = r"""
         || /apply|submit|send|next|continue|save|finish|upload|file|attach/i.test(words)) return JSON.stringify({ok: false});
     press(more);
     return JSON.stringify({ok: true});
+  }
+  if (action === 'tick') {
+    // One kind of tick box only: "I currently work here". Its words are read again here; a box that agrees to anything is refused.
+    var box = target, label = box && box.labels && box.labels.length ? String(box.labels[0].innerText || box.labels[0].textContent || '') : (box ? String(box.getAttribute('aria-label') || '') : '');
+    if (!box || box.tagName !== 'INPUT' || box.type !== 'checkbox' || box.disabled
+        || !/current|present|still work|i work here|ongoing|to date|till now|until now/i.test(label)
+        || /agree|consent|terms|privacy|policy|newsletter|subscribe|marketing/i.test(label)) return JSON.stringify({ok: false});
+    if (!box.checked) press(box);
+    if (box.checked) mark(box.labels && box.labels.length ? box.labels[0] : box);
+    return JSON.stringify({ok: box.checked});
   }
   if (action === 'radio') {
     var radio = marked[n + ':' + arg];
@@ -307,7 +355,7 @@ def choose_script(action: str, n: int, arg: Any, url: str) -> str:
     """The CHOOSE script for one step with a menu or a radio button: "open" (arg: text to type, or ''),
     "options", "pick" (arg: the entry's number), "close" (arg: true to clear typed text), "radio" (arg: the button's number), "add" (arg: the number of a button
     that adds a row for another job or degree; n is not used)."""
-    assert action in ("open", "options", "pick", "close", "radio", "add")
+    assert action in ("open", "options", "pick", "close", "radio", "add", "tick")
     return (CHOOSE.replace("__ACTION__", json.dumps(action)).replace("__N__", json.dumps(int(n)))
             .replace("__ARG__", json.dumps(arg)).replace("__URL__", json.dumps(str(url))))
 
@@ -483,10 +531,24 @@ def watch_answer(text: str) -> dict[str, Any]:
             "empty": data.get("empty") if isinstance(data.get("empty"), int) else 0}
 
 
-def fill_script(items: list[dict[str, Any]], url: str) -> str:
-    """The FILL script for these values. They travel as data (JSON), never as code."""
+def fill_script(items: list[dict[str, Any]], url: str, typed: bool = False) -> str:
+    """The FILL script for these values. They travel as data (JSON), never as code. `typed` writes them the
+    way typing arrives, for a page that threw away what was written the plain way."""
     data = [{"n": int(i["n"]), "value": str(i["value"]), "check": bool(i.get("check"))} for i in items]
-    return FILL.replace("__ITEMS__", json.dumps(data)).replace("__URL__", json.dumps(str(url)))
+    return FILL.replace("__ITEMS__", json.dumps(data)).replace("__URL__", json.dumps(str(url))).replace("__TYPED__", "true" if typed else "false")
+
+
+def empty_script(numbers: list[int], url: str) -> str:
+    """The EMPTY script: which of these fields hold nothing now. It says only that, never what a field holds."""
+    return EMPTY.replace("__WANTED__", json.dumps([int(n) for n in numbers])).replace("__URL__", json.dumps(str(url)))
+
+
+def empty_answer(text: str) -> list[int]:
+    try:
+        data = json.loads(text or "")
+    except ValueError:
+        return []
+    return [n for n in data.get("empty") or [] if isinstance(n, int)] if isinstance(data, dict) and isinstance(data.get("empty"), list) else []
 
 
 # ── what a field is ─────────────────────────────────────────────────────────
@@ -520,6 +582,28 @@ _NOT_A_ROW_DATE = re.compile(r"earliest|availab|can you|notice|birth|expected|pr
 NO_MONTH = "My details has only the year for this. Add the month there, or pick the date yourself."
 CHECK_DAY = "The day is not known, so the first of the month was used: check the date."
 SKIPPED = "You asked me to leave it out."
+THROWN = "The page threw the value away twice. Type this one yourself."
+MONTHS = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
+
+
+def date_option(options: list[str], when: str) -> tuple[str, str]:
+    """The entry of a month list or a year list that is this date ("03/2023"): (entry, '') or ('', why not).
+    Which of the two the list is shows in its entries: years are four digits."""
+    parts = re.split(r"[./-]", str(when or ""))
+    if not when:
+        return "", ""
+    year, month = parts[-1], (int(parts[0]) if len(parts) == 2 else 0)
+    plain = [" ".join(str(o).lower().split()) for o in options]
+    if sum(1 for o in plain if re.fullmatch(r"(?:19|20)\d{2}", o)) >= 3:
+        return next((o for o, p in zip(options, plain) if p == year), ""), ""
+    if not month:
+        return "", NO_MONTH
+    names = (MONTHS[month - 1], MONTHS[month - 1][:3], str(month), f"{month:02d}")
+    for o, p in zip(options, plain):
+        words = [w for w in re.split(r"[^a-z0-9]+", p) if w]
+        if p in names or (words and (words[0] in names or words[-1] in names[:2])):
+            return o, ""
+    return "", ""
 _CURRENT = re.compile(r"\b(?:current|present|latest|most recent|last)\b")
 _NOT_THIS_JOB = re.compile(r"appl|desired|interested|preferred|referr|referee|emergency")
 _RULES = (("linkedin", re.compile(r"linked ?in")),
@@ -604,6 +688,13 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
                 what = key
                 break
     has_words = bool(re.search(r"[^\W\d_]{2}", str(field.get("label") or "")))
+    if kind == "checkbox":
+        return "current_box", ""                    # the only kind of tick box that is reported: "I work here now"
+    if kind == "select" and not _NOT_A_ROW_DATE.search(words) and re.search(r"month|year|date|\bfrom\b|\bto\b|start|end", words):
+        if _ROW_START.search(words):
+            return "row_start", ""
+        if _ROW_END.search(words):
+            return "row_end", ""
     if picked:
         if kind == "select" and what == "country":
             return "country", ""
@@ -681,7 +772,7 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
     """What to do with each field that is still empty:
     {"fill": [{n, label, value, kind}], "ask": [{n, label, most}], "choose": [{n, kind, typed, label, options, what, value}],
      "left": [{label, why}]}. Fields that already hold something are not touched and not listed."""
-    out: dict[str, Any] = {"fill": [], "ask": [], "choose": [], "guess": [], "left": [], "rows": {"experience": 0, "education": 0}}
+    out: dict[str, Any] = {"fill": [], "ask": [], "choose": [], "guess": [], "tick": [], "left": [], "rows": {"experience": 0, "education": 0}}
     asked: set[str] = set()
     last = [""]                                     # the list whose row is being filled: its dates belong to that row
     # Jobs and degrees are asked row by row. A row ends where one of its fields comes round again:
@@ -730,11 +821,16 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
             elif what == "row_end" and entry.get("current"):
                 continue                            # a job that goes on has no end date: the field stays empty, and that is right
             else:
-                value, note = when_for(kind, entry.get("start" if what == "row_start" else "end", ""))
+                stamp = entry.get("start" if what == "row_start" else "end", "")
+                value, note = date_option(field.get("options") or [], stamp) if kind == "select" else when_for(kind, stamp)
                 if value:
                     out["fill"].append({"n": field["n"], "label": label, "value": value, "kind": "detail", "check": note})
                 else:
                     out["left"].append({"label": label, "why": note or DATE})
+        elif what == "current_box":
+            rows = details.jobs(mine) if last[0] == "experience" else []
+            if last[0] == "experience" and row["experience"] < len(rows) and rows[row["experience"]].get("current"):
+                out["tick"].append({"n": field["n"], "label": label})       # the job of this row goes on
         elif what == "guess":
             out["guess"].append({"n": field["n"], "label": label, "most": most})
         elif not what:

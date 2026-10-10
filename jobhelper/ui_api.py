@@ -27,6 +27,7 @@ from .api_base import _guarded, _stem
 from .api_documents import DocumentsApi
 from .api_interview import InterviewApi
 from .api_letters import LettersApi
+from . import chrome
 from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, email_client, filters, health, summary,
                textfmt, compare, config, db, followup, housekeeping, insights, integrity, keywords, merge, pdf, places,
                planner, salary, store, usage, vault)
@@ -841,7 +842,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
                     "wanted_roles": list(target_roles), "unwanted_roles": [], "my_fields": [],
                     # start from the level in the CV; the user can change both in Options
                     "level_words": filters.default_level_words(level), "max_years": filters.default_max_years(level),
-                    "about_right_to_work": "", "about_start": "", "about_experience": "", "notifications": True, "scan_all_folders": False, "assistant_watch": False,
+                    "about_right_to_work": "", "about_start": "", "about_experience": "", "notifications": True, "scan_all_folders": False, "assistant_watch": False, "assistant_browser": "chrome",
                     "keep_backups": housekeeping.DEFAULT_KEEP}
         try:
             if p.exists():
@@ -909,6 +910,8 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
             if code not in salary.CURRENCIES:
                 return {}, "“salary currency” must be one of: " + ", ".join(salary.CURRENCIES) + "."
             clean["salary_currency"] = code
+        if "assistant_browser" in clean and clean["assistant_browser"] not in chrome.BROWSERS:
+            return {}, "“assistant browser” must be one of: " + ", ".join(chrome.BROWSERS) + "."
         if clean.get("country") and not re.fullmatch(r"[^\W\d_]+(?:[ '.\-]+[^\W\d_]+)*\.?", clean["country"]):
             return {}, "“country” must be a country's name in letters, for example Germany."
         for key in ("include_remote", "all_languages", "full_time_only", "notifications", "scan_all_folders", "assistant_watch"):

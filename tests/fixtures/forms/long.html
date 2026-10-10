@@ -25,6 +25,7 @@
     <p><label for="w2">Job title</label><input id="w2" name="work[0][title]"></p>
     <p><label for="w5">Start date</label><input id="w5" name="work[0][from]" type="month"></p>
     <p><label for="w6">End date</label><input id="w6" name="work[0][to]" type="month"></p>
+    <p><label><input type="checkbox" id="wc" name="work[0][current]" style="width:auto"> I currently work here</label></p>
   </div>
   <!-- the second row is not in the page until this is pressed, as on many long forms -->
   <button type="button" id="addjob">Add another job</button>
@@ -35,6 +36,12 @@
   <p><label for="e1">School</label><input id="e1" name="edu[0][school]"></p>
   <p><label for="e2">Degree</label><input id="e2" name="edu[0][degree]"></p>
   <p><label for="e3">Field of study</label><input id="e3" name="edu[0][field]"></p>
+  <p><label for="em">Start date</label><select id="em" name="edu[0][from_m]"><option value="">Month</option><option value="1">January</option><option value="6">June</option><option value="9">September</option></select>
+     <select id="ey" name="edu[0][from_y]" aria-label="Start date"><option value="">Year</option><option>2020</option><option>2021</option><option>2022</option><option>2023</option></select></p>
+  <p><label for="xm">End date</label><select id="xm" name="edu[0][to_m]"><option value="">Month</option><option value="1">January</option><option value="6">June</option><option value="9">September</option></select>
+     <select id="xy" name="edu[0][to_y]" aria-label="End date"><option value="">Year</option><option>2020</option><option>2021</option><option>2022</option><option>2023</option></select></p>
+  <p><label><input type="checkbox" id="nl" name="newsletter" style="width:auto"> I agree to receive the newsletter about current openings</label></p>
+  <p><label for="st">Postal code (strict)</label><input id="st" name="strict_zip"></p>
   <p><label for="a19">Notice period</label><select id="a19" name="notice"><option value="">Choose</option><option value="0">Immediately</option><option value="1">1 month</option><option value="2">2 months</option></select></p>
   <p><label for="a20">Highest level of education</label><select id="a20" name="edu"><option value="">Choose</option><option>Secondary school</option><option>Bachelor's degree</option><option>Master's degree</option></select></p>
   <p><label for="a21">Shoe size</label><select id="a21" name="shoe"><option value="">Choose</option><option>40</option><option>44</option></select></p>
@@ -62,6 +69,8 @@
   many.innerHTML = html;
   window.sent = false; window.clicked = false;
   document.getElementById('send').addEventListener('click', function () { window.clicked = true; });
+  // a field that believes only what arrives the way typing does, and throws everything else away
+  document.getElementById('st').addEventListener('input', function (e) { if (e.inputType !== 'insertText') e.target.value = ''; });
   window.rows = 1;
   document.getElementById('addjob').addEventListener('click', function () {
     window.rows++;

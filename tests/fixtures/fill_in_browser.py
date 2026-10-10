@@ -163,7 +163,7 @@ def main() -> int:
                 loop.exec()
             print(json.dumps(out))
             app.quit()
-        QTimer.singleShot(400, go)             # the page's own scripts (and its frame) get their turn first
+        QTimer.singleShot(800, go)             # the page's own scripts (and its frame) get their turn first
     page.loadFinished.connect(work_on_page)
     view.load(QUrl(f"http://127.0.0.1:{server.server_address[1]}/{page_name}"))
     QTimer.singleShot(60000, lambda: app.exit(3))
