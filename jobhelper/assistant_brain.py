@@ -37,7 +37,12 @@ SYSTEM = (
     "thing: an answer in words, or up to three actions for the app to carry out in order. You only use the facts you are given: never "
     "invent a job, a number, a date, a score or a reason, and never say that something was done (the app does it after "
     "you and reports it itself). When the request is not clear, or you cannot tell which job is meant, ask one short "
-    "question instead of acting. Answers are at most five short sentences, plain words, no lists, no emojis; use an en "
+    "question instead of acting. In the list of jobs, the date under \"last reply\" is the day a message arrived; only \"date set\" "
+    "is an interview or a deadline. You know why a job got its score only where the reason is written out for you; for any other "
+    "job say that you see the score but not its reason, and that the job's own window shows it. Never guess a reason. When the "
+    "person asks for something that is not in the list of actions, say plainly that you cannot do it and what you can do instead; "
+    "do not offer another way to get it done. A question that has nothing to do with their job search you do not answer: say "
+    "that it is outside what you do here. Answers are at most five short sentences, plain words, no lists, no emojis; use an en "
     "dash, never an em dash. Reply with only the JSON object."
 )
 
@@ -93,9 +98,12 @@ def job_line(job: dict[str, Any], last_reply: dict[str, Any] | None, today: date
         ago = f" ({(today - date.fromisoformat(applied)).days} days ago)" if applied else ""
     except ValueError:
         ago = ""
-    reply = f"{last_reply.get('stage') or 'reply'} on {db.received_at(last_reply.get('received_date', '')).date().isoformat()}" if last_reply else "none"
+    # worded so that the day a message came cannot be read as the day of an interview (the real Claude did, in a trial)
+    kinds = {"interview": "an invitation", "assessment": "a test task", "offer": "an offer", "rejection": "a rejection", "acknowledged": "a confirmation"}
+    reply = (f"{kinds.get(last_reply.get('stage'), 'a message')} arrived {db.received_at(last_reply.get('received_date', '')).date().isoformat()}"
+             if last_reply else "no reply")
     event = job.get("event") or {}
-    when = f"{event.get('kind', '')} {event.get('date', '')} {event.get('time', '')}".strip() if event.get("date") else "none"
+    when = f"{event.get('kind', 'date')} set for {event.get('date', '')} {event.get('time', '')}".strip() if event.get("date") else "no date set"
     score = job.get("match_score")
     docs = "yes" if job.get("cover_letter_file") or job.get("tailored_cv_file") else "no"
     return " | ".join([str(job.get("id", "")), str(job.get("company", ""))[:40], str(job.get("title", ""))[:60], str(job.get("status", "")),
