@@ -32,8 +32,18 @@ def _decode(value: str | None) -> str:
     if not value:
         return ""
     out = []
-    for text, enc in decode_header(value):
-        out.append(text.decode(enc or "utf-8", errors="ignore") if isinstance(text, bytes) else text)
+    try:
+        pieces = decode_header(value)
+    except Exception:  # noqa: BLE001 - a header nobody can decode is read as it stands
+        return str(value)
+    for text, enc in pieces:
+        if not isinstance(text, bytes):
+            out.append(text)
+            continue
+        try:
+            out.append(text.decode(enc or "utf-8", errors="ignore"))
+        except LookupError:                  # "unknown-8bit" and other names of no encoding: one such subject ended a whole scan
+            out.append(text.decode("utf-8", errors="ignore"))
     return "".join(out)
 
 
@@ -150,7 +160,16 @@ def _read(imap, num, user: str, folder: str) -> dict[str, Any] | None:
     _typ, msg_data = imap.fetch(num, "(BODY.PEEK[])")
     if not msg_data or not isinstance(msg_data[0], tuple):
         return None
-    msg = email.message_from_bytes(msg_data[0][1])
+    try:
+        return _message(msg_data[0][1], num, user, folder)
+    except Exception as e:  # noqa: BLE001 - one message that cannot be taken apart is left out; the others are still read
+        from . import trouble
+        trouble.note("reading one message of the mailbox", RuntimeError(type(e).__name__))
+        return None
+
+
+def _message(raw: bytes, num, user: str, folder: str) -> dict[str, Any]:
+    msg = email.message_from_bytes(raw)
     return {
         "msg_id": _decode(msg.get("Message-ID")) or f"num-{user}-{folder}-{num.decode()}",
         "date": _decode(msg.get("Date")),

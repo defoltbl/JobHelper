@@ -16,6 +16,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
 from . import config, db, email_client, llm, store
+from .agent4_tracker import put
 
 SYSTEM = (
     "You analyze emails a job applicant received in reply to their applications. "
@@ -56,9 +57,44 @@ def _ask_waiting(on_limit, call):
             on_limit(e)
 
 
+STAGES = ("rejection", "interview", "assessment", "offer", "acknowledged", "other")
+_TEXTS = ("company", "role", "rejection_reason", "rejection_category", "sentiment", "next_step", "summary", "when")
+
+
+def tidy(result: dict[str, Any]) -> dict[str, Any]:
+    """Make a model's answer about a reply safe to file: every text really a text (a model may answer null, a number
+    or a list), and the stage one the app knows ("Rejection", "interview | assessment" and anything else become one
+    of STAGES). A reply that was read must be filed, not end the scan. Mutates and returns `result`."""
+    for key in _TEXTS:
+        value = result.get(key)
+        result[key] = " ".join(str(value).split()) if isinstance(value, (str, int, float)) and not isinstance(value, bool) else ""
+    said = str(result.get("stage") or "").lower()
+    result["stage"] = next((name for name in STAGES if re.search(rf"\b{name}\b", said)), "other")
+    if result["rejection_category"] not in db.REJECTION_CATEGORIES:
+        result["rejection_category"] = "no_reason_given"
+    return result
+
+
+def set_by_hand_since(job: dict[str, Any], email_date: str) -> bool:
+    """Whether you set this job's status yourself after this email arrived. Then the email does not change it:
+    a rejection from last week must not undo the interview you entered yesterday, on every scan again.
+    An email newer than your change still counts, like any news."""
+    from datetime import datetime
+    marked = str(job.get("status_by_hand") or "")
+    if not marked:
+        return False
+    try:
+        mine = datetime.fromisoformat(marked)
+    except ValueError:
+        return False
+    mine = mine if mine.tzinfo else mine.astimezone()
+    return _parse_date(email_date) <= mine
+
+
 def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, Any] | None, stats: dict[str, Any]) -> str:
     """Store one classified reply and move its application along. Returns the stage."""
-    stage = str(result.get("stage", "other"))
+    tidy(result)
+    stage = result["stage"]
     # Safety net: a mail the model filed as a plain update or confirmation but
     # whose text is an unmistakable rejection.
     worded = email_client.rejection_wording(f"{msg['subject']}\n{msg['body']}")
@@ -96,8 +132,8 @@ def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, An
     if guess:
         new_status = email_client.STAGE_TO_STATUS.get(stage)
         cur = guess.get("status", "found")
-        if new_status and (new_status == "rejected"
-                           or email_client.RANK.get(new_status, 0) > email_client.RANK.get(cur, 0)):
+        if new_status and not set_by_hand_since(guess, msg["date"]) and (
+                new_status == "rejected" or email_client.RANK.get(new_status, 0) > email_client.RANK.get(cur, 0)):
             if cur in store.LEAD_STATUSES and not guess.get("date_applied"):
                 # the company wrote back, so you applied: the reply's day is the best date known
                 guess["date_applied"] = db.received_at(msg["date"]).date().isoformat() \
@@ -105,7 +141,7 @@ def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, An
                 guess["date_applied_source"] = "first email"
             guess["status"] = new_status
             guess["last_update"] = date.today().isoformat()
-            note = result.get("summary", "").strip()
+            note = result["summary"]
             if note:
                 guess["notes"] = (f"[{date.today().isoformat()}] {note}\n" + guess.get("notes", "")).strip()
             stats["status_updates"] += 1
@@ -531,7 +567,8 @@ def progress_rows(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "first_contact": g["first"],
             "last_update": g["last"],
         })
-    return sorted(rows, key=lambda x: x["last_update"], reverse=True)
+    # by the day itself: these are dates as emails write them ("Fri, 9 Oct 2026 …"), which as text sort by the weekday's name
+    return sorted(rows, key=lambda x: _parse_date(x["last_update"]), reverse=True)
 
 
 def _numbered_path(stages: list[str]) -> str:
@@ -607,7 +644,7 @@ def annotate_progress(jobs: list[dict[str, Any]]) -> None:
             # (forward-only; rejection can apply from anywhere). This is the
             # safety net that moves an applied lead into applications.
             new_status = email_client.STAGE_TO_STATUS.get(row["result"])
-            if new_status:
+            if new_status and not set_by_hand_since(target, row["last_update"]):
                 cur = target.get("status", "found")
                 if new_status == "rejected" or email_client.RANK.get(new_status, 0) > email_client.RANK.get(cur, 0):
                     target["status"] = new_status
@@ -638,8 +675,8 @@ def build_report(jobs: list[dict[str, Any]]) -> None:
         *[(f"  {k}", v) for k, v in a["rejection_reasons"].items()],
     ]
     for i, (k, v) in enumerate(rows, start=2):
-        ws.cell(row=i, column=1, value=k)
-        ws.cell(row=i, column=2, value=v)
+        put(ws, i, 1, k)
+        put(ws, i, 2, v)
     ws.column_dimensions["A"].width = 34
     ws.column_dimensions["B"].width = 14
 
@@ -654,7 +691,7 @@ def build_report(jobs: list[dict[str, Any]]) -> None:
         wsp.column_dimensions[chr(64 + c)].width = 26 if h in ("path", "next_step") else 18
     for r, row in enumerate(progress_rows(jobs), start=2):
         for c, h in enumerate(p_headers, start=1):
-            wsp.cell(row=r, column=c, value=row.get(h, ""))
+            put(wsp, r, c, row.get(h, ""))
 
     ws2 = wb.create_sheet("Responses")
     headers = ["received_date", "company", "role", "stage", "rejection_category",
@@ -666,7 +703,7 @@ def build_report(jobs: list[dict[str, Any]]) -> None:
         ws2.column_dimensions[chr(64 + c)].width = 22
     for r, resp in enumerate(db.all_responses(), start=2):
         for c, h in enumerate(headers, start=1):
-            ws2.cell(row=r, column=c, value=resp.get(h, ""))
+            put(ws2, r, c, resp.get(h, ""))
 
     config.ensure_dirs()
     wb.save(str(config.RESPONSES_REPORT))

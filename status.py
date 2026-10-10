@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import date
+from datetime import date, datetime
 
 from jobhelper import (agent1_cv, agent2_search, agent3_letters, agent4_tracker,
                        agent5_responses, config, letters, llm, store, usage, vault)
@@ -48,6 +48,7 @@ def cmd_update(args) -> int:
         return 1
     job["status"] = args.status
     job["last_update"] = date.today().isoformat()
+    job["status_by_hand"] = datetime.now().isoformat(timespec="seconds")       # emails older than this do not change it back
     if args.status == "waiting" and not job.get("date_applied"):
         job["date_applied"] = date.today().isoformat()
     if args.note:
@@ -71,6 +72,7 @@ def cmd_apply(args) -> int:
         return 1
     job["status"] = "waiting"
     job["last_update"] = date.today().isoformat()
+    job["status_by_hand"] = datetime.now().isoformat(timespec="seconds")
     if not job.get("date_applied"):
         job["date_applied"] = date.today().isoformat()
     if args.note:

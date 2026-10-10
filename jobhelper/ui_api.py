@@ -313,6 +313,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
             if j["status"] in store.LEAD_STATUSES and not j.get("date_applied"):
                 j["date_applied"] = today
             j["status"], j["last_update"] = status, today
+            j["status_by_hand"] = datetime.now().isoformat(timespec="seconds")      # emails older than this do not change it back
             j["notes"] = (f"[{today}] Marked {status.replace('_', ' ')} by you.\n" + (j.get("notes") or "")).strip()
             agent2_search.prune_applied_leads(jobs)
         return self._change(job_id, go)

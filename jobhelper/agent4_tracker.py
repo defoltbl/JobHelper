@@ -73,6 +73,23 @@ STATUS_FILLS = {
 _WRAP = {"match_reason", "notes", "stages_path", "next_step"}
 
 
+
+def put(ws, row: int, column: int, value):
+    """Write one cell as plain content. What stands in these tables comes from job boards and from emails: a text that
+    begins with "=" would be run by Excel as a formula (it can fetch an address or show a false link), so it is stored
+    as text; characters a workbook cannot hold are left out; anything that is not a text or a number is written as text."""
+    from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+    if value is None:
+        value = ""
+    elif isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        value = str(value)
+    if isinstance(value, str):
+        value = ILLEGAL_CHARACTERS_RE.sub("", value)
+    cell = ws.cell(row=row, column=column, value=value)
+    if isinstance(value, str) and value.startswith("="):
+        cell.data_type = "s"
+    return cell
+
 def _render_sheet(rows: list[dict[str, Any]], columns, path, title: str) -> None:
     config.ensure_dirs()
     wb = Workbook()
@@ -94,9 +111,9 @@ def _render_sheet(rows: list[dict[str, Any]], columns, path, title: str) -> None
             if key in ("desired_monthly_czk", "desired_annual_czk"):      # what is asked for, which may be your own figure
                 amount = salary.asked(job)[0]
                 val = (amount * (12 if key == "desired_annual_czk" else 1)) or ""
-            cell = ws.cell(row=r, column=c, value=val)
+            cell = put(ws, r, c, val)
             cell.alignment = Alignment(vertical="top", wrap_text=key in _WRAP)
-            if key == "url" and val:
+            if key == "url" and str(val).lower().startswith(("http://", "https://")):      # a link to a web page, nothing else
                 cell.hyperlink = val
                 cell.font = Font(color="0563C1", underline="single")
         if status_col:

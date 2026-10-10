@@ -366,3 +366,103 @@ def test_a_word_of_a_job_title_in_a_company_name_does_not_match_a_reply():
     assert match("hr@nn.example", "Thank you for your application at NN Digital Hub", "", jobs)["id"] == "nn"       # all of a common-word name
     assert match("hr@reed.example", "Your application at Reed", "", jobs)["id"] == "reed"
     assert email_client.names_tracked_company("jobs@mail.example", "IT Support Specialist", jobs) is False
+
+
+# ── found by reading the reply code line by line (10 October 2026) ──────────
+def test_an_answer_of_the_wrong_shape_is_still_filed(isolate_data, monkeypatch):
+    """A model may answer null for a text, or write the stage its own way. Such an answer used to end the scan after the email
+    had been marked as read: the reply was lost."""
+    odd = {"is_response": True, "stage": "Rejection", "company": "Acme", "role": None, "summary": None, "next_step": ["call"],
+           "rejection_category": "made up", "rejection_reason": 7, "sentiment": True}
+    assert agent5_responses.tidy(dict(odd)) == {
+        "is_response": True, "stage": "rejection", "company": "Acme", "role": "", "summary": "", "next_step": "", "rejection_category": "no_reason_given",
+        "rejection_reason": "7", "sentiment": "", "when": ""}
+    for said, stage in (("interview | assessment", "interview"), ("OFFER", "offer"), ("acknowledged", "acknowledged"), ("spam", "other"), (None, "other"),
+                        ("reinterview", "other")):
+        assert agent5_responses.tidy({"stage": said})["stage"] == stage
+    jobs = [store.new_job(id="a", company="Acme", title="Dev", status="waiting")]
+    monkeypatch.setattr(email_client, "fetch_recent", lambda *a, **k: [
+        {"msg_id": "<odd@acme>", "date": "Mon, 05 Oct 2026 10:00:00 +0200", "sender": "hr@acme.com", "subject": "Your application", "body": "About your application."}])
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: dict(odd))
+    stats = agent5_responses.process_inbox(jobs)
+    assert stats["new_responses"] == 1 and stats["rejections"] == 1 and jobs[0]["status"] == "rejected"
+    assert db.all_responses()[0]["stage"] == "rejection" and db.all_responses()[0]["summary"] == ""
+
+
+def test_a_status_you_set_yourself_is_not_undone_by_an_older_email(isolate_data):
+    """A rejection arrived, then the company called and you entered the interview by hand. Every scan after that set the
+    application back to rejected, because the last email about it was a rejection."""
+    from datetime import datetime
+    db.upsert_response({"msg_id": "<r@acme>", "received_date": "Mon, 05 Oct 2026 10:00:00 +0200", "job_id": "a", "company": "Acme",
+                        "role": "Dev", "stage": "rejection", "rejection_category": "no_reason_given"})
+    job = store.new_job(id="a", company="Acme", title="Dev", status="interview")
+    job["status_by_hand"] = "2026-10-08T09:30:00"
+    agent5_responses.annotate_progress([job])
+    assert job["status"] == "interview" and job["result"] == "rejection", "the history still shows the rejection; your status stands"
+    assert agent5_responses.set_by_hand_since(job, "Mon, 05 Oct 2026 10:00:00 +0200") and not agent5_responses.set_by_hand_since(job, "Fri, 09 Oct 2026 08:00:00 +0200")
+    assert not agent5_responses.set_by_hand_since({"status_by_hand": "soon"}, "Mon, 05 Oct 2026 10:00:00 +0200") and not agent5_responses.set_by_hand_since({}, "")
+    # news that is newer than your change counts, like any news
+    stats = {"new_responses": 0, "status_updates": 0, "rejections": 0, "invites": []}
+    late = {"msg_id": "<r2@acme>", "date": "Fri, 09 Oct 2026 08:00:00 +0200", "sender": "hr@acme.com", "subject": "Your application", "body": "We chose another candidate."}
+    agent5_responses._file_reply(late, {"is_response": True, "stage": "rejection", "company": "Acme"}, job, stats)
+    assert job["status"] == "rejected" and stats["status_updates"] == 1
+    # an old email read only now (a first scan that looks months back) does not change what you set since
+    held = store.new_job(id="b", company="Borg", title="QA", status="offer")
+    held["status_by_hand"] = datetime.now().isoformat(timespec="seconds")
+    old = {"msg_id": "<old@borg>", "date": "Mon, 01 Jun 2026 10:00:00 +0200", "sender": "hr@borg.com", "subject": "Your application", "body": "Regret to inform you."}
+    agent5_responses._file_reply(old, {"is_response": True, "stage": "rejection", "company": "Borg"}, held, stats)
+    assert held["status"] == "offer" and db.has_response("<old@borg>"), "filed in the history, your status kept"
+
+
+def test_the_window_and_the_command_line_note_when_a_status_was_set_by_hand(isolate_data, monkeypatch):
+    import status
+    from jobhelper import config, ui_api
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a", company="Acme", title="Dev", status="waiting"), store.new_job(id="b", company="Borg", title="QA", status="letter_ready")])
+    assert ui_api.Api().set_status("a", "interview")["ok"]
+    monkeypatch.setattr("sys.argv", ["status.py", "apply", "b"])
+    assert status.main() == 0
+    assert all(len(j["status_by_hand"]) == 19 for j in store.load_jobs())
+
+
+def test_the_progress_rows_are_in_the_order_of_the_days_not_of_their_names(isolate_data):
+    for msg_id, when, company in (("1", "Fri, 02 Oct 2026 10:00:00 +0200", "Early"), ("2", "Mon, 05 Oct 2026 10:00:00 +0200", "Middle"),
+                                  ("3", "Thu, 08 Oct 2026 10:00:00 +0200", "Late")):
+        db.upsert_response({"msg_id": msg_id, "received_date": when, "company": company, "role": "Dev", "stage": "acknowledged"})
+    assert [r["company"] for r in agent5_responses.progress_rows([])] == ["Late", "Middle", "Early"], "as text, Thu > Mon > Fri put them in another order"
+
+
+def test_text_from_an_email_is_never_a_formula_in_the_excel_report(isolate_data):
+    """Anyone can send an email. Its subject, sender and the company it names go into the Excel report; a text that begins
+    with "=" was written there as a formula, which Excel runs when the file is opened."""
+    from openpyxl import Workbook, load_workbook
+    from jobhelper import agent4_tracker, config
+    ws = Workbook().active
+    formula = agent4_tracker.put(ws, 1, 1, '=HYPERLINK("http://evil.example","Open")')
+    assert formula.data_type == "s" and formula.value.startswith("=HYPERLINK")
+    assert agent4_tracker.put(ws, 2, 1, "plain\x0btext\x00").value == "plaintext", "characters a workbook cannot hold are left out, not a crash"
+    assert agent4_tracker.put(ws, 3, 1, ["a", "b"]).value == "['a', 'b']" and agent4_tracker.put(ws, 4, 1, None).value in ("", None)
+    assert agent4_tracker.put(ws, 5, 1, 42).value == 42 and agent4_tracker.put(ws, 6, 1, True).value == "True"
+    config.ensure_dirs()
+    db.upsert_response({"msg_id": "<x@evil>", "received_date": "Mon, 05 Oct 2026 10:00:00 +0200", "from_addr": "=cmd@evil.example", "subject": "s",
+                        "company": '=HYPERLINK("http://evil.example","Acme")', "role": "=1+1", "stage": "acknowledged", "summary": "=NOW()\x07"})
+    jobs = [store.new_job(id="j", title='=1+1', company='=HYPERLINK("http://evil.example","Acme")', status="waiting", url="javascript:alert(1)")]
+    agent5_responses.build_report(jobs)
+    agent4_tracker.render_all(jobs)
+    for path in (config.RESPONSES_REPORT, config.EXCEL_PATH):
+        book = load_workbook(path)
+        cells = [c for sheet in book.worksheets for row in sheet.iter_rows() for c in row if isinstance(c.value, str) and c.value.startswith("=")]
+        assert cells and all(c.data_type == "s" for c in cells), path.name
+        assert not any(c.hyperlink for sheet in book.worksheets for row in sheet.iter_rows() for c in row if c.hyperlink and "javascript" in str(c.hyperlink.target))
+
+
+def test_one_header_or_message_nobody_can_decode_does_not_end_a_scan(monkeypatch):
+    assert email_client._decode("=?unknown-8bit?B?SGVsbG8=?=") == "Hello", "a subject that names no real encoding is still read"
+    assert email_client._decode(None) == "" and email_client._decode("Plain") == "Plain"
+
+    class Box:
+        def fetch(self, num, what):
+            return "OK", [(b"1 (BODY[] {5}", b"From: a@b.c\r\nSubject: Hi\r\n\r\nBody text here")]
+    assert email_client._read(Box(), b"1", "me@example.com", "inbox")["subject"] == "Hi"
+    monkeypatch.setattr(email_client, "_message", lambda *a: (_ for _ in ()).throw(ValueError("broken")))
+    assert email_client._read(Box(), b"1", "me@example.com", "inbox") is None, "left out; the other messages are still read"
