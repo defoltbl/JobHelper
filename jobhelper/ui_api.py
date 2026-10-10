@@ -843,7 +843,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
                     "wanted_roles": list(target_roles), "unwanted_roles": [], "my_fields": [],
                     # start from the level in the CV; the user can change both in Options
                     "level_words": filters.default_level_words(level), "max_years": filters.default_max_years(level),
-                    "about_right_to_work": "", "about_start": "", "about_experience": "", "notifications": True, "scan_all_folders": False, "assistant_watch": False, "assistant_browser": "chrome",
+                    "about_right_to_work": "", "about_start": "", "about_experience": "", "notifications": True, "scan_all_folders": False, "assistant_watch": False, "assistant_browser": "chrome", "text_size": 100,
                     "keep_backups": housekeeping.DEFAULT_KEEP}
         try:
             if p.exists():
@@ -911,6 +911,10 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
             if code not in salary.CURRENCIES:
                 return {}, "“salary currency” must be one of: " + ", ".join(salary.CURRENCIES) + "."
             clean["salary_currency"] = code
+        if "text_size" in clean:
+            if isinstance(clean["text_size"], bool) or clean["text_size"] not in config.TEXT_SIZES:
+                return {}, "“size of text and controls” must be one of: " + ", ".join(f"{n}%" for n in config.TEXT_SIZES) + "."
+            clean["text_size"] = int(clean["text_size"])
         if "assistant_browser" in clean and clean["assistant_browser"] not in chrome.BROWSERS:
             return {}, "“assistant browser” must be one of: " + ", ".join(chrome.BROWSERS) + "."
         if clean.get("country") and not re.fullmatch(r"[^\W\d_]+(?:[ '.\-]+[^\W\d_]+)*\.?", clean["country"]):

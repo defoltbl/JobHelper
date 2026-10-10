@@ -264,7 +264,8 @@ def _piece(kind, words=40):
 
 def test_text_of_the_same_section_fills_the_space_a_figure_left(laid_out):
     """A figure that has to start on the next page no longer leaves the rest of its page empty: what follows it in
-    its own section is brought forward. Text never crosses a heading, and the pieces keep their order."""
+    its own section is brought forward, and when the section has nothing more, the next section of the same chapter
+    begins in the space (asked for on 10 October 2026). Nothing crosses a chapter, and the pieces keep their order."""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtGui import QGuiApplication
     app = QGuiApplication.instance() or QGuiApplication([])
@@ -281,7 +282,17 @@ def test_text_of_the_same_section_fills_the_space_a_figure_left(laid_out):
     assert filled.index("after7 ") < filled.index("A heading") and filled.count("<p") == body.count("<p") and len(filled) == len(body)
     alone = _piece("p", 260) + _piece("figure", 28) + _piece("h3") + _piece("p", 60).replace("word", "next")
     kept, moves = guide_pdf._fill_gaps(alone, DOCS, width, height)
-    assert kept == alone and moves == 0, "with nothing after it in its section, nothing is taken from the next one"
+    _doc, then = guide_pdf._layout(kept, DOCS, width, height)
+    assert moves == 2 and kept.index("A heading") < kept.index("next") < kept.index('data-kind="figure"'), "the next section begins in the space, heading and text together"
+    assert then["figures"][0]["gap"] < before["figures"][0]["gap"] and len(kept) == len(alone)
+    bare = _piece("p", 260) + _piece("figure", 28) + _piece("h3") + _piece("figure", 20) + _piece("p", 60).replace("word", "next")
+    held = guide_pdf._fill_gaps(bare, DOCS, width, height)[0]
+    assert "A heading</h3><p" in held or held == bare, "a heading never comes forward without text under it"
+    far = alone + _piece("h3").replace("A heading", "Third part") + _piece("p", 20).replace("word", "third")
+    held = guide_pdf._fill_gaps(far, DOCS, width, height)[0]
+    assert held.index('data-kind="figure"') < held.index("Third part"), "a figure goes no further than the section after its own"
+    chapter = _piece("p", 260) + _piece("figure", 28) + '<h2 style="margin:0px;">A chapter</h2>' + _piece("p", 60).replace("word", "next")
+    assert guide_pdf._fill_gaps(chapter, DOCS, width, height) == (chapter, 0), "a figure never leaves its chapter"
     assert guide_pdf._fill_gaps("<p>one</p><table><tr><td>x</td></tr>", DOCS, width, height) == ("<p>one</p><table><tr><td>x</td></tr>", 0)
     _ = app
     name, report = laid_out

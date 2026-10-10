@@ -15,8 +15,8 @@ are numbered inside their chapter: "Figure 4.2 – Title" stands centred under a
   its heading row repeated there;
 - a heading is never left alone at the bottom of a page;
 - no page is left half empty because a figure or a table had to start on the next one: the text
-  that follows it in the same section is brought forward to fill the space, as in a thesis. Text
-  never crosses a heading to do so.
+  that follows it is brought forward to fill the space, as in a thesis: text of the same section
+  first, then the beginning of the next section of the same chapter. Nothing crosses a chapter.
 
 In the PDF the entries of the contents, references such as "Figure 4.2" and "Table 9.1", and links
 to another chapter can be selected: they lead to that place. The chapters are also in the PDF's own outline.
@@ -251,12 +251,16 @@ def _height(seg: dict, base: Path, width: float) -> float:
 
 def _fill_gaps(body: str, base: Path, width: float, height: float) -> tuple[str, int]:
     """The body with text brought forward wherever a figure or a table had to start on the next page and left
-    the rest of its page empty. Only text of the same section moves (never across a heading), a figure, a table
+    the rest of its page empty. Text of the same section moves first; when there is none, the next section of the
+    same chapter begins in the space (a heading only with text under it, and never a chapter). A figure, a table
     or a note moves only whole, and the order of the moved pieces among themselves stays. Returns (body, moves)."""
     segs = _segments(body)
     if "".join(s["html"] for s in segs).count("<table") != body.count("<table"):
         return body, 0                               # a shape this does not know: the document is left as it was written
-    moves = 0
+    moves, section = 0, 0
+    for seg in segs:                                 # which section each piece was written in: a heading opens the next one
+        section += seg["kind"] in ("h2", "h3")
+        seg["sec"] = section
     for _round in range(12):
         _doc, report = _layout("".join(s["html"] for s in segs), base, width, height)
         owners = [s for s in segs if s["kind"] in ("figure", "data", "more", "callout", "list")]
@@ -267,18 +271,35 @@ def _fill_gaps(body: str, base: Path, width: float, height: float) -> tuple[str,
             if owner["kind"] not in ("figure", "data") or gap < MIN_GAP or owner["tries"] >= 4:
                 continue
             i = next(k for k, s in enumerate(segs) if s is owner)
-            end = next((k for k in range(i + 1, len(segs)) if segs[k]["kind"] in ("h2", "h3")), len(segs))
+            end = next((k for k in range(i + 1, len(segs)) if segs[k]["kind"] == "h2"), len(segs))       # never out of its chapter
             owner["tries"] += 1
             # 1. text of the same section comes forward; a figure, a table or a note comes only if all of it fits,
             #    and otherwise keeps its place after this one (figures and tables stay in their order)
-            room, taken, stay = gap - 4, [], []
-            for seg in segs[i + 1:end]:
+            #    When the section has no more text, the next section of the same chapter begins in the space: its
+            #    heading comes with the text under it, never alone.
+            room, taken, stay, rest = gap - 4, [], [], segs[i + 1:end]
+            for k, seg in enumerate(rest):
                 tall = _height(seg, base, width)
+                # from the section after its own only the heading and text come forward, and nothing from further on:
+                # figures and tables keep their order, and a figure stays next to what it shows
+                if seg["sec"] > owner["sec"] + 1 or (seg["sec"] != owner["sec"] and seg["kind"] not in ("text", "h3")):
+                    stay += rest[k:]
+                    break
+                if seg["kind"] == "h3":
+                    after = rest[k + 1] if k + 1 < len(rest) else None
+                    if stay or room <= 0 or after is None or after["kind"] != "text" or tall + min(_height(after, base, width), 48) > room:
+                        stay += rest[k:]
+                        break
+                    taken.append(seg)
+                    room -= tall
+                    continue
                 if room <= 0 or seg["kind"] == "more" or (seg["kind"] != "text" and tall > room) or (stay and seg["kind"] != "text"):
                     stay.append(seg)
                     continue
                 taken.append(seg)
                 room -= tall
+            if taken and taken[-1]["kind"] == "h3":     # a heading whose text did not come with it goes back
+                stay.insert(0, taken.pop())
             if taken:
                 segs[i:end] = taken + [owner] + stay
                 moves += len(taken)
@@ -292,7 +313,7 @@ def _fill_gaps(body: str, base: Path, width: float, height: float) -> tuple[str,
                 last = next((k for k in range(i + 1, len(segs)) if segs[k]["kind"] != "more"), len(segs))
                 if len(parts[0]) >= 2:
                     fresh = _table_parts(number, long["title"], long["opening"], long["head"], parts)
-                    segs[i:last] = [{"html": h, "kind": "data" if n == 0 else "more", "tries": owner["tries"]} for n, h in enumerate(fresh)]
+                    segs[i:last] = [{"html": h, "kind": "data" if n == 0 else "more", "tries": owner["tries"], "sec": owner["sec"]} for n, h in enumerate(fresh)]
                     moves += 1
                     changed = True
                     continue

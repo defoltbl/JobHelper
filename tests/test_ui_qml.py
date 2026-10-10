@@ -3898,3 +3898,50 @@ def test_a_job_is_found_for_the_assistant_by_typing_part_of_its_name(ui, monkeyp
     ui.js("assistantDialog.tryClose()")
     ui.wait(400)
     assert ui.warnings == []
+
+
+def test_the_size_of_text_and_controls_is_an_option_used_at_the_next_start(ui, monkeypatch):
+    """On a 27-inch 4K screen the window's text is small. Options has a size for everything in the window; it is checked
+    like any other option and takes effect the next time the app is opened (Qt has to know before the window exists)."""
+    import app_qt
+    api = ui.bridge._api
+    assert api.options()["text_size"] == 100 and config.text_scale() == 1.0 and app_qt.apply_text_size({}) == ""
+    for wrong in (90, 200, "big", None, True, 125.5):
+        result = api.save_options({"text_size": wrong})
+        assert result["ok"] is False and "100%, 110%, 125%, 150%" in result["msg"], wrong
+    assert api.options()["text_size"] == 100, "a wrong size changes nothing"
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    combo = ui.find("sizeCombo")
+    assert combo.property("currentText") == "100%" and combo.property("count") == 4
+    def hint():                                     # the line of small words beside the setting
+        row = combo.parentItem()
+        while row is not None and not isinstance(row.property("hint"), str):
+            row = row.parentItem()
+        return row.property("hint")
+    assert "for a large screen" in hint()
+    ui.js("currentIndex = 2", combo)
+    ui.wait(100)
+    assert "saved with Save" in hint(), "said where you look: nothing changes until Save, and then at the next start"
+    assert ui.js("optDialog.collect().options.text_size", dialog) == 125 and ui.js("optDialog.changed()") is True, "Save stores it, and closing asks first"
+    ui.js("close()", dialog)
+    ui.wait(350)
+    assert api.save_options({"text_size": 125})["ok"] and api.options()["text_size"] == 125 and config.text_scale() == 1.25
+    env = {}
+    assert app_qt.apply_text_size(env) == "1.25" and env == {"QT_SCALE_FACTOR": "1.25"}
+    assert app_qt.apply_text_size({"QT_SCALE_FACTOR": "2"}) == "", "a size set from outside is left alone"
+    monkeypatch.setattr(config, "ui_settings", lambda: {"text_size": "huge"})
+    assert config.text_scale() == 1.0 and app_qt.apply_text_size({}) == ""
+    monkeypatch.setattr(config, "text_scale", lambda: 1 / 0)
+    assert app_qt.apply_text_size({}) == "", "the window opens whatever the settings file holds"
+    monkeypatch.undo()
+    ui.js("optsData = bridge.options()")
+    ui.js("open()", dialog)
+    ui.wait(450)
+    assert ui.find("sizeCombo").property("currentText") == "125%", "the saved size is shown again"
+    ui.js("close()", dialog)
+    ui.wait(350)
+    api.save_options({"text_size": 100})
+    assert ui.warnings == []

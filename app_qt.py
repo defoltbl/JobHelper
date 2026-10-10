@@ -8,6 +8,7 @@ the Claude Code CLI, exactly like the command-line tools.
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -15,16 +16,33 @@ from PySide6.QtCore import QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
-from jobhelper import vault
+from jobhelper import config, vault
 from jobhelper.qt_bridge import Bridge
 
 QML = Path(__file__).resolve().parent / "ui_qt" / "Main.qml"
+
+
+def apply_text_size(environ=None) -> str:
+    """The size of text and controls chosen in Options: Qt is told before the window exists, and draws everything
+    that much larger. A size set from outside (QT_SCALE_FACTOR) is left as it is. Returns what was set ('' = nothing)."""
+    environ = os.environ if environ is None else environ
+    if environ.get("QT_SCALE_FACTOR"):
+        return ""
+    try:
+        scale = config.text_scale()
+    except Exception:  # noqa: BLE001 - the window must open whatever the settings file holds
+        return ""
+    if scale == 1.0:
+        return ""
+    environ["QT_SCALE_FACTOR"] = f"{scale:g}"
+    return environ["QT_SCALE_FACTOR"]
 
 
 def main() -> int:
     # Background work (reading the mailbox, preparing Insights) hands over to the window ten times
     # sooner than Python's default, so animations stay smooth while it runs.
     sys.setswitchinterval(0.0005)
+    apply_text_size()
     app = QGuiApplication(sys.argv)
     app.setApplicationName("JobHelper")
     icon = Path(__file__).resolve().parent / "ui_qt" / "icon.png"

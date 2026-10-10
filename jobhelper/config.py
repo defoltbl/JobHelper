@@ -286,6 +286,15 @@ def move_password_to_keychain() -> bool:
     return True
 
 
+TEXT_SIZES = (100, 110, 125, 150)     # per cent: everything in the window larger, for a large or very sharp screen
+
+
+def text_scale() -> float:
+    """How much larger the whole window is drawn (1.0 = as designed), from Options. Anything unexpected means 1.0."""
+    size = ui_settings().get("text_size")
+    return size / 100 if not isinstance(size, bool) and size in TEXT_SIZES else 1.0
+
+
 def ui_settings() -> dict:
     """Options saved from the desktop app (data/ui_settings.json), or {}."""
     import json

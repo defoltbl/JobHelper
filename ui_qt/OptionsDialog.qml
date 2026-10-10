@@ -78,6 +78,8 @@ Dialog {
     }
     property string coErr: ""
     property string optErr: ""
+    readonly property var sizes: [100, 110, 125, 150]      // per cent: the whole window larger
+    property int sizeAtOpen: 100
     function addCompany(name, ats, token) {
         var tok = (token || "").trim();
         coErr = "";
@@ -125,6 +127,7 @@ Dialog {
                             about_right_to_work: rightField.text.trim(), about_start: startField.text.trim(),
                             about_experience: expField.text.trim(),
                             notifications: notifySw.checked, keep_backups: keepSpin.value,
+                            text_size: optDialog.sizes[Math.max(0, sizeCombo.currentIndex)],
                             scan_all_folders: foldersSw.checked,
                             model: modelCombo.currentText, queries: qs },
                  companies: cs };
@@ -248,6 +251,7 @@ Dialog {
         rightField.text = o.about_right_to_work || ""; startField.text = o.about_start || "";
         expField.text = o.about_experience || "";
         notifySw.checked = o.notifications !== false;
+        sizeCombo.currentIndex = Math.max(0, sizes.indexOf(o.text_size || 100)); sizeAtOpen = sizes[sizeCombo.currentIndex];
         foldersSw.checked = o.scan_all_folders === true;
         keepSpin.value = o.keep_backups !== undefined ? o.keep_backups : 10;
         modelCombo.currentIndex = Math.max(0, modelCombo.find(o.model || "sonnet"));
@@ -588,6 +592,13 @@ Dialog {
                 ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; spacing: 6
                     GroupTitle { text: "Notifications and storage" }
                     Card {
+                        // everything in the window larger, for a large or very sharp screen
+                        SRow { label: "Size of text and controls"
+                            hint: sizeCombo.currentIndex >= 0 && optDialog.sizes[sizeCombo.currentIndex] !== optDialog.sizeAtOpen
+                                  ? "saved with Save · used the next time you open the app" : "for a large screen · used the next time you open the app"
+                            ThemedCombo { id: sizeCombo; objectName: "sizeCombo"; plainText: true; implicitWidth: 110
+                                model: ["100%", "110%", "125%", "150%"] } }
+                        Sep {}
                         SRow { label: "Notifications"; hint: "run finished, paused on the limit, interview invitation"
                             ThemedSwitch { id: notifySw; objectName: "notifySw" } }
                         Sep {}
