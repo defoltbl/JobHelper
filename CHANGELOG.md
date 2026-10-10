@@ -9,6 +9,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
   - In the job window, what you typed and did not save yet is no longer wiped when another part is saved. Before, saving the company notes (or a finished scoring, or a ticked step) emptied a date you were still writing.
   - **Options** says so when you typed a role, a word or a company into a box and pressed **Save** without adding it. Before, it was left out without a word.
   - A job that could not be restored or merged now says why in the status line.
+  - **Analytics** has a row for offer emails, so the rows under **Reply emails** add up again.
   - A number box (years, days, scores in **Options**) shows the right number again after you typed one and then pressed + or -. Before, the value changed but the box kept showing what you had typed.
   - A reply with a long summary no longer pushes its window past the edge of the app: the text scrolls, and the buttons and the **File under** list stay in view.
   - **Mark applied** no longer says "Moved to Applications" when the job was not moved (it was already an application, or it was gone from the list); it says so instead.

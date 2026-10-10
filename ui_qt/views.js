@@ -65,7 +65,7 @@ function open(k) {
                          [["", "By status"], ["date", "Newest applied first"], ["company", "Company A–Z"]]);
     } else if (k === "resp") {
         var rows3 = bridge.responses().map(function (r) {
-            return { primary: r.company + (r.summary ? "  —  " + r.summary : ""),
+            return { primary: r.company + (r.summary ? "  –  " + r.summary : ""),
                      secondary: r.date, badge: r.stage || "", value: "", actions: [], rid: r.id,
                      group: r.stage || "", company: r.company || "", score: -1, date: r.date || "",
                      hay: (r.company + " " + (r.summary || "")).toLowerCase() };
@@ -131,7 +131,7 @@ function open(k) {
                        value: r.top_text,
                        secondary: r.range_text + "  ·  written as \"" + r.text + "\""
                                   + (r.target ? "  ·  your target " + r.target_text + ": " + r.verdict : "") }); });
-        tableDialog.show("Insights — what works, keywords, skills to learn", out, "", []);
+        tableDialog.show("Insights – what works, keywords, skills to learn", out, "", []);
     } else {
         var an = bridge.analytics();
         var st = an.applications_by_status || {}, em = an.by_stage || {};
@@ -149,16 +149,17 @@ function open(k) {
                  (an.rejected_by_hand || 0) > 0 ? ((an.rejected_by_hand) + " of them you marked yourself (no email in the mailbox)") : ""),
             line("Companies that replied", an.companies_replied || 0, "at least one email from them"),
             line("Applications that reached an interview", an.applications_with_interview || 0, "at any point, including ones rejected later"),
-            line("Reply emails", an.response_emails || 0, "every email counted once; the five rows below add up to this"),
+            line("Reply emails", an.response_emails || 0, "every email counted once; the six rows below add up to this"),
             line("↳ confirmations", em.acknowledged || 0, "\"we received your application\""),
             line("↳ interview emails", em.interview || 0, "invitations, scheduling, reminders"),
             line("↳ tests and tasks", em.assessment || 0),
+            line("↳ offer emails", em.offer || 0),
             line("↳ rejections", em.rejection || 0),
             line("↳ other", em.other || 0, "feedback requests, account messages"),
             line("Why the rejection emails said no", em.rejection || 0, "the rows below add up to this")
         ]);
         var rr = an.rejection_reasons || {};
         for (var key in rr) rows4.push(line("↳ " + key.replace(/_/g, " "), rr[key]));
-        tableDialog.show("Analytics — outcomes & rejection reasons", rows4, "", []);
+        tableDialog.show("Analytics – outcomes & rejection reasons", rows4, "", []);
     }
 }

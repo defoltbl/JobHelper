@@ -4073,10 +4073,30 @@ def test_a_refused_mark_applied_is_not_reported_as_done(ui, monkeypatch):
 def test_the_window_uses_no_em_dash_in_what_it_says():
     """The dash rule of the documents holds for the window: an en dash, never an em dash, inside a sentence.
     (A lone "—" for "no value" is a sign, not a sentence, and stays.)"""
-    for path in sorted((ROOT / "ui_qt").glob("*.qml")):
+    for path in sorted((ROOT / "ui_qt").glob("*.qml")) + sorted((ROOT / "ui_qt").glob("*.js")):
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             code = line.split("//")[0]
             assert " — " not in code, f"{path.name}:{number} has an em dash in its text"
+
+
+def test_the_reply_emails_in_analytics_add_up(ui):
+    """Every kind of reply email has its row, so the rows under "Reply emails" add up to it (an offer email was left out)."""
+    from jobhelper import agent5_responses, db
+    db.upsert_response({"msg_id": "<offer-mail>", "received_date": "Tue, 18 Aug 2026 10:00:00 +0200", "from_addr": "hr@beta.example", "subject": "Offer",
+                        "job_id": "", "company": "Beta", "role": "QA Engineer", "stage": "offer", "summary": "They offer you the job."})
+    try:
+        ui.js('win.openView("ana")'); ui.wait(400)
+        rows = ui.js("(function () { var m = listView.model, o = []; for (var i = 0; i < m.length; i++) o.push(m[i].primary + '=' + m[i].value); return o.join('|'); })()",
+                     ui.find("tableDialog")).split("|")
+        value = lambda label: int(next(r for r in rows if r.startswith(label + "=")).split("=")[1])      # noqa: E731
+        kinds = ["↳ confirmations", "↳ interview emails", "↳ tests and tasks", "↳ offer emails", "↳ rejections", "↳ other"]
+        assert value("↳ offer emails") >= 1
+        assert sum(value(k) for k in kinds) == value("Reply emails")
+        assert set(agent5_responses.STAGES) == {"acknowledged", "interview", "assessment", "offer", "rejection", "other"}   # a new kind needs a row too
+    finally:
+        ui.js("tableDialog.close()"); ui.wait(300)
+        with db._connect(write=True) as conn:
+            conn.execute("DELETE FROM responses WHERE msg_id = ?", ("<offer-mail>",))
 
 
 def test_the_account_card_stays_inside_the_smallest_window(ui):
