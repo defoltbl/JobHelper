@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from . import config, form_fill, llm
+from . import config, details, form_fill, llm
 
 MAX_CHOICES = 12
 CHECK = "Chosen for you: check it."
@@ -105,10 +105,9 @@ def settle(choice: dict[str, Any], mine: dict[str, str], job: dict[str, Any] | N
 
 def facts_block(cv_text: str, mine: dict[str, str], job: dict[str, Any] | None) -> str:
     lines = [config.facts_block(cv_text)]
-    for key, label in (("country", "Lives in"), ("notice_period", "Notice period"), ("salary", "Salary expectation"),
-                       ("current_employer", "Current employer"), ("current_title", "Current job title"),
-                       ("university", "University or school"), ("degree", "Degree")):
+    for key, label in (("country", "Lives in"), ("notice_period", "Notice period")):
         lines.append(f"- {label}: {mine.get(key) or 'not stated'}")
+    lines += details.facts(mine)                    # every job (which ones are current), every degree, the salary
     source = str((job or {}).get("source") or "").split("/")[0].strip()
     lines.append(f"- Found the posting on: {source or 'not stated'}")
     return "\n".join(lines)

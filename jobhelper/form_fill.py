@@ -407,17 +407,23 @@ _PRIVATE = re.compile(r"passw|captcha|card ?number|credit card|\bcvv\b|\bcvc\b|\
 _NOT_MINE = re.compile(r"company|employer|organi[sz]ation|school|universit|college|referr|referee|reference|emergency|manager|recruiter"
                        r"|supervisor|\btitle\b|position|\brole\b|degree|skill|user ?name|login|nick")
 # what forms ask again and again; when it is not in My details, an open question is drafted instead
-SOFT = ("current_employer", "current_title", "university", "degree", "notice_period", "salary")
+SOFT = ("employer", "job_title", "school", "degree", "study_field", "notice_period", "salary")
+# asked once per job or per degree: the first such field gets the first entry of the list, the next one the second
+LISTED = {"employer": ("experience", "employer"), "job_title": ("experience", "title"),
+          "school": ("education", "school"), "degree": ("education", "degree"), "study_field": ("education", "field")}
+MORE_ROWS = "You listed {have} in My details, and this is one more. Add it there, or type it."
+_NOT_THIS_JOB = re.compile(r"appl|desired|interested|preferred|referr|referee|emergency")
 _RULES = (("linkedin", re.compile(r"linked ?in")),
           ("github", re.compile(r"git ?hub")),
           ("email", re.compile(r"e ?mail")),
           ("phone", re.compile(r"phone|mobile|\bcell\b|telefon|\btel\b")),
           ("notice_period", re.compile(r"notice period|period of notice|výpovědní")),
           ("salary", re.compile(r"salary|compensation|remuneration|expected pay|pay expectation")),
-          ("current_employer", re.compile(r"(?:current|present|latest|most recent|last) (?:employer|company|organi[sz]ation)|\bemployer\b")),
-          ("current_title", re.compile(r"(?:current|present|latest|most recent|last) (?:job ?)?(?:title|position|role)|\bjob ?title\b")),
-          ("university", re.compile(r"universit|\bschool\b|college|alma mater")),
-          ("degree", re.compile(r"\bdegree\b|qualification|field of study|\bmajor\b")),
+          ("employer", re.compile(r"(?:current|present|latest|most recent|last) (?:employer|company|organi[sz]ation)|\bemployer\b|^company\b|company ?name")),
+          ("job_title", re.compile(r"(?:current|present|latest|most recent|last) (?:job ?)?(?:title|position|role)|\bjob ?title\b|^position\b|^title\b")),
+          ("study_field", re.compile(r"field of study|\bmajor\b|area of study|specialisation|specialization|discipline")),
+          ("school", re.compile(r"universit|\bschool\b|college|alma mater|institution")),
+          ("degree", re.compile(r"\bdegree\b|qualification")),
           ("first_name", re.compile(r"first ?name|given ?name|fore ?name|\bfname\b|křestní")),
           ("last_name", re.compile(r"last ?name|sur ?name|family ?name|\blname\b|příjmení")),
           ("full_name", re.compile(r"full ?name|your name|^name\b|\bname$|\bname \*|jméno")),
@@ -432,7 +438,8 @@ _AUTO = {"given-name": "first_name", "family-name": "last_name", "name": "full_n
          "postal-code": "postcode", "country": "country", "country-name": "country", "url": "website"}
 _LETTER = re.compile(r"cover ?letter|motivation|motivační|průvodní")
 _BY_TYPE = {"email": "email", "tel": "phone"}
-WHAT = {"full_name": "name", "location": "city", **{key: label.lower() for key, label in details.LABELS.items()}}
+WHAT = {"full_name": "name", "location": "city", "employer": "jobs", "job_title": "jobs", "school": "degrees", "degree": "degrees",
+        "study_field": "degrees", "salary": "salary", **{key: label.lower() for key, label in details.LABELS.items()}}
 
 
 def _words(field: dict[str, Any]) -> str:
@@ -475,6 +482,8 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
             if rule.search(words):
                 if key in ("first_name", "last_name", "full_name", "street", "location", "city", "country", "postcode") and _NOT_MINE.search(words):
                     continue
+                if key in ("employer", "job_title") and _NOT_THIS_JOB.search(words):
+                    continue                        # "position applied for", "referee's employer": not a job of yours
                 what = key
                 break
     has_words = bool(re.search(r"[^\W\d_]{2}", str(field.get("label") or "")))
@@ -502,12 +511,21 @@ def detail_of(field: dict[str, Any]) -> str:
     if _PRIVATE.search(words):
         return ""
     for key, rule in _RULES:
-        if rule.search(words) and not (key in ("first_name", "last_name", "full_name", "street") and _NOT_MINE.search(words)):
+        if rule.search(words) and not (key in ("first_name", "last_name", "full_name", "street") and _NOT_MINE.search(words)) \
+                and not (key in ("employer", "job_title") and _NOT_THIS_JOB.search(words)):
             return key
     return ""
 
 
-def value_for(what: str, mine: dict[str, str]) -> str:
+def value_for(what: str, mine: dict[str, Any], index: int = 0) -> str:
+    """What goes into a field of this kind. `index` counts fields of the same kind on the page: the
+    second "Employer" gets your second job."""
+    if what in LISTED:
+        name, key = LISTED[what]
+        rows = details.jobs(mine) if name == "experience" else details.degrees(mine)
+        return str(rows[index].get(key) or "") if index < len(rows) else ""
+    if what == "salary":
+        return details.salary_text(mine)
     if what == "full_name":
         return details.full_name(mine) if mine.get("first_name") and mine.get("last_name") else ""
     if what == "location":
@@ -532,6 +550,7 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
      "left": [{label, why}]}. Fields that already hold something are not touched and not listed."""
     out: dict[str, list] = {"fill": [], "ask": [], "choose": [], "left": []}
     asked: set[str] = set()
+    met: dict[str, int] = {}                        # how many fields of a listed kind were met so far
 
     def ask(field, label, most) -> None:
         question = str(field.get("label") or "").strip()[:form_answers.MAX_QUESTION]
@@ -561,7 +580,15 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
             out["choose"].append({"n": field["n"], "kind": shape, "typed": bool(field.get("combo")), "label": label,
                                   "options": list(field.get("options") or []), "what": about, "value": value_for(about, mine) if about else ""})
         else:
-            value = letter if what == "letter" else value_for(what, mine)
+            index = met.get(what, 0)
+            met[what] = index + 1
+            value = letter if what == "letter" else value_for(what, mine, index if what in LISTED else 0)
+            if what in LISTED and not value and index:
+                have = len(mine.get(LISTED[what][0]) or [])
+                if index >= have > 0:               # the form has more rows than you have jobs or degrees
+                    count = f"{have} {details.WORD[LISTED[what][0]]}{'' if have == 1 else 's'}"
+                    out["left"].append({"label": label, "why": MORE_ROWS.format(have=count)})
+                    continue
             if value and what == "country" and kind == "select":
                 value = country_option(field.get("options") or [], value)
                 if not value:

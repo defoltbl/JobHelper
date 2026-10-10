@@ -56,6 +56,7 @@ def test_details_are_checked_field_by_field():
 def test_details_are_saved_encrypted_and_read_back(isolate):
     assert details.load() == details.empty()
     assert details.save({**MINE, "email": "nope"}) == {"ok": False, "field": "email", "msg": details.check({"email": "nope"})[1]["msg"]}
+    assert details.any_given(details.empty()) is False and details.any_given(MINE)
     assert not details.path().exists(), "a refused page saves nothing"
     assert details.save(MINE)["ok"] and details.load() == MINE
     assert details.path() in vault.data_files(), "kept with the files that are encrypted and backed up"
@@ -155,9 +156,10 @@ def _field(label="", kind="text", **more):
     (_field("Current location"), "location"), (_field("Street address"), "street"), (_field("Country", kind="select"), "country"),
     (_field("", auto="section-a given-name"), "first_name"), (_field("x", auto="postal-code"), "postcode"),
     (_field("Why do you want to work with us?", kind="textarea"), "question"), (_field("What are your salary expectations?"), "salary"),
-    (_field("Notice period"), "notice_period"), (_field("Current employer"), "current_employer"), (_field("Most recent company"), "current_employer"),
-    (_field("Job title"), "current_title"), (_field("Current position"), "current_title"), (_field("School name"), "university"),
-    (_field("University"), "university"), (_field("Degree"), "degree"), (_field("Field of study"), "degree"),
+    (_field("Notice period"), "notice_period"), (_field("Current employer"), "employer"), (_field("Most recent company"), "employer"),
+    (_field("Company"), "employer"), (_field("Company name"), "employer"), (_field("Job title"), "job_title"), (_field("Current position"), "job_title"),
+    (_field("Position"), "job_title"), (_field("Title"), "job_title"), (_field("School name"), "school"), (_field("Institution"), "school"),
+    (_field("University"), "school"), (_field("Degree"), "degree"), (_field("Field of study"), "study_field"), (_field("Major"), "study_field"),
     (_field("Notice period", kind="select"), "choice"), (_field("Phone country code", kind="select"), "choice"),
     (_field("Do you need a visa?", kind="radio"), "choice"), (_field("Location", kind="menu"), "choice"), (_field("Country", kind="menu"), "choice"),
     (_field("City", combo=True), "choice"), (_field("Years of experience with SQL", kind="number"), "choice"),
@@ -178,7 +180,7 @@ def test_fields_are_recognised_by_what_the_page_calls_them(field, what):
     (_field("Start date", kind="date"), form_fill.DATE),
     (_field("", kind="select"), form_fill.CHOICE), (_field("", kind="radio"), form_fill.CHOICE), (_field("Volume", kind="range"), form_fill.CHOICE),
     (_field("Gender", kind="radio"), form_fill.PRIVATE), (_field("Gender", kind="menu"), form_fill.PRIVATE), (_field("Age", kind="number"), form_fill.PRIVATE),
-    (_field("Company name"), form_fill.UNKNOWN), (_field("Referee's name"), form_fill.UNKNOWN),
+    (_field("Position applied"), form_fill.UNKNOWN), (_field("Referee's employer"), form_fill.UNKNOWN), (_field("Referee's name"), form_fill.UNKNOWN),
     (_field("Username"), form_fill.UNKNOWN), (_field("", kind="number"), form_fill.UNKNOWN),
     (_field(""), form_fill.UNKNOWN), (_field("???", kind="textarea"), form_fill.UNKNOWN)])
 def test_what_is_not_the_assistants_to_fill_is_left_with_the_reason(field, why):
@@ -421,7 +423,8 @@ def test_the_job_list_for_the_assistant_holds_open_jobs_only(isolate):
 
 
 # ── the test area: the whole request, on forms served on this machine, in a real browser engine ──
-AREA = {"details": {**MINE, "street": "Long Street 5", "current_employer": "Northwind", "notice_period": "1 month"},
+AREA = {"details": {**MINE, "street": "Long Street 5", "notice_period": "1 month",
+                    "experience": [{"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True}]},
         "jobs": [{"id": "bp", "title": "Backend Developer", "company": "Brightpath", "status": "letter_ready", "source": "linkedin",
                   "url": "https://www.linkedin.com/jobs/view/1", "description": "FastAPI services."},
                  {"id": "ql", "title": "Data Analyst", "company": "Quillon", "status": "waiting", "url": "", "description": "SQL reports."},
@@ -567,7 +570,7 @@ def test_choices_are_planned_apart_from_text_fields():
                           {**MINE, "notice_period": "1 month"}, has_job=True)
     assert [(c["n"], c["kind"], c["typed"], c["what"], c["value"]) for c in todo["choose"]] == [
         (1, "select", False, "notice_period", "1 month"), (2, "menu", False, "country", "Czechia"), (3, "menu", True, "city", "Brno"), (4, "number", False, "", "")]
-    assert todo["left"] == [{"label": "Gender", "why": form_fill.PRIVATE}, {"label": "Current employer", "why": form_fill.NO_DETAIL.format(what="current employer")}]
+    assert todo["left"] == [{"label": "Gender", "why": form_fill.PRIVATE}, {"label": "Current employer", "why": form_fill.NO_DETAIL.format(what="jobs")}]
     assert todo["fill"] == [{"n": 7, "label": "What is your current notice period, in weeks?", "value": "1 month", "kind": "detail"}]
     empty = form_fill.plan([_field("What is your current notice period, in weeks?", n=7)], MINE, has_job=True)
     assert empty["ask"] == [{"n": 7, "label": "What is your current notice period, in weeks?", "most": 0}], "not in My details: drafted like any open question"
@@ -760,3 +763,144 @@ def test_a_free_question_is_answered_from_what_the_app_knows(isolate, monkeypatc
     assert api.assistant_ask("is this job still open?", "nw1")["ok"] is False
     monkeypatch.setattr(llm, "ask", lambda *a, **k: pytest.fail("help costs nothing"))
     assert api.assistant_ask("help")["action"] == "help" and api.assistant_ask("my details")["action"] == "details"
+
+
+# ── several jobs, several degrees, a salary with its currency, files of your own ──
+JOBS = [{"employer": "Old Mill", "title": "Intern", "start": "2020", "end": "2021", "current": False},
+        {"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True},
+        {"employer": "Evening School", "title": "Tutor", "start": "2022", "end": "", "current": True}]
+SCHOOLS = [{"school": "Masaryk University", "degree": "Master", "field": "Applied informatics", "start": "2021", "end": "2023"},
+           {"school": "Masaryk University", "degree": "Bachelor", "field": "Informatics", "start": "2018", "end": "2021"}]
+FULL = {**MINE, "experience": JOBS, "education": SCHOOLS, "salary_amount": 60000, "salary_currency": "CZK", "salary_period": "month"}
+
+
+def test_jobs_degrees_salary_and_files_are_checked_row_by_row(tmp_path):
+    clean, problem = details.check({**FULL, "experience": JOBS + [{"employer": "", "title": "", "start": "", "end": ""}]})
+    assert problem == {} and clean["experience"] == JOBS and clean["education"] == SCHOOLS, "an empty line is not a job"
+    for change, where, word in (
+            ({"experience": [{"employer": "Acme", "title": ""}]}, "experience.0.title", "missing"),
+            ({"experience": [{"employer": "", "title": "Dev"}]}, "experience.0.employer", "missing"),
+            ({"experience": [JOBS[0], {"employer": "A", "title": "B", "start": "spring 23"}]}, "experience.1.start", "2023 or 03/2023"),
+            ({"experience": [{"employer": "A", "title": "B", "start": "13/2023"}]}, "experience.0.start", "2023 or 03/2023"),
+            ({"experience": [{"employer": "A", "title": "B", "start": "2023", "end": "2021"}]}, "experience.0.end", "earlier"),
+            ({"experience": [{"employer": "A", "title": "B", "end": "2024", "current": True}]}, "experience.0.end", "no end date"),
+            ({"experience": [{"employer": "x" * 101, "title": "B"}]}, "experience.0.employer", "the most is 100"),
+            ({"experience": [{"employer": "A", "title": "B"}] * 16}, "experience", "the most is 15"),
+            ({"experience": "three"}, "experience", "list"), ({"experience": ["x"]}, "experience.0", "row"),
+            ({"education": [{"school": "", "degree": "Master"}]}, "education.0.school", "missing"),
+            ({"salary_amount": "a lot"}, "salary", "whole number"), ({"salary_amount": -5}, "salary", "between"),
+            ({"salary_currency": "RUB"}, "salary", "not a currency"), ({"salary_period": "week"}, "salary", "per month or per year"),
+            ({"files": [{"label": "Diploma", "path": str(tmp_path / "gone.pdf")}]}, "files.0", "not there any more"),
+            ({"files": [{"label": "Diploma", "path": "relative.pdf"}]}, "files.0", "not there any more"),
+            ({"files": "one"}, "files", "list")):
+        clean, problem = details.check({**FULL, **change})
+        assert clean == {} and problem["field"] == where and word in problem["msg"], (change, problem)
+    paper = tmp_path / "AWS certificate.pdf"
+    paper.write_bytes(b"x")
+    clean, problem = details.check({**FULL, "files": [{"label": "", "path": str(paper)}, {"label": "", "path": ""}], "salary_amount": "65 000", "salary_currency": "eur"})
+    assert problem == {} and clean["files"] == [{"label": "AWS certificate", "path": str(paper)}] and clean["salary_amount"] == 65000 and clean["salary_currency"] == "EUR"
+    assert "twice" in details.check({**FULL, "files": [{"path": str(paper)}, {"path": str(paper)}]})[1]["msg"]
+
+
+def test_what_a_form_is_given_from_the_lists():
+    assert [j["employer"] for j in details.jobs(FULL)] == ["Northwind", "Evening School", "Old Mill"], "the current jobs first"
+    assert details.salary_text(FULL) == "60 000 CZK gross per month" and details.salary_text(MINE) == ""
+    assert details.salary_text({**FULL, "salary_amount": 52000, "salary_currency": "EUR", "salary_period": "year"}) == "52 000 EUR gross per year"
+    assert details.facts(FULL) == ["- Job: Junior analyst at Northwind (03/2023 to now) - a current job", "- Job: Tutor at Evening School (2022 to now) - a current job",
+                                   "- Job: Intern at Old Mill (2020 to 2021)", "- Education: Master, Applied informatics at Masaryk University (2021 to 2023)",
+                                   "- Education: Bachelor, Informatics at Masaryk University (2018 to 2021)", "- Salary expectation: 60 000 CZK gross per month"]
+    assert details.facts(MINE) == []
+    fields = [_field("Company", n=1), _field("Job title", n=2), _field("Company", n=3), _field("Job title", n=4), _field("Company", n=5), _field("Title", n=6),
+              _field("Company", n=7), _field("School", n=8), _field("Degree", n=9), _field("Field of study", n=10), _field("School", n=11), _field("Degree", n=12),
+              _field("School", n=13), _field("Expected salary", n=14), _field("Current employer", n=15, filled=True)]
+    todo = form_fill.plan(fields, FULL)
+    assert [(f["n"], f["value"]) for f in todo["fill"]] == [
+        (1, "Northwind"), (2, "Junior analyst"), (3, "Evening School"), (4, "Tutor"), (5, "Old Mill"), (6, "Intern"),
+        (8, "Masaryk University"), (9, "Master"), (10, "Applied informatics"), (11, "Masaryk University"), (12, "Bachelor"), (14, "60 000 CZK gross per month")]
+    assert todo["left"] == [{"label": "Company", "why": form_fill.MORE_ROWS.format(have="3 jobs")}, {"label": "School", "why": form_fill.MORE_ROWS.format(have="2 degrees")}]
+    assert form_fill.plan([_field("Company", n=1)], MINE)["left"] == [{"label": "Company", "why": form_fill.NO_DETAIL.format(what="jobs")}]
+    assert "Job: Junior analyst at Northwind" in form_choices.facts_block(CV, FULL, None) and "Education: Master" in form_choices.facts_block(CV, FULL, None)
+
+
+def test_jobs_and_degrees_are_copied_from_the_cv_and_never_made_up(isolate, monkeypatch):
+    cv = CV + "\nExperience\nJunior analyst, Northwind, 03/2023 - present\nIntern, Old Mill, 2020 - 2021\nEducation\nMasaryk University, Master, Applied informatics, 2021 - 2023"
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: cv)
+    seen = {}
+
+    def ask(prompt, **kw):
+        seen.update(prompt=prompt, **kw)
+        return {"experience": [{"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "present", "current": True},
+                               {"employer": "Old Mill", "title": "Intern", "start": "2020", "end": "2021", "current": False},
+                               {"employer": "Globex", "title": "Director", "start": "2019", "end": "2020"},
+                               {"employer": "Northwind", "title": "", "start": "", "end": ""}, "junk"],
+                "education": [{"school": "Masaryk University", "degree": "Master", "field": "Applied informatics", "start": "2021", "end": "2023"},
+                              {"school": "Harvard", "degree": "PhD", "field": "", "start": "", "end": ""}]}
+    monkeypatch.setattr(llm, "ask_json", ask)
+    out = ui_api.Api().assistant_cv_lists()
+    assert out["ok"] and [j["employer"] for j in out["experience"]] == ["Northwind", "Old Mill"], "an employer that is not in the CV is dropped, and so is a row with no title"
+    assert out["experience"][0] == {"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True}
+    assert [s["school"] for s in out["education"]] == ["Masaryk University"] and "2 jobs and 1 degrees" in out["say"]
+    assert "never add, guess" in seen["system"] and seen["tag"] == "assistant" and not details.path().exists(), "offered, not saved"
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"experience": [], "education": []})
+    assert "found no jobs or degrees" in ui_api.Api().assistant_cv_lists()["msg"]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's limit is used up until 14:00.")))
+    assert "limit is used up" in ui_api.Api().assistant_cv_lists()["msg"]
+    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "")
+    assert "could not be read" in ui_api.Api().assistant_cv_lists()["msg"]
+
+
+def test_your_own_files_are_shown_with_the_cv_or_alone(isolate, monkeypatch, tmp_path):
+    paper = tmp_path / "diploma.pdf"
+    paper.write_bytes(b"x")
+    store.save_jobs([_job()])
+    shown = []
+    monkeypatch.setattr(ui_api.Api, "_reveal", lambda self, path: shown.append(os.path.basename(str(path))))
+    api = ui_api.Api()
+    assert api.assistant_files("")["ok"] is False and "no file of your own" in api.assistant_files("nw1")["msg"]
+    assert details.save({**MINE, "files": [{"label": "Diploma", "path": str(paper)}]})["ok"]
+    out = api.assistant_files("")
+    assert out["ok"] and shown == ["diploma.pdf"] and "Diploma (diploma.pdf)" in out["say"]
+    assert api.my_details()["files"] == [{"label": "Diploma", "path": str(paper), "name": "diploma.pdf"}]
+    assert api.my_details()["currencies"][:3] == ["CZK", "EUR", "USD"] and api.my_details()["periods"] == ["month", "year"]
+    paper.unlink()
+    assert details.load()["files"] == [] or details.load() == details.empty(), "a file that is gone does not break the page"
+
+
+# ── answers of your own ─────────────────────────────────────────────────────
+def test_answers_of_your_own_are_kept_changed_and_removed(isolate):
+    api = ui_api.Api()
+    first = api.my_answers()
+    assert first["items"] == [] and "When can you start?" in first["starters"]
+    for question, answer, where, word in (("", "x", "question", "in words"), ("???", "x", "question", "in words"), ("q" * 301 + " word", "x", "question", "the most is 300"),
+                                          ("When can you start?", "  ", "answer", "empty"), ("When can you start?", "On [date].", "answer", "square brackets"),
+                                          ("When can you start?", "y" * 3001, "answer", "the most is 3000")):
+        out = api.save_my_answer(question, answer)
+        assert out["ok"] is False and out["field"] == where and word in out["msg"], (question, out)
+    assert api.save_my_answer("When can you start?", "Two weeks after an offer.")["ok"]
+    assert api.save_my_answer("What are your strengths?", "I finish what I start.")["ok"]
+    kept = api.my_answers()
+    assert [i["question"] for i in kept["items"]] == ["What are your strengths?", "When can you start?"] and "When can you start?" not in kept["starters"]
+    assert api.save_my_answer("When could you start?", "Two weeks after an offer.", "When can you start?")["ok"], "a reworded question replaces the old entry"
+    assert [i["question"] for i in api.my_answers()["items"]] == ["When could you start?", "What are your strengths?"]
+    assert api.delete_my_answer("What are your strengths?") == {"ok": True} and api.delete_my_answer("never asked") == {"ok": False}
+    assert answer_memory.recall("when could you start")["answer"] == "Two weeks after an offer."
+
+
+def test_a_draft_of_your_own_answer_comes_from_the_cv_and_is_not_kept_until_you_save(isolate, monkeypatch):
+    details.save(FULL)
+    seen = {}
+
+    def ask(prompt, **kw):
+        seen["prompt"] = prompt
+        return {"answers": [{"n": 1, "answer": "I work carefully with data in SQL and Python.", "needs_you": ""}]}
+    monkeypatch.setattr(llm, "ask_json", ask)
+    api = ui_api.Api()
+    out = api.draft_my_answer("What are your strengths?")
+    assert out["ok"] and out["answer"].startswith("I work carefully") and answer_memory.count() == 0
+    assert "Junior analyst at Northwind" in seen["prompt"] and "do not name a company" in seen["prompt"]
+    for question in ("Why do you want to work here?", "Why do you want to join our company?", "What attracts you to this role?", "Why us?"):
+        refused = api.draft_my_answer(question)
+        assert refused["ok"] is False and refused["msg"] == assistant.ABOUT_ONE_COMPANY, question
+    assert api.draft_my_answer("?")["field"] == "question"
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's limit is used up until 14:00.")))
+    assert "limit is used up" in api.draft_my_answer("What are your strengths?")["msg"]

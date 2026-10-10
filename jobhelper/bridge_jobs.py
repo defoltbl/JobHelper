@@ -2,6 +2,7 @@
 to `ui_api.Api`; the few that take seconds answer later through a signal."""
 from __future__ import annotations
 
+import os
 import threading
 
 from PySide6.QtCore import Slot
@@ -326,13 +327,22 @@ class JobSlots:
     def myDetails(self):
         return self._api.my_details()
 
-    @Slot("QVariantMap", result="QVariantMap")
-    def checkMyDetails(self, values):
-        return self._api.check_my_details(dict(values or {}))
+    @staticmethod
+    def _details(text):
+        """The page sends its fields as JSON text: lists of jobs and degrees arrive whole that way."""
+        import json
+        try:
+            return json.loads(text or "")
+        except ValueError:
+            return None
 
-    @Slot("QVariantMap", result="QVariantMap")
+    @Slot(str, result="QVariantMap")
+    def checkMyDetails(self, values):
+        return self._api.check_my_details(self._details(values))
+
+    @Slot(str, result="QVariantMap")
     def saveMyDetails(self, values):
-        return self._api.save_my_details(dict(values or {}))
+        return self._api.save_my_details(self._details(values))
 
     @Slot(result="QVariantList")
     def assistantJobs(self):
@@ -356,7 +366,8 @@ class JobSlots:
         def work():
             try:
                 result = {"open_form": lambda: self._api.assistant_open_form(arg), "files": lambda: self._api.assistant_files(job_id),
-                          "learn": self._api.assistant_learn, "forget": self._api.assistant_forget}[what]()
+                          "learn": self._api.assistant_learn, "forget": self._api.assistant_forget,
+                          "cv_lists": self._api.assistant_cv_lists, "draft": lambda: self._api.draft_my_answer(arg)}[what]()
             except Exception as e:  # noqa: BLE001 - the window must always get an answer
                 trouble.note(f"the assistant's request ({what})", e)
                 result = {"ok": False, "msg": str(e) or type(e).__name__}
@@ -370,6 +381,25 @@ class JobSlots:
         def work():
             self._post("formWatched", self._api.assistant_watch())
         threading.Thread(target=work, daemon=True).start()
+
+    @Slot(result="QVariantMap")
+    def myAnswers(self):
+        return self._api.my_answers()
+
+    @Slot(str, str, str, result="QVariantMap")
+    def saveMyAnswer(self, question, answer, was):
+        return self._api.save_my_answer(question, answer, was)
+
+    @Slot(str, result="QVariantMap")
+    def deleteMyAnswer(self, question):
+        return self._api.delete_my_answer(question)
+
+    @Slot(str, result=str)
+    def localFile(self, url):
+        """A file chosen in a file window, as a path ('' when it is not a file on this Mac)."""
+        from PySide6.QtCore import QUrl
+        path = QUrl(url).toLocalFile() if "://" in str(url) else str(url)
+        return path if path and os.path.isfile(path) else ""
 
     @Slot(result="QVariantMap")
     def assistantMemory(self):

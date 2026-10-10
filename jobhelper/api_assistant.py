@@ -1,9 +1,10 @@
 """The assistant's part of the window's back end: your details, and filling in the form that is open in Chrome."""
 from __future__ import annotations
 
+import os
 from typing import Any
 
-from . import answer_memory, assistant, chrome, config, cover_letter, details, form_answers, form_choices, form_fill, llm, mailhosts, store
+from . import answer_memory, assistant, chrome, config, cover_letter, details, form_answers, form_choices, form_fill, llm, mailhosts, salary, store
 from .api_base import _guarded
 
 SHOWN = 90      # characters of a filled-in value shown in the report
@@ -18,8 +19,67 @@ class AssistantApi:
         offered = details.from_cv(self._cv_text(), self._my_name())
         from_cv = [key for key in details.KEYS if not kept[key] and offered.get(key)]
         return {"details": {key: kept[key] or offered.get(key, "") for key in details.KEYS}, "from_cv": from_cv,
-                "saved": any(kept.values()),
-                "fields": [{"key": key, "label": label, "most": most} for key, label, most in details.FIELDS]}
+                "saved": details.any_given(kept),
+                "fields": [{"key": key, "label": label, "most": most} for key, label, most in details.FIELDS],
+                "experience": kept["experience"], "education": kept["education"],
+                "files": [{**f, "name": os.path.basename(f["path"])} for f in kept["files"]],
+                "salary_amount": kept["salary_amount"], "salary_currency": kept["salary_currency"], "salary_period": kept["salary_period"],
+                "currencies": list(salary.CURRENCIES), "periods": list(details.PERIODS), "max_rows": details.MAX_ROWS}
+
+    def assistant_cv_lists(self):
+        """The jobs and degrees your CV states, read by Claude in one call, to offer in the page (nothing is saved)."""
+        try:
+            found = details.lists_from_cv(self._cv_text())
+        except Exception as e:  # noqa: BLE001 - said to the person as the reason
+            return {"ok": False, "msg": f"I could not read them from your CV: {str(e) or type(e).__name__}"}
+        if not found["experience"] and not found["education"]:
+            return {"ok": False, "msg": "I found no jobs or degrees written in your CV in a way I can copy. Add them by hand."}
+        return {"ok": True, **found, "say": f"I read {len(found['experience'])} jobs and {len(found['education'])} degrees from your CV. "
+                                              "They are on the My details page, not saved yet: check them, then save."}
+
+    # ── answers of your own, for questions every form asks ──────
+    @_guarded(dict)
+    def my_answers(self):
+        kept = answer_memory.entries()
+        have = {answer_memory.key(i["question"]) for i in kept}
+        return {"items": kept, "starters": [q for q in assistant.STARTERS if answer_memory.key(q) not in have]}
+
+    def save_my_answer(self, question, answer, was=""):
+        """Keep an answer in your own words (a changed question replaces the old entry)."""
+        problem = assistant.check_answer(question, answer)
+        if problem:
+            return {"ok": False, **problem}
+        question = " ".join(str(question).split())
+        if was and answer_memory.key(was) != answer_memory.key(question):
+            answer_memory.forget(was)
+        if not answer_memory.remember(question, str(answer).strip()):
+            return {"ok": False, "field": "answer", "msg": "That answer could not be kept."}
+        return {"ok": True}
+
+    def delete_my_answer(self, question):
+        return {"ok": answer_memory.forget(str(question or ""))}
+
+    def draft_my_answer(self, question):
+        """A first draft of an answer from your CV (one Claude call). It is yours only once you read it and save it."""
+        question = " ".join(str(question or "").split())
+        problem = assistant.check_answer(question, "x")
+        if problem:
+            return {"ok": False, **problem}
+        if assistant.about_one_company(question):
+            return {"ok": False, "field": "question", "msg": assistant.ABOUT_ONE_COMPANY}
+        cv_text = self._cv_text()
+        if not cv_text.strip():
+            return {"ok": False, "field": "answer", "msg": "Your master CV could not be read, so no answer can be built from it."}
+        mine = details.load()
+        general = {"title": "any role this candidate applies for (do not name a role)", "company": "not known (do not name a company)",
+                   "location": "", "description": "", "desired_monthly_czk": ""}
+        notes = "\n".join([config.experience_notes()] + details.facts(mine)).strip()
+        try:
+            item = form_answers.generate(general, cv_text, [question], notes)[0]
+        except Exception as e:  # noqa: BLE001 - said to the person as the reason
+            return {"ok": False, "field": "answer", "msg": f"The answer could not be drafted: {str(e) or type(e).__name__}"}
+        return {"ok": True, "question": question, "answer": item["answer"], "check": item["check"],
+                "say": "Drafted from your CV. Read it, make it yours, then save."}
 
     def check_my_details(self, values):
         """{} or {"field", "msg"}: what is wrong with what is typed, before anything is saved."""
@@ -87,11 +147,16 @@ class AssistantApi:
         return {"ok": True, "say": f"I opened the form from {host} in a new tab. Ask me to fill it in when it has loaded."}
 
     def assistant_files(self, job_id):
-        """Show the CV and the letter of a job in Finder, ready to be dragged into the form."""
-        j = store.find(store.load_jobs(), job_id)
-        if not j:
+        """Show the CV and the letter of a job, and your own files (certificates, diplomas), in Finder,
+        ready to be dragged into the form."""
+        j = store.find(store.load_jobs(), job_id) if job_id else {}
+        if j is None:
             return {"ok": False, "msg": "That job is not in the list any more."}
         shown = []
+        for extra in details.load()["files"]:
+            if os.path.isfile(extra["path"]):
+                self._reveal(extra["path"])
+                shown.append(f"{extra['label']} ({os.path.basename(extra['path'])})")
         for what, base, name in (("CV", config.TAILORED_CV_DIR, j.get("tailored_cv_file", "")), ("letter", config.LETTERS_DIR, j.get("cover_letter_file", ""))):
             if not name:
                 continue
@@ -102,8 +167,8 @@ class AssistantApi:
                     shown.append(f"{what} ({path.name})")
                     break
         if not shown:
-            return {"ok": False, "msg": "This job has no CV or letter from the app. Attach your own files."}
-        return {"ok": True, "say": f"Shown in Finder: {' and '.join(shown)}. Drag {'it' if len(shown) == 1 else 'them'} onto the form's file field."}
+            return {"ok": False, "msg": "There is no CV or letter from the app for this job, and no file of your own under My details. Attach your files yourself."}
+        return {"ok": True, "say": f"Shown in Finder: {', '.join(shown)}. Drag {'it' if len(shown) == 1 else 'them'} onto the form's file {'field' if len(shown) == 1 else 'fields'}."}
 
     def assistant_watch(self):
         """Where the form in front stands now: quiet on any trouble (it is asked every few seconds while the window waits)."""
@@ -262,7 +327,7 @@ class AssistantApi:
         def no(msg, **more):
             return {"ok": False, "action": "fill", "msg": msg, **more}
         mine = details.load()
-        if not any(mine.values()):
+        if not details.any_given(mine):
             return no("I do not know your details yet. Fill in My details once, save, then ask me again.", action="details")
         try:
             tab = chrome.active_tab()
@@ -338,7 +403,7 @@ class AssistantApi:
         return {"ok": True, "action": "fill", "host": host, "url": page["url"],
                 "job_id": job["id"] if job else "", "job": label, "guessed": guessed,
                 "wants_file": any(i["why"] == form_fill.FILE for i in left),
-                "has_files": bool(job and (job.get("tailored_cv_file") or job.get("cover_letter_file"))),
+                "has_files": bool(mine["files"] or (job and (job.get("tailored_cv_file") or job.get("cover_letter_file")))),
                 "is_lead": bool(job and job.get("status") in store.LEAD_STATUSES), "can_learn": bool(self._last_fill["items"]),
                 "filled": filled, "left": left, "kept": kept, "boxes": page["boxes"],
                 "say": assistant.summary(host, filled, left, kept, page["boxes"], label, guessed)}

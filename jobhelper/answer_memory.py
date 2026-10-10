@@ -88,6 +88,21 @@ def recall(question: str, company: str = "", options: list[str] | None = None) -
     return {"answer": answer, "company": other, "when": kept.get("when", "")}
 
 
+def entries() -> list[dict[str, str]]:
+    """Everything remembered, the newest first: [{question, answer, company, when}]."""
+    return [{"question": v.get("question", ""), "answer": v["answer"], "company": v.get("company", ""), "when": v.get("when", "")}
+            for v in reversed(list(_load().values()))]
+
+
+def forget(question: str, company: str = "") -> bool:
+    """Remove one remembered answer."""
+    data = _load()
+    if data.pop(key(question, company), None) is None:
+        return False
+    vault.write_text(path(), json.dumps(data, ensure_ascii=False, indent=2))
+    return True
+
+
 def count() -> int:
     return len(_load())
 
