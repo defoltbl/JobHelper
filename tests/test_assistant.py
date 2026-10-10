@@ -2060,7 +2060,7 @@ def test_area_a_languages_page_gets_your_languages_their_levels_and_the_fluent_b
     assert out["left"] == {} and out["sent"] is False and out["clicked"] is False
 
 
-# ── found by reading the assistant's modules line by line (11 October 2026) ─
+# ── found by reading the assistant's modules line by line (10 October 2026) ─
 def test_the_review_names_a_long_list_by_the_words_beside_it():
     """The review before sending read a field's name the old way: for a list of 250 countries whose label is only written beside
     it, the entries crowded the label out and the review listed it under the page's inner name ("field_17")."""

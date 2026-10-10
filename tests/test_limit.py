@@ -420,7 +420,7 @@ def test_career_site_jobs_abroad_are_left_out(location, fits):
     assert filters.location_fits(location, "Prague") is fits
 
 
-# ── found by reading the bridges line by line (11 October 2026) ─────────────
+# ── found by reading the bridges line by line (10 October 2026) ─────────────
 def test_stop_pressed_while_a_run_waits_on_the_limit_ends_it_and_costs_no_job_a_try(isolate_data, monkeypatch):
     """Stop during a pause is raised from inside the step that was waiting. The agents catch ordinary errors around each job
     ("could not score this one, go on"), so the run went on to the next job, and the job it was on lost a try at its documents."""

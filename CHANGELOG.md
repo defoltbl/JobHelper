@@ -3,7 +3,7 @@
 The newest changes are first. The Help window in the app shows this file under "What changed".
 Format: a `## date` line, then one `- ` line per change; `**words**` are shown in bold.
 
-## 11 October 2026
+## 10 October 2026
 
 - **Found by reading the code line by line (third part: the assistant, the window's back end, the bridges):**
   - A right-to-work question that names another country than yours is never answered for you. What you said about your right to work is about your own country.
@@ -12,9 +12,6 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
   - **My details** is no longer read as empty when one saved value fails a check; only that value is left out.
   - The review before sending names a long list by the words beside it, not by the page's inner name.
   - The back end now refuses a career-site token that is not a plain slug, and a model or search source it does not know, whatever sent them.
-
-## 10 October 2026
-
 - **Fixed on a real form: "Location" and "Role description" inside a job were filled wrongly.** The location got your own city and the description got a text Claude drafted about you in general. Each job in **My details** now has **Where it was** and **What you did there**; **Read from my CV** copies both from the CV, word for word. Forms get the job's own, and what is empty is left to you with the reason.
 - **Dates split into a month box and a year box are filled in.** The From and To of a job were left empty on forms that draw them this way.
 - **Languages.** **My details** has a list of your languages with a level each (Native, Fluent, Advanced, Intermediate, Basic). A form that asks for each language gets them row by row, with the level in the form's own words; where a form has no entry for Native, Fluent is chosen. The box "I am fluent in this language" is ticked for Native and Fluent.

@@ -953,7 +953,7 @@ def test_the_plain_letter_written_without_a_template_carries_your_own_title(isol
     assert [p.text for p in docx.Document(str((config.LETTERS_DIR / bare).with_suffix(".docx"))).paragraphs][1] == "Group Full-Stack Developer", "a CV without such a line: the role, as before"
 
 
-# ── found by reading the window's back end line by line (11 October 2026) ───
+# ── found by reading the window's back end line by line (10 October 2026) ───
 def test_a_career_site_token_is_a_plain_slug_and_nothing_else(api, isolate_data):
     """The token becomes part of an address the app asks (https://<token>.recruitee.com/…). The window only lets a slug be typed;
     the back end now refuses anything else too, and so does the reader of a file edited by hand."""
