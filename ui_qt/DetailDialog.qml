@@ -335,7 +335,8 @@ Dialog {
         open();
     }
     function refresh() { var d = bridge.jobDetail(job.id); if (d && d.id) job = d; }
-    background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1 }
+    background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1
+        FocusCatcher {} }
     contentItem: ColumnLayout {
         spacing: 0
         // header
@@ -377,6 +378,7 @@ Dialog {
             contentHeight: detailCol.implicitHeight + 28
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar {}
+            FocusCatcher {}                // a press on empty space in the scroll area
             ColumnLayout {
                 id: detailCol
                 x: 16; y: 14; width: detailFlick.width - 32; spacing: 12

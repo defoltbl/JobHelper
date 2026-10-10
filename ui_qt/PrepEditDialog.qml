@@ -82,7 +82,8 @@ Dialog {
         }
         dirty = false; close();
     }
-    background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1 }
+    background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1
+        FocusCatcher {} }
     contentItem: ColumnLayout {
         spacing: 0
         RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
@@ -102,6 +103,7 @@ Dialog {
             Layout.fillWidth: true; Layout.fillHeight: true; clip: true
             contentHeight: peCol.implicitHeight + 28; boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar {}
+            FocusCatcher {}                // a press on empty space in the scroll area
             ColumnLayout {
                 id: peCol
                 x: 16; y: 14; width: peFlick.width - 32; spacing: 12

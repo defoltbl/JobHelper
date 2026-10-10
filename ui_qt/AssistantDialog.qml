@@ -178,7 +178,8 @@ Dialog {
             if (res.job_id) detailDialog.refresh();
         } }
 
-    background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1 }
+    background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1
+        FocusCatcher {} }
     contentItem: ColumnLayout {
         spacing: 0
         RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
@@ -210,6 +211,7 @@ Dialog {
                 Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                 contentHeight: talkCol.implicitHeight + 28; boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar {}
+                FocusCatcher {}                // a press on empty space in the scroll area
                 ColumnLayout {
                     id: talkCol
                     x: 16; y: 14; width: talkFlick.width - 32; spacing: 10
@@ -295,6 +297,7 @@ Dialog {
                 Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                 contentHeight: detailsCol.implicitHeight + 28; boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar {}
+                FocusCatcher {}                // a press on empty space in the scroll area
                 ColumnLayout {
                     id: detailsCol
                     x: 16; y: 14; width: detailsFlick.width - 32; spacing: 10

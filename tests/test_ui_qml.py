@@ -1,6 +1,7 @@
 """The QML window, loaded offscreen with a stubbed bridge: it must load without
 warnings, and the welcome screen, progress bar and validators must behave."""
 import os
+import re
 from datetime import date, timedelta
 
 import pytest
@@ -3432,3 +3433,42 @@ def test_after_a_fill_the_assistant_offers_what_applies(ui, monkeypatch):
     store.save_jobs([dict(j, status="letter_ready") if j["id"] == "lead" else j for j in store.load_jobs()])      # as the other tests expect it
     ui.js("win.reloadAll()")
     assert dialog.property("visible") is False and ui.warnings == []
+
+
+def test_a_press_on_empty_space_ends_the_editing_of_a_field(ui):
+    """The accent outline and the cursor of a text field used to stay when you clicked somewhere else in the window."""
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    dialog = ui.find("assistantDialog")
+    ui.js("assistantDialog.show()")
+    ui.wait(500)
+    ui.js('assistantDialog.page = "ask"')
+    box = ui.find("asBox")
+    ui.js("forceActiveFocus()", box)
+    ui.wait(100)
+    assert box.property("activeFocus") is True
+    spot = box.mapToScene(QPointF(box.width() / 2, -170)).toPoint()             # in the conversation above the field: empty space
+    QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, QPoint(spot.x(), spot.y()))
+    ui.wait(150)
+    assert box.property("activeFocus") is False, "the field let go"
+    QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, box.mapToScene(QPointF(box.width() / 2, box.height() / 2)).toPoint())
+    ui.wait(150)
+    assert box.property("activeFocus") is True, "and a click in the field still starts editing"
+    header = box.mapToScene(QPointF(box.width() / 2, 0)).toPoint()
+    QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, QPoint(header.x(), int(dialog.property("y")) + 30))   # beside the title
+    ui.wait(150)
+    assert box.property("activeFocus") is False
+    ui.js("assistantDialog.tryClose()")
+    ui.wait(400)
+    assert ui.warnings == []
+
+
+def test_every_window_with_a_text_field_lets_go_of_it():
+    """A window that has a field to type in must have a way to end the editing by pressing beside it."""
+    fields = re.compile(r"\b(TextField|TextEdit|TextArea|AutoField|ThemedSpin|TimeField|TagEditor) \{")
+    for path in sorted((ROOT / "ui_qt").glob("*Dialog.qml")) + [ROOT / "ui_qt" / "WelcomeOverlay.qml"]:
+        text = path.read_text(encoding="utf-8")
+        if fields.search(text):
+            assert "FocusCatcher {}" in text or "Sink.forceActiveFocus()" in text, f"{path.name} keeps a field's outline when you press beside it"
+        for scroll in re.findall(r"\n( +)Flickable \{\n(?:.*\n){0,6}?\1    (\w+) \{", text):
+            if "FocusCatcher {}" in text:
+                assert scroll[1] in ("FocusCatcher", "MouseArea"), f"{path.name}: a scroll area without a FocusCatcher as its first child"

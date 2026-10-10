@@ -128,7 +128,8 @@ Dialog {
                       : (out.length === total && g === "" && q === "") ? (baseTitle + " — " + total)
                       : (baseTitle + " — " + out.length + " of " + total);
     }
-    background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1 }
+    background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1
+        FocusCatcher {} }
     contentItem: ColumnLayout {
         spacing: 0
         RowLayout {

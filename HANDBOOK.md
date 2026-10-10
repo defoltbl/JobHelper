@@ -208,6 +208,9 @@ data/                your data; only the *.example.* files are in git
   thousands of small steps in a worker (the Insights keywords were 59,000 searches) make every call from
   the window queue behind them. Give such work short rests (`keywords.read_ahead`), keep it away from
   animations (it starts after the welcome screen), and keep `sys.setswitchinterval` in `app_qt.py`.
+- **A text field does not let go of the focus by itself.** In Qt Quick a press on empty space leaves the field
+  outlined with its cursor blinking. Every window with a field needs `FocusCatcher {}` in its background and as the
+  first child of each scroll area (it also covers the space under short content); a test fails for a window without one.
 - **An answer sent from a worker thread must carry plain values.** The start-up check travels inside the
   connection answer as text (`info.health`, JSON) and the window parses it.
 - **Under test the window's loop keeps Python to itself for one whole wait**, so a worker only moves
