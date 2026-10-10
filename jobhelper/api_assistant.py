@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import os
+import secrets
+import time
 from datetime import date
 from typing import Any
 
-from . import answer_memory, assistant, assistant_brain, chrome, config, cover_letter, details, form_answers, form_choices, form_fill, mailhosts, salary, store
+from . import agent1_cv, answer_memory, assistant, assistant_brain, chrome, config, cover_letter, details, form_answers, form_choices, form_fill, mailhosts, salary, store
 from .api_base import _guarded
 
 SHOWN = 90      # characters of a filled-in value shown in the report
@@ -371,9 +373,86 @@ class AssistantApi:
         return {"ok": True, "action": "review", "host": host, "problems": problems[:12], "job_id": job["id"] if job else "",
                 "say": say + note + " Tick boxes, files and personal questions are yours to check. I did not send anything."}
 
+    def _job_docs(self, j) -> dict[str, list]:
+        """The files of a job that can go into a form: its CV and its letter, the PDF before the Word file."""
+        out: dict[str, list] = {"cv": [], "letter": []}
+        for what, base, name in (("cv", config.TAILORED_CV_DIR, j.get("tailored_cv_file", "")), ("letter", config.LETTERS_DIR, j.get("cover_letter_file", ""))):
+            name = str(name or "")
+            if not name or os.path.basename(name) != name:
+                continue
+            docx = (base / name).with_suffix(".docx")
+            tried = [docx.with_suffix(".pdf"), docx] + ([config.COVER_LETTERS_DIR / name] if what == "letter" else [])
+            out[what] = [path for path in dict.fromkeys(tried) if path.is_file()]
+        return out
+
+    def _recently_opened(self) -> str:
+        """The job whose posting you opened from the app within the last two hours ('' = none)."""
+        job_id, when = getattr(self, "_opened", ("", 0.0))
+        return job_id if job_id and time.time() - when < 2 * 3600 else ""
+
+    def _job_of_page(self, jobs: list[dict], page: dict[str, Any]):
+        """The job a form belongs to, although the form is rarely at the address of its posting (see form_fill.match_job)."""
+        found = form_fill.match_job(jobs, page["url"], page["title"], page.get("from", ""))
+        if not found:
+            try:
+                words = form_fill.page_answer(chrome.run(form_fill.PAGE))["text"][:6000]
+            except (chrome.ChromeError, ValueError):
+                words = ""
+            found = form_fill.match_job(jobs, page["url"], page["title"], page.get("from", ""), words, self._recently_opened())
+        return store.find(jobs, found) if found else None
+
+    def _attach(self, wanted: list[dict[str, Any]], page: dict[str, Any], job) -> tuple[list[dict], list[dict], bool]:
+        """Give the form's file fields the CV and the letter of this job. Returns (attached, left, the tab moved).
+        Only a field that holds no file is given one; the field for further documents gets the letter when the
+        form has no place of its own for it. Nothing is sent: the page holds the file until you press its button."""
+        filled, left = [], []
+        docs = self._job_docs(job) if job else {"cv": [], "letter": []}
+        letter_placed = any(form_fill.classify(f)[0] == "letter" for f in page["fields"]) or any(i["kind"] == "letter" for i in wanted)
+        for item in wanted:
+            kind, check = item["kind"], form_fill.FILE_CHECK
+            if not job:
+                left.append({"label": item["label"], "why": form_fill.FILE_NO_JOB})
+                continue
+            if kind == "other":
+                if letter_placed:
+                    left.append({"label": item["label"], "why": form_fill.FILE_OTHER})
+                    continue
+                kind, letter_placed = "letter", True
+            paths = docs[kind]
+            if kind == "cv" and not paths:              # no CV adapted to this job: your own one, and said so
+                master = agent1_cv.find_cv()
+                paths, check = ([master] if master else []), form_fill.FILE_MASTER
+            if not paths:
+                left.append({"label": item["label"], "why": form_fill.FILE_NO_CV if kind == "cv" else form_fill.FILE_NO_LETTER})
+                continue
+            path = next((p for p in paths if form_fill.takes(item["accept"], p.name)), None)
+            if path is None:
+                left.append({"label": item["label"], "why": form_fill.FILE_FORMAT.format(accept=item["accept"], name=paths[0].name)})
+                continue
+            try:
+                content = path.read_bytes() if path.stat().st_size <= form_fill.MAX_FILE else None
+            except OSError:
+                left.append({"label": item["label"], "why": form_fill.FILE_NO_CV if kind == "cv" else form_fill.FILE_NO_LETTER})
+                continue
+            if content is None:
+                left.append({"label": item["label"], "why": form_fill.FILE_BIG.format(name=path.name)})
+                continue
+            key = "__jobhelper_" + secrets.token_hex(8)
+            for piece in form_fill.put_scripts(key, content):
+                chrome.run(piece)
+            got = form_fill.attach_answer(chrome.run(form_fill.attach_script(item["n"], key, path.name, page["url"])))
+            if got["moved"]:
+                return filled, left, True
+            if got["ok"] and got["size"] == len(content):
+                filled.append({"label": item["label"], "value": path.name, "kind": "file", "check": check})
+            else:
+                left.append({"label": item["label"], "why": form_fill.FILE_REFUSED})
+        return filled, left, False
+
     def assistant_fill(self, job_id="", skip=None):
-        """Fill in the form in the Chrome tab in front. Only empty fields are written; the only things
-        pressed are a menu, an entry of a menu and a radio button; the form is not sent.
+        """Fill in the form in the browser tab in front. Only empty fields are written; the only things
+        pressed are a menu, an entry of a menu and a radio button; file fields get the CV and the letter
+        of the job; the form is not sent.
         Returns what was filled, what was left and why."""
         def no(msg, **more):
             return {"ok": False, "action": "fill", "msg": msg, **more}
@@ -409,7 +488,7 @@ class AssistantApi:
                 return no("That job is not in the list any more. Choose another one.")
         else:
             open_ones = [j for j in jobs if j.get("status") in store.LEAD_STATUSES | {"waiting", "interview", "on_hold"}]
-            job = store.find(jobs, form_fill.match_job(open_ones, page["url"], page["title"]))
+            job = self._job_of_page(open_ones, page)
             guessed = job is not None
         todo = form_fill.plan(page["fields"], mine, self._letter_text(job), has_job=job is not None)
         added = 0
@@ -435,6 +514,7 @@ class AssistantApi:
                     kept.append(item)
             return kept
         fill, todo["ask"], todo["choose"], todo["guess"] = wanted(fill), wanted(todo["ask"]), wanted(todo["choose"]), wanted(todo["guess"])
+        todo["attach"] = wanted(todo["attach"])
         guesses = [{"n": g["n"], "kind": "text", "typed": False, "label": g["label"], "options": [], "what": "", "value": "", "most": g["most"]}
                    for g in todo["guess"][:8]]
         left += [{"label": g["label"], "why": form_fill.UNKNOWN} for g in todo["guess"][8:]]
@@ -497,6 +577,15 @@ class AssistantApi:
                     left.append({"label": item["label"], "why": form_fill.THROWN})
                 else:
                     left.append({"label": item["label"], "why": "The page did not take it: the field changed or was filled in the meantime. Type this one yourself."})
+        if todo["attach"]:
+            try:
+                attached, not_attached, moved = self._attach(todo["attach"], page, job)
+            except (chrome.ChromeError, ValueError) as e:
+                return no(str(e))
+            if moved:
+                return no("The tab changed while I was attaching your files. Go back to the form, look what it holds, and ask me again.")
+            filled += attached
+            left += not_attached
         kept = sum(1 for f in page["fields"] if f["filled"])
         label = f"{job.get('title', '')} at {job.get('company', '')}" if job else ""
         if job and filled and job.get("status") in store.LEAD_STATUSES:
@@ -508,7 +597,7 @@ class AssistantApi:
                                      if i["kind"] in ("answer", "choice") and i["n"] in (done["done"] if fill else [])]}
         return {"ok": True, "action": "fill", "host": host, "url": page["url"],
                 "job_id": job["id"] if job else "", "job": label, "guessed": guessed,
-                "wants_file": any(i["why"] == form_fill.FILE for i in left),
+                "wants_file": any(i["why"] in form_fill.FILE_REASONS or "Attach it yourself" in i["why"] for i in left),
                 "has_files": bool(mine["files"] or (job and (job.get("tailored_cv_file") or job.get("cover_letter_file")))),
                 "is_lead": bool(job and job.get("status") in store.LEAD_STATUSES), "can_learn": bool(self._last_fill["items"]),
                 "filled": filled, "left": left, "kept": kept, "boxes": page["boxes"],

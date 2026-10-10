@@ -410,12 +410,13 @@ def test_guide_shots(ui, monkeypatch):
                         "value": "Your back-end services are written in FastAPI on PostgreSQL, the stack of my own project…"},
                        {"label": "When can you start?", "value": "I can start on [your start date].", "kind": "answer", "check": "Your start date"},
                        {"label": "Country", "value": "Czech Republic", "kind": "choice", "check": "Chosen for you: check it."},
+                       {"label": "Resume/CV", "value": "CV_Northwind_Systems_Junior_Python_Developer.pdf", "kind": "file", "check": "Look that the page shows the file."},
                        {"label": "Do you have the right to work in the Czech Republic?", "value": "Yes", "kind": "choice", "check": "Chosen for you: check it."}],
-            "left": [{"label": "Resume/CV", "why": "Attach the file yourself: a page cannot be handed a file from outside."},
+            "left": [{"label": "Your photo", "why": "I cannot tell which of your files this field wants. Attach it yourself."},
                      {"label": "Are you willing to relocate?", "why": "Your CV, My details and About you do not settle this. Choose it yourself."}],
             "kept": 1, "boxes": 2, "wants_file": True, "has_files": True, "is_lead": True, "can_learn": True,
-            "say": "I filled in 8 fields on careers.northwind.example: 4 from My details, 2 answers drafted from your CV, 2 choices made for you. I took this to be the form for "
-                   "Junior Python Developer at Northwind Systems. 3 of them need your attention (outlined in amber on the page). 2 fields are left for you, "
+            "say": "I filled in 9 fields on careers.northwind.example: 4 from My details, 2 answers drafted from your CV, 2 choices made for you, 1 file attached. I took this to be the form for "
+                   "Junior Python Developer at Northwind Systems. 4 of them need your attention (outlined in amber on the page). 2 fields are left for you, "
                    "listed below with the reason. Read everything on the page, then send the form yourself. I never press Submit."})
         monkeypatch.setattr(ui_api.Api, "assistant_watch", lambda self: {"ok": False, "url": "", "sign": "", "empty": 0})
         monkeypatch.setattr(ui_api.Api, "assistant_memory", lambda self: {"count": 3})

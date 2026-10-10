@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Application form</title>
+<style>.box { background: #f4f3f1; padding: 18px; display: flex; justify-content: space-between; } .hide { display: none; }</style></head>
+<body>
+<!-- A form that is not at the address of its posting and does not name the company in its title: the way "Apply" leads to one.
+     File fields are drawn by the page: a box, a button, and the real field hidden behind them. -->
+<h1>Junior Tester</h1><p>Join Vantor in Brno.</p>
+<form id="f" onsubmit="window.sent = true; return false;">
+  <label for="fn">First name</label><input id="fn" name="first_name">
+  <div><span>Resume:</span>
+    <div class="box"><span>Attach your Resume (supported formats: png, jpeg, jpg, pdf, doc, docx, txt)</span>
+      <button type="button" onclick="window.clicked = true">ADD ATTACHMENT</button>
+      <input class="hide" type="file" id="resume" name="file_1" accept=".png,.jpeg,.jpg,.pdf,.doc,.docx,.txt"></div></div>
+  <div><span>Other Attachments:</span>
+    <div class="box"><span>Attach your Attachments (supported formats: png, jpeg, jpg, pdf, doc, docx, txt)</span>
+      <button type="button" onclick="window.clicked = true">ADD ATTACHMENT</button>
+      <input class="hide" type="file" id="other" name="file_2" accept=".png,.jpeg,.jpg,.pdf,.doc,.docx,.txt"></div></div>
+  <div><span>More documents</span><input type="file" id="more" name="file_3"></div>
+  <div><span>Your photo</span><input type="file" id="photo" name="file_4" accept="image/*"></div>
+  <div><span>CV (scanned)</span><input type="file" id="scan" name="file_5" accept="image/*"></div>
+  <button id="send" type="submit" onclick="window.clicked = true">Apply</button>
+</form>
+<script>
+  window.state = {};
+  document.querySelectorAll('input[type=file]').forEach(function (el) {
+    el.addEventListener('change', function () {            // what a page does with a chosen file: it reads it
+      var file = el.files[0];
+      if (!file) return;
+      file.arrayBuffer().then(function (buf) {
+        var bytes = new Uint8Array(buf), sum = 0;
+        for (var i = 0; i < bytes.length; i++) sum = (sum + bytes[i]) % 65521;
+        window.state[el.id] = {name: file.name, size: file.size, type: file.type, sum: sum};
+      });
+    });
+  });
+</script>
+</body></html>

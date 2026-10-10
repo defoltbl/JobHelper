@@ -21,6 +21,7 @@ is yours.
 from __future__ import annotations
 
 import json
+import os
 import re
 from typing import Any
 from urllib.parse import urlsplit
@@ -74,7 +75,7 @@ READ = r"""
     var walker = el.ownerDocument.createTreeWalker(node, 4, null), out = '', t;
     while ((t = walker.nextNode()) && out.length < 400) {
       var p = t.parentElement;
-      if (!p || el.contains(t) || /^(OPTION|OPTGROUP|SELECT|SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(p.tagName) || !p.getClientRects().length) continue;
+      if (!p || el.contains(t) || /^(OPTION|OPTGROUP|SELECT|SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(p.tagName) || p.closest('button') || !p.getClientRects().length) continue;
       out += ' ' + t.nodeValue;
     }
     return clean(out);
@@ -168,19 +169,20 @@ READ = r"""
       var options = [];
       if (tag === 'SELECT') for (var k = 0; k < el.options.length && k < 300; k++) options.push(clean(el.options[k].text).slice(0, 80));
       var filled = false;
-      if (type !== 'password' && type !== 'file') filled = tag === 'SELECT' ? chosen(el) : String(el.value || '').trim() !== '';
+      if (type === 'file') filled = !!(el.files && el.files.length);
+      else if (type !== 'password') filled = tag === 'SELECT' ? chosen(el) : String(el.value || '').trim() !== '';
       var called = label(el, root), hint = clean(el.getAttribute('placeholder')).slice(0, 120);
       if (tag === 'SELECT' && !called && el.options.length && String(el.options[0].value) === '') hint = clean(el.options[0].text).slice(0, 120);   // "Select your country": all the name it has
       fields.push({n: n, type: type, name: clean(el.name).slice(0, 80), id: clean(el.id).slice(0, 80),
                    auto: clean(el.getAttribute('autocomplete')).slice(0, 60), label: called,
-                   hint: hint,
+                   hint: hint, accept: type === 'file' ? clean(el.getAttribute('accept')).slice(0, 200) : '',
                    required: !!(el.required || el.getAttribute('aria-required') === 'true'),
                    filled: filled, most: el.maxLength > 0 ? el.maxLength : 0, options: options,
                    combo: el.getAttribute('role') === 'combobox' || !!el.getAttribute('aria-autocomplete') || el.getAttribute('aria-haspopup') === 'listbox'});
     }
   }
   walk(document);
-  return JSON.stringify({url: location.href, title: clean(document.title), fields: fields, frames: frames.slice(0, 5), boxes: boxes, adds: adds.slice(0, 20)});
+  return JSON.stringify({url: location.href, title: clean(document.title), from: String(document.referrer || '').slice(0, 2000), fields: fields, frames: frames.slice(0, 5), boxes: boxes, adds: adds.slice(0, 20)});
 })()
 """.replace("__MOST__", str(MAX_FIELDS)).replace("__CHOSEN__", _CHOSEN).strip()
 
@@ -241,6 +243,48 @@ FILL = r"""
   return JSON.stringify({done: done, skipped: skipped});
 })(__ITEMS__, __URL__, __TYPED__)
 """.replace("__CHOSEN__", _CHOSEN).strip()
+
+# A file goes to the page in pieces (a request to the browser has a size limit), then the pieces are made into the file the
+# field is given, the way a file chosen by hand arrives. Only a file field that holds nothing is given one.
+PUT = r"""
+(function (key, part) { window[key] = (window[key] || '') + part; return String(window[key].length); })(__KEY__, __PART__)
+""".strip()
+
+ATTACH = r"""
+(function (n, key, name, kind, url) {
+  var MARK = 'data-jobhelper', data = window[key] || '', found = null;
+  try { delete window[key]; } catch (e) { window[key] = ''; }
+  if (location.href !== url) return JSON.stringify({moved: true});
+  function walk(root) {
+    var all = root.querySelectorAll('*');
+    for (var i = 0; i < all.length && !found; i++) {
+      var el = all[i];
+      if (el.shadowRoot) walk(el.shadowRoot);
+      if (el.tagName === 'IFRAME') {
+        var inner = null;
+        try { inner = el.contentDocument; } catch (e) { inner = null; }
+        if (inner && inner.body) walk(inner);
+        continue;
+      }
+      if (el.getAttribute(MARK) === String(n)) found = el;
+    }
+  }
+  walk(document);
+  if (!found || found.tagName !== 'INPUT' || String(found.type).toLowerCase() !== 'file' || found.disabled) return JSON.stringify({ok: false, why: 'gone'});
+  if (found.files && found.files.length) return JSON.stringify({ok: false, why: 'has'});
+  try {
+    var view = found.ownerDocument.defaultView, raw = atob(data), bytes = new view.Uint8Array(raw.length);
+    for (var k = 0; k < raw.length; k++) bytes[k] = raw.charCodeAt(k);
+    var box = new view.DataTransfer();
+    box.items.add(new view.File([bytes], name, {type: kind, lastModified: Date.now()}));
+    found.files = box.files;
+  } catch (e) { return JSON.stringify({ok: false, why: 'refused'}); }
+  found.dispatchEvent(new (found.ownerDocument.defaultView.Event)('input', {bubbles: true}));
+  found.dispatchEvent(new (found.ownerDocument.defaultView.Event)('change', {bubbles: true}));
+  var has = found.files && found.files.length === 1 ? found.files[0].size : -1;
+  return JSON.stringify({ok: has >= 0, size: has});
+})(__N__, __KEY__, __NAME__, __KIND__, __URL__)
+""".strip()
 
 EMPTY = r"""
 (function (wanted, url) {
@@ -582,6 +626,67 @@ def fill_script(items: list[dict[str, Any]], url: str, typed: bool = False) -> s
     return FILL.replace("__ITEMS__", json.dumps(data)).replace("__URL__", json.dumps(str(url))).replace("__TYPED__", "true" if typed else "false")
 
 
+PIECE = 150_000                 # characters of a file sent to the page in one request
+MAX_FILE = 4 * 1024 * 1024      # a larger file is left to the person
+FILE_TYPES = {".pdf": "application/pdf", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              ".doc": "application/msword", ".txt": "text/plain", ".rtf": "application/rtf", ".odt": "application/vnd.oasis.opendocument.text"}
+
+
+def put_scripts(key: str, content: bytes) -> list[str]:
+    """The PUT scripts that carry a file to the page, piece by piece (as text; it is data, never code)."""
+    import base64
+    text = base64.b64encode(content).decode("ascii")
+    return [PUT.replace("__KEY__", json.dumps(str(key))).replace("__PART__", json.dumps(text[i:i + PIECE])) for i in range(0, len(text), PIECE)]
+
+
+def attach_script(n: int, key: str, name: str, url: str) -> str:
+    """The ATTACH script: give the file field with this number the file that was carried over under `key`."""
+    kind = FILE_TYPES.get(os.path.splitext(str(name))[1].lower(), "application/octet-stream")
+    return (ATTACH.replace("__N__", str(int(n))).replace("__KEY__", json.dumps(str(key))).replace("__NAME__", json.dumps(str(name)))
+            .replace("__KIND__", json.dumps(kind)).replace("__URL__", json.dumps(str(url))))
+
+
+def attach_answer(text: str) -> dict[str, Any]:
+    try:
+        data = json.loads(text or "")
+    except ValueError:
+        data = None
+    if not isinstance(data, dict):
+        return {"ok": False, "moved": False, "why": "refused", "size": -1}
+    return {"ok": data.get("ok") is True, "moved": data.get("moved") is True, "why": str(data.get("why") or ""),
+            "size": data.get("size") if isinstance(data.get("size"), int) else -1}
+
+
+def takes(accept: str, name: str) -> bool:
+    """Whether a file field that says it accepts `accept` (".pdf,.docx", "application/pdf", "image/*") takes this file.
+    A field that says nothing takes anything."""
+    wanted = [w.strip().lower() for w in str(accept or "").split(",") if w.strip()]
+    if not wanted:
+        return True
+    ending = os.path.splitext(str(name))[1].lower()
+    kind = FILE_TYPES.get(ending, "")
+    return any(w == ending or w == kind or (w.endswith("/*") and kind.startswith(w[:-1])) or w == "*/*" for w in wanted)
+
+
+_FILE_CV = re.compile(r"resum|\bcv\b|curriculum|vitae|životopis|zivotopis|lebenslauf")
+_FILE_LETTER = re.compile(r"cover|motivation|motivační|motivacni|průvodní|pruvodni|\bletter\b|anschreiben")
+_FILE_OTHER = re.compile(r"other|additional|further|supporting|attachment|document|certificate|příloh|priloh")
+_FILE_NOT = re.compile(r"photo|picture|avatar|portrait|passport|\bid\b|identity|visa|permit|transcript|portfolio|video|signature")
+
+
+def file_kind(field: dict[str, Any]) -> str:
+    """Which file a file field asks for: "cv", "letter", "other" (a place for further documents), or '' when it is not said
+    or it is something only you have (a photo, a passport, a transcript)."""
+    words = _words(field)
+    if _FILE_NOT.search(words):
+        return ""
+    if _FILE_CV.search(words):
+        return "cv"
+    if _FILE_LETTER.search(words):
+        return "letter"
+    return "other" if _FILE_OTHER.search(words) else ""
+
+
 def empty_script(numbers: list[int], url: str) -> str:
     """The EMPTY script: which of these fields hold nothing now. It says only that, never what a field holds."""
     return EMPTY.replace("__WANTED__", json.dumps([int(n) for n in numbers])).replace("__URL__", json.dumps(str(url)))
@@ -597,7 +702,17 @@ def empty_answer(text: str) -> list[int]:
 
 # ── what a field is ─────────────────────────────────────────────────────────
 PASSWORD = "A password is yours to type."
-FILE = "Attach the file yourself: a page cannot be handed a file from outside."
+FILE = "I cannot tell which of your files this field wants. Attach it yourself."
+FILE_NO_JOB = "Choose the job this form is for, and I will attach its CV and its letter."
+FILE_NO_CV = "I found no CV file to attach. Attach it yourself."
+FILE_NO_LETTER = "There is no letter file for this job. Attach your own."
+FILE_OTHER = "The letter has a field of its own on this form. Further documents (certificates, diplomas) are yours to add."
+FILE_FORMAT = "The field takes {accept}; the file I have is {name}. Attach it yourself."
+FILE_BIG = "The file {name} is larger than 4 MB. Attach it yourself."
+FILE_REFUSED = "The page did not take the file. Attach it yourself."
+FILE_CHECK = "Look that the page shows the file."
+FILE_MASTER = "This is your own CV, not one adapted to this job. " + FILE_CHECK
+FILE_REASONS = (FILE, FILE_NO_JOB, FILE_NO_CV, FILE_NO_LETTER, FILE_OTHER, FILE_BIG, FILE_REFUSED)
 PRIVATE = "Personal or payment information: fill it in yourself."
 CHOICE = "Choose it yourself."
 DATE = "Pick the date yourself."
@@ -705,7 +820,7 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
     if kind == "password":
         return "", PASSWORD
     if kind == "file":
-        return "", FILE
+        return "file", ""
     if _PRIVATE.search(words):
         return "", PRIVATE
     if kind in ("date", "month") or (kind == "text" and re.search(r"\bdates?\b|mm.?yyyy", words)):
@@ -816,7 +931,7 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
     """What to do with each field that is still empty:
     {"fill": [{n, label, value, kind}], "ask": [{n, label, most}], "choose": [{n, kind, typed, label, options, what, value}],
      "left": [{label, why}]}. Fields that already hold something are not touched and not listed."""
-    out: dict[str, Any] = {"fill": [], "ask": [], "choose": [], "guess": [], "tick": [], "left": [], "rows": {"experience": 0, "education": 0}}
+    out: dict[str, Any] = {"fill": [], "ask": [], "choose": [], "guess": [], "tick": [], "attach": [], "left": [], "rows": {"experience": 0, "education": 0}}
     asked: set[str] = set()
     last = [""]                                     # the list whose row is being filled: its dates belong to that row
     # Jobs and degrees are asked row by row. A row ends where one of its fields comes round again:
@@ -855,6 +970,13 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
         if field.get("filled"):
             if what in LISTED:
                 place(what, field)                  # a row that is filled already is still a row: the next one gets the next job
+            continue
+        if what == "file":
+            wants = file_kind(field)
+            if wants:
+                out["attach"].append({"n": field["n"], "label": label, "kind": wants, "accept": str(field.get("accept") or "")})
+            else:
+                out["left"].append({"label": label, "why": FILE})
             continue
         if what in ("row_start", "row_end"):
             name = last[0]
@@ -928,8 +1050,8 @@ def read_answer(text: str) -> dict[str, Any]:
         fields.append({"n": raw["n"], "filled": bool(raw.get("filled")), "required": bool(raw.get("required")), "combo": bool(raw.get("combo")),
                        "most": raw.get("most") if isinstance(raw.get("most"), int) else 0,
                        "options": [str(o)[:80] for o in (raw.get("options") or [])[:300]] if isinstance(raw.get("options"), list) else [],
-                       **{key: " ".join(str(raw.get(key) or "").split())[:300] for key in ("type", "name", "id", "auto", "label", "hint")}})
-    return {"url": str(data.get("url") or ""), "title": str(data.get("title") or "")[:300], "fields": fields,
+                       **{key: " ".join(str(raw.get(key) or "").split())[:300] for key in ("type", "name", "id", "auto", "label", "hint", "accept")}})
+    return {"url": str(data.get("url") or ""), "title": str(data.get("title") or "")[:300], "from": str(data.get("from") or "")[:2000], "fields": fields,
             "frames": [str(f)[:300] for f in (data.get("frames") or [])[:5]] if isinstance(data.get("frames"), list) else [],
             "boxes": data.get("boxes") if isinstance(data.get("boxes"), int) else 0,
             "adds": [{"k": a["k"], "text": " ".join(str(a.get("text") or "").split())[:80], "kind": add_kind(str(a.get("text") or ""))}
@@ -970,24 +1092,51 @@ def _address(url: str) -> str:
     return f"{(parts.hostname or '').lower().removeprefix('www.')}{parts.path.rstrip('/')}"
 
 
-def match_job(jobs: list[dict[str, Any]], url: str, title: str) -> str:
-    """The id of the one job this page is plainly the form of, or ''. The same address as the
-    posting, or the company's own name in the page's address or title; two jobs at one
-    company are told apart by their title. Anything less certain is left for the person to choose."""
+def _named_in(job: dict[str, Any], text: str) -> bool:
+    """Whether the company of a job is named in these words: the whole name, in order ("good data" or "gooddata")."""
+    kept = email_client.company_tokens(job.get("company", ""))
+    name = [w for w in re.findall(r"[a-z0-9]{3,}", str(job.get("company") or "").lower()) if w in kept]
+    if not set(name) - email_client.GENERIC_COMPANY_WORDS:
+        return False                                # a name made of words many companies share names nobody
+    return bool(re.search(rf"\b(?:{' '.join(name)}|{''.join(name)})\b", text))
+
+
+def _plain(text: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", str(text or "").lower()))
+
+
+def match_job(jobs: list[dict[str, Any]], url: str, title: str, came_from: str = "", text: str = "", opened: str = "") -> str:
+    """The id of the one job this page is plainly the form of, or ''.
+
+    A form is rarely at the address of its posting: "Apply" leads to another page, often on another
+    site. So, in this order: the address of the posting (of this page, or of the page that led here);
+    the company's own name in the page's address or title; the company and the job's title both in
+    the words of the page; and the posting you opened from the app a moment ago (`opened`), when the
+    page names its company or its title. Two jobs at one company are told apart by their title.
+    Anything less certain is left for the person to choose."""
     here = _address(url)
-    same = [j for j in jobs if j.get("url") and _address(j["url"]) == here and urlsplit(j["url"]).path.strip("/")]
-    if len(same) == 1:
-        return same[0]["id"]
-    text = " ".join(re.findall(r"[a-z0-9]+", f"{here} {title}".lower()))       # the site's name, the path (boards name the company there), the title
-    named = []
-    for job in jobs:
-        kept = email_client.company_tokens(job.get("company", ""))
-        name = [w for w in re.findall(r"[a-z0-9]{3,}", str(job.get("company") or "").lower()) if w in kept]
-        if not set(name) - email_client.GENERIC_COMPANY_WORDS:
-            continue                                # a name made of words many companies share names nobody
-        if re.search(rf"\b(?:{' '.join(name)}|{''.join(name)})\b", text):      # the whole name, in order: "good data" or "gooddata"
-            named.append(job)
+    for where in (here, _address(came_from) if came_from else ""):
+        same = [j for j in jobs if where and j.get("url") and _address(j["url"]) == where and urlsplit(j["url"]).path.strip("/")]
+        if len(same) == 1:
+            return same[0]["id"]
+    head, body = _plain(f"{here} {title}"), _plain(text)       # the site's name, the path (boards name the company there), the title
+    low = " ".join(str(title or "").lower().split())
+
+    def titled(job, words) -> bool:
+        return bool(job.get("title")) and _plain(job["title"]) in words
+
+    named = [j for j in jobs if _named_in(j, head)]
     if len(named) > 1:
-        low = " ".join(str(title or "").lower().split())
-        named = [j for j in named if j.get("title") and " ".join(j["title"].lower().split()) in low]
-    return named[0]["id"] if len(named) == 1 else ""
+        named = [j for j in named if j.get("title") and " ".join(j["title"].lower().split()) in low] or [j for j in named if titled(j, body)]
+    if len(named) == 1:
+        return named[0]["id"]
+    if named:
+        return ""                                   # two jobs of one company and nothing tells them apart
+    both = [j for j in jobs if _named_in(j, body) and titled(j, f"{head} {body}")]
+    if len(both) == 1:
+        return both[0]["id"]
+    last = next((j for j in jobs if opened and j.get("id") == opened), None)
+    if last and (_named_in(last, body) or titled(last, f"{head} {body}")
+                 or (came_from and last.get("url") and host_of(came_from) == host_of(last["url"]))):
+        return last["id"]
+    return ""

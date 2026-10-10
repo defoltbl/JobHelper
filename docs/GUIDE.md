@@ -976,8 +976,9 @@ Figure 9.4 shows the last two parts of the page.
 
 *Figure 9.4 – The salary and the files on the My details page*
 
-A page cannot be handed a file from outside. After a fill, **Show my CV and letter in Finder**
-shows these files too, selected in Finder, for you to drag onto the form.
+The assistant attaches the CV and the letter of the job by itself. Your own files are not
+attached for you: after a fill, **Show my CV and letter in Finder** shows them, selected in
+Finder, for you to drag onto the form.
 
 ### Answer the questions every form asks
 
@@ -1020,8 +1021,10 @@ switch is (section 10).
 1. In your browser, open the application form and leave its tab in front.
 2. In the app, select the assistant.
 3. Optional: under **Answers are for**, choose the job. With **Find the job from the page**
-   the assistant works it out from the page's address and title, and tells you which job it
-   took.
+   the assistant works it out and tells you which job it took. A form is rarely at the address
+   of its posting, because **Apply** leads to another page, so the assistant also looks at the
+   page that led there, at the company and the job title in the words of the page, and at the
+   posting you last opened from the app. When none of these is plain, it takes no job.
 4. Select **Fill in the form**, or type the request, for example *fill in the
    form*, and press Return.
 5. Read the answer (Figure 9.6). **Filled in** lists what was written and chosen; **Left for
@@ -1043,7 +1046,7 @@ switch is (section 10).
 
 | Button | Shown when | What it does |
 |---|---|---|
-| **Show my CV and letter in Finder** | The form asks for a file, and the job has documents from the app or you added files of your own | Opens Finder with the PDF of the adapted CV, the letter and your own files selected, ready to drag onto the form |
+| **Show my CV and letter in Finder** | A file field was left to you, and the job has documents from the app or you added files of your own | Opens Finder with the PDF of the adapted CV, the letter and your own files selected, ready to drag onto the form |
 | **Remember what I changed on the page** | The assistant wrote at least one answer | Reads back the answers it wrote, keeps your changes with the job, and remembers your wording |
 | **Mark applied** | The job is still in **New Jobs** | Moves the job to **Applications** as waiting, as the button in the job's window does |
 | **Fill in this page too** | The form in your browser moved on to other fields | Fills in the new page |
@@ -1091,7 +1094,7 @@ that contradicts your CV or names another company.
 
 > **Note**
 > For a review the assistant reads what the visible fields hold, which it does not do when it
-> fills in a form. It never reads a password or a file field, and the values of personal
+> fills in a form. It never reads a password or a file a field holds, and the values of personal
 > questions and payment fields are not sent to Claude.
 
 > **Tip**
@@ -1115,7 +1118,11 @@ Table 9.4 shows what happens to each kind of field.
 | An open question, such as "Why do you want to work here?" | Drafts the answer from your CV and the posting, in one Claude call for the whole form. Nothing outside your CV is claimed |
 | A cover letter box | Pastes the letter the app wrote for this job |
 | A field that already holds something | Leaves it as it is |
-| A file, such as your CV | Leaves it to you: a page cannot be handed a file from outside |
+| A file field for your CV or resume | Attaches the CV adapted to this job, as a PDF when the field takes one. When the job has no adapted CV, it attaches your own CV and says so. Marked for checking |
+| A file field for the cover letter | Attaches the letter of this job |
+| A file field for other attachments | Attaches the letter of this job, when the form has no other place for it. Certificates and diplomas stay yours to add |
+| Any other file field (a photo, a passport, a transcript), a file larger than 4 MB, or a kind of file the field does not take | Leaves it to you, with the reason |
+| A file field, when the assistant does not know which job the form is for | Leaves it to you. Choose the job, then ask again: a CV written for another company is worse than none |
 | A password | Leaves it to you |
 | Date of birth, gender, origin, health, payment details | Leaves them to you |
 | The dates of a job or a degree | Writes them where the form takes a month and a year, as one field or as two lists. Where it wants a full date, the first of the month is used and marked for checking. With only a year in **My details**, a month is left to you |

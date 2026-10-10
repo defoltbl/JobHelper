@@ -1,5 +1,6 @@
 """The assistant: your details, the link to Chrome, reading a form, deciding what each field is,
 and filling in only what is safe to fill. The page scripts run in a real browser engine on a local page."""
+import base64
 import json
 import os
 import subprocess
@@ -174,7 +175,6 @@ def test_fields_are_recognised_by_what_the_page_calls_them(field, what):
 
 @pytest.mark.parametrize("field, why", [
     (_field("Password", kind="password"), form_fill.PASSWORD), (_field("Email", kind="password"), form_fill.PASSWORD),
-    (_field("Resume/CV", kind="file"), form_fill.FILE),
     (_field("Date of birth"), form_fill.PRIVATE), (_field("Gender", kind="select"), form_fill.PRIVATE),
     (_field("Disability status", kind="select"), form_fill.PRIVATE), (_field("Card number"), form_fill.PRIVATE),
     (_field("Passport number"), form_fill.PRIVATE), (_field("Race / Ethnicity", kind="select"), form_fill.PRIVATE),
@@ -297,6 +297,7 @@ def _in_page(*scripts, page="plain.html"):
     done = subprocess.run([sys.executable, str(FIXTURES / "run_in_page.py"), str(FIXTURES / "forms" / page)],
                           input=json.dumps(list(scripts)), capture_output=True, text=True, timeout=120,
                           env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
+    assert "Traceback" not in done.stderr, done.stderr[-1500:]       # the test area itself is broken: that is a failure, not a skip
     if done.returncode != 0:
         pytest.skip(f"the browser engine did not start here: {done.stderr[-200:]}")
     return json.loads(done.stdout)
@@ -385,8 +386,12 @@ def test_a_real_form_is_read_filled_and_never_sent():
     assert _in_page(form_fill.fill_script(todo["fill"], "https://elsewhere.example/"))[0] == '{"moved":true}', "another page gets nothing"
 
 
+ran_files: list = []          # what the stand-in browser was given as files: [(field, name, content)]
+
+
 def _browser(monkeypatch, fields, url="https://careers.northwind.example/jobs/42", title="Junior Analyst - Northwind", frames=(), boxes=0, done=None):
-    ran = []
+    ran, carried, attached = [], {}, []
+    ran_files[:] = [attached]
     monkeypatch.setattr(chrome, "active_tab", lambda: {"url": url, "title": title})
 
     def run(script):
@@ -395,6 +400,16 @@ def _browser(monkeypatch, fields, url="https://careers.northwind.example/jobs/42
         ran.append(script)
         if script == form_fill.READ:
             return json.dumps({"url": url, "title": title, "fields": fields, "frames": list(frames), "boxes": boxes})
+        if script == form_fill.PAGE:
+            return json.dumps({"url": url, "title": title, "text": "", "stated": None})
+        if script.startswith("(function (key, part)"):           # a piece of a file on its way to the page
+            key, part = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
+            carried[key] = carried.get(key, "") + part
+            return str(len(carried[key]))
+        if script.startswith("(function (n, key, name, kind, url)"):
+            n, key, name, _kind, _url = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
+            attached.append((n, name, base64.b64decode(carried.pop(key, ""))))
+            return json.dumps({"ok": True, "size": len(attached[-1][2])})
         items = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")[0]
         return json.dumps(done if done is not None else {"done": [i["n"] for i in items], "skipped": []})
     monkeypatch.setattr(chrome, "run", run)
@@ -495,6 +510,7 @@ AREA = {"details": {**MINE, "street": "Long Street 5", "notice_period": "1 month
 def _area(page, **more):
     done = subprocess.run([sys.executable, str(FIXTURES / "fill_in_browser.py"), page], input=json.dumps({**AREA, **more}),
                           capture_output=True, text=True, timeout=180, env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
+    assert "Traceback" not in done.stderr, done.stderr[-1500:]       # the test area itself is broken: that is a failure, not a skip
     if done.returncode != 0:
         pytest.skip(f"the browser engine did not start here: {done.stderr[-200:]}")
     out = json.loads(done.stdout)
@@ -583,7 +599,7 @@ def test_area_the_plain_form_and_a_chosen_job():
     assert state["fn"] == "Alex" and state["country"] == "CZ" and state["zip"] == "602 00" and state["gh"] == MINE["github"]
     assert state["city"] == "Already here" and result["kept"] == 1 and state["token"] == "secret-token"
     assert state["why"].startswith("An answer to: Why do you want to work at Northwind?") and out["asked"] == ["Why do you want to work at Northwind?"]
-    assert out["left"]["Resume/CV"] == form_fill.FILE and out["left"]["Password"] == form_fill.PASSWORD and out["left"]["Date of birth"] == form_fill.PRIVATE
+    assert out["left"]["Resume/CV"] == form_fill.FILE_NO_CV and out["left"]["Password"] == form_fill.PASSWORD and out["left"]["Date of birth"] == form_fill.PRIVATE
     assert state["notice"] == "One month", "the only entry that says the same as My details"
     assert state["terms"] is False and state["pw"] == "" and state["dob"] == "" and state["visa"] is False
 
@@ -1578,3 +1594,180 @@ def test_a_test_never_writes_into_the_real_trouble_log():
     after = (config.DATA_DIR / trouble.LOG_NAME).stat().st_size if (config.DATA_DIR / trouble.LOG_NAME).exists() else 0
     assert before == after and trouble._folder() != config.DATA_DIR
     assert "must not reach" in (trouble._folder() / trouble.LOG_NAME).read_text(encoding="utf-8")
+
+
+# ── files: the CV and the letter of the job go into the form's file fields ──
+def _bytes(name: str, size: int) -> bytes:
+    return bytes((i * 7 + len(name)) % 256 for i in range(size))          # the same invented content the test area writes
+
+
+def _sum(content: bytes) -> int:
+    return sum(content) % 65521
+
+
+@pytest.mark.parametrize("label, kind", [
+    ("Resume:", "cv"), ("Attach your Resume (supported formats: png, jpeg, jpg, pdf, doc, docx, txt)", "cv"), ("Upload your CV", "cv"),
+    ("Curriculum vitae", "cv"), ("Cover letter", "letter"), ("Motivation letter (PDF)", "letter"), ("Other Attachments:", "other"),
+    ("Attach your Attachments (supported formats: png, pdf)", "other"), ("Additional documents", "other"), ("Certificates", "other"),
+    ("Your photo", ""), ("Passport copy", ""), ("Transcript of records", ""), ("Portfolio", ""), ("Upload", ""), ("", "")])
+def test_a_file_field_says_which_file_it_wants(label, kind):
+    field = _field(label, kind="file")
+    assert form_fill.classify(field) == ("file", "") and form_fill.file_kind(field) == kind
+    todo = form_fill.plan([field], MINE)
+    assert [i["kind"] for i in todo["attach"]] == ([kind] if kind else []) and [i["why"] for i in todo["left"]] == ([] if kind else [form_fill.FILE])
+    assert not form_fill.plan([{**field, "filled": True}], MINE)["attach"], "a field that holds a file is not given another"
+
+
+@pytest.mark.parametrize("accept, name, ok", [
+    ("", "CV.pdf", True), (".pdf,.docx", "CV.pdf", True), (".PDF, .DOCX", "cv.Pdf", True), (".png,.jpg", "CV.pdf", False),
+    ("application/pdf", "CV.pdf", True), ("application/pdf", "CV.docx", False), ("image/*", "CV.pdf", False), ("application/*", "CV.docx", True),
+    ("*/*", "CV.odd", True), (".doc", "CV.docx", False), ("text/plain", "letter.txt", True)])
+def test_a_file_is_offered_only_to_a_field_that_takes_its_kind(accept, name, ok):
+    assert form_fill.takes(accept, name) is ok
+
+
+def test_a_file_travels_to_the_page_in_pieces_and_as_data():
+    content = _bytes("x", form_fill.PIECE * 2)          # larger than two requests
+    pieces = form_fill.put_scripts("__jobhelper_k", content)
+    assert len(pieces) == 3 and all(len(p) < form_fill.PIECE + 400 for p in pieces), "a request to the browser has a size limit"
+    carried = "".join(json.loads("[" + p.rsplit("})(", 1)[1][:-1] + "]")[1] for p in pieces)
+    assert base64.b64decode(carried) == content
+    script = form_fill.attach_script(7, "__jobhelper_k", 'CV "final".pdf', "https://x.example/a")
+    assert json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]") == [7, "__jobhelper_k", 'CV "final".pdf', "application/pdf", "https://x.example/a"]
+    assert form_fill.attach_answer("nonsense") == {"ok": False, "moved": False, "why": "refused", "size": -1}
+    assert form_fill.attach_answer('{"moved": true}')["moved"] and form_fill.attach_answer('{"ok": true, "size": 9}') == {"ok": True, "moved": False, "why": "", "size": 9}
+    assert form_fill.attach_answer('{"ok": "yes", "size": "9"}')["ok"] is False, "a page may answer anything"
+
+
+def test_the_form_of_a_job_is_found_although_apply_led_to_another_address():
+    """The posting is on a job board; "Apply" leads to the company's applicant system, at an address the app has never seen."""
+    jobs = [_job(url="https://board.example/offer/771"), _job(id="vt", company="Vantor", title="Junior Tester", url="https://board.example/offer/905"),
+            _job(id="vt2", company="Vantor", title="Data Engineer", url="https://board.example/offer/906")]
+    form = "https://apply.ats.example/f/8c1d"
+    assert form_fill.match_job(jobs, form, "Application form") == "", "nothing says whose form this is"
+    assert form_fill.match_job(jobs, form, "Application form", came_from="https://board.example/offer/905?src=mail") == "vt", "the page that led here is the posting"
+    assert form_fill.match_job(jobs, form, "Application form", came_from="https://board.example/") == "", "the board's home page is nobody's posting"
+    assert form_fill.match_job(jobs, form, "Application form", text="Junior Tester\nJoin Vantor in Brno.") == "vt", "the company and the title are on the page"
+    assert form_fill.match_job(jobs, form, "Application form", text="Join Vantor in Brno.") == "", "two jobs there and no title: you choose"
+    assert form_fill.match_job(jobs, form, "Vantor careers", text="Apply for Data Engineer today") == "vt2", "the title in the words tells two jobs apart"
+    assert form_fill.match_job(jobs, form, "Application form", text="We are hiring a Junior Tester") == "", "a title alone could be any company's"
+    assert form_fill.match_job(jobs, form, "Application form", text="We are hiring a Junior Tester", opened="vt") == "vt", "you opened this posting from the app a moment ago"
+    assert form_fill.match_job(jobs, form, "Application form", text="Welcome", opened="vt") == "", "opened, but the page says nothing of it"
+    assert form_fill.match_job(jobs, form, "Application form", came_from="https://board.example/list", opened="vt") == "vt", "you came from the board of that posting"
+    assert form_fill.match_job(jobs, form, "Application form", text="Junior Analyst at Northwind", opened="vt") == "nw1", "what the page says counts for more than what was opened"
+    assert form_fill.match_job(jobs, form, "Application form", text="Junior Tester", opened="gone") == ""
+
+
+def test_opening_a_posting_from_the_app_is_remembered_for_two_hours(isolate, monkeypatch):
+    store.save_jobs([_job()])
+    api = ui_api.Api()
+    assert api._recently_opened() == ""
+    assert api.open_url("nw1")["ok"] and api._recently_opened() == "nw1"
+    api._opened = ("nw1", api._opened[1] - 2 * 3600 - 1)
+    assert api._recently_opened() == "", "an old click says nothing about the form in front now"
+    assert api.open_url("nobody") == {"ok": False}
+
+
+def _with_files(tmp_path, **more):
+    (tmp_path / "tailored" / "CV_Northwind.docx").write_bytes(_bytes("d", 900))
+    (tmp_path / "tailored" / "CV_Northwind.pdf").write_bytes(_bytes("p", 1200))
+    (tmp_path / "letters" / "Letter_Northwind.docx").write_bytes(_bytes("l", 700))
+    store.save_jobs([_job(tailored_cv_file="CV_Northwind.docx", cover_letter_file="Letter_Northwind.docx", **more)])
+    details.save(MINE)
+
+
+def test_the_cv_and_the_letter_of_the_job_are_attached(isolate, tmp_path, monkeypatch):
+    _with_files(tmp_path)
+    fields = [_field("First name", n=1), _field("Resume", kind="file", n=2, accept=".pdf,.docx"), _field("Other attachments", kind="file", n=3, accept=".doc,.docx"),
+              _field("More documents", kind="file", n=4), _field("Photo", kind="file", n=5), _field("CV scan", kind="file", n=6, accept="image/*"),
+              _field("Resume (again)", kind="file", n=7, filled=True)]
+    _browser(monkeypatch, fields)
+    out = ui_api.Api().assistant_fill()
+    assert out["ok"] and out["job_id"] == "nw1" and out["guessed"]
+    assert ran_files[0] == [(2, "CV_Northwind.pdf", _bytes("p", 1200)), (3, "Letter_Northwind.docx", _bytes("l", 700))], "the PDF where it is taken, the Word file where only that is"
+    files = {i["label"]: i for i in out["filled"] if i["kind"] == "file"}
+    assert files["Resume"]["value"] == "CV_Northwind.pdf" and files["Resume"]["check"] == form_fill.FILE_CHECK
+    left = {i["label"]: i["why"] for i in out["left"]}
+    assert left["More documents"] == form_fill.FILE_OTHER, "the letter is attached once"
+    assert left["Photo"] == form_fill.FILE and "image/*" in left["CV scan"] and "CV_Northwind.pdf" in left["CV scan"]
+    assert "Resume (again)" not in left and out["kept"] == 1, "a field that holds a file is not touched"
+    assert "2 files attached" in out["say"] and out["wants_file"] is True and "never press Submit" in out["say"]
+
+
+def test_files_need_a_job_and_fall_back_to_your_own_cv(isolate, tmp_path, monkeypatch):
+    details.save(MINE)
+    store.save_jobs([_job(company="Elsewhere", url="https://elsewhere.example/job/1")])
+    fields = [_field("Resume", kind="file", n=1), _field("Cover letter", kind="file", n=2), _field("Other attachments", kind="file", n=3)]
+    _browser(monkeypatch, fields)
+    out = ui_api.Api().assistant_fill()
+    assert out["ok"] and out["job_id"] == "" and ran_files[0] == [], "a CV for the wrong company is worse than none"
+    assert {i["why"] for i in out["left"]} == {form_fill.FILE_NO_JOB} and len(out["left"]) == 3
+    (tmp_path / "cv" / "My CV.docx").write_bytes(_bytes("m", 500))
+    (tmp_path / "letters" / "Big.docx").write_bytes(b"x" * (form_fill.MAX_FILE + 1))
+    store.save_jobs([_job(cover_letter_file="Big.docx")])
+    _browser(monkeypatch, fields)
+    out = ui_api.Api().assistant_fill("nw1")
+    assert ran_files[0] == [(1, "My CV.docx", _bytes("m", 500))]
+    assert out["filled"][0]["check"] == form_fill.FILE_MASTER, "said plainly: this is not the CV adapted to the job"
+    left = {i["label"]: i["why"] for i in out["left"]}
+    assert left["Cover letter"] == form_fill.FILE_BIG.format(name="Big.docx") and left["Other attachments"] == form_fill.FILE_OTHER
+    store.save_jobs([_job(tailored_cv_file="../../secret.docx", cover_letter_file="")])
+    (tmp_path / "cv" / "My CV.docx").unlink()
+    _browser(monkeypatch, fields[:2])
+    out = ui_api.Api().assistant_fill("nw1")
+    assert ran_files[0] == [] and {i["label"]: i["why"] for i in out["left"]} == {"Resume": form_fill.FILE_NO_CV, "Cover letter": form_fill.FILE_NO_LETTER}
+
+
+def test_a_file_the_page_does_not_take_is_said_and_skipping_is_obeyed(isolate, tmp_path, monkeypatch):
+    _with_files(tmp_path)
+    fields = [_field("Resume", kind="file", n=1), _field("Cover letter", kind="file", n=2)]
+    _browser(monkeypatch, fields)
+    out = ui_api.Api().assistant_fill(skip=["resume"])
+    assert [name for _n, name, _c in ran_files[0]] == ["Letter_Northwind.docx"]
+    assert {i["label"]: i["why"] for i in out["left"]} == {"Resume": form_fill.SKIPPED}
+    real = chrome.run
+    monkeypatch.setattr(chrome, "run", lambda script: json.dumps({"ok": False, "why": "refused"}) if script.startswith("(function (n, key") else real(script))
+    out = ui_api.Api().assistant_fill()
+    assert {i["why"] for i in out["left"]} == {form_fill.FILE_REFUSED} and not out["filled"]
+    monkeypatch.setattr(chrome, "run", lambda script: json.dumps({"ok": True, "size": 3}) if script.startswith("(function (n, key") else real(script))
+    assert {i["why"] for i in ui_api.Api().assistant_fill()["left"]} == {form_fill.FILE_REFUSED}, "the page holds a file of another size: not believed"
+    monkeypatch.setattr(chrome, "run", lambda script: json.dumps({"moved": True}) if script.startswith("(function (n, key") else real(script))
+    out = ui_api.Api().assistant_fill()
+    assert out["ok"] is False and "tab changed" in out["msg"]
+
+    def gone(script):
+        if script.startswith("(function (key, part)"):
+            raise chrome.ChromeError(chrome.NOT_RUNNING)
+        return real(script)
+    monkeypatch.setattr(chrome, "run", gone)
+    assert ui_api.Api().assistant_fill() == {"ok": False, "action": "fill", "msg": chrome.NOT_RUNNING}
+
+
+FILE_JOBS = [{"id": "vt", "title": "Junior Tester", "company": "Vantor", "status": "found", "url": "https://board.example/offer/905", "description": "",
+              "tailored_cv_file": "CV_Vantor_Junior_Tester.docx", "cover_letter_file": "Letter_Vantor.docx"},
+             {"id": "nw", "title": "Junior Analyst", "company": "Northwind", "status": "found", "url": "https://board.example/offer/771", "description": ""}]
+FILES = {"tailored_cvs/CV_Vantor_Junior_Tester.docx": 5000, "tailored_cvs/CV_Vantor_Junior_Tester.pdf": 330_000,
+         "cover_letters/Letter_Vantor.docx": 4100, "cover_letters/Letter_Vantor.pdf": 61_000}
+
+
+def test_area_the_cv_and_the_letter_reach_a_real_page_whole():
+    """The form of the report: file fields drawn by the page (a box and a button, the real field hidden), at an address that is not
+    the posting's, with a title that names nobody. The job is read from the words of the page; its files arrive byte for byte."""
+    out = _area("files.html", jobs=FILE_JOBS, files=FILES)
+    result, got = out["result"], out["kept"]
+    assert result["ok"] and result["job_id"] == "vt" and result["guessed"], result
+    cv, letter = _bytes("tailored_cvs/CV_Vantor_Junior_Tester.pdf", 330_000), _bytes("cover_letters/Letter_Vantor.pdf", 61_000)
+    assert got["resume"] == {"name": "CV_Vantor_Junior_Tester.pdf", "size": len(cv), "type": "application/pdf", "sum": _sum(cv)}, "sent in three pieces, whole on arrival"
+    assert got["other"] == {"name": "Letter_Vantor.pdf", "size": len(letter), "type": "application/pdf", "sum": _sum(letter)}
+    assert set(got) == {"resume", "other"} and out["state"]["more"] == 0 and out["state"]["photo"] == 0 and out["state"]["scan"] == 0
+    assert out["filled"]["Attach your Resume (supported formats: png, jpeg, jpg, pdf, doc, docx, txt)"]["value"] == "CV_Vantor_Junior_Tester.pdf" and out["filled"]["Attach your Attachments (supported formats: png, jpeg, jpg, pdf, doc, docx, txt)"]["value"] == "Letter_Vantor.pdf"
+    assert out["left"] == {"More documents": form_fill.FILE_OTHER, "Your photo": form_fill.FILE,
+                           "CV (scanned)": form_fill.FILE_FORMAT.format(accept="image/*", name="CV_Vantor_Junior_Tester.pdf")}
+    assert out["state"]["fn"] == "Alex" and "2 files attached" in result["say"]
+
+
+def test_area_no_file_leaves_the_app_for_a_form_of_an_unknown_job():
+    out = _area("files.html", jobs=FILE_JOBS[1:], files=FILES)
+    assert out["result"]["ok"] and out["result"]["job_id"] == "" and out["kept"] == {}
+    assert out["left"]["Attach your Resume (supported formats: png, jpeg, jpg, pdf, doc, docx, txt)"] == form_fill.FILE_NO_JOB and out["left"]["Attach your Attachments (supported formats: png, jpeg, jpg, pdf, doc, docx, txt)"] == form_fill.FILE_NO_JOB
+    assert out["state"]["resume"] == 0 and out["state"]["fn"] == "Alex", "your details are yours whatever the job; its documents are not"

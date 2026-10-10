@@ -412,6 +412,17 @@ steps that are each small enough to check, all in `form_fill`:
 3. A second script writes the values into fields that are still empty and outlines them.
 4. Lists, radio buttons and menus the page draws itself are choices: `form_choices` decides them,
    and a third script opens a menu, reads its entries, and presses the chosen one.
+5. A file field that asks for the CV, the letter or other attachments (`file_kind`) is given the
+   document of the job. The file travels to the page as text, in pieces of 150,000 characters
+   (`PUT`), because a request to the browser has a size limit; `ATTACH` makes the pieces into a
+   file and hands it to the field the way a file chosen by hand arrives.
+
+The job a form belongs to is found by `match_job`. A form is rarely at the address of its
+posting, so the function tries, in this order: the address of the posting (of the page, or of the
+page that led to it); the company's name in the address or the title; the company and the job
+title both in the words of the page; and the posting last opened from the app, when the page
+names its company or its title. Anything less plain gives no job, and without a job no file
+leaves the app.
 
 Table 6.4 gives the rules these steps keep. `tests/test_assistant.py` checks each of them.
 
@@ -435,7 +446,8 @@ there and a test that names what must be filled and what must be left.
 | Only empty fields are written | The filling script tests each field again just before it writes |
 | Values are data, never code | They travel as JSON inside the script, and the script travels as an argument of `osascript` |
 | What the page answers is not trusted | `read_answer` and `fill_answer` accept only the expected shape and cut every text to a fixed length |
-| Private fields are left alone | Passwords, files, payment and personal-status fields are recognised by their kind or their label and never planned |
+| Private fields are left alone | Passwords, payment and personal-status fields are recognised by their kind or their label and never planned |
+| A file is attached only when it is plainly the right one | The field must ask for a CV, a letter or other attachments, hold no file, and take the kind of file; the job must be known. A photo, a passport or a transcript is never attached. The page must report a file of the same size, or the field is listed as left |
 | The right page gets the values | The filling script compares the page's address with the one that was read, and writes nothing when they differ |
 | The browser is never started | The request first asks whether the browser is running and stops there when it is not |
 

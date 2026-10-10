@@ -10,6 +10,7 @@ The data folder is a temporary one and the Keychain is in memory, so nothing rea
 setup: {"details": {...}, "jobs": [...], "job_id": "", "answers": {"question": ["answer", "what to check"]},
         "choices": {"question": "the option or number Claude would choose"},
         "edit": {"field id": "what the person types over the assistant's answer, before asking it to remember"},
+        "files": {"tailored_cvs/CV_Vantor.pdf": 3000} (files made in the data folder, with this many bytes), "opened": "id of the job whose posting was opened from the app",
         "review": true, "problems": [what Claude would find in the review], "skip": ["words of fields to leave out"]}
 out:   {"result": what Api.assistant_fill returned, "state": every field's value afterwards,
         "sent": bool, "clicked": bool, "asked": the questions that went to Claude}
@@ -84,8 +85,13 @@ def main() -> int:
 
     work = Path(tempfile.mkdtemp(prefix="jobhelper_form_test_"))
     vault.use_keychain(vault.MemoryKeychain({vault.KEY_ACCOUNT: base64.urlsafe_b64encode(bytes(range(32))).decode("ascii")}))
-    for name in ("DATA_DIR", "LETTERS_DIR", "TAILORED_CV_DIR", "CV_DIR"):
-        setattr(config, name, work)
+    config.DATA_DIR = work
+    for name, folder in (("LETTERS_DIR", "cover_letters"), ("TAILORED_CV_DIR", "tailored_cvs"), ("CV_DIR", "cv"), ("COVER_LETTERS_DIR", "my_letters"),
+                         ("MY_LETTERS_DIR", "my_letters")):
+        setattr(config, name, work / folder)
+        (work / folder).mkdir(exist_ok=True)
+    for name, size in (setup.get("files") or {}).items():       # invented files: every byte value, so that nothing is lost on the way
+        (work / name).write_bytes(bytes((i * 7 + len(name)) % 256 for i in range(int(size))))
     config.JOBS_JSON, config.USAGE_JSON, config.ENV_PATH = work / "jobs.json", work / "usage.json", work / ".env"
     config.ensure_dirs = lambda: None
     ui_api.agent4_tracker.render_all = lambda jobs: None
@@ -141,6 +147,9 @@ def main() -> int:
 
         def go():
             api = ui_api.Api()
+            if setup.get("opened"):
+                api.open_url = None
+                api._opened = (setup["opened"], __import__("time").time())
             before = api.assistant_watch()
             result = api.assistant_fill(setup.get("job_id", ""), skip=setup.get("skip"))
             reviewed = api.assistant_review(setup.get("job_id", "")) if setup.get("review") else None

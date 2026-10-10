@@ -15,9 +15,9 @@ TOO_LONG = f"That is longer than {MAX_REQUEST} characters. Say it in a sentence,
 GREETING = "Hi! Open an application form in your browser, then ask me to fill it in."
 HELP = ("I fill in application forms. Open the form in your browser, bring its tab to the front, and ask me to fill it in. "
         "Your name, contacts and links come from My details; open questions are answered from your CV for the job you choose. "
-        "I choose from lists and yes/no questions only when your CV or your details settle the answer. "
         "I choose from lists, menus and yes/no questions only when your CV or your details settle the answer. "
-        "I leave files, passwords, tick boxes and personal questions to you, and I never send a form.")
+        "A field for your CV gets the CV of that job, and a field for the letter or for other attachments gets its letter. "
+        "I leave passwords, tick boxes and personal questions to you, and I never send a form.")
 UNKNOWN = "I did not understand that. " + HELP
 
 # What the assistant may say about the app when asked a free question: facts, kept short. It is
@@ -107,6 +107,7 @@ def summary(host: str, filled: list[dict[str, Any]], left: list[dict[str, Any]],
     answers = sum(1 for f in filled if f.get("kind") == "answer")
     letters = sum(1 for f in filled if f.get("kind") == "letter")
     choices = sum(1 for f in filled if f.get("kind") == "choice")
+    files = sum(1 for f in filled if f.get("kind") == "file")
     to_check = sum(1 for f in filled if f.get("check"))
     parts = []
     if filled:
@@ -114,6 +115,7 @@ def summary(host: str, filled: list[dict[str, Any]], left: list[dict[str, Any]],
         made += [_count(answers, "answer drafted from your CV", "answers drafted from your CV")] if answers else []
         made += ["your cover letter"] if letters else []
         made += [_count(choices, "choice made for you", "choices made for you")] if choices else []
+        made += [_count(files, "file attached", "files attached")] if files else []
         parts.append(f"I filled in {_count(len(filled), 'field')} on {host}: {', '.join(made)}.")
     else:
         parts.append(f"I filled in nothing on {host}.")

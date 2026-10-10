@@ -862,7 +862,7 @@ Dialog {
                         GroupTitle { text: "Files for forms"; Layout.fillWidth: true }
                         SmallButton { objectName: "asAddFile"; text: "Add a file…"; onClicked: filePick.open() } }
                     Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
-                        text: "Certificates, diplomas, references. A page cannot be handed a file, so after a fill the assistant shows these in Finder, with the CV and letter, for you to drag onto the form." }
+                        text: "Certificates, diplomas, references. The assistant attaches the CV and the letter of the job by itself; these are shown in Finder after a fill, for you to drag onto the form." }
                     Repeater {
                         model: fileModel
                         ColumnLayout { id: fileRow; Layout.fillWidth: true; spacing: 2

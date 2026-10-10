@@ -347,8 +347,10 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
 6. **The assistant was tested in its test area** (`tests/fixtures/forms/`: a plain form, a component-built one, a long
    one, a framed one, each filled in a browser engine by the real code), **not yet on real sites in the person's browser.**
    Sites that build their fields in unusual ways (their own drop-downs, forms inside a frame from another site,
-   pages that rebuild a field after it is written) will need a look one by one. Tick boxes, dates and file
-   uploads are left to the person on purpose.
+   pages that rebuild a field after it is written) will need a look one by one. Tick boxes and dates are left to
+   the person on purpose. File fields for the CV, the letter and other attachments are given the job's documents
+   (asked for after the first real form, 10 October 2026); a page that draws its uploader without a file field
+   until it is clicked cannot be reached, and the files are then shown in Finder as before.
 
 **Needs the person**
 

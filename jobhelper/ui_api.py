@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from datetime import date, datetime
 from pathlib import Path
 
@@ -1010,4 +1011,5 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         if not url.startswith(("http://", "https://")):         # a job board hands this over: only a web page is opened
             return {"ok": False}
         self._open(url)
+        self._opened = (job_id, time.time())                    # the form you fill in next is most likely this job's
         return {"ok": True, "url": url}

@@ -103,7 +103,8 @@ Safari):
 It writes into empty fields only. The only things it presses are a menu, an entry of a menu, a
 yes/no button, a button that adds a row for another job, and the box that says you work
 somewhere now. It never presses Submit or Next, never ticks a box that agrees to something,
-and never touches a password, a file or a personal question.
+and never touches a password or a personal question. A file field for the CV, the letter or
+other attachments is given the documents of the job the form is for; any other file is yours.
 
 **You can talk to it** in your own words:
 
