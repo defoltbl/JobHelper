@@ -841,7 +841,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
                     "wanted_roles": list(target_roles), "unwanted_roles": [], "my_fields": [],
                     # start from the level in the CV; the user can change both in Options
                     "level_words": filters.default_level_words(level), "max_years": filters.default_max_years(level),
-                    "about_right_to_work": "", "about_start": "", "about_experience": "", "notifications": True, "scan_all_folders": False,
+                    "about_right_to_work": "", "about_start": "", "about_experience": "", "notifications": True, "scan_all_folders": False, "assistant_watch": False,
                     "keep_backups": housekeeping.DEFAULT_KEEP}
         try:
             if p.exists():
@@ -911,7 +911,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
             clean["salary_currency"] = code
         if clean.get("country") and not re.fullmatch(r"[^\W\d_]+(?:[ '.\-]+[^\W\d_]+)*\.?", clean["country"]):
             return {}, "“country” must be a country's name in letters, for example Germany."
-        for key in ("include_remote", "all_languages", "full_time_only", "notifications", "scan_all_folders"):
+        for key in ("include_remote", "all_languages", "full_time_only", "notifications", "scan_all_folders", "assistant_watch"):
             if key in clean and not isinstance(clean[key], bool):
                 return {}, f"“{key.replace('_', ' ')}” must be on or off."
         return clean, ""

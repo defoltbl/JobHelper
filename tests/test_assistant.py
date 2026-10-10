@@ -1161,3 +1161,63 @@ def test_area_the_filled_form_is_read_back_and_reviewed():
     assert all("required" not in p for p in found.values()) or True
     assert "nothing wrong" not in review["say"] and "did not send anything" in review["say"]
     assert out["state"]["pw"] == "" and out["state"]["dob"] == "", "reading back changes nothing"
+
+
+# ── what the assistant says without being asked ─────────────────────────────
+def test_the_briefing_is_worked_out_from_your_data_without_claude(isolate, monkeypatch):
+    from datetime import date, timedelta
+    from jobhelper import db
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: pytest.fail("a briefing costs nothing"))
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: pytest.fail("a briefing costs nothing"))
+    api = ui_api.Api()
+    assert api.assistant_briefing() == {"headline": "", "lines": [], "nudges": []}, "nothing to say: the robot only says hello"
+    today = date.today()
+    store.save_jobs([
+        _job(form_filled=(today - timedelta(days=1)).isoformat()),
+        _job(id="fresh", company="Fresh", form_filled=today.isoformat()),
+        _job(id="iv", company="Quillon", title="Data Analyst", status="interview", date_applied="2026-09-01",
+             event={"date": (today + timedelta(days=1)).isoformat(), "time": "10:00", "kind": "interview", "note": ""}),
+        _job(id="ready", company="Vantor", title="Tester", status="interview", date_applied="2026-09-01", interview_prep={"questions": [{"question": "q", "answer": "a"}]},
+             event={"date": today.isoformat(), "time": "", "kind": "interview", "note": ""}),
+        _job(id="inv", company="Brightpath", title="Developer", status="waiting", date_applied="2026-09-10")])
+    monkeypatch.setattr(db, "all_responses", lambda: [{"job_id": "inv", "stage": "interview", "received_date": (today - timedelta(days=2)).strftime("%a, %d %b %Y 10:00:00 +0000"),
+                                                      "subject": "Invitation", "summary": "They invite you."}])
+    out = api.assistant_briefing()
+    texts = {n["kind"] + ":" + n["job_id"]: n["text"] for n in out["nudges"]}
+    assert set(texts) == {"apply:nw1", "prep:iv", "date:inv"}, "filled today, prepared already, or no invitation: not reminded"
+    assert "did not mark it applied" in texts["apply:nw1"] and "is tomorrow and there is no preparation yet" in texts["prep:iv"]
+    assert texts["date:inv"].startswith("Brightpath invited you on") and out["headline"] == out["nudges"][0]["text"]
+    assert any("ready to send" in line for line in out["lines"]) and any("invitation" in line for line in out["lines"])
+    assert api.assistant_nudge_done("nw1", "apply") == {"ok": True} and api.assistant_nudge_done("nw1", "everything") == {"ok": False}
+    assert "apply:nw1" not in {n["kind"] + ":" + n["job_id"] for n in api.assistant_briefing()["nudges"]}, "said once is enough when you say so"
+    filled = _browser(monkeypatch, [_field("Email", n=1)])
+    details.save(MINE)
+    assert filled is not None and api.assistant_fill("fresh")["ok"] and store.find(store.load_jobs(), "fresh")["form_filled"] == today.isoformat()
+
+
+def test_noticing_a_form_is_off_until_you_turn_it_on_and_offers_each_page_once(isolate, monkeypatch):
+    store.save_jobs([_job()])
+    api = ui_api.Api()
+    monkeypatch.setattr(chrome, "active_tab", lambda: pytest.fail("off: Chrome is not looked at"))
+    assert api.assistant_watching() is False and api.assistant_notice() == {"ok": False, "off": True}
+    assert api.assistant_set_watch("yes")["ok"] is False and api.assistant_watching() is False
+    assert api.assistant_set_watch(True) == {"ok": True, "on": True, "msg": ""} and api.assistant_watching() is True
+    assert api.options()["where"] == "", "the other options are kept as they were"
+    tab = {"url": "https://careers.northwind.example/jobs/42", "title": "Junior Analyst - Northwind"}
+    monkeypatch.setattr(chrome, "active_tab", lambda: dict(tab))
+    monkeypatch.setattr(chrome, "run", lambda script: json.dumps({"url": tab["url"], "fields": 6, "first": "a|b", "empty": 5}))
+    out = api.assistant_notice()
+    assert out["ok"] and out["job_id"] == "nw1" and "looks like the form for Junior Analyst at Northwind" in out["say"]
+    assert api.assistant_notice() == {"ok": False}, "the same page is not offered twice"
+    tab["url"] = "https://careers.northwind.example/jobs/42?step=2"
+    monkeypatch.setattr(chrome, "run", lambda script: json.dumps({"url": tab["url"], "fields": 6, "first": "a|b", "empty": 1}))
+    assert api.assistant_notice() == {"ok": False}, "nothing left to fill in: nothing to offer"
+    tab.update(url="https://news.example.org/today", title="News")
+    assert api.assistant_notice() == {"ok": False}, "a page that belongs to no job of yours"
+    tab.update(url="chrome://settings", title="Settings")
+    assert api.assistant_notice() == {"ok": False}
+    monkeypatch.setattr(chrome, "active_tab", lambda: (_ for _ in ()).throw(chrome.ChromeError(chrome.NOT_RUNNING)))
+    assert api.assistant_notice() == {"ok": False, "problem": ""}, "Chrome not in use is nothing to report"
+    monkeypatch.setattr(chrome, "active_tab", lambda: (_ for _ in ()).throw(chrome.ChromeError(chrome.NO_CONSENT)))
+    assert api.assistant_notice() == {"ok": False, "problem": chrome.NO_CONSENT}
+    assert api.assistant_set_watch(False)["ok"] and api.assistant_notice() == {"ok": False, "off": True}

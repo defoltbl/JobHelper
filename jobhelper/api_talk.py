@@ -3,9 +3,10 @@ before anything of yours is changed."""
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any
 
-from . import answer_memory, assistant, assistant_brain, config, db, details, form_answers, form_choices, insights, planner, salary, store
+from . import answer_memory, assistant, assistant_brain, chrome, config, db, details, form_answers, form_choices, form_fill, insights, mailhosts, planner, salary, store
 
 _PLAIN = re.compile(r"\b(?:but|skip|except|without|only|not|don't|do not|leave|and)\b")
 NO_JOB = "That job is not in the list any more."
@@ -230,6 +231,104 @@ class TalkApi:
         out = self._said(lambda: assistant_brain.feedback(job, cv_text, question, known.get(str(question), ""), answer))
         out["action"] = "practice_feedback"
         return out
+
+    # ── what the assistant says without being asked ─────────────
+    def assistant_briefing(self):
+        """What is worth your attention when the app opens, worked out from your data without Claude:
+        {"headline" (for the robot's bubble, '' when there is nothing), "lines", "nudges": [{text, job_id, kind}]}."""
+        from . import summary
+        try:
+            jobs, responses = store.load_jobs(), db.all_responses()
+        except Exception:  # noqa: BLE001 - locked data: nothing to say yet
+            return {"headline": "", "lines": [], "nudges": []}
+        now = date.today()
+        week = summary.week(jobs, responses, int(self.options().get("followup_days") or 0), now)
+        lines = []
+        if week["ready_total"]:
+            lines.append(f"{week['ready_total']} {'job is' if week['ready_total'] == 1 else 'jobs are'} ready to send" + (f" ({week['new_ready']} new this week)" if week["new_ready"] else ""))
+        if week["invites"]:
+            lines.append(f"{week['invites']} {'reply' if week['invites'] == 1 else 'replies'} this week that {'looks' if week['invites'] == 1 else 'look'} like an invitation")
+        if week["followups"]:
+            lines.append(f"{week['followups']} follow-up{'' if week['followups'] == 1 else 's'} due")
+        lines += [c["text"] for c in week["coming"][:3]]
+        nudges = []
+        last: dict[str, dict[str, Any]] = {}
+        for r in responses:
+            if r.get("job_id") and r["job_id"] not in last:
+                last[r["job_id"]] = r
+        for j in jobs:
+            what, done = f"{j.get('title', '')} at {j.get('company', '')}", set(j.get("nudged") or [])
+            filled = str(j.get("form_filled") or "")
+            if j.get("status") in store.LEAD_STATUSES and filled and filled < now.isoformat() and "apply" not in done:
+                nudges.append({"kind": "apply", "job_id": j["id"], "text": f"You filled in the form for {what} on {filled} but did not mark it applied."})
+            event = j.get("event") or {}
+            if event.get("kind") == "interview" and event.get("date") and "prep" not in done and not (j.get("interview_prep") or {}).get("questions"):
+                try:
+                    away = (date.fromisoformat(event["date"]) - now).days
+                except ValueError:
+                    away = -1
+                if 0 <= away <= 2:
+                    when = ("today", "tomorrow", "in two days")[away]
+                    nudges.append({"kind": "prep", "job_id": j["id"], "text": f"The interview for {what} is {when} and there is no preparation yet."})
+            reply = last.get(j["id"])
+            if reply and reply.get("stage") in ("interview", "assessment") and j.get("status") in store.APPLICATION_STATUSES - {"rejected"} \
+                    and not event.get("date") and "date" not in done:
+                when = db.received_at(reply.get("received_date", "")).date()
+                if 0 <= (now - when).days <= 14:
+                    nudges.append({"kind": "date", "job_id": j["id"], "text": f"{j.get('company', '')} invited you on {when.isoformat()} and no date is set for it."})
+        nudges = nudges[:6]
+        headline = nudges[0]["text"] if nudges else ("; ".join(lines[:3]) + "." if lines else "")
+        return {"headline": headline[:220], "lines": lines, "nudges": nudges}
+
+    def assistant_nudge_done(self, job_id, kind):
+        """Stop reminding about this (you looked at it, or it does not apply)."""
+        if kind not in ("apply", "prep", "date"):
+            return {"ok": False}
+
+        def go(jobs, j):            # may run twice (the running search's copy): the result is the same
+            j["nudged"] = sorted(set(j.get("nudged") or []) | {kind})
+        return {"ok": bool(self._change(job_id, go, render=False).get("ok"))}
+
+    def assistant_watching(self):
+        return bool(self.options().get("assistant_watch"))
+
+    def assistant_set_watch(self, on):
+        """Turn noticing a form in Chrome on or off. It is off until you turn it on: it means looking at the
+        address of the tab in front every little while."""
+        if not isinstance(on, bool):
+            return {"ok": False, "msg": "Noticing a form is on or off."}
+        saved = self.save_options({"assistant_watch": on})
+        self._noticed = set()
+        return {"ok": bool(saved.get("ok")), "on": on, "msg": saved.get("msg", "")}
+
+    def assistant_notice(self):
+        """Is the tab in front the application form of a job you track? Only when you turned this on, and each
+        page is offered once. Looks at the tab's address and title and counts its empty fields; reads nothing else."""
+        if not self.assistant_watching():
+            return {"ok": False, "off": True}
+        try:
+            tab = chrome.active_tab()
+        except chrome.ChromeError as e:
+            quiet = str(e) in (chrome.NOT_RUNNING, chrome.NO_WINDOW)      # Chrome simply not in use is nothing to report
+            return {"ok": False, "problem": "" if quiet else str(e)}
+        url = tab["url"]
+        seen = getattr(self, "_noticed", set())
+        if not url.lower().startswith(("http://", "https://")) or url in seen or mailhosts.never_used(form_fill.host_of(url)):
+            return {"ok": False}
+        jobs = [j for j in store.load_jobs() if j.get("status") in store.LEAD_STATUSES | {"waiting", "interview", "on_hold"}]
+        job = store.find(jobs, form_fill.match_job(jobs, url, tab["title"]))
+        if not job:
+            return {"ok": False}
+        try:
+            page = form_fill.watch_answer(chrome.run(form_fill.WATCH))
+        except chrome.ChromeError as e:
+            return {"ok": False, "problem": str(e)}
+        if page["empty"] < 3:
+            return {"ok": False}                    # the posting itself, or a form that is filled in already
+        seen.add(url)
+        self._noticed = seen
+        return {"ok": True, "job_id": job["id"], "job": f"{job.get('title', '')} at {job.get('company', '')}", "url": url,
+                "say": f"This looks like the form for {job.get('title', '')} at {job.get('company', '')}. Tap me and I fill it in."}
 
     # ── the facts a review or a choice is checked against ───────
     def _facts(self, job) -> str:
