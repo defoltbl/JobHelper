@@ -657,7 +657,7 @@ Table 6.4 lists the buttons at the bottom of the job window.
 | Button | What it does |
 |---|---|
 | **Form answers** | Drafts answers for this job's application form (section 7) |
-| **Fill form in Chrome** | Opens the assistant for this job, to fill in the form that is open in Chrome (section 9) |
+| **Fill the form** | Opens the assistant for this job, to fill in the form that is open in your browser (section 9) |
 | **Score it anyway** | Sends a skipped job to scoring |
 | **Not interested** | Removes the job from the list. Its documents go to an encrypted backup |
 | **Mark applied** | Moves the job to Applications |
@@ -868,8 +868,8 @@ when the app opens, and opens its window when you select it.
 
 *Figure 9.1 – The assistant at the end of the assembly line*
 
-The assistant fills in the form that is open in Google Chrome, or in Brave, Edge or Safari
-when you choose one of them (section 10). It writes into empty fields only. The only things
+The assistant fills in the form that is open in Google Chrome, or in Brave, Edge, Opera,
+Opera GX or Safari when you choose one of them (section 10). It writes into empty fields only. The only things
 it presses on a page are a menu, an entry of a menu, a yes/no button, a button that adds a
 row for another job or degree, and the box that says you work at a job now; it never presses
 a button that sends or continues, never ticks a box that agrees to something, and never
@@ -1020,7 +1020,7 @@ Chrome does not let another app write into a page until you allow it. Do this on
 3. Optional: under **Answers are for**, choose the job. With **Find the job from the page**
    the assistant works it out from the page's address and title, and tells you which job it
    took.
-4. Select **Fill in the form in Chrome**, or type the request, for example *fill in the
+4. Select **Fill in the form**, or type the request, for example *fill in the
    form*, and press Return.
 5. Read the answer (Figure 9.6). **Filled in** lists what was written and chosen; **Left for
    you** lists what was not, each with the reason.
@@ -1044,11 +1044,11 @@ Chrome does not let another app write into a page until you allow it. Do this on
 | **Show my CV and letter in Finder** | The form asks for a file, and the job has documents from the app or you added files of your own | Opens Finder with the PDF of the adapted CV, the letter and your own files selected, ready to drag onto the form |
 | **Remember what I changed on the page** | The assistant wrote at least one answer | Reads back the answers it wrote, keeps your changes with the job, and remembers your wording |
 | **Mark applied** | The job is still in **New Jobs** | Moves the job to **Applications** as waiting, as the button in the job's window does |
-| **Fill in this page too** | The form in Chrome moved on to other fields | Fills in the new page |
+| **Fill in this page too** | The form in your browser moved on to other fields | Fills in the new page |
 | **Open the form in its own tab** | The form sits in a frame from another site | Opens that form in a new Chrome tab, where it can be filled in |
 | **Review before I send** | After every fill | Reads the form back and lists what looks wrong |
 
-To open the assistant for one job directly, select **Fill form in Chrome** in that job's
+To open the assistant for one job directly, select **Fill the form** in that job's
 window.
 
 ### Fill in a form with several pages
@@ -1297,8 +1297,9 @@ The assistant also tells you things without being asked. None of this uses Claud
 ### Choose your browser
 
 The assistant works in Google Chrome unless you choose another browser. On the **My details**
-page, under **How I work**, choose **Google Chrome**, **Brave Browser**, **Microsoft Edge** or
-**Safari**. The line beside the list says where that browser's switch is; turn it on once, as
+page, under **How I work**, choose **Google Chrome**, **Brave Browser**, **Microsoft Edge**,
+**Opera**, **Opera GX** or **Safari**. Firefox is in the list as not possible: it does not let
+another app read or fill in its pages, so open the form in one of the others. The line beside the list says where that browser's switch is; turn it on once, as
 in section 9. The switch to notice forms is in the same place.
 
 ### Speak instead of typing

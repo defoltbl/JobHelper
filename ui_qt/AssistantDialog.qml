@@ -86,7 +86,11 @@ Dialog {
     }
     function setBrowser(key) {
         var r = bridge.setAssistantBrowser(key);
-        if (!(r && r.ok)) { problem = { field: "", msg: (r && r.msg) || "That browser could not be chosen." }; browser = bridge.assistantBrowser(); return; }
+        if (!(r && r.ok)) {              // Firefox, for one: said, and the list goes back to the browser in use
+            problem = { field: "", msg: (r && r.msg) || "That browser could not be chosen." }; detailsNote = "";
+            browser = ({}); browser = bridge.assistantBrowser(); return;
+        }
+        problem = ({});
         browser = r; watchProblem = "";
         detailsNote = "I now work in " + r.name + ". Its switch: " + r.switch + ".";
     }
@@ -519,7 +523,7 @@ Dialog {
             ColumnLayout { Layout.fillWidth: true; spacing: 2
                 Text { text: "Assistant"; color: theme.ink; font.pixelSize: 17; font.bold: true }
                 Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
-                    text: "Fills in forms in " + assistantDialog.browser.name + ", answers questions about your search, and does things in the app after your yes." } }
+                    text: "Fills in application forms in your browser, answers questions about your search, and does things in the app after your yes." } }
             Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
                 Layout.alignment: Qt.AlignTop
                 Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
@@ -668,14 +672,14 @@ Dialog {
                         Keys.onEnterPressed: assistantDialog.ask(text) }
                     SmallButton { objectName: "asSend"; implicitHeight: 34; text: "Ask"; enabled: !assistantDialog.busy; onClicked: assistantDialog.ask(askBox.text) }
                     PillButton { objectName: "asFill"; primaryStyle: true; enabled: !assistantDialog.busy
-                        text: assistantDialog.busy ? "Working…" : "Fill in the form in " + assistantDialog.browser.short
+                        text: assistantDialog.busy ? "Working…" : "Fill in the form"
                         onClicked: assistantDialog.ask("Fill in the form") } }
                 Text { objectName: "asErr"; Layout.fillWidth: true; wrapMode: Text.WordWrap
                     font.pixelSize: assistantDialog.askErr !== "" ? 12 : 11; font.bold: assistantDialog.askErr !== ""
                     color: assistantDialog.askErr !== "" || askBox.text.length > assistantDialog.maxRequest ? theme.crit : theme.faint
                     text: assistantDialog.askErr !== "" ? assistantDialog.askErr
                         : askBox.text.length > assistantDialog.maxRequest ? (askBox.text.length - assistantDialog.maxRequest) + " characters too long (the limit is " + assistantDialog.maxRequest + ")"
-                        : "Filling in a form costs nothing; anything else you ask is one Claude call. I ask before I change anything of yours, and I never send a form." }
+                        : "I fill in the form that is open in " + assistantDialog.browser.name + " (change the browser on My details). Filling costs nothing; anything else you ask is one Claude call. I ask before I change anything of yours, and I never send a form." }
             }
         }
 

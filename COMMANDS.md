@@ -249,7 +249,7 @@ Inside the window:
 - **Thank-you draft** (job window) — offered from the day of an interview or call, for an
   application that is still open. Plain template, no Claude; copy it, add one real detail,
   send it yourself, then **Mark as sent**.
-- **The assistant** (the light-blue robot at the end of the assembly line, or **Fill form in Chrome** in a job's
+- **The assistant** (the light-blue robot at the end of the assembly line, or **Fill the form** in a job's
   window) — fills in the application form that is open in Google Chrome: your details from its **My details** page,
   answers to open questions drafted from your CV for the job. It writes into empty fields only, lists what it left
   and why, and never sends the form. Once, in Chrome: View > Developer > Allow JavaScript from Apple Events.

@@ -1492,12 +1492,20 @@ def test_other_browsers_are_spoken_to_in_their_own_way(isolate, monkeypatch):
             chrome.use(key)
             chrome.run("1")
             assert f'tell application "{app}"' in " ".join(calls[-1][0]) and "execute active tab of front window javascript" in " ".join(calls[-1][0])
+        for key, app in (("opera", "Opera"), ("opera_gx", "Opera GX")):
+            chrome.use(key)
+            chrome.run("1")
+            assert f'tell application "{app}"' in " ".join(calls[-1][0]) and "execute active tab of front window javascript" in " ".join(calls[-1][0])
+            assert chrome.short() == app and "Developer > Allow JavaScript from Apple Events" in chrome.said("no_scripts")
+        assert chrome.use("firefox") == "chrome", "Firefox cannot be reached this way: it is never the browser in use"
         assert chrome.use("netscape") == "chrome" and chrome.use(None) == "chrome"
         assert chrome.ChromeError(chrome.NOT_RUNNING).kind == "not_running" and chrome.ChromeError("something else").kind == "refused"
         # the choice is kept with the options and used from then on
         api = ui_api.Api()
-        assert api.assistant_browser()["key"] == "chrome" and [b["key"] for b in api.assistant_browser()["all"]] == ["chrome", "brave", "edge", "safari"]
-        assert api.assistant_set_browser("firefox")["ok"] is False and api.assistant_browser()["key"] == "chrome"
+        assert api.assistant_browser()["key"] == "chrome" and [b["key"] for b in api.assistant_browser()["all"]] == ["chrome", "brave", "edge", "opera", "opera_gx", "safari", "firefox"]
+        refused = api.assistant_set_browser("firefox")
+        assert refused["ok"] is False and refused["msg"].startswith("Firefox does not let another app") and api.assistant_browser()["key"] == "chrome"
+        assert api.assistant_set_browser("netscape")["ok"] is False and api.check_options({"assistant_browser": "firefox"})[1]
         out = api.assistant_set_browser("safari")
         assert out["ok"] and out["name"] == "Safari" and "Develop" in out["switch"] and api.options()["assistant_browser"] == "safari"
         details.save(MINE)

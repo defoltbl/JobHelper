@@ -422,7 +422,7 @@ def test_guide_shots(ui, monkeypatch):
         monkeypatch.setattr(ui_api.Api, "assistant_notes_list", lambda self: {"notes": [{"text": "No consulting firms", "when": ""}, {"text": "Remote or Prague only", "when": ""}]})
         ui.js("assistantDialog.show()")
         ui.wait(500)
-        ui.js('assistantDialog.ask("Fill in the form in Chrome")')
+        ui.js('assistantDialog.ask("Fill in the form")')
         for _ in range(100):
             if not ui.find("assistantDialog").property("busy"):
                 break

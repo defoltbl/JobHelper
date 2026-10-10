@@ -3468,6 +3468,14 @@ def test_a_press_on_empty_space_ends_the_editing_of_a_field(ui):
     QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, box.mapToScene(QPointF(box.width() / 2, box.height() / 2)).toPoint())
     ui.wait(150)
     assert box.property("activeFocus") is True, "and a click in the field still starts editing"
+    # a list keeps its outline after a choice too: the same press lets go of it
+    combo = ui.find("asJob")
+    ui.js("forceActiveFocus()", combo)
+    ui.wait(100)
+    assert combo.property("activeFocus") is True
+    QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, QPoint(spot.x(), spot.y()))
+    ui.wait(150)
+    assert combo.property("activeFocus") is False, "the list let go"
     header = box.mapToScene(QPointF(box.width() / 2, 0)).toPoint()
     QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, QPoint(header.x(), int(dialog.property("y")) + 30))   # beside the title
     ui.wait(150)
@@ -3482,7 +3490,7 @@ def test_every_window_with_a_text_field_lets_go_of_it():
     fields = re.compile(r"\b(TextField|TextEdit|TextArea|AutoField|ThemedSpin|TimeField|TagEditor) \{")
     for path in sorted((ROOT / "ui_qt").glob("*Dialog.qml")) + [ROOT / "ui_qt" / "WelcomeOverlay.qml"]:
         text = path.read_text(encoding="utf-8")
-        if fields.search(text):
+        if fields.search(text) or "ThemedCombo {" in text:
             assert "FocusCatcher {}" in text or "Sink.forceActiveFocus()" in text, f"{path.name} keeps a field's outline when you press beside it"
         for scroll in re.findall(r"\n( +)Flickable \{\n(?:.*\n){0,6}?\1    (\w+) \{", text):
             if "FocusCatcher {}" in text:
@@ -3780,7 +3788,7 @@ def test_the_assistant_at_pro_level_in_the_window(ui, monkeypatch):
     ui.js("talk.clear(); assistantDialog.show()")
     ui.wait(450)
     ui.js('assistantDialog.page = "ask"')
-    assert ui.find("asFill").property("text") == "Fill in the form in Chrome" and ui.find("asStarters").property("visible")
+    assert ui.find("asFill").property("text") == "Fill in the form" and "open in Google Chrome" in ui.find("asErr").property("text") and ui.find("asStarters").property("visible")
     # several things at once: what only shows is done, the rest is one question; then it can be taken back
     ui.js('assistantDialog.ask("mark acme applied, set a date and open beta")')
     _wait_idle(ui, dialog)
@@ -3820,9 +3828,15 @@ def test_the_assistant_at_pro_level_in_the_window(ui, monkeypatch):
     ui.js('assistantDialog.setBrowser("safari")')
     assert config.ui_settings().get("assistant_browser") == "safari" and "Develop" in ui.find("asDetailsNote").property("text")
     ui.js('assistantDialog.page = "ask"')
-    assert ui.find("asFill").property("text") == "Fill in the form in Safari"
+    assert "open in Safari" in ui.find("asErr").property("text"), "the line under the box says which browser"
     ui.js('assistantDialog.setBrowser("netscape")')
     assert config.ui_settings().get("assistant_browser") == "safari" and dialog.property("browser")["key"] == "safari"
+    ui.js('assistantDialog.page = "details"; assistantDialog.setBrowser("firefox")')
+    assert "Firefox does not let another app" in ui.find("asDetailsNote").property("text") and config.ui_settings().get("assistant_browser") == "safari"
+    names = [b["name"] for b in dialog.property("browser")["all"]]
+    assert names == ["Google Chrome", "Brave Browser", "Microsoft Edge", "Opera", "Opera GX", "Safari", "Firefox (not possible)"]
+    ui.js('assistantDialog.setBrowser("opera_gx")')
+    assert config.ui_settings().get("assistant_browser") == "opera_gx" and "Opera GX" in ui.find("asDetailsNote").property("text")
     ui.js('assistantDialog.setBrowser("chrome")')
     ui.js("assistantDialog.dirty = false; assistantDialog.tryClose()")
     ui.wait(400)
