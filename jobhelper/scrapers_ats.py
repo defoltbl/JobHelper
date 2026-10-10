@@ -111,6 +111,12 @@ def _norm(jid: str, title: str, company: str, location: str, url: str,
                          description=description, date_posted=posted, source="careers")
 
 
+def is_token(token: str) -> bool:
+    """A career site's own short name as it stands in its address ("gitlab", "Acme-Corp"): letters, digits, - and _ only.
+    The token becomes part of an address the app asks, so nothing else is accepted (no dots, slashes or spaces)."""
+    return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}", str(token or "")))
+
+
 def load_companies() -> list[dict[str, str]]:
     p = config.DATA_DIR / "companies.json"
     if not p.exists():
@@ -122,7 +128,7 @@ def load_companies() -> list[dict[str, str]]:
     if not isinstance(data, list):
         return []
     # entry by entry: one line that is not a company (a note, a typo) must not hide all the others
-    return [c for c in data if isinstance(c, dict) and c.get("ats") in _FETCHERS and isinstance(c.get("token"), str) and c["token"].strip()]
+    return [c for c in data if isinstance(c, dict) and c.get("ats") in _FETCHERS and isinstance(c.get("token"), str) and is_token(c["token"])]
 
 
 def _company_jobs(name: str, ats: str, token: str) -> list[dict[str, Any]]:

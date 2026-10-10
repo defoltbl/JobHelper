@@ -29,7 +29,7 @@ from .api_documents import DocumentsApi
 from .api_interview import InterviewApi
 from .api_letters import LettersApi
 from . import chrome
-from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, email_client, filters, health, summary,
+from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, email_client, filters, health, scrapers_ats, summary,
                textfmt, compare, config, db, followup, housekeeping, insights, integrity, keywords, merge, pdf, places,
                planner, salary, store, usage, vault)
 
@@ -503,9 +503,10 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         """Put a filtered-out posting into New Jobs; the next search run scores it like any other."""
         data = agent2_search.load_dropped()
         rows = data["rows"]
-        if not 0 <= int(index) < len(rows):
+        index = self._position(index, len(rows))
+        if index < 0:
             return {"ok": False, "msg": "That posting is not in the list any more."}
-        row = rows[int(index)]
+        row = rows[index]
         posting = row.get("job")
         if not isinstance(posting, dict) or not posting.get("id"):
             return {"ok": False, "msg": "This posting was saved without its details. Run a search, then bring it back."}
@@ -528,13 +529,23 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         live = self.live
         if live is not None and not store.find(live, job["id"]):
             live.append(dict(job))                        # a run in progress must not lose it
-        del rows[int(index)]
+        del rows[index]
         agent2_search.save_dropped(rows, when=data["when"])
         return {"ok": True, "title": job.get("title", "")}
 
+    @staticmethod
+    def _position(index, size: int) -> int:
+        """A place in a list as the window names it (a whole number, sometimes as 2.0 or "2"), or -1 when there is none."""
+        try:
+            place = int(index)
+        except (TypeError, ValueError):
+            return -1
+        return place if not isinstance(index, bool) and 0 <= place < size and place == float(index) else -1
+
     def open_filtered(self, index):
         rows = agent2_search.load_dropped()["rows"]
-        url = rows[index].get("url", "") if 0 <= int(index) < len(rows) else ""
+        index = self._position(index, len(rows))
+        url = str(rows[index].get("url") or "") if index >= 0 else ""
         if not url.startswith(("http://", "https://")):
             return {"ok": False}
         self._open(url)
@@ -858,6 +869,8 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
     OPTION_LISTS = ("queries", "skip_words", "keep_words", "level_words", "wanted_roles", "unwanted_roles", "my_fields")
     OPTION_TEXTS = {"where": 80, "country": 60, "about_right_to_work": 300, "about_start": 300, "about_experience": config.MAX_EXPERIENCE_NOTES}
     MAX_LIST, MAX_WORD = 60, 100
+    MODELS = ("sonnet", "opus", "haiku")
+    SOURCES = ("czech", "linkedin", "remote", "careers", "adzuna", "jooble", "all")
 
     def check_options(self, opts):
         """(clean options, '') or ({}, what is wrong). The window checks the same things as you type;
@@ -916,7 +929,10 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
             if isinstance(clean["text_size"], bool) or clean["text_size"] not in config.TEXT_SIZES:
                 return {}, "“size of text and controls” must be one of: " + ", ".join(f"{n}%" for n in config.TEXT_SIZES) + "."
             clean["text_size"] = int(clean["text_size"])
-        if "assistant_browser" in clean and clean["assistant_browser"] not in chrome.BROWSERS:
+        for key, allowed in (("model", self.MODELS), ("source", self.SOURCES)):
+            if key in clean and (not isinstance(clean[key], str) or clean[key] not in allowed):
+                return {}, f"“{key}” must be one of: " + ", ".join(allowed) + "."
+        if "assistant_browser" in clean and (not isinstance(clean["assistant_browser"], str) or clean["assistant_browser"] not in chrome.BROWSERS):
             return {}, "“assistant browser” must be one of: " + ", ".join(chrome.BROWSERS) + "."
         if clean.get("country") and not re.fullmatch(r"[^\W\d_]+(?:[ '.\-]+[^\W\d_]+)*\.?", clean["country"]):
             return {}, "“country” must be a country's name in letters, for example Germany."
@@ -950,8 +966,12 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
 
     def save_companies(self, companies):
         config.ensure_dirs()
-        clean = [{"name": (c.get("name") or c.get("token")), "ats": c.get("ats"), "token": c.get("token")}
-                 for c in (companies or []) if c.get("ats") and c.get("token")]
+        # The token becomes part of an address the app asks (https://<token>.recruitee.com …): only a plain slug is kept,
+        # so nothing typed or pasted here can send a request anywhere else. The window checks the same as you type.
+        clean = [{"name": " ".join(str(c.get("name") or c["token"]).split())[:60], "ats": c["ats"], "token": c["token"]}
+                 for c in (companies if isinstance(companies, (list, tuple)) else [])
+                 if isinstance(c, dict) and isinstance(c.get("ats"), str) and c["ats"] in scrapers_ats._FETCHERS
+                 and isinstance(c.get("token"), str) and scrapers_ats.is_token(c["token"])][:200]
         (config.DATA_DIR / "companies.json").write_text(
             json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
         integrity.approve(["companies"])          # changed through the app: trusted
@@ -960,8 +980,12 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
     # ── actions ─────────────────────────────────────────────────
     def apply_job(self, job_id):
         def go(jobs, j):
+            if j.get("status") not in store.LEAD_STATUSES and j.get("status") != "waiting":
+                # "mark applied" is for a new job: an application that was answered is not set back to waiting by a stray press
+                return {"ok": False, "msg": "This job is already among your applications. Change its status there."}
             j["status"] = "waiting"
             j["last_update"] = date.today().isoformat()
+            j["status_by_hand"] = datetime.now().isoformat(timespec="seconds")      # emails older than this do not change it back
             if not j.get("date_applied"):
                 j["date_applied"] = date.today().isoformat()
                 j.pop("date_applied_source", None)          # you pressed "mark applied": this is the real day

@@ -951,3 +951,44 @@ def test_the_plain_letter_written_without_a_template_carries_your_own_title(isol
     assert lines[:2] == ["Alex Novak", "Junior Software Developer"], "who writes, not the role applied for"
     bare = agent3_letters._save_letter(dict(job, id="j2"), "Dear Hiring Team,\nI apply.\nYours sincerely,", cv_text="Alex Novak\nalex@example.com\nPROFILE")
     assert [p.text for p in docx.Document(str((config.LETTERS_DIR / bare).with_suffix(".docx"))).paragraphs][1] == "Group Full-Stack Developer", "a CV without such a line: the role, as before"
+
+
+# ── found by reading the window's back end line by line (11 October 2026) ───
+def test_a_career_site_token_is_a_plain_slug_and_nothing_else(api, isolate_data):
+    """The token becomes part of an address the app asks (https://<token>.recruitee.com/…). The window only lets a slug be typed;
+    the back end now refuses anything else too, and so does the reader of a file edited by hand."""
+    from jobhelper import scrapers_ats
+    result = api.save_companies([{"name": "Proton", "ats": "greenhouse", "token": "proton"}, {"name": "Bad", "ats": "recruitee", "token": "evil.example/x#"},
+                                 {"name": "Bad2", "ats": "lever", "token": "a b"}, {"name": "Bad3", "ats": "workday", "token": "acme"},
+                                 {"name": ["x"], "ats": "lever", "token": "acme-corp_1"}, "junk", None, {"ats": ["lever"], "token": "x"}])
+    assert result == {"ok": True, "count": 2} and [c["token"] for c in api.companies()] == ["proton", "acme-corp_1"]
+    assert api.save_companies("not a list") == {"ok": True, "count": 0}
+    for token, ok in (("gitlab", True), ("Acme-Corp_1", True), ("", False), ("a.b", False), ("a/b", False), ("-a", False), ("x" * 81, False), (None, False)):
+        assert scrapers_ats.is_token(token) is ok, token
+    (config.DATA_DIR / "companies.json").write_text(json.dumps([{"name": "A", "ats": "recruitee", "token": "ok-1"}, {"name": "B", "ats": "recruitee", "token": "evil.example/x#"}]),
+                                                    encoding="utf-8")
+    assert [c["token"] for c in scrapers_ats.load_companies()] == ["ok-1"]
+
+
+def test_options_refuse_a_model_or_a_source_the_app_does_not_know(api):
+    for wrong, word in (({"model": "gpt"}, "model"), ({"model": ["sonnet"]}, "model"), ({"source": "indeed"}, "source"),
+                        ({"assistant_browser": ["chrome"]}, "assistant browser"), ({"assistant_browser": "firefox"}, "assistant browser")):
+        result = api.save_options(wrong)
+        assert result["ok"] is False and word in result["msg"], wrong
+    assert api.save_options({"model": "opus", "source": "linkedin"})["ok"] and api.options()["model"] == "opus"
+
+
+def test_mark_applied_is_for_a_new_job_and_notes_that_you_did_it(api):
+    store.save_jobs([store.new_job(id="lead", title="Dev", company="Acme", status="letter_ready"),
+                     store.new_job(id="closed", title="QA", company="Borg", status="rejected", date_applied="2026-09-01"),
+                     store.new_job(id="talks", title="Ops", company="Cyan", status="interview", date_applied="2026-09-01")])
+    assert api.apply_job("closed") == {"ok": False} and api.apply_job("talks") == {"ok": False}
+    assert [store.find(store.load_jobs(), i)["status"] for i in ("closed", "talks")] == ["rejected", "interview"], "a stray press changes nothing"
+    assert api.apply_job("lead") == {"ok": True}
+    lead = store.find(store.load_jobs(), "lead")
+    assert lead["status"] == "waiting" and len(lead["status_by_hand"]) == 19 and api.apply_job("lead") == {"ok": True}, "pressing it twice is harmless"
+
+
+def test_a_place_in_a_list_from_the_window_is_checked(api):
+    assert [api._position(i, 3) for i in (0, 2, 2.0, "1", 3, -1, 1.5, None, "x", True)] == [0, 2, 2, 1, -1, -1, -1, -1, -1, -1]
+    assert api.open_filtered("x") == {"ok": False} and api.bring_back(99)["ok"] is False
