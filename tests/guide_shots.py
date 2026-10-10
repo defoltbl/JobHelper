@@ -390,8 +390,17 @@ def test_guide_shots(ui, monkeypatch):
         ui.find("assistantBot").setProperty("greeting", False)
         details.save({"first_name": "Alex", "last_name": "Novak", "email": "alex.novak@example.com", "phone": "+420 123 456 789", "street": "",
                       "city": "Prague", "postcode": "110 00", "country": "Czechia", "linkedin": "linkedin.com/in/alexnovak",
-                      "github": "github.com/alexnovak", "website": "", "current_employer": "Riverside Labs", "current_title": "Junior developer",
-                      "university": "Charles University", "degree": "Master's degree in computer science", "notice_period": "1 month", "salary": ""})
+                      "github": "github.com/alexnovak", "website": "", "notice_period": "1 month",
+                      "experience": [{"employer": "Riverside Labs", "title": "Junior developer", "start": "03/2024", "end": "", "current": True},
+                                     {"employer": "Evening Code School", "title": "Tutor", "start": "2023", "end": "", "current": True},
+                                     {"employer": "Old Mill Software", "title": "Intern", "start": "2022", "end": "2023", "current": False}],
+                      "education": [{"school": "Charles University", "degree": "Master", "field": "Computer science", "start": "2021", "end": "2023"},
+                                    {"school": "Charles University", "degree": "Bachelor", "field": "Informatics", "start": "2018", "end": "2021"}],
+                      "salary_amount": 60000, "salary_currency": "CZK", "salary_period": "month"})
+        monkeypatch.setattr(ui_api.Api, "my_answers", lambda self: {"starters": ["What are your strengths?", "Tell us about yourself.", "Are you willing to relocate?"], "items": [
+            {"question": "When can you start?", "answer": "Two weeks after an offer; my notice period is one month at most.", "company": "", "when": ""},
+            {"question": "Why are you looking for a new job?", "company": "", "when": "",
+             "answer": "I want to build back-end services full time. In my current role that is a small part of the work."}]})
         monkeypatch.setattr(ui_api.Api, "assistant_ask", lambda self, text, job_id="": {
             "ok": True, "action": "fill", "host": "careers.northwind.example", "job_id": "lead1", "job": "Junior Python Developer at Northwind Systems", "guessed": True,
             "filled": [{"label": "First name", "value": "Alex", "kind": "detail", "check": ""}, {"label": "Last name", "value": "Novak", "kind": "detail", "check": ""},
@@ -423,6 +432,12 @@ def test_guide_shots(ui, monkeypatch):
         shot("40_assistant_next")
         ui.js('assistantDialog.page = "details"')
         shot("39_my_details")
+        ui.js("detailsFlick.contentY = 500")
+        shot("41_my_jobs_and_degrees")
+        ui.js("detailsFlick.contentY = Math.max(0, detailsFlick.contentHeight - detailsFlick.height)")
+        shot("42_my_salary_and_files")
+        ui.js('assistantDialog.page = "answers"')
+        shot("43_my_answers")
         ui.js("assistantDialog.tryClose()")
         ui.wait(350)
         details.path().unlink(missing_ok=True)

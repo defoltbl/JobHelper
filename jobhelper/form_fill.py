@@ -412,6 +412,7 @@ SOFT = ("employer", "job_title", "school", "degree", "study_field", "notice_peri
 LISTED = {"employer": ("experience", "employer"), "job_title": ("experience", "title"),
           "school": ("education", "school"), "degree": ("education", "degree"), "study_field": ("education", "field")}
 MORE_ROWS = "You listed {have} in My details, and this is one more. Add it there, or type it."
+_CURRENT = re.compile(r"\b(?:current|present|latest|most recent|last)\b")
 _NOT_THIS_JOB = re.compile(r"appl|desired|interested|preferred|referr|referee|emergency")
 _RULES = (("linkedin", re.compile(r"linked ?in")),
           ("github", re.compile(r"git ?hub")),
@@ -550,7 +551,20 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
      "left": [{label, why}]}. Fields that already hold something are not touched and not listed."""
     out: dict[str, list] = {"fill": [], "ask": [], "choose": [], "left": []}
     asked: set[str] = set()
-    met: dict[str, int] = {}                        # how many fields of a listed kind were met so far
+    # Jobs and degrees are asked row by row. A row ends where one of its fields comes round again:
+    # the second "Company" starts your second job, whatever fields a row is made of.
+    row = {"experience": 0, "education": 0}
+    seen: dict[str, set] = {"experience": set(), "education": set()}
+
+    def place(what: str, field: dict[str, Any]) -> int:
+        name = LISTED[what][0]
+        if name == "experience" and _CURRENT.search(_words(field)):
+            return 0                                # "current employer" is your current job wherever it stands
+        if what in seen[name]:
+            row[name] += 1
+            seen[name] = set()
+        seen[name].add(what)
+        return row[name]
 
     def ask(field, label, most) -> None:
         question = str(field.get("label") or "").strip()[:form_answers.MAX_QUESTION]
@@ -580,9 +594,8 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
             out["choose"].append({"n": field["n"], "kind": shape, "typed": bool(field.get("combo")), "label": label,
                                   "options": list(field.get("options") or []), "what": about, "value": value_for(about, mine) if about else ""})
         else:
-            index = met.get(what, 0)
-            met[what] = index + 1
-            value = letter if what == "letter" else value_for(what, mine, index if what in LISTED else 0)
+            index = place(what, field) if what in LISTED else 0
+            value = letter if what == "letter" else value_for(what, mine, index)
             if what in LISTED and not value and index:
                 have = len(mine.get(LISTED[what][0]) or [])
                 if index >= have > 0:               # the form has more rows than you have jobs or degrees

@@ -424,7 +424,10 @@ def test_the_job_list_for_the_assistant_holds_open_jobs_only(isolate):
 
 # ── the test area: the whole request, on forms served on this machine, in a real browser engine ──
 AREA = {"details": {**MINE, "street": "Long Street 5", "notice_period": "1 month",
-                    "experience": [{"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True}]},
+                    "experience": [{"employer": "Old Mill", "title": "Intern", "start": "2020", "end": "2021", "current": False},
+                                   {"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True}],
+                    "education": [{"school": "Masaryk University", "degree": "Master", "field": "Applied informatics", "start": "2021", "end": "2023"}],
+                    "salary_amount": 60000, "salary_currency": "CZK", "salary_period": "month"},
         "jobs": [{"id": "bp", "title": "Backend Developer", "company": "Brightpath", "status": "letter_ready", "source": "linkedin",
                   "url": "https://www.linkedin.com/jobs/view/1", "description": "FastAPI services."},
                  {"id": "ql", "title": "Data Analyst", "company": "Quillon", "status": "waiting", "url": "", "description": "SQL reports."},
@@ -477,6 +480,10 @@ def test_area_a_long_form_is_filled_in_as_far_as_is_safe():
     assert state["a7"] == "602 00" and state["a8"] == "Brno" and state["a10"] == MINE["github"] and state["a13"] == "Northwind"
     assert state["a9"] == "cz" and "Country" in out["filled"], "Czechia is chosen from a list that calls it Czech Republic"
     assert state["a5"] == "" and "9 characters" in out["left"]["Mobile"], "a number that does not fit even without spaces is left"
+    # the rows of jobs and degrees: your current job first, then the earlier one
+    assert state["a13"] == "Northwind", "the current employer, asked on its own"
+    assert (state["w1"], state["w2"], state["w3"], state["w4"]) == ("Northwind", "Junior analyst", "Old Mill", "Intern"), "each row gets one job, whole"
+    assert (state["e1"], state["e2"], state["e3"]) == ("Masaryk University", "Master", "Applied informatics")
     # lists, radio buttons and a number
     assert state["a4"] == "+420", "the country code is read off your phone number"
     assert state["a19"] == "1" and out["filled"]["Notice period"]["value"] == "1 month", "from My details, without asking Claude"
@@ -488,9 +495,9 @@ def test_area_a_long_form_is_filled_in_as_far_as_is_safe():
     assert all(out["filled"][label]["check"] == form_choices.CHECK and state[key + "#outline"] == "amber"
                for label, key in (("Notice period", "a19"), ("Highest level of education", "a20"), ("Years of experience with SQL", "a12")))
     assert state["a11"] == "" and out["left"]["Earliest start date"] == form_fill.DATE
-    assert state["a15"].startswith("I expect about [your figure]") and state["a15#outline"] == "amber" and out["filled"]["Salary expectation (gross, per month)"]["check"]
+    assert state["a15"] == "60 000 CZK gross per month" and state["a15#outline"] == "green", "the figure and currency from My details, no draft"
     assert state["a16"] != "" and state["a17"] == "" and "same question" in out["left"]["Why do you want this role?"]
-    assert len(out["asked"]) == form_answers.MAX_QUESTIONS and sum(1 for why in out["left"].values() if why == form_fill.TOO_MANY) == 5
+    assert len(out["asked"]) == form_answers.MAX_QUESTIONS and sum(1 for why in out["left"].values() if why == form_fill.TOO_MANY) == 3
     assert state["a40"] == "" and state["a41"] == 0 and state["a42"] == "" and state["a43"] == ""
     assert out["left"]["National ID number"] == form_fill.PRIVATE and out["left"]["Create a password for your candidate account"] == form_fill.PASSWORD
 
@@ -818,6 +825,10 @@ def test_what_a_form_is_given_from_the_lists():
         (1, "Northwind"), (2, "Junior analyst"), (3, "Evening School"), (4, "Tutor"), (5, "Old Mill"), (6, "Intern"),
         (8, "Masaryk University"), (9, "Master"), (10, "Applied informatics"), (11, "Masaryk University"), (12, "Bachelor"), (14, "60 000 CZK gross per month")]
     assert todo["left"] == [{"label": "Company", "why": form_fill.MORE_ROWS.format(have="3 jobs")}, {"label": "School", "why": form_fill.MORE_ROWS.format(have="2 degrees")}]
+    ragged = form_fill.plan([_field("Current employer", n=1), _field("Company", n=2), _field("Job title", n=3), _field("Job title", n=4), _field("Company", n=5),
+                             _field("Current job title", n=6)], FULL)
+    assert [(f["n"], f["value"]) for f in ragged["fill"]] == [(1, "Northwind"), (2, "Northwind"), (3, "Junior analyst"), (4, "Tutor"), (5, "Evening School"),
+                                                              (6, "Junior analyst")], "a row ends where one of its fields comes round again"
     assert form_fill.plan([_field("Company", n=1)], MINE)["left"] == [{"label": "Company", "why": form_fill.NO_DETAIL.format(what="jobs")}]
     assert "Job: Junior analyst at Northwind" in form_choices.facts_block(CV, FULL, None) and "Education: Master" in form_choices.facts_block(CV, FULL, None)
 

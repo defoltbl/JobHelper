@@ -52,6 +52,24 @@ Dialog {
     ListModel { id: filledModel }         // {label, value, kind, check}
     ListModel { id: leftModel }           // {label, why}
     ListModel { id: fieldModel }          // {key, label, most, value, fromCv}
+    ListModel { id: jobModel }            // {employer, title, start, end, current}
+    ListModel { id: schoolModel }         // {school, degree, field, start, end}
+    ListModel { id: fileModel }           // {label, path, name}
+    ListModel { id: answerModel }         // {question, answer, was, check, dirty, err}
+    property string salaryAmount: ""      // digits, "" = no figure
+    property string salaryCurrency: "CZK"
+    property string salaryPeriod: "month"
+    property var currencies: ["CZK"]
+    property int maxRows: 15
+    property bool confirmCv: false        // "Read from my CV" was pressed once and would replace rows
+    property var starters: []             // questions most forms ask, not answered yet
+    property string answersNote: ""
+    property string answersErr: ""
+    readonly property var jobCols: [{ key: "employer", label: "Employer", most: 100 }, { key: "title", label: "Job title", most: 100 },
+                                    { key: "start", label: "From", most: 10, hint: "03/2023" }, { key: "end", label: "To", most: 10, hint: "2024" }]
+    readonly property var schoolCols: [{ key: "school", label: "University or school", most: 120 }, { key: "degree", label: "Degree", most: 120 },
+                                       { key: "field", label: "Field of study", most: 120 }, { key: "start", label: "From", most: 10, hint: "2019" },
+                                       { key: "end", label: "To", most: 10, hint: "2023" }]
 
     function say(who, text, bad) {
         talk.append({ who: who, text: text, bad: bad === true });
@@ -61,7 +79,7 @@ Dialog {
         askErr = ""; confirmClose = false; busy = false;
         jobs = [{ id: "", label: "Find the job from the page" }].concat(bridge.assistantJobs());
         jobBox.currentIndex = 0; jobId = "";
-        loadDetails();
+        loadDetails(); loadAnswers();
         remembered = bridge.assistantMemory().count || 0; confirmForget = false;
         if (talk.count === 0)
             say("bot", detailsSaved ? "Hi! Open an application form in Chrome, bring its tab to the front, then ask me to fill it in."
@@ -120,6 +138,11 @@ Dialog {
             problem = { field: "", msg: "You changed your details and did not save them. Press Save, or Close once more to discard the change." };
             return;
         }
+        if (unsavedAnswers() > 0 && !confirmClose) {
+            confirmClose = true; page = "answers"; answersNote = "";
+            answersErr = unsavedAnswers() + (unsavedAnswers() === 1 ? " answer is" : " answers are") + " not saved. Press Save on each, or Close once more to discard the changes.";
+            return;
+        }
         dirty = false; close();
     }
     // ── My details ──
@@ -130,29 +153,149 @@ Dialog {
         for (var i = 0; i < fields.length; i++)
             fieldModel.append({ key: fields[i].key, label: fields[i].label, most: fields[i].most,
                                 value: shown[fields[i].key] || "", fromCv: fromCv.indexOf(fields[i].key) >= 0 });
+        fillRows(jobModel, (d && d.experience) || [], jobCols, true);
+        fillRows(schoolModel, (d && d.education) || [], schoolCols, false);
+        fileModel.clear();
+        var files = (d && d.files) || [];
+        for (var f = 0; f < files.length; f++) fileModel.append({ label: files[f].label, path: files[f].path, name: files[f].name });
+        salaryAmount = d && d.salary_amount > 0 ? "" + d.salary_amount : "";
+        salaryCurrency = (d && d.salary_currency) || "CZK"; salaryPeriod = (d && d.salary_period) || "month";
+        currencies = (d && d.currencies) || ["CZK"]; maxRows = (d && d.max_rows) || 15;
         detailsSaved = !!(d && d.saved); offered = fromCv.length;
-        dirty = false; problem = ({}); detailsNote = ""; confirmClose = false;
+        dirty = false; problem = ({}); detailsNote = ""; confirmClose = false; confirmCv = false;
+    }
+    function fillRows(model, rows, cols, withCurrent) {
+        model.clear();
+        for (var i = 0; i < rows.length; i++) {
+            var row = {};
+            for (var c = 0; c < cols.length; c++) row[cols[c].key] = rows[i][cols[c].key] || "";
+            if (withCurrent) row.current = rows[i].current === true;
+            model.append(row);
+        }
+    }
+    function rowsOf(model, cols, withCurrent) {
+        var out = [];
+        for (var i = 0; i < model.count; i++) {
+            var row = {}, kept = model.get(i);
+            for (var c = 0; c < cols.length; c++) row[cols[c].key] = kept[cols[c].key];
+            if (withCurrent) row.current = kept.current === true;
+            out.push(row);
+        }
+        return out;
     }
     function values() {
         var out = {};
         for (var i = 0; i < fieldModel.count; i++) out[fieldModel.get(i).key] = fieldModel.get(i).value;
+        out.experience = rowsOf(jobModel, jobCols, true);
+        out.education = rowsOf(schoolModel, schoolCols, false);
+        out.files = [];
+        for (var f = 0; f < fileModel.count; f++) out.files.push({ label: fileModel.get(f).label, path: fileModel.get(f).path });
+        out.salary_amount = salaryAmount.trim() === "" ? 0 : salaryAmount;
+        out.salary_currency = salaryCurrency; out.salary_period = salaryPeriod;
         return out;
+    }
+    function touched() {                  // something on the page changed: check it all again
+        dirty = true; detailsNote = ""; confirmClose = false; confirmCv = false;
+        problem = bridge.checkMyDetails(JSON.stringify(values()));
+    }
+    function addRow(model, cols, withCurrent) {
+        if (model.count >= maxRows) { problem = { field: "", msg: "That is the most rows this list takes (" + maxRows + "). Remove an old one first." }; return; }
+        var row = {};
+        for (var c = 0; c < cols.length; c++) row[cols[c].key] = "";
+        if (withCurrent) row.current = false;
+        model.append(row); dirty = true; detailsNote = "";
+    }
+    function setRow(model, index, key, value) { model.setProperty(index, key, value); touched(); }
+    function setSalary(amount, currency, period) { salaryAmount = "" + amount; salaryCurrency = currency; salaryPeriod = period; touched(); }
+    function addFile(url) {
+        var path = bridge.localFile(url);
+        if (path === "") { problem = { field: "files", msg: "That is not a file on this Mac. Choose a file, such as a PDF of a certificate." }; return; }
+        for (var i = 0; i < fileModel.count; i++)
+            if (fileModel.get(i).path === path) { problem = { field: "files." + i, msg: "That file is in the list already." }; return; }
+        var name = path.split("/").pop();
+        fileModel.append({ label: name.replace(/\.[^.]+$/, ""), path: path, name: name });
+        touched();
+    }
+    function readCv() {                   // jobs and degrees, copied from the CV by Claude; never over rows without asking
+        if (busy) return;
+        if ((jobModel.count > 0 || schoolModel.count > 0) && !confirmCv) {
+            confirmCv = true; detailsNote = "";
+            problem = { field: "", msg: "Reading from your CV replaces the jobs and degrees listed here. Press Read from my CV once more to go on." };
+            return;
+        }
+        confirmCv = false; problem = ({});
+        say("you", "Read my jobs and degrees from my CV", false);
+        busy = true; bridge.assistantDo("cv_lists", "", "");
+    }
+    // ── My answers ──
+    function loadAnswers() {
+        var d = bridge.myAnswers();
+        answerModel.clear();
+        var items = (d && d.items) || [];
+        for (var i = 0; i < items.length; i++)
+            answerModel.append({ question: items[i].question, answer: items[i].answer, was: items[i].question, check: "", dirty: false, err: "" });
+        starters = (d && d.starters) || [];
+        answersNote = ""; answersErr = "";
+    }
+    function addAnswer(question) {
+        for (var i = 0; i < answerModel.count; i++)
+            if (answerModel.get(i).question.trim().toLowerCase() === (question || "").trim().toLowerCase() && question !== "") { answersErr = "That question is in the list already."; return; }
+        answerModel.insert(0, { question: question || "", answer: "", was: "", check: "", dirty: true, err: "" });
+        answersErr = ""; answersNote = "";
+        var left = [];
+        for (var s = 0; s < starters.length; s++) if (starters[s] !== question) left.push(starters[s]);
+        starters = left;
+        answersFlick.contentY = 0;
+    }
+    function setAnswer(index, key, value) {
+        answerModel.setProperty(index, key, value); answerModel.setProperty(index, "dirty", true); answerModel.setProperty(index, "err", "");
+        answersNote = ""; answersErr = "";
+    }
+    function unsavedAnswers() { var n = 0; for (var i = 0; i < answerModel.count; i++) if (answerModel.get(i).dirty) n++; return n; }
+    function saveAnswer(index) {
+        var row = answerModel.get(index);
+        var r = bridge.saveMyAnswer(row.question, row.answer, row.was);
+        if (!(r && r.ok)) { answerModel.setProperty(index, "err", (r && r.msg) || "That answer could not be kept."); return; }
+        answerModel.setProperty(index, "was", row.question.trim()); answerModel.setProperty(index, "dirty", false);
+        answerModel.setProperty(index, "err", ""); answerModel.setProperty(index, "check", "");
+        remembered = bridge.assistantMemory().count || 0;
+        answersNote = "Kept. The next form that asks this gets your wording, with no Claude call.";
+    }
+    function removeAnswer(index) {
+        var row = answerModel.get(index);
+        if (row.was !== "") bridge.deleteMyAnswer(row.was);
+        answerModel.remove(index);
+        remembered = bridge.assistantMemory().count || 0;
+        answersNote = "Removed."; answersErr = "";
+    }
+    function draftAnswer(index) {
+        if (busy) { answerModel.setProperty(index, "err", "I am still working on the last request. Wait for the answer."); return; }
+        var row = answerModel.get(index);
+        if (row.question.trim() === "") { answerModel.setProperty(index, "err", "Write the question first."); return; }
+        if (row.answer.trim() !== "" && row.check !== "replace") {
+            answerModel.setProperty(index, "check", "replace");
+            answerModel.setProperty(index, "err", "A draft replaces what is written here. Press Draft with Claude once more to go on."); return;
+        }
+        answerModel.setProperty(index, "err", ""); answerModel.setProperty(index, "check", "");
+        say("you", "Draft an answer: " + row.question, false);
+        busy = true; bridge.assistantDo("draft", row.question, "");
     }
     function setField(key, value) {       // what typing in a field does
         for (var i = 0; i < fieldModel.count; i++) if (fieldModel.get(i).key === key) fieldModel.setProperty(i, "value", value);
-        dirty = true; detailsNote = ""; confirmClose = false;
-        problem = bridge.checkMyDetails(values());
+        touched();
     }
     function saveDetails() {
         confirmClose = false; detailsNote = "";
-        var empty = true, all = values();
-        for (var k in all) if (String(all[k]).trim() !== "") empty = false;
+        var empty = jobModel.count === 0 && schoolModel.count === 0 && fileModel.count === 0, all = values();
+        for (var i = 0; i < fieldModel.count; i++) if (String(fieldModel.get(i).value).trim() !== "") empty = false;
         if (empty && !detailsSaved) { problem = { field: "first_name", msg: "Every field is empty. Fill in at least your name and email, then save." }; return; }
-        var r = bridge.saveMyDetails(all);
+        var r = bridge.saveMyDetails(JSON.stringify(all));
         if (!(r && r.ok)) { problem = { field: (r && r.field) || "", msg: (r && r.msg) || "Your details could not be saved." }; return; }
         loadDetails();
         detailsNote = "Saved, encrypted on this Mac. Forms are filled in with exactly this.";
     }
+    FileDialog { id: filePick; title: "Choose a file a form may ask for"
+        onAccepted: assistantDialog.addFile("" + selectedFile) }
     Connections { target: bridge
         function onFormWatched(res) {
             if (!res.ok || assistantDialog.busy || assistantDialog.watchSign === "" || assistantDialog.nextPage) return;
@@ -166,7 +309,24 @@ Dialog {
             assistantDialog.busy = false;
             if (res.action === "details") assistantDialog.page = "details";
             if (res.action === "fill") assistantDialog.last = res;
-            if (res.action === "learn" || res.action === "forget") assistantDialog.remembered = bridge.assistantMemory().count || 0;
+            if (res.action === "learn" || res.action === "forget") { assistantDialog.remembered = bridge.assistantMemory().count || 0; assistantDialog.loadAnswers(); }
+            if (res.action === "cv_lists") {              // offered in the page, not saved
+                if (res.ok) {
+                    assistantDialog.fillRows(jobModel, res.experience || [], assistantDialog.jobCols, true);
+                    assistantDialog.fillRows(schoolModel, res.education || [], assistantDialog.schoolCols, false);
+                    assistantDialog.touched();
+                    assistantDialog.detailsNote = "Read from your CV, not saved yet: check every line, then save.";
+                } else assistantDialog.problem = { field: "", msg: res.msg || "That did not work." };
+            }
+            if (res.action === "draft") {
+                for (var a = 0; a < answerModel.count; a++) {
+                    if (answerModel.get(a).question.trim() !== (res.question || answerModel.get(a).question).trim() && res.ok) continue;
+                    if (res.ok) { answerModel.setProperty(a, "answer", res.answer); answerModel.setProperty(a, "dirty", true);
+                                  answerModel.setProperty(a, "check", res.check || ""); answerModel.setProperty(a, "err", ""); assistantDialog.answersNote = res.say || ""; }
+                    else if (answerModel.get(a).dirty || answerModel.count === 1) { answerModel.setProperty(a, "err", res.msg || "That did not work."); break; }
+                }
+                if (!res.ok) assistantDialog.answersErr = res.msg || "That did not work.";
+            }
             if (!res.ok) { stagePanel.assistant.shake(); assistantDialog.say("bot", res.msg || "That did not work.", true); return; }
             stagePanel.assistant.nod();
             assistantDialog.say("bot", res.say || "Done.", false);
@@ -200,6 +360,8 @@ Dialog {
             SmallButton { objectName: "asPageAsk"; text: "Ask"; primaryStyle: assistantDialog.page === "ask"; onClicked: assistantDialog.page = "ask" }
             SmallButton { objectName: "asPageDetails"; text: assistantDialog.dirty ? "My details •" : "My details"
                 primaryStyle: assistantDialog.page === "details"; onClicked: assistantDialog.page = "details" }
+            SmallButton { objectName: "asPageAnswers"; text: "My answers" + (answerModel.count > 0 ? " (" + answerModel.count + ")" : "")
+                primaryStyle: assistantDialog.page === "answers"; onClicked: assistantDialog.page = "answers" }
             Item { Layout.fillWidth: true }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
@@ -290,6 +452,72 @@ Dialog {
             }
         }
 
+        // ── My answers ──
+        ColumnLayout { visible: assistantDialog.page === "answers"; Layout.fillWidth: true; Layout.fillHeight: true; spacing: 0
+            Flickable {
+                id: answersFlick
+                Layout.fillWidth: true; Layout.fillHeight: true; clip: true
+                contentHeight: answersCol.implicitHeight + 28; boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar {}
+                FocusCatcher {}                // a press on empty space in the scroll area
+                ColumnLayout {
+                    id: answersCol
+                    x: 16; y: 14; width: answersFlick.width - 32; spacing: 10
+                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
+                        text: "Questions that forms ask whatever the company, answered once in your own words. Claude can draft an answer from your CV; it counts as yours once you read it and save it. A question about one company (“Why do you want to work here?”) is drafted for each job when its form is filled in." }
+                    RowLayout { Layout.fillWidth: true; spacing: 6
+                        Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 12; font.bold: true
+                            text: answerModel.count === 0 ? "No answers of your own yet." : answerModel.count + (answerModel.count === 1 ? " answer" : " answers") }
+                        SmallButton { objectName: "asAddAnswer"; text: "Add a question"; onClicked: assistantDialog.addAnswer("") } }
+                    Flow { Layout.fillWidth: true; spacing: 6; visible: assistantDialog.starters.length > 0
+                        Repeater { model: assistantDialog.starters
+                            SmallButton { text: "+ " + modelData; onClicked: assistantDialog.addAnswer(modelData) } } }
+                    Repeater {
+                        model: answerModel
+                        Rectangle { Layout.fillWidth: true; radius: 12; color: theme.surface2; border.width: 1
+                            border.color: model.err !== "" ? theme.crit : (model.dirty ? theme.warn : theme.line)
+                            implicitHeight: ansItem.implicitHeight + 24
+                            ColumnLayout { id: ansItem; x: 12; y: 12; width: parent.width - 24; spacing: 6
+                                TextField { id: qBox; Layout.fillWidth: true; implicitHeight: 32; color: theme.ink; font.pixelSize: 13; font.bold: true; selectByMouse: true
+                                    placeholderText: "The question, as a form asks it"; placeholderTextColor: theme.faint
+                                    Component.onCompleted: text = model.question
+                                    background: Rectangle { radius: 7; color: theme.surface; border.width: 1; border.color: qBox.activeFocus ? theme.accent : theme.line }
+                                    onTextEdited: assistantDialog.setAnswer(index, "question", text) }
+                                Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
+                                    border.color: aBox.text.length > 3000 ? theme.crit : (aBox.activeFocus ? theme.accent : theme.line)
+                                    implicitHeight: Math.max(64, aBox.implicitHeight + 16)
+                                    TextEdit { id: aBox; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap; selectByMouse: true
+                                        color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
+                                        text: model.answer
+                                        onTextChanged: if (activeFocus) assistantDialog.setAnswer(index, "answer", text)
+                                        Text { visible: aBox.text === ""; text: "Your answer"; color: theme.faint; font.pixelSize: 12 } } }
+                                Text { visible: model.err !== "" || (model.check !== "" && model.check !== "replace"); Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    color: model.err !== "" ? theme.crit : theme.warn; font.pixelSize: 11; font.bold: true
+                                    text: model.err !== "" ? model.err : "Check: " + model.check }
+                                RowLayout { Layout.fillWidth: true; spacing: 6
+                                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
+                                        text: model.dirty ? "Not saved yet." : "Kept: used when a form asks this." }
+                                    SmallButton { enabled: !assistantDialog.busy; text: assistantDialog.busy ? "Asking Claude…" : "Draft with Claude"
+                                        onClicked: assistantDialog.draftAnswer(index) }
+                                    SmallButton { text: "Remove"; onClicked: assistantDialog.removeAnswer(index) }
+                                    SmallButton { primaryStyle: true; visible: model.dirty; text: "Save"; onClicked: assistantDialog.saveAnswer(index) } }
+                            }
+                        }
+                    }
+                }
+            }
+            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
+            RowLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 6
+                Text { objectName: "asAnswersNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                    font.pixelSize: assistantDialog.answersErr !== "" ? 12 : 11; font.bold: assistantDialog.answersErr !== ""
+                    color: assistantDialog.answersErr !== "" ? theme.crit : (assistantDialog.answersNote !== "" ? theme.good : theme.faint)
+                    text: assistantDialog.answersErr !== "" ? assistantDialog.answersErr
+                        : assistantDialog.answersNote !== "" ? assistantDialog.answersNote
+                        : "Kept encrypted on this Mac. Each one is marked for checking when it is used in a form." }
+                SmallButton { text: "Close"; onClicked: assistantDialog.tryClose() }
+            }
+        }
+
         // ── My details ──
         ColumnLayout { visible: assistantDialog.page === "details"; Layout.fillWidth: true; Layout.fillHeight: true; spacing: 0
             Flickable {
@@ -331,6 +559,72 @@ Dialog {
                             }
                         }
                     }
+
+                    // ── the jobs you have had ──
+                    RowLayout { Layout.fillWidth: true; Layout.topMargin: 8; spacing: 6
+                        GroupTitle { text: "Work experience"; Layout.fillWidth: true }
+                        SmallButton { objectName: "asReadCv"; enabled: !assistantDialog.busy
+                            text: assistantDialog.busy ? "Reading…" : "Read from my CV"; onClicked: assistantDialog.readCv() }
+                        SmallButton { objectName: "asAddJob"; text: "Add a job"; onClicked: assistantDialog.addRow(jobModel, assistantDialog.jobCols, true) } }
+                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
+                        text: jobModel.count === 0 ? "No jobs listed. Forms that ask for your employer and job title are filled in from this list; several jobs may be current at once."
+                              : "A form with several “Company” fields gets these in order: the current jobs first, then the others as listed here." }
+                    RowsEditor { objectName: "asJobs"; Layout.fillWidth: true; store: jobModel; cols: assistantDialog.jobCols; listName: "experience"; withCurrent: true
+                        problem: assistantDialog.problem; onChanged: assistantDialog.touched() }
+
+                    // ── degrees ──
+                    RowLayout { Layout.fillWidth: true; Layout.topMargin: 8; spacing: 6
+                        GroupTitle { text: "Education"; Layout.fillWidth: true }
+                        SmallButton { objectName: "asAddSchool"; text: "Add a degree"; onClicked: assistantDialog.addRow(schoolModel, assistantDialog.schoolCols, false) } }
+                    Text { visible: schoolModel.count === 0; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
+                        text: "No degrees listed. Add each one: the highest first, as forms ask for them." }
+                    RowsEditor { objectName: "asSchools"; Layout.fillWidth: true; store: schoolModel; cols: assistantDialog.schoolCols; listName: "education"
+                        problem: assistantDialog.problem; onChanged: assistantDialog.touched() }
+
+                    // ── the salary you ask for ──
+                    GroupTitle { text: "Salary expectation"; Layout.topMargin: 8 }
+                    RowLayout { Layout.fillWidth: true; spacing: 8
+                        TextField { id: payBox; objectName: "asSalary"; Layout.preferredWidth: 150; implicitHeight: 32; color: theme.ink; font.pixelSize: 12; selectByMouse: true
+                            placeholderText: "60000"; placeholderTextColor: theme.faint
+                            text: assistantDialog.salaryAmount
+                            background: Rectangle { radius: 7; color: theme.surface; border.width: 1
+                                border.color: assistantDialog.problem.field === "salary" ? theme.crit : (payBox.activeFocus ? theme.accent : theme.line) }
+                            onTextEdited: { assistantDialog.salaryAmount = text; assistantDialog.touched(); } }
+                        ThemedCombo { objectName: "asCurrency"; plainText: true; Layout.preferredWidth: 96; model: assistantDialog.currencies
+                            currentIndex: Math.max(0, assistantDialog.currencies.indexOf(assistantDialog.salaryCurrency))
+                            onActivated: { assistantDialog.salaryCurrency = assistantDialog.currencies[currentIndex]; assistantDialog.touched(); } }
+                        ThemedCombo { objectName: "asPeriod"; plainText: true; Layout.preferredWidth: 130; model: ["per month", "per year"]
+                            currentIndex: assistantDialog.salaryPeriod === "year" ? 1 : 0
+                            onActivated: { assistantDialog.salaryPeriod = currentIndex === 1 ? "year" : "month"; assistantDialog.touched(); } }
+                        Item { Layout.fillWidth: true } }
+                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
+                        color: assistantDialog.problem.field === "salary" ? theme.crit : theme.faint; font.bold: assistantDialog.problem.field === "salary"
+                        text: assistantDialog.problem.field === "salary" ? (assistantDialog.problem.msg || "")
+                            : assistantDialog.salaryAmount.trim() === "" ? "Gross, as a whole number. Left empty, a form that asks is answered from the figure in Options, or left to you."
+                            : "A form that asks gets: " + assistantDialog.salaryAmount.trim().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " " + assistantDialog.salaryCurrency + " gross per " + assistantDialog.salaryPeriod + "." }
+
+                    // ── files a form may ask for besides the CV ──
+                    RowLayout { Layout.fillWidth: true; Layout.topMargin: 8; spacing: 6
+                        GroupTitle { text: "Files for forms"; Layout.fillWidth: true }
+                        SmallButton { objectName: "asAddFile"; text: "Add a file…"; onClicked: filePick.open() } }
+                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
+                        text: "Certificates, diplomas, references. A page cannot be handed a file, so after a fill the assistant shows these in Finder, with the CV and letter, for you to drag onto the form." }
+                    Repeater {
+                        model: fileModel
+                        ColumnLayout { id: fileRow; Layout.fillWidth: true; spacing: 2
+                            readonly property bool wrong: assistantDialog.problem.field === "files." + index
+                            RowLayout { Layout.fillWidth: true; spacing: 8
+                                TextField { id: fileBox; Layout.preferredWidth: 220; implicitHeight: 30; color: theme.ink; font.pixelSize: 12; selectByMouse: true
+                                    Component.onCompleted: text = model.label
+                                    background: Rectangle { radius: 7; color: theme.surface; border.width: 1
+                                        border.color: fileRow.wrong ? theme.crit : (fileBox.activeFocus ? theme.accent : theme.line) }
+                                    onTextEdited: { fileModel.setProperty(index, "label", text); assistantDialog.touched(); } }
+                                Text { Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; color: theme.soft; font.pixelSize: 12; text: model.name }
+                                SmallButton { text: "Remove"; onClicked: { fileModel.remove(index); assistantDialog.touched(); } } }
+                            Text { visible: fileRow.wrong; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true
+                                text: assistantDialog.problem.msg || "" } } }
+                    Text { visible: assistantDialog.problem.field === "files"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true
+                        text: assistantDialog.problem.msg || "" }
                 }
             }
             Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }

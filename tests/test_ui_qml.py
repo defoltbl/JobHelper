@@ -3472,3 +3472,126 @@ def test_every_window_with_a_text_field_lets_go_of_it():
         for scroll in re.findall(r"\n( +)Flickable \{\n(?:.*\n){0,6}?\1    (\w+) \{", text):
             if "FocusCatcher {}" in text:
                 assert scroll[1] in ("FocusCatcher", "MouseArea"), f"{path.name}: a scroll area without a FocusCatcher as its first child"
+
+
+def _listed(value):
+    """A list property of a window, whichever way Qt hands it over."""
+    return list(value.toVariant()) if hasattr(value, "toVariant") else list(value)
+
+
+def test_my_details_takes_several_jobs_degrees_a_salary_with_its_currency_and_files(ui, monkeypatch, tmp_path):
+    from jobhelper import details
+    details.path().unlink(missing_ok=True)
+    dialog = ui.find("assistantDialog")
+    ui.js("assistantDialog.show()")
+    ui.wait(450)
+    ui.js('assistantDialog.page = "details"')
+    ui.js('assistantDialog.setField("first_name", "Alex"); assistantDialog.setField("last_name", "Novak")')
+    # jobs: any number, several may be current
+    for _ in range(3):
+        ui.js("assistantDialog.addRow(jobModel, assistantDialog.jobCols, true)")
+    assert ui.js("jobModel.count") == 3 and dialog.property("dirty")
+    ui.js('assistantDialog.setRow(jobModel, 0, "employer", "Old Mill")')
+    assert ui.js("assistantDialog.problem.field") == "experience.0.title" and "missing" in ui.find("asDetailsNote").property("text")
+    ui.js('assistantDialog.setRow(jobModel, 0, "title", "Intern"); assistantDialog.setRow(jobModel, 0, "start", "2020"); assistantDialog.setRow(jobModel, 0, "end", "2019")')
+    assert ui.js("assistantDialog.problem.field") == "experience.0.end" and "earlier" in ui.js("assistantDialog.problem.msg")
+    ui.js('assistantDialog.setRow(jobModel, 0, "end", "2021")')
+    ui.js('assistantDialog.setRow(jobModel, 1, "employer", "Northwind"); assistantDialog.setRow(jobModel, 1, "title", "Junior analyst"); assistantDialog.setRow(jobModel, 1, "current", true)')
+    ui.js('assistantDialog.setRow(jobModel, 2, "employer", "Evening School"); assistantDialog.setRow(jobModel, 2, "title", "Tutor"); assistantDialog.setRow(jobModel, 2, "current", true)')
+    ui.js('assistantDialog.setRow(jobModel, 2, "start", "last year")')
+    assert ui.js("assistantDialog.problem.field") == "experience.2.start"
+    ui.js("assistantDialog.saveDetails()")
+    assert not details.path().exists(), "nothing is saved while a line is wrong"
+    ui.js('assistantDialog.setRow(jobModel, 2, "start", "2022")')
+    assert ui.js("!assistantDialog.problem.msg")
+    # degrees
+    ui.js("assistantDialog.addRow(schoolModel, assistantDialog.schoolCols, false); assistantDialog.addRow(schoolModel, assistantDialog.schoolCols, false)")
+    ui.js('assistantDialog.setRow(schoolModel, 0, "school", "Masaryk University"); assistantDialog.setRow(schoolModel, 0, "degree", "Master")')
+    ui.js('assistantDialog.setRow(schoolModel, 1, "degree", "Bachelor")')
+    assert ui.js("assistantDialog.problem.field") == "education.1.school"
+    ui.js('assistantDialog.setRow(schoolModel, 1, "school", "Masaryk University")')
+    # salary: a figure and a currency
+    assert _listed(dialog.property("currencies"))[:4] == ["CZK", "EUR", "USD", "GBP"]
+    ui.js('assistantDialog.setSalary("a lot", "EUR", "year")')
+    assert ui.js("assistantDialog.problem.field") == "salary" and "whole number" in ui.js("assistantDialog.problem.msg")
+    ui.js('assistantDialog.setSalary("52000", "EUR", "year")')
+    # files
+    paper = tmp_path / "AWS certificate.pdf"
+    paper.write_bytes(b"x")
+    ui.js(f'assistantDialog.addFile("file://{tmp_path}/missing.pdf")')
+    assert ui.js("fileModel.count") == 0 and "not a file" in ui.js("assistantDialog.problem.msg")
+    ui.js(f'assistantDialog.addFile("{paper.as_uri()}")')
+    ui.js(f'assistantDialog.addFile("{paper.as_uri()}")')
+    assert ui.js("fileModel.count") == 1 and ui.js("fileModel.get(0).label") == "AWS certificate" and "already" in ui.js("assistantDialog.problem.msg")
+    ui.js("assistantDialog.touched()")
+    ui.wait(300)
+    assert ui.find("asJobs").property("visible") and ui.find("asSchools").property("visible") and ui.warnings == []
+    ui.js("assistantDialog.saveDetails()")
+    kept = details.load()
+    assert [j["employer"] for j in kept["experience"]] == ["Old Mill", "Northwind", "Evening School"] and [j["current"] for j in kept["experience"]] == [False, True, True]
+    assert [s["degree"] for s in kept["education"]] == ["Master", "Bachelor"] and details.salary_text(kept) == "52 000 EUR gross per year"
+    assert kept["files"] == [{"label": "AWS certificate", "path": str(paper)}] and not dialog.property("dirty")
+    assert ui.js("jobModel.count") == 3 and ui.js("jobModel.get(1).current") is True and dialog.property("salaryCurrency") == "EUR", "read back as it was saved"
+    # the same from the CV, with Claude: offered, never over your rows without asking
+    monkeypatch.setattr(ui_api.Api, "assistant_cv_lists", lambda self: {"ok": True, "say": "I read 1 jobs and 1 degrees from your CV.",
+        "experience": [{"employer": "Riverside Labs", "title": "Developer", "start": "2024", "end": "", "current": True}],
+        "education": [{"school": "Charles University", "degree": "Master", "field": "Computer science", "start": "2019", "end": "2021"}]})
+    ui.js("assistantDialog.readCv()")
+    assert not dialog.property("busy") and "replaces the jobs and degrees" in ui.js("assistantDialog.problem.msg") and ui.js("jobModel.count") == 3
+    ui.js("assistantDialog.readCv()")
+    _wait_idle(ui, dialog)
+    assert ui.js("jobModel.count") == 1 and ui.js("jobModel.get(0).employer") == "Riverside Labs" and ui.js("schoolModel.get(0).field") == "Computer science"
+    assert dialog.property("dirty") and "not saved yet" in ui.find("asDetailsNote").property("text")
+    assert [j["employer"] for j in details.load()["experience"]] == ["Old Mill", "Northwind", "Evening School"], "offered, not saved"
+    ui.js("assistantDialog.tryClose()")
+    assert dialog.property("opened"), "unsaved rows: asked once"
+    ui.js("assistantDialog.tryClose()")
+    ui.wait(400)
+    details.path().unlink(missing_ok=True)
+    assert dialog.property("visible") is False and ui.warnings == []
+
+
+def test_my_answers_are_written_drafted_saved_and_removed(ui, monkeypatch):
+    from jobhelper import answer_memory
+    answer_memory.forget_all()
+    dialog = ui.find("assistantDialog")
+    ui.js("assistantDialog.show()")
+    ui.wait(450)
+    ui.js('assistantDialog.page = "answers"')
+    assert ui.js("answerModel.count") == 0 and "When can you start?" in _listed(dialog.property("starters"))
+    ui.js('assistantDialog.addAnswer("When can you start?")')
+    assert ui.js("answerModel.count") == 1 and "When can you start?" not in _listed(dialog.property("starters"))
+    ui.js('assistantDialog.addAnswer("When can you start?")')
+    assert ui.js("answerModel.count") == 1 and "already" in ui.find("asAnswersNote").property("text")
+    ui.js("assistantDialog.saveAnswer(0)")
+    assert "empty" in ui.js("answerModel.get(0).err") and answer_memory.count() == 0
+    ui.js('assistantDialog.setAnswer(0, "answer", "On [date].")')
+    ui.js("assistantDialog.saveAnswer(0)")
+    assert "square brackets" in ui.js("answerModel.get(0).err")
+    ui.js('assistantDialog.setAnswer(0, "answer", "Two weeks after an offer.")')
+    ui.js("assistantDialog.saveAnswer(0)")
+    assert answer_memory.recall("When can you start?")["answer"] == "Two weeks after an offer." and ui.js("answerModel.get(0).dirty") is False
+    assert "Kept" in ui.find("asAnswersNote").property("text") and dialog.property("remembered") == 1
+    # a draft from the CV: not over your text without asking, and not kept until saved
+    monkeypatch.setattr(ui_api.Api, "draft_my_answer", lambda self, question: {
+        "ok": True, "question": question, "answer": "I am careful with data.", "check": "", "say": "Drafted from your CV. Read it, make it yours, then save."})
+    ui.js('assistantDialog.addAnswer("What are your strengths?")')
+    ui.js("assistantDialog.draftAnswer(0)")
+    _wait_idle(ui, dialog)
+    assert ui.js("answerModel.get(0).answer") == "I am careful with data." and ui.js("answerModel.get(0).dirty") is True and answer_memory.count() == 1
+    ui.js("assistantDialog.draftAnswer(0)")
+    assert not dialog.property("busy") and "replaces what is written" in ui.js("answerModel.get(0).err")
+    monkeypatch.setattr(ui_api.Api, "draft_my_answer", lambda self, question: {"ok": False, "field": "question", "msg": "This question is about one company."})
+    ui.js('assistantDialog.addAnswer("Why do you want to work here?")')
+    ui.js("assistantDialog.draftAnswer(0)")
+    _wait_idle(ui, dialog)
+    assert ui.js("answerModel.get(0).err") == "This question is about one company." and "one company" in ui.find("asAnswersNote").property("text")
+    ui.js("assistantDialog.tryClose()")
+    assert dialog.property("opened") and "not saved" in ui.find("asAnswersNote").property("text"), "unsaved answers: asked once"
+    ui.js("assistantDialog.removeAnswer(0); assistantDialog.removeAnswer(0)")
+    assert ui.js("answerModel.count") == 1 and ui.js("answerModel.get(0).question") == "When can you start?"
+    ui.js("assistantDialog.removeAnswer(0)")
+    assert answer_memory.count() == 0 and dialog.property("remembered") == 0
+    ui.js("assistantDialog.tryClose()")
+    ui.wait(400)
+    assert dialog.property("visible") is False and ui.warnings == []
