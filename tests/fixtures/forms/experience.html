@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>My Experience - Northwind careers</title>
+<style>label, .lbl { display: block; font-weight: bold; margin-top: 10px; } input, textarea { padding: 6px; } .date input { width: 48px; }</style></head>
+<body>
+<!-- A "My experience" page as a large applicant system draws it: inside each job its own Location and Role Description,
+     and dates split into a month box and a year box that are named only "Month" and "Year". -->
+<form id="f" onsubmit="window.sent = true; return false;">
+  <label for="mycity">City</label><input id="mycity" name="city">
+  <h2>Work Experience</h2>
+  <h3>Work Experience 1</h3>
+  <label for="t1">Job Title*</label><input id="t1" name="jobTitle-1">
+  <label for="c1">Company*</label><input id="c1" name="company-1">
+  <label for="l1">Location</label><input id="l1" name="location-1">
+  <label for="now1">I currently work here</label><input type="checkbox" id="now1" name="current-1">
+  <div><span class="lbl" id="f1l">From*</span><div class="date" role="group" aria-labelledby="f1l">
+    <input id="f1m" aria-label="Month" placeholder="MM" maxlength="2"><span>/</span><input id="f1y" aria-label="Year" placeholder="YYYY" maxlength="4"></div></div>
+  <div><span class="lbl" id="e1l">To*</span><div class="date" role="group" aria-labelledby="e1l">
+    <input id="e1m" aria-label="Month" placeholder="MM" maxlength="2"><span>/</span><input id="e1y" aria-label="Year" placeholder="YYYY" maxlength="4"></div></div>
+  <label for="d1">Role Description</label><textarea id="d1" name="description-1" rows="4" cols="60"></textarea>
+  <h3>Work Experience 2</h3>
+  <label for="t2">Job Title*</label><input id="t2" name="jobTitle-2">
+  <label for="c2">Company*</label><input id="c2" name="company-2">
+  <label for="l2">Location</label><input id="l2" name="location-2">
+  <label for="now2">I currently work here</label><input type="checkbox" id="now2" name="current-2">
+  <div><span class="lbl" id="f2l">From*</span><div class="date" role="group" aria-labelledby="f2l">
+    <input id="f2m" aria-label="Month" placeholder="MM" maxlength="2"><span>/</span><input id="f2y" aria-label="Year" placeholder="YYYY" maxlength="4"></div></div>
+  <div><span class="lbl" id="e2l">To*</span><div class="date" role="group" aria-labelledby="e2l">
+    <input id="e2m" aria-label="Month" placeholder="MM" maxlength="2"><span>/</span><input id="e2y" aria-label="Year" placeholder="YYYY" maxlength="4"></div></div>
+  <label for="d2">Role Description</label><textarea id="d2" name="description-2" rows="4" cols="60"></textarea>
+  <h2>Education</h2>
+  <label for="s1">School or University*</label><input id="s1" name="school-1">
+  <label for="sl1">Location</label><input id="sl1" name="schoolLocation-1">
+  <h2>About you</h2>
+  <label for="why">Why do you want to work at Northwind?</label><textarea id="why" name="why" rows="3" cols="60"></textarea>
+  <button id="send" type="submit" onclick="window.clicked = true">Save and Continue</button>
+</form>
+</body></html>

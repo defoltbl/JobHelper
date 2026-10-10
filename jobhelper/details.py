@@ -28,10 +28,13 @@ LABELS = {key: label for key, label, _most in FIELDS}
 LINKS = {"linkedin": "linkedin.com", "github": "github.com", "website": ""}
 
 # the lists: one row per job, one per degree. `start` and `end` are a year, or a month and a year.
-ROWS = {"experience": (("employer", "Employer", 100), ("title", "Job title", 100), ("start", "From", 10), ("end", "To", 10)),
+# A job also has where it was and what you did there: forms ask for both inside each job ("Location", "Role description").
+ROWS = {"experience": (("employer", "Employer", 100), ("title", "Job title", 100), ("start", "From", 10), ("end", "To", 10),
+                       ("location", "Where it was", 80), ("description", "What you did there", 2000)),
         "education": (("school", "University or school", 120), ("degree", "Degree", 120), ("field", "Field of study", 120),
                       ("start", "From", 10), ("end", "To", 10))}
 NEEDED = {"experience": ("employer", "title"), "education": ("school",)}
+LONG = ("description",)         # row fields that hold several lines
 WORD = {"experience": "job", "education": "degree"}
 MAX_ROWS, MAX_FILES, MAX_FILE_LABEL = 15, 20, 60
 PERIODS = ("month", "year")
@@ -118,7 +121,10 @@ def _rows(name: str, raw: Any) -> tuple[list[dict[str, Any]], dict[str, str]]:
             return [], {"field": f"{name}.{i}", "msg": f"Line {i + 1} of the {WORD[name]}s is not a row of fields."}
         clean: dict[str, Any] = {}
         for key, label, most in ROWS[name]:
-            value = " ".join(str(row.get(key) or "").split())
+            if key in LONG:                         # several lines: each tidied, the line breaks kept
+                value = "\n".join(line for line in (" ".join(part.split()) for part in str(row.get(key) or "").splitlines()) if line)
+            else:
+                value = " ".join(str(row.get(key) or "").split())
             if len(value) > most:
                 return [], {"field": f"{name}.{i}.{key}", "msg": f"“{label}” is {len(value)} characters long; the most is {most}."}
             if key in ("start", "end") and value and not _WHEN.fullmatch(value):
@@ -297,10 +303,13 @@ Rules:
 - "start" and "end" as the CV gives them, written as YYYY or MM/YYYY; "" when the CV does not say;
 - "current" is true only when the CV says the job goes on (present, now, current, no end date beside a start date);
 - names of employers, titles, schools and degrees exactly as the CV writes them;
+- "location" is the place the CV gives for that job (a city, a country, "Remote"); "" when it gives none;
+- "description" is what the CV writes under that job: its lines or bullet points copied word for word, one per line,
+  without the bullet signs; "" when the CV writes nothing under it. Never a summary, and nothing from the profile at the top;
 - personal projects, courses and certificates are not jobs and not degrees: leave them out.
 
 Return JSON with exactly this shape:
-{{"experience": [{{"employer": "", "title": "", "start": "", "end": "", "current": false}}],
+{{"experience": [{{"employer": "", "title": "", "start": "", "end": "", "current": false, "location": "", "description": ""}}],
   "education": [{{"school": "", "degree": "", "field": "", "start": "", "end": ""}}]}}"""
 
 
@@ -320,6 +329,12 @@ def lists_from_cv(cv_text: str) -> dict[str, list]:
                 continue
             if row.get("current"):
                 row = {**row, "end": ""}
+            if name == "experience":                # only what the CV itself says: a place or a line it does not have is dropped
+                place = " ".join(str(row.get("location") or "").lower().split())
+                lines = [" ".join(line.split()).lstrip("•-–* ").strip() for line in str(row.get("description") or "").splitlines()]
+                kept = [line for line in lines if len(line) >= 8 and " ".join(line.lower().split()) in plain]
+                row = {**row, "location": str(row.get("location") or "") if place and place in plain else "",
+                       "description": "\n".join(kept)[:2000]}
             rows, problem = _rows(name, [row])
             if problem or not rows or " ".join(rows[0][key].lower().split()) not in plain:
                 continue

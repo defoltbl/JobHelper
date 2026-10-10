@@ -33,7 +33,7 @@ ColumnLayout {
                 x: 10; y: 10; width: parent.width - 20; spacing: 6
                 GridLayout { Layout.fillWidth: true; columns: width > 460 ? 2 : 1; columnSpacing: 10; rowSpacing: 6
                     Repeater {
-                        model: ed.cols
+                        model: ed.cols.filter(function (c) { return c.area !== true; })
                         ColumnLayout { Layout.fillWidth: true; Layout.preferredWidth: 100; spacing: 2
                             Text { text: modelData.label; color: theme.soft; font.pixelSize: 11; font.bold: true }
                             TextField {
@@ -50,6 +50,27 @@ ColumnLayout {
                                 onTextEdited: { ed.store.setProperty(card.row, modelData.key, text); ed.changed(); }
                             }
                         }
+                    }
+                }
+                // a column of several lines (what you did in a job): a box across the whole row that grows with its text
+                Repeater {
+                    model: ed.cols.filter(function (c) { return c.area === true; })
+                    ColumnLayout { Layout.fillWidth: true; spacing: 2
+                        Text { text: modelData.label; color: theme.soft; font.pixelSize: 11; font.bold: true; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                        TextArea {
+                            id: areaBox
+                            objectName: "rowArea_" + modelData.key
+                            Layout.fillWidth: true; implicitHeight: Math.max(64, contentHeight + 16); wrapMode: TextEdit.Wrap
+                            color: theme.ink; font.pixelSize: 12; selectByMouse: true
+                            placeholderText: modelData.hint || ""; placeholderTextColor: theme.faint
+                            Component.onCompleted: text = ed.store.get(card.row)[modelData.key] || ""
+                            background: Rectangle { radius: 7; color: theme.surface; border.width: 1
+                                border.color: ed.problem.field === card.where + "." + modelData.key || areaBox.text.length > modelData.most ? theme.crit
+                                            : (areaBox.activeFocus ? theme.accent : theme.line) }
+                            onTextChanged: if (activeFocus) { ed.store.setProperty(card.row, modelData.key, text); ed.changed(); }
+                        }
+                        Text { visible: areaBox.text.length > modelData.most; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11
+                            text: "That is " + areaBox.text.length + " characters; the most is " + modelData.most + "." }
                     }
                 }
                 RowLayout { Layout.fillWidth: true; spacing: 8

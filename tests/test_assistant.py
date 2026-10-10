@@ -1030,9 +1030,9 @@ def test_an_answer_is_rewritten_on_request_shown_first_and_saved_after_your_yes(
 
 
 # ── several jobs, several degrees, a salary with its currency, files of your own ──
-JOBS = [{"employer": "Old Mill", "title": "Intern", "start": "2020", "end": "2021", "current": False},
-        {"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True},
-        {"employer": "Evening School", "title": "Tutor", "start": "2022", "end": "", "current": True}]
+JOBS = [{"employer": "Old Mill", "title": "Intern", "start": "2020", "end": "2021", "location": "", "description": "", "current": False},
+        {"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "location": "", "description": "", "current": True},
+        {"employer": "Evening School", "title": "Tutor", "start": "2022", "end": "", "location": "", "description": "", "current": True}]
 SCHOOLS = [{"school": "Masaryk University", "degree": "Master", "field": "Applied informatics", "start": "2021", "end": "2023"},
            {"school": "Masaryk University", "degree": "Bachelor", "field": "Informatics", "start": "2018", "end": "2021"}]
 FULL = {**MINE, "experience": JOBS, "education": SCHOOLS, "salary_amount": 60000, "salary_currency": "CZK", "salary_period": "month"}
@@ -1106,7 +1106,8 @@ def test_jobs_and_degrees_are_copied_from_the_cv_and_never_made_up(isolate, monk
     monkeypatch.setattr(llm, "ask_json", ask)
     out = ui_api.Api().assistant_cv_lists()
     assert out["ok"] and [j["employer"] for j in out["experience"]] == ["Northwind", "Old Mill"], "an employer that is not in the CV is dropped, and so is a row with no title"
-    assert out["experience"][0] == {"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True}
+    assert out["experience"][0] == {"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "location": "", "description": "",
+                                    "current": True}
     assert [s["school"] for s in out["education"]] == ["Masaryk University"] and "2 jobs and 1 degrees" in out["say"]
     assert "never add, guess" in seen["system"] and seen["tag"] == "assistant" and not details.path().exists(), "offered, not saved"
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"experience": [], "education": []})
@@ -1904,3 +1905,69 @@ def test_file_fields_with_no_words_are_one_line_not_one_each():
     todo = form_fill.plan(fields, MINE)
     assert todo["left"] == [{"label": "Files", "why": form_fill.FILE_BUTTON}, {"label": "Photo", "why": form_fill.FILE}] and not todo["attach"]
     assert form_fill.FILE_BUTTON in form_fill.FILE_REASONS, "the button that shows your files in Finder is offered for it"
+
+
+# ── inside a job's row: its own place, its own description, dates split into boxes (a real form, 10 October 2026) ──
+WORK = [{"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True, "location": "Brno, Czechia",
+         "description": "Built SQL reports for the finance team\nAutomated the monthly close in Python"},
+        {"employer": "Old Mill", "title": "Intern", "start": "09/2020", "end": "2021", "current": False, "location": "", "description": ""}]
+
+
+def test_a_jobs_place_and_description_are_the_jobs_own_not_yours_and_not_a_question():
+    """Reported from a real form: "Location" inside Work Experience 1 got the person's own city, and "Role Description" got an
+    answer drafted by Claude about the person in general. Both belong to the job and are in the CV."""
+    mine = {**MINE, "experience": WORK}
+    fields = [_field("City", n=1), _field("Job Title", n=2), _field("Company", n=3), _field("Location", n=4),
+              _field("I currently work here", kind="checkbox", n=5), _field("Role Description", kind="textarea", n=6),
+              _field("Job Title", n=7), _field("Company", n=8), _field("Location", n=9), _field("Role Description", kind="textarea", n=10),
+              _field("School", n=11), _field("Location", n=12), _field("Describe your studies", kind="textarea", n=13),
+              _field("Email", n=14), _field("Phone", n=15), _field("Postcode", n=16), _field("LinkedIn", n=17), _field("GitHub", n=18),
+              _field("Location", n=19), _field("Why do you want this role? Tell us in a few lines", kind="textarea", n=20)]
+    todo = form_fill.plan(fields, mine, has_job=True)
+    got = {i["n"]: i["value"] for i in todo["fill"]}
+    assert got[1] == "Brno" and got[19] == "Brno, Czechia", "your own city, before the jobs and well after them"
+    assert (got[2], got[3], got[4]) == ("Junior analyst", "Northwind", "Brno, Czechia") and got[6] == WORK[0]["description"]
+    assert (got[7], got[8]) == ("Intern", "Old Mill") and 9 not in got and 10 not in got, "the second job has neither: left, not filled with the first job's or yours"
+    left = {i["label"]: i["why"] for i in todo["left"]}
+    assert "Where it was" in left["Location"] or left["Location"] == form_fill.ROW_PLACE
+    assert "What you did there" in left["Role Description"] and left["Describe your studies"] == form_fill.ROW_WORDS
+    assert [q["label"] for q in todo["ask"]] == ["Why do you want this role? Tell us in a few lines"], "only a real open question goes to Claude"
+    assert [t["n"] for t in todo["tick"]] == [5]
+    short = form_fill.plan([_field("Company", n=1), _field("Role Description", kind="textarea", n=2, most=20)], mine)
+    assert "20 characters" in short["left"][0]["why"], "a description longer than the box is not cut silently"
+
+
+@pytest.mark.parametrize("part, when, value, why", [
+    ("month", "03/2023", "03", ""), ("year", "03/2023", "2023", ""), ("year", "2021", "2021", ""), ("month", "2021", "", form_fill.NO_MONTH),
+    ("day", "03/2023", "", form_fill.DATE), ("month", "", "", ""), ("month", "3/2023", "03", "")])
+def test_one_box_of_a_split_date_gets_its_part(part, when, value, why):
+    assert form_fill.part_for(part, when) == (value, why)
+
+
+def test_a_date_split_into_a_month_box_and_a_year_box_is_named_by_its_pair():
+    box = lambda label, part, group, n: _field(label, n=n, part=part, group=group)      # noqa: E731
+    assert form_fill.classify(box("Month", "month", "From*", 1)) == ("row_start", "") and form_fill.classify(box("Year", "year", "To*", 1)) == ("row_end", "")
+    assert form_fill.classify(box("Month", "month", "Date of birth", 1)) == ("", form_fill.PRIVATE) or form_fill.classify(box("Month", "month", "Date of birth", 1))[0] == ""
+    assert form_fill.classify(box("Year", "year", "Earliest start", 1)) == ("", form_fill.DATE) and form_fill.classify(box("Year", "year", "", 1)) == ("", form_fill.DATE)
+    mine = {**MINE, "experience": WORK}
+    fields = [_field("Company", n=1), box("Month", "month", "From*", 2), box("Year", "year", "From*", 3), box("Month", "month", "To*", 4), box("Year", "year", "To*", 5),
+              _field("Company", n=6), box("Month", "month", "From*", 7), box("Year", "year", "From*", 8), box("Month", "month", "To*", 9), box("Year", "year", "To*", 10)]
+    todo = form_fill.plan(fields, mine)
+    assert {i["n"]: i["value"] for i in todo["fill"]} == {1: "Northwind", 2: "03", 3: "2023", 6: "Old Mill", 7: "09", 8: "2020", 10: "2021"}, \
+        "a job that goes on has no end; a year without a month fills the year box only"
+    assert [(i["label"], i["why"]) for i in todo["left"]] == [("Month", form_fill.NO_MONTH)]
+
+
+def test_area_a_work_experience_page_gets_each_jobs_own_place_dates_and_description():
+    out = _area("experience.html", job_id="vt", details={**MINE, "experience": WORK, "education": SCHOOLS},
+                answers={"Why do you want to work at Northwind?": ["Because of your SQL reports.", ""]})
+    state, result = out["state"], out["result"]
+    assert result["ok"], result
+    assert (state["t1"], state["c1"], state["l1"]) == ("Junior analyst", "Northwind", "Brno, Czechia") and state["mycity"] == "Brno"
+    assert state["d1"] == WORK[0]["description"], "what the CV says under that job, with its line breaks, not a drafted answer"
+    assert (state["f1m"], state["f1y"], state["e1m"], state["e1y"]) == ("03", "2023", "", "") and state["now1"] is True, "the job goes on: no end, the box ticked"
+    assert (state["t2"], state["c2"], state["l2"], state["d2"]) == ("Intern", "Old Mill", "", "") and state["now2"] is False
+    assert (state["f2m"], state["f2y"], state["e2m"], state["e2y"]) == ("09", "2020", "", "2021")
+    assert state["s1"] == SCHOOLS[0]["school"] and state["sl1"] == "", "where the school was is not known: left, not your own city"
+    assert out["asked"] == ["Why do you want to work at Northwind?"] and state["why"] == "Because of your SQL reports."
+    assert out["sent"] is False and out["clicked"] is False

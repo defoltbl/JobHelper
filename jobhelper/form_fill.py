@@ -189,12 +189,20 @@ READ = r"""
       var called = label(el, root), hint = clean(el.getAttribute('placeholder')).slice(0, 120);
       if (tag === 'SELECT' && !called && el.options.length && String(el.options[0].value) === '') hint = clean(el.options[0].text).slice(0, 120);   // "Select your country": all the name it has
       if (el.readOnly) type = 'menu';             // a box that cannot be typed in and opens a list: a menu like any other
+      var part = '', group = '';                  // a date split into boxes ("MM" and "YYYY"): which part this is, and what the pair is called ("From")
+      var asks = clean(el.getAttribute('aria-label') || hint || called).toLowerCase();
+      if (tag === 'INPUT' && /^(mm|month|yyyy|year|dd|day)$/.test(asks)) {
+        part = /^(mm|month)$/.test(asks) ? 'month' : (/^(yyyy|year)$/.test(asks) ? 'year' : 'day');
+        var holder = el.parentElement ? (el.parentElement.closest('[role=group], fieldset') || el.parentElement) : null;
+        var legend = holder && holder.tagName === 'FIELDSET' ? holder.querySelector('legend') : null;
+        group = holder ? (legend && text(legend) ? text(legend) : label(holder, root)) : '';
+      }
       var code = '';                              // a list of calling codes says which one it shows: the number beside it depends on it
       if (tag === 'SELECT' && filled && options.length >= 10 && options.filter(function (o) { return /\+\d{1,4}\b/.test(o); }).length > options.length * 0.7)
         code = (clean(el.options[el.selectedIndex].text).match(/\+\d{1,4}\b/) || [''])[0];
       fields.push({n: n, type: type, name: clean(el.name).slice(0, 80), id: clean(el.id).slice(0, 80),
                    auto: clean(el.getAttribute('autocomplete')).slice(0, 60), label: called,
-                   hint: hint, accept: type === 'file' ? clean(el.getAttribute('accept')).slice(0, 200) : '', code: code,
+                   hint: hint, accept: type === 'file' ? clean(el.getAttribute('accept')).slice(0, 200) : '', code: code, part: part, group: group.slice(0, 120),
                    required: !!(el.required || el.getAttribute('aria-required') === 'true'),
                    filled: filled, most: el.maxLength > 0 ? el.maxLength : 0, options: options,
                    combo: !el.readOnly && (el.getAttribute('role') === 'combobox' || !!el.getAttribute('aria-autocomplete') || el.getAttribute('aria-haspopup') === 'listbox')});
@@ -763,7 +771,14 @@ _NOT_MINE = re.compile(r"company|employer|organi[sz]ation|school|universit|colle
 SOFT = ("employer", "job_title", "school", "degree", "study_field", "notice_period", "salary", "start")
 # asked once per job or per degree: the first such field gets the first entry of the list, the next one the second
 LISTED = {"employer": ("experience", "employer"), "job_title": ("experience", "title"),
+          "job_location": ("experience", "location"), "job_description": ("experience", "description"),
           "school": ("education", "school"), "degree": ("education", "degree"), "study_field": ("education", "field")}
+# inside a job's row a form also asks where the job was and what you did there: the job's own, not yours and not an open question
+_ROW_TEXT = re.compile(r"descri(?:ption|be)|responsibilit|duties|what (?:did you|you did)|achievement|accomplishment|tasks?\b|summary of|"
+                       r"náplň práce|popis")
+ROW_NEAR = 5                   # a field this close after a job's own field still belongs to that job
+ROW_PLACE = "This asks where the school was, which My details does not hold. Fill it in yourself."
+ROW_WORDS = "This asks about your studies in your own words. Write it yourself."
 MORE_ROWS = "You listed {have} in My details, and this is one more. Add it there, or type it."
 _ROW_START = re.compile(r"\bstart(?:ed)?\b|\bfrom\b|\bbegan\b|date from|od\b")
 _ROW_END = re.compile(r"\bend(?:ed)?\b|\bto\b|\buntil\b|\bfinish|\bleft\b|date to|graduat")
@@ -882,7 +897,8 @@ _AUTO = {"given-name": "first_name", "family-name": "last_name", "name": "full_n
          "postal-code": "postcode", "country": "country", "country-name": "country", "url": "website"}
 _LETTER = re.compile(r"cover ?letter|motivation|motivační|průvodní")
 _BY_TYPE = {"email": "email", "tel": "phone"}
-WHAT = {"full_name": "name", "location": "city", "employer": "jobs", "job_title": "jobs", "school": "degrees", "degree": "degrees",
+WHAT = {"job_location": "job's place (under your jobs: Where it was)", "job_description": "description of this job (under your jobs: What you did there)",
+        "full_name": "name", "location": "city", "employer": "jobs", "job_title": "jobs", "school": "degrees", "degree": "degrees",
         "study_field": "degrees", "salary": "salary", **{key: label.lower() for key, label in details.LABELS.items()}}
 
 
@@ -915,6 +931,15 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
         return "file", ""
     if _PRIVATE.search(words):
         return "", PRIVATE
+    if field.get("part") and kind in ("text", "number", "tel"):
+        # one box of a date that is split into a month and a year: the pair's own name says whose date it is
+        pair = _words({"label": field.get("group")})
+        if not _NOT_A_ROW_DATE.search(pair):
+            if _ROW_START.search(pair):
+                return "row_start", ""
+            if _ROW_END.search(pair):
+                return "row_end", ""
+        return "", DATE
     if kind in ("date", "month") and _AVAILABLE.search(words):
         return "start", ""
     if kind in ("date", "month") or (kind == "text" and re.search(r"\bdates?\b|mm.?yyyy", words)):
@@ -931,12 +956,17 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
         return "", CHOICE
     auto = (str(field.get("auto") or "").lower().split() or [""])[-1]
     what = _AUTO.get(auto) or _BY_TYPE.get(kind) or ""
-    if not what:
+    # What the person reads comes first: a field labelled "Location" whose inner name is "schoolLocation-1" is a location.
+    # Only a field whose label says nothing is judged by the names the page gives it inside.
+    shown = _words({"label": field.get("label"), "hint": field.get("hint")})
+    for seen in ([shown, words] if shown else [words]):
+        if what:
+            break
         for key, rule in _RULES:
-            if rule.search(words):
-                if key in ("first_name", "last_name", "full_name", "street", "location", "city", "country", "postcode") and _NOT_MINE.search(words):
+            if rule.search(seen):
+                if key in ("first_name", "last_name", "full_name", "street", "location", "city", "country", "postcode") and _NOT_MINE.search(seen):
                     continue
-                if key in ("employer", "job_title") and _NOT_THIS_JOB.search(words):
+                if key in ("employer", "job_title") and _NOT_THIS_JOB.search(seen):
                     continue                        # "position applied for", "referee's employer": not a job of yours
                 what = key
                 break
@@ -966,6 +996,18 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
     if has_words and kind in ("text", "search") and not _NOT_MINE.search(words) and not _NOT_THIS_JOB.search(words):
         return "guess", ""                          # a few words Claude may copy from the CV; never somebody else's name or employer
     return "", UNKNOWN
+
+
+def part_for(part: str, when: str) -> tuple[str, str]:
+    """One box of a date that a form splits into a month and a year: (value, '') or ('', why it is left)."""
+    parts = re.split(r"[./\-]", str(when or ""))
+    if not when:
+        return "", ""
+    if part == "year":
+        return parts[-1], ""
+    if part == "month":
+        return (parts[0].zfill(2), "") if len(parts) == 2 else ("", NO_MONTH)
+    return "", DATE                                 # the day is not known
 
 
 def when_for(kind: str, when: str) -> tuple[str, str]:
@@ -1095,6 +1137,7 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
 
     kinds = [classify(f)[0] for f in fields]
     codes: dict[int, str] = {}                      # where a list of calling codes stands, and the code it shows
+    row_at = [-99]                                  # where the last field of a job's or a degree's row stood
     for at, field in enumerate(fields):
         label, most = name_of(field), int(field.get("most") or 0)
         kind = str(field.get("type") or "text").lower()
@@ -1103,6 +1146,19 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
         if what == "row_start" and kind in ("date", "month") and _LONE_START.search(_words(field)) and not field.get("filled") \
                 and not {"row_end", "employer", "job_title", "school", "degree", "study_field"} & set(kinds[max(0, at - 4):at] + kinds[at + 1:at + 5]):
             what = "start"
+        # inside a job's row: "Location" is where that job was, and "Role description" is what you did there
+        near = last[0] and at - row_at[0] <= ROW_NEAR
+        picked = kind in ("select", "radio", "menu", "checkbox", "file") or bool(field.get("combo"))
+        if near and not picked and what not in LISTED and what not in ("row_start", "row_end", "start"):
+            wordy = _ROW_TEXT.search(_words(field)) and (what in ("question", "guess") or kind == "textarea")
+            if last[0] == "experience":
+                what = "job_location" if what in ("location", "city") else ("job_description" if wordy else what)
+            elif what in ("location", "city"):
+                what, why = "", ROW_PLACE
+            elif wordy:
+                what, why = "", ROW_WORDS
+        if what in LISTED or what in ("row_start", "row_end", "current_box"):
+            row_at[0] = at
         if is_code_list(field) and str(mine.get("phone") or "").startswith("+"):
             # the list of calling codes beside a phone field: the code of your own number, and the number then goes in without it
             if field.get("filled"):
@@ -1152,7 +1208,10 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
                 continue                            # a job that goes on has no end date: the field stays empty, and that is right
             else:
                 stamp = entry.get("start" if what == "row_start" else "end", "")
-                value, note = date_option(field.get("options") or [], stamp) if kind == "select" else when_for(kind, stamp)
+                if field.get("part"):
+                    value, note = part_for(field["part"], stamp)
+                else:
+                    value, note = date_option(field.get("options") or [], stamp) if kind == "select" else when_for(kind, stamp)
                 if value:
                     out["fill"].append({"n": field["n"], "label": label, "value": value, "kind": "detail", "check": note})
                 else:
@@ -1222,7 +1281,7 @@ def read_answer(text: str) -> dict[str, Any]:
         fields.append({"n": raw["n"], "filled": bool(raw.get("filled")), "required": bool(raw.get("required")), "combo": bool(raw.get("combo")),
                        "most": raw.get("most") if isinstance(raw.get("most"), int) else 0,
                        "options": [str(o)[:80] for o in (raw.get("options") or [])[:300]] if isinstance(raw.get("options"), list) else [],
-                       **{key: " ".join(str(raw.get(key) or "").split())[:300] for key in ("type", "name", "id", "auto", "label", "hint", "accept", "code")}})
+                       **{key: " ".join(str(raw.get(key) or "").split())[:300] for key in ("type", "name", "id", "auto", "label", "hint", "accept", "code", "part", "group")}})
     return {"url": str(data.get("url") or ""), "title": str(data.get("title") or "")[:300], "from": str(data.get("from") or "")[:2000], "fields": fields,
             "frames": [str(f)[:300] for f in (data.get("frames") or [])[:5]] if isinstance(data.get("frames"), list) else [],
             "boxes": data.get("boxes") if isinstance(data.get("boxes"), int) else 0,

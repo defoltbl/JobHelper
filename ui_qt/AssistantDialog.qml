@@ -200,7 +200,10 @@ Dialog {
     property string answersNote: ""
     property string answersErr: ""
     readonly property var jobCols: [{ key: "employer", label: "Employer", most: 100 }, { key: "title", label: "Job title", most: 100 },
-                                    { key: "start", label: "From", most: 10, hint: "03/2023" }, { key: "end", label: "To", most: 10, hint: "2024" }]
+                                    { key: "start", label: "From", most: 10, hint: "03/2023" }, { key: "end", label: "To", most: 10, hint: "2024" },
+                                    { key: "location", label: "Where it was", most: 80, hint: "Brno, Czechia" },
+                                    { key: "description", label: "What you did there (as your CV says it; forms ask for it inside each job)", most: 2000, area: true,
+                                      hint: "One line per point, in your own words" }]
     readonly property var schoolCols: [{ key: "school", label: "University or school", most: 120 }, { key: "degree", label: "Degree", most: 120 },
                                        { key: "field", label: "Field of study", most: 120 }, { key: "start", label: "From", most: 10, hint: "2019" },
                                        { key: "end", label: "To", most: 10, hint: "2023" }]
