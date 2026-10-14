@@ -262,10 +262,18 @@ def test_the_interview_day_in_an_email_becomes_the_date_to_remember():
     saved = a5._save_date(job, {"when": f"{day} 9:30", "next_step": "Join the Google Meet call."}, "interview")
     when = date.fromisoformat(day)
     assert saved == f"{when.day} {when:%b} 09:30 · BRIGHTLINE"
-    assert job["event"] == {"date": day, "time": "09:30", "kind": "interview", "note": "Join the Google Meet call."}
-    assert a5._save_date(job, {"when": day}, "interview") != "" and job["event"]["time"] == ""      # the same day again: updated
+    assert job["event"] == {"date": day, "time": "09:30", "kind": "interview", "note": "Join the Google Meet call.", "from": "email"}
+    assert a5._save_date(job, {"when": day, "next_step": "Reminder"}, "interview") != ""           # the same day again, no time given:
+    assert job["event"]["time"] == "09:30" and job["event"]["note"] == "Reminder"                  # updated, and the time is kept
     other = _soon(9)
-    assert a5._save_date(job, {"when": other}, "interview") == "" and job["event"]["date"] == day   # your date is not overwritten
+    saved = a5._save_date(job, {"when": f"{other} 13:30", "next_step": "New time"}, "interview")   # put off by a newer email: moved
+    assert saved != "" and job["event"]["date"] == other and job["event"]["time"] == "13:30" and job["event"]["from"] == "email"
+    planner_job = store.new_job(id="mine", title="T", company="C", status="interview")
+    from jobhelper import planner
+    assert planner.set_event(planner_job, day, "10:00", "interview", "my own") == ""                 # a date you set yourself
+    assert a5._save_date(planner_job, {"when": f"{other} 13:30"}, "interview") == ""
+    assert planner_job["event"] == {"date": day, "time": "10:00", "kind": "interview", "note": "my own"}   # is never overwritten
+    assert planner.set_event(job, other, "14:00", "interview", "") == "" and "from" not in job["event"]  # an edit by hand makes it yours
     for nothing in ("", None, "next Tuesday", "2020-01-01 10:00", "13.10.2026"):
         fresh = store.new_job(id="x", title="T", company="C")
         assert a5._save_date(fresh, {"when": nothing}, "interview") == "" and "event" not in fresh
@@ -291,6 +299,30 @@ def test_a_scan_files_both_emails_under_one_application_and_saves_the_date(isola
     assert by["ml"]["event"]["date"] == day and by["ml"]["event"]["time"] == "11:30" and "event" not in by["ros"]
     assert len(stats["invites"]) == 2 and len(stats["dates"]) == 1
     assert a5.scan_summary(stats).startswith("Scanned 2 emails (0 read before, 2 sent to Claude) · 2 new: 2 invitations. Date saved: ")
+
+
+def test_an_interview_that_is_put_off_gets_its_new_date(isolate_data, monkeypatch):
+    """The calendar cancels the first slot and invites to a new one in the same minute: the new day and time are saved,
+    the cancellation is no rejection, and the application stays at interview."""
+    from jobhelper import agent5_responses as a5, email_client, llm
+    first, later = _soon(), _soon(8)
+    mails = [{"msg_id": "<c>", "date": "Mon, 12 Oct 2026 13:32:00 +0200", "sender": "Petra <petra@brightlinerobotics.com>",
+              "subject": f"Canceled event: Interview with Brightline Robotics @ {first} 11:30am", "body": "This event has been canceled."},
+             {"msg_id": "<n>", "date": "Mon, 12 Oct 2026 13:32:30 +0200", "sender": "Petra <petra@brightlinerobotics.com>",
+              "subject": f"Invitation: Interview with Brightline Robotics @ {later} 1:30pm", "body": f"When: {later} 1:30pm CEST"}]
+    replies = [{"is_response": True, "stage": "other", "company": "Brightline Robotics", "role": "", "summary": "The interview was canceled.", "when": ""},
+               {"is_response": True, "stage": "interview", "company": "Brightline Robotics", "role": "", "summary": "Scheduled.", "when": f"{later} 13:30",
+                "next_step": "Attend the Google Meet interview."}]
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: mails)
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: replies.pop(0))
+    jobs = _brightline()
+    by = {j["id"]: j for j in jobs}
+    by["ml"]["status"] = "interview"
+    assert a5._save_date(by["ml"], {"when": f"{first} 11:30"}, "interview") != ""          # the first invitation's date, from an email
+    stats = a5.process_inbox(jobs)
+    assert by["ml"]["status"] == "interview" and stats.get("rejections", 0) == 0
+    assert by["ml"]["event"]["date"] == later and by["ml"]["event"]["time"] == "13:30"
+    assert len(stats["dates"]) == 1
 
 
 def test_reply_notification_wording():

@@ -1220,8 +1220,16 @@ def test_help_marks_key_words(ui):
 # ── dates, company notes, pasted replies, CV comparison, pay ────────────────
 def _open_job(ui, job_id="app"):
     ui.js(f'detailDialog.show("{job_id}")')
+    _until_open(ui, "detailDialog")
+
+
+def _until_open(ui, name, most_ms=4000):
+    """Wait for a window's opening animation to end: a fixed pause is too short on a busy machine."""
+    dialog, waited = ui.find(name), 0
     ui.wait(450)
-    assert ui.find("detailDialog").property("opened") is True
+    while dialog.property("opened") is not True and waited < most_ms:
+        ui.wait(50); waited += 50
+    assert dialog.property("opened") is True
 
 
 def test_a_date_on_a_job_shows_on_the_main_screen_and_is_announced(ui):
@@ -2786,8 +2794,11 @@ def test_a_long_title_makes_its_row_taller_instead_of_being_cut(ui):
         ui.js("detailDialog.close()")
         ui.wait(350)
         ui.js('ticker.text = "' + "A long message in the status line that has to be read to its last word. " * 4 + '"')
-        ui.wait(100)
-        assert ui.js("statusBar.height") > 46 and ui.js("ticker.truncated") is False     # the bar grows with its message
+        for _ in range(60):                                  # the bar grows with its message (slower on a busy machine)
+            ui.wait(50)
+            if ui.js("statusBar.height") > 46:
+                break
+        assert ui.js("statusBar.height") > 46 and ui.js("ticker.truncated") is False
         ui.js('ticker.text = ""')
     finally:
         ui.bridge._api._change("lead", lambda jobs, j: j.update(title=start), render=False)
@@ -3830,7 +3841,10 @@ def test_the_assistant_at_pro_level_in_the_window(ui, monkeypatch):
     ui.js('assistantDialog.ask("what needs my attention today?")')
     _wait_idle(ui, dialog)
     assert dialog.property("typingIndex") >= 0 or ui.js("talk.get(talk.count - 1).text.length") == 300
-    ui.wait(900)
+    for _ in range(80):                                      # written out in well under a second; longer on a busy machine
+        ui.wait(50)
+        if dialog.property("typingIndex") == -1:
+            break
     assert dialog.property("typingIndex") == -1 and ui.js("talk.get(talk.count - 1).text.length") == 300
     monkeypatch.setattr(ui_api.Api, "assistant_talk", talk)
     # notes: listed on the My details page, and one can be forgotten there

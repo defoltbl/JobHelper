@@ -1389,6 +1389,10 @@ Table 11.1 lists the fields of an application.
 The date then shows on the **Coming up** card of the main window. You get a notification the
 day before and on the day. With a time, you also get one about three hours and one hour before (Figure 11.3).
 
+You often do not have to set it. An invitation in your mailbox that names a day sets the date by itself
+when you scan your email. When the company moves the interview, the newer invitation moves the date
+as well. A date that you set or changed yourself is never changed by an email.
+
 ![Dates, pasted replies and notes](img/13_application_dates_notes.png)
 
 *Figure 11.3 – Dates, pasted replies and notes*

@@ -58,6 +58,8 @@ def _ask_waiting(on_limit, call):
 
 
 STAGES = ("rejection", "interview", "assessment", "offer", "acknowledged", "other")
+# A date to remember that an email put on the job (not you): a newer email may move it.
+EVENT_FROM_EMAIL = "email"
 _TEXTS = ("company", "role", "rejection_reason", "rejection_category", "sentiment", "next_step", "summary", "when")
 
 
@@ -149,8 +151,9 @@ def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, An
 
 
 def _save_date(job: dict[str, Any], result: dict[str, Any], kind: str) -> str:
-    """Put the day an email fixes (an interview, a test) on the job as its date to remember,
-    unless you already set a later or equal one yourself. Returns "13 Oct 11:30 · Company" or ''."""
+    """Put the day an email fixes (an interview, a test) on the job as its date to remember.
+    A date that came from an earlier email is moved by a newer one (an interview that was put off);
+    a coming date you set yourself is never overwritten. Returns "13 Oct 11:30 · Company" or ''."""
     from . import planner
     m = re.fullmatch(r"\s*(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}:\d{2}))?.*", str(result.get("when") or ""))
     if not m:
@@ -158,12 +161,17 @@ def _save_date(job: dict[str, Any], result: dict[str, Any], kind: str) -> str:
     day, clock = m.group(1), (m.group(2) or "")
     if clock and len(clock) == 4:
         clock = "0" + clock
-    current = (job.get("event") or {}).get("date", "")
-    if current and current >= date.today().isoformat() and current != day:
+    event = job.get("event") or {}
+    current = event.get("date", "")
+    by_email = event.get("from") == EVENT_FROM_EMAIL
+    if current and current >= date.today().isoformat() and current != day and not by_email:
         return ""                                   # you have your own date on this job: it is not overwritten
+    if current == day and not clock:
+        clock = event.get("time", "")               # a reminder naming only the day keeps the time already known
     note = str(result.get("next_step") or result.get("summary") or "").strip()[:200]
     if planner.set_event(job, day, clock, kind, note):
         return ""                                   # a past or unreadable date: nothing saved
+    job["event"]["from"] = EVENT_FROM_EMAIL         # a later email may move it; an edit by hand drops this mark
     when = date.fromisoformat(day)
     return f"{when.day} {when:%b}" + (f" {clock}" if clock else "") + f" · {job.get('company') or job.get('title', '')}"
 

@@ -3,6 +3,11 @@
 The newest changes are first. The Help window in the app shows this file under "What changed".
 Format: a `## date` line, then one `- ` line per change; `**words**` are shown in bold.
 
+## 14 October 2026
+
+- When a company moves an interview, the new day and time from its invitation now replace the old **date to remember**. Before, a date an earlier email had set was kept, and the new one had to be typed by hand. A date you set yourself is still never changed by an email.
+- A later email that names only the day of an interview (a reminder) keeps the time already saved.
+
 ## 11 October 2026
 
 - **Found by reading the code line by line (fourth part: the smaller modules and the window's files):**
