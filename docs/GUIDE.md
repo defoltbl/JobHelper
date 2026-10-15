@@ -167,7 +167,7 @@ You need:
 
 ### What the welcome card checks
 
-Table 2.1 lists the four checks.
+Table 2.1 lists the five checks.
 
 *Table 2.1 – What the welcome card checks*
 
@@ -177,9 +177,11 @@ Table 2.1 lists the four checks.
 | **Job email** | The mailbox you apply from, opened read-only | So that replies update your applications by themselves | No |
 | **Master CV** | Your one true CV | Every adapted CV is made from it and may only say what it says | Yes |
 | **Data protection** | Encryption of your job data, with the key in the macOS Keychain | Your applications and replies are private | Yes |
+| **PDF copies** | LibreOffice, a free program that makes a PDF copy of each Word file | Some forms accept only PDF files | No |
 
 A search can start only when the required rows are green. Without the email row everything
-works except reading replies.
+works except reading replies. Without LibreOffice, the app makes the Word files but no PDF
+copies. To get PDF copies, install LibreOffice from libreoffice.org, then select **Recheck**.
 
 ### Sign in to Claude
 

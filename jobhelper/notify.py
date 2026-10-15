@@ -27,6 +27,17 @@ def _run(cmd: list[str]) -> None:
     subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def _open(app: Path) -> bool:
+    """Start the helper app in the background; False when macOS did not start it (tests replace this)."""
+    try:
+        return subprocess.run(["open", "-g", "-n", str(app)], capture_output=True, timeout=15).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+STALE_HOURS = 12      # a message that waited longer than this is out of date: it is not shown late
+
+
 # ── the app's own notifier, so notifications carry its name and icon ────────
 # A notification sent through plain `osascript` shows the Script Editor icon. macOS takes the
 # icon from the app that posts it, so the first time one is needed a tiny helper app is built
@@ -121,9 +132,14 @@ def send(message: str, subtitle: str = "") -> bool:
             import time
             queue = _folder() / "queue"
             queue.mkdir(parents=True, exist_ok=True)
-            (queue / f"{time.time_ns()}.txt").write_text(f"{_one_line(subtitle) or TITLE}\n{_one_line(message)}", encoding="utf-8")
-            _run(["open", "-g", "-n", str(app)])
-            return True
+            for old in queue.glob("*.txt"):          # left by a helper that did not start: out of date now
+                if time.time() - old.stat().st_mtime > STALE_HOURS * 3600:
+                    old.unlink(missing_ok=True)
+            entry = queue / f"{time.time_ns()}.txt"
+            entry.write_text(f"{_one_line(subtitle) or TITLE}\n{_one_line(message)}", encoding="utf-8")
+            if _open(app):
+                return True
+            entry.unlink(missing_ok=True)            # the helper did not start: the plain way below, shown once
         script = f"display notification {_quote(message)} with title {_quote(TITLE)}"
         if subtitle:
             script += f" subtitle {_quote(subtitle)}"

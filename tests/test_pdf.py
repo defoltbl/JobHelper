@@ -36,6 +36,17 @@ def fake_office(monkeypatch):
     return SimpleNamespace(calls=calls, state=state)
 
 
+def test_libreoffice_is_found_in_its_usual_places_also_without_a_path(tmp_path):
+    """An app that Finder opens has a short PATH: LibreOffice from its usual folders is still found."""
+    program = tmp_path / "LibreOffice.app" / "Contents" / "MacOS" / "soffice"
+    program.parent.mkdir(parents=True)
+    program.write_text("")
+    assert pdf.search_soffice(lambda name: None, ["/nowhere/soffice", str(program)]) == str(program)
+    assert pdf.search_soffice(lambda name: "/bin/" + name if name == "soffice" else None, [str(program)]) == "/bin/soffice"
+    assert pdf.search_soffice(lambda name: None, []) == ""
+    assert {"/Applications/LibreOffice.app/Contents/MacOS/soffice", "/opt/homebrew/bin/soffice"} <= set(pdf._CANDIDATES)
+
+
 def test_nothing_happens_without_libreoffice(tmp_path):
     doc = tmp_path / "cv.docx"
     doc.write_bytes(b"x")

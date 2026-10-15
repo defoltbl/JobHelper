@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 16 October 2026
 
+- The Account card has a fifth row, **PDF copies**. It says whether LibreOffice is on your Mac, and how to get PDF copies when it is not.
+- A notification that the app's notifier cannot show now appears **the plain way**, and an old message that waited too long is not shown late.
 - The Claude sign-in is checked, and started, with **the same Claude program that answers the app's questions**, so the Account card is right also when the app is opened from Finder.
 - The **weekly run** now starts the app itself, with no window, so it also works for an app that is not run from its project folder. When you open the app, it points an older weekly run at itself, on the same day and time.
 - Your data now lives in **your Library** (Application Support, folder JobHelper), the usual place for a Mac app, so a new version of the app never touches it. At the first start the app moves it there once, checks every file, and keeps the old folder as data_moved_to_Library.

@@ -14,15 +14,22 @@ from pathlib import Path
 _CANDIDATES = [
     "/Applications/LibreOffice.app/Contents/MacOS/soffice",
     str(Path.home() / "Applications/LibreOffice.app/Contents/MacOS/soffice"),
+    "/opt/homebrew/bin/soffice",          # Homebrew: not on the PATH of an app that Finder opens
+    "/usr/local/bin/soffice",
 ]
 
 
 def find_soffice() -> str:
+    return search_soffice(shutil.which, _CANDIDATES)
+
+
+def search_soffice(which, candidates) -> str:
+    """LibreOffice's program: on the PATH, else in one of its usual places ('' = not on this Mac)."""
     for name in ("soffice", "libreoffice"):
-        found = shutil.which(name)
+        found = which(name)
         if found:
             return found
-    for path in _CANDIDATES:
+    for path in candidates:
         if Path(path).is_file():
             return path
     return ""

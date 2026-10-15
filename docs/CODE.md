@@ -426,6 +426,17 @@ the full path of the program. Thus the check, the sign-in and the questions alwa
 that Finder opens gets a short PATH. If the copy is missing, `ClaudeCli` looks on the PATH and then
 in the usual folders. If it finds no program, the window shows `claude_cli.MISSING`.
 
+### Programs the app needs from outside
+
+Table 6.4 lists the programs from outside that the app uses, and what it does without them.
+
+*Table 6.4 – Programs from outside the app*
+
+| Program | Where the app finds it | Without it |
+|---|---|---|
+| LibreOffice | The PATH, then its usual folders (`pdf._CANDIDATES`), also for an app that Finder opens | No PDF copies. The **PDF copies** row of the Account card says how to get them |
+| The notifier | A small helper app in `data/notifier`, built at the first notification | `osascript` shows the notification. A message that waits more than `notify.STALE_HOURS` is not shown late |
+
 ### The start-up check and its fixes
 
 `health.run()` makes each check of `health.CHECKS`. A check returns an empty string when all is
@@ -481,7 +492,7 @@ the function tries these steps in order:
 
 If none of these is clear, the function gives no job. Without a job, no file leaves the app.
 
-Table 6.4 gives the rules these steps keep. `tests/test_assistant.py` checks each of them.
+Table 6.5 gives the rules these steps keep. `tests/test_assistant.py` checks each of them.
 
 A test area also tries the whole request. `tests/fixtures/fill_in_browser.py` serves the forms
 in `tests/fixtures/forms/` from this machine. It opens one form in a browser engine and runs the
@@ -497,7 +508,7 @@ The area has these forms:
 To check a form that the assistant fills in wrong, add a page there. Then add a test that names
 the fields to fill and the fields to leave.
 
-*Table 6.4 – The rules of filling in a form*
+*Table 6.5 – The rules of filling in a form*
 
 | Rule | How it is kept |
 |---|---|
@@ -524,10 +535,10 @@ Figure 6.6 shows what happens to a request.
 Some requests are fixed, for example "fill in the form", "my details" or "help". All other
 requests go to `assistant_brain.decide`. This makes one call to Claude. The call sends the jobs
 as lines, the numbers, the last turns of the talk and the list of actions. Claude answers in
-words or names one action. Table 6.5 gives the rules that keep this safe. `api_talk` applies
+words or names one action. Table 6.6 gives the rules that keep this safe. `api_talk` applies
 them.
 
-*Table 6.5 – The rules of acting on a request*
+*Table 6.6 – The rules of acting on a request*
 
 | Rule | How it is kept |
 |---|---|
@@ -562,9 +573,9 @@ Long work (a search, a scan, a rewrite) runs in a thread and answers through a s
 ### The back end: a facade over services
 
 `Api` does no work itself. It follows the object-oriented rules of the project: each class has
-one job, and parts are joined by composition, not by inheritance. Table 6.6 lists the parts.
+one job, and parts are joined by composition, not by inheritance. Table 6.7 lists the parts.
 
-*Table 6.6 – The parts of the back end*
+*Table 6.7 – The parts of the back end*
 
 | Part | File | What it owns |
 |---|---|---|

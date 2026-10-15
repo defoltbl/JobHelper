@@ -404,6 +404,17 @@ Item {
                         color: theme.crit; font.pixelSize: 11; font.bold: true; text: welcome.restoreErr }
                 }
 
+                // 5 · PDF copies: optional, made by LibreOffice when it is on this Mac
+                StepRow {
+                    objectName: "pdfRow"; order: 4; label: "5"; title: "PDF copies"
+                    ok: connData.pdf === true
+                    subColor: !win.connChecked || connData.pdf === true ? theme.soft : theme.warn
+                    sub: !win.connChecked ? "Checking…"
+                       : connData.pdf === true ? "Made with LibreOffice next to each Word file."
+                       : "Not made: LibreOffice is not on this Mac. The Word files are made as usual. "
+                         + "For PDF copies, install LibreOffice (free, libreoffice.org), then select Recheck."
+                }
+
             }
             }
             // the buttons that close the card: under the scrolling part, always in view

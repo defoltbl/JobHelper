@@ -100,6 +100,7 @@ def safe_environment(tmp_path_factory, monkeypatch):
     from jobhelper import notify
     monkeypatch.setattr(notify, "_run", lambda cmd: None)     # never show a real notification from a test
     monkeypatch.setattr(notify, "ensure_app", lambda: None)   # nor build the helper app
+    monkeypatch.setattr(notify, "_open", lambda app: False)   # nor start it
     import types
 
     from jobhelper import api_core, api_system  # noqa: F401

@@ -205,6 +205,17 @@ def test_start_enters_the_app_and_the_chip_reopens_the_card(ui):
     ui.wait(700)
 
 
+def test_pdf_row_says_how_to_get_pdf_copies_and_is_never_required(ui):
+    welcome, row = ui.find("welcome"), ui.find("pdfRow")
+    ui.win.setProperty("connData", {**READY, "pdf": False})
+    assert "libreoffice.org" in row.property("sub") and "Word files are made as usual" in row.property("sub")
+    assert "select Recheck" in row.property("sub") and welcome.property("ready") is True              # optional
+    ui.win.setProperty("connData", {**READY, "pdf": True})
+    assert row.property("sub").startswith("Made with LibreOffice")
+    ui.win.setProperty("connData", dict(READY))
+    assert ui.warnings == []
+
+
 def test_welcome_is_not_ready_without_claude_or_cv(ui):
     welcome = ui.find("welcome")
     for missing in ({"claude": False}, {"cv": ""}, {"paid_api": True},

@@ -196,14 +196,45 @@ def test_with_the_helper_app_a_message_goes_through_its_queue(isolate_data, monk
     app = isolate_data / "notifier" / "JobHelper.app"
     monkeypatch.setattr(notify.sys, "platform", "darwin")
     monkeypatch.setattr(notify, "ensure_app", lambda: app)
-    monkeypatch.setattr(notify, "_run", calls.append)
+    monkeypatch.setattr(notify, "_run", lambda cmd: pytest.fail("the helper started: no plain notification"))
+    monkeypatch.setattr(notify, "_open", lambda started: calls.append(started) or True)
     assert notify.send('Tomorrow at 11:30:\ninterview · "BRIGHTLINE"', "Reminder") is True
-    assert calls == [["open", "-g", "-n", str(app)]]
+    assert calls == [app]
     queued = list((isolate_data / "notifier" / "queue").glob("*.txt"))
     assert len(queued) == 1 and queued[0].read_text(encoding="utf-8") == 'Reminder\nTomorrow at 11:30: interview · "BRIGHTLINE"'
     notify.send("No headline given")
     texts = sorted(p.read_text(encoding="utf-8") for p in (isolate_data / "notifier" / "queue").glob("*.txt"))
     assert "JobHelper\nNo headline given" in texts                        # the app's name stands in for a headline
+
+
+def test_a_helper_that_does_not_start_falls_back_to_the_plain_way_once(isolate_data, monkeypatch):
+    plain = []
+    app = isolate_data / "notifier" / "JobHelper.app"
+    monkeypatch.setattr(notify.sys, "platform", "darwin")
+    monkeypatch.setattr(notify, "ensure_app", lambda: app)
+    monkeypatch.setattr(notify, "_open", lambda started: False)
+    monkeypatch.setattr(notify, "_run", plain.append)
+    assert notify.send("Today at 13:30: interview", "Reminder") is True
+    assert plain and plain[0][0] == "osascript" and "Today at 13:30: interview" in plain[0][-1]
+    assert list((isolate_data / "notifier" / "queue").glob("*.txt")) == []        # not shown a second time later
+
+
+def test_a_message_that_waited_too_long_is_not_shown_late(isolate_data, monkeypatch):
+    import os
+    import time
+    queue = isolate_data / "notifier" / "queue"
+    queue.mkdir(parents=True)
+    old, recent = queue / "1.txt", queue / "2.txt"
+    old.write_text("Reminder\nToday at 13:30: interview", encoding="utf-8")
+    recent.write_text("Search finished\n3 new jobs", encoding="utf-8")
+    stamp = time.time() - (notify.STALE_HOURS + 1) * 3600
+    os.utime(old, (stamp, stamp))
+    monkeypatch.setattr(notify.sys, "platform", "darwin")
+    monkeypatch.setattr(notify, "ensure_app", lambda: isolate_data / "notifier" / "JobHelper.app")
+    monkeypatch.setattr(notify, "_open", lambda started: True)
+    notify.send("Something new")
+    left = sorted(p.read_text(encoding="utf-8") for p in queue.glob("*.txt"))
+    assert left == ["JobHelper\nSomething new", "Search finished\n3 new jobs"]
 
 
 def test_the_helper_app_is_built_once_with_the_icon_and_name(isolate_data, monkeypatch):

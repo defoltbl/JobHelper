@@ -391,6 +391,6 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
 - **An app that opens without the terminal.** Expected parts: a real `JobHelper.app` with the
   existing icon; data moved out of the project folder to a per-user place, with a one-time
   move of existing data and backups (DONE: `home.DataHome`, ~/Library/Application Support/JobHelper); finding the Claude sign-in from an app started by
-  Finder (DONE: `claude_cli.ClaudeCli` uses the SDK's own copy); the weekly run and the notifier pointed at the packaged app; first launch of an
+  Finder (DONE: `claude_cli.ClaudeCli` uses the SDK's own copy); the weekly run and the notifier pointed at the packaged app (DONE: `--weekly`, `schedule.refresh`, notifier falls back to osascript); first launch of an
   unsigned app on macOS; the technical documentation updated for installing without Python.
   It is last because every item above changes files the package would freeze.
