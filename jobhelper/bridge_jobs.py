@@ -245,6 +245,8 @@ class JobSlots:
     @Slot(result=int)
     def remind(self):
         """Announce dates that are tomorrow or today (once per day each). Returns how many."""
+        if self._quiet:
+            return 0
         due = self._api.due_reminders()
         for item in due:
             notify.send(planner.reminder_text(item), "Reminder")

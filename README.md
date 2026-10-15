@@ -217,6 +217,7 @@ JobHelper/
 ├── app_qt.py                 # starts the window
 ├── run.py                    # the same search from the command line (used by the weekly run)
 ├── status.py                 # command-line tools: list, sync, security, usage …
+├── packaging/JobHelper.spec   # how JobHelper.app is built (scripts/build_app.py runs it)
 ├── jobhelper/                # all the logic, no window code (63 modules)
 │   ├── agent1_cv.py … agent5_responses.py     # the five agents
 │   ├── scrapers_*.py         # one module per kind of job source
@@ -282,6 +283,17 @@ look for in **Options** and select **Run search**.
 
 **Save your recovery key once** – you need it on a new Mac or after a Keychain reset: in the
 app, **Account** card → *Data protection* → **Recovery key**.
+
+### Build the Mac app
+
+```bash
+pip install -r requirements-build.txt     # PyInstaller, only for building
+python scripts/build_app.py               # builds dist/JobHelper.app, then checks it
+```
+
+The check opens the built app's window off-screen on a throwaway data folder, so it never
+touches your data or asks Claude. Drag `dist/JobHelper.app` into Applications. The first time,
+macOS asks you to allow it: **System Settings → Privacy & Security → Open Anyway**.
 
 ## Usage
 

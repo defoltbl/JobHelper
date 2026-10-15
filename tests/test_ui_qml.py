@@ -216,6 +216,18 @@ def test_pdf_row_says_how_to_get_pdf_copies_and_is_never_required(ui):
     assert ui.warnings == []
 
 
+def test_the_set_up_line_names_what_is_missing(ui):
+    cases = [({"cv": ""}, "Needed before the line can run: your master CV."),
+             ({"claude": False}, "Needed before the line can run: the Claude sign-in."),
+             ({"claude": False, "cv": ""}, "Needed before the line can run: the Claude sign-in and your master CV."),
+             ({"paid_api": True}, "A paid Claude key is set on this Mac. Remove it, then start the app again.")]
+    for missing, said in cases:
+        ui.win.setProperty("connData", {**READY, **missing})
+        assert ui.js("welcome.neededText()") == said, missing
+    ui.win.setProperty("connData", dict(READY))
+    assert ui.js("welcome.neededText()") == ""
+
+
 def test_welcome_is_not_ready_without_claude_or_cv(ui):
     welcome = ui.find("welcome")
     for missing in ({"claude": False}, {"cv": ""}, {"paid_api": True},

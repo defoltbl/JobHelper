@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 16 October 2026
 
+- JobHelper is now a **Mac app**, JobHelper.app: it opens from Applications like any other app, with no Python or terminal. The user guide shows how to open it the first time.
+- The welcome card now names what is still needed, for example **your master CV**, instead of always saying two things.
 - The Account card has a fifth row, **PDF copies**. It says whether LibreOffice is on your Mac, and how to get PDF copies when it is not.
 - A notification that the app's notifier cannot show now appears **the plain way**, and an old message that waited too long is not shown late.
 - The Claude sign-in is checked, and started, with **the same Claude program that answers the app's questions**, so the Account card is right also when the app is opened from Finder.

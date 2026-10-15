@@ -1,0 +1,2 @@
+# Only for building JobHelper.app (python scripts/build_app.py); the app itself does not need it.
+pyinstaller==6.22.3

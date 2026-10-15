@@ -237,6 +237,49 @@ Table 3.1 lists the main packages and what each is for.
 3. Follow the welcome card. Sign in to Claude, choose a CV, and connect a mailbox for replies if
    you want. The user guide describes each step.
 
+### Build JobHelper.app
+
+A packaged app opens like any other Mac app, without Python or a terminal. To build it:
+
+1. Turn the virtual environment on.
+2. Install the build tool. The app itself does not need it.
+
+   ```bash
+   pip install -r requirements-build.txt
+   ```
+
+3. Build the app and check it:
+
+   ```bash
+   python scripts/build_app.py
+   ```
+
+The script runs PyInstaller with `packaging/JobHelper.spec` and puts the app in `dist/`.
+Then `AppCheck` examines the app. It looks for the program, the bundle id, the version, the
+window files, the icon, the sound and `CHANGELOG.md`. It starts the Claude program that the
+app carries, and it verifies the signature. Then it starts the app with `--check-window`.
+To check an app that is already built, use `python scripts/build_app.py --check`.
+
+The window check loads the whole window off-screen for a few seconds and reports each problem
+that Qt finds. It also loads the commands of the weekly run, and saves a picture of the window as
+`dist/window_check.png`. The check runs only on a throwaway data folder (`JOBHELPER_HOME`) and an
+in-memory keychain (`JOBHELPER_VAULT_BACKEND=memory`). Without both, the app refuses it. Its
+bridge is quiet: it asks Claude nothing and gives no reminder.
+
+Some important points:
+
+- The name, version and bundle id are in `jobhelper/app_info.py`.
+- The spec drops the Qt parts that the window does not use, for example the web engine and 3D
+  (`UNUSED_QT`). Thus the app is about 390 MB, not 650 MB. A test makes sure that no Qt part the
+  window imports is dropped.
+- A module that the app loads by its name must be in `hiddenimports` of the spec. The window
+  check fails if one is missing.
+- The app is signed only for the Mac that built it (an ad-hoc signature), and Apple has not
+  notarized it. On another Mac, the person must select **Open Anyway** one time (user guide,
+  section 2).
+- `Info.plist` contains `NSAppleEventsUsageDescription`, so macOS can ask before the app controls
+  Google Chrome or Terminal.
+
 ### Run a search without the window
 
 A search can also be run from the command line. It does the same work as **Run search** and

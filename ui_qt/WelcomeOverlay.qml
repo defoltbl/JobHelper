@@ -60,6 +60,14 @@ Item {
     readonly property var changedFiles: connData.changed_files || []
     readonly property bool protectedOk: connData.vault !== "locked" && changedFiles.length === 0
     readonly property bool ready: connData.claude === true && hasCv && connData.paid_api !== true && protectedOk
+    // what is still missing, in words: "Needed before the line can run: your master CV."
+    function neededText() {
+        if (connData.paid_api === true) return "A paid Claude key is set on this Mac. Remove it, then start the app again.";
+        var missing = [];
+        if (connData.claude !== true) missing.push("the Claude sign-in");
+        if (!hasCv) missing.push("your master CV");
+        return missing.length === 0 ? "" : "Needed before the line can run: " + missing.join(" and ") + ".";
+    }
     Behavior on cover { NumberAnimation { duration: 460; easing.type: Easing.InOutCubic } }
     visible: cover > 0.001
 
@@ -215,7 +223,7 @@ Item {
                         color: theme.soft; font.pixelSize: 12
                         text: welcome.ready ? "Everything is connected. Your assembly line is ready."
                             : !welcome.protectedOk ? "Your data protection needs a look before the line can run."
-                            : "Two things are needed before the line can run." }
+                            : welcome.neededText() }
                 }
                 Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line; opacity: 0.7 }
 

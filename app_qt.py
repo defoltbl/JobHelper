@@ -38,10 +38,30 @@ def apply_text_size(environ=None) -> str:
     return environ["QT_SCALE_FACTOR"]
 
 
+CHECK_FLAG = "--check-window"
+
+
+def check_refusal(environ) -> str:
+    """Why the window check may not run here ('' = it may): it only ever runs on a throwaway data
+    folder and an in-memory keychain, so it can never touch a person's data or Keychain."""
+    if not str(environ.get("JOBHELPER_HOME") or "").strip():
+        return "The window check needs JOBHELPER_HOME: a throwaway data folder."
+    if str(environ.get("JOBHELPER_VAULT_BACKEND") or "").lower() != "memory":
+        return "The window check needs JOBHELPER_VAULT_BACKEND=memory."
+    return ""
+
+
 def main() -> int:
     from jobhelper import home, weekly
     if weekly.FLAG in sys.argv[1:]:
         return weekly.main()                          # the weekly run: no window, everything into its log
+    checking = CHECK_FLAG in sys.argv[1:]
+    if checking:
+        refusal = check_refusal(os.environ)
+        if refusal:
+            print(refusal)
+            return 2
+        return check_window()
     if home.start().moved:
         # the data has just moved into the Library: start again, so every part of the app uses the new place
         os.execv(sys.executable, home.restart_command(sys.argv, sys.executable, getattr(sys, "frozen", False)))
@@ -76,6 +96,49 @@ def main() -> int:
     rc = app.exec()
     shut_down(engine)
     return rc
+
+
+def check_window(seconds: float = 4.0) -> int:
+    """Load the whole window off-screen, let it start for a few seconds, then close it: 0 when Qt
+    reported no problem, else 1 (the problems are printed). For a built app: `JobHelper --check-window`."""
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    import importlib
+
+    from PySide6.QtCore import QTimer
+    app = QGuiApplication(sys.argv[:1])
+    engine = QQmlApplicationEngine()
+    problems: list[str] = []
+    engine.warnings.connect(lambda found: problems.extend(w.toString() for w in found))
+    bridge = Bridge(quiet=True)
+    engine.rootContext().setContextProperty("bridge", bridge)
+    engine.load(QUrl.fromLocalFile(str(QML)))
+    if not engine.rootObjects():
+        print("Failed to load the QML UI.")
+        return 1
+    picture = os.environ.get("JOBHELPER_CHECK_PICTURE", "")
+
+    def finish():
+        try:
+            if picture:                               # a picture of the window, to look at after a build
+                importlib.import_module("PySide6.QtQuick")    # so the window is a QQuickWindow, which can be pictured
+                if not engine.rootObjects()[0].grabWindow().save(picture):
+                    problems.append(f"The picture could not be saved to {picture}.")
+        except Exception as e:  # noqa: BLE001 - a picture that fails is a problem of the check, never a hang
+            problems.append(f"The picture of the window failed: {e}")
+        finally:
+            app.quit()
+    QTimer.singleShot(int(seconds * 1000), finish)
+    app.exec()
+    shut_down(engine)
+    for name in ("run", "status"):                    # what the weekly run starts (a built app must carry them)
+        try:
+            importlib.import_module(name)
+        except Exception as e:  # noqa: BLE001 - reported as a problem of the check
+            problems.append(f"The weekly run's {name} cannot be loaded: {e}")
+    for problem in problems:
+        print(problem)
+    print(f"window check: {len(problems)} problems")
+    return 1 if problems else 0
 
 
 def shut_down(engine) -> None:

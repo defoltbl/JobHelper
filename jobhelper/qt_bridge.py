@@ -67,8 +67,10 @@ class Bridge(RunSlots, JobSlots, QObject):
     formNoticed = Signal("QVariantMap")        # the tab in front looks like the form of a tracked job (only when that is turned on)
     formWatched = Signal("QVariantMap")        # where the form in Chrome stands now (asked while the assistant's window waits)
 
-    def __init__(self) -> None:
+    def __init__(self, quiet: bool = False) -> None:
+        """`quiet`: asks Claude nothing and gives no reminder (the window check of a built app)."""
         super().__init__()
+        self._quiet = quiet
         self._api = Api()
         self._running = False
         self._stop = threading.Event()
@@ -287,6 +289,9 @@ class Bridge(RunSlots, JobSlots, QObject):
 
     def _ping_usage(self):
         from . import llm
+        if self._quiet:
+            self.usageReady.emit()
+            return
         try:
             if self._api.connections().get("claude") and not config.using_paid_api():
                 llm.ask("ping", system="Reply with exactly: ok", tag="usage_ping", force=True)

@@ -19,3 +19,7 @@ data_moved_to_Library*/
 
 # OS / editor
 .DS_Store
+
+# The built app and PyInstaller's work folder
+build/
+dist/

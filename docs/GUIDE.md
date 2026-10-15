@@ -149,11 +149,32 @@ structure of the code and the tests.
 
 ## 2. Set up the app
 
-Do this once. When the app starts, it checks four things and shows them on the welcome card (Figure 2.1).
+Do this once. When the app starts, it checks five things and shows them on the welcome card (Figure 2.1).
 
 ![The welcome card](img/01_welcome.png)
 
 *Figure 2.1 – The welcome card*
+
+### Install the app
+
+1. Drag **JobHelper** into the **Applications** folder.
+2. Double-click **JobHelper** in **Applications**.
+
+### Open the app for the first time
+
+JobHelper is not from the App Store, so macOS does not know it. The first time you open it,
+macOS stops it and shows a message. Do these steps one time:
+
+1. On the message, select **Done**.
+2. Open **System Settings**, then select **Privacy & Security**.
+3. Scroll down to the line that names JobHelper, then select **Open Anyway**.
+4. Type your Mac password, if macOS asks for it.
+5. Select **Open Anyway** again. The window of JobHelper opens.
+
+After this, JobHelper opens like any other app.
+
+The first time the assistant fills in a form, macOS asks if JobHelper may control Google
+Chrome. Select **Allow**. Without this, the assistant cannot read or fill in a form.
 
 ### Prerequisites
 

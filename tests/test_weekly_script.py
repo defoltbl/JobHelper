@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def _tracked_text_files():
-    skip = {".venv", ".git", "data", "__pycache__", ".pytest_cache"}
+    skip = {".venv", ".git", "data", "__pycache__", ".pytest_cache", "build", "dist"}     # build/, dist/: the built app
     for path in ROOT.rglob("*"):
         parts = path.relative_to(ROOT).parts
         if any(part.startswith("data_moved_to_Library") for part in parts):

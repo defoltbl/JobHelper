@@ -235,6 +235,9 @@ data/                your data; only the *.example.* files are in git
   `app_qt.main()` before anything reads data, and the app then starts itself again. Tests set
   `JOBHELPER_HOME` to a temporary folder in `conftest.py`, and the guard watches both the Library
   folder and the old `data/`.
+- **A packaged app carries only what it can see being imported.** A module loaded by name
+  (`importlib`, the weekly run's `run`/`status`, `PySide6.QtQuick` for the picture) must be in the
+  spec's `hiddenimports`; the window check of the built app fails when one is missing.
 - **Opening the real window uses up reminders.** `Bridge.remind` marks the reminders of the day as given.
   A read-only check of the real window must replace `ui_api.Api.due_reminders` with an empty list; a
   check on a day with an interview once used up that day's morning reminder.
@@ -388,7 +391,7 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
 
 **Last**
 
-- **An app that opens without the terminal.** Expected parts: a real `JobHelper.app` with the
+- **An app that opens without the terminal.** DONE 2026-10-16: `python scripts/build_app.py` (PyInstaller, `packaging/JobHelper.spec`, checked by `AppCheck`). Expected parts: a real `JobHelper.app` with the
   existing icon; data moved out of the project folder to a per-user place, with a one-time
   move of existing data and backups (DONE: `home.DataHome`, ~/Library/Application Support/JobHelper); finding the Claude sign-in from an app started by
   Finder (DONE: `claude_cli.ClaudeCli` uses the SDK's own copy); the weekly run and the notifier pointed at the packaged app (DONE: `--weekly`, `schedule.refresh`, notifier falls back to osascript); first launch of an
