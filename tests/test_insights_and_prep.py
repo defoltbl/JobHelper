@@ -714,6 +714,7 @@ def test_projects_and_skills_are_asked_for_kept_held_to_the_cv_and_editable(monk
                                  "result": "Shown at two conferences.", "ask": ["Why imitation learning first?"]}]
     assert prep["skills"] == [{"skill": "Python", "proof": "Used in every project.", "detail": "I wrote the training loop."}]
     assert '"about"' in prompts[0] and '"why"' in prompts[0] and "never as a detail or a" in prompts[0]
+    assert "technical reason it suits that task" in prompts[0] and "not about this application" in prompts[0]
     assert prep["ask_hr"][0] == interview_prep.NEXT_STEPS_QUESTION and "Who would I work with?" in prep["ask_hr"]
     labels = {p["key"]: p["label"] for p in interview_prep.parts(prep)}
     assert labels["projects.0.what"] == "Your project: Game-AI agent" and labels["skills.0.proof"] == "Where your CV shows it: Python"

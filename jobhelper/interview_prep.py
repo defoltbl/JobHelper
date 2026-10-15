@@ -96,8 +96,9 @@ Besides the questions, write the sheet the candidate reads before the call:
   CV and the candidate's own words give them. "plain" is the same in 1-2 sentences for HR. "tools" are the tools
   the CV names for it. "tech" takes each of those tools in turn, so the candidate can explain it to a specialist:
   "about" is one sentence on what the tool or method is, in general; "use" is one or two sentences on what it did in
-  this project; "why" is one sentence on why it fits this job in the project (what it gives over the usual
-  choices). Use what the CV and the candidate's own words say; where they only name the tool, explain its usual
+  this project; "why" is one sentence on the technical reason it suits that task in the project (what it does
+  better there than the usual other choices). "why" is about the project, not about this application: never
+  "it shows I can …". Use what the CV and the candidate's own words say; where they only name the tool, explain its usual
   job and its usual reason in general words ("FastAPI serves the answers over HTTP"), never as a detail or a
   decision the candidate claims.
   "result" is the outcome the CV gives ('' when it gives none). "ask" is 2-3 questions a specialist may ask
@@ -135,7 +136,7 @@ Return JSON with exactly these keys:
   "projects": [{{"name": "<the project's name as the CV gives it>", "what": "<3-5 sentences, first person>",
                 "plain": "<1-2 sentences for HR, no jargon, first person>", "tools": ["<tools the CV names for it>"],
                 "tech": [{{"tool": "<one of those tools>", "about": "<1 sentence: what the tool or method is>",
-                          "use": "<1-2 sentences: what it did in this project>", "why": "<1 sentence: why it fits this job>"}}],
+                          "use": "<1-2 sentences: what it did in this project>", "why": "<1 sentence: the technical reason it suits that task in the project>"}}],
                 "result": "<the outcome the CV gives, or ''>", "ask": ["<2-3 questions a specialist may ask about it>"]}}],
   "skills": [{{"skill": "<a skill this role asks for>", "proof": "<one sentence: where the CV shows it>",
               "detail": "<2-3 sentences for a specialist: what you did with it and what you can explain>"}}],
