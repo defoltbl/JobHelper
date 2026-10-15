@@ -3,6 +3,13 @@
 The newest changes are first. The Help window in the app shows this file under "What changed".
 Format: a `## date` line, then one `- ` line per change; `**words**` are shown in bold.
 
+## 15 October 2026
+
+- **Interview preparation** now opens as two Word documents: one for a talk with HR, one for a talk with a specialist. Both go in this order: the company, you, your projects and skills, the questions they may ask you, and the questions you can ask them.
+- The preparation has a new part, **your projects and skills**, each with where your CV shows it. Select **Make again** on an older preparation to get it.
+- The questions you can ask HR always include the **next steps**, and ask about the team, working hours, the first weeks and the contract.
+- The preparation is written in **ASD-STE100 Simplified Technical English**: short sentences, the active voice and common words.
+
 ## 14 October 2026
 
 - When a company moves an interview, the new day and time from its invitation now replace the old **date to remember**. Before, a date an earlier email had set was kept, and the new one had to be typed by hand. A date you set yourself is still never changed by an email.

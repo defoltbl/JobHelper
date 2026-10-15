@@ -801,9 +801,10 @@ Dialog {
                         SmallButton { visible: detailDialog.job.has_prep === true && !detailDialog.prepBusy; text: "Open"
                             primaryStyle: true; objectName: "prepOpen"; onClicked: prepDialog.show(detailDialog.job.id) }
                         SmallButton { objectName: "prepDocument"; visible: detailDialog.job.has_prep === true && !detailDialog.prepBusy
-                            text: "Document"
+                            text: "Documents"
                             onClicked: { var r = bridge.prepDocument(detailDialog.job.id, false);
-                                         ticker.text = (r && r.ok) ? "Opened " + r.file + "." : ((r && r.msg) || "Couldn't write the document."); } }
+                                         ticker.text = (r && r.ok) ? "Opened " + (r.files || [r.file]).join(" and ") + "."
+                                                                   : ((r && r.msg) || "Couldn't write the documents."); } }
                         SmallButton { objectName: "prepMake"; enabled: !detailDialog.prepBusy
                             text: detailDialog.prepBusy ? "Preparing…" : (detailDialog.job.has_prep ? "Make again" : "Prepare")
                             onClicked: {

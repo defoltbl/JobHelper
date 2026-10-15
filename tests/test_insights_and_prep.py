@@ -307,7 +307,8 @@ def test_an_older_saved_preparation_without_the_new_parts_still_works(monkeypatc
     assert prep["company"] == [] and prep["pitch"] == "" and prep["key_question"] == {"question": "", "answer": ""}
 
 
-def test_the_sheet_is_a_word_document_in_the_order_you_read_it(tmp_path):
+def test_two_documents_one_for_hr_one_for_a_specialist_in_the_order_asked(tmp_path):
+    """Company, you, projects and skills, their questions with answers, your questions: in that order, in both files."""
     import docx
 
     from jobhelper import prep_doc
@@ -315,32 +316,64 @@ def test_the_sheet_is_a_word_document_in_the_order_you_read_it(tmp_path):
     prep = dict(FULL, made="2026-10-08", checks=["The opening pitch mentions X."])
     prep["concepts"] = prep["concepts"][:1]
     prep["questions"] = [dict(q, check="Kubernetes" if q["kind"] == "technical" else "") for q in FULL["questions"]]
-    path = prep_doc.build(job, prep, tmp_path / "out" / "x.docx", contact="Petra")
-    lines = [p.text for p in docx.Document(str(path)).paragraphs if p.text.strip()]
-    assert lines[0] == "BRIGHTLINE – Interview Prep" and lines[1] == "Machine Learning Engineer"
-    assert lines[2] == "Tuesday 13 October 2026, 11:30 · Google Meet · with Petra"
-    order = ["About BRIGHTLINE (if they ask what you know)", "The role – what the work actually is", "Your fit – lead with these",
-             "The honest gap (own it, don't hide it)", "The key question: “This role asks for 3+ years. Why you?”",
-             "Your opening pitch (about 45 seconds)", "If you speak with HR or a recruiter",
-             "If you speak with someone who does this work or the hiring manager", "Concepts to be able to explain",
-             "Worth revising before the call", "Questions to ask them", "Practical reminders"]
-    assert [lines.index(h) for h in order] == sorted(lines.index(h) for h in order)
-    assert "Imitation learning: Learning a policy from demonstrations." in lines and prep_doc.COMPANY_NOTE in lines
-    assert "Check before you say it: this mentions Kubernetes, which is not in your CV." in lines
-    assert "Check: The opening pitch mentions X." in lines and "—" not in "\n".join(lines)
-    old = prep_doc.build({"title": "T", "company": "C"}, {"questions": FULL["questions"], "summary": "s"}, tmp_path / "old.docx")
-    old_lines = [p.text for p in docx.Document(str(old)).paragraphs if p.text.strip()]
-    assert old_lines[0] == "C – Interview Prep" and "Your fit – lead with these" not in old_lines and "Practical reminders" in old_lines
+    prep["projects"] = [{"name": "Game-AI agent", "what": "I built an agent that learns from play. I used PyTorch.", "plain": "I built a program that learns to play a game.",
+                         "tools": ["Python", "PyTorch"]}]
+    prep["skills"] = [{"skill": "Python", "proof": "I used it in every project in my CV."}]
+    read = lambda path: [p.text for p in docx.Document(str(path)).paragraphs if p.text.strip()]   # noqa: E731
+    hr = read(prep_doc.build(job, prep, tmp_path / "out" / "hr.docx", contact="Petra", audience="hr"))
+    tech = read(prep_doc.build(job, prep, tmp_path / "out" / "tech.docx", contact="Petra", audience="technical"))
+    assert hr[0] == "BRIGHTLINE – Interview preparation: HR" and tech[0] == "BRIGHTLINE – Interview preparation: Technical"
+    assert hr[1] == "Machine Learning Engineer" and hr[2] == "Tuesday 13 October 2026, 11:30 · Google Meet · with Petra"
+    order_hr = ["1. About the company", "2. About you", "3. Your projects and skills", "4. Questions HR may ask you", "5. Questions you can ask HR",
+                "Before the call"]
+    order_tech = ["1. About the company", "2. About you", "3. Your projects and skills", "4. Questions a specialist may ask you",
+                  "Concepts to explain", "5. Questions you can ask them", "Before the call"]
+    assert [hr.index(h) for h in order_hr] == sorted(hr.index(h) for h in order_hr)
+    assert [tech.index(h) for h in order_tech] == sorted(tech.index(h) for h in order_tech)
+    # each file has its own questions, and its own way of telling the projects
+    hr_qs = {q["question"] for q in prep["questions"] if prep_doc._audience(q) == "hr"}
+    tech_qs = {q["question"] for q in prep["questions"] if prep_doc._audience(q) == "technical"}
+    assert hr_qs <= set(hr) and not (tech_qs - hr_qs) & set(hr)
+    assert tech_qs <= set(tech) and not (hr_qs - tech_qs) & set(tech)
+    assert "“I built a program that learns to play a game.”" in hr and "Tools: Python, PyTorch" not in hr
+    assert "“I built an agent that learns from play. I used PyTorch.”" in tech and "Tools: Python, PyTorch" in tech
+    assert "Python: I used it in every project in my CV." in hr and "Python: I used it in every project in my CV." in tech
+    assert "Imitation learning: Learning a policy from demonstrations." in tech and "Concepts to explain" not in hr
+    assert prep_doc.COMPANY_NOTE in hr and prep_doc.COMPANY_NOTE in tech
+    assert "Check this answer before you say it. It mentions Kubernetes. Your CV does not show this." in tech
+    assert "Check: The opening pitch mentions X." in hr and all("—" not in "\n".join(doc) for doc in (hr, tech))
+    # HR always gets the question about the next steps, whatever was drafted
+    assert hr.index(interview_prep.NEXT_STEPS_QUESTION) > hr.index("5. Questions you can ask HR")
+    # an older preparation (no projects, no skills, one mixed list of questions to ask) still makes both files
+    old = {"questions": FULL["questions"], "summary": "s", "ask_them": ["What does a normal day look like?"]}
+    for audience in prep_doc.AUDIENCES:
+        lines = read(prep_doc.build({"title": "T", "company": "C"}, old, tmp_path / f"old_{audience}.docx", audience=audience))
+        assert prep_doc.NEW_PART in lines and "What does a normal day look like?" in lines and "Before the call" in lines
+
+
+def test_the_text_the_app_writes_itself_follows_simplified_technical_english():
+    """ASD-STE100: at most 20 words in a sentence of instruction, 25 in a description; no em dash."""
+    import re
+
+    from jobhelper import prep_doc
+    texts = [prep_doc.COMPANY_NOTE, prep_doc.NEW_PART, *prep_doc.NOTES.values(), *prep_doc.FIXED_REMINDERS, interview_prep.NEXT_STEPS_QUESTION]
+    for text in texts:
+        for sentence in re.split(r"(?<=[.!?])\s+", text):
+            assert len(sentence.split()) <= 20, sentence
+        assert "—" not in text
+    assert "ASD-STE100" in interview_prep.SYSTEM and "20 words" in interview_prep.SYSTEM
 
 
 def test_sheet_file_name_and_date_line():
     from jobhelper import prep_doc
-    assert prep_doc.file_name("AlexNovak", "Actum Digital, a.s.") == "AlexNovak_ActumDigital_Prep.docx"
-    assert prep_doc.file_name("", "") == "Candidate_Company_Prep.docx"
+    assert prep_doc.file_name("AlexNovak", "Actum Digital, a.s.") == "AlexNovak_ActumDigital_Prep_HR.docx"
+    assert prep_doc.file_name("AlexNovak", "Actum Digital, a.s.", "technical") == "AlexNovak_ActumDigital_Prep_Technical.docx"
+    assert prep_doc.file_name("", "") == "Candidate_Company_Prep_HR.docx"
     assert prep_doc.when_text({"date": "2026-10-13", "time": ""}) == "Tuesday 13 October 2026" and prep_doc.when_text({}) == "" and prep_doc.when_text(None) == ""
+    assert prep_doc.when_text({"date": None}) == ""
 
 
-def test_api_writes_and_opens_the_sheet(isolate_data, monkeypatch):
+def test_api_writes_and_opens_both_documents(isolate_data, monkeypatch):
     config.ensure_dirs()
     opened, shown = [], []
     monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(target))
@@ -350,9 +383,18 @@ def test_api_writes_and_opens_the_sheet(isolate_data, monkeypatch):
     assert "Prepare the interview first" in api.prep_document("b")["msg"] and api.prep_document("zzz")["ok"] is False
     api._change("a", lambda jobs, j: j.__setitem__("interview_prep", dict(FULL, made="2026-10-08", checks=[])), render=False)
     got = api.prep_document("a")
-    path = config.DATA_DIR / "interview_prep" / "Candidate_Brightline_Prep.docx"
-    assert got == {"ok": True, "file": path.name} and opened == [path] and path.is_file()
-    assert api.prep_document("a", reveal=True)["ok"] and shown == [path] and len(opened) == 1
+    folder = config.DATA_DIR / "interview_prep"
+    hr, tech = folder / "Candidate_Brightline_Prep_HR.docx", folder / "Candidate_Brightline_Prep_Technical.docx"
+    assert got == {"ok": True, "file": hr.name, "files": [hr.name, tech.name]}
+    assert opened == [hr, tech] and hr.is_file() and tech.is_file()
+    assert api.prep_document("a", reveal=True)["ok"] and shown == [hr] and len(opened) == 2
+
+
+def test_hr_questions_always_ask_about_the_next_steps():
+    assert interview_prep.with_next_steps(["Who would I work with?"])[0] == interview_prep.NEXT_STEPS_QUESTION
+    asked = ["What does the hiring process look like from here?", "Who would I work with?"]
+    assert interview_prep.with_next_steps(asked) == asked                          # already asked: not twice
+    assert interview_prep.with_next_steps([]) == [interview_prep.NEXT_STEPS_QUESTION]
 
 
 # ── work experience, told for the role ──────────────────────────────────────
@@ -388,13 +430,17 @@ def test_the_sheet_has_the_work_experience_section(tmp_path):
 
     from jobhelper import prep_doc
     prep = dict(FULL, experience=[WORK[0]], made="2026-10-08", checks=[])
-    lines = [p.text for p in docx.Document(str(prep_doc.build({"title": "ML Engineer", "company": "BRIGHTLINE"}, prep, tmp_path / "x.docx"))).paragraphs if p.text.strip()]
+    read = lambda audience: [p.text for p in docx.Document(str(prep_doc.build({"title": "ML Engineer", "company": "BRIGHTLINE"}, prep,      # noqa: E731
+                                                                                    tmp_path / f"{audience}.docx", audience=audience))).paragraphs if p.text.strip()]
+    lines = read("technical")
     start = lines.index("Your work experience, told for this role")
-    assert lines.index("Your fit – lead with these") < start < lines.index("The honest gap (own it, don't hide it)")
+    assert lines.index("2. About you") < lines.index("What to lead with") < start < lines.index("The honest gap. Say it openly; do not hide it.")
     block = lines[start:start + 12]
     assert "Software Developer Intern, Acme, Feb-Aug 2026" in block and "“I worked on the import service in Python. I added its tests.”" in block
-    assert "Ask yourself, and add it only if it is true:" in block and "Did you review other people's code?" in block
-    assert any(x.startswith("Thin spot: The CV gives no results for this job.") and "More about your work" in x for x in block)
+    assert "Ask yourself these questions. Add a point only if it is true:" in block and "Did you review other people's code?" in block
+    assert any(x.startswith("Your CV says little here: The CV gives no results for this job.") and "More about your work" in x for x in block)
+    hr = read("hr")                                       # HR gets the story, without the specialist's working notes
+    assert "Your work experience, in plain words" in hr and "Did you review other people's code?" not in hr
 
 
 def test_experience_notes_come_from_options_and_reach_both_drafts(isolate_data, monkeypatch):
@@ -444,16 +490,17 @@ def test_the_sheet_has_both_sets_and_marks_usual_tasks_as_general(tmp_path):
 
     from jobhelper import prep_doc
     prep = dict(interview_prep._clean(TWO), made="2026-10-08", checks=[])
-    lines = [p.text for p in docx.Document(str(prep_doc.build({"title": "ML Engineer", "company": "BRIGHTLINE"}, prep, tmp_path / "x.docx"))).paragraphs if p.text.strip()]
-    hr, tech = lines.index("If you speak with HR or a recruiter"), lines.index("If you speak with someone who does this work or the hiring manager")
-    assert hr < tech
-    assert "I taught a program to play a game by copying good players." in lines[hr:tech]             # the plain answer is in the HR set
-    assert "A route planner for delivery vans in Python." in lines[tech:] and "It clips the policy update." in lines[tech:]
-    assert lines[hr + 1].startswith("They usually do not know the specialist side of the work")
-    assert "For HR, in plain words:" in lines and "“I helped build a tool that loads data, and I checked that it works.”" in lines
-    general = lines.index("What people in this kind of position usually do (general knowledge about the role, not your record):")
-    assert lines[general + 1] == "An intern in this kind of role usually fixes small bugs."
-    assert general < lines.index("Ask yourself, and add it only if it is true:")
+    read = lambda audience: [p.text for p in docx.Document(str(prep_doc.build({"title": "ML Engineer", "company": "BRIGHTLINE"}, prep,      # noqa: E731
+                                                                                    tmp_path / f"{audience}.docx", audience=audience))).paragraphs if p.text.strip()]
+    hr, tech = read("hr"), read("technical")
+    assert "I taught a program to play a game by copying good players." in hr                     # the plain answer is in the HR file
+    assert "A route planner for delivery vans in Python." in tech and "It clips the policy update." in tech
+    assert "A route planner for delivery vans in Python." not in hr
+    assert hr[hr.index("4. Questions HR may ask you") + 1] == prep_doc.NOTES["hr"]
+    assert "“I helped build a tool that loads data, and I checked that it works.”" in hr               # the plain story, for HR
+    general = tech.index("What people in this type of job usually do. This is general information about the role, not your record:")
+    assert tech[general + 1] == "An intern in this kind of role usually fixes small bugs."
+    assert general < tech.index("Ask yourself these questions. Add a point only if it is true:")
 
 
 def test_a_plain_story_is_held_to_the_cv_too(monkeypatch):
@@ -484,14 +531,17 @@ def test_the_sheet_puts_your_questions_under_each_set(tmp_path):
 
     from jobhelper import prep_doc
     prep = dict(interview_prep._clean(ASK), made="2026-10-08", checks=[])
-    lines = [p.text for p in docx.Document(str(prep_doc.build({"title": "T", "company": "BRIGHTLINE"}, prep, tmp_path / "x.docx"))).paragraphs if p.text.strip()]
-    hr, tech = lines.index("If you speak with HR or a recruiter"), lines.index("If you speak with someone who does this work or the hiring manager")
-    assert hr < lines.index("What you can ask them:") < tech < lines.index("What you can ask this person:")
-    assert "What are the next steps after this call?" in lines[hr:tech] and "What would I own in the first three months?" in lines[tech:]
-    assert "Questions to ask them" not in lines                                     # no second, mixed list
+    read = lambda p, name, audience: [x.text for x in docx.Document(str(prep_doc.build({"title": "T", "company": "BRIGHTLINE"}, p,      # noqa: E731
+                                                                                         tmp_path / name, audience=audience))).paragraphs if x.text.strip()]
+    hr, tech = read(prep, "hr.docx", "hr"), read(prep, "tech.docx", "technical")
+    assert "What are the next steps after this call?" in hr[hr.index("5. Questions you can ask HR"):]
+    assert "What would I own in the first three months?" in tech[tech.index("5. Questions you can ask them"):]
+    assert "What would I own in the first three months?" not in hr and "What are the next steps after this call?" not in tech
+    assert interview_prep.NEXT_STEPS_QUESTION not in hr                         # the drafted list already asks about the next steps
     old = dict(interview_prep._clean(dict(TWO, ask_them=["An older mixed question?"])), made="x", checks=[])
-    old_lines = [p.text for p in docx.Document(str(prep_doc.build({"title": "T", "company": "C"}, old, tmp_path / "old.docx"))).paragraphs if p.text.strip()]
-    assert "Questions to ask them" in old_lines and "An older mixed question?" in old_lines      # an older saved preparation still shows its list
+    old["ask_hr"], old["ask_technical"] = [], []
+    for audience in ("hr", "technical"):                                        # an older saved preparation still shows its list
+        assert "An older mixed question?" in read(old, f"old_{audience}.docx", audience)
 
 
 # ── questions to ask must fit the person asking ─────────────────────────────
@@ -634,3 +684,25 @@ def test_a_cv_or_template_paragraph_that_cannot_be_rewritten_is_said_in_words(tm
     with pytest.raises(ValueError, match="Retype it as plain text"):
         cover_letter._set_para(para, "new")
     assert cv_tailor._is_heading("WORK EXPERIENCE") and not cv_tailor._is_heading("Skills: Python") and not cv_tailor._is_heading("ab")
+
+
+def test_projects_and_skills_are_asked_for_kept_held_to_the_cv_and_editable(monkeypatch):
+    prompts = []
+    reply = dict(FULL, ask_hr=["Who would I work with?"],
+                 projects=[{"name": "Game-AI agent", "what": "I built an agent that learns from play.", "plain": "I built a game program.", "tools": ["PyTorch"]},
+                           {"name": "", "what": "no name: dropped"}, "not a project"],
+                 skills=[{"skill": "Python", "proof": "Used in every project."}, {"skill": "Go", "proof": ""}])
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or reply)
+    prep = interview_prep.generate({"title": "ML Engineer", "company": "BRIGHTLINE"}, CV)
+    assert '"projects"' in prompts[0] and '"skills"' in prompts[0] and "next steps" in prompts[0] and "ASD-STE100" in interview_prep.SYSTEM
+    assert prep["projects"] == [{"name": "Game-AI agent", "what": "I built an agent that learns from play.", "plain": "I built a game program.", "tools": ["PyTorch"]}]
+    assert prep["skills"] == [{"skill": "Python", "proof": "Used in every project."}]
+    assert prep["ask_hr"][0] == interview_prep.NEXT_STEPS_QUESTION and "Who would I work with?" in prep["ask_hr"]
+    labels = {p["key"]: p["label"] for p in interview_prep.parts(prep)}
+    assert labels["projects.0.what"] == "Your project: Game-AI agent" and labels["skills.0.proof"] == "Where your CV shows it: Python"
+    new, problem = interview_prep.apply_parts(prep, [{"key": "projects.0.what", "text": "I built and tested an agent."}], CV)
+    assert problem == "" and new["projects"][0]["what"] == "I built and tested an agent."
+    _, problem = interview_prep.apply_parts(prep, [{"key": "skills.0.proof", "text": " "}], CV)
+    assert "is empty" in problem
+    text = interview_prep.as_text({"title": "ML Engineer", "company": "BRIGHTLINE"}, prep)
+    assert "YOUR PROJECTS" in text and "Tools: PyTorch" in text and "- Python: Used in every project." in text

@@ -1981,16 +1981,19 @@ def test_which_messages_are_shown_as_errors(ui, text, bad):
 
 def test_preparation_opens_as_a_document_from_both_windows(ui, monkeypatch):
     calls = []
-    monkeypatch.setattr(ui_api.Api, "prep_document", lambda self, job_id, reveal=False: calls.append((job_id, reveal)) or {"ok": True, "file": "Alex_Beta_Prep.docx"})
+    monkeypatch.setattr(ui_api.Api, "prep_document", lambda self, job_id, reveal=False: calls.append((job_id, reveal)) or {"ok": True, "file": "Alex_Beta_Prep_HR.docx",
+                                                                                                                  "files": ["Alex_Beta_Prep_HR.docx", "Alex_Beta_Prep_Technical.docx"]})
     ui.bridge._api._change("app", lambda jobs, j: j.__setitem__("interview_prep", {"made": "2026-10-08", "summary": "s", "questions": [
         {"kind": "about you", "question": "Tell me about yourself.", "why": "", "answer": "I am a junior developer.", "check": ""}]}), render=False)
     _open_job(ui, "app")
     assert ui.find("prepDocument").property("visible") is True
     ui.js('prepDialog.show("app")')
     ui.wait(450)
-    assert ui.find("prepDoc").property("text") == "Open as document" and ui.find("prepShow").property("text") == "Show in folder"
-    assert ui.js('bridge.prepDocument("app", false).file') == "Alex_Beta_Prep.docx" and ui.js('bridge.prepDocument("app", true).ok') is True
+    assert ui.find("prepDoc").property("text") == "Open as documents" and ui.find("prepShow").property("text") == "Show in folder"
+    assert ui.js('bridge.prepDocument("app", false).files.length') == 2 and ui.js('bridge.prepDocument("app", true).ok') is True
     assert calls == [("app", False), ("app", True)]
+    ui.js("prepDialog.note = ''"); QMetaObject.invokeMethod(ui.find("prepDoc"), "clicked"); ui.wait(30)
+    assert ui.js("prepDialog.note") == "Opened in Word: Alex_Beta_Prep_HR.docx and Alex_Beta_Prep_Technical.docx."
     ui.js("prepDialog.close()")
     ui.wait(350)
     ui.js("detailDialog.close()")

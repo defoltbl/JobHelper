@@ -1586,8 +1586,9 @@ For one interview the app builds a sheet from your CV and the posting.
    about a minute.
 3. When the card says the questions and answers are ready, select **Open**.
 
-**Document** on the same card opens the sheet as a Word file. **Make again** builds a new one,
-for example after you changed your CV (Figure 13.1).
+**Documents** on the same card opens the preparation as two Word files: one for a talk with HR
+or a recruiter, and one for a talk with a specialist or the hiring manager. **Make again** builds
+a new preparation, for example after you changed your CV (Figure 13.1).
 
 ![The interview preparation](img/14_interview_preparation.png)
 
@@ -1608,6 +1609,26 @@ Table 13.1 lists the parts of the interview sheet.
 | **Why they ask** | Under each question: what the interviewer wants to learn |
 | Questions you can ask them | For the HR person, and for the people you would work with |
 
+### The two documents
+
+Both documents have the same order: the company, you, your projects and skills, the questions
+they may ask you, and the questions you can ask them. Table 13.2 shows how the two differ.
+
+*Table 13.2 – The HR document and the technical document*
+
+| Part | For HR | For a specialist |
+|---|---|---|
+| 1. About the company | What the company does, and a sentence to say about it | The same facts, and the role in detail |
+| 2. About you | Your opening pitch and your jobs in plain words | Your pitch, and each job told for this role, with notes to check |
+| 3. Your projects and skills | Each project in one or two plain sentences | Each project in full, with its tools |
+| 4. Questions they may ask you | HR questions, answered in plain words | Questions about the work, answered with exact tools and numbers, then terms to explain and topics to revise |
+| 5. Questions you can ask | The next steps, the team, working hours, the first weeks, the contract | The work itself, the tools, what you would do first |
+
+The question about the next steps is always in the HR document. The text follows the rules of
+ASD-STE100 Simplified Technical English: short sentences, the active voice and common words.
+A preparation made before 15 October 2026 has no projects and skills part: select **Make again**
+to add it.
+
 > **Important**
 > The answers are a starting point built from your CV. An answer that touches something your
 > CV does not show is marked **Check this answer**. Rewrite it, so that you never repeat a
@@ -1615,16 +1636,16 @@ Table 13.1 lists the parts of the interview sheet.
 
 ### Use the sheet
 
-Table 13.2 lists the buttons of the interview sheet.
+Table 13.3 lists the buttons of the interview sheet.
 
-*Table 13.2 – The buttons of the interview sheet*
+*Table 13.3 – The buttons of the interview sheet*
 
 | Button | What it does |
 |---|---|
 | **Edit** | Lets you rewrite any part in your own words |
 | **Copy all** | Copies the whole sheet as text |
-| **Open as document** | Makes a Word sheet to print or read on the way |
-| **Show in folder** | Selects that Word file in Finder |
+| **Open as documents** | Makes the two Word files, for HR and for a specialist, and opens them |
+| **Show in folder** | Shows the two Word files in Finder |
 
 After the interview, the application's window offers a short **thank-you** note to copy.
 

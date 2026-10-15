@@ -114,14 +114,15 @@ Dialog {
                 text: prepDialog.note !== "" ? prepDialog.note
                     : "Answers are a starting point built from your CV. Say them in your own words." }
             SmallButton { objectName: "prepEdit"; text: "Edit"; onClicked: prepEditDialog.show(prepDialog.prep.id) }
-            SmallButton { objectName: "prepDoc"; primaryStyle: true; text: "Open as document"
+            // two documents: one for a talk with HR, one for a talk with a specialist
+            SmallButton { objectName: "prepDoc"; primaryStyle: true; text: "Open as documents"
                 onClicked: { var r = bridge.prepDocument(prepDialog.prep.id, false);
-                    prepDialog.note = (r && r.ok) ? "Opened " + r.file + " in Word." : "";
-                    if (!(r && r.ok)) ticker.text = (r && r.msg) || "Couldn't write the document."; } }
+                    prepDialog.note = (r && r.ok) ? "Opened in Word: " + (r.files || [r.file]).join(" and ") + "." : "";
+                    if (!(r && r.ok)) ticker.text = (r && r.msg) || "Couldn't write the documents."; } }
             SmallButton { objectName: "prepShow"; text: "Show in folder"
                 onClicked: { var r = bridge.prepDocument(prepDialog.prep.id, true);
-                    prepDialog.note = (r && r.ok) ? "Shown in its folder: " + r.file : "";
-                    if (!(r && r.ok)) ticker.text = (r && r.msg) || "Couldn't write the document."; } }
+                    prepDialog.note = (r && r.ok) ? "Shown in their folder: " + (r.files || [r.file]).join(" and ") + "." : "";
+                    if (!(r && r.ok)) ticker.text = (r && r.msg) || "Couldn't write the documents."; } }
             SmallButton { objectName: "prepCopy"; text: "Copy all"
                 onClicked: { bridge.copyText(bridge.prepText(prepDialog.prep.id)); prepDialog.note = "Copied. Paste it into Notes or a document."; } }
             PillButton { primaryStyle: true; text: "Close"; onClicked: prepDialog.close() }

@@ -192,23 +192,29 @@ class InterviewApi:
         result = self._change(job_id, go, render=False)
         return {"ok": True, **outcome} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "The changes could not be saved."}
 
-    def _prep_file(self, j):
+    def _prep_file(self, j, audience="hr"):
         cv = agent1_cv.find_cv()
         prefix = cv_tailor.name_prefix(cv) if cv else "Candidate"
-        return config.DATA_DIR / "interview_prep" / prep_doc.file_name(prefix, j.get("company", ""))
+        return config.DATA_DIR / "interview_prep" / prep_doc.file_name(prefix, j.get("company", ""), audience)
 
     def prep_document(self, job_id, reveal=False):
-        """Write the saved preparation as a Word document and open it (or show it in its folder)."""
+        """Write the saved preparation as two Word documents, one for a talk with HR and one for a talk
+        with a specialist, and open both (or show them in their folder)."""
         j = store.find(store.load_jobs(), job_id)
         if not j or not (j.get("interview_prep") or {}).get("questions"):
             return {"ok": False, "msg": "Prepare the interview first, then it can be opened as a document."}
         try:
             contact = planner.company_notes(j.get("company", "")).get("contact", "")
-            path = prep_doc.build(j, j["interview_prep"], self._prep_file(j), contact)
+            paths = [prep_doc.build(j, j["interview_prep"], self._prep_file(j, audience), contact, audience)
+                     for audience in prep_doc.AUDIENCES]
         except Exception as e:  # noqa: BLE001 - shown to the user as the reason
-            return {"ok": False, "msg": f"The document could not be written ({e})."}
-        (self._reveal if reveal else self._open)(path)
-        return {"ok": True, "file": path.name}
+            return {"ok": False, "msg": f"The documents could not be written ({e})."}
+        if reveal:
+            self._reveal(paths[0])                  # one Finder window, with both files side by side
+        else:
+            for path in paths:
+                self._open(path)
+        return {"ok": True, "file": paths[0].name, "files": [path.name for path in paths]}
 
     @_guarded(str)
     def prep_text(self, job_id):

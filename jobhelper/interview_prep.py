@@ -15,11 +15,20 @@ from typing import Any
 
 from . import config, cover_letter, llm
 
+# ASD-STE100 Simplified Technical English, as the person asked for: short, clear sentences that a reader
+# whose first language is not English reads once and understands. Kept here so the sheet and the answers follow it.
+STE_RULES = (
+    "Write all text in ASD-STE100 Simplified Technical English: one idea in each sentence; at most 20 words "
+    "in a sentence (25 in a description); the active voice; the simple present or the simple past; common English "
+    "words with one meaning each; no idioms, no slang, no phrasal verb where one verb does the work; keep 'the' "
+    "and 'a'; a list for steps or for several items; at most 6 sentences in a paragraph. Spoken answers follow "
+    "the same rules: short, direct sentences."
+)
 SYSTEM = (
     "You prepare one candidate for one job interview. You only use facts from the "
     "candidate's CV: never invent experience, employers, numbers or technologies. "
     "Answers are in the first person, spoken style, 3-6 sentences. Use an en dash "
-    "with spaces, never an em dash, and no emojis. Reply with only the JSON object."
+    "with spaces, never an em dash, and no emojis. " + STE_RULES + " Reply with only the JSON object."
 )
 
 PROMPT = """Prepare the candidate for an interview for the job below.
@@ -82,6 +91,15 @@ Besides the questions, write the sheet the candidate reads before the call:
   what they really did; it is never written as something this candidate did.
   "if_true" is 3-5 questions TO THE CANDIDATE that turn those usual tasks into reminders, e.g. "Did you write
   the tests for it yourself?". Never statements about the candidate.
+- "projects": one entry for EVERY project in the CV (not the jobs), most relevant to this role first. "what" is
+  3-5 spoken sentences in the first person: the goal, what the candidate built, with what, and the result, as the
+  CV and the candidate's own words give them. "plain" is the same in 1-2 sentences for HR. "tools" are the tools
+  the CV names for it. Nothing that is not written there.
+- "skills": 5-8 skills this role asks for that the CV shows. "proof" names where the CV shows it (a job, a
+  project, a course), in one short sentence. A skill the CV does not show is not in this list.
+- "ask_hr" must include: the next steps of the process and when the candidate hears back; and practical details
+  of the work that HR can answer (the team and who the role reports to, working hours and office or home days,
+  the first weeks and the training, the type of contract).
 - "ask_hr" and "ask_technical": questions for the candidate to ask. Never one that the facts above already
   answer (no visa, sponsorship or relocation question when the right to work or the location is stated), and
   never one that points at the candidate's own weak spot (their years of experience, a skill they lack):
@@ -106,13 +124,16 @@ Return JSON with exactly these keys:
                   "typical": ["<3-5 usual tasks in that kind of position, stated in general>"],
                   "if_true": ["<3-5 questions to the candidate>"],
                   "thin": "<'' or one sentence: what the CV does not say about this job that would help here>"}}],
+  "projects": [{{"name": "<the project's name as the CV gives it>", "what": "<3-5 sentences, first person>",
+                "plain": "<1-2 sentences for HR, no jargon, first person>", "tools": ["<tools the CV names for it>"]}}],
+  "skills": [{{"skill": "<a skill this role asks for>", "proof": "<one sentence: where the CV shows it>"}}],
   "concepts": [{{"term": "<a term from the posting>", "meaning": "<1-2 plain sentences>"}}],
   "reminders": ["<4-6 practical reminders for this interview: what to lead with, what not to bluff, what to ask at the end>"],
   "questions": [
     {{"audience": "hr | technical", "kind": "<one of the kinds above>", "question": "<the question>",
       "why": "<one short sentence: why they ask it>", "answer": "<the answer, first person>"}}
   ],
-  "ask_hr": ["<5 questions the candidate can ask HR or a recruiter: the process and next steps, the team, how the first months look, working arrangements; specific to this company and role, nothing a quick look at the posting already answers>"],
+  "ask_hr": ["<5-6 questions the candidate can ask HR or a recruiter: the next steps and when they hear back, the team and who the role reports to, working hours and office or home days, the first weeks and the training, the contract; specific to this company and role, nothing a quick look at the posting already answers>"],
   "ask_technical": ["<5 questions the candidate can ask someone who does this work or the hiring manager: the actual work, the tools and methods, how the team works and checks its work, what a newcomer would own first; specific to this posting>"],
   "revise": ["<up to 5 topics from the posting worth revising before the interview>"]
 }}"""
@@ -137,6 +158,16 @@ def _unbacked(answer: str, unverified: list[str]) -> str:
                     and not cover_letter._WISH.search(sentence) and not _HONEST.search(sentence):
                 return term
     return ""
+
+
+# Every HR talk should end with the next steps: asked by the app itself when the model left it out.
+NEXT_STEPS_QUESTION = "What are the next steps in the process, and when can I expect to hear from you?"
+_ASKS_NEXT = re.compile(r"\b(next steps?|process|timeline|hear (?:back|from you)|decision)\b", re.IGNORECASE)
+
+
+def with_next_steps(questions: list[str]) -> list[str]:
+    """The questions for HR, with one about the next steps first when none asks it."""
+    return list(questions) if any(_ASKS_NEXT.search(q) for q in questions) else [NEXT_STEPS_QUESTION] + list(questions)
 
 
 _ASK_VISA = re.compile(r"\b(visa|sponsor\w*|work permit|right to work|relocat\w+)\b", re.IGNORECASE)
@@ -184,7 +215,9 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
             ("the opening pitch", prep["pitch"]), ("the key question", prep["key_question"]["answer"]),
             ("what to say about the company", prep["company_say"])] + [("your fit", point) for point in prep["fit"]] + [
             (f"the story about {e['job'][:50]}", e["story"]) for e in prep["experience"]] + [
-            (f"the plain story about {e['job'][:50]}", e["plain"]) for e in prep["experience"]]
+            (f"the plain story about {e['job'][:50]}", e["plain"]) for e in prep["experience"]] + [
+            (f"the project {pr['name'][:50]}", pr["what"]) for pr in prep["projects"]] + [
+            (f"the project {pr['name'][:50]} for HR", pr["plain"]) for pr in prep["projects"]]
         bad = [(label, _unbacked(said, unverified)) for label, said in spoken if said]
         bad = [(q, term) for q, term in bad if term]
         third = [label for label, said in spoken if said and first_name and re.search(rf"\b{re.escape(first_name)}\b", said)]
@@ -200,10 +233,13 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
     facts = config.candidate_facts(cv_text)
     for key in ("ask_hr", "ask_technical", "ask_them"):       # the app's own check, whatever the model wrote
         prep[key] = fit_questions(prep[key], facts)
+    prep["ask_hr"] = with_next_steps(prep["ask_hr"])
     checks = []
     for label, said in [("The opening pitch", prep["pitch"]), ("The answer to the key question", prep["key_question"]["answer"])] \
             + [("A point under your fit", point) for point in prep["fit"]] \
-            + [(f"The story about {e['job'][:50]}", e["story"]) for e in prep["experience"]]:
+            + [(f"The story about {e['job'][:50]}", e["story"]) for e in prep["experience"]] \
+            + [(f"The project {pr['name'][:50]}", pr["what"]) for pr in prep["projects"]] \
+            + [(f"The skill {sk['skill'][:40]}", sk["proof"]) for sk in prep["skills"]]:
         term = _unbacked(said, unverified)
         if term:
             checks.append(f"{label} mentions {term} as experience, which is not in your CV.")
@@ -254,7 +290,22 @@ def _clean(data: Any) -> dict[str, Any]:
                  "thin": cover_letter.clean(str(e.get("thin", "") or "")).strip()}
         if entry["job"] and entry["story"]:
             experience.append(entry)
+    projects = []
+    for pr in data.get("projects") if isinstance(data.get("projects"), list) else []:
+        if not isinstance(pr, dict):
+            continue
+        entry = {"name": cover_letter.clean(str(pr.get("name", "") or "")).strip(), "what": cover_letter.clean(str(pr.get("what", "") or "")).strip(),
+                 "plain": cover_letter.clean(str(pr.get("plain", "") or "")).strip(), "tools": _items(pr.get("tools"), 10)}
+        if entry["name"] and entry["what"]:
+            projects.append(entry)
+    skills = []
+    for sk in data.get("skills") if isinstance(data.get("skills"), list) else []:
+        if isinstance(sk, dict):
+            entry = {"skill": cover_letter.clean(str(sk.get("skill", "") or "")).strip(), "proof": cover_letter.clean(str(sk.get("proof", "") or "")).strip()}
+            if entry["skill"] and entry["proof"]:
+                skills.append(entry)
     return {"summary": text("summary"), "questions": questions, "experience": experience[:6],
+            "projects": projects[:6], "skills": skills[:8],
             "ask_hr": texts("ask_hr", 6), "ask_technical": texts("ask_technical", 6),
             "ask_them": texts("ask_them", 6),          # one mixed list: what older saved preparations have
             "revise": texts("revise", 6),
@@ -271,6 +322,12 @@ def as_text(job: dict[str, Any], prep: dict[str, Any]) -> str:
     lines = [f"Interview preparation: {job.get('title', '')} at {job.get('company', '')}", ""]
     if prep.get("summary"):
         lines += [prep["summary"], ""]
+    if prep.get("projects"):
+        lines += ["YOUR PROJECTS", ""]
+        for pr in prep["projects"]:
+            lines += [pr["name"], pr["what"]] + ([f"Tools: {', '.join(pr['tools'])}"] if pr.get("tools") else []) + [""]
+    if prep.get("skills"):
+        lines += ["YOUR SKILLS FOR THIS ROLE", ""] + [f"- {sk['skill']}: {sk['proof']}" for sk in prep["skills"]] + [""]
     who = None
     for n, q in enumerate(prep.get("questions") or [], 1):
         audience = q.get("audience") or ("technical" if q["kind"] in ("technical", "your projects") else "hr")
@@ -294,8 +351,8 @@ _LISTS = {"company": "About the company", "role": "The role: what the work is", 
           "revise": "Worth revising before the call", "reminders": "Practical reminders"}
 _TEXTS = {"summary": "What to expect", "company_say": "What you can say about the company", "role_plain": "The role in plain terms",
           "gap": "The honest gap", "pitch": "Your opening pitch"}
-_ORDER = ["summary", "company", "company_say", "role", "role_plain", "fit", "experience", "gap", "key_question", "pitch",
-          "questions", "ask_hr", "ask_technical", "revise", "reminders"]
+_ORDER = ["summary", "company", "company_say", "role", "role_plain", "fit", "experience", "projects", "skills", "gap", "key_question",
+          "pitch", "questions", "ask_hr", "ask_technical", "revise", "reminders"]
 
 
 def parts(prep: dict[str, Any]) -> list[dict[str, str]]:
@@ -316,6 +373,14 @@ def parts(prep: dict[str, Any]) -> list[dict[str, str]]:
                 add(f"experience.{i}.story", f"Your work: {e['job']}", e.get("story", ""))
                 if e.get("plain"):
                     add(f"experience.{i}.plain", f"The same for HR, in plain words: {e['job']}", e["plain"])
+        elif name == "projects":
+            for i, pr in enumerate(prep.get("projects") or []):
+                add(f"projects.{i}.what", f"Your project: {pr['name']}", pr.get("what", ""))
+                if pr.get("plain"):
+                    add(f"projects.{i}.plain", f"The same for HR, in plain words: {pr['name']}", pr["plain"])
+        elif name == "skills":
+            for i, sk in enumerate(prep.get("skills") or []):
+                add(f"skills.{i}.proof", f"Where your CV shows it: {sk['skill']}", sk.get("proof", ""))
         elif name == "key_question" and (prep.get("key_question") or {}).get("question"):
             add("key_question.question", "The key question", prep["key_question"]["question"])
             add("key_question.answer", "Your answer to the key question", prep["key_question"].get("answer", ""))
@@ -357,7 +422,7 @@ def apply_parts(prep: dict[str, Any], edited: list[dict[str, Any]], cv_text: str
             new["key_question"][key.split(".")[1]] = text
         else:
             section, index, field = key.split(".")
-            if not text and field in ("answer", "story"):
+            if not text and field in ("answer", "story", "what", "proof"):
                 return prep, f"“{label[:70]}” is empty. Write it, or leave the draft as it was."
             new[section][int(index)][field] = text
     unverified = cover_letter.unverified_terms(cv_text + "\n" + (notes or "")) if cv_text.strip() else []
@@ -366,7 +431,9 @@ def apply_parts(prep: dict[str, Any], edited: list[dict[str, Any]], cv_text: str
     checks = []
     for label, said in [("The opening pitch", new.get("pitch", "")), ("The answer to the key question", (new.get("key_question") or {}).get("answer", ""))] \
             + [("A point under your fit", point) for point in new.get("fit") or []] \
-            + [(f"The story about {e['job'][:50]}", e.get("story", "")) for e in new.get("experience") or []]:
+            + [(f"The story about {e['job'][:50]}", e.get("story", "")) for e in new.get("experience") or []] \
+            + [(f"The project {pr['name'][:50]}", pr.get("what", "")) for pr in new.get("projects") or []] \
+            + [(f"The skill {sk['skill'][:40]}", sk.get("proof", "")) for sk in new.get("skills") or []]:
         term = _unbacked(said, unverified)
         if term:
             checks.append(f"{label} mentions {term} as experience, which is not in your CV.")
