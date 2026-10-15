@@ -241,7 +241,7 @@ JobHelper/
 │   └── fixtures/forms/       # the assistant's test area: forms it must fill and must not send
 ├── scripts/                  # the PDF builder, the numbering check, the diagrams, the lock file
 ├── docs/                     # user guide, technical documentation, their PDFs, pictures
-├── data/                     # your data (never in git; only the *.example.* files are)
+├── examples/                 # example rule files and career sites, to copy into your data folder
 ├── requirements.txt          # dependencies
 └── requirements.lock         # the same, pinned by SHA-256
 ```
@@ -324,7 +324,8 @@ All commands and options are in [COMMANDS.md](COMMANDS.md).
 ## Configuration
 
 Almost everything is set in the window under **Options** and saved encrypted. A few things
-can be set in `.env` (copy `.env.example`):
+can be set in `.env` in the data home, `~/Library/Application Support/JobHelper/.env`
+(copy `.env.example` there):
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -336,10 +337,13 @@ can be set in `.env` (copy `.env.example`):
 
 The mailbox password never goes into `.env`: the app keeps it in the macOS Keychain.
 
+Your data is in `~/Library/Application Support/JobHelper/data` (older versions kept it in the
+project's `data/`; the app moves it there once, and keeps the old folder as `data_moved_to_Library`).
+
 Rules for the CV and the letter are optional. To write your own, copy
-`data/cv_adaptation_instruction.example.md` and `data/cover_letter_instruction.example.md` to
-the same names without `.example`. With a letter of your own as
-`data/cover_letter_template.docx`, letters keep its head and layout.
+`examples/cv_adaptation_instruction.example.md` and `examples/cover_letter_instruction.example.md`
+into the data folder, with the same names without `.example`. With a letter of your own as
+`cover_letter_template.docx` in the data folder, letters keep its head and layout.
 
 ## Security and privacy
 

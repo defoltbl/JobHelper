@@ -149,12 +149,12 @@ def test_without_a_run_edits_only_go_to_disk(isolate_data):
 # ── the app works for somebody else's CV ────────────────────────────────────
 def test_example_rule_files_are_generic_and_usable(isolate_data):
     for name in ("cv_adaptation_instruction.example.md", "cover_letter_instruction.example.md"):
-        text = (ROOT / "data" / name).read_text(encoding="utf-8")
+        text = (ROOT / "examples" / name).read_text(encoding="utf-8")
         assert "{{name}}" in text or "{{first_name}}" in text
         assert "—" not in text
     config.ensure_dirs()
-    config.CV_INSTRUCTION.write_text((ROOT / "data" / "cv_adaptation_instruction.example.md").read_text(encoding="utf-8"), encoding="utf-8")
-    config.LETTER_INSTRUCTION.write_text((ROOT / "data" / "cover_letter_instruction.example.md").read_text(encoding="utf-8"), encoding="utf-8")
+    config.CV_INSTRUCTION.write_text((ROOT / "examples" / "cv_adaptation_instruction.example.md").read_text(encoding="utf-8"), encoding="utf-8")
+    config.LETTER_INSTRUCTION.write_text((ROOT / "examples" / "cover_letter_instruction.example.md").read_text(encoding="utf-8"), encoding="utf-8")
     ui_api.Api().save_options({"where": "Berlin", "about_right_to_work": "EU citizen", "about_start": ""})
     cv = "Jane Doe\nJunior Data Analyst\nSQL, Python"
     cv_rules, letter_rules = cv_tailor.load_rules(cv), cover_letter.load_rules(cv)

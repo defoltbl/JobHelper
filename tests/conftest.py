@@ -5,6 +5,12 @@ import sys
 
 # Before anything imports jobhelper: tests must never talk to the real Keychain.
 os.environ["JOBHELPER_VAULT_BACKEND"] = "memory"
+# ... nor use your own data folder: a test that forgets isolate_data writes into a throwaway one.
+import tempfile  # noqa: E402
+
+if not os.environ.get("JOBHELPER_TEST_HOME"):          # once, also when a test imports this file again
+    os.environ["JOBHELPER_TEST_HOME"] = tempfile.mkdtemp(prefix="jobhelper-test-home-")
+os.environ["JOBHELPER_HOME"] = os.environ["JOBHELPER_TEST_HOME"]     # never a JOBHELPER_HOME of your own shell
 os.environ.pop("IMAP_PASSWORD", None)
 from pathlib import Path
 
@@ -21,16 +27,22 @@ TEST_KEY = base64.urlsafe_b64encode(bytes(range(32))).decode("ascii")
 
 
 # ── the last line of defence: the run fails if anything in your own data/ changed ──
+def _real_data_folders() -> list[Path]:
+    """Every place your own data can be: the Library folder, and the old one in the project folder."""
+    from jobhelper import home
+    return [home.LIBRARY, ROOT / "data"]
+
+
 def _data_snapshot() -> dict[str, tuple[int, int]]:
-    """Size and change time of every file in data/ (the contents are never read)."""
-    root = ROOT / "data"
-    if not root.is_dir():
-        return {}
+    """Size and change time of every file of your own data (the contents are never read)."""
     out = {}
-    for path in root.rglob("*"):
-        if path.is_file() and not path.name.startswith("."):          # Finder's own .DS_Store files are not data
-            info = path.stat()
-            out[str(path.relative_to(root))] = (info.st_size, info.st_mtime_ns)
+    for root in _real_data_folders():
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if path.is_file() and not path.name.startswith("."):      # Finder's own .DS_Store files are not data
+                info = path.stat()
+                out[str(path)] = (info.st_size, info.st_mtime_ns)
     return out
 
 
@@ -50,7 +62,7 @@ def pytest_sessionfinish(session, exitstatus):
     changed = data_changes(before, _data_snapshot())
     if changed:
         reporter = session.config.pluginmanager.get_plugin("terminalreporter")
-        message = ("Files in your own data/ folder changed during the test run: " + ", ".join(changed[:10])
+        message = ("Files of your own data changed during the test run: " + ", ".join(changed[:10])
                    + ". A test must use isolate_data. (If the app was open, it may have been the app.)")
         if reporter:
             reporter.write_line(message, red=True, bold=True)

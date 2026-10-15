@@ -230,6 +230,11 @@ data/                your data; only the *.example.* files are in git
   first child of each scroll area (it also covers the space under short content); a test fails for a window without one.
 - **An answer sent from a worker thread must carry plain values.** The start-up check travels inside the
   connection answer as text (`info.health`, JSON) and the window parses it.
+- **Where the data is, is decided once, when `config` is imported.** `config.DATA_DIR` comes from
+  `home.DataHome`; modules keep paths made from it. So the one-time move into the Library happens in
+  `app_qt.main()` before anything reads data, and the app then starts itself again. Tests set
+  `JOBHELPER_HOME` to a temporary folder in `conftest.py`, and the guard watches both the Library
+  folder and the old `data/`.
 - **Opening the real window uses up reminders.** `Bridge.remind` marks the reminders of the day as given.
   A read-only check of the real window must replace `ui_api.Api.due_reminders` with an empty list; a
   check on a day with an interview once used up that day's morning reminder.
@@ -385,7 +390,7 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
 
 - **An app that opens without the terminal.** Expected parts: a real `JobHelper.app` with the
   existing icon; data moved out of the project folder to a per-user place, with a one-time
-  move of existing data and backups; finding the Claude sign-in from an app started by
+  move of existing data and backups (DONE: `home.DataHome`, ~/Library/Application Support/JobHelper); finding the Claude sign-in from an app started by
   Finder; the weekly run and the notifier pointed at the packaged app; first launch of an
   unsigned app on macOS; the technical documentation updated for installing without Python.
   It is last because every item above changes files the package would freeze.

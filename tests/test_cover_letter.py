@@ -34,7 +34,10 @@ def test_rebuilds_the_approved_example_exactly(tmp_path):
     assert cover_letter.verify(TEMPLATE, out) == []
 
 
-def test_approved_example_passes_the_content_checks():
+def test_approved_example_passes_the_content_checks(tmp_path, monkeypatch):
+    rules = tmp_path / "cover_letter_instruction.md"            # its own rules, never your real ones
+    rules.write_text("Do not claim: Anything else (Copilot, Docker, and so on).\n", encoding="utf-8")
+    monkeypatch.setattr(config, "LETTER_INSTRUCTION", rules)
     _, body, _ = _example()
     unverified = cover_letter.unverified_terms(_master_text())
     assert "Kubernetes" in unverified and "Copilot" in unverified and "Docker" not in unverified

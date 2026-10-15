@@ -18,10 +18,15 @@ source .venv/bin/activate             # activate it (do this every new terminal)
 pip install --require-hashes -r requirements.lock   # install the exact, hash-checked packages
                                       # (or: pip install -r requirements.txt)
 
-cp .env.example .env                  # optional settings (never put the mailbox password here)
+mkdir -p ~/Library/Application\ Support/JobHelper
+cp .env.example ~/Library/Application\ Support/JobHelper/.env   # optional settings (never the mailbox password)
 claude auth login                     # sign in with your Claude subscription
 claude auth status                    # verify: "loggedIn": true
 ```
+
+Your data lives in `~/Library/Application Support/JobHelper/data`; every `data/…` path in this
+file is inside that folder. (Older versions used the project's `data/`; the app moves it once and keeps
+the old folder as `data_moved_to_Library`.)
 
 Put your CV (English) in `data/cv/` — e.g. `data/cv/FirstnameLastname_CV_EN.docx`.
 
@@ -354,7 +359,7 @@ search automatically once configured). Edit `data/companies.json`:
 
 Supported ATS platforms (public APIs): **greenhouse**, **lever**,
 **smartrecruiters**, **recruitee**. `token` is the slug in the career-site URL
-(e.g. `boards.greenhouse.io/gitlab` → `gitlab`). See `data/companies.example.json`.
+(e.g. `boards.greenhouse.io/gitlab` → `gitlab`). See `examples/companies.example.json`.
 
 **Not supported:** SAP (jobs.sap.com) and Microsoft careers block scraping. For
 those, set up their own **job agent / email alert** on the company site — Agent 5

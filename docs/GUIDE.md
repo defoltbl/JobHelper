@@ -2214,7 +2214,17 @@ Table 21.1 explains the words the app uses.
 
 ### Where things are written
 
-Table 21.2 lists the folders the app writes to.
+The app keeps your data in the folder JobHelper. That folder is in the folder Application
+Support of your Library: `~/Library/Application Support/JobHelper`. Your data stays there
+when you put a new version of the app on your Mac.
+
+Older versions kept the data in the folder of the program. When you start this version for
+the first time, the app copies your data into the Library and compares each copy with its
+original. Then it starts again. It keeps the old folder as `data_moved_to_Library`, so you
+have a full copy. If the move is not possible, the app uses the old folder, and the red line
+at the top tells you why.
+
+Table 21.2 lists the folders the app writes to. They are in the folder `data` of JobHelper.
 
 *Table 21.2 – The folders the app writes to*
 

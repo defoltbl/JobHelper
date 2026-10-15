@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 16 October 2026
 
+- Your data now lives in **your Library** (Application Support, folder JobHelper), the usual place for a Mac app, so a new version of the app never touches it. At the first start the app moves it there once, checks every file, and keeps the old folder as data_moved_to_Library.
 - The red line of the start-up check now has a button that fixes the problem: **Repair** gives jobs with an unknown status a status the app knows, and **Restore from backup** puts back the newest copy of a damaged job list or replies database. The line becomes green when the fix is done.
 - Messages about the data key, backups and the search city no longer tell you to type a command. They tell you **what to do in the window**.
 

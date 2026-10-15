@@ -1,5 +1,6 @@
-# Secrets & local config
+# Secrets & local config (also the copy left behind when the data moved to the Library)
 .env
+.env_moved_to_Library*
 
 # Python
 .venv/
@@ -7,11 +8,11 @@ venv/
 __pycache__/
 *.pyc
 
-# Local data: everything in data/ stays out (your CV, letters, rules, tracking
-# tables, the database, backups, logs). Only the example files are kept.
-data/*
-!data/*.example.md
-!data/*.example.json
+# Local data: your CV, letters, rules, tracking tables, the database, backups, logs.
+# The app keeps it in ~/Library/Application Support/JobHelper; an older copy in the
+# project folder, and the folder left behind when it moved, stay out too.
+data/
+data_moved_to_Library*/
 
 # Test and tool caches
 .pytest_cache/

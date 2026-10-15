@@ -201,10 +201,11 @@ Before you install, make sure you have:
    pip install --require-hashes -r requirements.lock
    ```
 
-4. Optional: copy the example settings file. The mailbox password never goes into it.
+4. Optional: copy the example settings file into the data home. The mailbox password never goes into it.
 
    ```bash
-   cp .env.example .env
+   mkdir -p ~/Library/Application\ Support/JobHelper
+   cp .env.example ~/Library/Application\ Support/JobHelper/.env
    ```
 
 Table 3.1 lists the main packages and what each is for.
@@ -322,7 +323,7 @@ The code is in three places (Table 6.1).
 | `tests/` | The tests, and the script that takes the pictures of the user guide |
 | `scripts/` | Tools for the documentation: the PDF builder, the numbering check, the diagram |
 | `docs/` | The user guide, this document, their PDFs and the pictures |
-| `data/` | The person's data. Never part of the code; see section 7 |
+| `examples/` | Example rule files and a list of company career sites, to copy and change |
 
 ### The agents
 
@@ -572,8 +573,24 @@ the app must be approved.
 
 *Figure 7.1 – How the data is kept safe*
 
-Everything a person makes with the app is in `data/` (Table 7.1). The folder is not part of the
-code and is never committed.
+Everything a person makes with the app is in the data home (Table 7.1):
+`~/Library/Application Support/JobHelper`. The folder `data` in it holds the files, and `.env` the
+settings that are not secret. `home.DataHome` gives these places to `config`. The data home is
+not part of the code, so a new version of the program does not touch it.
+
+Older versions kept `data/` and `.env` in the project folder. `app_qt.main()` calls `home.start()`
+before it uses the data. If the old folder holds data, `DataHome.settle()` moves it once:
+
+1. It copies the folder into `data.incoming` in the data home.
+2. It compares each copy with its original, byte for byte. A difference stops the move.
+3. It gives the copy its real name and writes the note `home.json`.
+4. It renames the old folder to `data_moved_to_Library`, and `.env` to `.env_moved_to_Library`.
+   Nothing is deleted.
+5. The app starts again (`home.restart_command`), so every module uses the new place.
+
+If a step fails, the old folder stays in use and the start-up check shows the reason. The
+variable `JOBHELPER_HOME` names another data home; the tests set it to a temporary folder.
+In Table 7.1, `data/` is the folder `data` of the data home.
 
 *Table 7.1 – The files and folders in data*
 

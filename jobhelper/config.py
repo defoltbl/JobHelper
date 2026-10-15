@@ -10,11 +10,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from . import vault
+from . import home, vault
 
 # Project layout ------------------------------------------------------------
-ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
+ROOT = Path(__file__).resolve().parent.parent          # the program (in a packaged app: inside JobHelper.app)
+HOME = home.here()                                     # your data: ~/Library/Application Support/JobHelper
+DATA_DIR = HOME.data_dir()
 CV_DIR = DATA_DIR / "cv"                     # your master CV(s)
 TAILORED_CV_DIR = DATA_DIR / "tailored_cvs"  # per-application keyword-tailored CVs
 CV_INSTRUCTION = DATA_DIR / "cv_adaptation_instruction.md"  # your rules for adapting the CV
@@ -34,8 +35,8 @@ EXCEL_PATH = APPLICATIONS_DIR / "applications.xlsx"  # applications you've sent 
 NEW_JOBS_EXCEL = LEADS_DIR / "new_jobs.xlsx"         # fresh leads from search, not applied yet
 RESPONSES_REPORT = REPORTS_DIR / "responses_report.xlsx"  # Agent 5: analytics report
 
-# Load .env from the project root (does not override real env vars).
-ENV_PATH = ROOT / ".env"
+# Load .env from the data home (does not override real env vars).
+ENV_PATH = HOME.env_path()
 load_dotenv(ENV_PATH)
 
 # Folder of your own, pre-written cover letters (imported into the tracker).

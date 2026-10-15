@@ -97,7 +97,14 @@ def _folders() -> str:
     return ""
 
 
-CHECKS = [("Data key", _data_key), ("Job list", _jobs), ("Replies", _responses), ("Options", _settings),
+def _home() -> str:
+    """A move of the data into the Library that failed at this start (the old folder is still in use)."""
+    from . import home
+    reason = home.problem()
+    return f"Your data could not be moved into the Library, so the app uses the old folder. {reason}" if reason else ""
+
+
+CHECKS = [("Data folder", _home), ("Data key", _data_key), ("Job list", _jobs), ("Replies", _responses), ("Options", _settings),
           ("Rules and template unchanged", _rules), ("Master CV", _cv), ("Folders writable", _folders)]
 
 
