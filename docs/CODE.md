@@ -279,6 +279,11 @@ Some important points:
   section 2).
 - `Info.plist` contains `NSAppleEventsUsageDescription`, so macOS can ask before the app controls
   Google Chrome or Terminal.
+- Finder and launchd start an app in `/`. The Claude program watches the folder it works in. In
+  `/`, macOS then asked for the Desktop, the Downloads, the music, removable disks and the data of
+  other apps. So `app_qt.main()` changes to `config.work_dir()`, an empty folder in the data
+  folder, before it does anything. `llm.options_for` and `ClaudeCli.auth_status` give the Claude
+  program the same folder.
 
 ### Run a search without the window
 

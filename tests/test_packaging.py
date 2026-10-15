@@ -107,3 +107,30 @@ def test_the_build_check_names_what_a_broken_app_lacks(tmp_path):
     for missing in ("its program", "bundle id", "Chrome", "icon.icns", "Claude program", "signed"):
         assert missing in wrong, missing
     assert "Main.qml" not in wrong                                                # what is there is not reported
+
+
+# ── never in / : Finder and launchd start an app there, and Claude watches where it works ──
+def test_claude_is_asked_from_an_empty_folder_of_the_app(isolate_data):
+    from jobhelper import config
+    options = llm.options_for("system", "haiku")
+    assert options.cwd == str(isolate_data / "work") and Path(options.cwd).is_dir()
+    assert list(Path(options.cwd).iterdir()) == [] and options.tools == []
+    assert config.work_dir() == isolate_data / "work"
+
+
+def test_the_app_works_in_its_own_folder_in_every_mode(isolate_data, monkeypatch):
+    from jobhelper import weekly
+    monkeypatch.chdir("/")                                                      # as Finder or launchd start it
+    monkeypatch.setattr(sys, "argv", ["JobHelper", "--weekly"])
+    monkeypatch.setattr(weekly, "main", lambda: 0)
+    assert app_qt.main() == 0 and Path.cwd() == (isolate_data / "work").resolve()
+
+
+def test_the_sign_in_check_runs_in_the_apps_folder(isolate_data, tmp_path, monkeypatch):
+    from jobhelper.claude_cli import ClaudeCli
+    program = tmp_path / "claude"
+    program.write_text("#!/bin/sh\npwd -P\n")
+    program.chmod(0o755)
+    monkeypatch.chdir("/")
+    done = ClaudeCli(program, which=lambda name: None, places=()).auth_status()
+    assert done.stdout.strip() == str((isolate_data / "work").resolve())

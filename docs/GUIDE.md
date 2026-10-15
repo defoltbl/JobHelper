@@ -176,6 +176,10 @@ After this, JobHelper opens like any other app.
 The first time the assistant fills in a form, macOS asks if JobHelper may control Google
 Chrome. Select **Allow**. Without this, the assistant cannot read or fill in a form.
 
+JobHelper does not need your Desktop, your Downloads, your music, removable disks or the data
+of other apps. If macOS asks for one of them, select **Don't Allow**. When you choose a file
+yourself (your CV, for example), macOS gives the app that one file.
+
 ### Prerequisites
 
 You need:

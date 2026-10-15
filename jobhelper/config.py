@@ -139,6 +139,16 @@ def using_paid_api() -> bool:
     return bool(os.getenv("ANTHROPIC_API_KEY"))
 
 
+def work_dir() -> Path:
+    """An empty folder of the app's own that the app, the Claude program and the other programs it starts
+    work in. A Mac app that Finder or launchd starts works in / (the whole disk), and the Claude program
+    watches its working folder: there it touched Desktop, Downloads, Music and other apps' data, and
+    macOS asked you about each of them."""
+    folder = DATA_DIR / "work"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
 def ensure_dirs() -> None:
     for d in (DATA_DIR, CV_DIR, TAILORED_CV_DIR, LETTERS_DIR,
               APPLICATIONS_DIR, LEADS_DIR, REPORTS_DIR, COVER_LETTERS_DIR):

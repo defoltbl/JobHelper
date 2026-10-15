@@ -22,8 +22,9 @@ from claude_agent_sdk import ClaudeAgentOptions, query
 from . import config, usage
 
 
-async def _ask_async(prompt: str, system: str | None, model: str) -> tuple[str, dict[str, Any]]:
-    options = ClaudeAgentOptions(
+def options_for(system: str | None, model: str) -> ClaudeAgentOptions:
+    """How the Claude program is asked: no tools, and its own empty working folder."""
+    return ClaudeAgentOptions(
         system_prompt=system or "You are a precise, concise assistant.",
         tools=[],                  # offer the model no tools at all — inference only
         allowed_tools=[],          # (and pre-approve nothing)
@@ -33,7 +34,12 @@ async def _ask_async(prompt: str, system: str | None, model: str) -> tuple[str, 
         # cut off with "Reached maximum number of turns". No tools are allowed,
         # so this won't cause tool-loop iterations.
         max_turns=6,
+        cwd=str(config.work_dir()),    # its own empty folder: the program watches where it works (never the whole disk)
     )
+
+
+async def _ask_async(prompt: str, system: str | None, model: str) -> tuple[str, dict[str, Any]]:
+    options = options_for(system, model)
     parts: list[str] = []
     result_text = ""
     rec: dict[str, Any] = {"model": model}

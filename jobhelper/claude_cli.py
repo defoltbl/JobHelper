@@ -61,7 +61,9 @@ class ClaudeCli:
         program = self.path()
         if not program:
             raise FileNotFoundError(MISSING)
-        return subprocess.run([program, "auth", "status"], capture_output=True, text=True, timeout=timeout)
+        from . import config
+        return subprocess.run([program, "auth", "status"], capture_output=True, text=True, timeout=timeout,
+                              cwd=config.work_dir())               # never in / (see config.work_dir)
 
     def login_script(self) -> list[str]:
         """The osascript arguments that open Terminal on `claude auth login`, with this program's full path

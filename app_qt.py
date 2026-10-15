@@ -53,6 +53,9 @@ def check_refusal(environ) -> str:
 
 def main() -> int:
     from jobhelper import home, weekly
+    # Finder and launchd start an app in / (the whole disk). Every program the app starts (Claude, LibreOffice)
+    # works where the app works, and Claude watches that folder: so the app works in an empty folder of its own.
+    os.chdir(config.work_dir())
     if weekly.FLAG in sys.argv[1:]:
         return weekly.main()                          # the weekly run: no window, everything into its log
     checking = CHECK_FLAG in sys.argv[1:]

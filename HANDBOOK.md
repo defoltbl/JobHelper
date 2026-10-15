@@ -235,6 +235,10 @@ data/                your data; only the *.example.* files are in git
   `app_qt.main()` before anything reads data, and the app then starts itself again. Tests set
   `JOBHELPER_HOME` to a temporary folder in `conftest.py`, and the guard watches both the Library
   folder and the old `data/`.
+- **An app started by Finder or launchd works in `/`.** The Claude program watches its working folder
+  ("Watching / for /.claude to appear" in its debug log), and that made macOS ask the first user of
+  JobHelper.app for Desktop, Downloads, Music, removable disks and other apps' data. Everything now
+  works in `config.work_dir()`; tests in `test_packaging.py` keep it so.
 - **A packaged app carries only what it can see being imported.** A module loaded by name
   (`importlib`, the weekly run's `run`/`status`, `PySide6.QtQuick` for the picture) must be in the
   spec's `hiddenimports`; the window check of the built app fails when one is missing.
