@@ -33,7 +33,8 @@ def test_enable_writes_plist_and_loads_it(sched):
     assert result["ok"] and result["enabled"] and result["label"] == "Wed 18:30"
     data = plistlib.loads(schedule.PLIST.read_bytes())
     assert data["StartCalendarInterval"] == {"Weekday": 3, "Hour": 18, "Minute": 30}
-    assert data["ProgramArguments"][-1].endswith("weekly_jobhelper.sh")
+    assert data["ProgramArguments"] == schedule.command() and data["ProgramArguments"][-1] == "--weekly"
+    assert "/.local/bin" in data["EnvironmentVariables"]["PATH"]                # where the Claude CLI usually is
     assert sched.calls[-1][:2] == ["launchctl", "load"]
 
 
@@ -68,3 +69,38 @@ def test_not_available_off_macos(sched, monkeypatch):
     monkeypatch.setattr(schedule, "available", lambda: False)
     assert schedule.write_schedule(True, 1, 9, 0)["ok"] is False
     assert sched.calls == []
+
+
+def test_the_command_is_the_app_itself():
+    import sys
+    from pathlib import Path
+    source = schedule.command("/venv/bin/python", frozen=False)
+    assert source[0] == "/venv/bin/python" and Path(source[1]).name == "app_qt.py" and source[2] == "--weekly"
+    assert Path(source[1]).is_file()
+    assert schedule.command("/Applications/JobHelper.app/Contents/MacOS/JobHelper", frozen=True) == \
+        ["/Applications/JobHelper.app/Contents/MacOS/JobHelper", "--weekly"]
+    assert schedule.command() == [sys.executable, source[1], "--weekly"]
+
+
+def test_refresh_points_an_old_weekly_run_at_this_program_on_the_same_day(sched):
+    schedule.PLIST.parent.mkdir(parents=True)
+    schedule.PLIST.write_bytes(plistlib.dumps({"Label": schedule.LABEL, "ProgramArguments": ["/bin/zsh", "/old/place/weekly.sh"],
+                                               "StartCalendarInterval": {"Weekday": 4, "Hour": 7, "Minute": 45},
+                                               "StandardOutPath": "/old/place/data/weekly.log"}))
+    assert schedule.refresh() == {"ok": True, "changed": True}
+    data = plistlib.loads(schedule.PLIST.read_bytes())
+    assert data["ProgramArguments"] == schedule.command() and data["StandardOutPath"] == str(schedule.LOG)
+    assert data["StartCalendarInterval"] == {"Weekday": 4, "Hour": 7, "Minute": 45}
+    sched.calls.clear()
+    assert schedule.refresh() == {"ok": True, "changed": False} and sched.calls == []     # up to date: not touched
+
+
+def test_refresh_does_nothing_when_the_weekly_run_is_off(sched):
+    assert schedule.refresh() == {"ok": True, "changed": False} and not schedule.PLIST.exists() and sched.calls == []
+
+
+def test_refresh_says_why_it_could_not_change_it(sched):
+    schedule.PLIST.parent.mkdir(parents=True)
+    schedule.PLIST.write_bytes(b"not a plist")
+    sched.state.update(returncode=1, stderr="Load failed: 5")
+    assert schedule.refresh() == {"ok": False, "changed": False, "msg": "Load failed: 5"}

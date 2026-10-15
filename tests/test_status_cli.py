@@ -101,8 +101,8 @@ def test_the_package_and_the_example_settings_describe_the_app_as_it_is():
     assert "Agent 5" in jobhelper.__doc__ and "4-agent" not in jobhelper.__doc__ and "form" in jobhelper.__doc__
     env = (root / ".env.example").read_text(encoding="utf-8")
     assert "Email sync (Agent 5" in env and "ANTHROPIC_API_KEY=" not in env.replace("Do NOT set ANTHROPIC_API_KEY", "")
-    script = (root / "weekly_jobhelper.sh").read_text(encoding="utf-8")
-    assert "send the week" not in script, "the app never sends anything: the summary is a notification"
+    from jobhelper import weekly
+    assert "send the week" not in (weekly.__doc__ or ""), "the app never sends anything: the summary is a notification"
 
 
 def test_a_mailbox_that_refuses_or_cannot_be_reached_is_one_sentence_in_the_log(isolate_data, monkeypatch, capsys):

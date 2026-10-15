@@ -39,10 +39,16 @@ def apply_text_size(environ=None) -> str:
 
 
 def main() -> int:
-    from jobhelper import home
+    from jobhelper import home, weekly
+    if weekly.FLAG in sys.argv[1:]:
+        return weekly.main()                          # the weekly run: no window, everything into its log
     if home.start().moved:
         # the data has just moved into the Library: start again, so every part of the app uses the new place
         os.execv(sys.executable, home.restart_command(sys.argv, sys.executable, getattr(sys, "frozen", False)))
+    from jobhelper import schedule
+    fixed = schedule.refresh()                        # a weekly run of an older version now starts this one
+    if not fixed["ok"]:
+        print("Weekly run: %s" % fixed.get("msg", ""))
     # Background work (reading the mailbox, preparing Insights) hands over to the window ten times
     # sooner than Python's default, so animations stay smooth while it runs.
     sys.setswitchinterval(0.0005)

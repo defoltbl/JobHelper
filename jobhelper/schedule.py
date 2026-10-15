@@ -14,8 +14,9 @@ from . import config
 
 LABEL = "com.jobhelper.weeklyscan"
 PLIST = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
-SCRIPT = config.ROOT / "weekly_jobhelper.sh"
 LOG = config.DATA_DIR / "weekly_jobhelper.launchd.log"
+# launchd starts a program with a short PATH: add the usual places of the Claude CLI and Homebrew
+PATH = "{home}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 # launchd Weekday: 0 or 7 = Sunday, 1 = Monday … 6 = Saturday.
 DAY_NAMES = {0: "Sun", 7: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat"}
@@ -41,15 +42,47 @@ def read_schedule() -> dict:
             "label": f"{DAY_NAMES.get(wd, 'Mon')} {hour:02d}:{minute:02d}"}
 
 
-def _plist_bytes(weekday: int, hour: int, minute: int) -> bytes:
-    return plistlib.dumps({
+def command(executable: str | None = None, frozen: bool | None = None) -> list[str]:
+    """What the LaunchAgent starts: this program with --weekly. A packaged app is its own program;
+    from the source, the Python that runs the app starts app_qt.py."""
+    from . import weekly
+    executable = executable or sys.executable
+    frozen = getattr(sys, "frozen", False) if frozen is None else frozen
+    return [executable, weekly.FLAG] if frozen else [executable, str(config.ROOT / "app_qt.py"), weekly.FLAG]
+
+
+def _plist_dict(weekday: int, hour: int, minute: int) -> dict:
+    return {
         "Label": LABEL,
-        "ProgramArguments": ["/bin/zsh", str(SCRIPT)],
+        "ProgramArguments": command(),
+        "EnvironmentVariables": {"PATH": PATH.format(home=Path.home())},
         "StartCalendarInterval": {"Weekday": int(weekday), "Hour": int(hour), "Minute": int(minute)},
         "RunAtLoad": False,
         "StandardOutPath": str(LOG),
         "StandardErrorPath": str(LOG),
-    })
+    }
+
+
+def _plist_bytes(weekday: int, hour: int, minute: int) -> bytes:
+    return plistlib.dumps(_plist_dict(weekday, hour, minute))
+
+
+def refresh() -> dict:
+    """At the app's start: a weekly run set up by an older version, or for the app in another place
+    (the source, a copy in Applications), is pointed at this program and this data folder again,
+    on the same day and time. {ok, changed} (and msg when it could not be changed)."""
+    if not available() or not PLIST.exists():
+        return {"ok": True, "changed": False}
+    try:
+        current = plistlib.loads(PLIST.read_bytes())
+    except Exception:  # noqa: BLE001 - a damaged file is written again
+        current = {}
+    when = read_schedule()
+    wanted = _plist_dict(when["weekday"], when["hour"], when["minute"])
+    if all(current.get(key) == wanted[key] for key in ("ProgramArguments", "EnvironmentVariables", "StandardOutPath")):
+        return {"ok": True, "changed": False}
+    result = write_schedule(True, when["weekday"], when["hour"], when["minute"])
+    return {"ok": bool(result.get("ok")), "changed": bool(result.get("ok")), **({"msg": result["msg"]} if "msg" in result else {})}
 
 
 def write_schedule(enabled: bool, weekday: int, hour: int, minute: int) -> dict:

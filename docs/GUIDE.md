@@ -1957,6 +1957,10 @@ time you open the window (Table 17.1).
 
 Open the card again, turn **Enabled** off, and select **Save**.
 
+If you put a new version of the app on your Mac, or move the app to a different folder, open
+the app one time. It then sets the weekly run to start the app in its new place, on the same
+day and at the same time.
+
 ---
 
 ## 18. Watch your Claude usage and limits

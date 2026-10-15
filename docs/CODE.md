@@ -400,6 +400,22 @@ Table 6.3 groups the other modules by what they are for.
 | Storage and safety | `store`, `db`, `vault`, `integrity`, `housekeeping`, `health`, `trouble` | The job list, the reply database, encryption, signed rule files, backups, the start-up check, the log of errors |
 | The window's back end | `ui_api`, `api_core`, `api_system`, `api_options`, `api_jobs`, `api_documents`, `api_replies`, `api_insights`, `api_interview`, `api_letters`, `api_assistant`, `api_talk`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` is a facade: it hands each call to one of ten services. `Bridge` gives `Api` to QML and runs long work in threads |
 
+### The weekly run
+
+The **Weekly run** card writes a LaunchAgent with `schedule.write_schedule`. The LaunchAgent starts
+the program itself with `--weekly` (`schedule.command()`). From the source, that is
+`python app_qt.py --weekly`. In the packaged app, it is `JobHelper --weekly`. The LaunchAgent also
+gets a PATH with the usual folders of the Claude CLI and Homebrew.
+
+`app_qt.main()` sees `--weekly` before it opens a window and calls `weekly.main()`. `WeeklyRun` runs
+two steps: `run.py --reuse-profile`, then `status.py sync --summary`. Each step writes into
+`weekly_jobhelper.log` in the data folder. A step that fails is written in the log, and the next
+step still runs.
+
+At each start, `schedule.refresh()` compares the LaunchAgent with `schedule.command()`. If an older
+version or a different place of the app wrote it, the function writes it again with the same day
+and time.
+
 ### The start-up check and its fixes
 
 `health.run()` makes each check of `health.CHECKS`. A check returns an empty string when all is

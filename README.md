@@ -217,7 +217,6 @@ JobHelper/
 ├── app_qt.py                 # starts the window
 ├── run.py                    # the same search from the command line (used by the weekly run)
 ├── status.py                 # command-line tools: list, sync, security, usage …
-├── weekly_jobhelper.sh       # what the weekly LaunchAgent runs
 ├── jobhelper/                # all the logic, no window code (63 modules)
 │   ├── agent1_cv.py … agent5_responses.py     # the five agents
 │   ├── scrapers_*.py         # one module per kind of job source

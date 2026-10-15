@@ -577,15 +577,16 @@ place can be set as `COVER_LETTERS_DIR` in `.env`). They are never rewritten.
 ## 9. Weekly automation (macOS LaunchAgent)
 
 A LaunchAgent runs a **job search + email analysis** once a week, on the day and at the time you chose:
-`~/Library/LaunchAgents/com.jobhelper.weeklyscan.plist` → `weekly_jobhelper.sh` →
-`run.py --reuse-profile` then `status.py sync --summary`
+`~/Library/LaunchAgents/com.jobhelper.weeklyscan.plist` → the app with `--weekly` (from the source:
+`python app_qt.py --weekly`; the packaged app: `JobHelper --weekly`) → `run.py --reuse-profile` then
+`status.py sync --summary`, with no window. When the app starts, it points an older weekly run at itself again.
 
 Easiest way to change it: click the **Weekly run** card in the app to turn it
 on/off and pick the day + time. The commands below do the same by hand:
 
 ```bash
 launchctl list | grep jobhelper                 # is it registered?
-zsh weekly_jobhelper.sh                          # run search + email now (manual)
+python app_qt.py --weekly                        # run search + email now (manual)
 launchctl unload ~/Library/LaunchAgents/com.jobhelper.weeklyscan.plist   # disable
 launchctl load -w ~/Library/LaunchAgents/com.jobhelper.weeklyscan.plist  # re-enable
 tail -f data/weekly_jobhelper.log                # watch results
