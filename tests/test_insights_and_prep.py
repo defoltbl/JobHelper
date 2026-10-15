@@ -337,7 +337,17 @@ def test_two_documents_one_for_hr_one_for_a_specialist_in_the_order_asked(tmp_pa
     assert tech_qs <= set(tech) and not (hr_qs - tech_qs) & set(tech)
     assert "“I built a program that learns to play a game.”" in hr and "Tools: Python, PyTorch" not in hr
     assert "“I built an agent that learns from play. I used PyTorch.”" in tech and "Tools: Python, PyTorch" in tech
-    assert "Python: I used it in every project in my CV." in hr and "Python: I used it in every project in my CV." in tech
+    prep["projects"][0]["tech"] = [{"tool": "PyTorch", "about": "A library for neural networks.", "use": "It trained the policy.", "why": "It is common in research."}]
+    prep["projects"][0]["result"], prep["projects"][0]["ask"] = "Shown at two conferences.", ["Why imitation learning first?"]
+    prep["skills"][0]["detail"] = "I can explain how I tested it."
+    tech = read(prep_doc.build(job, prep, tmp_path / "out" / "tech2.docx", audience="technical"))
+    hr = read(prep_doc.build(job, prep, tmp_path / "out" / "hr2.docx", audience="hr"))
+    line = "PyTorch. What it is: A library for neural networks. In this project: It trained the policy. Why: It is common in research."
+    assert line in tech and line not in hr
+    assert "Result: Shown at two conferences." in tech and "Why imitation learning first?" in tech and "Why imitation learning first?" not in hr
+    assert "Python: I used it in every project in my CV. I can explain how I tested it." in tech
+    assert "Python: I used it in every project in my CV." in hr
+    assert "Python: I used it in every project in my CV." in hr
     assert "Imitation learning: Learning a policy from demonstrations." in tech and "Concepts to explain" not in hr
     assert prep_doc.COMPANY_NOTE in hr and prep_doc.COMPANY_NOTE in tech
     assert "Check this answer before you say it. It mentions Kubernetes. Your CV does not show this." in tech
@@ -689,14 +699,21 @@ def test_a_cv_or_template_paragraph_that_cannot_be_rewritten_is_said_in_words(tm
 def test_projects_and_skills_are_asked_for_kept_held_to_the_cv_and_editable(monkeypatch):
     prompts = []
     reply = dict(FULL, ask_hr=["Who would I work with?"],
-                 projects=[{"name": "Game-AI agent", "what": "I built an agent that learns from play.", "plain": "I built a game program.", "tools": ["PyTorch"]},
+                 projects=[{"name": "Game-AI agent", "what": "I built an agent that learns from play.", "plain": "I built a game program.", "tools": ["PyTorch"],
+                            "tech": [{"tool": "PyTorch", "about": "A library for neural networks.", "use": "It trained the policy.", "why": "It is the usual choice in research."},
+                                     {"tool": "", "use": "no tool: dropped"}],
+                            "result": "Shown at two conferences.", "ask": ["Why imitation learning first?"]},
                            {"name": "", "what": "no name: dropped"}, "not a project"],
-                 skills=[{"skill": "Python", "proof": "Used in every project."}, {"skill": "Go", "proof": ""}])
+                 skills=[{"skill": "Python", "proof": "Used in every project.", "detail": "I wrote the training loop."}, {"skill": "Go", "proof": ""}])
     monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or reply)
     prep = interview_prep.generate({"title": "ML Engineer", "company": "BRIGHTLINE"}, CV)
     assert '"projects"' in prompts[0] and '"skills"' in prompts[0] and "next steps" in prompts[0] and "ASD-STE100" in interview_prep.SYSTEM
-    assert prep["projects"] == [{"name": "Game-AI agent", "what": "I built an agent that learns from play.", "plain": "I built a game program.", "tools": ["PyTorch"]}]
-    assert prep["skills"] == [{"skill": "Python", "proof": "Used in every project."}]
+    assert prep["projects"] == [{"name": "Game-AI agent", "what": "I built an agent that learns from play.", "plain": "I built a game program.", "tools": ["PyTorch"],
+                                 "tech": [{"tool": "PyTorch", "about": "A library for neural networks.", "use": "It trained the policy.",
+                                           "why": "It is the usual choice in research."}],
+                                 "result": "Shown at two conferences.", "ask": ["Why imitation learning first?"]}]
+    assert prep["skills"] == [{"skill": "Python", "proof": "Used in every project.", "detail": "I wrote the training loop."}]
+    assert '"about"' in prompts[0] and '"why"' in prompts[0] and "never as a detail or a" in prompts[0]
     assert prep["ask_hr"][0] == interview_prep.NEXT_STEPS_QUESTION and "Who would I work with?" in prep["ask_hr"]
     labels = {p["key"]: p["label"] for p in interview_prep.parts(prep)}
     assert labels["projects.0.what"] == "Your project: Game-AI agent" and labels["skills.0.proof"] == "Where your CV shows it: Python"
@@ -706,3 +723,4 @@ def test_projects_and_skills_are_asked_for_kept_held_to_the_cv_and_editable(monk
     assert "is empty" in problem
     text = interview_prep.as_text({"title": "ML Engineer", "company": "BRIGHTLINE"}, prep)
     assert "YOUR PROJECTS" in text and "Tools: PyTorch" in text and "- Python: Used in every project." in text
+    assert "- PyTorch: A library for neural networks. It trained the policy. It is the usual choice in research." in text

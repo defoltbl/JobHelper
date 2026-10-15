@@ -164,11 +164,35 @@ def build(job: dict[str, Any], prep: dict[str, Any], out_path: Path, contact: st
     for pr in prep.get("projects") or []:
         para(pr["name"], 11, bold=True, after=2, before=6).paragraph_format.keep_with_next = True
         para(f"“{(pr.get('plain') or pr['what']) if hr else pr['what']}”", after=3)
-        if not hr and pr.get("tools"):
+        if hr:
+            continue
+        if pr.get("tech"):
+            para("The tools and methods: what each one is, what it did here, and why it fits.", bold=True, after=1)
+            for t in pr["tech"]:
+                p = doc.add_paragraph(style="List Bullet")
+                p.add_run(f"{t['tool']}.").bold = True
+                for label, key in (("What it is: ", "about"), ("In this project: ", "use"), ("Why: ", "why")):
+                    if t.get(key):
+                        p.add_run(" " + label).italic = True
+                        p.add_run(t[key])
+                p.paragraph_format.space_after = Pt(3)
+        elif pr.get("tools"):
             para(f"Tools: {', '.join(pr['tools'])}", size=10, after=3)
+        if pr.get("result"):
+            para(f"Result: {pr['result']}", after=3)
+        if pr.get("ask"):
+            para("A specialist may ask:", bold=True, after=1)
+            bullets(pr["ask"])
     if prep.get("skills"):
         subheading("Your skills for this role, and where your CV shows them")
-        bullets(f"{sk['skill']}: {sk['proof']}" for sk in prep["skills"])
+        if hr:
+            bullets(f"{sk['skill']}: {sk['proof']}" for sk in prep["skills"])
+        else:
+            for sk in prep["skills"]:
+                p = doc.add_paragraph(style="List Bullet")
+                p.add_run(f"{sk['skill']}: ").bold = True
+                p.add_run(" ".join(x for x in (sk["proof"], sk.get("detail", "")) if x))
+                p.paragraph_format.space_after = Pt(3)
 
     # 4. what they may ask
     asked = [q for q in prep.get("questions") or [] if _audience(q) == audience]

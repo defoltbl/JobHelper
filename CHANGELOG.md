@@ -7,6 +7,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 - **Interview preparation** now opens as two Word documents: one for a talk with HR, one for a talk with a specialist. Both go in this order: the company, you, your projects and skills, the questions they may ask you, and the questions you can ask them.
 - The preparation has a new part, **your projects and skills**, each with where your CV shows it. Select **Make again** on an older preparation to get it.
+- In the technical document, each project explains its tools and methods: **what each one is, what it did in the project, and why it fits**. It also gives the result and the questions a specialist may ask. Each skill gets more detail.
+- The **preparation window** shows your projects and skills too, before the questions.
 - The questions you can ask HR always include the **next steps**, and ask about the team, working hours, the first weeks and the contract.
 - The preparation is written in **ASD-STE100 Simplified Technical English**: short sentences, the active voice and common words.
 

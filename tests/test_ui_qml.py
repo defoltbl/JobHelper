@@ -4192,3 +4192,30 @@ def test_options_says_when_something_was_typed_but_not_added(ui):
         ui.js("optDialog.close()"); ui.wait(350)
         ui.bridge.saveOptions(start)
         ui.js("optsData = bridge.options()")
+
+
+def test_the_preparation_window_shows_projects_and_skills(ui):
+    """Projects with each tool explained, and skills with their proof, before the questions; an older preparation says how to get them."""
+    prep = {"made": "2026-10-15", "summary": "s", "questions": [{"kind": "about you", "audience": "hr", "question": "Tell me about yourself.", "why": "",
+                                                                "answer": "I am a junior developer.", "check": ""}],
+            "projects": [{"name": "Game-AI agent", "what": "I built an agent that learns to play.", "plain": "", "tools": ["PyTorch"],
+                          "tech": [{"tool": "PyTorch", "about": "A library for neural networks.", "use": "It trained the policy.", "why": "It is fast to try ideas in <2 lines>."}],
+                          "result": "Shown at two conferences.", "ask": []}],
+            "skills": [{"skill": "Python", "proof": "Used in every project.", "detail": "I wrote the training loop."}]}
+    ui.bridge._api._change("app", lambda jobs, j: j.__setitem__("interview_prep", prep), render=False)
+    try:
+        ui.js('prepDialog.show("app")'); _until_open(ui, "prepDialog")
+        assert ui.find("prepProjects").property("visible") is True and ui.find("prepSkills").property("visible") is True
+        assert ui.find("prepNoProjects").property("visible") is False
+        said = [item.property("text") for item in ui.seen("prepProjects") + ui.seen("prepSkills") if item.property("text")]
+        assert "Game-AI agent" in said and "Result: Shown at two conferences." in said
+        assert any("<b>PyTorch.</b>" in t and "<i>Why:</i> It is fast to try ideas in &lt;2 lines&gt;." in t for t in said)   # its own < is a letter
+        assert any("<b>Python:</b> Used in every project. I wrote the training loop." in t for t in said)
+        ui.js("prepDialog.close()"); ui.wait(350)
+        ui.bridge._api._change("app", lambda jobs, j: j.__setitem__("interview_prep", dict(prep, projects=[], skills=[])), render=False)
+        ui.js('prepDialog.show("app")'); _until_open(ui, "prepDialog")
+        assert ui.find("prepProjects").property("visible") is False and ui.find("prepNoProjects").property("visible") is True
+    finally:
+        ui.js("prepDialog.close()"); ui.wait(350)
+        ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
+    assert ui.warnings == []

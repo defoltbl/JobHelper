@@ -57,6 +57,32 @@ Dialog {
                 DetailCard { heading: "What to expect"; visible: !!prepDialog.prep.summary
                     Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; lineHeight: 1.25
                         text: prepDialog.prep.summary || "" } }
+                // your projects and skills, as the technical document tells them
+                DetailCard { heading: "Your projects"; objectName: "prepProjects"; visible: (prepDialog.prep.projects || []).length > 0
+                    Repeater { model: prepDialog.prep.projects || []
+                        ColumnLayout { Layout.fillWidth: true; spacing: 4
+                            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 14; font.bold: true; text: modelData.name
+                                Layout.topMargin: index === 0 ? 0 : 8 }
+                            TextEdit { Layout.fillWidth: true; readOnly: true; selectByMouse: true; wrapMode: TextEdit.Wrap
+                                text: modelData.what || ""; color: theme.ink; font.pixelSize: 13; selectionColor: theme.accent }
+                            Repeater { model: modelData.tech || []
+                                Text { Layout.fillWidth: true; Layout.leftMargin: 10; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 12
+                                    textFormat: Text.StyledText; lineHeight: 1.2
+                                    text: "•  <b>" + win.escapeHtml(modelData.tool) + ".</b>"
+                                          + (modelData.about ? " <i>What it is:</i> " + win.escapeHtml(modelData.about) : "")
+                                          + (modelData.use ? " <i>In this project:</i> " + win.escapeHtml(modelData.use) : "")
+                                          + (modelData.why ? " <i>Why:</i> " + win.escapeHtml(modelData.why) : "") } }
+                            Text { visible: !!modelData.result; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
+                                text: "Result: " + (modelData.result || "") } } } }
+                DetailCard { heading: "Your skills for this role"; objectName: "prepSkills"; visible: (prepDialog.prep.skills || []).length > 0
+                    Repeater { model: prepDialog.prep.skills || []
+                        Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 13; lineHeight: 1.2
+                            textFormat: Text.StyledText
+                            text: "•  <b>" + win.escapeHtml(modelData.skill) + ":</b> " + win.escapeHtml(modelData.proof || "")
+                                  + (modelData.detail ? " " + win.escapeHtml(modelData.detail) : "") } } }
+                Text { objectName: "prepNoProjects"; visible: (prepDialog.prep.projects || []).length === 0 && (prepDialog.prep.skills || []).length === 0
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 12
+                    text: "This preparation has no part about your projects and skills. Select Make again in the application window to add it." }
                 Repeater {
                     model: prepDialog.prep.questions || []
                     ColumnLayout { Layout.fillWidth: true; spacing: 6

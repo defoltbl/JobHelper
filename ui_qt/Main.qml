@@ -212,6 +212,8 @@ ApplicationWindow {
     // The same colour, fully see-through. A colour that fades to plain "transparent" fades
     // through black on the way, which leaves a dark shadow behind on a quick mouse move.
     function clearOf(c) { return Qt.rgba(c.r, c.g, c.b, 0); }
+    // text from Claude or the user shown in a StyledText line: its own < and & are letters, not marks
+    function escapeHtml(t) { return ("" + (t || "")).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
     function daysText(n) { return n + (n === 1 ? " day" : " days"); }
     function stopRun() { if (win.appRunning && !win.stopping && bridge.stopRun()) win.stopping = true; }
     function startRun() { if (win.appRunning) return; handleStart(bridge.runSearch(optsData), "Starting…", "search"); }
