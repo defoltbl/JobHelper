@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -88,88 +89,150 @@ def load() -> dict[str, Any]:
 
 def any_given(d: dict[str, Any]) -> bool:
     """Is there anything to fill a form with?"""
-    return any(d.get(key) for key in KEYS) or bool(d.get("experience") or d.get("education") or d.get("languages"))
+    return MyDetails(d).any_given()
+
+
+class DetailsProblem(ValueError):
+    """The first thing wrong with the details, and where: a key ("email"), a place in a list
+    ("experience.1.title"), "salary" or "files.0"."""
+
+    def __init__(self, field: str, msg: str) -> None:
+        super().__init__(msg)
+        self.field, self.msg = field, msg
+
+    def as_dict(self) -> dict[str, str]:
+        return {"field": self.field, "msg": self.msg}
 
 
 def check(values: Any) -> tuple[dict[str, Any], dict[str, str]]:
-    """(clean values, {}) or ({}, {"field": where, "msg": what is wrong}). `field` is a key
-    ("email"), a place in a list ("experience.1.title"), "salary" or "files.0". The window
+    """(clean values, {}) or ({}, {"field": where, "msg": what is wrong}). The window
     checks the same things as you type; this is the last word."""
+    try:
+        return _checked(values), {}
+    except DetailsProblem as problem:
+        return {}, problem.as_dict()
+
+
+def _checked(values: Any) -> dict[str, Any]:
+    """The clean values, or DetailsProblem for the first thing wrong (in the order of the page)."""
     if not isinstance(values, dict):
-        return {}, {"field": "", "msg": "The details did not arrive as fields. Close the page and open it again."}
+        raise DetailsProblem("", "The details did not arrive as fields. Close the page and open it again.")
     clean = empty()
     for key, label, most in FIELDS:
         raw = values.get(key)
         if raw is not None and not isinstance(raw, str):
-            return {}, {"field": key, "msg": f"“{label}” must be text."}
+            raise DetailsProblem(key, f"“{label}” must be text.")
         value = " ".join(str(raw or "").split())
         if len(value) > most:
-            return {}, {"field": key, "msg": f"“{label}” is {len(value)} characters long; the most is {most}."}
+            raise DetailsProblem(key, f"“{label}” is {len(value)} characters long; the most is {most}.")
         problem = _problem(key, label, value) if value else ""
         if problem:
-            return {}, {"field": key, "msg": problem}
+            raise DetailsProblem(key, problem)
         clean[key] = _link(value) if key in LINKS and value else value
-    for name in ROWS:
-        rows, problem = _rows(name, values.get(name))
-        if problem:
-            return {}, problem
-        clean[name] = rows
-    files, problem = _files(values.get("files"))
-    if problem:
-        return {}, problem
-    clean["files"] = files
-    pay, problem = _salary(values)
-    if problem:
-        return {}, problem
-    clean.update(pay)
-    return clean, {}
+    for name, kind in LISTS.items():
+        clean[name] = kind().clean(values.get(name))
+    clean["files"] = FileList().clean(values.get("files"))
+    clean.update(Salary.from_values(values).to_dict())
+    return clean
+
+
+class RowList:
+    """One list of My details: a row per job, degree or language. It checks each row and the list
+    as a whole. The steps are the same for every list; a kind of list adds its own rules in the
+    two hooks (`_before`, `_after`) and in `_cell`."""
+
+    name = ""                                       # "experience", "education" or "languages"
+
+    def __init__(self) -> None:
+        self.columns, self.needed, self.word = ROWS[self.name], NEEDED[self.name], WORD[self.name]
+
+    def clean(self, raw: Any) -> list[dict[str, Any]]:
+        if raw is None:
+            return []
+        if not isinstance(raw, (list, tuple)):
+            raise DetailsProblem(self.name, f"The list of {self.word}s did not arrive as a list. Close the page and open it again.")
+        out: list[dict[str, Any]] = []
+        for i, row in enumerate(raw):
+            if not isinstance(row, dict):
+                raise DetailsProblem(f"{self.name}.{i}", f"Line {i + 1} of the {self.word}s is not a row of fields.")
+            clean = {key: self._cell(i, key, label, most, row.get(key)) for key, label, most in self.columns}
+            self._before(i, row, clean)
+            if not any(clean.get(key) for key, _label, _most in self.columns):
+                continue                            # a line left empty is not a job
+            for key in self.needed:
+                if not clean[key]:
+                    label = next(lab for k, lab, _most in self.columns if k == key)
+                    raise DetailsProblem(f"{self.name}.{i}.{key}", f"“{label}” is missing in this {self.word}. Fill it in, or remove the line.")
+            self._after(i, clean, out)
+            if clean.get("start") and clean.get("end") and _year(clean["end"]) < _year(clean["start"]):
+                raise DetailsProblem(f"{self.name}.{i}.end", "“To” is earlier than “From”.")
+            out.append(clean)
+        if len(out) > MAX_ROWS:
+            raise DetailsProblem(self.name, f"That is {len(out)} {self.word}s; the most is {MAX_ROWS}. Remove the oldest ones.")
+        return out
+
+    def _cell(self, i: int, key: str, label: str, most: int, raw: Any) -> str:
+        if key in LONG:                             # several lines: each tidied, the line breaks kept
+            value = "\n".join(line for line in (" ".join(part.split()) for part in str(raw or "").splitlines()) if line)
+        else:
+            value = " ".join(str(raw or "").split())
+        if len(value) > most:
+            raise DetailsProblem(f"{self.name}.{i}.{key}", f"“{label}” is {len(value)} characters long; the most is {most}.")
+        if key in ("start", "end") and value and not _WHEN.fullmatch(value):
+            raise DetailsProblem(f"{self.name}.{i}.{key}", "Write a year, or a month and a year: 2023 or 03/2023.")
+        return value
+
+    def _before(self, i: int, raw: dict, clean: dict) -> None:
+        """A rule on one row, before an empty row is skipped."""
+
+    def _after(self, i: int, clean: dict, done: list[dict]) -> None:
+        """A rule on one row against the rows before it."""
+
+
+class JobList(RowList):
+    """Your jobs. A current job has no end date."""
+    name = "experience"
+
+    def _before(self, i: int, raw: dict, clean: dict) -> None:
+        clean["current"] = bool(raw.get("current"))
+        if clean["current"] and clean["end"]:
+            raise DetailsProblem(f"{self.name}.{i}.end", "A current job has no end date. Clear “To”, or turn off “current”.")
+
+
+class DegreeList(RowList):
+    """Your degrees."""
+    name = "education"
+
+
+class LanguageList(RowList):
+    """Your languages: a name in letters, a level forms know, each language once."""
+    name = "languages"
+
+    def _cell(self, i: int, key: str, label: str, most: int, raw: Any) -> str:
+        value = super()._cell(i, key, label, most, raw)
+        if key == "level" and value:
+            known = next((level for level in LEVELS if level.lower() == value.lower()), "")
+            if not known:
+                raise DetailsProblem(f"{self.name}.{i}.{key}", "Write one of: " + ", ".join(LEVELS) + ".")
+            return known
+        if key == "language" and value and not re.fullmatch(r"[^\W\d_]+(?:[ '\-][^\W\d_]+)*", value):
+            raise DetailsProblem(f"{self.name}.{i}.{key}", "Write the language's name in letters, for example English.")
+        return value
+
+    def _after(self, i: int, clean: dict, done: list[dict]) -> None:
+        if any(clean["language"].lower() == other["language"].lower() for other in done):
+            raise DetailsProblem(f"{self.name}.{i}.language", f"{clean['language']} is in the list twice. Remove one line.")
+
+
+LISTS = {kind.name: kind for kind in (JobList, DegreeList, LanguageList)}
 
 
 def _rows(name: str, raw: Any) -> tuple[list[dict[str, Any]], dict[str, str]]:
-    if raw is None:
-        return [], {}
-    if not isinstance(raw, (list, tuple)):
-        return [], {"field": name, "msg": f"The list of {WORD[name]}s did not arrive as a list. Close the page and open it again."}
-    out = []
-    for i, row in enumerate(raw):
-        if not isinstance(row, dict):
-            return [], {"field": f"{name}.{i}", "msg": f"Line {i + 1} of the {WORD[name]}s is not a row of fields."}
-        clean: dict[str, Any] = {}
-        for key, label, most in ROWS[name]:
-            if key in LONG:                         # several lines: each tidied, the line breaks kept
-                value = "\n".join(line for line in (" ".join(part.split()) for part in str(row.get(key) or "").splitlines()) if line)
-            else:
-                value = " ".join(str(row.get(key) or "").split())
-            if len(value) > most:
-                return [], {"field": f"{name}.{i}.{key}", "msg": f"“{label}” is {len(value)} characters long; the most is {most}."}
-            if key in ("start", "end") and value and not _WHEN.fullmatch(value):
-                return [], {"field": f"{name}.{i}.{key}", "msg": "Write a year, or a month and a year: 2023 or 03/2023."}
-            if key == "level" and value:
-                known = next((level for level in LEVELS if level.lower() == value.lower()), "")
-                if not known:
-                    return [], {"field": f"{name}.{i}.{key}", "msg": "Write one of: " + ", ".join(LEVELS) + "."}
-                value = known
-            if key == "language" and value and not re.fullmatch(r"[^\W\d_]+(?:[ '\-][^\W\d_]+)*", value):
-                return [], {"field": f"{name}.{i}.{key}", "msg": "Write the language's name in letters, for example English."}
-            clean[key] = value
-        if name == "experience":
-            clean["current"] = bool(row.get("current"))
-            if clean["current"] and clean["end"]:
-                return [], {"field": f"{name}.{i}.end", "msg": "A current job has no end date. Clear “To”, or turn off “current”."}
-        if not any(clean.get(key) for key, _label, _most in ROWS[name]):
-            continue                                # a line left empty is not a job
-        for key in NEEDED[name]:
-            if not clean[key]:
-                label = next(lab for k, lab, _most in ROWS[name] if k == key)
-                return [], {"field": f"{name}.{i}.{key}", "msg": f"“{label}” is missing in this {WORD[name]}. Fill it in, or remove the line."}
-        if name == "languages" and any(clean["language"].lower() == other["language"].lower() for other in out):
-            return [], {"field": f"{name}.{i}.language", "msg": f"{clean['language']} is in the list twice. Remove one line."}
-        if clean.get("start") and clean.get("end") and _year(clean["end"]) < _year(clean["start"]):
-            return [], {"field": f"{name}.{i}.end", "msg": "“To” is earlier than “From”."}
-        out.append(clean)
-    if len(out) > MAX_ROWS:
-        return [], {"field": name, "msg": f"That is {len(out)} {WORD[name]}s; the most is {MAX_ROWS}. Remove the oldest ones."}
-    return out, {}
+    """One list checked on its own: (rows, {}) or ([], problem)."""
+    try:
+        return LISTS[name]().clean(raw), {}
+    except DetailsProblem as problem:
+        return [], problem.as_dict()
 
 
 def _year(when: str) -> tuple[int, int]:
@@ -177,47 +240,70 @@ def _year(when: str) -> tuple[int, int]:
     return (int(parts[-1]), int(parts[0]) if len(parts) == 2 else 0)
 
 
-def _files(raw: Any) -> tuple[list[dict[str, str]], dict[str, str]]:
-    if raw is None:
-        return [], {}
-    if not isinstance(raw, (list, tuple)):
-        return [], {"field": "files", "msg": "The list of files did not arrive as a list. Close the page and open it again."}
-    out, seen = [], set()
-    for i, row in enumerate(raw):
-        if not isinstance(row, dict):
-            return [], {"field": f"files.{i}", "msg": f"Line {i + 1} of the files is not a file."}
-        where = str(row.get("path") or "").strip()
-        label = " ".join(str(row.get("label") or "").split())
-        if not where and not label:
-            continue
-        if not where or not Path(where).is_absolute() or not Path(where).is_file():
-            return [], {"field": f"files.{i}", "msg": f"The file “{Path(where).name or label}” is not there any more. Choose it again, or remove the line."}
-        if len(label) > MAX_FILE_LABEL:
-            return [], {"field": f"files.{i}", "msg": f"The name of a file is {len(label)} characters long; the most is {MAX_FILE_LABEL}."}
-        if where in seen:
-            return [], {"field": f"files.{i}", "msg": f"“{Path(where).name}” is in the list twice. Remove one of them."}
-        seen.add(where)
-        out.append({"label": label or Path(where).stem, "path": where})
-    if len(out) > MAX_FILES:
-        return [], {"field": "files", "msg": f"That is {len(out)} files; the most is {MAX_FILES}."}
-    return out, {}
+class FileList:
+    """The files a form may ask for: each one still on the disk, named, and listed once."""
+
+    def clean(self, raw: Any) -> list[dict[str, str]]:
+        if raw is None:
+            return []
+        if not isinstance(raw, (list, tuple)):
+            raise DetailsProblem("files", "The list of files did not arrive as a list. Close the page and open it again.")
+        out, seen = [], set()
+        for i, row in enumerate(raw):
+            if not isinstance(row, dict):
+                raise DetailsProblem(f"files.{i}", f"Line {i + 1} of the files is not a file.")
+            where = str(row.get("path") or "").strip()
+            label = " ".join(str(row.get("label") or "").split())
+            if not where and not label:
+                continue
+            if not where or not Path(where).is_absolute() or not Path(where).is_file():
+                raise DetailsProblem(f"files.{i}", f"The file “{Path(where).name or label}” is not there any more. Choose it again, or remove the line.")
+            if len(label) > MAX_FILE_LABEL:
+                raise DetailsProblem(f"files.{i}", f"The name of a file is {len(label)} characters long; the most is {MAX_FILE_LABEL}.")
+            if where in seen:
+                raise DetailsProblem(f"files.{i}", f"“{Path(where).name}” is in the list twice. Remove one of them.")
+            seen.add(where)
+            out.append({"label": label or Path(where).stem, "path": where})
+        if len(out) > MAX_FILES:
+            raise DetailsProblem("files", f"That is {len(out)} files; the most is {MAX_FILES}.")
+        return out
 
 
-def _salary(values: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
-    raw = values.get("salary_amount", 0)
-    try:
-        amount = int(str(raw if raw not in (None, "") else 0).replace(" ", "").replace(" ", ""))
-    except ValueError:
-        return {}, {"field": "salary", "msg": "The salary must be a whole number, like 60000."}
-    if not 0 <= amount <= MAX_SALARY:
-        return {}, {"field": "salary", "msg": f"The salary must be between 0 (not given) and {MAX_SALARY:,}.".replace(",", " ")}
-    currency = str(values.get("salary_currency") or "CZK").strip().upper()
-    if currency not in salary.CURRENCIES:
-        return {}, {"field": "salary", "msg": f"“{currency}” is not a currency the app knows. Choose one from the list."}
-    period = str(values.get("salary_period") or "month").strip().lower()
-    if period not in PERIODS:
-        return {}, {"field": "salary", "msg": "A salary is per month or per year."}
-    return {"salary_amount": amount, "salary_currency": currency, "salary_period": period}, {}
+@dataclass(frozen=True)
+class Salary:
+    """The salary you ask for: a whole amount (0 = not given), a currency and a period."""
+    amount: int = 0
+    currency: str = "CZK"
+    period: str = "month"
+
+    @classmethod
+    def from_values(cls, values: dict[str, Any]) -> "Salary":
+        raw = values.get("salary_amount", 0)
+        try:
+            amount = int(str(raw if raw not in (None, "") else 0).replace(" ", "").replace(" ", ""))
+        except ValueError:
+            raise DetailsProblem("salary", "The salary must be a whole number, like 60000.") from None
+        if not 0 <= amount <= MAX_SALARY:
+            raise DetailsProblem("salary", f"The salary must be between 0 (not given) and {MAX_SALARY:,}.".replace(",", " "))
+        currency = str(values.get("salary_currency") or "CZK").strip().upper()
+        if currency not in salary.CURRENCIES:
+            raise DetailsProblem("salary", f"“{currency}” is not a currency the app knows. Choose one from the list.")
+        period = str(values.get("salary_period") or "month").strip().lower()
+        if period not in PERIODS:
+            raise DetailsProblem("salary", "A salary is per month or per year.")
+        return cls(amount, currency, period)
+
+    @classmethod
+    def of(cls, d: dict[str, Any]) -> "Salary":
+        """The saved salary of the details (already checked)."""
+        return cls(int(d.get("salary_amount") or 0), d.get("salary_currency") or "CZK", d.get("salary_period") or "month")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"salary_amount": self.amount, "salary_currency": self.currency, "salary_period": self.period}
+
+    def text(self) -> str:
+        """"60 000 CZK gross per month", or '' when no figure is given."""
+        return f"{salary.money(self.amount, self.currency)} gross per {self.period}" if self.amount > 0 else ""
 
 
 def _link(value: str) -> str:
@@ -256,45 +342,73 @@ def save(values: Any) -> dict[str, Any]:
 
 
 # ── what a form is given ────────────────────────────────────────────────────
+class MyDetails:
+    """The saved details, as forms and prompts use them."""
+
+    def __init__(self, data: dict[str, Any]) -> None:
+        self._d = data
+
+    def full_name(self) -> str:
+        return " ".join(part for part in (self._d.get("first_name", ""), self._d.get("last_name", "")) if part)
+
+    def jobs(self) -> list[dict[str, Any]]:
+        """Your jobs in the order forms ask for them: the current ones first, then as you listed them."""
+        rows = list(self._d.get("experience") or [])
+        return [r for r in rows if r.get("current")] + [r for r in rows if not r.get("current")]
+
+    def degrees(self) -> list[dict[str, Any]]:
+        return list(self._d.get("education") or [])
+
+    def languages(self) -> list[dict[str, Any]]:
+        """Your languages in the order you listed them: {language, level}."""
+        return list(self._d.get("languages") or [])
+
+    def salary(self) -> Salary:
+        return Salary.of(self._d)
+
+    def any_given(self) -> bool:
+        """Is there anything to fill a form with?"""
+        return any(self._d.get(key) for key in KEYS) or bool(self._d.get("experience") or self._d.get("education") or self._d.get("languages"))
+
+    def facts(self) -> list[str]:
+        """The jobs, degrees and salary as lines for a prompt (nothing for what is not given)."""
+        lines = []
+        for job in self.jobs():
+            span = f"{job.get('start') or '?'} to {'now' if job.get('current') else (job.get('end') or '?')}"
+            lines.append(f"- Job: {job['title']} at {job['employer']} ({span}){' - a current job' if job.get('current') else ''}")
+        for row in self.degrees():
+            what = ", ".join(part for part in (row.get("degree"), row.get("field")) if part) or "studies"
+            lines.append(f"- Education: {what} at {row['school']} ({row.get('start') or '?'} to {row.get('end') or '?'})")
+        for row in self.languages():
+            lines.append(f"- Language: {row['language']}" + (f" ({row['level']})" if row.get("level") else ""))
+        if self.salary().text():
+            lines.append(f"- Salary expectation: {self.salary().text()}")
+        return lines
+
+
+# The same, for a dictionary of details as the rest of the app passes it around.
 def full_name(d: dict[str, Any]) -> str:
-    return " ".join(part for part in (d.get("first_name", ""), d.get("last_name", "")) if part)
+    return MyDetails(d).full_name()
 
 
 def jobs(d: dict[str, Any]) -> list[dict[str, Any]]:
-    """Your jobs in the order forms ask for them: the current ones first, then as you listed them."""
-    rows = list(d.get("experience") or [])
-    return [r for r in rows if r.get("current")] + [r for r in rows if not r.get("current")]
+    return MyDetails(d).jobs()
 
 
 def degrees(d: dict[str, Any]) -> list[dict[str, Any]]:
-    return list(d.get("education") or [])
+    return MyDetails(d).degrees()
 
 
 def languages(d: dict[str, Any]) -> list[dict[str, Any]]:
-    """Your languages in the order you listed them: {language, level}."""
-    return list(d.get("languages") or [])
+    return MyDetails(d).languages()
 
 
 def salary_text(d: dict[str, Any]) -> str:
-    """"60 000 CZK gross per month", or '' when no figure is given."""
-    amount = int(d.get("salary_amount") or 0)
-    return f"{salary.money(amount, d.get('salary_currency') or 'CZK')} gross per {d.get('salary_period') or 'month'}" if amount > 0 else ""
+    return MyDetails(d).salary().text()
 
 
 def facts(d: dict[str, Any]) -> list[str]:
-    """The jobs, degrees and salary as lines for a prompt (nothing for what is not given)."""
-    lines = []
-    for job in jobs(d):
-        span = f"{job.get('start') or '?'} to {'now' if job.get('current') else (job.get('end') or '?')}"
-        lines.append(f"- Job: {job['title']} at {job['employer']} ({span}){' - a current job' if job.get('current') else ''}")
-    for row in degrees(d):
-        what = ", ".join(part for part in (row.get("degree"), row.get("field")) if part) or "studies"
-        lines.append(f"- Education: {what} at {row['school']} ({row.get('start') or '?'} to {row.get('end') or '?'})")
-    for row in languages(d):
-        lines.append(f"- Language: {row['language']}" + (f" ({row['level']})" if row.get("level") else ""))
-    if salary_text(d):
-        lines.append(f"- Salary expectation: {salary_text(d)}")
-    return lines
+    return MyDetails(d).facts()
 
 
 # ── what the CV offers ──────────────────────────────────────────────────────

@@ -159,6 +159,7 @@ data/                your data; only the *.example.* files are in git
 - **Keeping data safe:** `vault` (encryption, backups), `integrity` (signed rule files),
   `housekeeping` (old backups, logs, the Trash), `store` and `db` (jobs and replies).
 - **Claude:** `llm` (every call goes through it; pauses at the limit), `usage`.
+- **My details** (`details`): `check()` answers (clean values, problem); inside, `DetailsProblem` is raised by `RowList` and its kinds `JobList`, `DegreeList`, `LanguageList` (template method: `_cell`, `_before`, `_after`), `FileList` and `Salary`. `MyDetails` is the saved details as forms use them.
 - **The window's back end:** `ui_api.Api` is a facade over ten services (OOP: one job per class,
   composition, no service imports another): `api_system`, `api_options`, `api_jobs`,
   `api_documents` (scores, moving documents, "not interested"), `api_replies`, `api_insights`,
