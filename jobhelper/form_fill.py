@@ -963,95 +963,178 @@ def _words(field: dict[str, Any]) -> str:
     return " ".join(re.sub(r"[_\-.\[\]:()]+", " ", parts).lower().split())
 
 
-def name_of(field: dict[str, Any]) -> str:
-    """What to call the field when talking to the person."""
-    for key in ("label", "hint", "name", "id"):
-        value = " ".join(str(field.get(key) or "").split())
-        if value:
-            return value[:120]
-    return f"Field {field.get('n', '')}".strip()
+class Field:
+    """One field of a form, as the page reports it (the READ script): what it is called, what kind of
+    field it is, and what it asks for. It only reads the page's report and never changes it."""
 
+    def __init__(self, raw: dict[str, Any], at: int = 0) -> None:
+        self._raw = raw
+        self.at = at                                # its place among the fields of the page
 
-def classify(field: dict[str, Any]) -> tuple[str, str]:
-    """(what it is, why it is left). The first is a key of the details ("email", "full_name",
-    "location"), "letter", "question", "choice" (something to pick: see form_choices), or ""
-    when the field is left to the person."""
-    kind = str(field.get("type") or "text").lower()
-    words = _words(field)
-    picked = kind in ("select", "radio", "menu") or bool(field.get("combo"))
-    if kind == "password":
-        return "", PASSWORD
-    if kind == "file":
-        return "file", ""
-    if _PRIVATE.search(words):
-        return "", PRIVATE
-    if field.get("part") and kind in ("text", "number", "tel"):
-        # one box of a date that is split into a month and a year: the pair's own name says whose date it is
-        pair = _words({"label": field.get("group")})
-        if not _NOT_A_ROW_DATE.search(pair):
-            if _ROW_START.search(pair):
-                return "row_start", ""
-            if _ROW_END.search(pair):
-                return "row_end", ""
-        return "", DATE
-    if kind in ("date", "month") and _AVAILABLE.search(words):
-        return "start", ""
-    if kind in ("date", "month") or (kind == "text" and re.search(r"\bdates?\b|mm.?yyyy", words)):
-        if not _NOT_A_ROW_DATE.search(words):
+    def get(self, key: str, default: Any = None) -> Any:
+        """One value of the page's report, as it gave it."""
+        return self._raw.get(key, default)
+
+    @property
+    def n(self):
+        return self._raw["n"]
+
+    @property
+    def kind(self) -> str:
+        """The kind of field: "text", "select", "radio", "menu" (drawn by the page), "file" …"""
+        return str(self._raw.get("type") or "text").lower()
+
+    @property
+    def most(self) -> int:
+        """How many characters it takes (0 = no limit)."""
+        return int(self._raw.get("most") or 0)
+
+    @property
+    def options(self) -> list[str]:
+        return list(self._raw.get("options") or [])
+
+    @property
+    def filled(self) -> bool:
+        return bool(self._raw.get("filled"))
+
+    @property
+    def combo(self) -> bool:
+        """A text box that opens a list as you type."""
+        return bool(self._raw.get("combo"))
+
+    @property
+    def picked(self) -> bool:
+        """Something you pick (a list, a menu, a box, a file) rather than type."""
+        return self.kind in ("select", "radio", "menu", "checkbox", "file") or self.combo
+
+    @property
+    def words(self) -> str:
+        """What the page calls the field, as plain lower-case words."""
+        return _words(self._raw)
+
+    @property
+    def name(self) -> str:
+        """What to call the field when talking to the person."""
+        field = self._raw
+        for key in ("label", "hint", "name", "id"):
+            value = " ".join(str(field.get(key) or "").split())
+            if value:
+                return value[:120]
+        return f"Field {field.get('n', '')}".strip()
+
+    def meaning(self) -> tuple[str, str]:
+        """(what it is, why it is left). The first is a key of the details ("email", "full_name",
+"location"), "letter", "question", "choice" (something to pick: see form_choices), or ""
+when the field is left to the person."""
+        field = self._raw
+        kind = str(field.get("type") or "text").lower()
+        words = _words(field)
+        picked = kind in ("select", "radio", "menu") or bool(field.get("combo"))
+        if kind == "password":
+            return "", PASSWORD
+        if kind == "file":
+            return "file", ""
+        if _PRIVATE.search(words):
+            return "", PRIVATE
+        if field.get("part") and kind in ("text", "number", "tel"):
+            # one box of a date that is split into a month and a year: the pair's own name says whose date it is
+            pair = _words({"label": field.get("group")})
+            if not _NOT_A_ROW_DATE.search(pair):
+                if _ROW_START.search(pair):
+                    return "row_start", ""
+                if _ROW_END.search(pair):
+                    return "row_end", ""
+            return "", DATE
+        if kind in ("date", "month") and _AVAILABLE.search(words):
+            return "start", ""
+        if kind in ("date", "month") or (kind == "text" and re.search(r"\bdates?\b|mm.?yyyy", words)):
+            if not _NOT_A_ROW_DATE.search(words):
+                if _ROW_START.search(words):
+                    return "row_start", ""
+                if _ROW_END.search(words):
+                    return "row_end", ""
+            if kind != "text":
+                return "", DATE
+        if kind in ("week", "time", "datetime-local"):
+            return "", DATE
+        if kind in ("range", "color"):
+            return "", CHOICE
+        auto = (str(field.get("auto") or "").lower().split() or [""])[-1]
+        what = _AUTO.get(auto) or _BY_TYPE.get(kind) or ""
+        # What the person reads comes first: a field labelled "Location" whose inner name is "schoolLocation-1" is a location.
+        # Only a field whose label says nothing is judged by the names the page gives it inside.
+        shown = _words({"label": field.get("label"), "hint": field.get("hint")})
+        for seen in ([shown, words] if shown else [words]):
+            if what:
+                break
+            for key, rule in _RULES:
+                if rule.search(seen):
+                    if key in ("first_name", "last_name", "full_name", "street", "location", "city", "country", "postcode") and _NOT_MINE.search(seen):
+                        continue
+                    if key in ("employer", "job_title") and _NOT_THIS_JOB.search(seen):
+                        continue                        # "position applied for", "referee's employer": not a job of yours
+                    what = key
+                    break
+        has_words = bool(re.search(r"[^\W\d_]{2}", str(field.get("label") or "")))
+        if kind == "checkbox":                          # the two kinds of tick box that are reported: "I work here now", "I am fluent in this language"
+            return ("fluent_box", "") if _FLUENT.search(words) else ("current_box", "")
+        if _LANG_NAME.fullmatch(_words({"label": field.get("label")}).strip(" *")):
+            return "lang_name", ""                      # "Language" in a list of languages: one of yours, row by row
+        if kind == "select" and not _NOT_A_ROW_DATE.search(words) and re.search(r"month|year|date|\bfrom\b|\bto\b|start|end", words):
             if _ROW_START.search(words):
                 return "row_start", ""
             if _ROW_END.search(words):
                 return "row_end", ""
-        if kind != "text":
-            return "", DATE
-    if kind in ("week", "time", "datetime-local"):
-        return "", DATE
-    if kind in ("range", "color"):
-        return "", CHOICE
-    auto = (str(field.get("auto") or "").lower().split() or [""])[-1]
-    what = _AUTO.get(auto) or _BY_TYPE.get(kind) or ""
-    # What the person reads comes first: a field labelled "Location" whose inner name is "schoolLocation-1" is a location.
-    # Only a field whose label says nothing is judged by the names the page gives it inside.
-    shown = _words({"label": field.get("label"), "hint": field.get("hint")})
-    for seen in ([shown, words] if shown else [words]):
+        if picked:
+            if kind == "select" and what == "country":
+                return "country", ""
+            return ("choice", "") if has_words else ("", CHOICE)
+        if kind == "textarea" and _LETTER.search(words):
+            return "letter", ""
+        if what and kind == "textarea" and what not in ("street", "location"):
+            what = ""                                   # a big box that mentions "name" or "email" is a question, not a detail
+        if kind == "number":
+            return ("choice", "") if has_words and what not in ("phone", "postcode") else (("", UNKNOWN) if not what else (what, ""))
         if what:
-            break
+            return what, ""
+        label = str(field.get("label") or "").strip()
+        if kind == "textarea" or "?" in label or len(label) >= 20:
+            return ("question", "") if has_words else ("", UNKNOWN)
+        if has_words and kind in ("text", "search") and not _NOT_MINE.search(words) and not _NOT_THIS_JOB.search(words):
+            return "guess", ""                          # a few words Claude may copy from the CV; never somebody else's name or employer
+        return "", UNKNOWN
+
+    def detail(self) -> str:
+        """Which of the details a field asks for, whatever kind of field it is ('' = none): a hint for a choice."""
+        field = self._raw
+        words = _words(field)
+        if _PRIVATE.search(words):
+            return ""
         for key, rule in _RULES:
-            if rule.search(seen):
-                if key in ("first_name", "last_name", "full_name", "street", "location", "city", "country", "postcode") and _NOT_MINE.search(seen):
-                    continue
-                if key in ("employer", "job_title") and _NOT_THIS_JOB.search(seen):
-                    continue                        # "position applied for", "referee's employer": not a job of yours
-                what = key
-                break
-    has_words = bool(re.search(r"[^\W\d_]{2}", str(field.get("label") or "")))
-    if kind == "checkbox":                          # the two kinds of tick box that are reported: "I work here now", "I am fluent in this language"
-        return ("fluent_box", "") if _FLUENT.search(words) else ("current_box", "")
-    if _LANG_NAME.fullmatch(_words({"label": field.get("label")}).strip(" *")):
-        return "lang_name", ""                      # "Language" in a list of languages: one of yours, row by row
-    if kind == "select" and not _NOT_A_ROW_DATE.search(words) and re.search(r"month|year|date|\bfrom\b|\bto\b|start|end", words):
-        if _ROW_START.search(words):
-            return "row_start", ""
-        if _ROW_END.search(words):
-            return "row_end", ""
-    if picked:
-        if kind == "select" and what == "country":
-            return "country", ""
-        return ("choice", "") if has_words else ("", CHOICE)
-    if kind == "textarea" and _LETTER.search(words):
-        return "letter", ""
-    if what and kind == "textarea" and what not in ("street", "location"):
-        what = ""                                   # a big box that mentions "name" or "email" is a question, not a detail
-    if kind == "number":
-        return ("choice", "") if has_words and what not in ("phone", "postcode") else (("", UNKNOWN) if not what else (what, ""))
-    if what:
-        return what, ""
-    label = str(field.get("label") or "").strip()
-    if kind == "textarea" or "?" in label or len(label) >= 20:
-        return ("question", "") if has_words else ("", UNKNOWN)
-    if has_words and kind in ("text", "search") and not _NOT_MINE.search(words) and not _NOT_THIS_JOB.search(words):
-        return "guess", ""                          # a few words Claude may copy from the CV; never somebody else's name or employer
-    return "", UNKNOWN
+            if rule.search(words) and not (key in ("first_name", "last_name", "full_name", "street") and _NOT_MINE.search(words)) \
+                    and not (key in ("employer", "job_title") and _NOT_THIS_JOB.search(words)):
+                return key
+        return ""
+
+    def is_code_list(self) -> bool:
+        """Whether a list is one of calling codes ("Czech Republic +420"): most of its entries carry one."""
+        field = self._raw
+        options = field.get("options") or []
+        return str(field.get("type")) == "select" and len(options) >= 10 and sum(1 for o in options if _CODE.search(str(o))) > len(options) * 0.7
+
+    def file_kind(self) -> str:
+        """Which file a file field asks for (see `file_kind`)."""
+        return file_kind(self._raw)
+
+
+def name_of(field: dict[str, Any]) -> str:
+    """What to call the field when talking to the person."""
+    return Field(field).name
+
+
+def classify(field: dict[str, Any]) -> tuple[str, str]:
+    """(what it is, why it is left) for one field as the page reports it: see `Field.meaning`."""
+    return Field(field).meaning()
 
 
 def part_for(part: str, when: str) -> tuple[str, str]:
@@ -1081,15 +1164,8 @@ def when_for(kind: str, when: str) -> tuple[str, str]:
 
 
 def detail_of(field: dict[str, Any]) -> str:
-    """Which of the details a field asks for, whatever kind of field it is ('' = none): a hint for a choice."""
-    words = _words(field)
-    if _PRIVATE.search(words):
-        return ""
-    for key, rule in _RULES:
-        if rule.search(words) and not (key in ("first_name", "last_name", "full_name", "street") and _NOT_MINE.search(words)) \
-                and not (key in ("employer", "job_title") and _NOT_THIS_JOB.search(words)):
-            return key
-    return ""
+    """Which of the details a field asks for ('' = none): see `Field.detail`."""
+    return Field(field).detail()
 
 
 def value_for(what: str, mine: dict[str, Any], index: int = 0) -> str:
@@ -1114,9 +1190,8 @@ NO_CODE = "The list has no entry for the country code of your phone number. Choo
 
 
 def is_code_list(field: dict[str, Any]) -> bool:
-    """Whether a list is one of calling codes ("Czech Republic +420"): most of its entries carry one."""
-    options = field.get("options") or []
-    return str(field.get("type")) == "select" and len(options) >= 10 and sum(1 for o in options if _CODE.search(str(o))) > len(options) * 0.7
+    """Whether a list is one of calling codes: see `Field.is_code_list`."""
+    return Field(field).is_code_list()
 
 
 def code_option(options: list[str], phone: str, country: str = "") -> tuple[str, str]:
@@ -1155,208 +1230,306 @@ def country_option(options: list[str], country: str) -> str:
     return ""
 
 
-def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", has_job: bool = False) -> dict[str, list]:
-    """What to do with each field that is still empty:
-    {"fill": [{n, label, value, kind}], "ask": [{n, label, most}], "choose": [{n, kind, typed, label, options, what, value}],
-     "left": [{label, why}]}. Fields that already hold something are not touched and not listed."""
-    out: dict[str, Any] = {"fill": [], "ask": [], "choose": [], "guess": [], "tick": [], "attach": [], "left": [],
-                           "rows": {"experience": 0, "education": 0, "languages": 0}}
-    asked: set[str] = set()
-    last = [""]                                     # the list whose row is being filled: its dates belong to that row
-    # Jobs and degrees are asked row by row. A row ends where one of its fields comes round again:
-    # the second "Company" starts your second job, whatever fields a row is made of.
-    row = {"experience": 0, "education": 0, "languages": 0}
-    seen: dict[str, set] = {"experience": set(), "education": set(), "languages": set()}
+class RowTracker:
+    """Which job, degree or language a field belongs to.
 
-    def place(what: str, field: dict[str, Any]) -> int:
+    Jobs, degrees and languages are asked row by row. A row ends where one of its fields comes round
+    again: the second "Company" starts your second job, whatever fields a row is made of."""
+
+    LISTS = ("experience", "education", "languages")
+
+    def __init__(self) -> None:
+        self._row = dict.fromkeys(self.LISTS, 0)          # the row being filled in each list
+        self._seen: dict[str, set] = {name: set() for name in self.LISTS}
+        self.counts = dict.fromkeys(self.LISTS, 0)       # how many rows the form has, as far as it was read
+        self.last = ""                                   # the list whose row is being filled: its dates belong to it
+        self._at = -99                                   # where the last field of that row stood
+
+    def place(self, what: str, field: "Field") -> int:
+        """The row of a field that names a job, a degree or a language (0 = the first)."""
         name = LISTED[what][0]
-        if name == "experience" and _CURRENT.search(_words(field)):
-            return 0                                # "current employer" is your current job wherever it stands
-        if what in seen[name]:
-            row[name] += 1
-            seen[name] = set()
-        seen[name].add(what)
-        last[0] = name
-        out["rows"][name] = row[name] + 1
-        return row[name]
+        if name == "experience" and _CURRENT.search(field.words):
+            return 0                                    # "current employer" is your current job wherever it stands
+        if what in self._seen[name]:
+            self._row[name] += 1
+            self._seen[name] = set()
+        self._seen[name].add(what)
+        self.last = name
+        self.counts[name] = self._row[name] + 1
+        return self._row[name]
 
-    def ask(field, label, most) -> None:
-        question = str(field.get("label") or "").strip()[:form_answers.MAX_QUESTION]
-        if not has_job:
-            out["left"].append({"label": label, "why": NO_JOB})
-        elif question.lower() in asked:
-            out["left"].append({"label": label, "why": "The same question as one above: copy that answer if it fits."})
-        elif len(out["ask"]) >= form_answers.MAX_QUESTIONS:
-            out["left"].append({"label": label, "why": TOO_MANY})
-        else:
-            asked.add(question.lower())
-            out["ask"].append({"n": field["n"], "label": question, "most": most})
+    def row(self, name: str) -> int:
+        """The row being filled in a list."""
+        return self._row[name]
 
-    kinds = [classify(f)[0] for f in fields]
-    codes: dict[int, str] = {}                      # where a list of calling codes stands, and the code it shows
-    row_at = [-99]                                  # where the last field of a job's or a degree's row stood
-    for at, field in enumerate(fields):
-        label, most = name_of(field), int(field.get("most") or 0)
-        kind = str(field.get("type") or "text").lower()
-        what, why = classify(field)
+    def mark(self, at: int) -> None:
+        """A field of the current row stands at `at`."""
+        self._at = at
+
+    def within(self, at: int, distance: int) -> bool:
+        """Whether a field at `at` is close enough after the current row to belong to it."""
+        return bool(self.last) and at - self._at <= distance
+
+
+class FormPlan:
+    """What to do with the empty fields of one page: fill, ask Claude, choose, guess, tick, attach, or leave
+    to the person with the reason. `as_dict()` is the shape the rest of the app reads."""
+
+    def __init__(self) -> None:
+        self.fill: list[dict] = []
+        self.ask: list[dict] = []
+        self.choose: list[dict] = []
+        self.guess: list[dict] = []
+        self.tick: list[dict] = []
+        self.attach: list[dict] = []
+        self.left: list[dict] = []
+
+    def leave(self, label: str, why: str) -> None:
+        self.left.append({"label": label, "why": why})
+
+    def leaves(self, why: str) -> bool:
+        """Whether some field is already left for this reason."""
+        return any(i["why"] == why for i in self.left)
+
+    def as_dict(self, rows: dict[str, int]) -> dict[str, Any]:
+        return {"fill": self.fill, "ask": self.ask, "choose": self.choose, "guess": self.guess, "tick": self.tick,
+                "attach": self.attach, "left": self.left, "rows": dict(rows)}
+
+
+class FormPlanner:
+    """Decides, field by field, what to do with a form that is still empty, from the person's details.
+    One method for each kind of field; `plan()` goes through them in the order of the page."""
+
+    def __init__(self, fields: list[dict[str, Any]], mine: dict[str, Any], letter: str = "", has_job: bool = False) -> None:
+        self._fields = [Field(f, at) for at, f in enumerate(fields)]
+        self._kinds = [f.meaning()[0] for f in self._fields]
+        self._mine, self._letter, self._has_job = mine, letter, has_job
+        self._plan, self._rows = FormPlan(), RowTracker()
+        self._codes: dict[int, str] = {}               # where a list of calling codes stands, and the code it shows
+        self._asked: set[str] = set()
+
+    def plan(self) -> dict[str, Any]:
+        for field in self._fields:
+            self._one(field)
+        return self._plan.as_dict(self._rows.counts)
+
+    # ── what a field is, in its place on the page ──
+    def _meaning(self, field: Field) -> tuple[str, str]:
+        at, kind, kinds = field.at, field.kind, self._kinds
+        what, why = field.meaning()
         # a "Start date" that belongs to no job (no end date, employer or school near it) asks when you can start
-        if what == "row_start" and kind in ("date", "month") and _LONE_START.search(_words(field)) and not field.get("filled") \
+        if what == "row_start" and kind in ("date", "month") and _LONE_START.search(field.words) and not field.filled \
                 and not {"row_end", "employer", "job_title", "school", "degree", "study_field"} & set(kinds[max(0, at - 4):at] + kinds[at + 1:at + 5]):
             what = "start"
         # inside a job's row: "Location" is where that job was, and "Role description" is what you did there
-        near = last[0] and at - row_at[0] <= ROW_NEAR
-        picked = kind in ("select", "radio", "menu", "checkbox", "file") or bool(field.get("combo"))
+        near = self._rows.within(at, ROW_NEAR)
+        picked = kind in ("select", "radio", "menu", "checkbox", "file") or field.combo
         if near and not picked and what not in LISTED and what not in ("row_start", "row_end", "start"):
-            wordy = _ROW_TEXT.search(_words(field)) and (what in ("question", "guess") or kind == "textarea")
-            if last[0] == "experience":
+            wordy = _ROW_TEXT.search(field.words) and (what in ("question", "guess") or kind == "textarea")
+            if self._rows.last == "experience":
                 what = "job_location" if what in ("location", "city") else ("job_description" if wordy else what)
             elif what in ("location", "city"):
                 what, why = "", ROW_PLACE
             elif wordy:
                 what, why = "", ROW_WORDS
-        if last[0] == "languages" and at - row_at[0] <= LANG_NEAR and what != "lang_name" and kind != "checkbox" \
+        if self._rows.last == "languages" and self._rows.within(at, LANG_NEAR) and what != "lang_name" and kind != "checkbox" \
                 and _LANG_LEVEL.search(_words({"label": field.get("label")}).strip(" *")):
             what = "lang_level"
         if what in LISTED or what in ("row_start", "row_end", "current_box", "lang_level", "fluent_box"):
-            row_at[0] = at
-        if is_code_list(field) and str(mine.get("phone") or "").startswith("+"):
-            # the list of calling codes beside a phone field: the code of your own number, and the number then goes in without it
-            if field.get("filled"):
-                codes[at] = str(field.get("code") or "")
-            else:
-                entry, code = code_option(field.get("options") or [], mine["phone"], mine.get("country", ""))
-                if entry:
-                    codes[at] = code
-                    out["fill"].append({"n": field["n"], "label": label, "value": entry, "kind": "detail"})
-                else:
-                    codes[at] = ""
-                    out["left"].append({"label": label, "why": NO_CODE})
-            continue
-        if what == "start" and kind in ("date", "month") and not field.get("filled"):
-            said = str(mine.get("start") or "").strip()
-            day, worked = start_day(said)
-            if not said:
-                out["left"].append({"label": label, "why": START_UNKNOWN})
-            elif not day:
-                out["left"].append({"label": label, "why": START_NO_DATE.format(text=said[:60])})
-            else:
-                out["fill"].append({"n": field["n"], "label": label, "value": day.isoformat()[:7 if kind == "month" else 10], "kind": "detail",
-                                    "check": START_CHECK.format(text=said[:60]) if worked else ""})
-            continue
-        if field.get("filled"):
+            self._rows.mark(at)
+        return what, why
+
+    def _one(self, field: Field) -> None:
+        what, why = self._meaning(field)
+        if field.is_code_list() and str(self._mine.get("phone") or "").startswith("+"):
+            return self._phone_code(field)
+        if what == "start" and field.kind in ("date", "month") and not field.filled:
+            return self._start_date(field)
+        if field.filled:
             if what in LISTED:
-                place(what, field)                  # a row that is filled already is still a row: the next one gets the next job
-            continue
+                self._rows.place(what, field)            # a row that is filled already is still a row: the next one gets the next job
+            return None
         if what == "file":
-            wants = file_kind(field)
-            if wants:
-                out["attach"].append({"n": field["n"], "label": label, "kind": wants, "accept": str(field.get("accept") or "")})
-            elif not str(field.get("label") or field.get("hint") or "").strip():
-                # a file field with no words of its own is the page's tool behind its "Select file" buttons: said once, not once per field
-                if not any(i["why"] == FILE_BUTTON for i in out["left"]):
-                    out["left"].append({"label": "Files", "why": FILE_BUTTON})
-            else:
-                out["left"].append({"label": label, "why": FILE})
-            continue
+            return self._file(field)
         if what in ("row_start", "row_end"):
-            name = last[0]
-            rows = (details.jobs(mine) if name == "experience" else details.degrees(mine)) if name else []
-            entry = rows[row[name]] if name and row[name] < len(rows) else None
-            if entry is None:
-                out["left"].append({"label": label, "why": DATE})
-            elif what == "row_end" and entry.get("current"):
-                continue                            # a job that goes on has no end date: the field stays empty, and that is right
-            else:
-                stamp = entry.get("start" if what == "row_start" else "end", "")
-                if field.get("part"):
-                    value, note = part_for(field["part"], stamp)
-                else:
-                    value, note = date_option(field.get("options") or [], stamp) if kind == "select" else when_for(kind, stamp)
-                if value:
-                    out["fill"].append({"n": field["n"], "label": label, "value": value, "kind": "detail", "check": note})
-                else:
-                    out["left"].append({"label": label, "why": note or DATE})
-        elif what in ("lang_name", "lang_level", "fluent_box"):
-            spoken = details.languages(mine)
-            index = place(what, field) if what == "lang_name" else row["languages"]
-            entry = spoken[index] if last[0] == "languages" and index < len(spoken) else None
-            options, menu = list(field.get("options") or []), kind == "menu" or bool(field.get("combo"))
-            if entry is None:
-                if what != "fluent_box":
-                    count = f"{len(spoken)} language{'' if len(spoken) == 1 else 's'}"
-                    out["left"].append({"label": label, "why": MORE_LANGUAGES.format(have=count) if spoken else NO_DETAIL.format(what="languages")})
-            elif what == "fluent_box":
-                if entry.get("level") in ("Native", "Fluent"):
-                    out["tick"].append({"n": field["n"], "label": label})
-            elif what == "lang_level" and not entry.get("level"):
-                out["left"].append({"label": label, "why": NO_LEVEL.format(language=entry["language"])})
-            elif menu:                              # a menu the page draws: its entries are known only once it is open
-                out["choose"].append({"n": field["n"], "kind": "menu", "typed": bool(field.get("combo")), "label": label, "options": [],
-                                      "what": what, "value": entry["language"] if what == "lang_name" else entry["level"]})
-            elif kind in ("select", "radio"):
-                if what == "lang_name":
-                    value, why = language_option(options, entry["language"]), NO_LANGUAGE.format(language=entry["language"])
-                else:
-                    value, why = level_option(options, entry["level"]), NO_LEVEL_OPTION.format(level=entry["level"])
-                if not value:
-                    out["left"].append({"label": label, "why": why})
-                elif kind == "radio":
-                    out["choose"].append({"n": field["n"], "kind": "radio", "typed": False, "label": label, "options": options, "what": what,
-                                          "value": entry["language"] if what == "lang_name" else entry["level"]})
-                else:
-                    out["fill"].append({"n": field["n"], "label": label, "value": value, "kind": "detail",
-                                        **({"check": LEVEL_CHECK.format(level=entry["level"])} if what == "lang_level" else {})})
-            else:
-                out["fill"].append({"n": field["n"], "label": label, "kind": "detail",
-                                    "value": entry["language"] if what == "lang_name" else entry["level"]})
-        elif what == "current_box":
-            rows = details.jobs(mine) if last[0] == "experience" else []
-            if last[0] == "experience" and row["experience"] < len(rows) and rows[row["experience"]].get("current"):
-                out["tick"].append({"n": field["n"], "label": label})       # the job of this row goes on
-        elif what == "guess":
-            out["guess"].append({"n": field["n"], "label": label, "most": most})
+            return self._row_date(field, what)
+        if what in ("lang_name", "lang_level", "fluent_box"):
+            return self._language(field, what)
+        if what == "current_box":
+            return self._current_box(field)
+        if what == "guess":
+            self._plan.guess.append({"n": field.n, "label": field.name, "most": field.most})
         elif not what:
-            out["left"].append({"label": label, "why": why})
+            self._plan.leave(field.name, why)
         elif what == "question":
-            ask(field, label, most)
+            self._ask(field)
         elif what == "choice":
-            about = detail_of(field)
-            shape = "number" if kind == "number" else ("menu" if kind == "menu" or field.get("combo") else kind)
-            out["choose"].append({"n": field["n"], "kind": shape, "typed": bool(field.get("combo")), "label": label,
-                                  "options": list(field.get("options") or []), "what": about, "value": value_for(about, mine) if about else ""})
+            self._choice(field)
         else:
-            index = place(what, field) if what in LISTED else 0
-            value = letter if what == "letter" else value_for(what, mine, index)
-            if what in LISTED and not value and index:
-                have = len(mine.get(LISTED[what][0]) or [])
-                if index >= have > 0:               # the form has more rows than you have jobs or degrees
-                    count = f"{have} {details.WORD[LISTED[what][0]]}{'' if have == 1 else 's'}"
-                    out["left"].append({"label": label, "why": MORE_ROWS.format(have=count)})
-                    continue
-            if value and what == "country" and kind == "select":
-                value = country_option(field.get("options") or [], value)
-                if not value:
-                    out["left"].append({"label": label, "why": NO_COUNTRY.format(country=mine["country"])})
-                    continue
-            near = [codes[k] for k in (at - 1, at - 2, at + 1) if k in codes]
-            check = ""
-            if value and what == "phone" and near and kind in ("text", "tel"):
-                if near[0] and value.startswith(near[0]):
-                    value = national(value, near[0])
-                else:
-                    check = PHONE_CODE
-            if value and what == "phone" and most and len(value) > most:
-                value = re.sub(r"[ ()./\-]", "", value)             # a short field: the same number without its spaces
-            if not value and what in SOFT and (len(str(field.get("label") or "")) >= 20 or "?" in str(field.get("label") or "")):
-                ask(field, label, most)                              # not in My details: drafted like any other question
-            elif not value:
-                out["left"].append({"label": label, "why": NO_LETTER if what == "letter" else (START_UNKNOWN if what == "start" else NO_DETAIL.format(what=WHAT.get(what, what)))})
-            elif most and len(value) > most:
-                out["left"].append({"label": label, "why": TOO_LONG.format(most=most, size=len(value))})
+            self._detail(field, what)
+        return None
+
+    # ── one method for each kind of field ──
+    def _ask(self, field: Field) -> None:
+        """An open question: Claude drafts the answer from the CV (one call for the page)."""
+        label, question = field.name, str(field.get("label") or "").strip()[:form_answers.MAX_QUESTION]
+        if not self._has_job:
+            self._plan.leave(label, NO_JOB)
+        elif question.lower() in self._asked:
+            self._plan.leave(label, "The same question as one above: copy that answer if it fits.")
+        elif len(self._plan.ask) >= form_answers.MAX_QUESTIONS:
+            self._plan.leave(label, TOO_MANY)
+        else:
+            self._asked.add(question.lower())
+            self._plan.ask.append({"n": field.n, "label": question, "most": field.most})
+
+    def _phone_code(self, field: Field) -> None:
+        """The list of calling codes beside a phone field: the code of your own number; the number then goes in without it."""
+        if field.filled:
+            self._codes[field.at] = str(field.get("code") or "")
+            return
+        entry, code = code_option(field.options, self._mine["phone"], self._mine.get("country", ""))
+        if entry:
+            self._codes[field.at] = code
+            self._plan.fill.append({"n": field.n, "label": field.name, "value": entry, "kind": "detail"})
+        else:
+            self._codes[field.at] = ""
+            self._plan.leave(field.name, NO_CODE)
+
+    def _start_date(self, field: Field) -> None:
+        """When you can start, worked out from what you wrote in Options."""
+        said = str(self._mine.get("start") or "").strip()
+        day, worked = start_day(said)
+        if not said:
+            self._plan.leave(field.name, START_UNKNOWN)
+        elif not day:
+            self._plan.leave(field.name, START_NO_DATE.format(text=said[:60]))
+        else:
+            self._plan.fill.append({"n": field.n, "label": field.name, "value": day.isoformat()[:7 if field.kind == "month" else 10],
+                                    "kind": "detail", "check": START_CHECK.format(text=said[:60]) if worked else ""})
+
+    def _file(self, field: Field) -> None:
+        wants = field.file_kind()
+        if wants:
+            self._plan.attach.append({"n": field.n, "label": field.name, "kind": wants, "accept": str(field.get("accept") or "")})
+        elif not str(field.get("label") or field.get("hint") or "").strip():
+            # a file field with no words of its own is the page's tool behind its "Select file" buttons: said once, not once per field
+            if not self._plan.leaves(FILE_BUTTON):
+                self._plan.leave("Files", FILE_BUTTON)
+        else:
+            self._plan.leave(field.name, FILE)
+
+    def _row_date(self, field: Field, what: str) -> None:
+        """The start or end date of the job or degree of this row."""
+        name = self._rows.last
+        rows = (details.jobs(self._mine) if name == "experience" else details.degrees(self._mine)) if name else []
+        entry = rows[self._rows.row(name)] if name and self._rows.row(name) < len(rows) else None
+        if entry is None:
+            self._plan.leave(field.name, DATE)
+            return
+        if what == "row_end" and entry.get("current"):
+            return                                      # a job that goes on has no end date: the field stays empty, and that is right
+        stamp = entry.get("start" if what == "row_start" else "end", "")
+        if field.get("part"):
+            value, note = part_for(field.get("part"), stamp)
+        else:
+            value, note = date_option(field.options, stamp) if field.kind == "select" else when_for(field.kind, stamp)
+        if value:
+            self._plan.fill.append({"n": field.n, "label": field.name, "value": value, "kind": "detail", "check": note})
+        else:
+            self._plan.leave(field.name, note or DATE)
+
+    def _language(self, field: Field, what: str) -> None:
+        """A language of yours, its level, or the box that says you are fluent in it."""
+        label, kind = field.name, field.kind
+        spoken = details.languages(self._mine)
+        index = self._rows.place(what, field) if what == "lang_name" else self._rows.row("languages")
+        entry = spoken[index] if self._rows.last == "languages" and index < len(spoken) else None
+        options, menu = field.options, kind == "menu" or field.combo
+        if entry is None:
+            if what != "fluent_box":
+                count = f"{len(spoken)} language{'' if len(spoken) == 1 else 's'}"
+                self._plan.leave(label, MORE_LANGUAGES.format(have=count) if spoken else NO_DETAIL.format(what="languages"))
+        elif what == "fluent_box":
+            if entry.get("level") in ("Native", "Fluent"):
+                self._plan.tick.append({"n": field.n, "label": label})
+        elif what == "lang_level" and not entry.get("level"):
+            self._plan.leave(label, NO_LEVEL.format(language=entry["language"]))
+        elif menu:                                      # a menu the page draws: its entries are known only once it is open
+            self._plan.choose.append({"n": field.n, "kind": "menu", "typed": field.combo, "label": label, "options": [],
+                                      "what": what, "value": entry["language"] if what == "lang_name" else entry["level"]})
+        elif kind in ("select", "radio"):
+            if what == "lang_name":
+                value, why = language_option(options, entry["language"]), NO_LANGUAGE.format(language=entry["language"])
             else:
-                out["fill"].append({"n": field["n"], "label": label, "value": value, "kind": "letter" if what == "letter" else "detail",
+                value, why = level_option(options, entry["level"]), NO_LEVEL_OPTION.format(level=entry["level"])
+            if not value:
+                self._plan.leave(label, why)
+            elif kind == "radio":
+                self._plan.choose.append({"n": field.n, "kind": "radio", "typed": False, "label": label, "options": options, "what": what,
+                                          "value": entry["language"] if what == "lang_name" else entry["level"]})
+            else:
+                self._plan.fill.append({"n": field.n, "label": label, "value": value, "kind": "detail",
+                                        **({"check": LEVEL_CHECK.format(level=entry["level"])} if what == "lang_level" else {})})
+        else:
+            self._plan.fill.append({"n": field.n, "label": label, "kind": "detail",
+                                    "value": entry["language"] if what == "lang_name" else entry["level"]})
+
+    def _current_box(self, field: Field) -> None:
+        """The box "I work here now": ticked when the job of this row goes on."""
+        rows = details.jobs(self._mine) if self._rows.last == "experience" else []
+        here = self._rows.row("experience")
+        if self._rows.last == "experience" and here < len(rows) and rows[here].get("current"):
+            self._plan.tick.append({"n": field.n, "label": field.name})
+
+    def _choice(self, field: Field) -> None:
+        """A list, a yes/no question or a menu: chosen later by form_choices, with what the field asks about."""
+        about, kind = field.detail(), field.kind
+        shape = "number" if kind == "number" else ("menu" if kind == "menu" or field.combo else kind)
+        self._plan.choose.append({"n": field.n, "kind": shape, "typed": field.combo, "label": field.name,
+                                  "options": field.options, "what": about, "value": value_for(about, self._mine) if about else ""})
+
+    def _detail(self, field: Field, what: str) -> None:
+        """One of your details, or the letter."""
+        label, kind, most, mine = field.name, field.kind, field.most, self._mine
+        index = self._rows.place(what, field) if what in LISTED else 0
+        value = self._letter if what == "letter" else value_for(what, mine, index)
+        if what in LISTED and not value and index:
+            have = len(mine.get(LISTED[what][0]) or [])
+            if index >= have > 0:                       # the form has more rows than you have jobs or degrees
+                count = f"{have} {details.WORD[LISTED[what][0]]}{'' if have == 1 else 's'}"
+                self._plan.leave(label, MORE_ROWS.format(have=count))
+                return
+        if value and what == "country" and kind == "select":
+            value = country_option(field.options, value)
+            if not value:
+                self._plan.leave(label, NO_COUNTRY.format(country=mine["country"]))
+                return
+        near = [self._codes[k] for k in (field.at - 1, field.at - 2, field.at + 1) if k in self._codes]
+        check = ""
+        if value and what == "phone" and near and kind in ("text", "tel"):
+            if near[0] and value.startswith(near[0]):
+                value = national(value, near[0])
+            else:
+                check = PHONE_CODE
+        if value and what == "phone" and most and len(value) > most:
+            value = re.sub(r"[ ()./\-]", "", value)     # a short field: the same number without its spaces
+        if not value and what in SOFT and (len(str(field.get("label") or "")) >= 20 or "?" in str(field.get("label") or "")):
+            self._ask(field)                            # not in My details: drafted like any other question
+        elif not value:
+            self._plan.leave(label, NO_LETTER if what == "letter" else (START_UNKNOWN if what == "start" else NO_DETAIL.format(what=WHAT.get(what, what))))
+        elif most and len(value) > most:
+            self._plan.leave(label, TOO_LONG.format(most=most, size=len(value)))
+        else:
+            self._plan.fill.append({"n": field.n, "label": label, "value": value, "kind": "letter" if what == "letter" else "detail",
                                     **({"check": check} if check else {})})
-    return out
+
+
+def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", has_job: bool = False) -> dict[str, list]:
+    """What to do with each field that is still empty:
+    {"fill": [{n, label, value, kind}], "ask": [{n, label, most}], "choose": [{n, kind, typed, label, options, what, value}],
+     "left": [{label, why}]}. Fields that already hold something are not touched and not listed. See `FormPlanner`."""
+    return FormPlanner(fields, mine, letter, has_job).plan()
 
 
 def read_answer(text: str) -> dict[str, Any]:

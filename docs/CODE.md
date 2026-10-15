@@ -408,7 +408,10 @@ small steps that are easy to check, all in `form_fill`:
 
 1. A script lists the fields of the page: what each is called, its kind, and whether it already
    holds something. It numbers them with an attribute and sends back no value the person typed.
-2. `plan()` decides in plain code what each field is. The details of the person come from
+2. `plan()` decides in plain code what each field is. It uses four small classes. `Field` wraps one
+   field and knows what it asks for. `RowTracker` knows which job, degree or language a field
+   belongs to. `FormPlanner` has one method for each kind of field, and `FormPlan` keeps the result.
+   The details of the person come from
    `details`. Open questions go to `form_answers` in one call. The other fields stay empty, with
    the reason.
 3. A second script writes the values into fields that are still empty and outlines them.

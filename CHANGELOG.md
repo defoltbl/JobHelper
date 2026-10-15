@@ -5,7 +5,6 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 15 October 2026
 
-- Inside the app: the back end of the window is now a facade over ten small services, each with one job (object-oriented rules). Nothing changes in how the app looks or works.
 - **Interview preparation** now opens as two Word documents: one for a talk with HR, one for a talk with a specialist. Both go in this order: the company, you, your projects and skills, the questions they may ask you, and the questions you can ask them.
 - The preparation has a new part, **your projects and skills**, each with where your CV shows it. Select **Make again** on an older preparation to get it.
 - In the technical document, each project explains its tools and methods: **what each one is, what it did in the project, and the technical reason it suits that task**. It also gives the result and the questions a specialist may ask. Each skill gets more detail.
@@ -13,6 +12,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 - The questions you can ask HR always include the **next steps**, and ask about the team, working hours, the first weeks and the contract.
 - The **user guide** and the **code documentation** now follow ASD-STE100: no sentence over 20 words in a step or 25 words in a description, one idea in each sentence, and lists where a sentence named many things. A test keeps them that way.
 - The preparation is written in **ASD-STE100 Simplified Technical English**: short sentences, the active voice and common words.
+- **Inside the app:** the back end of the window is now a facade over ten small services, each with one job (object-oriented rules). Nothing changes in how the app looks or works.
+- **Inside the app:** the assistant's form logic is now made of small classes (a field, the rows of jobs and languages, the plan for a page). Nothing changes in how it fills a form.
 
 ## 14 October 2026
 
