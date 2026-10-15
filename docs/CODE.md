@@ -2,9 +2,9 @@
 
 **Applies to:** the JobHelper source code, on macOS with Python 3.10 or newer.
 
-This document is for people who work with the code: it explains how to install the app, how
-to run it from the command line, how the code is laid out, and how to test and document a
-change. To use the app, read the user guide, [GUIDE.md](GUIDE.md).
+This document is for people who work with the code. It tells you how to install the app and
+how to run it from the command line. It also shows how the code is organised, and how to test
+and document a change. To use the app, read the user guide, [GUIDE.md](GUIDE.md).
 
 ## In this document
 
@@ -23,10 +23,11 @@ change. To use the app, read the user guide, [GUIDE.md](GUIDE.md).
 
 ## 1. Overview
 
-JobHelper is a desktop app for macOS that finds job postings, scores them against a CV, writes
-an adapted CV and a cover letter for the good ones, and tracks applications and replies. It is
-written in Python. The window is built with Qt Quick (PySide6). All model calls go through the
-Claude Code program, so that they use the person's Claude subscription and never the paid API.
+JobHelper is a desktop app for macOS. It finds job postings and scores them against a CV. For
+the good postings, it writes an adapted CV and a cover letter. It also tracks applications and
+replies. It is written in Python, and the window uses Qt Quick (PySide6). All model calls go
+through the Claude Code program. So they use the Claude subscription of the person, never the
+paid API.
 
 The work is done by five agents (Figure 1.1). A search runs the first four in order; an email
 scan runs the fifth.
@@ -65,10 +66,10 @@ Table 1.2 lists the other documents of the project.
 
 ### Overview
 
-JobHelper is built from a small number of well-known parts, each chosen for a reason that
-follows from what the app must do: run on one person's Mac, keep their data private, and use
-their Claude subscription instead of a paid API. This chapter names each part and says why it
-was chosen, so that a change does not replace one without knowing what it was there for.
+JobHelper uses a small number of well-known parts. The app must run on the Mac of one person,
+keep the data private, and use a Claude subscription instead of a paid API. Each part was chosen
+for one of these needs. This chapter names each part and tells why it was chosen. Then a change
+does not replace a part without knowing its purpose.
 
 ### The language and the window
 
@@ -79,7 +80,7 @@ Table 2.1 lists what the app itself is written in.
 | Technology | Used for | Why it was chosen |
 |---|---|---|
 | Python 3.10 or newer | All the logic | The libraries for Word files, Excel files, mail and web pages are mature in Python, and the official Claude library is a Python library. One language for everything keeps the project small enough for one person |
-| Qt Quick (QML) with PySide6 | The window | It draws a native window on the graphics card, so the robots and the lists animate smoothly, and it needs no web browser inside the app. An earlier window built from a web page was removed: two front ends had to be kept the same, and the web one was slower and looked foreign on macOS |
+| Qt Quick (QML) with PySide6 | The window | It draws a native window on the graphics card, so the robots and the lists move smoothly. It needs no web browser inside the app. An earlier window was a web page, and the app removed it. Two front ends had to stay the same, and the web window was slower and looked foreign on macOS |
 | QML for layout, Python for logic | The split between `ui_qt/` and `jobhelper/` | A QML file only shows things and calls the bridge; it never reads a file. The logic can therefore be tested without a window, and the window can be tested without real data |
 | Threads with Qt signals | Searches, scans and rewrites | Long work must not freeze the window. A worker thread does it and answers through a signal, which Qt delivers on the window's own thread |
 
@@ -119,8 +120,8 @@ Table 2.4 lists what reaches outside the Mac.
 | Technology | Used for | Why it was chosen |
 |---|---|---|
 | `requests` with `beautifulsoup4` and `lxml` | Reading the job boards and company career sites | The boards have no common interface, so their public pages are read as a browser would read them, at a modest pace. No search needs a key or an account |
-| `imaplib`, from Python itself | Reading replies | IMAP works with almost every mail provider and can open a mailbox read-only, which is the promise the app makes: it never sends, deletes or marks mail |
-| An app password instead of a sign-in window | Access to the mailbox | It can be cancelled at the provider at any time without changing the real password, and it needs no registration of the app with each provider |
+| `imaplib`, from Python itself | Reading replies | IMAP works with almost all mail providers. It can open a mailbox read-only. This keeps the promise of the app: it never sends, deletes or marks mail |
+| An app password instead of a sign-in window | Access to the mailbox | The person can cancel it at the provider at any time, without a change to the real password. The app needs no registration with each provider |
 
 ### Privacy and the Mac
 
@@ -134,7 +135,7 @@ Table 2.5 lists what protects the data and ties the app to macOS.
 | The macOS Keychain, through the `security` program | Keeping the data key and the mailbox passwords | Secrets are then protected by the Mac's login and are never written to a file of the project |
 | Signed rule files | The rules for CVs and letters, the letter template, the master CV | These files decide what is written in the person's name. A change made outside the app must be approved before the next run |
 | A LaunchAgent | The weekly run | It is how macOS starts a task on a schedule, also when the window is closed |
-| Apple events, through the `osascript` program | The assistant reads and fills in the form that is open in the person's browser (Chrome, Brave, Edge, Opera or Safari; Opera GX has that door shut and Firefox never had it) | The form is filled in where the person is already signed in, with nothing to install. Chrome and macOS each ask for consent first, and the app can only do what a script in the page can do: it cannot attach files or read saved passwords |
+| Apple events, through the `osascript` program | The assistant reads and fills in the form that is open in the browser of the person. This works in Chrome, Brave, Edge, Opera and Safari. Opera GX closed this access, and Firefox never had it | The form is filled in where the person is already signed in, with nothing to install. Chrome and macOS each ask for consent first. The app can do only what a script in the page can do: it cannot read saved passwords. It attaches a file the way a page script can (see section 6) |
 | Hash-pinned packages in `requirements.lock` | Installing | Each package is checked against a fingerprint, so a changed package cannot be installed unnoticed |
 
 ### Quality
@@ -231,8 +232,8 @@ Table 3.1 lists the main packages and what each is for.
    python app_qt.py
    ```
 
-3. Follow the welcome card: sign in to Claude, choose a CV, and connect a mailbox if you want
-   replies to be read. The user guide describes each step.
+3. Follow the welcome card. Sign in to Claude, choose a CV, and connect a mailbox for replies if
+   you want. The user guide describes each step.
 
 ### Run a search without the window
 
@@ -339,9 +340,9 @@ Table 6.2 names the module of each agent and what it may ask Claude.
 
 ### What a search does with a posting
 
-Figure 6.1 follows one posting through a search. Everything before the scoring is plain code:
-a posting that does not fit the rules, or is plainly another profession, never costs a call
-to Claude, and it is kept with the reason so that the person can bring it back.
+Figure 6.1 follows one posting through a search. All steps before the scoring are plain code. A
+posting that does not fit the rules never costs a call to Claude. The same is true for a posting
+from another profession. The app keeps it with the reason, so the person can bring it back.
 
 ![What a search does with a posting](img/code_search.png)
 
@@ -349,11 +350,11 @@ to Claude, and it is kept with the reason so that the person can bring it back.
 
 ### How a text is kept inside what the CV shows
 
-An adapted CV, a letter, a form answer and an interview answer are all written by Claude and
-then checked in code (Figure 6.2). A prompt that says "do not invent" is not a guarantee, so
-the draft is read for technologies the CV does not show and for terms of the posting stated as
-experience. What is found is sent back once; what is still there is kept and shown to the
-person, never cut out silently.
+Claude writes the adapted CV, the letter, the form answers and the interview answers. Then code
+checks them (Figure 6.2). A prompt that says "do not invent" is not a guarantee. So the code
+reads each draft for technologies that the CV does not show. It also looks for terms of the
+posting stated as experience. The code sends its findings back to Claude once. If a finding is
+still there, the app keeps it and shows it to the person. It never cuts it out silently.
 
 ![How a text is kept inside what the CV shows](img/code_honesty.png)
 
@@ -371,8 +372,8 @@ without a call which messages are worth a question to Claude.
 ### How a run behaves at Claude's limit
 
 The limit of the subscription is a state of a run, not an error (Figure 6.4). Every call goes
-through `llm.ask`, which refuses to call when a limit is used up; the run saves its work,
-shows the reset time, and goes on from the same job when the person presses **Resume**.
+through `llm.ask`. It refuses to call when a limit is used up. The run then saves its work and
+shows the reset time. When the person presses **Resume**, the run continues from the same job.
 
 ![The limit is a state, not an error](img/code_limit.png)
 
@@ -390,15 +391,15 @@ Table 6.3 groups the other modules by what they are for.
 | Rules without a model call | `filters`, `prefilter`, `language`, `places`, `keywords`, `salary`, `merge`, `followup`, `planner` | Level, years, language, location, profession, pay, duplicates, reminders |
 | Writing | `cv_tailor`, `cover_letter`, `letters`, `form_answers`, `interview_prep`, `prep_doc`, `pdf` | The adapted CV, the letter, form answers, the interview documents (one for HR, one technical) |
 | Mail | `email_client`, `mailhosts` | Reading mailboxes read-only; which server a mailbox is read from |
-| The assistant | `assistant`, `assistant_brain`, `assistant_notes`, `details`, `chrome`, `form_fill`, `form_choices`, `answer_memory` | The fixed requests and the facts about the app; what Claude makes of a free request, checked before anything happens; the person's own details; the link to Google Chrome; reading a form, deciding what each field is, and filling it in; choosing from lists and menus; the person's own wording, remembered |
+| The assistant | `assistant`, `assistant_brain`, `assistant_notes`, `details`, `chrome`, `form_fill`, `form_choices`, `answer_memory` | The fixed requests and the facts about the app. What Claude makes of a free request, checked before anything happens. The details of the person. The link to the browser. Reading a form, deciding what each field is, and filling it in. Choosing from lists and menus. The wording of the person, remembered |
 | Claude | `llm`, `usage` | The one place that asks Claude; counting usage and knowing the limits |
 | Storage and safety | `store`, `db`, `vault`, `integrity`, `housekeeping`, `health`, `trouble` | The job list, the reply database, encryption, signed rule files, backups, the start-up check, the log of errors |
 | The window's back end | `ui_api`, `api_documents`, `api_interview`, `api_letters`, `api_assistant`, `api_talk`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` holds the logic; `Bridge` exposes it to QML and runs long work in threads |
 
 ### How the assistant fills in a form
 
-The assistant works on the tab that is in front in the person's browser (Figure 6.5), in
-steps that are each small enough to check, all in `form_fill`:
+The assistant works on the tab in front in the browser of the person (Figure 6.5). It works in
+small steps that are easy to check, all in `form_fill`:
 
 ![How the assistant fills in a form](img/code_fill.png)
 
@@ -407,47 +408,56 @@ steps that are each small enough to check, all in `form_fill`:
 
 1. A script lists the fields of the page: what each is called, its kind, and whether it already
    holds something. It numbers them with an attribute and sends back no value the person typed.
-2. `plan()` decides in plain code what each field is. The person's details come from `details`;
-   open questions go to `form_answers` in one call; everything else is left, with the reason.
+2. `plan()` decides in plain code what each field is. The details of the person come from
+   `details`. Open questions go to `form_answers` in one call. The other fields stay empty, with
+   the reason.
 3. A second script writes the values into fields that are still empty and outlines them.
-4. Lists, radio buttons and menus the page draws itself are choices: `form_choices` decides them,
-   and a third script opens a menu, reads its entries, and presses the chosen one.
-5. A file field that asks for the CV, the letter or other attachments (`file_kind`) is given the
-   document of the job. The file travels to the page as text, in pieces of 150,000 characters
-   (`PUT`), because a request to the browser has a size limit; `ATTACH` makes the pieces into a
-   file and hands it to the field the way a file chosen by hand arrives.
+4. Lists, radio buttons and menus that the page draws itself are choices. `form_choices` decides
+   them. A third script opens a menu, reads its entries, and presses the chosen entry.
+5. A file field can ask for the CV, the letter or other attachments (`file_kind`). It gets the
+   document of the job. A request to the browser has a size limit. So the file goes to the page
+   as text, in pieces of 150,000 characters (`PUT`). `ATTACH` makes the pieces into a file. It
+   gives the file to the field the same way as a file chosen by hand.
 
-The job a form belongs to is found by `match_job`. A form is rarely at the address of its
-posting, so the function tries, in this order: the address of the posting (of the page, or of the
-page that led to it); the company's name in the address or the title; the company and the job
-title both in the words of the page; and the posting last opened from the app, when the page
-names its company or its title. Anything less plain gives no job, and without a job no file
-leaves the app.
+`match_job` finds the job of a form. A form is usually not at the address of its posting. So
+the function tries these steps in order:
+
+1. the address of the posting (of the page, or of the page that opened it)
+2. the name of the company in the address or the title
+3. the company and the job title, both in the words of the page
+4. the posting last opened from the app, if the page names its company or its title
+
+If none of these is clear, the function gives no job. Without a job, no file leaves the app.
 
 Table 6.4 gives the rules these steps keep. `tests/test_assistant.py` checks each of them.
 
-The whole request is also tried in a test area: `tests/fixtures/fill_in_browser.py` serves the
-forms in `tests/fixtures/forms/` from this machine, opens one in a browser engine, and runs the
-same code the window runs, with Claude replaced by prepared answers and the data in a temporary
-folder. There is a plain form, one built the way component libraries build them (each box
-keeps its own value and undoes what did not arrive like typing; its lists are menus that hold
-nothing until they are opened), a long one with lists, radio buttons and a number, and one that
-sits in a frame from another address. To check a kind of form the assistant gets wrong, add a page
-there and a test that names what must be filled and what must be left.
+A test area also tries the whole request. `tests/fixtures/fill_in_browser.py` serves the forms
+in `tests/fixtures/forms/` from this machine. It opens one form in a browser engine and runs the
+same code as the window. Prepared answers replace Claude, and the data is in a temporary folder.
+The area has these forms:
+
+- a plain form
+- a form made like component libraries make them. Each box keeps its own value and undoes a
+  change that did not arrive like typing. Its lists are menus that are empty until they open.
+- a long form with lists, radio buttons and a number
+- a form in a frame from another address
+
+To check a form that the assistant fills in wrong, add a page there. Then add a test that names
+the fields to fill and the fields to leave.
 
 *Table 6.4 – The rules of filling in a form*
 
 | Rule | How it is kept |
 |---|---|
-| The form is never sent | No script presses a button that sends. The one script that presses anything (`CHOOSE`) accepts five kinds of element: what opens a menu, an entry of a menu, a radio button, a button whose words say that it adds a row for a job or a degree, and a tick box whose words say that a job goes on. It reads those words again before it acts, and refuses anything that sends, continues, uploads or agrees. A test reads the scripts for those calls, and the test area checks on every form that nothing was sent |
-| What a page throws away is noticed | After writing, `EMPTY` says which fields hold nothing; those are written again the way typing arrives; what is still empty is reported to the person, not counted as filled |
-| A choice is made only when something settles it | `form_choices.settle` uses the person's details and the job; one call to Claude covers the rest, and an answer that is not one of the field's own options is dropped. Every choice is marked for checking |
+| The form is never sent | No script presses a button that sends. Only one script presses something (`CHOOSE`). It accepts five types of element. These are what opens a menu, an entry of a menu, and a radio button. The fourth is a button that adds a row for a job or a degree. The fifth is a tick box that says a job goes on. It reads the words of the element again before it acts. It refuses anything that sends, continues, uploads or agrees. A test reads the scripts for these calls. The test area checks on each form that nothing was sent |
+| What a page throws away is noticed | After writing, `EMPTY` tells which fields are empty. The app writes these again, the way typing arrives. If a field is still empty, the app tells the person and does not count it as filled |
+| A choice is made only when something settles it | `form_choices.settle` uses the details of the person and the job. One call to Claude covers the other choices. The app drops an answer that is not one of the options of the field. Every choice is marked for checking |
 | Only the assistant's own answers are read back | To learn the person's corrections, `VALUES` is asked for the numbers of the fields the assistant filled as answers, and for nothing else |
 | Only empty fields are written | The filling script tests each field again just before it writes |
 | Values are data, never code | They travel as JSON inside the script, and the script travels as an argument of `osascript` |
 | What the page answers is not trusted | `read_answer` and `fill_answer` accept only the expected shape and cut every text to a fixed length |
 | Private fields are left alone | Passwords, payment and personal-status fields are recognised by their kind or their label and never planned |
-| A file is attached only when it is plainly the right one | The field must ask for a CV, a letter or other attachments, hold no file, and take the kind of file; the job must be known. A photo, a passport or a transcript is never attached. The page must report a file of the same size, or the field is listed as left |
+| A file is attached only when it is clearly the right one | The field must ask for a CV, a letter or other attachments. It must be empty and take the type of file. The app must know the job. A photo, a passport or a transcript is never attached. The page must report a file of the same size. If not, the field is listed as left |
 | The right page gets the values | The filling script compares the page's address with the one that was read, and writes nothing when they differ |
 | The browser is never started | The request first asks whether the browser is running and stops there when it is not |
 
@@ -459,24 +469,25 @@ Figure 6.6 shows what happens to a request.
 
 *Figure 6.6 – How the assistant decides what to do with a request*
 
-A request that is not one of the fixed ones ("fill in the form", "my details", "help") goes to
-`assistant_brain.decide`: one call to Claude, with the jobs as lines, the numbers, the last turns
-of the talk and the list of actions. Claude answers in words or names one action. Table 6.5
-gives the rules that keep this safe; `api_talk` carries them out.
+Some requests are fixed, for example "fill in the form", "my details" or "help". All other
+requests go to `assistant_brain.decide`. This makes one call to Claude. The call sends the jobs
+as lines, the numbers, the last turns of the talk and the list of actions. Claude answers in
+words or names one action. Table 6.5 gives the rules that keep this safe. `api_talk` applies
+them.
 
 *Table 6.5 – The rules of acting on a request*
 
 | Rule | How it is kept |
 |---|---|
-| Claude does nothing itself | It returns JSON. `check` keeps only words, up to three actions from a fixed list, and arguments of the right kind; an unknown action or a job that is not in the list is dropped |
-| Only the jobs a request is likely about are sent | `relevant` picks the job in front, the companies named in the talk, what is open and the best leads, up to 70; closed applications come only when the request is about them. Sending every job with every request cost three times as much |
+| Claude does nothing itself | It returns JSON. `check` keeps only words, up to three actions from a fixed list, and arguments of the right type. It drops an unknown action or a job that is not in the list |
+| Only the jobs that a request is probably about are sent | `relevant` picks up to 70 jobs: the job in front, the companies named in the talk, the open jobs and the best leads. Closed applications go only when the request is about them. To send all jobs with each request cost three times more |
 | What was agreed to can be taken back | `assistant_confirm` keeps the job as it was, and any lead that marking it applied folded away; `assistant_undo` puts them back. Not offered while a search is running |
 | The prompts were tried against the real Claude | A trial on invented data showed a reply's date being read as an interview's date, and a guessed reason for a score. The job lines were reworded ("an invitation arrived", "no date set") and the rules tightened; run such a trial again after changing a prompt |
 | Nothing of the person's is changed without their yes | An action that changes data comes back to the window as a question, worded by the app from the checked arguments, not by Claude. `assistant_confirm` carries it out and checks it once more |
 | A rewrite is shown before it is saved | The new paragraph or answer is made first and travels with the question; saving is the confirmed action |
-| An answer comes from what the app holds | The prompt carries the jobs, their state and the facts about the app; a brief, advice, a review and practice feedback each have their own prompt with only their own facts |
+| An answer comes from what the app holds | The prompt carries the jobs, their state and the facts about the app. A brief, advice, a review and practice feedback each have their own prompt, with only their own facts |
 | The fixed requests cost nothing | They are recognised by their words before any call is made |
-| Initiative uses no model | The briefing and the reminders are computed from the data; noticing a form is off until it is turned on, and looks only at the address and title of the tab in front and the number of its empty fields |
+| Initiative uses no model | The app calculates the briefing and the reminders from the data. Noticing a form is off until the person turns it on. It looks only at the address and title of the tab in front, and at the number of its empty fields |
 
 ### How the window talks to the logic
 
@@ -490,8 +501,8 @@ The window never touches a file. Every action goes through three layers:
 
 1. A QML file in `ui_qt/` calls a slot of `bridge`, for example `bridge.saveOptions(...)`.
 2. The slot, in `qt_bridge.py`, `bridge_runs.py` or `bridge_jobs.py`, calls a method of `Api`.
-3. The method, in `ui_api.py` or one of the `api_*.py` files, checks the input, does the work
-   and returns a plain dictionary: `{"ok": True, ...}` or `{"ok": False, "msg": "why"}`.
+3. The method is in `ui_api.py` or in one of the `api_*.py` files. It checks the input and does
+   the work. It returns a plain dictionary: `{"ok": True, ...}` or `{"ok": False, "msg": "why"}`.
 
 Long work (a search, a scan, a rewrite) runs in a thread and answers through a signal.
 
@@ -501,8 +512,8 @@ Long work (a search, a scan, a rewrite) runs in a thread and answers through a s
 
 ## 7. Work with the data files
 
-Figure 7.1 shows how the data is kept safe: every read and write goes through `vault`, the key
-lives in the Keychain, a backup is made before a bulk change, and a rule file changed outside
+Figure 7.1 shows how the app keeps the data safe. Every read and write goes through `vault`. The
+key is in the Keychain. The app makes a backup before a bulk change. A rule file changed outside
 the app must be approved.
 
 ![How the data is kept safe](img/code_safety.png)
@@ -528,8 +539,8 @@ code and is never committed.
 
 Follow these rules when code changes data:
 
-1. Read and write the job list only through `store`, the replies only through `db`, and any
-   encrypted file only through `vault`.
+1. Read and write the job list only through `store`, and the replies only through `db`. Read
+   and write any encrypted file only through `vault`.
 2. Call `vault.make_backup(label)` before a change that touches many jobs.
 3. Move a document to the encrypted backup instead of deleting it; put old copies in the Trash.
 4. Do not change the data while the window is running.
@@ -570,9 +581,9 @@ what stands in for it.
 
 ### Test the window
 
-The window is loaded without a screen and driven by the tests in `tests/test_ui_qml.py`. Use
-the helpers of its `ui` fixture: `ui.js(code)` runs JavaScript in the window, `ui.find(name)`
-finds an item by its `objectName`, and `ui.wait(ms)` lets the window run.
+The tests in `tests/test_ui_qml.py` load the window without a screen and drive it. Use the
+helpers of their `ui` fixture. `ui.js(code)` runs JavaScript in the window. `ui.find(name)`
+finds an item by its `objectName`. `ui.wait(ms)` lets the window run.
 
 > **Tip**
 > After a change that can be seen, take a picture of the window and look at it. A test that
@@ -580,8 +591,8 @@ finds an item by its `objectName`, and `ui.wait(ms)` lets the window run.
 
 ## 9. Update the documentation
 
-Each change that a person can see needs three things: a line in `CHANGELOG.md`, the user guide
-brought up to date, and its pictures taken again if a pictured window changed.
+Each change that a person can see needs three things. Add a line to `CHANGELOG.md`, and update
+the user guide. If a window in a picture changed, take its pictures again.
 
 ### Take the pictures of the user guide again
 
@@ -594,10 +605,10 @@ python -m pytest tests/guide_shots.py -q -o addopts=""
 
 ### Keep the numbers of figures and tables in order
 
-Figures and tables are numbered inside their chapter, as in a thesis: the second figure of
-chapter 4 carries the number 4.2. Every picture has a caption under it and every table a caption above
-it: a line in italics made of the word Figure or Table, the number, an en dash and the title.
-The text refers to each by its number.
+Figures and tables are numbered inside their chapter, as in a thesis. For example, the second
+figure of chapter 4 has the number 4.2. Each picture has a caption under it, and each table has
+a caption above it. The caption is a line in italics: the word Figure or Table, the number, an
+en dash and the title. The text refers to each figure and table by its number.
 
 1. Write the caption of a new figure or table with any number that is not used yet, for
    example 900.
@@ -619,13 +630,13 @@ Figure 9.1 shows how a PDF is made from its text.
 python scripts/guide_pdf.py
 ```
 
-The script makes `docs/GUIDE.pdf` and `docs/CODE.pdf`. It lays each one out like a thesis: a
-title page, the contents with dotted lines that lead to the page numbers, then the text with
-its page number at the top right. The entries of the contents, references to figures and
-tables, and links to another chapter can be selected and lead to their place. A caption stands centred under its picture and above its
-table. There are no lists of figures and tables. The script keeps the page rules in
-Table 9.1.
-A test fails while a PDF is older than its text.
+The script makes `docs/GUIDE.pdf` and `docs/CODE.pdf`. It lays out each one like a thesis.
+First comes a title page. Then come the contents, with dotted lines to the page numbers. Then
+comes the text, with the page number at the top right. You can select the entries of the
+contents, the references to figures and tables, and the links to other chapters. Each one takes
+you to its place. A caption is centred under its picture and above its table. There are no lists
+of figures and tables. The script keeps the page rules in Table 9.1. A test fails while a PDF
+is older than its text.
 
 *Table 9.1 – The page rules of the PDFs*
 
@@ -633,8 +644,8 @@ A test fails while a PDF is older than its text.
 |---|---|
 | A figure is never split across two pages | A picture and its caption are one block; a block that would cross a page starts on the next one |
 | A table stays on one page | The same, with the caption above it |
-| No page is left half empty because a figure or a table had to start on the next one | The text that follows it in the same section is brought forward to fill the space; a figure, a table or a note comes forward only if all of it fits. Text never crosses a heading. A table longer than a page begins where its page has room, and a picture that almost fits is shown a little smaller |
-| What names a place leads to it | A PDF library adds a link for every entry of the contents, every mention of a figure or a table, and every link to another chapter, and writes the chapters into the PDF's outline |
+| No page is left half empty because a figure or a table had to start on the next page | The text that follows it in the same section moves forward to fill the space. A figure, a table or a note moves forward only if all of it fits. Text never goes past a heading. A table longer than a page starts where its page has room. A picture that almost fits is made a little smaller |
+| What names a place leads to it | A PDF library adds a link for each entry of the contents and each mention of a figure or a table. It also adds a link for each reference to another chapter. It also writes the chapters into the outline of the PDF |
 | The points of a list stand out | A heavy square before each point, a bold number before each step |
 | A table longer than a page continues between two rows | It is cut into parts that fit, each under the line "Continuation of Table" with its number, and with the heading row repeated |
 | A heading is never left alone at the bottom of a page | A heading whose text would start on the next page moves there too |

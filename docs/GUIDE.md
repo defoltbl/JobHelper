@@ -2,8 +2,9 @@
 
 **Applies to:** JobHelper for macOS.
 
-This guide explains every part of the app: what it is for, how to use it step by step, what
-each control does, and what to do when something does not look right.
+This guide explains every part of the app. For each part, it tells you what the part is for
+and how to use it step by step. It also tells you what each control does and what to do when
+something looks wrong.
 
 ## In this guide
 
@@ -49,10 +50,10 @@ each control does, and what to do when something does not look right.
 
 ### What the app does for you
 
-Looking for a job means doing the same five things over and over: reading postings, deciding
-which ones fit, rewriting your CV and a letter for each, keeping a list of where you applied,
-and reading the answers. JobHelper does the repetitive part of all five and leaves the
-decisions to you.
+A job search has five tasks that you do again and again. You read postings and decide which
+ones fit. You change your CV and write a letter for each job. You keep a list of where you
+applied. Then you read the answers. JobHelper does the repeated work in all five tasks. You
+make the decisions.
 
 The work is split between five agents. The window shows each one as a robot on an assembly
 line (Table 1.1).
@@ -108,9 +109,9 @@ Table 1.2 shows a normal week with the app.
 
 ### Read this guide
 
-Every section is built the same way: an overview of what the feature is for, what you need
-before you start, the steps to follow, a table of what each control does, and the problems
-people run into (Table 1.3).
+All sections have the same structure. First, an overview tells you what the feature is for.
+Then you see what you need before you start, and the steps to follow. A table tells you what
+each control does. The last part covers the usual problems (Table 1.3).
 
 *Table 1.3 – How things are written in this guide*
 
@@ -136,9 +137,9 @@ Four kinds of box mark what deserves attention (Table 1.4).
 
 The figures show the real window of the app, filled with **invented** people and companies.
 
-This guide is for using the app. People who work with its code will find the installation, the
-command line, the structure of the code and the tests in the technical documentation,
-[CODE.md](CODE.md).
+This guide is for people who use the app. The technical documentation, [CODE.md](CODE.md),
+is for people who work with the code. It covers the installation, the command line, the
+structure of the code and the tests.
 
 ### Next steps
 
@@ -204,10 +205,11 @@ works except reading replies.
    **2-Step Verification** in your Google account, then create an **App Password** and name it
    "JobHelper".
 2. On the **Job email** row of the welcome card, select **Connect** (or **Change**).
-3. Enter the address. The line under the fields then says which server it will be read from and
-   what kind of password that provider wants.
-4. Enter the password. If the app does not know the provider, a third field appears: enter the
-   provider's **IMAP server** there (its help pages name it, for example `imap.example.com`).
+3. Enter the address. The line under the fields then shows the server that the app reads from.
+   It also shows the type of password that the provider wants.
+4. Enter the password. If the app does not know the provider, a third field appears. Enter the
+   provider's **IMAP server** in it, for example `imap.example.com`. The provider's help pages
+   give this name.
 5. Select **Save**. The button says **Checking…** while the app signs in to the mailbox once
    with what you entered. A refused password is not saved, and the card says so in red (Table 2.2).
 
@@ -239,9 +241,9 @@ Use this when replies arrive at two addresses, for example an old address and a 
 3. Enter the second address and its own password, then select **Save**. It may be at another
    provider than the first one.
 
-Both mailboxes are then read by every email scan. To find older replies in the new mailbox,
-run one longer scan (section 12, *Look further back once*). A problem with the second mailbox never
-stops the scan of the first one; the app tells you about it at the end of the scan.
+Each email scan then reads both mailboxes. To find older replies in the new mailbox, run one
+longer scan (section 12, *Look further back once*). A problem with the second mailbox never
+stops the scan of the first one. The app tells you about the problem at the end of the scan.
 
 ### Save your recovery key
 
@@ -379,10 +381,10 @@ Figure 3.3 shows the red line of the start-up check.
 
 *Figure 3.3 – The start-up check found something*
 
-Each time the app starts, it checks itself: the data key, the job list, the replies, the
-settings, the rule files, your master CV and the folders. If something is wrong, a red line at
-the top says what, in plain words, and how to fix it. **Hide** puts the line away until the
-next start; **Show all** appears when more than one thing was found.
+Each time the app starts, it checks itself. It checks the data key, the job list, the
+replies, the settings, the rule files, your master CV and the folders. If it finds a problem,
+a red line at the top tells you what is wrong and how to fix it. **Hide** removes the line
+until the next start. **Show all** appears when the app found more than one problem.
 
 ### The right column
 
@@ -429,8 +431,8 @@ The rows of the **Last run** card (Table 3.5):
 
 ## 4. Run a search
 
-A search finds new postings, drops the ones that cannot fit, scores the rest against your CV,
-and writes an adapted CV and a cover letter for each good one.
+A search finds new postings and removes the ones that cannot fit. It scores the other postings
+against your CV. For each good posting, it writes an adapted CV and a cover letter.
 
 ### Prerequisites
 
@@ -564,10 +566,10 @@ Table 5.2 lists the controls of the New Jobs list.
 
 ### Review several jobs one by one
 
-When many jobs wait for a decision, for example all those marked **stretch**, you do not have
-to open each from the list and come back.
+Many jobs can wait for a decision, for example all the jobs marked **stretch**. You do not
+have to open each job from the list and then go back to the list.
 
-1. In **New Jobs**, narrow the list to the jobs you want to go through: select a chip, or type
+1. In **New Jobs**, show only the jobs that you want to go through. Select a chip, or type
    in the search box.
 2. Select **Review these … one by one**. The first job opens, with a bar that says where you
    are (Figure 5.2).
@@ -679,9 +681,9 @@ send them. You are the one who signs them.
 
 ### The adapted CV
 
-The app makes a copy of your CV in which the profile paragraph and the skills list are
-reworded and reordered to put first what this posting asks for. Everything else stays as you
-wrote it.
+The app makes a copy of your CV for each job. In the copy, it rewords the profile paragraph
+and the skills list. It also puts first what this posting asks for. All other parts stay as
+you wrote them.
 
 **To see what changed:**
 
@@ -698,13 +700,14 @@ wrote it.
 > Use this view to check that nothing was stretched. Every claim on the right must be one you
 > can back in an interview.
 
-Sometimes the job window shows an amber line, **Check your adapted CV before you send it** or
-**Check your cover letter before you send it**, with a few terms. Those are words of the posting that the adapted CV states as your experience
-although your own CV does not mention them (in a letter: where the sentence says that you did
-it, not where it speaks of the role). The app asked for them to be removed once already;
-what is left may still be fair wording for something you did, so the decision is yours: keep
-the term only if it is true of you, and otherwise edit the Word file or add what you really did
-under **More about your work** in Options.
+Sometimes the job window shows an amber line with a few terms. The line says **Check your
+adapted CV before you send it** or **Check your cover letter before you send it**. These terms
+come from the posting. The adapted CV states them as your experience, but your own CV does not
+mention them. In a letter, the line marks only a sentence that says you did it, not a sentence
+about the role. The app already asked Claude once to remove these terms. A term that is left
+can still be a fair word for work that you did. So you decide. Keep the term only if it is
+true. If it is not true, edit the Word file. You can also add what you really did under **More
+about your work** in Options.
 
 ### The cover letter
 
@@ -714,8 +717,8 @@ The letter is written to the company, about this role, from the facts in your CV
 
 1. Open the job and select **Edit letter**.
 2. Change the words of any paragraph yourself.
-3. Or, to have one paragraph written again: type what should change in **For a rewrite**
-   (for example "shorter"), then select **Rewrite this paragraph**.
+3. To have one paragraph written again, type what to change in **For a rewrite**, for example
+   "shorter". Then select **Rewrite this paragraph**.
 4. Select **Save**. The Word file and the PDF are updated.
 
 Figure 7.2 shows the letter editor.
@@ -751,9 +754,9 @@ have them written when you decide to apply after all, or after the job was score
    about a minute.
 3. When the line says **Written**, check both documents as usual.
 
-A letter that you wrote yourself is never replaced: only what is missing is written. When the
-posting's text is missing, the app asks you to read the posting again first (section 8),
-because a letter written from a title alone would be generic.
+The app never replaces a letter that you wrote yourself. It writes only what is missing. If
+the text of the posting is missing, the app first asks you to read the posting again
+(section 8). A letter from the title alone would be too general.
 
 ### Your own letters
 
@@ -779,10 +782,10 @@ Figure 7.3 shows answers for one job's form.
 
 *Figure 7.3 – Answers for one job's form*
 
-The answers come from your CV, the posting, and the facts you gave under **About you** in
-Options. An answer the app cannot give truthfully (a salary figure, a date, a reference) is
-left with the missing part in square brackets and a **Check** note. The answers are kept with
-the job (Table 7.2).
+The answers come from your CV, the posting, and the facts under **About you** in Options. Some
+answers need a fact that the app does not know, such as a salary figure, a date or a
+reference. The app then puts the missing part in square brackets and adds a **Check** note.
+The answers stay with the job (Table 7.2).
 
 *Table 7.2 – The limits of one draft of form answers*
 
@@ -817,8 +820,8 @@ title only** or **scored from a short summary** (Table 8.1).
 
 1. Open the job.
 2. Select **Read it again**. The app asks the job board once more.
-3. If that does not help, select **Open posting**, copy the whole text of the posting in your
-   browser, paste it under **Paste the posting's text**, and select **Save text**.
+3. If that does not help, select **Open posting**. Copy all the text of the posting in your
+   browser. Paste it under **Paste the posting's text**, then select **Save text**.
 
 Either way, the job is then scored again by itself.
 
@@ -847,9 +850,10 @@ Figure 8.2 shows moving documents for several jobs at once.
 
 *Figure 8.2 – Moving documents for several jobs at once*
 
-For a week afterwards, **Put them back** in the same bar undoes the whole move. For a single
-job, **Put them back** stays in its window, also when the job has become an application in the
-meantime (a reply showed that you had applied): those are the documents you sent.
+For one week after the move, **Put them back** in the same bar undoes the whole move. For one
+job, **Put them back** stays in the job's window. It stays there also if the job became an
+application in the meantime, because a reply showed that you applied. Then these documents are
+the documents that you sent.
 
 > **Note**
 > Nothing the app wrote for you is thrown away without a way back. You may have had a reason
@@ -859,22 +863,27 @@ meantime (a reply showed that you had applied): those are the documents you sent
 
 ## 9. Fill in an application form
 
-Most companies ask you to fill in a form on their own site: your name and contacts again, a
-few links, and some questions of their own. The **assistant** does the typing. It is the
-light-blue robot that stands at the end of the assembly line (Figure 9.1). It blinks, waves
-when the app opens, and opens its window when you select it.
+Most companies ask you to fill in a form on their own site. The form asks again for your name,
+your contacts and a few links, and it asks some questions of its own. The **assistant** does the
+typing. It is the light-blue robot at the end of the assembly line (Figure 9.1). It blinks, it
+waves when the app opens, and it opens its window when you select it.
 
 ![The assistant at the end of the assembly line](img/37_assistant.png)
 
 *Figure 9.1 – The assistant at the end of the assembly line*
 
-The assistant fills in the form that is open in Google Chrome, or in Brave, Edge, Opera or
-Safari when you choose one of them (section 10). It cannot work in Opera GX or Firefox. It writes into empty fields only. The only things
-it presses on a page are a menu, an entry of a menu, a yes/no button, a button that adds a
-row for another job or degree, and the box that says you work at a job now; it never presses
-a button that sends or continues, never ticks a box that agrees to something, and never
-sends the form. You
-read what it wrote and send the form yourself.
+The assistant fills in the form that is open in Google Chrome. You can also choose Brave, Edge,
+Opera or Safari (section 10). It cannot work in Opera GX or Firefox. It writes only into empty
+fields. On a page, it presses only these things:
+
+- a menu, and an entry of a menu
+- a yes/no button
+- a button that adds a row for another job or degree
+- the box that says you work at a job now
+
+It never presses a button that sends or continues. It never ticks a box that agrees to
+something, and it never sends the form. You read what it wrote, and you send the form
+yourself.
 
 When the pointer is over the assembly line, the assistant follows it with its eyes. It nods
 when a request worked and shakes its head when it did not.
@@ -929,10 +938,10 @@ Many forms have a section for work experience and one for education, with a row 
 and each degree. The assistant fills those rows from two lists (Figure 9.3).
 
 1. On the **My details** page, under **Work experience**, select **Add a job** for each job
-   you have had, or select **Read from my CV**: Claude copies the jobs and degrees your CV
-   states, in one call, with the place of each job and the lines the CV writes under it, word
-   for word. Nothing is saved until you select **Save**, and a line the CV does not back is
-   left out.
+   that you had. Or select **Read from my CV**. Then Claude copies, in one call, the jobs and
+   degrees from your CV. For each job, it copies the place and the lines under the job, word for
+   word. A line that your CV does not show is not copied. The app saves nothing until you
+   select **Save**.
 2. Fill in each job. Table 9.2 describes the fields. Turn on **I work here now** for every job
    that goes on; several jobs may be current at once.
 3. Under **Education**, select **Add a degree** for each degree, the highest first.
@@ -983,21 +992,21 @@ their meaning, so such a list is left to you.
 
 Figure 9.4 shows the last two parts of the page.
 
-1. Under **Salary expectation**, enter the figure as a whole number, choose the currency, and
+1. Under **Salary expectation**, enter the figure as a whole number. Choose the currency, and
    choose **per month** or **per year**. A form that asks then gets, for example, *60 000 CZK
-   gross per month*. Leave the figure empty and the assistant drafts an answer from the
-   figure in **Options**, or leaves the question to you.
-2. Under **Files for forms**, select **Add a file…** for each certificate, diploma or
-   reference a form may ask for, and give each a short name.
+   gross per month*. If you leave the figure empty, the assistant uses the figure in
+   **Options**. If there is none, it leaves the question to you.
+2. Under **Files for forms**, select **Add a file…** for each certificate, diploma or reference
+   that a form can ask for. Give each file a short name.
 3. Select **Save**.
 
 ![The salary and the files on the My details page](img/42_my_salary_and_files.png)
 
 *Figure 9.4 – The salary and the files on the My details page*
 
-The assistant attaches the CV and the letter of the job by itself. Your own files are not
-attached for you: after a fill, **Show my CV and letter in Finder** shows them, selected in
-Finder, for you to drag onto the form.
+The assistant attaches the CV and the letter of the job by itself. It does not attach your
+other files. After a fill, **Show my CV and letter in Finder** selects them in Finder. Then you
+drag them onto the form.
 
 ### Answer the questions every form asks
 
@@ -1016,9 +1025,10 @@ that asks gets your wording, without a Claude call.
 
 *Figure 9.5 – The My answers page*
 
-An answer is marked for checking each time it is used. A question about one company, such as
-"Why do you want to work here?", cannot have one answer for all of them: the assistant drafts
-it for each job when it fills in that job's form (the next tasks).
+The app marks an answer for checking each time it uses it. Some questions are about one
+company, for example "Why do you want to work here?". These cannot have one answer for all
+companies. The assistant writes them for each job when it fills in the form of that job (the
+next tasks).
 
 ### Let your browser be filled in
 
@@ -1028,8 +1038,8 @@ switch is (section 10).
 
 1. In Chrome's menu bar, select **View** > **Developer** > **Allow JavaScript from Apple
    Events**. A tick appears next to it.
-2. The first time you ask the assistant to fill in a form, macOS asks whether the app may
-   control Google Chrome. Select **OK**.
+2. The first time that you ask the assistant to fill in a form, macOS asks a question. It asks
+   if the app can control Google Chrome. Select **OK**.
 
 > **Important**
 > This switch lets apps on your Mac write into the page that is open in the browser. Turn it off
@@ -1040,12 +1050,12 @@ switch is (section 10).
 1. In your browser, open the application form and leave its tab in front.
 2. In the app, select the assistant.
 3. Optional: under **Answers are for**, choose the job. To find it quickly, type part of its
-   company or title in the box beside the list: the list narrows, and when one job is left it
-   is chosen. With **Find the job from the page**
-   the assistant works it out and tells you which job it took. A form is rarely at the address
-   of its posting, because **Apply** leads to another page, so the assistant also looks at the
-   page that led there, at the company and the job title in the words of the page, and at the
-   posting you last opened from the app. When none of these is plain, it takes no job.
+   company or title in the box next to the list. The list becomes shorter. When only one job is
+   left, the app chooses it. With **Find the job from the page**, the assistant finds the job and
+   tells you which job it took. A form is usually not at the address of its posting, because
+   **Apply** opens another page. So the assistant also looks at the page that opened the form. It
+   reads the company and job title on the page. It also checks the posting that you last opened
+   from the app. If none of these is clear, it takes no job.
 4. Select **Fill in the form**, or type the request, for example *fill in the
    form*, and press Return.
 5. Read the answer (Figure 9.6). **Filled in** lists what was written and chosen; **Left for
@@ -1086,17 +1096,17 @@ itself: you press the form's own button.
 
 ### Use your own wording again
 
-When you rewrite an answer, the assistant keeps your wording and uses it the next time a form
-asks the same question, at any company, without a Claude call.
+When you rewrite an answer, the assistant keeps your words. The next time a form asks the same
+question, it uses them, at any company, without a Claude call.
 
 1. After a fill, change the answers on the page as you like.
 2. In the app, select **Remember what I changed on the page**.
 
-An answer you rewrite and save under **Form answers** (section 7) is remembered the same way.
-A remembered answer is marked for checking when it is used, and one that names the company it
-was written for is not used for another company. Every remembered answer is on the **My
-answers** page, where you can change or remove it. **Forget them** on the **My details** page
-removes all of them after asking once.
+The assistant also keeps an answer that you rewrite and save under **Form answers** (section 7).
+The app marks a kept answer for checking each time it uses it. An answer that names its company
+is not used for another company. The **My answers** page lists all kept answers. There you can
+change or remove them. **Forget them** on the **My details** page removes all of them, after it
+asks you once.
 
 > **Note**
 > To learn your changes, the assistant reads back only the answers it wrote itself. It does
@@ -1104,10 +1114,14 @@ removes all of them after asking once.
 
 ### Review a form before you send it
 
-After a fill, select **Review before I send**, or ask *review the form*. The assistant reads
-the form back and lists what looks wrong (Figure 9.8): a required field that is still empty, a
-part left in square brackets, an email that is not yours, and, in one Claude call, an answer
-that contradicts your CV or names another company.
+After a fill, select **Review before I send**, or ask *review the form*. The assistant reads the
+form back and lists the problems (Figure 9.8):
+
+- a required field that is still empty
+- a part that is still in square brackets
+- an email address that is not yours
+- an answer that disagrees with your CV or names another company (this check uses one Claude
+  call)
 
 ![What a review found](img/45_assistant_review.png)
 
@@ -1135,7 +1149,7 @@ Table 9.4 shows what happens to each kind of field.
 | File fields the page keeps behind its own **Select file** buttons | Cannot be reached. The assistant says so once; press the page's button and choose each file yourself |
 | Employer, job title, school, degree, field of study | Writes them from your lists of jobs and degrees, row by row |
 | A salary question | Writes the figure with its currency from **My details** |
-| A list, a yes/no choice, or a menu the page draws itself | Chooses the entry when something settles it: **My details** (country, city, notice period, the country code of your phone), where the posting was found ("How did you hear about us?"), or your CV and **About you** (right to work, degree level). Marked for checking. When nothing settles it, it is left to you |
+| A list, a yes/no choice, or a menu the page draws itself | Chooses the entry when a fact settles it. A fact can come from **My details**: country, city, notice period, the country code of your phone. It can come from where you found the posting ("How did you hear about us?"). It can also come from your CV and **About you**: right to work, degree level. Marked for checking. If no fact settles it, it is left to you |
 | A number, such as years of experience with a tool | Counts it from your CV. Marked for checking |
 | A question you answered in your own words before | Uses your wording again, marked for checking |
 | An open question, such as "Why do you want to work here?" | Drafts the answer from your CV and the posting, in one Claude call for the whole form. Nothing outside your CV is claimed |
@@ -1144,7 +1158,7 @@ Table 9.4 shows what happens to each kind of field.
 | A file field for your CV or resume | Attaches the CV adapted to this job, as a PDF when the field takes one. When the job has no adapted CV, it attaches your own CV and says so. Marked for checking |
 | A file field for the cover letter | Attaches the letter of this job |
 | A file field for other attachments | Attaches the letter of this job, when the form has no other place for it. Certificates and diplomas stay yours to add |
-| Any other file field (a photo, a passport, a transcript), a file larger than 4 MB, or a kind of file the field does not take | Leaves it to you, with the reason |
+| Any other file field (a photo, a passport, a transcript). Also a file larger than 4 MB, or a type of file that the field does not take | Leaves it to you, with the reason |
 | A file field, when the assistant does not know which job the form is for | Leaves it to you. Choose the job, then ask again: a CV written for another company is worse than none |
 | A password | Leaves it to you |
 | Date of birth, gender, origin, health, payment details | Leaves them to you |
@@ -1192,9 +1206,9 @@ Table 9.5 lists what the assistant may answer, and what to do.
 
 ## 10. Talk to the assistant
 
-The assistant is more than a form filler. You can ask it about your search in your own words,
-have it do things in the app after your yes, and let it tell you what needs attention. This
-chapter covers everything that is not filling in a form (section 9).
+The assistant does more than fill in forms. You can ask it about your search in your own words.
+It can do things in the app after you say yes. It also tells you what needs your attention. This
+chapter covers all of this. Section 9 covers the forms.
 
 ### Prerequisites
 
@@ -1204,9 +1218,10 @@ chapter covers everything that is not filling in a form (section 9).
 
 ### Talk to the assistant
 
-You can ask the assistant in your own words, and it remembers the last turns of the talk, so a
-second question may build on the first (Figure 10.1). When a job's window is open, "this job"
-means that job; otherwise choose the job under **Answers are for**, or name its company.
+You can ask the assistant in your own words. It remembers the last turns of the talk, so a
+second question can build on the first (Figure 10.1). When the window of a job is open, "this
+job" means that job. If no job window is open, choose the job under **Answers are for**, or name
+its company.
 
 1. Select the assistant and type what you need, then press Return.
 2. Read the answer. While you wait, the line under the talk says what the assistant is doing.
@@ -1243,16 +1258,16 @@ Table 10.1 shows what you can ask for.
 > practice answer are one more. Only the jobs a request is likely about are sent with
 > it, not your whole list. The calls count against your Claude limit like a search does (section 18).
 
-The assistant never changes anything on Claude's word alone. What Claude proposes is checked
-by the app: an action that does not exist, or a job that is not in your list, is dropped, and
-the assistant says that it could not do it.
+The assistant never changes anything only because Claude says so. The app checks each proposal
+from Claude. It drops an action that does not exist, or a job that is not in your list. Then the
+assistant tells you that it could not do it.
 
 ### Do several things at once, and take them back
 
-One request may hold up to three things, for example *I sent the Northwind form: mark it
-applied and remind me to follow up in ten days*. What only shows something is done at once.
-What changes your data is asked about in one question that lists each step; **Yes, do it**
-carries them out in order.
+One request can hold up to three tasks. For example: *I sent the Northwind form: mark it applied
+and remind me to follow up in ten days*. A task that only shows something is done at once. For
+the tasks that change your data, the assistant asks one question that lists each step. **Yes, do
+it** does them in order.
 
 After a yes, **Undo** appears under the answer. It puts the job back exactly as it was: its
 status, its dates, and a lead that marking it applied had folded away. **Undo** takes back the
@@ -1260,11 +1275,10 @@ last yes only, and is not offered while a search or a scan is running.
 
 ### Tell the assistant what to remember
 
-Say *remember that I do not want consulting firms* and the assistant keeps the note. It uses
-your notes in its answers from then on, also after the app was closed, and it also remembers
-the last turns of a talk. The notes are listed on the **My details** page under **What you
-asked me to remember**; select **Forget** to remove one. **New talk** on the **Ask** page puts
-the earlier talk away.
+Say *remember that I do not want consulting firms*, and the assistant keeps the note. It uses
+your notes in all later answers, also after you close the app. It also remembers the last turns
+of a talk. The **My details** page lists the notes under **What you asked me to remember**.
+Select **Forget** to remove one. **New talk** on the **Ask** page puts away the earlier talk.
 
 > **Note**
 > A note shapes what the assistant says. It does not change what a search finds or how a
@@ -1274,15 +1288,15 @@ the earlier talk away.
 
 1. Open a job posting in your browser and leave its tab in front.
 2. In the assistant's window, select **Is the posting in my browser worth applying to?**
-3. The assistant reads the page, scores the posting against your CV with the same scorer a
-   search uses, and says the score and the reason.
+3. The assistant reads the page and scores the posting against your CV. It uses the same scorer
+   as a search. Then it tells you the score and the reason.
 4. To keep it, select **Yes, do it**: the posting is added to **New Jobs**. The next search
    writes its documents when the score is at or above your limit.
 
-This takes one call to Claude, for the scoring. Most job pages state the job's title and
-employer in a form that search engines read, and the assistant takes them from there; only
-when a page does not, one more call reads them off the page. A posting that is in your list
-already is recognised by its address, without a call.
+This takes one call to Claude, for the score. Most job pages give the title and the employer in a
+form that search engines read. The assistant takes them from there. Only if a page does not
+give them, one more call reads them from the page. The app knows a posting that is already in
+your list by its address, so that needs no call.
 
 ### Draft a reply to a company
 
@@ -1302,8 +1316,8 @@ fill in.
    Quillon*.
 3. The assistant asks the questions of the preparation one at a time. Type each answer as you
    would say it and press Return.
-4. Read what it says about the answer: what is good, what is missing, and one real thing from
-   your CV you could add. Then it asks the next question.
+4. Read what it says about your answer: what is good and what is missing. It also gives one real
+   fact from your CV that you can add. Then it asks the next question.
 5. To end, type *stop* or select **Stop practising**.
 
 Each answer is one Claude call. Nothing you type in practice is saved.
@@ -1316,9 +1330,9 @@ typed. When the practice ends, the assistant says how many went well.
 
 The assistant also tells you things without being asked. None of this uses Claude.
 
-- **When the app opens**, its bubble says what deserves your attention: a form you filled in
-  but did not mark as applied, an interview in the next two days with no preparation, an
-  invitation with no date set, or how many jobs are ready to send.
+- **When the app opens**, its bubble tells you what needs your attention. This can be a form that
+  you filled in but did not mark as applied. It can be an interview in the next two days with no
+  preparation, or an invitation with no date. It can also be the number of jobs ready to send.
 - **In its window**, **For you today** lists the same reminders. Select **Open** to go to the
   job, or **Do not remind me** to stop that reminder.
 - **Noticing a form.** On the **My details** page, under **How I work**, turn on the switch
@@ -1335,15 +1349,16 @@ The assistant also tells you things without being asked. None of this uses Claud
 
 The assistant works in Google Chrome unless you choose another browser. On the **My details**
 page, under **How I work**, choose **Google Chrome**, **Brave Browser**, **Microsoft Edge**,
-**Opera** or **Safari**. Opera GX and Firefox are in the list as not possible: they do not let
-another app fill in their pages, so open the form in one of the others. The line beside the list says where that browser's switch is; turn it on once, as
-in section 9. The switch to notice forms is in the same place.
+**Opera** or **Safari**. The list shows Opera GX and Firefox as not possible. They do not let
+another app fill in their pages, so open the form in another browser. The line next to the list
+tells you where the switch of that browser is. Turn it on once, as in section 9. The switch to
+notice forms is in the same place.
 
 ### Speak instead of typing
 
-The assistant's box takes dictation like any text field on your Mac: select the box and press
-the dictation key (the microphone key, or the Fn key twice), then speak. What you say appears
-as text; press Return to send it. Dictation is a feature of macOS and is turned on under
+The box of the assistant takes dictation, like all text fields on your Mac. Select the box and
+press the dictation key (the microphone key, or the Fn key two times). Then speak. Your words
+appear as text. Press Return to send them. Dictation is a feature of macOS. Turn it on under
 **System Settings** > **Keyboard** > **Dictation**.
 
 ### Next steps
@@ -1520,8 +1535,9 @@ Table 12.2 lists the fields of a reply.
 
 ### File a reply under the right application
 
-Sometimes a reply is filed under the wrong application, or under none: two applications at
-one company, or a recruiter who writes from an agency's address.
+Sometimes the app files a reply under the wrong application, or under none. This can happen
+when you have two applications at one company. It can also happen when a recruiter writes from
+the address of an agency.
 
 1. In **Responses**, select the reply.
 2. Select **File under…** (or **File under another…**). The list of your applications opens
@@ -1586,9 +1602,9 @@ For one interview the app builds a sheet from your CV and the posting.
    about a minute.
 3. When the card says the questions and answers are ready, select **Open**.
 
-**Documents** on the same card opens the preparation as two Word files: one for a talk with HR
-or a recruiter, and one for a talk with a specialist or the hiring manager. **Make again** builds
-a new preparation, for example after you changed your CV (Figure 13.1).
+**Documents** on the same card opens the preparation as two Word files. One file is for a talk
+with HR or a recruiter. The other file is for a talk with a specialist or the hiring manager.
+**Make again** makes a new preparation, for example after you change your CV (Figure 13.1).
 
 ![The interview preparation](img/14_interview_preparation.png)
 
@@ -1611,8 +1627,9 @@ Table 13.1 lists the parts of the interview sheet.
 
 ### The two documents
 
-Both documents have the same order: the company, you, your projects and skills, the questions
-they may ask you, and the questions you can ask them. Table 13.2 shows how the two differ.
+The two documents have the same order. First the company, then you, then your projects and
+skills. Then come the questions that they can ask you, and the questions that you can ask them.
+Table 13.2 shows the differences.
 
 *Table 13.2 – The HR document and the technical document*
 
@@ -1758,7 +1775,7 @@ Table 16.1 lists the Search settings.
 | Setting | What it does | Values | Why you would change it |
 |---|---|---|---|
 | **City** | Where to search | A city name | The app will not search without one |
-| **Country** | Which postings of a company's career site, and which remote jobs, count as "here": the city, anywhere in this country, the region it is in ("Europe", "EMEA"), or remote without being tied to another part of the world | A country's name in English. Empty = the country of the city, shown in grey | Type it when the field says the city is not known, or when you also want jobs from a neighbouring country |
+| **Country** | Which postings count as "here", from the career site of a company and from remote jobs. They can be in the city, anywhere in this country, or in the region of the country ("Europe", "EMEA"). A remote job counts if it is not tied to another part of the world | A country's name in English. Empty = the country of the city, shown in grey | Type it when the field says that it does not know the city. Also type it when you want jobs from a neighbouring country |
 | **Job source** | Which job boards are read | Czech boards, LinkedIn and careers; LinkedIn only; Company career sites only; All sources (+ remote) | More sources find more and take longer |
 | **Search roles** | The words typed into the job boards, in English | One or more roles | Too few results: add a role. Too many poor ones: remove one |
 | **Skip titles with** | Words that drop a posting by its title | Words | To get rid of a kind of posting that keeps appearing |
@@ -1830,8 +1847,8 @@ Table 16.3 lists the About you settings.
 
 | Setting | What it does |
 |---|---|
-| **Salary you ask for** | Your expected pay, gross per month, with its currency. Form answers give it as your expectation, the job window and the lists show it, and Insights compares what postings pay with it. 0 = none given: the app then uses its own estimate, which it has for software roles in Czechia only, and otherwise leaves the figure for you to fill in |
-| **A different figure for** | A salary of its own for one kind of role, used instead of the general one when the words are in the job's title (*support* for "IT Support Specialist"). Enter the kind of role and the figure, then select **+ Add** |
+| **Salary you ask for** | Your expected pay, gross per month, with its currency. Form answers give it as your expectation. The job window and the lists show it. Insights compares what postings pay with it. 0 = none given. The app then uses its own estimate, which it has only for software roles in Czechia. In other cases, you fill in the figure yourself |
+| **A different figure for** | A salary for one type of role. The app uses it instead of the general figure when the words are in the job's title (*support* for "IT Support Specialist"). Enter the type of role and the figure, then select **+ Add** |
 | **Right to work** | How letters and answers should say it. Empty = not mentioned |
 | **You can start** | When you can start, for example *immediately*, *one month* or *1 November 2026*. Letters and answers say it this way, and the assistant fills it into forms. Empty = not mentioned |
 | **More about your work** | What you really did in each job beyond what the CV says, in your own words. The app may use it like the CV |
@@ -1997,8 +2014,8 @@ The **Last run** card shows two rows about cost (Table 18.3).
 1. In the right column, select **Help**.
 2. Select the tab **Usage and problems** (Figure 18.3).
 
-The first card shows how many questions the app has asked Claude in all and by kind of work,
-with what the same work would have cost through the paid API. Nothing of it was billed.
+The first card shows how many questions the app asked Claude, in total and by type of work. It
+also shows the cost of the same work through the paid API. You paid none of it.
 
 ![Usage and problems in Help](img/35_help_usage.png)
 
@@ -2024,8 +2041,9 @@ Table 18.4 lists ways to use less of your limit.
 
 ### Where your data is
 
-Everything stays on your Mac. The only things that leave it are the questions put to Claude
-(your CV text and a posting), the requests to the job boards, and the reading of your mailbox (Table 19.1).
+Everything stays on your Mac. Only three things leave it (Table 19.1). These are the questions
+to Claude (your CV text and a posting), the requests to the job boards, and the reading of your
+mailbox.
 
 *Table 19.1 – Where your data is and what protects it*
 
@@ -2046,8 +2064,8 @@ To make a backup of everything yourself, for example before you move to a new Ma
 
 1. Open **Options** > **Notifications and storage**.
 2. Select **Back up now**. The green line names the folder of the backup.
-3. Optional: select **Check backups**. The app restores a backup into a throwaway folder and
-   compares it with your data, to prove that it can be restored.
+3. Optional: select **Check backups**. The app restores a backup into a temporary folder. Then it
+   compares the copy with your data. This proves that the backup works.
 
 To take your data out of the app in a form that any program can open:
 
@@ -2064,8 +2082,8 @@ The files that tell the app how to write your CV and your letters, the letter te
 your master CV are signed. If one of them is changed outside the app, the next run waits.
 
 1. Open the **Account** card. The **Data protection** row names the changed files.
-2. Select **See what changed**. The lines that were removed are shown in red with a minus
-   sign, the lines that were added in green with a plus sign.
+2. Select **See what changed**. Removed lines show in red with a minus sign. Added lines show in
+   green with a plus sign.
 3. Select **Approve** if the change is yours. Otherwise put the file back as it was.
 
 > **Note**
@@ -2100,9 +2118,11 @@ Figure 20.1 shows the Help window.
 
 *Figure 20.1 – Help inside the app*
 
-**Help** in the app has three tabs: **How it works** covers the same ground as this guide in
-short form, **What changed** lists the changes of each version, and **Usage and problems**
-shows what the app has used and the small problems it carried on after.
+**Help** in the app has three tabs:
+
+- **How it works** gives the main points of this guide in short form.
+- **What changed** lists the changes of each version.
+- **Usage and problems** shows what the app used, and the small problems that it noted.
 
 ### Starting and signing in
 

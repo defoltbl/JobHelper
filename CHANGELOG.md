@@ -10,6 +10,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 - In the technical document, each project explains its tools and methods: **what each one is, what it did in the project, and the technical reason it suits that task**. It also gives the result and the questions a specialist may ask. Each skill gets more detail.
 - The **preparation window** shows your projects and skills too, before the questions.
 - The questions you can ask HR always include the **next steps**, and ask about the team, working hours, the first weeks and the contract.
+- The **user guide** and the **code documentation** now follow ASD-STE100: no sentence over 20 words in a step or 25 words in a description, one idea in each sentence, and lists where a sentence named many things. A test keeps them that way.
 - The preparation is written in **ASD-STE100 Simplified Technical English**: short sentences, the active voice and common words.
 
 ## 14 October 2026

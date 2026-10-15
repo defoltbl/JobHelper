@@ -345,3 +345,28 @@ def test_the_points_of_a_list_stand_out(laid_out):
     for item in items[:60]:
         assert re.match(r'<li style="[^"]*font-weight:700; color:#0b1220;"><span style=" font-weight:400; color:#182230;">', item), item[:160]
     _ = app, laid_out
+
+
+# ── ASD-STE100 Simplified Technical English (the user's rule for all documentation) ──
+def test_the_guide_and_the_code_document_keep_the_ste100_sentence_lengths():
+    """At most 20 words in a step and 25 in a description: scripts/ste_check.py lists any sentence over that."""
+    import sys
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import ste_check
+    for name in ("docs/GUIDE.md", "docs/CODE.md"):
+        found = ste_check.problems(ROOT / name)
+        assert not found, f"{name}: " + "; ".join(f"line {line}, {n} words: {s[:80]}" for line, n, s in found[:5])
+
+
+def test_the_ste100_checker_counts_the_way_the_rule_says(tmp_path):
+    import sys
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import ste_check
+    doc = tmp_path / "x.md"
+    long_step = "1. " + " ".join(["word"] * 21) + "."
+    long_text = " ".join(["word"] * 26) + "."
+    fine = "Select **Save**. The app keeps `data/my_details.json` encrypted on this Mac."
+    doc.write_text("\n\n".join(["# Title", long_step, long_text, fine, "```\n" + " ".join(["code"] * 40) + "\n```",
+                                "| A | " + " ".join(["cell"] * 27) + " |", "*Figure 1.1 – " + " ".join(["caption"] * 30) + "*"]), encoding="utf-8")
+    found = ste_check.problems(doc)
+    assert [(n, words) for n, words, _ in found] == [(3, 21), (5, 26), (13, 27)]       # a step over 20, a text over 25, a table cell; never code or captions
