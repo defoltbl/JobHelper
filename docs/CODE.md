@@ -399,6 +399,25 @@ Table 6.3 groups the other modules by what they are for.
 | Storage and safety | `store`, `db`, `vault`, `integrity`, `housekeeping`, `health`, `trouble` | The job list, the reply database, encryption, signed rule files, backups, the start-up check, the log of errors |
 | The window's back end | `ui_api`, `api_core`, `api_system`, `api_options`, `api_jobs`, `api_documents`, `api_replies`, `api_insights`, `api_interview`, `api_letters`, `api_assistant`, `api_talk`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` is a facade: it hands each call to one of ten services. `Bridge` gives `Api` to QML and runs long work in threads |
 
+### The start-up check and its fixes
+
+`health.run()` makes each check of `health.CHECKS`. A check returns an empty string when all is
+well. It returns a sentence when it finds a problem. It returns a pair when the window can fix the
+problem: the sentence and an action. The actions are in `health.ACTIONS`: `repair_statuses`,
+`restore_jobs` and `restore_replies`. The report gives the action of the first problem and the
+label of its button.
+
+The button calls `Bridge.fixProblem`. That slot refuses during a run. Then it calls
+`SystemService.fix_problem`:
+
+- `repair_statuses` makes a backup and calls `store.repair_statuses`. The command
+  `python status.py repair-statuses` uses the same function.
+- `restore_data` finds the newest backup copy that opens with `vault.newest_good_copy`. It moves
+  the damaged file into `backups/damaged` with `vault.set_aside`. Then it writes the copy back.
+
+No message of the check tells the person to type a command. A test reads the strings of
+`health`, `vault` and `agent2_search` to make sure.
+
 ### How the assistant fills in a form
 
 The assistant works on the tab in front in the browser of the person (Figure 6.5). It works in

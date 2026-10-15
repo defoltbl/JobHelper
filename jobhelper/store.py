@@ -119,3 +119,20 @@ def slugify(text: str, max_len: int = 40) -> str:
     text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip()
     text = re.sub(r"[\s_-]+", "-", text)
     return text[:max_len].strip("-") or "job"
+
+
+def repair_statuses(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Give every job with a status the app does not know one it does: an application (it has an apply date, or came
+    from an email) becomes "waiting", anything else a new job again. Each one gets a note. Returns the jobs that were
+    changed. Changes `jobs`."""
+    from datetime import date
+    fixed = []
+    for j in jobs:
+        if j.get("status") in STATUSES:
+            continue
+        applied = bool(j.get("date_applied")) or j.get("source") in ("email", "manual")
+        j["notes"] = (f"[{date.today().isoformat()}] Status was \"{j.get('status')}\", which the app does not know; set to "
+                      f"{'waiting' if applied else 'found'}.\n" + (j.get("notes") or "")).strip()
+        j["status"] = "waiting" if applied else "found"
+        fixed.append(j)
+    return fixed

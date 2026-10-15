@@ -11,7 +11,7 @@ from pathlib import Path
 
 from . import trouble
 from .api_base import _guarded
-from . import agent1_cv, health, config, integrity, pdf, usage, vault
+from . import agent1_cv, agent4_tracker, health, config, integrity, pdf, store, usage, vault
 
 
 def _claude_auth_status():
@@ -76,6 +76,65 @@ class SystemService:
     # ── the check made when the app starts ──────────────────────
     def self_check(self, claude_signed_in=None):
         return health.run(claude_signed_in)
+
+    # ── what the start-up check offers to put right ─────────────
+    _RESTORABLE = {"jobs": ("JOBS_JSON", "job list"), "replies": ("RESPONSES_DB", "replies database")}
+
+    def fix_problem(self, action):
+        """Do what a problem of the start-up check offers (its `action`): {ok, msg}."""
+        fixes = {"repair_statuses": self.repair_statuses,
+                 "restore_jobs": lambda: self.restore_data("jobs"),
+                 "restore_replies": lambda: self.restore_data("replies")}
+        fix = fixes.get(str(action or ""))
+        if fix is None:
+            return {"ok": False, "msg": "The app has no fix for this problem. Select Show all to read what to do."}
+        return fix()
+
+    def repair_statuses(self):
+        """Give every job whose status the app does not know a status it knows. A backup is made first."""
+        try:
+            jobs = store.load_jobs()
+        except Exception as e:  # noqa: BLE001 - shown as the reason
+            return {"ok": False, "msg": f"Your job list could not be read: {trouble._safe(e)}"}
+        if not any(j.get("status") not in store.STATUSES for j in jobs):
+            return {"ok": True, "fixed": 0, "msg": "Every job has a status the app knows. Nothing was changed."}
+        try:
+            vault.make_backup("before_status_repair")
+            fixed = store.repair_statuses(jobs)
+            store.save_jobs(jobs)
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "msg": f"The statuses were not repaired: {trouble._safe(e)}"}
+        try:
+            agent4_tracker.render_all(jobs)
+        except Exception as e:  # noqa: BLE001 - the spreadsheets are made again on the next change
+            trouble.note("repairing statuses: the spreadsheets", e)
+        count = len(fixed)
+        return {"ok": True, "fixed": count,
+                "msg": f"Repaired {count} {'job' if count == 1 else 'jobs'}. Each one has a note that tells what was changed."}
+
+    def restore_data(self, kind):
+        """Put back the newest backup copy of the job list or the replies database that opens. The damaged
+        file is moved into the backups (folder "damaged"), never deleted."""
+        if kind not in self._RESTORABLE:
+            return {"ok": False, "msg": "Only the job list and the replies database can be restored here."}
+        attr, what = self._RESTORABLE[kind]
+        path = getattr(config, attr)
+        try:
+            found = vault.newest_good_copy(path)
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "msg": f"The backups could not be read: {trouble._safe(e)}"}
+        if found is None:
+            return {"ok": False, "msg": f"No backup copy of your {what} opens, so nothing was changed. "
+                                        "If you have a copy of your own, put it back in the app's data folder."}
+        data, copy = found
+        try:
+            vault.set_aside(path, "damaged")
+            vault.write_bytes(path, data)
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "msg": f"Your {what} was not restored: {trouble._safe(e)}"}
+        made = datetime.fromtimestamp(copy.stat().st_mtime).strftime("%d %B %Y, %H:%M")
+        return {"ok": True, "msg": f"Your {what} is back as it was on {made}. Changes made after that time are not in it. "
+                                   "The damaged file is kept in the backups, in the folder damaged."}
 
     # ── what changed (CHANGELOG.md, shown in Help) ──────────────
     @_guarded(list)

@@ -840,3 +840,13 @@ def test_a_used_up_limit_is_not_noted_as_a_problem(bridge, monkeypatch):
     monkeypatch.setattr(llm, "ask", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no connection")))
     bridge._ping_usage()
     assert noted == ["asking Claude for the current usage"]            # a real failure still is
+
+
+def test_the_start_up_check_button_is_refused_during_a_run(bridge, monkeypatch):
+    calls = []
+    monkeypatch.setattr(ui_api.Api, "fix_problem", lambda self, action: calls.append(action) or {"ok": True, "msg": ""})
+    bridge._set_running(True)
+    result = bridge.fixProblem("repair_statuses")
+    assert result["ok"] is False and "running" in result["msg"] and calls == []
+    bridge._set_running(False)
+    assert bridge.fixProblem("repair_statuses")["ok"] is True and calls == ["repair_statuses"]

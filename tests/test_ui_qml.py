@@ -1589,6 +1589,28 @@ def test_start_up_check_shows_one_line_only_when_something_is_wrong(ui):
     assert ui.warnings == []
 
 
+def test_start_up_check_offers_the_fix_and_says_what_it_did(ui):
+    banner, fix = ui.find("healthBanner"), ui.find("healthFix")
+    ui.js('healthNote = ""; healthNoteOk = false; healthHidden = false')
+    ui.js('healthData = { ok: false, problems: 1, message: "Your job list is damaged.", action: "restore_jobs", '
+          'action_label: "Restore from backup", checks: [{ name: "Job list", ok: false, problem: "Your job list is damaged.", action: "restore_jobs" }] }')
+    assert banner.property("visible") is True and fix.property("visible") is True and fix.property("text") == "Restore from backup"
+    ui.js('healthData = { ok: false, problems: 1, message: "Paste your key.", action: "", action_label: "", checks: [] }')
+    assert fix.property("visible") is False                                      # nothing the app can do: no button
+    ui.js('healthData = { ok: false, problems: 1, message: "Odd.", action: "no_such_fix", action_label: "Repair", checks: [] }')
+    ui.js("fixHealth()")                                                          # the back end refuses: a red line under it
+    note = ui.find("healthNote")
+    assert note.property("visible") is True and "no fix" in note.property("text") and ui.js("healthNoteOk") is False
+    assert banner.property("visible") is True
+    ui.js('healthNoteOk = true; healthNote = "Repaired 2 jobs."; healthData = { ok: true, checks: [], problems: 0, message: "" }')
+    assert banner.property("visible") is True and ui.find("healthText").property("text") == "Repaired 2 jobs."   # green: put right
+    assert fix.property("visible") is False
+    ui.js('healthHidden = true; healthNote = ""; healthNoteOk = false')
+    assert banner.property("visible") is False
+    ui.js('healthHidden = false')
+    assert ui.warnings == []
+
+
 # ── the window is split into one file per window ────────────────────────────
 def test_every_window_has_its_own_file_and_main_stays_small():
     folder = ROOT / "ui_qt"

@@ -10,20 +10,25 @@ from typing import Any
 from . import agent1_cv, config, db, integrity, store, vault
 
 
+# What the window can do about a problem, by a button on the start-up check's line.
+ACTIONS = {"repair_statuses": "Repair", "restore_jobs": "Restore from backup", "restore_replies": "Restore from backup"}
+
+
 def _check(name: str, fn) -> dict[str, Any]:
-    """Run one check: fn returns '' (fine) or what is wrong and what to do."""
+    """Run one check: fn returns '' (fine), what is wrong and what to do, or (that, an action of ACTIONS)."""
     try:
-        problem = fn() or ""
+        found = fn() or ""
     except Exception as e:  # noqa: BLE001 - a crashing check is itself a finding
-        problem = f"The check itself failed ({type(e).__name__}: {e})."
-    return {"name": name, "ok": not problem, "problem": problem}
+        found = f"The check itself failed ({type(e).__name__}: {e})."
+    problem, action = found if isinstance(found, tuple) else (found, "")
+    return {"name": name, "ok": not problem, "problem": problem, "action": action}
 
 
 def _data_key() -> str:
     state = vault.state()
     if state == "locked":
         return ("The key for your data is not in the Keychain, so nothing can be opened. Open the Account card and paste your "
-                "recovery key there (or run: python status.py security restore-key).")
+                "recovery key there.")
     return ""            # 'off' is a choice (or no Keychain on this system), not a fault
 
 
@@ -31,25 +36,27 @@ def _jobs() -> str:
     try:
         jobs = store.load_jobs()
     except vault.VaultError:
-        return "Your job list cannot be decrypted. Paste your recovery key in the Account card (or run: python status.py security restore-key)."
+        return "Your job list cannot be decrypted. Paste your recovery key in the Account card."
     except ValueError:
-        return "Your job list (data/jobs.json) is damaged. Restore it from data/backups (python status.py security restore)."
+        return ("Your job list (data/jobs.json) is damaged. Select Restore from backup to put back the newest copy that opens.",
+                "restore_jobs")
     broken = [j for j in jobs if not isinstance(j, dict) or not j.get("id") or "status" not in j]
     if broken:
         return f"{len(broken)} entries in your job list are incomplete."
     lost = [j for j in jobs if j["status"] not in store.STATUSES]
     return (f"{len(lost)} {'job has' if len(lost) == 1 else 'jobs have'} a status the app does not know, so "
             f"{'it is' if len(lost) == 1 else 'they are'} in none of the lists (the first: {lost[0].get('company') or lost[0]['id']}). "
-            "Run: python status.py repair-statuses") if lost else ""
+            "Select Repair to give each one a status the app knows.", "repair_statuses") if lost else ""
 
 
 def _responses() -> str:
     try:
         db.all_responses()
     except vault.VaultError:
-        return "The replies database cannot be decrypted. Paste your recovery key in the Account card (or run: python status.py security restore-key)."
+        return "The replies database cannot be decrypted. Paste your recovery key in the Account card."
     except Exception:  # noqa: BLE001
-        return "The replies database (data/responses.db) is damaged. Restore it from data/backups."
+        return ("The replies database (data/responses.db) is damaged. Select Restore from backup to put back the newest copy "
+                "that opens.", "restore_replies")
     return ""
 
 
@@ -95,12 +102,15 @@ CHECKS = [("Data key", _data_key), ("Job list", _jobs), ("Replies", _responses),
 
 
 def run(claude_signed_in: bool | None = None) -> dict[str, Any]:
-    """{ok, checks: [{name, ok, problem}], problems, message}. `claude_signed_in` comes
+    """{ok, checks: [{name, ok, problem, action}], problems, message, action, action_label}. `claude_signed_in` comes
     from the connection check the window already made (None = not known yet)."""
     checks = [_check(name, fn) for name, fn in CHECKS]
     if claude_signed_in is not None:
         checks.append({"name": "Claude", "ok": bool(claude_signed_in),
-                       "problem": "" if claude_signed_in else "You are not signed in to Claude. Open the Account card and press Sign in."})
+                       "problem": "" if claude_signed_in else "You are not signed in to Claude. Open the Account card and press Sign in.",
+                       "action": ""})
     bad = [c for c in checks if not c["ok"]]
     message = "" if not bad else (bad[0]["problem"] if len(bad) == 1 else f"{len(bad)} things need your attention. The first: {bad[0]['problem']}")
-    return {"ok": not bad, "checks": checks, "problems": len(bad), "message": message}
+    action = bad[0].get("action", "") if bad else ""
+    return {"ok": not bad, "checks": checks, "problems": len(bad), "message": message, "action": action,
+            "action_label": ACTIONS.get(action, "")}

@@ -55,7 +55,7 @@ def test_missing_key_locks_instead_of_starting_over(isolate_data):
     vault.data_key()                                    # folder is now tied to the test key
     vault.use_keychain(vault.MemoryKeychain())          # Keychain lost the key
     assert vault.state() == "locked"
-    with pytest.raises(vault.VaultError, match="restore-key"):
+    with pytest.raises(vault.VaultError, match="Account card"):
         vault.data_key()
     assert vault.keychain().get(vault.KEY_ACCOUNT) is None      # and no new key was made up
 
@@ -309,8 +309,9 @@ def test_restore_test_needs_protection_to_be_on(isolate_data, monkeypatch):
 
     from jobhelper import vault
     monkeypatch.setattr(vault, "state", lambda: "off")
-    with _pytest.raises(vault.VaultError, match="not active"):
+    with _pytest.raises(vault.VaultError, match="Protection is off") as raised:
         vault.restore_test()
+    assert "status.py" not in str(raised.value)
 
 
 # ── one backup of everything ────────────────────────────────────────────────
@@ -425,9 +426,47 @@ def test_no_new_key_is_made_for_data_that_is_already_encrypted(isolate_data):
     first = vault.recovery_key()
     (config.DATA_DIR / "vault.json").unlink()
     vault.use_keychain(vault.MemoryKeychain())               # a new Mac: the Keychain is empty
-    with pytest.raises(vault.VaultError, match="restore-key"):
+    with pytest.raises(vault.VaultError, match="Account card"):
         vault.data_key()
     assert vault.state() == "locked" and vault.keychain().get(vault.KEY_ACCOUNT) is None, "nothing was written over"
     vault.restore_key(first)
     assert vault.read_text(config.JOBS_JSON) == "[]" and vault.state() == "ok"
     assert "Gmail" not in " ".join(vault.LABELS.values()), "any provider's mailbox, not one company's"
+
+
+# ── the newest backup copy that opens, for the start-up check's Restore button ──
+def _backup_copy(folder, name, data, age):
+    import os
+    import time
+    path = vault.backups_dir() / folder / (name + vault.BACKUP_SUFFIX)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(vault.encrypt(data))
+    stamp = time.time() - age
+    os.utime(path, (stamp, stamp))
+    return path
+
+
+def test_newest_good_copy_skips_copies_that_do_not_open(isolate_data):
+    config.ensure_dirs()
+    _backup_copy("old_20260101_100000", "jobs.json", b'[{"id": "old"}]', age=300)
+    good = _backup_copy("mid_20260102_100000", "jobs.json", b'[{"id": "mid"}]', age=200)
+    _backup_copy("new_20260103_100000", "jobs.json", b"{not json", age=100)             # the newest is damaged too
+    _backup_copy("new_20260103_100000", "profile.json", b"{}", age=50)                  # another file is not a copy of it
+    data, copy = vault.newest_good_copy(config.JOBS_JSON)
+    assert copy == good and data == b'[{"id": "mid"}]'
+
+
+def test_newest_good_copy_is_none_without_a_usable_copy(isolate_data):
+    config.ensure_dirs()
+    assert vault.newest_good_copy(config.JOBS_JSON) is None                            # no backups folder at all
+    _backup_copy("a_20260101_100000", "responses.db", b"not a database", age=10)
+    assert vault.newest_good_copy(config.RESPONSES_DB) is None
+
+
+def test_set_aside_moves_the_file_and_never_deletes_it(isolate_data):
+    config.ensure_dirs()
+    config.JOBS_JSON.write_bytes(b"damaged bytes")
+    kept = vault.set_aside(config.JOBS_JSON, "damaged")
+    assert not config.JOBS_JSON.exists() and kept.parent == vault.backups_dir() / "damaged"
+    assert kept.read_bytes() == b"damaged bytes" and kept.name.startswith("jobs.") and kept.suffix == ".json"
+    assert vault.set_aside(config.JOBS_JSON, "damaged") is None                         # nothing there any more

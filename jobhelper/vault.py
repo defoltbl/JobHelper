@@ -199,13 +199,12 @@ def data_key() -> bytes:
     if stored:
         key = _decode_key(stored)
         if marker.get("key_id") and marker["key_id"] != _key_id(key):
-            raise VaultError("The key in the Keychain does not match this data. Paste your recovery key in the Account card "
-                             "(or run: python status.py security restore-key).")
+            raise VaultError("The key in the Keychain does not match this data. Paste your recovery key in the Account card.")
     else:
         if marker.get("key_id") or any(file_is_encrypted(path) for path in data_files()):
             # (the second test: the note of the key, vault.json, is gone but the data is plainly encrypted)
             raise VaultError("This data is encrypted, but its key is not in the Keychain. Paste your recovery key in the "
-                             "Account card (or run: python status.py security restore-key).")
+                             "Account card.")
         key = os.urandom(32)
         keychain().set(KEY_ACCOUNT, base64.urlsafe_b64encode(key).decode("ascii"))
     if not marker.get("key_id"):
@@ -406,6 +405,35 @@ def restore_backup(src: Path, dest: Path) -> int:
     return done
 
 
+def set_aside(path: Path, folder: str) -> Path | None:
+    """Move a file, as it is on disk, into backups/<folder>/ with a time-stamped name (a damaged file that is
+    replaced is kept there, never deleted). Returns where it went, or None when there was no file."""
+    path = Path(path)
+    if not path.is_file():
+        return None
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dest = backups_dir() / folder / f"{path.stem}.{stamp}{path.suffix}"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    path.replace(dest)
+    return dest
+
+
+def newest_good_copy(path: Path) -> tuple[bytes, Path] | None:
+    """The newest backup copy of a data file that decrypts and opens as what it is (JSON, a database):
+    (its plain bytes, the backup file), or None when no copy is usable."""
+    path = Path(path)
+    names = {path.name, path.name + BACKUP_SUFFIX}
+    copies = [p for p in backups_dir().rglob("*") if p.is_file() and p.name in names] if backups_dir().is_dir() else []
+    for copy in sorted(copies, key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            data = read_bytes(copy)
+        except Exception:  # noqa: BLE001 - a copy that cannot be read is skipped
+            continue
+        if not _usable(path.name, data):
+            return data, copy
+    return None
+
+
 # ── one call that brings a data folder up to date ───────────────────────────
 def protect_all() -> dict:
     """Move secrets to the Keychain, encrypt data files and backups, and take the
@@ -457,7 +485,7 @@ def restore_test() -> dict:
     import shutil
     import tempfile
     if state() != "ok":
-        raise VaultError("Protection is not active, so there is nothing to test. Run: python status.py security protect")
+        raise VaultError("Protection is off on this Mac, so there are no encrypted backups to test.")
     live = {p.name: read_bytes(p) for p in data_files() if Path(p).is_file()}
     backup = make_backup("restore_test")
     scratch = Path(tempfile.mkdtemp(prefix="jobhelper-restore-"))

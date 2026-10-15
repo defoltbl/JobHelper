@@ -470,6 +470,13 @@ class JobSlots:
         """The start-up check; the window passes what its connection check found about Claude."""
         return self._api.self_check(bool(claude_signed_in))
 
+    @Slot(str, result="QVariantMap")
+    def fixProblem(self, action):
+        """The button on the start-up check's line: repair the statuses, or restore a damaged file from a backup."""
+        if self._running:
+            return {"ok": False, "msg": "A search or scan is running. Try again when it has finished."}
+        return self._api.fix_problem(action)
+
     @Slot(result="QVariantList")
     def changelog(self):
         return self._api.changelog()

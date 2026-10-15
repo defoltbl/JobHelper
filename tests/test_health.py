@@ -37,8 +37,10 @@ def test_a_damaged_job_list_and_database_are_named_with_the_way_out(healthy):
     vault.write_text(config.JOBS_JSON, "{not json")
     config.RESPONSES_DB.write_bytes(b"JHENC1\ngarbage")
     report = health.run(True)
-    assert "damaged" in _named(report, "Job list")["problem"] and "data/backups" in _named(report, "Job list")["problem"]
+    assert "damaged" in _named(report, "Job list")["problem"] and "Restore from backup" in _named(report, "Job list")["problem"]
+    assert _named(report, "Job list")["action"] == "restore_jobs" and _named(report, "Replies")["action"] == "restore_replies"
     assert _named(report, "Replies")["ok"] is False
+    assert report["action"] == "restore_jobs" and report["action_label"] == "Restore from backup"     # the first problem's button
     assert report["problems"] == 2 and report["message"].startswith("2 things need your attention. The first: ")
 
 
@@ -48,9 +50,9 @@ def test_a_missing_key_is_reported_once_per_file_it_blocks(healthy, monkeypatch)
     monkeypatch.setattr(vault, "state", lambda: "locked")
     monkeypatch.setattr(vault, "data_key", locked)
     report = health.run(True)
-    assert "restore-key" in _named(report, "Data key")["problem"]
-    assert "restore-key" in _named(report, "Job list")["problem"]
-    assert report["ok"] is False
+    assert "Account card" in _named(report, "Data key")["problem"]
+    assert "Account card" in _named(report, "Job list")["problem"]
+    assert report["ok"] is False and report["action"] == ""                    # only you can paste the key: no button
 
 
 def test_a_missing_cv_is_a_problem_but_missing_rules_and_template_are_not(healthy, monkeypatch):
@@ -69,7 +71,34 @@ def test_a_job_with_a_status_the_app_does_not_know_is_reported(healthy):
     jobs = store.load_jobs() + [store.new_job(id="lost", title="Dev", company="Quiet Lake", status="applied")]
     store.save_jobs(jobs)
     problem = _named(health.run(True), "Job list")["problem"]
-    assert "1 job has a status the app does not know" in problem and "Quiet Lake" in problem and "repair-statuses" in problem
+    assert "1 job has a status the app does not know" in problem and "Quiet Lake" in problem and "Select Repair" in problem
+    report = health.run(True)
+    assert report["action"] == "repair_statuses" and report["action_label"] == "Repair"
+
+
+def _messages(module) -> list[str]:
+    """The strings of a module that are not docstrings: what it can say to you."""
+    import ast
+    import inspect
+    tree = ast.parse(inspect.getsource(module))
+    docs = {id(node.body[0].value) for node in ast.walk(tree)
+            if isinstance(node, (ast.Module, ast.FunctionDef, ast.ClassDef)) and node.body
+            and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant)}
+    return [node.value for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs]
+
+
+def test_no_message_names_a_terminal_command():
+    """The check and the key messages are read in the window: what to do is always something in the window."""
+    from jobhelper import agent2_search
+    for module in (health, vault, agent2_search):
+        said = [m for m in _messages(module) if "status.py" in m or "run.py" in m or "Run: python" in m]
+        assert said == [], f"{module.__name__}: {said}"
+
+
+def test_all_well_offers_no_button(healthy):
+    report = health.run(True)
+    assert report["action"] == "" and report["action_label"] == "" and all(c["action"] == "" for c in report["checks"])
 
 
 def test_changed_rule_files_and_damaged_options(healthy, monkeypatch):

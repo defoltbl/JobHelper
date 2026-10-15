@@ -3,6 +3,11 @@
 The newest changes are first. The Help window in the app shows this file under "What changed".
 Format: a `## date` line, then one `- ` line per change; `**words**` are shown in bold.
 
+## 16 October 2026
+
+- The red line of the start-up check now has a button that fixes the problem: **Repair** gives jobs with an unknown status a status the app knows, and **Restore from backup** puts back the newest copy of a damaged job list or replies database. The line becomes green when the fix is done.
+- Messages about the data key, backups and the search city no longer tell you to type a command. They tell you **what to do in the window**.
+
 ## 15 October 2026
 
 - **Interview preparation** now opens as two Word documents: one for a talk with HR, one for a talk with a specialist. Both go in this order: the company, you, your projects and skills, the questions they may ask you, and the questions you can ask them.

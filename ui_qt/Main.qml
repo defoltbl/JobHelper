@@ -63,6 +63,13 @@ ApplicationWindow {
     property bool connChecked: false  // first connection check has come back
     property var healthData: ({ ok: true, checks: [], problems: 0, message: "" })   // the start-up self-check
     property bool healthHidden: false
+    property string healthNote: ""         // what the start-up check's button did (or why it did not)
+    property bool healthNoteOk: false
+    function fixHealth() {
+        var r = bridge.fixProblem(healthData.action || "");
+        healthNote = r.msg || ""; healthNoteOk = r.ok === true;
+        if (r.ok === true) { healthHidden = false; reloadAll(); }     // the check runs again with the connections
+    }
     property bool healthRan: false
     function showHealth() {
         var rows = (healthData.checks || []).map(function (c) {

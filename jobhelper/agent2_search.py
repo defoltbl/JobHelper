@@ -439,7 +439,7 @@ def search(
     asking for … years"). None means: decide from the level in the CV.
     """
     if not str(where or "").strip():
-        raise RuntimeError("No city to search in. Choose one in the app's Options (or pass --where to run.py).")
+        raise RuntimeError("No city to search in. Choose one in the app's Options.")
     sources = job_sources.sources_for(source, max_age_days=max_age_days)
     # What a source read is remembered while one search asks its roles, not from one search to the next:
     # the app can stay open for days.

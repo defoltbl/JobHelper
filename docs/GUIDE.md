@@ -386,6 +386,20 @@ replies, the settings, the rule files, your master CV and the folders. If it fin
 a red line at the top tells you what is wrong and how to fix it. **Hide** removes the line
 until the next start. **Show all** appears when the app found more than one problem.
 
+For some problems, the line has a button that fixes the problem:
+
+- **Repair** appears when a job has a status that the app does not know. That job is in no
+  list. Select **Repair**. The app makes a backup first. Then it gives each job a status that
+  it knows and adds a note to the job.
+- **Restore from backup** appears when the job list or the replies database is damaged. Select
+  **Restore from backup**. The app puts back the newest backup copy that opens. It moves the
+  damaged file into the backups, in the folder "damaged". Changes after the time of that copy
+  are not in it.
+
+When the fix is done, the line becomes green and tells you what changed. If the fix is not
+possible, a red sentence under the line tells you why. You cannot use these buttons while a
+search or a scan runs.
+
 ### The right column
 
 Figure 3.4 shows the Usage left card and the Last run card.
@@ -2133,6 +2147,8 @@ Table 20.1 lists problems with starting and signing in.
 | What you see | Cause | What to do |
 |---|---|---|
 | A red line at the top of the main window | The start-up check found something | The line says what and how to fix it |
+| "Jobs have a status the app does not know" | A job has a status from an older version or from a change by hand | Select **Repair** on the red line |
+| "Your job list is damaged" | The file of the job list cannot be read | Select **Restore from backup** on the red line |
 | A button does nothing | A required row of the Account card is red | Open the **Account** chip and make the rows green |
 | "A paid API key is set" | A paid Claude key is set on this Mac | Ask whoever set up the app to remove it, then start the app again |
 

@@ -1004,3 +1004,85 @@ def test_mark_applied_is_for_a_new_job_and_notes_that_you_did_it(api):
 def test_a_place_in_a_list_from_the_window_is_checked(api):
     assert [api_insights.list_position(i, 3) for i in (0, 2, 2.0, "1", 3, -1, 1.5, None, "x", True)] == [0, 2, 2, 1, -1, -1, -1, -1, -1, -1]
     assert api.open_filtered("x") == {"ok": False} and api.bring_back(99)["ok"] is False
+
+
+# ── the start-up check's button: repair the statuses, restore a damaged file ──
+def test_repair_statuses_backs_up_then_gives_each_job_a_known_status(api):
+    _seed(store.new_job(id="a", title="Dev", company="Acme", status="applied", date_applied="2026-10-01"),
+          store.new_job(id="b", title="QA", company="Beta", status="maybe"),
+          store.new_job(id="c", title="Ops", company="Gamma", status="waiting"))
+    result = api.fix_problem("repair_statuses")
+    assert result["ok"] is True and result["fixed"] == 2 and "Repaired 2 jobs" in result["msg"]
+    jobs = {j["id"]: j for j in store.load_jobs()}
+    assert (jobs["a"]["status"], jobs["b"]["status"], jobs["c"]["status"]) == ("waiting", "found", "waiting")
+    assert 'Status was "maybe"' in jobs["b"]["notes"] and "Status was" not in (jobs["c"].get("notes") or "")
+    backups = list(vault.backups_dir().glob("before_status_repair_*"))
+    assert len(backups) == 1 and (backups[0] / "jobs.json.enc").is_file()
+    again = api.repair_statuses()
+    assert again["ok"] is True and again["fixed"] == 0 and len(list(vault.backups_dir().glob("before_status_repair_*"))) == 1
+
+
+def test_repair_statuses_says_why_when_the_list_cannot_be_read(api):
+    config.ensure_dirs()
+    vault.write_text(config.JOBS_JSON, "{not json")
+    result = api.repair_statuses()
+    assert result["ok"] is False and result["msg"].startswith("Your job list could not be read")
+
+
+def _copy_in_backups(name, data, age):
+    import os
+    import time
+    path = vault.backups_dir() / f"copy_{age}" / (name + vault.BACKUP_SUFFIX)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(vault.encrypt(data))
+    os.utime(path, (time.time() - age,) * 2)
+    return path
+
+
+def test_restore_puts_back_the_newest_copy_that_opens_and_keeps_the_damaged_file(api):
+    config.ensure_dirs()
+    _copy_in_backups("jobs.json", json.dumps([store.new_job(id="old", title="Dev", company="Acme")]).encode(), age=500)
+    _copy_in_backups("jobs.json", json.dumps([store.new_job(id="good", title="Dev", company="Acme")]).encode(), age=300)
+    _copy_in_backups("jobs.json", b"{also damaged", age=100)
+    vault.write_text(config.JOBS_JSON, "{not json")
+    damaged = config.JOBS_JSON.read_bytes()
+    result = api.fix_problem("restore_jobs")
+    assert result["ok"] is True and "job list is back as it was on" in result["msg"]
+    assert [j["id"] for j in store.load_jobs()] == ["good"]
+    kept = list((vault.backups_dir() / "damaged").iterdir())
+    assert len(kept) == 1 and kept[0].read_bytes() == damaged                 # moved aside, never deleted
+
+
+def test_restore_of_the_replies_database(api):
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE seen (msg_id TEXT PRIMARY KEY)")
+    conn.execute("INSERT INTO seen VALUES ('m1')")
+    conn.commit()
+    image = conn.serialize()
+    conn.close()
+    config.ensure_dirs()
+    _copy_in_backups("responses.db", image, age=60)
+    config.RESPONSES_DB.write_bytes(b"JHENC1\ngarbage")
+    assert api.restore_data("replies")["ok"] is True
+    from jobhelper import db
+    assert db.is_seen("m1") is True
+
+
+def test_restore_without_a_usable_copy_changes_nothing(api):
+    config.ensure_dirs()
+    vault.write_text(config.JOBS_JSON, "{not json")
+    before = config.JOBS_JSON.read_bytes()
+    result = api.restore_data("jobs")
+    assert result["ok"] is False and "No backup copy of your job list opens" in result["msg"]
+    assert config.JOBS_JSON.read_bytes() == before and not (vault.backups_dir() / "damaged").exists()
+
+
+@pytest.mark.parametrize("action", ["", "delete_everything", None, 3])
+def test_an_unknown_fix_is_refused(api, action):
+    result = api.fix_problem(action)
+    assert result["ok"] is False and "no fix" in result["msg"]
+
+
+def test_restore_of_something_else_is_refused(api):
+    assert api.restore_data("profile")["ok"] is False

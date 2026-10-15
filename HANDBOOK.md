@@ -230,6 +230,9 @@ data/                your data; only the *.example.* files are in git
   first child of each scroll area (it also covers the space under short content); a test fails for a window without one.
 - **An answer sent from a worker thread must carry plain values.** The start-up check travels inside the
   connection answer as text (`info.health`, JSON) and the window parses it.
+- **Opening the real window uses up reminders.** `Bridge.remind` marks the reminders of the day as given.
+  A read-only check of the real window must replace `ui_api.Api.due_reminders` with an empty list; a
+  check on a day with an interview once used up that day's morning reminder.
 - **Under test the window's loop keeps Python to itself for one whole wait**, so a worker only moves
   between two waits. `Ui.wait` waits in short steps for that reason; do not call `QTest.qWait` directly.
 - **Rows made by a `Repeater` are not found by `findChild`.** Use `ui.seen(part)` / `ui.drawn(name)`.

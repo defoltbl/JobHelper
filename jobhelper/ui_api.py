@@ -82,6 +82,9 @@ class Api:
     backup_all = _Via("_system")
     backup_check = _Via("_system")
     backup_export = _Via("_system")
+    fix_problem = _Via("_system")
+    repair_statuses = _Via("_system")
+    restore_data = _Via("_system")
 
     # ── Options and the career-site list (OptionsService) ──
     followup_days = _Via("_settings")

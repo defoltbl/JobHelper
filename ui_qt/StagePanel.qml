@@ -23,14 +23,23 @@ Rectangle {
     ColumnLayout {
         anchors.fill: parent; anchors.margins: 16; spacing: 14
         // one clear line when the start-up check found something; nothing when all is well
-        Rectangle { objectName: "healthBanner"; visible: win.healthData.ok === false && !win.healthHidden
-            Layout.fillWidth: true; radius: 10; color: theme.critbg; border.color: theme.crit; border.width: 1
+        Rectangle { id: healthBanner; objectName: "healthBanner"
+            // green when the button put the problem right; red while the check finds something
+            readonly property bool fixed: win.healthData.ok !== false && win.healthNoteOk && win.healthNote !== ""
+            visible: (win.healthData.ok === false && !win.healthHidden) || fixed
+            Layout.fillWidth: true; radius: 10; color: fixed ? theme.goodbg : theme.critbg; border.color: fixed ? theme.good : theme.crit; border.width: 1
             implicitHeight: hbRow.implicitHeight + 16
             RowLayout { id: hbRow; x: 12; y: 8; width: parent.width - 24; spacing: 10
-                Text { objectName: "healthText"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 12
-                    text: win.healthData.message || "" }
-                SmallButton { visible: (win.healthData.problems || 0) > 1; text: "Show all"; onClicked: win.showHealth() }
-                SmallButton { text: "Hide"; onClicked: win.healthHidden = true }
+                ColumnLayout { Layout.fillWidth: true; spacing: 4
+                    Text { objectName: "healthText"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.ink; font.pixelSize: 12
+                        text: healthBanner.fixed ? win.healthNote : (win.healthData.message || "") }
+                    Text { objectName: "healthNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: win.healthNoteOk ? theme.good : theme.crit
+                        font.pixelSize: 12; visible: !healthBanner.fixed && win.healthNote !== ""; text: win.healthNote }
+                }
+                SmallButton { objectName: "healthFix"; visible: !healthBanner.fixed && (win.healthData.action_label || "") !== ""
+                    text: win.healthData.action_label || ""; onClicked: win.fixHealth() }
+                SmallButton { visible: !healthBanner.fixed && (win.healthData.problems || 0) > 1; text: "Show all"; onClicked: win.showHealth() }
+                SmallButton { text: "Hide"; onClicked: { win.healthHidden = true; win.healthNote = ""; win.healthNoteOk = false } }
             }
         }
         RowLayout {
