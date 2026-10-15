@@ -143,7 +143,7 @@ class RunSlots:
             text = "Scored %d jobs again: %d changed (%d lower, %d higher)." % (stats["scored"], len(changed), lower, len(changed) - lower)
             if stats["failed"]:
                 text += " %d could not be scored and keep their old score." % stats["failed"]
-            stale = sum(1 for j in jobs if self._api._stale_docs(j))
+            stale = sum(1 for j in jobs if self._api.stale_docs(j))
             if stale:
                 text += " %d now below your limit still %s documents (marked in New Jobs)." % (stale, "has" if stale == 1 else "have")
             self.runFinished.emit("rescore", text)

@@ -2,34 +2,125 @@
 (moving them to the backup, putting them back, removing old copies) and "not interested"."""
 from __future__ import annotations
 
+
+from . import agent1_cv
+
 import os
 from datetime import date, datetime, timedelta
 
-from . import (agent2_search, agent3_letters, config, housekeeping, store, vault)
+from . import agent2_search, agent3_letters, config, housekeeping, store, vault
 from .api_base import _guarded, textfmt_clean
 
 
-class DocumentsApi:
-    """Mixed into `ui_api.Api`; uses its `_change`, `_cv_text`, `_open` and `live`."""
+class DocumentsService:
+    """Scores and documents: scoring again, writing a CV and a letter on request, and documents left from a higher score."""
+
+    def __init__(self, app, editor, cv, desktop) -> None:
+        """`app` is the facade (`ui_api.Api`): what this service needs from the others is asked through it."""
+        self._app, self._editor, self._cv, self._desktop = app, editor, cv, desktop
+
+    def rescore_ids(self, job_id=""):
+        """Which jobs "Score again" covers: the one given, or every new job that has a score."""
+        jobs = store.load_jobs()
+        if job_id:
+            j = store.find(jobs, job_id)
+            return [j["id"]] if j and j.get("status") in store.LEAD_STATUSES and j.get("match_score") is not None else []
+        return [j["id"] for j in jobs if j.get("status") in store.LEAD_STATUSES and j.get("match_score") is not None]
+
+    def rescore_plan(self):
+        """How much "Score all again" would ask: {jobs, calls}."""
+        n = len(self.rescore_ids())
+        return {"jobs": n, "calls": -(-n // max(1, int(config.SCORE_BATCH)))}
+
+    def rescore_one(self, job_id):
+        """Score one new job again now (one Claude call). Only the score and its reason change."""
+        ids = self.rescore_ids(job_id)
+        if not ids:
+            return {"ok": False, "msg": "Only a new job that already has a score can be scored again."}
+        profile = agent1_cv.load_profile() or {}
+        jobs = store.load_jobs()
+        try:
+            stats = agent3_letters.rescore(jobs, ids, profile, self._cv.text())
+        except Exception as e:  # noqa: BLE001 - shown to the user as the reason (the limit, no connection)
+            return {"ok": False, "msg": str(e)}
+        if not stats["scored"]:
+            return {"ok": False, "msg": "Claude gave no usable score. Try again in a moment."}
+        fresh = store.find(jobs, job_id)
+        keys = ("match_score", "match_reason", "score_before", "score_capped", "match_tier", "last_update")
+
+        def go(current, j):          # put on a fresh copy: the call took a few seconds
+            for k in keys:
+                if k in fresh:
+                    j[k] = fresh[k]
+                else:
+                    j.pop(k, None)
+        self._editor.change(job_id, go)
+        change = stats["changed"][0] if stats["changed"] else None
+        return {"ok": True, "score": fresh["match_score"], "before": change["before"] if change else fresh["match_score"]}
+
+    def can_write_documents(self, j) -> str:
+        """'' when a CV and a letter can be written for this new job now; otherwise why not."""
+        if not j or j.get("status") not in store.LEAD_STATUSES:
+            return "Documents are written for a new job only."
+        if j.get("tailored_cv_file") and j.get("cover_letter_file"):
+            return "This job already has its CV and its letter."
+        if agent3_letters.text_basis(j) == "title":
+            return "The posting's text is missing, and a letter written from a title alone would be generic. Read the posting again or paste its text first."
+        if not self._cv.text().strip():
+            return "Your master CV could not be read. Choose it in the Account card first."
+        return ""
+
+    def write_documents(self, job_id):
+        """Write the adapted CV and the cover letter for one new job now, whatever its score: the person
+        asked for them. A letter that is already there (their own, or an earlier one) is left as it is."""
+        j = store.find(store.load_jobs(), job_id)
+        why = self.can_write_documents(j)
+        if why:
+            return {"ok": False, "msg": why}
+        work = dict(j)
+        try:
+            cv_path = agent1_cv.find_cv()
+            done = agent3_letters.generate_for(work, self._cv.text(), cv_path)
+        except Exception as e:  # noqa: BLE001 - shown to the person as the reason (the limit, no connection)
+            return {"ok": False, "msg": str(e) or "The documents could not be written."}
+        if not done["cv"] and not done["letter"]:
+            return {"ok": False, "msg": "Nothing could be written this time. Try again in a moment."}
+        fresh = {k: v for k, v in work.items() if j.get(k) != v}
+
+        def go(jobs, current):          # on a fresh copy: the writing took a while
+            current.update(fresh)
+        self._editor.change(job_id, go)
+        made = " and ".join(name for name, key in (("the CV", "cv"), ("the letter", "letter")) if done[key])
+        missing = [name for name, key, had in (("the CV", "cv", j.get("tailored_cv_file")), ("the letter", "letter", j.get("cover_letter_file")))
+                   if not done[key] and not had]
+        return {"ok": True, "cv": done["cv"], "letter": done["letter"],
+                "msg": f"Written: {made}." + (f" Not written: {' and '.join(missing)}; try again in a moment." if missing else "")}
+
+    def score_anyway(self, job_id):
+        """Send a job the free pre-filter skipped to scoring on the next run."""
+        def go(jobs, j):
+            j["prefilter_override"] = True
+            j.pop("prefilter", None)
+        return self._editor.change(job_id, go)
 
     # ── what a score rests on, and documents left over from a higher score ──
     MIN_PASTED, MAX_PASTED = 200, 20000
 
-    def _threshold(self) -> int:
+    def threshold(self) -> int:
         try:
-            return int(self.options().get("threshold") or config.DEFAULT_THRESHOLD)
+            return int(self._app.options().get("threshold") or config.DEFAULT_THRESHOLD)
         except (TypeError, ValueError):
             return config.DEFAULT_THRESHOLD
 
-    def _stale_docs(self, j, threshold=None) -> bool:
+    def stale_docs(self, j, threshold=None) -> bool:
         """A new job whose letter or CV was written by the app when the score was higher than your limit is now."""
         if j.get("status") not in store.LEAD_STATUSES or not isinstance(j.get("match_score"), int):
             return False
-        threshold = self._threshold() if threshold is None else threshold
+        threshold = self.threshold() if threshold is None else threshold
         return j["match_score"] < threshold and (agent3_letters._generated_letter(j) or bool(j.get("tailored_cv_file")))
 
     @staticmethod
-    def _score_before(j):
+    def score_before(j):
         """The score a job had before it was scored again (None if it never changed)."""
         before = j.get("score_before")
         return before if isinstance(before, int) and not isinstance(before, bool) and before != j.get("match_score") else None
@@ -37,9 +128,9 @@ class DocumentsApi:
     @_guarded(list)
     def stale_docs_list(self):
         """New jobs that still have a letter or CV from a score that was above your limit: [{id, title, company, score}]."""
-        threshold = self._threshold()
+        threshold = self.threshold()
         return [{"id": j["id"], "title": j["title"], "company": j["company"], "score": j["match_score"]}
-                for j in store.load_jobs() if self._stale_docs(j, threshold)]
+                for j in store.load_jobs() if self.stale_docs(j, threshold)]
 
     def shelve_all_docs(self, expected=-1):
         """Move the documents of every job in stale_docs_list() to the backup. `expected` is how many
@@ -77,7 +168,7 @@ class DocumentsApi:
             if j.get("hold") == agent3_letters.NO_TEXT:
                 j.pop("hold", None)
             j["doc_attempts"] = 0
-        return self._jobs.change(job_id, go, render=False)
+        return self._editor.change(job_id, go, render=False)
 
     def reread_posting(self, job_id):
         """Try to read a posting's text from its board again (no Claude). Score it again afterwards."""
@@ -95,7 +186,7 @@ class DocumentsApi:
             if job.get("hold") == agent3_letters.NO_TEXT:
                 job.pop("hold", None)
             job["doc_attempts"] = 0
-        saved = self._jobs.change(job_id, go, render=False)
+        saved = self._editor.change(job_id, go, render=False)
         return {"ok": bool(saved.get("ok")), "chars": len(text)}
 
     SHELF = "below_your_limit"        # the folder in backups/ that documents below your limit go to
@@ -141,11 +232,11 @@ class DocumentsApi:
                 j["status"] = "found"
             j["apply_steps"] = []
             j["last_update"] = date.today().isoformat()
-        result = self._jobs.change(job_id, go)
+        result = self._editor.change(job_id, go)
         return {"ok": True, "moved": moved.get("n", 0)} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "Couldn't move the documents."}
 
     @staticmethod
-    def _shelved(j):
+    def shelved(j):
         """The note of documents moved to the backup for a job, while they can still be put back: no
         other documents were written for it since, and it is a new job or one you applied to. (A reply
         can show that you applied to a job whose documents were moved; those are the ones you sent.)"""
@@ -165,7 +256,7 @@ class DocumentsApi:
         def go(jobs, j):
             if "record" in done:                  # the same edit on a running search's own list: the files are already back
                 return back(j, done["record"])
-            record = self._shelved(j)
+            record = self.shelved(j)
             if not record:
                 if isinstance(j.get("shelved"), dict) and j.get("status") in store.LEAD_STATUSES | store.APPLICATION_STATUSES:
                     return {"ok": False, "msg": "Other documents were written for this job since. The earlier ones stay in the backup."}
@@ -202,7 +293,7 @@ class DocumentsApi:
             j["apply_steps"] = list(record.get("apply_steps") or [])
             j["last_update"] = date.today().isoformat()
             j.pop("shelved", None)
-        result = self._jobs.change(job_id, go)
+        result = self._editor.change(job_id, go)
         return {"ok": True, "restored": done.get("n", 0)} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "Couldn't put the documents back."}
 
     # ── moved documents that have grown old ─────────────────────
@@ -262,7 +353,7 @@ class DocumentsApi:
         """The most recent batch of documents moved to the backup that can still be put back, for
         UNDO_DAYS: {when, batch, jobs: [{id, title, company}]} ({} when there is none)."""
         oldest = (datetime.now() - timedelta(days=self.UNDO_DAYS)).isoformat(timespec="seconds")
-        rows = [(r, j) for j in store.load_jobs() for r in [self._shelved(j)]
+        rows = [(r, j) for j in store.load_jobs() for r in [self.shelved(j)]
                 if r and isinstance(r.get("when"), str) and r["when"] >= oldest and isinstance(r.get("batch"), str)]
         if not rows:
             return {}
@@ -312,7 +403,7 @@ class DocumentsApi:
                 j["cover_letter_file"] = ""
             j["tailored_cv_file"], j["match_tier"] = "", ""
             j["status"], j["last_update"] = store.NOT_INTERESTED, date.today().isoformat()
-        return self._jobs.change(job_id, go)
+        return self._editor.change(job_id, go)
 
     def restore_job(self, job_id):
         """Undo "not interested": the job is a lead again (documents are written on the next run)."""
@@ -321,7 +412,7 @@ class DocumentsApi:
                 return {"ok": False, "msg": "That job is not in the not-interested list."}
             j["status"], j["last_update"] = "found", date.today().isoformat()
             j["doc_attempts"] = 0
-        return self._jobs.change(job_id, go)
+        return self._editor.change(job_id, go)
 
     @_guarded(list)
     def dismissed(self):

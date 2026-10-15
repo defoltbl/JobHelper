@@ -1,19 +1,27 @@
 """The assistant's part of the window's back end: your details, and filling in the form that is open in Chrome."""
 from __future__ import annotations
 
+
+
 import os
 import secrets
-import time
 from datetime import date
 from typing import Any
 
-from . import agent1_cv, answer_memory, assistant, assistant_brain, chrome, config, cover_letter, details, form_answers, form_choices, form_fill, mailhosts, salary, store
+from . import (agent1_cv, answer_memory, assistant, assistant_brain, chrome, config, cover_letter, details, form_answers,
+    form_choices, form_fill, mailhosts, salary, store)
 from .api_base import _guarded
 
 SHOWN = 90      # characters of a filled-in value shown in the report
 
 
-class AssistantApi:
+class AssistantService:
+    """"""
+
+    def __init__(self, app, editor, cv, desktop) -> None:
+        """`app` is the facade (`ui_api.Api`): what this service needs from the others is asked through it."""
+        self._app, self._editor, self._cv, self._desktop = app, editor, cv, desktop
+        self._last_fill = None      # what the last fill found, for the buttons under the answer
     # ── My details ──────────────────────────────────────────────
     @_guarded(dict)
     def my_details(self):
@@ -125,7 +133,7 @@ class AssistantApi:
             return {"ok": False, "msg": "That is not a web address I can open."}
         if mailhosts.never_used(host):
             return {"ok": False, "msg": "This app does not work with Russian services, so I do not open this site."}
-        self._browser()
+        self._app.browser()
         try:
             chrome.open_tab(url)
         except chrome.ChromeError as e:
@@ -174,7 +182,7 @@ class AssistantApi:
     def assistant_watch(self):
         """Where the form in front stands now: quiet on any trouble (it is asked every few seconds while the window waits)."""
         try:
-            self._browser()
+            self._app.browser()
             return {"ok": True, **form_fill.watch_answer(chrome.run(form_fill.WATCH))}
         except Exception:  # noqa: BLE001 - not being able to look is not something to report
             return {"ok": False, "url": "", "sign": "", "empty": 0}
@@ -182,10 +190,10 @@ class AssistantApi:
     def assistant_learn(self):
         """Take over what the person changed on the page in the answers the assistant wrote: kept with the job and
         remembered for the same question elsewhere. Only those fields are read back, nothing else on the page."""
-        last = getattr(self, "_last_fill", None)
+        last = self._last_fill
         if not last or not last.get("items"):
             return {"ok": False, "msg": "There is nothing to compare with yet. Ask me to fill in a form first."}
-        self._browser()
+        self._app.browser()
         try:
             now = form_fill.values_answer(chrome.run(form_fill.values_script([i["n"] for i in last["items"]], last["url"])))
         except chrome.ChromeError as e:
@@ -209,7 +217,7 @@ class AssistantApi:
                 have = {it["question"].lower() for it in items}
                 items += [{"question": i["question"], "answer": i["answer"], "check": ""} for i in learned if i["question"].lower() not in have]
                 j["form_answers"] = {"made": (j.get("form_answers") or {}).get("made") or form_answers.stamp(), "items": items}
-            self._jobs.change(last["job_id"], keep, render=False)
+            self._editor.change(last["job_id"], keep, render=False)
         if not learned:
             return {"ok": True, "learned": 0, "say": "You changed none of the answers I wrote, so there is nothing new to remember."}
         return {"ok": True, "learned": len(learned),
@@ -229,8 +237,8 @@ class AssistantApi:
     def _letter_text(self, j) -> str:
         """The body of the letter the app wrote for this job ('' when there is none it can read)."""
         try:
-            if j and self._editable_letter(j):
-                return "\n\n".join(p for p in cover_letter.read_letter(self._letter_path(j))["paragraphs"] if p.strip())
+            if j and self._app.editable_letter(j):
+                return "\n\n".join(p for p in cover_letter.read_letter(self._app.letter_path(j))["paragraphs"] if p.strip())
         except Exception:  # noqa: BLE001 - no letter is not a failure: the field is left to the person
             pass
         return ""
@@ -259,7 +267,7 @@ class AssistantApi:
         def keep(jobs, j):          # may run twice (the running search's copy): the result is the same
             items = [i for i in form_answers.tidy((j.get("form_answers") or {}).get("items")) if i["question"].lower() not in new]
             j["form_answers"] = {"made": form_answers.stamp(), "items": items + list(new.values())}
-        self._jobs.change(job["id"], keep, render=False)
+        self._editor.change(job["id"], keep, render=False)
         return {**kept, **{k: v for k, v in new.items() if v["answer"]}}, ""
 
     def _menu(self, n: int, url: str, typed: str = "") -> list[str]:
@@ -359,7 +367,7 @@ class AssistantApi:
         The values of personal and payment fields are not looked at."""
         def no(msg):
             return {"ok": False, "action": "review", "msg": msg}
-        self._browser()
+        self._app.browser()
         try:
             tab = chrome.active_tab()
             host = form_fill.host_of(tab["url"])
@@ -390,7 +398,7 @@ class AssistantApi:
         if cv_text.strip():
             try:
                 seen = {p["field"] for p in problems}
-                problems += [p for p in assistant_brain.review(job, cv_text, self._facts(job), [f for f in fields if not f["private"]], self._pay(job))
+                problems += [p for p in assistant_brain.review(job, cv_text, self._app.facts(job), [f for f in fields if not f["private"]], self._app.pay(job))
                              if p["field"] not in seen]
             except Exception as e:  # noqa: BLE001 - the plain checks are still reported
                 note = f" Claude could not read it against your CV ({str(e) or type(e).__name__}), so only the plain checks were made."
@@ -416,11 +424,6 @@ class AssistantApi:
             out[what] = [path for path in dict.fromkeys(tried) if path.is_file()]
         return out
 
-    def _recently_opened(self) -> str:
-        """The job whose posting you opened from the app within the last two hours ('' = none)."""
-        job_id, when = getattr(self, "_opened", ("", 0.0))
-        return job_id if job_id and time.time() - when < 2 * 3600 else ""
-
     def _job_of_page(self, jobs: list[dict], page: dict[str, Any]):
         """The job a form belongs to, although the form is rarely at the address of its posting (see form_fill.match_job)."""
         found = form_fill.match_job(jobs, page["url"], page["title"], page.get("from", ""))
@@ -429,7 +432,7 @@ class AssistantApi:
                 words = form_fill.page_answer(chrome.run(form_fill.PAGE))["text"][:6000]
             except (chrome.ChromeError, ValueError):
                 words = ""
-            found = form_fill.match_job(jobs, page["url"], page["title"], page.get("from", ""), words, self._recently_opened())
+            found = form_fill.match_job(jobs, page["url"], page["title"], page.get("from", ""), words, self._app.recently_opened())
         return store.find(jobs, found) if found else None
 
     def _attach(self, wanted: list[dict[str, Any]], page: dict[str, Any], job) -> tuple[list[dict], list[dict], bool]:
@@ -488,10 +491,10 @@ class AssistantApi:
         def no(msg, **more):
             return {"ok": False, "action": "fill", "msg": msg, **more}
         mine = details.load()
-        self._browser()
+        self._app.browser()
         if not details.any_given(mine):
             return no("I do not know your details yet. Fill in My details once, save, then ask me again.", action="details")
-        mine["start"] = str(self.options().get("about_start") or "").strip()      # when you can start: said once, under Options, About you
+        mine["start"] = str(self._app.options().get("about_start") or "").strip()      # when you can start: said once, under Options, About you
         try:
             tab = chrome.active_tab()
         except chrome.ChromeError as e:
@@ -622,7 +625,7 @@ class AssistantApi:
         label = f"{job.get('title', '')} at {job.get('company', '')}" if job else ""
         if job and filled and job.get("status") in store.LEAD_STATUSES:
             today = date.today().isoformat()        # so that the app can remind you when a filled form was never marked applied
-            self._jobs.change(job["id"], lambda jobs, j: j.__setitem__("form_filled", today), render=False)
+            self._editor.change(job["id"], lambda jobs, j: j.__setitem__("form_filled", today), render=False)
         # what the assistant itself wrote as answers: the only fields it may read back later, to learn your corrections
         self._last_fill = {"url": page["url"], "job_id": job["id"] if job else "", "company": job.get("company", "") if job else "",
                            "items": [{"n": i["n"], "label": i["label"], "value": i["value"]} for i in fill

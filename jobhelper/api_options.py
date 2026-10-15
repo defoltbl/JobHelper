@@ -1,0 +1,214 @@
+"""Options and the career-site list: reading, checking and saving them, and the figures read from them.
+
+Part of the window's back end: the facade `ui_api.Api` hands calls to this service."""
+from __future__ import annotations
+
+import json
+import re
+
+from . import trouble
+from . import chrome
+from . import agent1_cv, filters, scrapers_ats, config, followup, housekeeping, integrity, places, salary, vault
+
+
+class OptionsService:
+    """Options and the career-site list: reading, checking and saving them, and the figures read from them."""
+
+    def __init__(self, app, editor, cv, desktop) -> None:
+        """`app` is the facade (`ui_api.Api`): what this service needs from the others is asked through it."""
+        self._app, self._editor, self._cv, self._desktop = app, editor, cv, desktop
+
+    # ── one job in full ─────────────────────────────────────────
+    def followup_days(self) -> int:
+        try:
+            return max(0, int(config.ui_settings().get("followup_days", followup.DEFAULT_DAYS)))
+        except (TypeError, ValueError):
+            return followup.DEFAULT_DAYS
+
+    def profession_fields(self, wanted=None):
+        """Which professions the free first look treats as yours, for the roles given (the ones
+        typed in Options, before they are saved): {fields: [...], from_cv: bool}."""
+        from . import prefilter
+        try:
+            profile = agent1_cv.load_profile() or {}
+        except Exception:  # noqa: BLE001 - no CV analysis yet
+            profile = {}
+        wanted = [str(w).strip() for w in (wanted or []) if str(w).strip()] or list(profile.get("target_roles") or [])
+        roles = wanted + list(profile.get("adjacent_roles") or [])
+        from_roles = prefilter.fields_of(roles)
+        return {"fields": from_roles or prefilter.fields_of([], self._cv.text()), "from_cv": not from_roles, "all": list(prefilter.FIELDS)}
+
+    def currencies(self):
+        return list(salary.CURRENCIES)
+
+    def salary_hint(self, where, country):
+        """What the app does when no figure is given, for the line under the field in Options."""
+        home = places.country_of(str(country or "")) or places.country_of(str(where or ""))
+        if home == "czechia" or not (str(where or "").strip() or str(country or "").strip()):
+            return "With 0 the app uses its own estimate, which it has for software roles in Czechia only."
+        return "With 0 no figure is given: the app has no estimate for this country. Answers then leave the salary for you to fill in."
+
+    def country_of(self, city):
+        """The country the app takes a city to be in ("Czechia"), or '' when it does not know the city."""
+        name = places.country_of(str(city or ""))
+        return " ".join(part.capitalize() for part in name.split())
+
+    # ── the last run (shown on the Last run card, also after a restart) ──
+    def last_run(self):
+        try:
+            data = json.loads(vault.read_text(config.DATA_DIR / "last_run.json"))
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError, vault.VaultError):
+            return {}
+
+    def note_run(self, **fields):
+        """Merge the given facts into the saved last-run summary."""
+        data = self.last_run()
+        data.update({k: v for k, v in fields.items() if v is not None})
+        config.ensure_dirs()
+        vault.write_text(config.DATA_DIR / "last_run.json", json.dumps(data, ensure_ascii=False, indent=2))
+        return data
+
+    # ── read / write: options ───────────────────────────────────
+    def options(self):
+        p = config.DATA_DIR / "ui_settings.json"
+        # Seed the search keywords from the CV profile so the user sees (and can
+        # edit) what's actually being searched.
+        try:
+            profile = agent1_cv.load_profile() or {}
+            seed_queries = profile.get("search_queries") or profile.get("target_roles") or []
+            level = profile.get("seniority", "junior")
+            target_roles = [str(r) for r in (profile.get("target_roles") or [])]
+        except Exception:
+            seed_queries, level, target_roles = [], "junior", []
+        defaults = {"where": "", "country": "", "salary_target": 0, "salary_currency": "CZK", "salary_by_role": [], "source": "czech", "include_remote": False, "full_time_only": True,
+                    "all_languages": False, "max_age_days": config.MAX_JOB_AGE_DAYS,
+                    "threshold": config.DEFAULT_THRESHOLD, "min_lead_score": config.MIN_LEAD_SCORE,
+                    "model": config.MODEL, "per_query": 15, "queries": list(seed_queries),
+                    "followup_days": followup.DEFAULT_DAYS, "scan_days": config.IMAP_LOOKBACK_DAYS,
+                    "skip_words": ["intern", "internship"], "keep_words": [],
+                    # what the scorer treats as your direction: starts from the roles read from your CV
+                    "wanted_roles": list(target_roles), "unwanted_roles": [], "my_fields": [],
+                    # start from the level in the CV; the user can change both in Options
+                    "level_words": filters.default_level_words(level), "max_years": filters.default_max_years(level),
+                    "about_right_to_work": "", "about_start": "", "about_experience": "", "notifications": True, "scan_all_folders": False, "assistant_watch": False, "assistant_browser": "chrome", "text_size": 100,
+                    "keep_backups": housekeeping.DEFAULT_KEEP}
+        try:
+            if p.exists():
+                defaults.update(json.loads(vault.read_text(p)))
+        except Exception as e:  # noqa: BLE001 - the defaults are used; the start-up check tells the user
+            trouble.note("reading the saved Options", e)
+        return defaults
+
+    OPTION_NUMBERS = {"salary_target": (0, 100_000_000), "threshold": (0, 100), "min_lead_score": (0, 100), "max_age_days": (0, 3650), "per_query": (1, 100),
+                      "max_years": (0, 60), "keep_backups": (0, 1000), "followup_days": (0, 365), "scan_days": (1, 3650)}
+    OPTION_LISTS = ("queries", "skip_words", "keep_words", "level_words", "wanted_roles", "unwanted_roles", "my_fields")
+    OPTION_TEXTS = {"where": 80, "country": 60, "about_right_to_work": 300, "about_start": 300, "about_experience": config.MAX_EXPERIENCE_NOTES}
+    MAX_LIST, MAX_WORD = 60, 100
+    MODELS = ("sonnet", "opus", "haiku")
+    SOURCES = ("czech", "linkedin", "remote", "careers", "adzuna", "jooble", "all")
+
+    def check_options(self, opts):
+        """(clean options, '') or ({}, what is wrong). The window checks the same things as you type;
+        this is the last word, so nothing unusable is saved whatever sent it."""
+        if not isinstance(opts, dict):
+            return {}, "Those are not Options."
+        clean = dict(opts)
+        for key, (low, high) in self.OPTION_NUMBERS.items():
+            if key in clean:
+                value = clean[key]
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or value != int(value) or not low <= value <= high:
+                    return {}, f"“{key.replace('_', ' ')}” must be a whole number from {low} to {high}."
+                clean[key] = int(value)
+        for key in self.OPTION_LISTS:
+            if key in clean:
+                if not isinstance(clean[key], (list, tuple)):
+                    return {}, f"“{key.replace('_', ' ')}” must be a list of words."
+                words = [str(w).strip() for w in clean[key] if isinstance(w, str) and str(w).strip()]
+                if len(words) > self.MAX_LIST:
+                    return {}, f"“{key.replace('_', ' ')}” has {len(words)} entries; the most is {self.MAX_LIST}."
+                long = next((w for w in words if len(w) > self.MAX_WORD), None)
+                if long:
+                    return {}, f"An entry under “{key.replace('_', ' ')}” is {len(long)} characters long; the most is {self.MAX_WORD}."
+                clean[key] = list(dict.fromkeys(words))
+        for key, limit in self.OPTION_TEXTS.items():
+            if key in clean:
+                text = str(clean[key] or "").strip() if isinstance(clean[key], (str, type(None))) else None
+                if text is None:
+                    return {}, f"“{key.replace('_', ' ')}” must be text."
+                if len(text) > limit:
+                    return {}, f"“{key.replace('_', ' ')}” is {len(text)} characters long; the most is {limit}. Shorten it."
+                clean[key] = text
+        if "salary_by_role" in clean:
+            entries, seen = clean["salary_by_role"], set()
+            if not isinstance(entries, (list, tuple)) or len(entries) > 20:
+                return {}, "“salary by role” takes up to 20 lines."
+            tidy = []
+            for entry in entries:
+                role = str((entry or {}).get("role") or "").strip() if isinstance(entry, dict) else ""
+                amount = (entry or {}).get("amount") if isinstance(entry, dict) else None
+                if not 2 <= len(role) <= 60 or not re.search(r"[^\W\d_]{2}", role):
+                    return {}, "Each line of “salary by role” needs a kind of role in words, for example support."
+                if isinstance(amount, bool) or not isinstance(amount, (int, float)) or amount != int(amount) or not 1 <= amount <= 100_000_000:
+                    return {}, f"The salary for “{role}” must be a whole number above 0."
+                if role.lower() in seen:
+                    return {}, f"“{role}” is in the salary list twice."
+                seen.add(role.lower())
+                tidy.append({"role": role, "amount": int(amount)})
+            clean["salary_by_role"] = tidy
+        if "salary_currency" in clean:
+            code = str(clean["salary_currency"] or "").strip().upper()
+            if code not in salary.CURRENCIES:
+                return {}, "“salary currency” must be one of: " + ", ".join(salary.CURRENCIES) + "."
+            clean["salary_currency"] = code
+        if "text_size" in clean:
+            if isinstance(clean["text_size"], bool) or clean["text_size"] not in config.TEXT_SIZES:
+                return {}, "“size of text and controls” must be one of: " + ", ".join(f"{n}%" for n in config.TEXT_SIZES) + "."
+            clean["text_size"] = int(clean["text_size"])
+        for key, allowed in (("model", self.MODELS), ("source", self.SOURCES)):
+            if key in clean and (not isinstance(clean[key], str) or clean[key] not in allowed):
+                return {}, f"“{key}” must be one of: " + ", ".join(allowed) + "."
+        if "assistant_browser" in clean and (not isinstance(clean["assistant_browser"], str) or clean["assistant_browser"] not in chrome.BROWSERS):
+            return {}, "“assistant browser” must be one of: " + ", ".join(chrome.BROWSERS) + "."
+        if clean.get("country") and not re.fullmatch(r"[^\W\d_]+(?:[ '.\-]+[^\W\d_]+)*\.?", clean["country"]):
+            return {}, "“country” must be a country's name in letters, for example Germany."
+        for key in ("include_remote", "all_languages", "full_time_only", "notifications", "scan_all_folders", "assistant_watch"):
+            if key in clean and not isinstance(clean[key], bool):
+                return {}, f"“{key.replace('_', ' ')}” must be on or off."
+        return clean, ""
+
+    def save_options(self, opts):
+        """Save the Options. What the window does not send (the chosen master CV) is kept."""
+        clean, problem = self.check_options(opts or {})
+        if problem:
+            return {"ok": False, "msg": problem}
+        kept = {k: v for k, v in config.ui_settings().items() if k not in clean}
+        config.ensure_dirs()
+        vault.write_text(config.DATA_DIR / "ui_settings.json",
+                         json.dumps({**kept, **clean}, ensure_ascii=False, indent=2))
+        return {"ok": True}
+
+    # ── career-site companies (data/companies.json) ─────────────
+    def companies(self):
+        p = config.DATA_DIR / "companies.json"
+        try:
+            if p.exists():
+                data = json.loads(p.read_text(encoding="utf-8"))
+                return [{"name": c.get("name", ""), "ats": c.get("ats", ""), "token": c.get("token", "")}
+                        for c in data if isinstance(c, dict) and c.get("ats") and c.get("token")]
+        except Exception as e:  # noqa: BLE001 - an unreadable list is shown as empty
+            trouble.note("reading the career-site list", e)
+        return []
+
+    def save_companies(self, companies):
+        config.ensure_dirs()
+        # The token becomes part of an address the app asks (https://<token>.recruitee.com …): only a plain slug is kept,
+        # so nothing typed or pasted here can send a request anywhere else. The window checks the same as you type.
+        clean = [{"name": " ".join(str(c.get("name") or c["token"]).split())[:60], "ats": c["ats"], "token": c["token"]}
+                 for c in (companies if isinstance(companies, (list, tuple)) else [])
+                 if isinstance(c, dict) and isinstance(c.get("ats"), str) and c["ats"] in scrapers_ats._FETCHERS
+                 and isinstance(c.get("token"), str) and scrapers_ats.is_token(c["token"])][:200]
+        (config.DATA_DIR / "companies.json").write_text(
+            json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
+        integrity.approve(["companies"])          # changed through the app: trusted
+        return {"ok": True, "count": len(clean)}

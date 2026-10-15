@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from jobhelper import api_core, config, store, ui_api, vault
+from jobhelper import api_core, api_documents, api_insights, api_system, config, store, ui_api, vault
 
 
 @pytest.fixture
@@ -106,7 +106,7 @@ def _fake_cli(monkeypatch, stdout="", error=None):
         if error:
             raise error
         return SimpleNamespace(stdout=stdout, stderr="", returncode=0)
-    monkeypatch.setattr(ui_api, "_claude_auth_status", run)
+    monkeypatch.setattr(api_system, "_claude_auth_status", run)
 
 
 def test_connections_reads_account_and_plan(api, monkeypatch):
@@ -483,12 +483,13 @@ def test_one_job_that_cannot_be_moved_does_not_stop_the_others(api, monkeypatch)
     config.ensure_dirs()
     api.save_options({"threshold": 50})
     store.save_jobs([_with_docs("a", 30), _with_docs("b", 20)])
-    real = api.shelve_docs
-    monkeypatch.setattr(api, "shelve_docs", lambda job_id, batch="": {"ok": False, "msg": "no"} if job_id == "a" else real(job_id, batch))
+    real = api_documents.DocumentsService.shelve_docs
+    monkeypatch.setattr(api_documents.DocumentsService, "shelve_docs",
+                        lambda self, job_id, batch="": {"ok": False, "msg": "no"} if job_id == "a" else real(self, job_id, batch))
     got = api.shelve_all_docs(2)
     assert got["ok"] is True and got["jobs"] == 1 and got["files"] == 2
     assert got["failed"] == [{"title": "Dev", "company": "Co a", "why": "no"}]             # each one that failed, with its own reason
-    monkeypatch.setattr(api, "shelve_docs", lambda job_id, batch="": {"ok": False})
+    monkeypatch.setattr(api_documents.DocumentsService, "shelve_docs", lambda self, job_id, batch="": {"ok": False})
     nothing = api.shelve_all_docs()
     assert nothing["ok"] is False and nothing["msg"] == "Couldn't move the documents."
     assert nothing["failed"] == [{"title": "Dev", "company": "Co a", "why": "Couldn't move the documents."}]
@@ -684,18 +685,29 @@ def test_a_closed_posting_is_marked_in_the_list_and_the_window(api):
     assert api.job_detail("lead")["closed"] is True and api.job_detail("open")["closed"] is False and api.job_detail("app")["closed"] is False
 
 
-def test_the_parts_of_the_back_end_do_not_define_the_same_name_twice():
-    """`Api` is put together from several files; a name defined in two of them would silently hide one."""
-    from jobhelper import api_documents, api_interview, api_letters
-    parts = [ui_api.Api, api_documents.DocumentsApi, api_interview.InterviewApi, api_letters.LettersApi]
-    seen = {}
-    for part in parts:
-        for name in vars(part):
-            if name.startswith("__"):
-                continue
-            assert name not in seen, f"{name} is defined in {seen[name].__name__} and in {part.__name__}"
-            seen[name] = part
-    assert len(seen) > 100 and callable(ui_api.Api().shelve_docs) and callable(ui_api.Api().save_letter) and callable(ui_api.Api().set_event)
+def test_the_back_end_is_a_facade_over_services_that_do_not_know_each_other():
+    """`Api` only hands calls on; each public name has one owner; a service asks another one through `Api`."""
+    import ast
+    import inspect
+    from pathlib import Path
+
+    api = ui_api.Api()
+    owners = {}
+    for name, value in vars(ui_api.Api).items():
+        if isinstance(value, ui_api._Via):
+            owners.setdefault(name, value._service)
+    services = {attr: getattr(api, attr) for attr in set(owners.values())}
+    assert len(services) == 10 and len(owners) > 150
+    for attr, service in services.items():                      # every public method of a service is on the facade, with that owner
+        public = {n for n in vars(type(service)) if not n.startswith("_")}
+        assert {n for n, o in owners.items() if o == attr} == public, attr
+    for path in Path(ui_api.__file__).parent.glob("api_*.py"):   # no service imports another service
+        source = path.read_text(encoding="utf-8")
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("api_") and node.module not in ("api_base", "api_core"):
+                raise AssertionError(f"{path.name} imports {node.module}")
+    assert callable(api.shelve_docs) and callable(api.save_letter) and callable(api.set_event)
+    assert "self._app" in inspect.getsource(type(services["_talk"]))      # the talk reaches the rest of the app only through the facade
 
 
 # ── filing a reply under the right application ──────────────────────────────
@@ -990,5 +1002,5 @@ def test_mark_applied_is_for_a_new_job_and_notes_that_you_did_it(api):
 
 
 def test_a_place_in_a_list_from_the_window_is_checked(api):
-    assert [api._position(i, 3) for i in (0, 2, 2.0, "1", 3, -1, 1.5, None, "x", True)] == [0, 2, 2, 1, -1, -1, -1, -1, -1, -1]
+    assert [api_insights.list_position(i, 3) for i in (0, 2, 2.0, "1", 3, -1, 1.5, None, "x", True)] == [0, 2, 2, 1, -1, -1, -1, -1, -1, -1]
     assert api.open_filtered("x") == {"ok": False} and api.bring_back(99)["ok"] is False

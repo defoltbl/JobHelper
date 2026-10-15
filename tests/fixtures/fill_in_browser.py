@@ -94,7 +94,7 @@ def main() -> int:
         (work / name).write_bytes(bytes((i * 7 + len(name)) % 256 for i in range(int(size))))
     config.JOBS_JSON, config.USAGE_JSON, config.ENV_PATH = work / "jobs.json", work / "usage.json", work / ".env"
     config.ensure_dirs = lambda: None
-    ui_api.agent4_tracker.render_all = lambda jobs: None
+    api_core.agent4_tracker.render_all = lambda jobs: None
     api_core.CvSource.text = lambda self: setup.get("cv", "Alex Novak\nJunior analyst. SQL, Excel, Python.")
     api_core.CvSource.name = lambda self: "Alex Novak"
     store.save_jobs(setup.get("jobs", []))
@@ -149,7 +149,7 @@ def main() -> int:
             api = ui_api.Api()
             if setup.get("opened"):
                 api.open_url = None
-                api._opened = (setup["opened"], __import__("time").time())
+                api.note_opened(setup["opened"])
             before = api.assistant_watch()
             result = api.assistant_fill(setup.get("job_id", ""), skip=setup.get("skip"))
             reviewed = api.assistant_review(setup.get("job_id", "")) if setup.get("review") else None

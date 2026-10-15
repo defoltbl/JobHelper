@@ -29,7 +29,7 @@ def isolate(tmp_path, monkeypatch):
     for folder in ("cv", "tailored", "letters"):
         (tmp_path / folder).mkdir()
     monkeypatch.setattr(config, "ensure_dirs", lambda: None)
-    monkeypatch.setattr(ui_api.agent4_tracker, "render_all", lambda jobs: None)
+    monkeypatch.setattr(api_core.agent4_tracker, "render_all", lambda jobs: None)
     monkeypatch.setattr(api_core.CvSource, "text", lambda self: CV)
     monkeypatch.setattr(api_core.CvSource, "name", lambda self: "Alex Novak")
     return tmp_path
@@ -1406,7 +1406,10 @@ def test_not_interested_and_a_running_search(isolate, monkeypatch):
     assert api.assistant_undo()["ok"] and store.find(store.load_jobs(), "nw1")["status"] == "found"
     api.live = store.load_jobs()                # a search is running
     assert "is running" in api.assistant_confirm({"name": "many", "args": {"actions": [{"name": "mark_applied", "args": {"job": "nw1"}}]}})["msg"]
-    api._undo = [{"kind": "added", "id": "x", "what": "x"}]
+    api.live = None
+    _decision(monkeypatch, "", {"name": "not_interested", "args": {"job": "nw1"}})
+    assert api.assistant_confirm(api.assistant_talk("I am not interested in northwind")["pending"])["can_undo"]
+    api.live = store.load_jobs()                # something to take back, while a search runs: refused too
     assert "is running" in api.assistant_undo()["msg"]
 
 
@@ -1692,10 +1695,10 @@ def test_the_form_of_a_job_is_found_although_apply_led_to_another_address():
 def test_opening_a_posting_from_the_app_is_remembered_for_two_hours(isolate, monkeypatch):
     store.save_jobs([_job()])
     api = ui_api.Api()
-    assert api._recently_opened() == ""
-    assert api.open_url("nw1")["ok"] and api._recently_opened() == "nw1"
-    api._opened = ("nw1", api._opened[1] - 2 * 3600 - 1)
-    assert api._recently_opened() == "", "an old click says nothing about the form in front now"
+    assert api.recently_opened() == ""
+    assert api.open_url("nw1")["ok"] and api.recently_opened() == "nw1"
+    api.note_opened("nw1", when=__import__("time").time() - api.OPENED_FOR - 1)
+    assert api.recently_opened() == "", "an old click says nothing about the form in front now"
     assert api.open_url("nobody") == {"ok": False}
 
 

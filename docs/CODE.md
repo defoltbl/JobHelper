@@ -394,7 +394,7 @@ Table 6.3 groups the other modules by what they are for.
 | The assistant | `assistant`, `assistant_brain`, `assistant_notes`, `details`, `chrome`, `form_fill`, `form_choices`, `answer_memory` | The fixed requests and the facts about the app. What Claude makes of a free request, checked before anything happens. The details of the person. The link to the browser. Reading a form, deciding what each field is, and filling it in. Choosing from lists and menus. The wording of the person, remembered |
 | Claude | `llm`, `usage` | The one place that asks Claude; counting usage and knowing the limits |
 | Storage and safety | `store`, `db`, `vault`, `integrity`, `housekeeping`, `health`, `trouble` | The job list, the reply database, encryption, signed rule files, backups, the start-up check, the log of errors |
-| The window's back end | `ui_api`, `api_documents`, `api_interview`, `api_letters`, `api_assistant`, `api_talk`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` holds the logic; `Bridge` exposes it to QML and runs long work in threads |
+| The window's back end | `ui_api`, `api_core`, `api_system`, `api_options`, `api_jobs`, `api_documents`, `api_replies`, `api_insights`, `api_interview`, `api_letters`, `api_assistant`, `api_talk`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` is a facade: it hands each call to one of ten services. `Bridge` gives `Api` to QML and runs long work in threads |
 
 ### How the assistant fills in a form
 
@@ -501,10 +501,37 @@ The window never touches a file. Every action goes through three layers:
 
 1. A QML file in `ui_qt/` calls a slot of `bridge`, for example `bridge.saveOptions(...)`.
 2. The slot, in `qt_bridge.py`, `bridge_runs.py` or `bridge_jobs.py`, calls a method of `Api`.
-3. The method is in `ui_api.py` or in one of the `api_*.py` files. It checks the input and does
-   the work. It returns a plain dictionary: `{"ok": True, ...}` or `{"ok": False, "msg": "why"}`.
+3. `Api` in `ui_api.py` hands the call to the service that owns it. The service is in one of the
+   `api_*.py` files. It checks the input and does the work. It returns a plain dictionary:
+   `{"ok": True, ...}` or `{"ok": False, "msg": "why"}`.
 
 Long work (a search, a scan, a rewrite) runs in a thread and answers through a signal.
+
+### The back end: a facade over services
+
+`Api` does no work itself. It follows the object-oriented rules of the project: each class has
+one job, and parts are joined by composition, not by inheritance. Table 6.6 lists the parts.
+
+*Table 6.6 – The parts of the back end*
+
+| Part | File | What it owns |
+|---|---|---|
+| `Api` (the facade) | `ui_api.py` | The list of all calls the window can make. Each call goes to one service |
+| `Desktop`, `CvSource`, `JobEditor` | `api_core.py` | Opening a file, the CV text, and safe hand edits to the job list (also during a run) |
+| `SystemService` | `api_system.py` | The sign-in, Claude usage, the log of small problems, backups, the start-up check |
+| `OptionsService` | `api_options.py` | Options and the career-site list, and the figures read from them |
+| `JobsService` | `api_jobs.py` | The lists, one job in full, hand edits, and the posting last opened |
+| `DocumentsService` | `api_documents.py` | Scores, documents on request, documents from a higher score |
+| `RepliesService` | `api_replies.py` | Replies from companies and follow-ups |
+| `InsightsService` | `api_insights.py` | Insights, the last week, what a search filtered out |
+| `InterviewService` | `api_interview.py` | Dates, form answers, interview preparation |
+| `LettersService` | `api_letters.py` | The letter editor and PDFs |
+| `AssistantService`, `TalkService` | `api_assistant.py`, `api_talk.py` | The assistant: forms in the browser, and free requests |
+
+Each service gets four things in its constructor: the facade, the `JobEditor`, the `CvSource` and
+the `Desktop`. A service that needs another service asks through the facade. No service imports
+another service; a test checks this. A test replaces a class (`Desktop.open`, `CvSource.text`)
+or a call of the facade, never the inside of a service.
 
 > **Important**
 > Every input is checked twice: in the window, where the person sees a red message next to the

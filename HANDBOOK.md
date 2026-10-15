@@ -159,10 +159,12 @@ data/                your data; only the *.example.* files are in git
 - **Keeping data safe:** `vault` (encryption, backups), `integrity` (signed rule files),
   `housekeeping` (old backups, logs, the Trash), `store` and `db` (jobs and replies).
 - **Claude:** `llm` (every call goes through it; pauses at the limit), `usage`.
-- **The window's back end:** `ui_api` (what the window can ask for: lists, one job in full, hand
-  edits, Options) with its parts `api_documents` (scores, moving documents, "not interested"),
-  `api_interview` (dates, form answers, interview preparation) and `api_letters` (letter editor,
-  PDFs); `qt_bridge` is the Qt side (signals, sign-in, Options, schedule) with its parts `bridge_runs` (search,
+- **The window's back end:** `ui_api.Api` is a facade over ten services (OOP: one job per class,
+  composition, no service imports another): `api_system`, `api_options`, `api_jobs`,
+  `api_documents` (scores, moving documents, "not interested"), `api_replies`, `api_insights`,
+  `api_interview` (dates, form answers, interview preparation), `api_letters` (letter editor, PDFs),
+  `api_assistant` and `api_talk`; the shared helpers are in `api_core` (`Desktop`, `CvSource`,
+  `JobEditor`). `qt_bridge` is the Qt side (signals, sign-in, Options, schedule) with its parts `bridge_runs` (search,
   scan, scoring again, stopping, pausing on the limit) and `bridge_jobs` (what the job windows ask for).
 - **The main window:** `Main.qml` holds the state, the palette and the dialogs; the screen itself is
   `NavPanel` (left), `StagePanel` (robots and status line), `AssistantBot` (the assistant at the end of the line) with its window `AssistantDialog`, `StatusPanel` (right), `PipelineBar`

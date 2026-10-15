@@ -3,23 +3,28 @@ application form and the interview preparation."""
 from __future__ import annotations
 
 
-from . import (agent1_cv, answer_memory, cv_tailor, form_answers, prep_doc, config, db, interview_prep, planner, store,
-               vault)
+
+
+from . import (agent1_cv, answer_memory, cv_tailor, form_answers, prep_doc, config, db, interview_prep, planner, store, vault)
 from .api_base import _guarded
 
 
-class InterviewApi:
-    """Mixed into `ui_api.Api`; uses its `_change`, `_cv_text`, `_open` and `live`."""
+class InterviewService:
+    """"""
+
+    def __init__(self, app, editor, cv, desktop) -> None:
+        """`app` is the facade (`ui_api.Api`): what this service needs from the others is asked through it."""
+        self._app, self._editor, self._cv, self._desktop = app, editor, cv, desktop
 
     # ── dates to remember ───────────────────────────────────────
     def set_event(self, job_id, day, time_text="", kind="interview", note=""):
         def go(jobs, j):
             problem = planner.set_event(j, day, time_text, kind, note)
             return {"ok": False, "msg": problem} if problem else {"ok": True}
-        return self._jobs.change(job_id, go, render=False)
+        return self._editor.change(job_id, go, render=False)
 
     def clear_event(self, job_id):
-        return self._jobs.change(job_id, lambda jobs, j: planner.clear_event(j), render=False)
+        return self._editor.change(job_id, lambda jobs, j: planner.clear_event(j), render=False)
 
     @_guarded(list)
     def upcoming(self, limit=0):
@@ -34,7 +39,7 @@ class InterviewApi:
         due = planner.due_reminders(jobs)
         if due:
             store.save_jobs(jobs)
-            live = self._jobs.live
+            live = self._editor.live
             for item in due:                         # a run in progress must not lose the mark
                 twin = store.find(live, item["id"]) if live is not None else None
                 saved = store.find(jobs, item["id"])
@@ -64,7 +69,7 @@ class InterviewApi:
         return planner.thanks_draft(j, self._cv.name(), planner.company_notes(j.get("company", "")).get("contact", ""))
 
     def mark_thanked(self, job_id):
-        return bool(self._jobs.change(job_id, lambda jobs, j: planner.mark_thanked(j), render=False).get("ok"))
+        return bool(self._editor.change(job_id, lambda jobs, j: planner.mark_thanked(j), render=False).get("ok"))
 
     # ── answers for one job's application form ──────────────────
     @_guarded(dict)
@@ -101,7 +106,7 @@ class InterviewApi:
             return {"ok": False, "msg": str(e)}
         kept = {"made": form_answers.stamp(), "items": items}
         # saved through _change: the call took a while, so re-read instead of writing an old copy back
-        saved = self._jobs.change(job_id, lambda jobs, job: job.__setitem__("form_answers", kept), render=False)
+        saved = self._editor.change(job_id, lambda jobs, job: job.__setitem__("form_answers", kept), render=False)
         return {"ok": bool(saved.get("ok")), "count": len(items), "to_check": sum(1 for i in items if i["check"])}
 
     def save_form_answers(self, job_id, items):
@@ -122,7 +127,7 @@ class InterviewApi:
                 j["form_answers"] = {"made": made, "items": clean}
             else:
                 j.pop("form_answers", None)
-        saved = self._jobs.change(job_id, go, render=False)
+        saved = self._editor.change(job_id, go, render=False)
         if saved.get("ok"):                 # an answer you rewrote is yours: it is used for the same question elsewhere
             for item in clean:
                 if item["question"].lower() in earlier and answer_memory.changed(earlier[item["question"].lower()], item["answer"]):
@@ -153,7 +158,7 @@ class InterviewApi:
         except Exception as e:  # noqa: BLE001 - shown to the user as the reason
             return {"ok": False, "msg": str(e)}
         # saved through _change: the call took a while, so re-read instead of writing an old copy back
-        return {"ok": bool(self._jobs.change(job_id, lambda jobs, job: job.__setitem__("interview_prep", prep),
+        return {"ok": bool(self._editor.change(job_id, lambda jobs, job: job.__setitem__("interview_prep", prep),
                                         render=False).get("ok"))}
 
     @_guarded(dict)
@@ -181,7 +186,7 @@ class InterviewApi:
                 return {"ok": False, "msg": problem}
             j["interview_prep"] = new
             outcome["to_check"] = len(new.get("checks") or []) + sum(1 for q in new["questions"] if q.get("check"))
-        result = self._jobs.change(job_id, go, render=False)
+        result = self._editor.change(job_id, go, render=False)
         return {"ok": True, **outcome} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "The changes could not be saved."}
 
     def _prep_file(self, j, audience="hr"):

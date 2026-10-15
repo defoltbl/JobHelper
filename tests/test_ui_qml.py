@@ -1382,8 +1382,8 @@ def test_application_only_cards_are_hidden_for_a_new_job_and_nothing_overflows(u
         (config.LETTERS_DIR / name).write_bytes(b"x")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
                                                              url="https://example.com/job"), render=False)
-    monkeypatch.setattr(ui_api.Api, "_comparable", lambda self, j: True)
-    monkeypatch.setattr(ui_api.Api, "_editable_letter", lambda self, j: True)
+    monkeypatch.setattr(ui_api.Api, "comparable", lambda self, j: True)
+    monkeypatch.setattr(ui_api.Api, "editable_letter", lambda self, j: True)
     _open_job(ui, "lead")
     for card in ("eventCard", "replyCard", "notesCard"):
         assert ui.find(card).property("visible") is False, card
@@ -1639,7 +1639,7 @@ def test_apply_checklist_ticks_steps_and_marks_applied(ui, monkeypatch):
     opened = []
     monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(str(target)))
     monkeypatch.setattr(ui_api.Api, "combined_pdf", lambda self, job_id: {"ok": True, "file": "both.pdf", "pages": 3})
-    monkeypatch.setattr(ui_api.Api, "_can_combine", lambda self, j: bool(j.get("tailored_cv_file")))
+    monkeypatch.setattr(ui_api.Api, "can_combine", lambda self, j: bool(j.get("tailored_cv_file")))
     for folder, name in ((config.TAILORED_CV_DIR, "cv_lead.docx"), (config.LETTERS_DIR, "L_lead.docx")):
         (folder / name).write_bytes(b"x")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
@@ -2427,7 +2427,7 @@ def test_a_title_only_score_is_marked_and_the_posting_can_be_pasted(ui, monkeypa
 def test_documents_from_a_higher_score_are_marked_and_moved_only_after_asking(ui, monkeypatch):
     for folder, name in ((config.TAILORED_CV_DIR, "cv_lead.docx"), (config.LETTERS_DIR, "L_lead.docx")):
         (folder / name).write_bytes(b"x")
-    monkeypatch.setattr(ui_api.Api, "_threshold", lambda self: 50)
+    monkeypatch.setattr(ui_api.Api, "threshold", lambda self: 50)
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
                                                              status="letter_ready", match_score=30), render=False)
     ui.js('openView("new")')
@@ -2494,7 +2494,7 @@ def test_read_it_again_button_reports_both_outcomes(ui, monkeypatch):
 def test_documents_below_the_limit_are_moved_together_only_after_asking(ui, monkeypatch):
     for folder, name in ((config.TAILORED_CV_DIR, "cv_lead.docx"), (config.LETTERS_DIR, "L_lead.docx")):
         (folder / name).write_bytes(b"x")
-    monkeypatch.setattr(ui_api.Api, "_threshold", lambda self: 50)
+    monkeypatch.setattr(ui_api.Api, "threshold", lambda self: 50)
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
                                                              status="letter_ready", match_score=30), render=False)
     ui.js('openView("new")')
@@ -2667,7 +2667,7 @@ def test_old_moved_documents_are_removed_from_options_after_asking(ui):
 
 
 def test_jobs_that_could_not_be_put_back_are_listed_one_by_one(ui, monkeypatch):
-    monkeypatch.setattr(ui_api.Api, "_threshold", lambda self: 50)
+    monkeypatch.setattr(ui_api.Api, "threshold", lambda self: 50)
     jobs = store.load_jobs()
     for name in ("one", "two"):
         (config.LETTERS_DIR / f"L_{name}.docx").write_bytes(b"x")

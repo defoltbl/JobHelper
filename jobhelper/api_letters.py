@@ -2,48 +2,54 @@
 letter and CV in one PDF."""
 from __future__ import annotations
 
+
+
 import os
 
 from datetime import date
 
-from . import (agent3_letters, config, cover_letter, pdf, store, vault)
+from . import agent3_letters, config, cover_letter, pdf, store, vault
 from .api_base import _guarded, _stem
 
 
-class LettersApi:
-    """Mixed into `ui_api.Api`; uses its `_change`, `_cv_text`, `_open` and `live`."""
+class LettersService:
+    """"""
+
+    def __init__(self, app, editor, cv, desktop) -> None:
+        """`app` is the facade (`ui_api.Api`): what this service needs from the others is asked through it."""
+        self._app, self._editor, self._cv, self._desktop = app, editor, cv, desktop
 
     # ── editing a letter the app wrote ──────────────────────────
-    def _letter_path(self, j):
+    def letter_path(self, j):
         return (config.LETTERS_DIR / j.get("cover_letter_file", "")).with_suffix(".docx")
 
-    def _editable_letter(self, j) -> bool:
-        if not (bool(j) and agent3_letters._generated_letter(j) and self._letter_path(j).is_file()
+    def editable_letter(self, j) -> bool:
+        if not (bool(j) and agent3_letters._generated_letter(j) and self.letter_path(j).is_file()
                 and config.LETTER_TEMPLATE.exists()):
             return False
         try:        # letters from an early version have fewer paragraphs than the template: Word only
-            return len(cover_letter.read_letter(self._letter_path(j))["paragraphs"]) \
+            return len(cover_letter.read_letter(self.letter_path(j))["paragraphs"]) \
                 == len(cover_letter.read_letter(config.LETTER_TEMPLATE)["paragraphs"])
         except Exception:  # noqa: BLE001 - not a letter built from the template
             return False
 
-    def _old_format_letter(self, j) -> bool:
+    def old_format_letter(self, j) -> bool:
         """A Word letter the app wrote, but in an earlier layout: it opens in Word, not in the editor here."""
-        return bool(j) and agent3_letters._generated_letter(j) and self._letter_path(j).is_file() \
-            and config.LETTER_TEMPLATE.exists() and not self._editable_letter(j)
+        return bool(j) and agent3_letters._generated_letter(j) and self.letter_path(j).is_file() \
+            and config.LETTER_TEMPLATE.exists() and not self.editable_letter(j)
 
     @_guarded(dict)
     def letter_for_edit(self, job_id):
         j = store.find(store.load_jobs(), job_id)
         if not j:
             return {"ok": False, "msg": "That job is not in the list any more."}
-        if not self._editable_letter(j):
-            if self._old_format_letter(j):
+        if not self.editable_letter(j):
+            if self.old_format_letter(j):
                 return {"ok": False, "msg": "This letter was made in an older format. Open it in Word to change it."}
             return {"ok": False, "msg": "This letter is your own, or was not made from the current letter template. "
                                         "Open it in Word to change it."}
         try:
-            parts = cover_letter.read_letter(self._letter_path(j))
+            parts = cover_letter.read_letter(self.letter_path(j))
         except Exception:  # noqa: BLE001
             return {"ok": False, "msg": "The letter file could not be read. Open it in Word instead."}
         return {"ok": True, "id": j["id"], "company": j["company"], "title": j["title"], **parts,
@@ -54,12 +60,12 @@ class LettersApi:
         The previous version is kept in an encrypted backup. Rule breaks are returned as warnings."""
         jobs = store.load_jobs()
         j = store.find(jobs, job_id)
-        if not self._editable_letter(j):
+        if not self.editable_letter(j):
             return {"ok": False, "msg": "This letter cannot be edited here."}
         texts = [cover_letter.clean(str(p)).strip() for p in (paragraphs or [])]
         if len(texts) != cover_letter.BODY_PARAGRAPHS or any(not t for t in texts):
             return {"ok": False, "msg": f"The letter needs all {cover_letter.BODY_PARAGRAPHS} paragraphs; none may be empty."}
-        path = self._letter_path(j)
+        path = self.letter_path(j)
         parts = cover_letter.read_letter(path)
         draft = path.with_name(path.stem + ".editing.docx")
         try:
@@ -78,13 +84,13 @@ class LettersApi:
         made = pdf.to_pdf(path)
         if made and pdf.page_count(made) > 1:
             warnings.append("The letter is now longer than one page.")
-        self._jobs.change(job_id, lambda all_jobs, job: job.__setitem__("last_update", date.today().isoformat()), render=False)
+        self._editor.change(job_id, lambda all_jobs, job: job.__setitem__("last_update", date.today().isoformat()), render=False)
         return {"ok": True, "warnings": warnings, "words": sum(len(t.split()) for t in texts)}
 
     def rewrite_paragraph(self, job_id, paragraphs, index, hint=""):
         """Ask Claude for a new version of one paragraph (not saved). One or two calls."""
         j = store.find(store.load_jobs(), job_id)
-        if not self._editable_letter(j):
+        if not self.editable_letter(j):
             return {"ok": False, "msg": "Only letters the app wrote can be rewritten here."}
         texts = [str(p) for p in (paragraphs or [])]
         cv_text = self._cv.text()
@@ -122,7 +128,7 @@ class LettersApi:
             parts.append(found)
         return parts
 
-    def _can_combine(self, j) -> bool:
+    def can_combine(self, j) -> bool:
         return self._pdf_parts(j) is not None
 
     def combined_pdf(self, job_id):

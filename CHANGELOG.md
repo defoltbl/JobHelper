@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 15 October 2026
 
+- Inside the app: the back end of the window is now a facade over ten small services, each with one job (object-oriented rules). Nothing changes in how the app looks or works.
 - **Interview preparation** now opens as two Word documents: one for a talk with HR, one for a talk with a specialist. Both go in this order: the company, you, your projects and skills, the questions they may ask you, and the questions you can ask them.
 - The preparation has a new part, **your projects and skills**, each with where your CV shows it. Select **Make again** on an older preparation to get it.
 - In the technical document, each project explains its tools and methods: **what each one is, what it did in the project, and the technical reason it suits that task**. It also gives the result and the questions a specialist may ask. Each skill gets more detail.

@@ -131,8 +131,8 @@ def test_guide_shots(ui, monkeypatch):
                "key_skills": ["Python", "FastAPI", "SQL"]}
     monkeypatch.setattr(agent1_cv, "load_profile", lambda: dict(profile))
     monkeypatch.setattr(api_core.CvSource, "text", lambda self: CV)
-    monkeypatch.setattr(ui_api.Api, "_threshold", lambda self: 50)
-    monkeypatch.setattr(ui_api.Api, "_old_format_letter", lambda self, j: False)      # the stand-in files are not real letters
+    monkeypatch.setattr(ui_api.Api, "threshold", lambda self: 50)
+    monkeypatch.setattr(ui_api.Api, "old_format_letter", lambda self, j: False)      # the stand-in files are not real letters
     monkeypatch.setattr(ui_api.Api, "usage_info", lambda self: {"five_hour_used": 34, "five_hour_resets": "", "seven_day_used": 12, "seven_day_resets": "",
                                                               "model": "sonnet", "calls": 41, "cost": 1.87})
     letter = ["I am writing to apply for the Junior Python Developer role at Northwind Systems. Your posting describes back-end services in "
