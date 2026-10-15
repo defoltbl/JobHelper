@@ -28,7 +28,8 @@ from .ui_api import Api
 from .bridge_jobs import JobSlots
 from .bridge_runs import RunSlots
 from . import trouble  # noqa: I001
-from . import (config, integrity, schedule)
+from . import (claude_cli, config, integrity, schedule)
+from .claude_cli import ClaudeCli
 
 
 def _address_problem(address: str) -> str:
@@ -206,17 +207,15 @@ class Bridge(RunSlots, JobSlots, QObject):
 
     @Slot(result="QVariantMap")
     def claudeLogin(self):
-        """Open a Terminal running `claude auth login` so the user can complete
+        """Open a Terminal running the Claude program's `auth login` so the user can complete
         the subscription sign-in (OAuth), then Recheck in the app."""
+        if sys.platform != "darwin":
+            return {"ok": False, "msg": "Signing in from the app works on a Mac only."}
         try:
-            if sys.platform == "darwin":
-                subprocess.Popen([
-                    "osascript",
-                    "-e", 'tell application "Terminal" to activate',
-                    "-e", 'tell application "Terminal" to do script "claude auth login"',
-                ])
-                return {"ok": True}
-            return {"ok": False, "msg": "Run: claude auth login"}
+            subprocess.Popen(ClaudeCli.of_the_sdk().login_script())
+            return {"ok": True}
+        except FileNotFoundError as e:
+            return {"ok": False, "msg": str(e) if str(e) == claude_cli.MISSING else "Terminal could not be opened."}
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "msg": str(e)}
 

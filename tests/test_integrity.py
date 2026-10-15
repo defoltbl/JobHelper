@@ -99,7 +99,7 @@ def test_saving_companies_in_the_app_is_trusted(files):
 
 
 def test_connections_list_changed_files_for_the_ui(files, monkeypatch):
-    monkeypatch.setattr(api_system.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError()))
+    monkeypatch.setattr(api_system, "_claude_auth_status", lambda: (_ for _ in ()).throw(FileNotFoundError()))
     integrity.approve()
     assert ui_api.Api().connections()["changed_files"] == []
     config.CV_INSTRUCTION.write_text("edited", encoding="utf-8")

@@ -178,7 +178,8 @@ Before you install, make sure you have:
 
 - macOS.
 - Python 3.10 or newer.
-- The Claude Code program, signed in with a Claude subscription: run `claude auth login` once.
+- A Claude subscription. The SDK carries its own copy of the Claude Code program. Sign in one time:
+  select **Sign in** in the Account card, or run `claude auth login`.
 - Optional: LibreOffice, for PDF copies of the documents.
 
 > **Important**
@@ -415,6 +416,15 @@ step still runs.
 At each start, `schedule.refresh()` compares the LaunchAgent with `schedule.command()`. If an older
 version or a different place of the app wrote it, the function writes it again with the same day
 and time.
+
+### The Claude program
+
+The SDK asks Claude through its own copy of the Claude Code program (`claude_agent_sdk/_bundled/claude`).
+`claude_cli.ClaudeCli` finds the same copy. The app uses it to check the sign-in
+(`api_system._claude_auth_status`) and to open Terminal on `auth login` (`Bridge.claudeLogin`), with
+the full path of the program. Thus the check, the sign-in and the questions always agree. An app
+that Finder opens gets a short PATH. If the copy is missing, `ClaudeCli` looks on the PATH and then
+in the usual folders. If it finds no program, the window shows `claude_cli.MISSING`.
 
 ### The start-up check and its fixes
 

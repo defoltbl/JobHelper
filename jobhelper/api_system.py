@@ -5,18 +5,19 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 from datetime import datetime
 from pathlib import Path
 
 from . import trouble
+from .claude_cli import ClaudeCli
 from .api_base import _guarded
 from . import agent1_cv, agent4_tracker, health, config, integrity, pdf, store, usage, vault
 
 
 def _claude_auth_status():
-    """Ask the Claude CLI who is signed in (tests replace this, so they never run the real CLI)."""
-    return subprocess.run(["claude", "auth", "status"], capture_output=True, text=True, timeout=8)
+    """Ask the Claude program who is signed in: the same program the SDK asks with (tests replace this,
+    so they never run the real one)."""
+    return ClaudeCli.of_the_sdk().auth_status()
 
 
 class SystemService:
