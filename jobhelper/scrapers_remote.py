@@ -85,6 +85,11 @@ def _remoteok_payload() -> tuple[dict[str, Any], ...]:
     return tuple(item for item in data[1:] if isinstance(item, dict)) if isinstance(data, list) else ()   # [0] is a legal notice
 
 
+def forget_remoteok() -> None:
+    """Forget RemoteOK's list: each search reads it again."""
+    _remoteok_payload.cache_clear()
+
+
 def remoteok(keyword: str, where: str, limit: int, with_description: bool = True) -> list[dict[str, Any]]:
     try:
         payload = _remoteok_payload()
@@ -142,6 +147,11 @@ def _rss_date(pubdate: str) -> str:
         return parsedate_to_datetime(pubdate).date().isoformat()
     except (TypeError, ValueError):
         return ""
+
+
+def forget_wwr() -> None:
+    """Forget the feeds of We Work Remotely: each search reads them again."""
+    _wwr_feed.cache_clear()
 
 
 def weworkremotely(keyword: str, where: str, limit: int, with_description: bool = True) -> list[dict[str, Any]]:

@@ -1,6 +1,6 @@
 """Agent 2: search for jobs on several sources, and filter what comes back.
 
-Sources (see `active_providers`):
+Sources (each one a `job_sources.JobSource`; see `job_sources.sources_for`):
   • jobs.cz, prace.cz   read from their search pages (scrapers_cz); no key needed
   • LinkedIn            its public job search (scrapers_intl)
   • RemoteOK, We Work Remotely   remote roles (scrapers_remote)
@@ -15,104 +15,13 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Any, Callable
+from typing import Any
 
 import requests
 
-from . import (config, email_client, filters, language, salary, scrapers_ats,
-               scrapers_cz, scrapers_intl, scrapers_remote, store, textfmt)
-
-ADZUNA_URL = "https://api.adzuna.com/v1/api/jobs/{country}/search/{page}"
-JOOBLE_URL = "https://jooble.org/api/{key}"
-
+from . import config, email_client, filters, job_sources, language, salary, scrapers_intl, store, textfmt
 
 _clean = textfmt.strip_tags          # text from a board, without its HTML
-
-
-# ── Adzuna ──────────────────────────────────────────────────────────────────
-def _adzuna_query(what: str, where: str, per_page: int) -> list[dict[str, Any]]:
-    params = {
-        "app_id": config.ADZUNA_APP_ID,
-        "app_key": config.ADZUNA_APP_KEY,
-        "what": what,
-        "where": where,
-        "results_per_page": per_page,
-        "content-type": "application/json",
-    }
-    url = ADZUNA_URL.format(country=config.ADZUNA_COUNTRY, page=1)
-    resp = requests.get(url, params=params, timeout=30)
-    resp.raise_for_status()
-    out = []
-    for raw in resp.json().get("results", []):
-        smin, smax = raw.get("salary_min"), raw.get("salary_max")
-        salary = ""
-        if smin or smax:
-            salary = f"{int(smin or 0):,} - {int(smax or 0):,}".replace(",", " ")
-        out.append(store.new_job(
-            id=f"adzuna-{raw.get('id')}",
-            title=_clean(raw.get("title", "")),
-            company=_clean((raw.get("company") or {}).get("display_name", "")),
-            location=_clean((raw.get("location") or {}).get("display_name", "")),
-            source="adzuna",
-            url=raw.get("redirect_url", ""),
-            salary=salary,
-            description=_clean(raw.get("description", "")),
-            date_posted=(raw.get("created") or "")[:10],
-        ))
-    return out
-
-
-# ── Jooble ──────────────────────────────────────────────────────────────────
-def _jooble_query(what: str, where: str, per_page: int) -> list[dict[str, Any]]:
-    url = JOOBLE_URL.format(key=config.JOOBLE_API_KEY)
-    resp = requests.post(url, json={"keywords": what, "location": where}, timeout=30)
-    resp.raise_for_status()
-    out = []
-    for raw in resp.json().get("jobs", [])[:per_page]:
-        out.append(store.new_job(
-            id=f"jooble-{raw.get('id')}",
-            title=_clean(raw.get("title", "")),
-            company=_clean(raw.get("company", "")),
-            location=_clean(raw.get("location", "")),
-            source=f"jooble/{_clean(raw.get('source', ''))}"[:40],
-            url=raw.get("link", ""),
-            salary=_clean(raw.get("salary", "")),
-            description=_clean(raw.get("snippet", "")),
-        ))
-    return out
-
-
-def active_providers(source: str = "czech", max_age_days: int = 0) -> list[tuple[str, Callable[[str, str, int], list[dict[str, Any]]]]]:
-    """Which providers to use, given the chosen source.
-
-    source:
-      "czech"    → jobs.cz + prace.cz + LinkedIn (default; Prague market)
-      "linkedin" → LinkedIn only
-      "remote"   → RemoteOK + We Work Remotely (English remote roles)
-      "careers"  → your companies' career centers (data/companies.json)
-      "adzuna"   → Adzuna API (pl/de/gb/... — NOT Czech)
-      "jooble"   → Jooble API (needs a key for the target region)
-      "all"      → every configured provider
-
-    max_age_days restricts LinkedIn to recent postings (its f_TPR window).
-    """
-    import functools
-    provs: list[tuple[str, Callable]] = []
-    if source in ("czech", "all"):
-        provs.append(("jobs.cz", scrapers_cz.jobs_cz))
-        provs.append(("prace.cz", scrapers_cz.prace_cz))
-    if source in ("czech", "linkedin", "all"):
-        provs.append(("linkedin", functools.partial(scrapers_intl.linkedin, max_age_days=max_age_days)))
-    if source in ("remote", "all"):
-        provs.append(("remoteok", scrapers_remote.remoteok))
-        provs.append(("weworkremotely", scrapers_remote.weworkremotely))
-    if source in ("careers", "czech", "all") and scrapers_ats.load_companies():
-        provs.append(("careers", scrapers_ats.careers))
-    if source in ("jooble", "all") and config.has_jooble():
-        provs.append(("jooble", _jooble_query))
-    if source in ("adzuna", "all") and config.adzuna_available():
-        provs.append(("adzuna", _adzuna_query))
-    return provs
 
 
 # Words to strip from a title before comparing roles (seniority / gender / noise).
@@ -531,13 +440,12 @@ def search(
     """
     if not str(where or "").strip():
         raise RuntimeError("No city to search in. Choose one in the app's Options (or pass --where to run.py).")
-    # What the career sites and remote boards answered is remembered while one search asks its queries,
-    # not from one search to the next: the app can stay open for days.
-    scrapers_ats._cache.clear()
-    scrapers_remote._remoteok_payload.cache_clear()
-    scrapers_remote._wwr_feed.cache_clear()
-    providers = active_providers(source, max_age_days=max_age_days)
-    if not providers:
+    sources = job_sources.sources_for(source, max_age_days=max_age_days)
+    # What a source read is remembered while one search asks its roles, not from one search to the next:
+    # the app can stay open for days.
+    for src in sources:
+        src.reset()
+    if not sources:
         raise RuntimeError(
             f"No usable job source for source='{source}'.\n"
             "  • czech  → no key needed (jobs.cz + prace.cz)\n"
@@ -546,15 +454,15 @@ def search(
         )
 
     found: dict[str, dict[str, Any]] = {}
-    steps, step = len(providers) * len(queries), 0
-    for name, fn in providers:
-        got = 0
+    steps, step = len(sources) * len(queries), 0
+    for src in sources:
+        name, got = src.name, 0
         for q in queries:
             if progress:
                 progress(step, steps)
             step += 1
             try:
-                for job in fn(q, where, per_query):
+                for job in src.find(q, where, per_query):
                     if job["id"] and job["id"] not in found:
                         job["query"] = q            # which keyword found it (for the Insights view)
                         found[job["id"]] = job

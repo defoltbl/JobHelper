@@ -1,4 +1,4 @@
-from jobhelper import agent2_search, store
+from jobhelper import job_sources, agent2_search, store
 
 
 def test_is_english_job_uses_description():
@@ -19,16 +19,16 @@ def test_czech_job_filtered():
     assert not agent2_search.is_english_job(cz)
 
 
-def test_active_providers_czech_default():
-    names = [n for n, _ in agent2_search.active_providers("czech")]
+def test_the_czech_setting_asks_the_czech_boards_first():
+    names = [s.name for s in job_sources.sources_for("czech")]
     # the Czech job boards + LinkedIn always lead; "careers" is appended only
     # when the user has configured company career centers (data/companies.json)
     assert names[:3] == ["jobs.cz", "prace.cz", "linkedin"]
     assert set(names) <= {"jobs.cz", "prace.cz", "linkedin", "careers"}
 
 
-def test_active_providers_linkedin_only():
-    names = [n for n, _ in agent2_search.active_providers("linkedin")]
+def test_the_linkedin_setting_asks_linkedin_only():
+    names = [s.name for s in job_sources.sources_for("linkedin")]
     assert names == ["linkedin"]
 
 

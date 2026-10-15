@@ -2,7 +2,7 @@
 from pathlib import Path
 import pytest
 
-from jobhelper import api_core, agent2_search, config, db, insights, interview_prep, llm, store, ui_api
+from jobhelper import job_sources, api_core, agent2_search, config, db, insights, interview_prep, llm, store, ui_api
 
 CV = ("Alex Novak\nJunior Software Developer\nPython, Kotlin, SQL, PostgreSQL, FastAPI, Docker, Azure, Git, Linux, React.\n"
       "Built a document search service with FastAPI and pgvector. English B2.")
@@ -77,8 +77,7 @@ def test_keyword_stats_show_which_keywords_waste_scoring():
 def test_search_remembers_which_keyword_found_a_job(monkeypatch):
     ad = ("We are looking for a junior Python developer to join our team in Prague. "
           "You will work with the backend team and write clean, tested code every day.")
-    monkeypatch.setattr(agent2_search, "active_providers", lambda source, max_age_days=0: [
-        ("one", lambda q, w, n: [store.new_job(id="x-" + q, title="Dev " + q, company="Acme " + q, location="Prague", description=ad)])])
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0: [job_sources.Board("one", lambda q, w, n: [store.new_job(id="x-" + q, title="Dev " + q, company="Acme " + q, location="Prague", description=ad)])])
     found = agent2_search.search(["python developer", "qa tester"], where="Prague")
     assert {j["query"] for j in found} == {"python developer", "qa tester"}
 

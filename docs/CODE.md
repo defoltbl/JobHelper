@@ -390,7 +390,7 @@ Table 6.3 groups the other modules by what they are for.
 
 | Group | Modules | What they do |
 |---|---|---|
-| Reading postings | `scrapers_cz`, `scrapers_intl`, `scrapers_remote`, `scrapers_ats`, `scrapers_page` | One module per kind of source. A site that turns programs away is left alone |
+| Reading postings | `job_sources`, `scrapers_cz`, `scrapers_intl`, `scrapers_remote`, `scrapers_ats`, `scrapers_page` | Each board, feed or API is one `JobSource` with the same interface: find, reset, available. One scraper module per kind of site. A site that turns programs away is left alone |
 | Rules without a model call | `filters`, `prefilter`, `language`, `places`, `keywords`, `salary`, `merge`, `followup`, `planner` | Level, years, language, location, profession, pay, duplicates, reminders |
 | Writing | `cv_tailor`, `cover_letter`, `letters`, `form_answers`, `interview_prep`, `prep_doc`, `pdf` | The adapted CV, the letter, form answers, the interview documents (one for HR, one technical) |
 | Mail | `email_client`, `mailhosts` | Reading mailboxes read-only; which server a mailbox is read from |

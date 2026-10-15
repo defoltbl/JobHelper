@@ -117,6 +117,11 @@ def is_token(token: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}", str(token or "")))
 
 
+def forget() -> None:
+    """Forget what the career sites answered: each search asks them again (the app can stay open for days)."""
+    _cache.clear()
+
+
 def load_companies() -> list[dict[str, str]]:
     p = config.DATA_DIR / "companies.json"
     if not p.exists():

@@ -202,8 +202,9 @@ data/                your data; only the *.example.* files are in git
   Do not add a second way to ask.
 - **A CV's sections are found by their headings, whatever they are called** (`cv_tailor._sections`):
   never by a fixed list of names, or another person's CV loses a section.
-- **Caches that outlive one search** are wrong in an app that stays open for days: clear them at
-  the start of `agent2_search.search`.
+- **Caches that outlive one search** are wrong in an app that stays open for days: each
+  `job_sources.JobSource` forgets what it read in `reset()`, which `agent2_search.search` calls first.
+  A new board is a new `JobSource` in `job_sources.all_sources()`; the search itself does not change.
 - **The folder `backups/below_your_limit`** holds documents that can be put back. The automatic
   clean-up of old backups must never count it as a backup.
 
