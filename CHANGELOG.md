@@ -13,6 +13,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 - The **user guide** and the **code documentation** now follow ASD-STE100: no sentence over 20 words in a step or 25 words in a description, one idea in each sentence, and lists where a sentence named many things. A test keeps them that way.
 - The preparation is written in **ASD-STE100 Simplified Technical English**: short sentences, the active voice and common words.
 - **Inside the app:** the back end of the window is now a facade over ten small services, each with one job (object-oriented rules). Nothing changes in how the app looks or works.
+- **Inside the app:** the interview preparation is now made of small classes (a question, a job, a project, a tool, a skill). Editing a preparation by hand now checks the tools of each project against your CV too, as making one does.
 - **Inside the app:** the assistant's form logic is now made of small classes (a field, the rows of jobs and languages, the plan for a page). Nothing changes in how it fills a form.
 
 ## 14 October 2026

@@ -10,6 +10,7 @@ the right answer, unlike in a cover letter.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
@@ -210,7 +211,7 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
     unverified = cover_letter.unverified_terms(cv_text + "\n" + notes)
     first_name = cover_letter.candidate_first_name(cv_text)
     mail_lines = "\n".join(f"- {m.get('stage', '')}: {m.get('summary', '')}" for m in (emails or [])[:6]) or "(nothing yet)"
-    feedback, prep = "", {}
+    feedback, prep = "", Preparation({})
     for _attempt in range(2):
         data = llm.ask_json(PROMPT.format(
             cv_text=cv_text[:12000], title=job.get("title", ""), company=job.get("company", ""),
@@ -220,22 +221,11 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
             facts=config.facts_block(cv_text),
             notes=notes[:config.MAX_EXPERIENCE_NOTES] or "(nothing written yet)"),
             system=SYSTEM, tag="interview_prep")
-        prep = _clean(data)
-        if not prep["questions"]:
+        prep = Preparation.from_reply(data)
+        if not prep.questions:
             raise ValueError("The model returned no questions.")
-        # everything said in the candidate's own voice is held to the CV: the answers, the pitch, the fit list
-        spoken = [(q["question"], q["answer"]) for q in prep["questions"]] + [
-            ("the opening pitch", prep["pitch"]), ("the key question", prep["key_question"]["answer"]),
-            ("what to say about the company", prep["company_say"])] + [("your fit", point) for point in prep["fit"]] + [
-            (f"the story about {e['job'][:50]}", e["story"]) for e in prep["experience"]] + [
-            (f"the plain story about {e['job'][:50]}", e["plain"]) for e in prep["experience"]] + [
-            (f"the project {pr['name'][:50]}", pr["what"]) for pr in prep["projects"]] + [
-            (f"the project {pr['name'][:50]} for HR", pr["plain"]) for pr in prep["projects"]] + [
-            (f"the result of {pr['name'][:50]}", pr["result"]) for pr in prep["projects"]] + [
-            (f"the skill {sk['skill'][:40]}", sk["detail"]) for sk in prep["skills"]]
-        bad = [(label, _unbacked(said, unverified)) for label, said in spoken if said]
-        bad = [(q, term) for q, term in bad if term]
-        third = [label for label, said in spoken if said and first_name and re.search(rf"\b{re.escape(first_name)}\b", said)]
+        # everything said in the candidate's own voice is held to the CV: the answers, the pitch, the stories, the projects
+        bad, third = prep.problems(unverified, first_name)
         if not bad and not third:
             break
         feedback = "\nYour previous version was rejected. Fix these problems:\n" + "\n".join(
@@ -243,25 +233,14 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
              for q, term in bad] +
             [f"- The answer to \"{q[:70]}\" talks about the candidate by name. Write it in the first person." for q in third]) + "\n"
     # Whatever still claims unbacked experience after the retry is marked, not hidden: the user must see it.
-    for q in prep["questions"]:
-        q["check"] = _unbacked(q["answer"], unverified)
+    prep.mark(unverified)
+    saved = prep.as_dict()
     facts = config.candidate_facts(cv_text)
     for key in ("ask_hr", "ask_technical", "ask_them"):       # the app's own check, whatever the model wrote
-        prep[key] = fit_questions(prep[key], facts)
-    prep["ask_hr"] = with_next_steps(prep["ask_hr"])
-    checks = []
-    for label, said in [("The opening pitch", prep["pitch"]), ("The answer to the key question", prep["key_question"]["answer"])] \
-            + [("A point under your fit", point) for point in prep["fit"]] \
-            + [(f"The story about {e['job'][:50]}", e["story"]) for e in prep["experience"]] \
-            + [(f"The project {pr['name'][:50]}", pr["what"]) for pr in prep["projects"]] \
-            + [(f"The skill {sk['skill'][:40]}", sk["proof"] + " " + sk["detail"]) for sk in prep["skills"]] \
-            + [(f"What {t['tool'][:30]} did in {pr['name'][:40]}", t["use"] + " " + t["why"]) for pr in prep["projects"] for t in pr["tech"]]:
-        term = _unbacked(said, unverified)
-        if term:
-            checks.append(f"{label} mentions {term} as experience, which is not in your CV.")
-    prep["checks"] = checks
-    prep["made"] = date.today().isoformat()
-    return prep
+        saved[key] = fit_questions(saved[key], facts)
+    saved["ask_hr"] = with_next_steps(saved["ask_hr"])
+    saved["made"] = date.today().isoformat()
+    return saved
 
 
 def _items(value: Any, most: int) -> list[str]:
@@ -274,68 +253,199 @@ def _items(value: Any, most: int) -> list[str]:
     return [cover_letter.clean(str(x)).strip() for x in value if isinstance(x, (str, int, float)) and str(x).strip()][:most]
 
 
-def _clean(data: Any) -> dict[str, Any]:
-    data = data if isinstance(data, dict) else {}
-    questions = []
-    for item in data.get("questions") if isinstance(data.get("questions"), list) else []:
-        if not isinstance(item, dict):
-            continue
-        question, answer = cover_letter.clean(str(item.get("question", ""))).strip(), cover_letter.clean(str(item.get("answer", ""))).strip()
+def _text(value: Any) -> str:
+    """One text from the model's reply, cleaned (en dash, no stray marks)."""
+    return cover_letter.clean(str(value or "")).strip()
+
+
+def _listed(value: Any) -> list[dict]:
+    """The entries of a list the model was asked for (anything that is not a list: none)."""
+    return [x for x in value if isinstance(x, dict)] if isinstance(value, list) else []
+
+
+@dataclass
+class Question:
+    """A question the interviewer will probably ask, with the answer in the candidate's words."""
+    audience: str                       # "hr" or "technical"
+    kind: str                           # one of KINDS
+    question: str
+    why: str
+    answer: str
+
+    @classmethod
+    def from_reply(cls, item: dict) -> "Question | None":
+        question, answer = _text(item.get("question")), _text(item.get("answer"))
         if not question or not answer:
-            continue
+            return None
         kind = str(item.get("kind", "")).strip().lower()
         kind = kind if kind in KINDS else "about you"
         audience = str(item.get("audience", "")).strip().lower()
-        if audience not in AUDIENCES:               # an older or careless reply: questions about the work itself go to the specialist
+        if audience not in AUDIENCES:   # an older or careless reply: questions about the work itself go to the specialist
             audience = "technical" if kind in ("technical", "your projects") else "hr"
-        questions.append({"audience": audience, "kind": kind, "question": question,
-                          "why": cover_letter.clean(str(item.get("why", ""))).strip(), "answer": answer})
-    questions.sort(key=lambda q: (AUDIENCES.index(q["audience"]), KINDS.index(q["kind"])))
-    texts = lambda key, n: _items(data.get(key), n)                                                                   # noqa: E731
-    text = lambda key: cover_letter.clean(str(data.get(key, "") or "")).strip()                                        # noqa: E731
-    key_q = data.get("key_question") if isinstance(data.get("key_question"), dict) else {}
-    concepts = [{"term": cover_letter.clean(str(c.get("term", ""))).strip(), "meaning": cover_letter.clean(str(c.get("meaning", ""))).strip()}
-                for c in (data.get("concepts") if isinstance(data.get("concepts"), list) else []) if isinstance(c, dict)]
-    experience = []
-    for e in data.get("experience") if isinstance(data.get("experience"), list) else []:
-        if not isinstance(e, dict):
-            continue
-        entry = {"job": cover_letter.clean(str(e.get("job", "") or "")).strip(), "story": cover_letter.clean(str(e.get("story", "") or "")).strip(),
-                 "plain": cover_letter.clean(str(e.get("plain", "") or "")).strip(),
-                 "gained": _items(e.get("gained"), 5), "typical": _items(e.get("typical"), 6), "if_true": _items(e.get("if_true"), 6),
-                 "thin": cover_letter.clean(str(e.get("thin", "") or "")).strip()}
-        if entry["job"] and entry["story"]:
-            experience.append(entry)
-    projects = []
-    for pr in data.get("projects") if isinstance(data.get("projects"), list) else []:
-        if not isinstance(pr, dict):
-            continue
-        tech = [{key: cover_letter.clean(str(t.get(key, "") or "")).strip() for key in ("tool", "about", "use", "why")}
-                for t in (pr.get("tech") if isinstance(pr.get("tech"), list) else []) if isinstance(t, dict)]
-        entry = {"name": cover_letter.clean(str(pr.get("name", "") or "")).strip(), "what": cover_letter.clean(str(pr.get("what", "") or "")).strip(),
-                 "plain": cover_letter.clean(str(pr.get("plain", "") or "")).strip(), "tools": _items(pr.get("tools"), 10),
-                 "tech": [t for t in tech if t["tool"] and t["use"]][:10], "result": cover_letter.clean(str(pr.get("result", "") or "")).strip(),
-                 "ask": _items(pr.get("ask"), 4)}
-        if entry["name"] and entry["what"]:
-            projects.append(entry)
-    skills = []
-    for sk in data.get("skills") if isinstance(data.get("skills"), list) else []:
-        if isinstance(sk, dict):
-            entry = {"skill": cover_letter.clean(str(sk.get("skill", "") or "")).strip(), "proof": cover_letter.clean(str(sk.get("proof", "") or "")).strip(),
-                     "detail": cover_letter.clean(str(sk.get("detail", "") or "")).strip()}
-            if entry["skill"] and entry["proof"]:
-                skills.append(entry)
-    return {"summary": text("summary"), "questions": questions, "experience": experience[:6],
-            "projects": projects[:6], "skills": skills[:8],
-            "ask_hr": texts("ask_hr", 6), "ask_technical": texts("ask_technical", 6),
-            "ask_them": texts("ask_them", 6),          # one mixed list: what older saved preparations have
-            "revise": texts("revise", 6),
-            "company": texts("company", 7), "company_say": text("company_say"),
-            "role": texts("role", 8), "role_plain": text("role_plain"),
-            "fit": texts("fit", 8), "gap": text("gap"), "pitch": text("pitch"),
-            "key_question": {"question": cover_letter.clean(str(key_q.get("question", "") or "")).strip(),
-                             "answer": cover_letter.clean(str(key_q.get("answer", "") or "")).strip()},
-            "concepts": [c for c in concepts if c["term"] and c["meaning"]][:10], "reminders": texts("reminders", 7)}
+        return cls(audience, kind, question, _text(item.get("why")), answer)
+
+    def order(self) -> tuple[int, int]:
+        return AUDIENCES.index(self.audience), KINDS.index(self.kind)
+
+    def to_dict(self) -> dict[str, str]:
+        return {"audience": self.audience, "kind": self.kind, "question": self.question, "why": self.why, "answer": self.answer}
+
+
+@dataclass
+class WorkStory:
+    """One job of the CV, told for this role."""
+    job: str
+    story: str
+    plain: str
+    gained: list[str]
+    typical: list[str]
+    if_true: list[str]
+    thin: str
+
+    @classmethod
+    def from_reply(cls, e: dict) -> "WorkStory | None":
+        story = cls(_text(e.get("job")), _text(e.get("story")), _text(e.get("plain")), _items(e.get("gained"), 5),
+                    _items(e.get("typical"), 6), _items(e.get("if_true"), 6), _text(e.get("thin")))
+        return story if story.job and story.story else None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"job": self.job, "story": self.story, "plain": self.plain, "gained": self.gained, "typical": self.typical,
+                "if_true": self.if_true, "thin": self.thin}
+
+
+@dataclass
+class Tool:
+    """A tool or a method of a project: what it is, what it did there, and why it suits that task."""
+    tool: str
+    about: str
+    use: str
+    why: str
+
+    @classmethod
+    def from_reply(cls, t: dict) -> "Tool | None":
+        tool = cls(*(_text(t.get(key)) for key in ("tool", "about", "use", "why")))
+        return tool if tool.tool and tool.use else None
+
+    def to_dict(self) -> dict[str, str]:
+        return {"tool": self.tool, "about": self.about, "use": self.use, "why": self.why}
+
+
+@dataclass
+class Project:
+    """A project of the CV, told for a specialist ("what") and for HR ("plain")."""
+    name: str
+    what: str
+    plain: str
+    tools: list[str]
+    tech: list[Tool]
+    result: str
+    ask: list[str]
+
+    @classmethod
+    def from_reply(cls, pr: dict) -> "Project | None":
+        tech = [t for t in (Tool.from_reply(x) for x in _listed(pr.get("tech"))) if t][:10]
+        project = cls(_text(pr.get("name")), _text(pr.get("what")), _text(pr.get("plain")), _items(pr.get("tools"), 10),
+                      tech, _text(pr.get("result")), _items(pr.get("ask"), 4))
+        return project if project.name and project.what else None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"name": self.name, "what": self.what, "plain": self.plain, "tools": self.tools,
+                "tech": [t.to_dict() for t in self.tech], "result": self.result, "ask": self.ask}
+
+
+@dataclass
+class Skill:
+    """A skill the role asks for, with where the CV shows it."""
+    skill: str
+    proof: str
+    detail: str
+
+    @classmethod
+    def from_reply(cls, sk: dict) -> "Skill | None":
+        skill = cls(_text(sk.get("skill")), _text(sk.get("proof")), _text(sk.get("detail")))
+        return skill if skill.skill and skill.proof else None
+
+    def to_dict(self) -> dict[str, str]:
+        return {"skill": self.skill, "proof": self.proof, "detail": self.detail}
+
+
+class Preparation:
+    """One interview preparation. It is saved with the job as a plain dictionary (`as_dict`), the shape the
+    documents and the window read. It knows what in it is said in the candidate's voice, so that all of it is
+    held to the CV in one place."""
+
+    def __init__(self, data: dict[str, Any]) -> None:
+        self._data = data
+
+    @classmethod
+    def from_reply(cls, reply: Any) -> "Preparation":
+        """The model's reply, cleaned: parts that are not usable are left out; lists keep their limits."""
+        data = reply if isinstance(reply, dict) else {}
+        keep = lambda kind, key, most: [x.to_dict() for x in (kind.from_reply(i) for i in _listed(data.get(key))) if x][:most]  # noqa: E731
+        questions = sorted((q for q in (Question.from_reply(i) for i in _listed(data.get("questions"))) if q), key=Question.order)
+        texts = lambda key, n: _items(data.get(key), n)                                                                   # noqa: E731
+        key_q = data.get("key_question") if isinstance(data.get("key_question"), dict) else {}
+        concepts = [{"term": _text(c.get("term")), "meaning": _text(c.get("meaning"))} for c in _listed(data.get("concepts"))]
+        return cls({"summary": _text(data.get("summary")), "questions": [q.to_dict() for q in questions],
+                    "experience": keep(WorkStory, "experience", 6), "projects": keep(Project, "projects", 6), "skills": keep(Skill, "skills", 8),
+                    "ask_hr": texts("ask_hr", 6), "ask_technical": texts("ask_technical", 6),
+                    "ask_them": texts("ask_them", 6),          # one mixed list: what older saved preparations have
+                    "revise": texts("revise", 6),
+                    "company": texts("company", 7), "company_say": _text(data.get("company_say")),
+                    "role": texts("role", 8), "role_plain": _text(data.get("role_plain")),
+                    "fit": texts("fit", 8), "gap": _text(data.get("gap")), "pitch": _text(data.get("pitch")),
+                    "key_question": {"question": _text(key_q.get("question")), "answer": _text(key_q.get("answer"))},
+                    "concepts": [c for c in concepts if c["term"] and c["meaning"]][:10], "reminders": texts("reminders", 7)})
+
+    def as_dict(self) -> dict[str, Any]:
+        return self._data
+
+    @property
+    def questions(self) -> list[dict]:
+        return self._data.get("questions") or []
+
+    def _parts(self, key: str) -> list[dict]:
+        return self._data.get(key) or []
+
+    def voice(self) -> list[tuple[str, str]]:
+        """(where, text) for everything said in the candidate's own voice: what must not claim more than the CV."""
+        d = self._data
+        return [(q["question"], q["answer"]) for q in self.questions] + [
+            ("the opening pitch", d.get("pitch", "")), ("the key question", (d.get("key_question") or {}).get("answer", "")),
+            ("what to say about the company", d.get("company_say", ""))] + [("your fit", point) for point in self._parts("fit")] + [
+            (f"the story about {e['job'][:50]}", e.get("story", "")) for e in self._parts("experience")] + [
+            (f"the plain story about {e['job'][:50]}", e.get("plain", "")) for e in self._parts("experience")] + [
+            (f"the project {pr['name'][:50]}", pr.get("what", "")) for pr in self._parts("projects")] + [
+            (f"the project {pr['name'][:50]} for HR", pr.get("plain", "")) for pr in self._parts("projects")] + [
+            (f"the result of {pr['name'][:50]}", pr.get("result", "")) for pr in self._parts("projects")] + [
+            (f"the skill {sk['skill'][:40]}", sk.get("detail", "")) for sk in self._parts("skills")]
+
+    def problems(self, unverified: list[str], first_name: str = "") -> tuple[list[tuple[str, str]], list[str]]:
+        """What to send back to the model: (where, a technology claimed without the CV) and where it names the candidate."""
+        said = [(where, text) for where, text in self.voice() if text]
+        bad = [(where, term) for where, term in ((w, _unbacked(t, unverified)) for w, t in said) if term]
+        third = [where for where, text in said if first_name and re.search(rf"\b{re.escape(first_name)}\b", text)]
+        return bad, third
+
+    def mark(self, unverified: list[str]) -> None:
+        """Mark, in the saved preparation, what still claims more than the CV: each answer, and a list of checks."""
+        d = self._data
+        for q in self.questions:
+            q["check"] = _unbacked(q.get("answer", ""), unverified)
+        claims = [("The opening pitch", d.get("pitch", "")), ("The answer to the key question", (d.get("key_question") or {}).get("answer", ""))] \
+            + [("A point under your fit", point) for point in self._parts("fit")] \
+            + [(f"The story about {e['job'][:50]}", e.get("story", "")) for e in self._parts("experience")] \
+            + [(f"The project {pr['name'][:50]}", pr.get("what", "")) for pr in self._parts("projects")] \
+            + [(f"The skill {sk['skill'][:40]}", sk.get("proof", "") + " " + sk.get("detail", "")) for sk in self._parts("skills")] \
+            + [(f"What {t['tool'][:30]} did in {pr['name'][:40]}", t.get("use", "") + " " + t.get("why", ""))
+               for pr in self._parts("projects") for t in pr.get("tech") or []]
+        d["checks"] = [f"{label} mentions {term} as experience, which is not in your CV."
+                       for label, term in ((label, _unbacked(text, unverified)) for label, text in claims) if term]
+
+
+def _clean(data: Any) -> dict[str, Any]:
+    """The model's reply as a saved preparation (see `Preparation.from_reply`)."""
+    return Preparation.from_reply(data).as_dict()
 
 
 def as_text(job: dict[str, Any], prep: dict[str, Any]) -> str:
@@ -450,17 +560,6 @@ def apply_parts(prep: dict[str, Any], edited: list[dict[str, Any]], cv_text: str
                 return prep, f"“{label[:70]}” is empty. Write it, or leave the draft as it was."
             new[section][int(index)][field] = text
     unverified = cover_letter.unverified_terms(cv_text + "\n" + (notes or "")) if cv_text.strip() else []
-    for q in new.get("questions") or []:
-        q["check"] = _unbacked(q.get("answer", ""), unverified)
-    checks = []
-    for label, said in [("The opening pitch", new.get("pitch", "")), ("The answer to the key question", (new.get("key_question") or {}).get("answer", ""))] \
-            + [("A point under your fit", point) for point in new.get("fit") or []] \
-            + [(f"The story about {e['job'][:50]}", e.get("story", "")) for e in new.get("experience") or []] \
-            + [(f"The project {pr['name'][:50]}", pr.get("what", "")) for pr in new.get("projects") or []] \
-            + [(f"The skill {sk['skill'][:40]}", sk.get("proof", "") + " " + sk.get("detail", "")) for sk in new.get("skills") or []]:
-        term = _unbacked(said, unverified)
-        if term:
-            checks.append(f"{label} mentions {term} as experience, which is not in your CV.")
-    new["checks"] = checks
+    Preparation(new).mark(unverified)
     new["edited"] = date.today().isoformat()
     return new, ""

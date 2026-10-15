@@ -354,7 +354,10 @@ Claude writes the adapted CV, the letter, the form answers and the interview ans
 checks them (Figure 6.2). A prompt that says "do not invent" is not a guarantee. So the code
 reads each draft for technologies that the CV does not show. It also looks for terms of the
 posting stated as experience. The code sends its findings back to Claude once. If a finding is
-still there, the app keeps it and shows it to the person. It never cuts it out silently.
+still there, the app keeps it and shows it to the person. It never cuts it out silently. In the interview
+preparation, small classes do this work. `Question`, `WorkStory`, `Project`, `Tool` and `Skill` each
+clean one part of the reply. `Preparation` lists everything said in the voice of the person and
+checks all of it against the CV in one place.
 
 ![How a text is kept inside what the CV shows](img/code_honesty.png)
 
