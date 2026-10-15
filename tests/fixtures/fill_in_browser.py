@@ -81,7 +81,7 @@ def main() -> int:
     from PySide6.QtWebEngineWidgets import QWebEngineView
     from PySide6.QtWidgets import QApplication
 
-    from jobhelper import chrome, config, details, llm, store, ui_api, vault
+    from jobhelper import api_core, chrome, config, details, llm, store, ui_api, vault
 
     work = Path(tempfile.mkdtemp(prefix="jobhelper_form_test_"))
     vault.use_keychain(vault.MemoryKeychain({vault.KEY_ACCOUNT: base64.urlsafe_b64encode(bytes(range(32))).decode("ascii")}))
@@ -95,8 +95,8 @@ def main() -> int:
     config.JOBS_JSON, config.USAGE_JSON, config.ENV_PATH = work / "jobs.json", work / "usage.json", work / ".env"
     config.ensure_dirs = lambda: None
     ui_api.agent4_tracker.render_all = lambda jobs: None
-    ui_api.Api._cv_text = lambda self: setup.get("cv", "Alex Novak\nJunior analyst. SQL, Excel, Python.")
-    ui_api.Api._my_name = lambda self: "Alex Novak"
+    api_core.CvSource.text = lambda self: setup.get("cv", "Alex Novak\nJunior analyst. SQL, Excel, Python.")
+    api_core.CvSource.name = lambda self: "Alex Novak"
     store.save_jobs(setup.get("jobs", []))
     if setup.get("details"):
         assert details.save(setup["details"])["ok"]

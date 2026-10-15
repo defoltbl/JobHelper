@@ -16,7 +16,6 @@ import json
 import os
 import re
 import subprocess
-import sys
 import time
 from datetime import date, datetime
 from pathlib import Path
@@ -25,6 +24,7 @@ from . import trouble  # noqa: I001
 from .api_assistant import AssistantApi
 from .api_talk import TalkApi
 from .api_base import _guarded, _stem
+from .api_core import CvSource, Desktop, JobEditor
 from .api_documents import DocumentsApi
 from .api_interview import InterviewApi
 from .api_letters import LettersApi
@@ -40,28 +40,35 @@ def _claude_auth_status():
 
 
 class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
-    # ── small helpers ───────────────────────────────────────────
-    def _open(self, path):
-        try:
-            if sys.platform == "darwin":
-                subprocess.Popen(["open", str(path)])
-            elif os.name == "nt":
-                os.startfile(str(path))  # type: ignore[attr-defined]
-            else:
-                subprocess.Popen(["xdg-open", str(path)])
-        except Exception as e:  # noqa: BLE001 - the window says "couldn't open"; the reason is kept
-            trouble.note("opening a file or folder", e)
+    """The window's back end, as one object the bridge talks to.
 
-    def _reveal(self, path):
-        """Show a file in its folder (selected in Finder), so it is easy to drag into a form."""
-        try:
-            if sys.platform == "darwin":
-                subprocess.Popen(["open", "-R", str(path)])
-            else:
-                self._open(os.path.dirname(str(path)))
-        except Exception as e:  # noqa: BLE001
-            trouble.note("showing a file in its folder", e)
+    It owns the small shared objects (`api_core`) and hands them to the parts that need them.
+    """
 
+    def __init__(self) -> None:
+        self._desktop = Desktop()
+        self._cv = CvSource()
+        self._jobs = JobEditor()
+
+    @property
+    def live(self):
+        """The job list of the search or scan in progress (None between runs); set by the bridge."""
+        return self._jobs.live
+
+    @live.setter
+    def live(self, jobs) -> None:
+        self._jobs.live = jobs
+
+    @property
+    def editor(self) -> JobEditor:
+        """Changes saved jobs by hand, and the same job in a run in progress."""
+        return self._jobs
+
+    def cv_text(self) -> str:
+        """The master CV as text (empty when there is none)."""
+        return self._cv.text()
+
+    # ── small actions ───────────────────────────────────────────
     def show_in_folder(self, kind, job_id):
         """Reveal a job's CV, letter or single PDF in its folder. The PDF copy when there is one."""
         j = store.find(store.load_jobs(), job_id)
@@ -82,7 +89,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         if not target.is_file():
             return {"ok": False, "msg": "That file is not on the disk any more." if kind != "combined"
                     else "Make the single PDF first, then it can be shown in its folder."}
-        self._reveal(target)
+        self._desktop.reveal(target)
         return {"ok": True, "file": target.name}
 
     # ── read: status / data ─────────────────────────────────────
@@ -188,21 +195,6 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         except (TypeError, ValueError):
             return followup.DEFAULT_DAYS
 
-    _cv_cache: tuple = ("", 0.0, "")
-
-    def _cv_text(self) -> str:
-        """Master CV text, re-read only when the file changes."""
-        try:
-            path = agent1_cv.find_cv()
-            if not path:
-                return ""
-            stamp = path.stat().st_mtime
-            if Api._cv_cache[:2] != (str(path), stamp):
-                Api._cv_cache = (str(path), stamp, agent1_cv.read_cv_text(path))
-            return Api._cv_cache[2]
-        except Exception:  # noqa: BLE001
-            return ""
-
     def _doc(self, base, name: str) -> dict:
         """Which files exist for a stored document name."""
         if not name:
@@ -217,7 +209,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         if not j:
             return {}
         description = (j.get("description") or "").strip()
-        words = keywords.compare(description, self._cv_text()) if description else {"matched": [], "missing": []}
+        words = keywords.compare(description, self._cv.text()) if description else {"matched": [], "missing": []}
         replies = followup.last_reply_by_job(db.all_responses())
         letter = self._doc(config.LETTERS_DIR, j.get("cover_letter_file", ""))
         cv = self._doc(config.TAILORED_CV_DIR, j.get("tailored_cv_file", ""))
@@ -277,30 +269,6 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         return {}
 
     # ── changing a job by hand ──────────────────────────────────
-    live = None      # the jobs list a run in progress is working on (set by the bridge)
-
-    def _change(self, job_id, fn, render: bool = True):
-        """Apply one hand edit to the saved jobs - and, while a search or scan is
-        running, to that run's own list too. Without the second step the run
-        would write its older copy over your edit when it finishes."""
-        jobs = store.load_jobs()
-        j = store.find(jobs, job_id)
-        if not j:
-            return {"ok": False, "msg": "That job is not in the list any more."}
-        result = fn(jobs, j) or {"ok": True}
-        if result.get("ok"):
-            store.save_jobs(jobs)
-            if render:                               # the Excel files only when what they show has changed
-                agent4_tracker.render_all(jobs)
-            running = self.live
-            twin = store.find(running, job_id) if running is not None else None
-            if twin is not None:
-                try:
-                    fn(running, twin)
-                except Exception as e:  # noqa: BLE001 - the saved copy is already right
-                    trouble.note(f"repeating a hand edit on the running search's list ({job_id})", e)
-        return result
-
     def set_status(self, job_id, status):
         """Mark an application rejected / interview / offer / waiting by hand
         (for news that did not come through the scanned mailbox)."""
@@ -316,7 +284,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
             j["status_by_hand"] = datetime.now().isoformat(timespec="seconds")      # emails older than this do not change it back
             j["notes"] = (f"[{today}] Marked {status.replace('_', ' ')} by you.\n" + (j.get("notes") or "")).strip()
             agent2_search.prune_applied_leads(jobs)
-        return self._change(job_id, go)
+        return self._jobs.change(job_id, go)
 
     def set_apply_date(self, job_id, text):
         """Set the day you applied (YYYY-MM-DD). This date is yours: emails never change it."""
@@ -334,7 +302,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
             if j.get("source") == "manual" and j.get("date_found") == j["date_applied"]:
                 j["date_found"] = ""               # so it is not mistaken for an import day
             j["last_update"] = date.today().isoformat()
-        return self._change(job_id, go)
+        return self._jobs.change(job_id, go)
 
     def profession_fields(self, wanted=None):
         """Which professions the free first look treats as yours, for the roles given (the ones
@@ -347,7 +315,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         wanted = [str(w).strip() for w in (wanted or []) if str(w).strip()] or list(profile.get("target_roles") or [])
         roles = wanted + list(profile.get("adjacent_roles") or [])
         from_roles = prefilter.fields_of(roles)
-        return {"fields": from_roles or prefilter.fields_of([], self._cv_text()), "from_cv": not from_roles, "all": list(prefilter.FIELDS)}
+        return {"fields": from_roles or prefilter.fields_of([], self._cv.text()), "from_cv": not from_roles, "all": list(prefilter.FIELDS)}
 
     def rescore_ids(self, job_id=""):
         """Which jobs "Score again" covers: the one given, or every new job that has a score."""
@@ -370,7 +338,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         profile = agent1_cv.load_profile() or {}
         jobs = store.load_jobs()
         try:
-            stats = agent3_letters.rescore(jobs, ids, profile, self._cv_text())
+            stats = agent3_letters.rescore(jobs, ids, profile, self._cv.text())
         except Exception as e:  # noqa: BLE001 - shown to the user as the reason (the limit, no connection)
             return {"ok": False, "msg": str(e)}
         if not stats["scored"]:
@@ -384,7 +352,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
                     j[k] = fresh[k]
                 else:
                     j.pop(k, None)
-        self._change(job_id, go)
+        self._jobs.change(job_id, go)
         change = stats["changed"][0] if stats["changed"] else None
         return {"ok": True, "score": fresh["match_score"], "before": change["before"] if change else fresh["match_score"]}
 
@@ -396,7 +364,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
             return "This job already has its CV and its letter."
         if agent3_letters.text_basis(j) == "title":
             return "The posting's text is missing, and a letter written from a title alone would be generic. Read the posting again or paste its text first."
-        if not self._cv_text().strip():
+        if not self._cv.text().strip():
             return "Your master CV could not be read. Choose it in the Account card first."
         return ""
 
@@ -410,7 +378,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         work = dict(j)
         try:
             cv_path = agent1_cv.find_cv()
-            done = agent3_letters.generate_for(work, self._cv_text(), cv_path)
+            done = agent3_letters.generate_for(work, self._cv.text(), cv_path)
         except Exception as e:  # noqa: BLE001 - shown to the person as the reason (the limit, no connection)
             return {"ok": False, "msg": str(e) or "The documents could not be written."}
         if not done["cv"] and not done["letter"]:
@@ -419,7 +387,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
 
         def go(jobs, current):          # on a fresh copy: the writing took a while
             current.update(fresh)
-        self._change(job_id, go)
+        self._jobs.change(job_id, go)
         made = " and ".join(name for name, key in (("the CV", "cv"), ("the letter", "letter")) if done[key])
         missing = [name for name, key, had in (("the CV", "cv", j.get("tailored_cv_file")), ("the letter", "letter", j.get("cover_letter_file")))
                    if not done[key] and not had]
@@ -431,7 +399,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         def go(jobs, j):
             j["prefilter_override"] = True
             j.pop("prefilter", None)
-        return self._change(job_id, go)
+        return self._jobs.change(job_id, go)
 
     # ── the last seven days ─────────────────────────────────────
     @_guarded(dict)
@@ -459,10 +427,10 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
             def go(current, j):
                 # applied to a fresh copy, not the one read before the call: other edits made meanwhile are kept
                 j.update(moved)
-                if current is not self.live:
+                if current is not self._jobs.live:
                     agent5_responses.annotate_progress(current)
                     agent2_search.prune_applied_leads(current)
-            self._change(job_id, go)
+            self._jobs.change(job_id, go)
         return result
 
     # ── the check made when the app starts ──────────────────────
@@ -526,7 +494,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         store.upsert(jobs, [job])
         store.save_jobs(jobs)
         agent4_tracker.render_all(jobs)
-        live = self.live
+        live = self._jobs.live
         if live is not None and not store.find(live, job["id"]):
             live.append(dict(job))                        # a run in progress must not lose it
         del rows[index]
@@ -548,7 +516,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         url = str(rows[index].get("url") or "") if index >= 0 else ""
         if not url.startswith(("http://", "https://")):
             return {"ok": False}
-        self._open(url)
+        self._desktop.open(url)
         return {"ok": True}
 
     # ── master CV next to an adapted one ────────────────────────
@@ -580,17 +548,17 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         threshold = int(opts.get("threshold") or 30)
         return {"works": insights.what_works(jobs, db.all_responses()),
                 "keywords": insights.keyword_stats(jobs, list(opts.get("queries") or []), threshold),
-                "gaps": insights.skill_gaps(jobs, self._cv_text()),
+                "gaps": insights.skill_gaps(jobs, self._cv.text()),
                 "salaries": insights.salaries(jobs),
                 "trends": insights.trends(jobs, db.all_responses()),
                 "reply_times": insights.reply_times(jobs, db.all_responses()),
-                "low_scores": insights.low_score_reasons(jobs, self._cv_text(), threshold),
+                "low_scores": insights.low_score_reasons(jobs, self._cv.text(), threshold),
                 "threshold": threshold, "min_group": insights.MIN_GROUP}
 
     def read_ahead(self):
         """Prepare what the Insights view needs (the keywords of every posting and of the CV), gently:
         for a background thread, so the first Insights view opens at once. Returns how many texts were read."""
-        return keywords.read_ahead([j.get("description") or "" for j in store.load_jobs()] + [self._cv_text()])
+        return keywords.read_ahead([j.get("description") or "" for j in store.load_jobs()] + [self._cv.text()])
 
     @staticmethod
     def _asked_text(j, suffix=""):
@@ -623,12 +591,12 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
     def merge_jobs(self, keep_id, drop_id):
         def go(jobs, j):
             return {"ok": merge.merge(jobs, keep_id, drop_id)}
-        return self._change(keep_id, go)
+        return self._jobs.change(keep_id, go)
 
     def keep_separate(self, a_id, b_id):
         def go(jobs, j):
             return {"ok": merge.keep_separate(jobs, a_id, b_id)}
-        return self._change(a_id, go)
+        return self._jobs.change(a_id, go)
 
     @_guarded(dict)
     def followup_draft(self, job_id):
@@ -643,7 +611,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         return followup.draft(j, followup.candidate_name(profile, cv.name if cv else ""))
 
     def mark_followed_up(self, job_id):
-        result = self._change(job_id, lambda jobs, j: followup.mark_sent(j))
+        result = self._jobs.change(job_id, lambda jobs, j: followup.mark_sent(j))
         return {"ok": bool(result.get("ok"))}
 
     @_guarded(list)
@@ -692,7 +660,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         path = config.DATA_DIR / trouble.LOG_NAME
         if not path.is_file():
             return {"ok": False, "msg": "There is no log yet: nothing has gone wrong."}
-        self._reveal(path)
+        self._desktop.reveal(path)
         return {"ok": True}
 
     def backup_all(self):
@@ -768,7 +736,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         if not job_id:
             db.set_response_job(msg_id, "")
             if old:
-                self._change(old["id"], lambda all_jobs, j: agent5_responses.annotate_progress(all_jobs))
+                self._jobs.change(old["id"], lambda all_jobs, j: agent5_responses.annotate_progress(all_jobs))
             return {"ok": True, "msg": "The reply is not filed under any application now."
                                        + (f" {old['company']} keeps its status ({old['status']}): change it there if this reply had set it." if old else "")}
         target = store.find(jobs, job_id)
@@ -788,7 +756,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
             if new_status and new_status != current and (new_status == "rejected" or email_client.RANK.get(new_status, 0) > email_client.RANK.get(current, 0)):
                 moved["from"], j["status"], j["last_update"] = current, new_status, date.today().isoformat()
             agent5_responses.annotate_progress(all_jobs)
-        self._change(job_id, go)
+        self._jobs.change(job_id, go)
         text = f"Filed under {target.get('company', '')} · {target.get('title', '')}."
         if moved:
             text += f" Its status changed from {moved['from']} to {new_status}."
@@ -990,7 +958,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
                 j["date_applied"] = date.today().isoformat()
                 j.pop("date_applied_source", None)          # you pressed "mark applied": this is the real day
             agent2_search.prune_applied_leads(jobs)
-        result = self._change(job_id, go)
+        result = self._jobs.change(job_id, go)
         return {"ok": bool(result.get("ok"))}
 
     # ── the steps before "Mark applied" ─────────────────────────
@@ -1005,7 +973,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
             done = [s for s in (j.get("apply_steps") or []) if s in self.APPLY_STEPS]
             if step not in done:
                 j["apply_steps"] = done + [step]
-        result = self._change(job_id, go, render=False)
+        result = self._jobs.change(job_id, go, render=False)
         return {"ok": bool(result.get("ok"))}
 
     def open_doc(self, kind, name):
@@ -1017,11 +985,11 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         docx = p.with_suffix(".pdf" if want_pdf else ".docx")
         target = docx if docx.exists() or want_pdf else p
         if target.exists():
-            self._open(target)
+            self._desktop.open(target)
             return {"ok": True}
         own = config.COVER_LETTERS_DIR / os.path.basename(name)   # a letter you wrote yourself
         if kind == "letter" and own.is_file():
-            self._open(own)
+            self._desktop.open(own)
             return {"ok": True}
         return {"ok": False}
 
@@ -1029,7 +997,7 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         p = {"leads": config.NEW_JOBS_EXCEL, "apps": config.EXCEL_PATH,
              "report": config.RESPONSES_REPORT}.get(which)
         if p and p.exists():
-            self._open(p)
+            self._desktop.open(p)
             return {"ok": True}
         return {"ok": False}
 
@@ -1039,6 +1007,6 @@ class Api(DocumentsApi, InterviewApi, LettersApi, AssistantApi, TalkApi):
         url = str((job or {}).get("url", "") or "").strip()
         if not url.startswith(("http://", "https://")):         # a job board hands this over: only a web page is opened
             return {"ok": False}
-        self._open(url)
+        self._desktop.open(url)
         self._opened = (job_id, time.time())                    # the form you fill in next is most likely this job's
         return {"ok": True, "url": url}

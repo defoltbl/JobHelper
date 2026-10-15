@@ -2,7 +2,7 @@
 from pathlib import Path
 import pytest
 
-from jobhelper import agent2_search, config, db, insights, interview_prep, llm, store, ui_api
+from jobhelper import api_core, agent2_search, config, db, insights, interview_prep, llm, store, ui_api
 
 CV = ("Alex Novak\nJunior Software Developer\nPython, Kotlin, SQL, PostgreSQL, FastAPI, Docker, Azure, Git, Linux, React.\n"
       "Built a document search service with FastAPI and pgvector. English B2.")
@@ -108,7 +108,7 @@ def test_skill_gaps_never_change_the_cv_or_a_letter(isolate_data, monkeypatch):
 
 def test_api_insights_puts_it_together(isolate_data, monkeypatch):
     config.ensure_dirs()
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: CV)
     job = store.new_job(id="1", title="Junior Python Developer", company="A", match_score=60, description="Python and AWS.")
     store.save_jobs([job, _app("2", "QA Tester", "rejected")])
     api = ui_api.Api()
@@ -181,7 +181,7 @@ def test_prep_text_for_copying():
 
 def test_api_makes_keeps_and_returns_the_preparation(isolate_data, monkeypatch):
     config.ensure_dirs()
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: CV)
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: GOOD)
     store.save_jobs([_job(), store.new_job(id="lead", title="Dev", company="B")])
     db.upsert_response({"msg_id": "<1@x>", "job_id": "i1", "company": "Acme", "stage": "interview", "summary": "Call on Friday."})
@@ -386,12 +386,12 @@ def test_sheet_file_name_and_date_line():
 def test_api_writes_and_opens_both_documents(isolate_data, monkeypatch):
     config.ensure_dirs()
     opened, shown = [], []
-    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(target))
-    monkeypatch.setattr(ui_api.Api, "_reveal", lambda self, target: shown.append(target))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(target))
+    monkeypatch.setattr(api_core.Desktop, "reveal", lambda self, target: shown.append(target))
     store.save_jobs([store.new_job(id="a", title="ML Engineer", company="BRIGHTLINE", status="interview"), store.new_job(id="b", title="T", company="C", status="waiting")])
     api = ui_api.Api()
     assert "Prepare the interview first" in api.prep_document("b")["msg"] and api.prep_document("zzz")["ok"] is False
-    api._change("a", lambda jobs, j: j.__setitem__("interview_prep", dict(FULL, made="2026-10-08", checks=[])), render=False)
+    api.editor.change("a", lambda jobs, j: j.__setitem__("interview_prep", dict(FULL, made="2026-10-08", checks=[])), render=False)
     got = api.prep_document("a")
     folder = config.DATA_DIR / "interview_prep"
     hr, tech = folder / "Candidate_Brightline_Prep_HR.docx", folder / "Candidate_Brightline_Prep_Technical.docx"
@@ -463,7 +463,7 @@ def test_experience_notes_come_from_options_and_reach_both_drafts(isolate_data, 
     assert api.save_options({"about_experience": "  At Acme I wrote the import service.  " + "x" * 3000})["ok"] is True
     assert config.experience_notes().startswith("At Acme I wrote the import service.") and len(config.experience_notes()) <= config.MAX_EXPERIENCE_NOTES
     api.save_options({"about_experience": "At Acme I wrote the import service."})
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: CV)
     store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="waiting")])
     seen = {}
     monkeypatch.setattr(interview_prep, "generate", lambda j, cv, emails, notes="": seen.update(prep=notes) or dict(FULL, made="x", checks=[], experience=[]))
@@ -644,11 +644,11 @@ def test_an_optional_part_may_be_emptied_and_a_claim_you_add_is_flagged():
 
 def test_api_edits_the_saved_preparation(isolate_data, monkeypatch):
     config.ensure_dirs()
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: CV)
     store.save_jobs([store.new_job(id="a", title="ML Engineer", company="BRIGHTLINE", status="interview"), store.new_job(id="b", title="T", company="C", status="waiting")])
     api = ui_api.Api()
     assert "Prepare the interview first" in api.prep_parts("b")["msg"] and api.save_prep_parts("b", [])["ok"] is False
-    api._change("a", lambda jobs, j: j.update(interview_prep=_saved()), render=False)
+    api.editor.change("a", lambda jobs, j: j.update(interview_prep=_saved()), render=False)
     got = api.prep_parts("a")
     assert got["ok"] and got["company"] == "BRIGHTLINE" and got["edited"] == "" and api.job_detail("a")["prep_edited"] is False
     refused = api.save_prep_parts("a", [{"key": "questions.0.answer", "text": ""}])

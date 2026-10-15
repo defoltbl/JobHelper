@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-from jobhelper import answer_memory, assistant, assistant_brain, chrome, config, details, form_answers, form_choices, form_fill, llm, store, ui_api, vault
+from jobhelper import api_core, answer_memory, assistant, assistant_brain, chrome, config, details, form_answers, form_choices, form_fill, llm, store, ui_api, vault
 from tests.conftest import FIXTURES
 
 MINE = {**details.empty(), "first_name": "Alex", "last_name": "Novak", "email": "alex@example.com", "phone": "+420 123 456 789", "street": "",
@@ -30,8 +30,8 @@ def isolate(tmp_path, monkeypatch):
         (tmp_path / folder).mkdir()
     monkeypatch.setattr(config, "ensure_dirs", lambda: None)
     monkeypatch.setattr(ui_api.agent4_tracker, "render_all", lambda jobs: None)
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
-    monkeypatch.setattr(ui_api.Api, "_my_name", lambda self: "Alex Novak")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: CV)
+    monkeypatch.setattr(api_core.CvSource, "name", lambda self: "Alex Novak")
     return tmp_path
 
 
@@ -843,7 +843,7 @@ def test_the_cv_and_letter_are_shown_in_finder_pdf_first(isolate, monkeypatch, t
     (config.LETTERS_DIR / "letter_nw.docx").write_bytes(b"x")
     store.save_jobs([_job(tailored_cv_file="cv_nw.docx", cover_letter_file="letter_nw.docx"), _job(id="bare")])
     shown = []
-    monkeypatch.setattr(ui_api.Api, "_reveal", lambda self, path: shown.append(path.name))
+    monkeypatch.setattr(api_core.Desktop, "reveal", lambda self, path: shown.append(path.name))
     api = ui_api.Api()
     out = api.assistant_files("nw1")
     assert out["ok"] and shown == ["cv_nw.pdf", "letter_nw.docx"] and "Drag them" in out["say"]
@@ -1092,7 +1092,7 @@ def test_what_a_form_is_given_from_the_lists():
 
 def test_jobs_and_degrees_are_copied_from_the_cv_and_never_made_up(isolate, monkeypatch):
     cv = CV + "\nExperience\nJunior analyst, Northwind, 03/2023 - present\nIntern, Old Mill, 2020 - 2021\nEducation\nMasaryk University, Master, Applied informatics, 2021 - 2023"
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: cv)
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: cv)
     seen = {}
 
     def ask(prompt, **kw):
@@ -1114,7 +1114,7 @@ def test_jobs_and_degrees_are_copied_from_the_cv_and_never_made_up(isolate, monk
     assert "found no jobs or degrees" in ui_api.Api().assistant_cv_lists()["msg"]
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's limit is used up until 14:00.")))
     assert "limit is used up" in ui_api.Api().assistant_cv_lists()["msg"]
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "")
     assert "could not be read" in ui_api.Api().assistant_cv_lists()["msg"]
 
 
@@ -1123,7 +1123,7 @@ def test_your_own_files_are_shown_with_the_cv_or_alone(isolate, monkeypatch, tmp
     paper.write_bytes(b"x")
     store.save_jobs([_job()])
     shown = []
-    monkeypatch.setattr(ui_api.Api, "_reveal", lambda self, path: shown.append(os.path.basename(str(path))))
+    monkeypatch.setattr(api_core.Desktop, "reveal", lambda self, path: shown.append(os.path.basename(str(path))))
     api = ui_api.Api()
     assert api.assistant_files("")["ok"] is False and "no file of your own" in api.assistant_files("nw1")["msg"]
     assert details.save({**MINE, "files": [{"label": "Diploma", "path": str(paper)}]})["ok"]

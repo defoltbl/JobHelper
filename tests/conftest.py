@@ -53,9 +53,9 @@ def safe_environment(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(notify, "ensure_app", lambda: None)   # nor build the helper app
     import types
 
-    from jobhelper import ui_api
-    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: None)   # never open a real file, folder or web page
-    monkeypatch.setattr(ui_api.Api, "_reveal", lambda self, target: None)  # nor a real Finder window
+    from jobhelper import api_core, ui_api  # noqa: F401
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: None)   # never open a real file, folder or web page
+    monkeypatch.setattr(api_core.Desktop, "reveal", lambda self, target: None)  # nor a real Finder window
     from jobhelper import agent2_search
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)                         # the app refuses to ask with it set; tests set it on purpose
     monkeypatch.setattr(agent2_search, "refetch_description", lambda job: "")     # never read a real job board

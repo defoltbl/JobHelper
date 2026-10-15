@@ -14,7 +14,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtQuick import QQuickWindow
 
-from jobhelper import agent1_cv, agent2_search, config, db, llm, store, ui_api
+from jobhelper import api_core, agent1_cv, agent2_search, config, db, llm, store, ui_api
 from tests.conftest import ROOT
 from tests import test_ui_qml
 
@@ -130,7 +130,7 @@ def test_guide_shots(ui, monkeypatch):
                "adjacent_roles": ["QA Automation Engineer"], "search_queries": ["junior python developer", "backend developer", "software engineer"],
                "key_skills": ["Python", "FastAPI", "SQL"]}
     monkeypatch.setattr(agent1_cv, "load_profile", lambda: dict(profile))
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: CV)
     monkeypatch.setattr(ui_api.Api, "_threshold", lambda self: 50)
     monkeypatch.setattr(ui_api.Api, "_old_format_letter", lambda self, j: False)      # the stand-in files are not real letters
     monkeypatch.setattr(ui_api.Api, "usage_info", lambda self: {"five_hour_used": 34, "five_hour_resets": "", "seven_day_used": 12, "seven_day_resets": "",
@@ -317,7 +317,7 @@ def test_guide_shots(ui, monkeypatch):
                               {"audience": "technical", "kind": "technical", "question": "How do you test an API endpoint?", "why": "The posting names testing.",
                                "answer": "With pytest and a test client: one test for the normal case, and one for each way the input can be wrong.", "check": ""}],
                 "ask_hr": ["What are the next steps and the timeline?"], "ask_technical": ["How is code reviewed in the team?"], "ask_them": [], "checks": []}
-        ui.bridge._api._change("app1", lambda jobs, j: j.update(interview_prep=dict(prep)), render=False)
+        ui.bridge._api.editor.change("app1", lambda jobs, j: j.update(interview_prep=dict(prep)), render=False)
         ui.js('prepDialog.show("app1")')
         shot("14_interview_preparation")
         ui.js("prepDialog.close()")

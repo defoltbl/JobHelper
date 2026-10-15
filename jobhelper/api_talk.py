@@ -181,7 +181,7 @@ class TalkApi:
         if not message:
             return {"ok": False, "action": "say", "msg": f"No message from {job.get('company', '')} is filed under this application, so there is nothing to reply to. Scan your email first."}
         try:
-            text = assistant_brain.reply(job, message, how, self._my_name())
+            text = assistant_brain.reply(job, message, how, self._cv.name())
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
             return {"ok": False, "action": "say", "msg": f"I could not ask Claude: {str(e) or type(e).__name__}"}
         if not text:
@@ -215,7 +215,7 @@ class TalkApi:
                     "say": f"This posting is in your list already: {known.get('title', '')} at {known.get('company', '')}, {score}. {str(known.get('match_reason') or '')[:400]}".strip()}
         if len(page["text"].split()) < 60:
             return no("There is too little text on this page to judge a job from. Open the posting itself and ask me again.")
-        cv_text = self._cv_text()
+        cv_text = self._cv.text()
         if not cv_text.strip():
             return no("Your master CV could not be read, so I cannot compare the posting with it.")
         try:
@@ -251,8 +251,8 @@ class TalkApi:
         """The numbers of the Insights view, as the advice is built from them."""
         jobs, responses = store.load_jobs(), db.all_responses()
         threshold = int(self.options().get("threshold") or 30)
-        return {"what_works": insights.what_works(jobs, responses), "skill_gaps": insights.skill_gaps(jobs, self._cv_text()),
-                "reply_times": insights.reply_times(jobs, responses), "low_scores": insights.low_score_reasons(jobs, self._cv_text(), threshold),
+        return {"what_works": insights.what_works(jobs, responses), "skill_gaps": insights.skill_gaps(jobs, self._cv.text()),
+                "reply_times": insights.reply_times(jobs, responses), "low_scores": insights.low_score_reasons(jobs, self._cv.text(), threshold),
                 "smallest_group_that_counts": insights.MIN_GROUP}
 
     # ── edits by instruction: shown first, saved after your yes ──
@@ -279,7 +279,7 @@ class TalkApi:
         if len(found) != 1:
             return {"ok": False, "action": "say", "msg": "I could not tell which answer you mean. Open Form answers for this job and name the question."
                     if items else "This job has no form answers yet. Draft them first."}
-        cv_text = self._cv_text()
+        cv_text = self._cv.text()
         if not cv_text.strip():
             return {"ok": False, "action": "say", "msg": "Your master CV could not be read, so the answer cannot be checked against it."}
         try:
@@ -359,7 +359,7 @@ class TalkApi:
                     if it["question"].lower() == question.lower():
                         it["answer"], it["check"] = answer, ""
                 j["form_answers"] = {"made": (j.get("form_answers") or {}).get("made") or form_answers.stamp(), "items": items}
-            done, said = self._change(job["id"], keep, render=False), "The answer is changed and kept with the job."
+            done, said = self._jobs.change(job["id"], keep, render=False), "The answer is changed and kept with the job."
             if done.get("ok"):
                 answer_memory.remember(question, answer, job.get("company", ""))
         else:
@@ -455,7 +455,7 @@ class TalkApi:
             return {"ok": False, "action": "practice_feedback", "msg": "Answer in a sentence or two, as you would in the interview."}
         if len(answer) > 3000:
             return {"ok": False, "action": "practice_feedback", "msg": f"That is {len(answer)} characters; an answer you would say aloud fits in 3000."}
-        cv_text = self._cv_text()
+        cv_text = self._cv.text()
         if not cv_text.strip():
             return {"ok": False, "action": "practice_feedback", "msg": "Your master CV could not be read, so I cannot compare your answer with it."}
         prep = job.get("interview_prep") or {}
@@ -473,7 +473,7 @@ class TalkApi:
             notes[asked] = {"rating": made["rating"], "when": today}
             j["practice"] = dict(list(notes.items())[-40:])
         if asked in known:
-            self._change(job_id, keep, render=False)
+            self._jobs.change(job_id, keep, render=False)
         return {"ok": True, "action": "practice_feedback", "say": made["feedback"], "rating": made["rating"]}
 
     def assistant_notes_list(self):
@@ -540,7 +540,7 @@ class TalkApi:
 
         def go(jobs, j):            # may run twice (the running search's copy): the result is the same
             j["nudged"] = sorted(set(j.get("nudged") or []) | {kind})
-        return {"ok": bool(self._change(job_id, go, render=False).get("ok"))}
+        return {"ok": bool(self._jobs.change(job_id, go, render=False).get("ok"))}
 
     def _browser(self) -> str:
         """Speak to the browser chosen in the assistant's settings (Chrome unless another one was chosen)."""
@@ -609,7 +609,7 @@ class TalkApi:
 
     # ── the facts a review or a choice is checked against ───────
     def _facts(self, job) -> str:
-        return form_choices.facts_block(self._cv_text(), details.load(), job)
+        return form_choices.facts_block(self._cv.text(), details.load(), job)
 
     @staticmethod
     def _pay(job) -> str:

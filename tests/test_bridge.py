@@ -6,7 +6,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from jobhelper import (agent1_cv, agent2_search, agent3_letters, agent4_tracker,  # noqa: E402
+from jobhelper import (api_core, agent1_cv, agent2_search, agent3_letters, agent4_tracker,  # noqa: E402
                        agent5_responses, config, integrity, letters, qt_bridge, store, ui_api, usage, vault)
 
 READY = {"claude": True, "plan": "pro", "claude_email": "me@example.com", "paid_api": False,
@@ -630,7 +630,7 @@ def test_a_search_saves_what_it_filtered_out_and_counts_it(bridge, monkeypatch):
     assert [(r["group"], r["title"]) for r in saved["rows"]] == [("skip word", "Intern"), ("already applied", "QA Engineer")]
     assert bridge.lastRun()["filtered"] == 2
     opened = []
-    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(target))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(target))
     assert bridge.openFiltered(0) == {"ok": True} and opened == ["https://example.com/i"]
     assert bridge.openFiltered(1) == {"ok": False}
 

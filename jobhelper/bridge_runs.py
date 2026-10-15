@@ -133,7 +133,7 @@ class RunSlots:
             def tick(done, total):
                 self._checkpoint()                              # Stop is honoured between calls
                 self._tick("a3", done, total)
-            stats = agent3_letters.rescore(jobs, ids, profile, self._api._cv_text(), progress=tick,
+            stats = agent3_letters.rescore(jobs, ids, profile, self._api.cv_text(), progress=tick,
                                            on_limit=self._on_limit, status=self.logChanged.emit)
             store.save_jobs(jobs)
             agent4_tracker.render_all(jobs)

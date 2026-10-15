@@ -19,7 +19,7 @@ class AssistantApi:
     def my_details(self):
         """What the page shows: the saved details, and in empty fields what the CV plainly states (offered, not saved)."""
         kept = details.load()
-        offered = details.from_cv(self._cv_text(), self._my_name())
+        offered = details.from_cv(self._cv.text(), self._cv.name())
         from_cv = [key for key in details.KEYS if not kept[key] and offered.get(key)]
         return {"details": {key: kept[key] or offered.get(key, "") for key in details.KEYS}, "from_cv": from_cv,
                 "saved": details.any_given(kept),
@@ -33,7 +33,7 @@ class AssistantApi:
     def assistant_cv_lists(self):
         """The jobs and degrees your CV states, read by Claude in one call, to offer in the page (nothing is saved)."""
         try:
-            found = details.lists_from_cv(self._cv_text())
+            found = details.lists_from_cv(self._cv.text())
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
             return {"ok": False, "msg": f"I could not read them from your CV: {str(e) or type(e).__name__}"}
         if not found["experience"] and not found["education"] and not found.get("languages"):
@@ -73,7 +73,7 @@ class AssistantApi:
             return {"ok": False, **problem}
         if assistant.about_one_company(question):
             return {"ok": False, "field": "question", "msg": assistant.ABOUT_ONE_COMPANY}
-        cv_text = self._cv_text()
+        cv_text = self._cv.text()
         if not cv_text.strip():
             return {"ok": False, "field": "answer", "msg": "Your master CV could not be read, so no answer can be built from it."}
         mine = details.load()
@@ -156,7 +156,7 @@ class AssistantApi:
         shown = []
         for extra in details.load()["files"]:
             if os.path.isfile(extra["path"]):
-                self._reveal(extra["path"])
+                self._desktop.reveal(extra["path"])
                 shown.append(f"{extra['label']} ({os.path.basename(extra['path'])})")
         for what, base, name in (("CV", config.TAILORED_CV_DIR, j.get("tailored_cv_file", "")), ("letter", config.LETTERS_DIR, j.get("cover_letter_file", ""))):
             if not name or os.path.basename(str(name)) != str(name):       # a file name, never a path out of the folder
@@ -164,7 +164,7 @@ class AssistantApi:
             docx = (base / name).with_suffix(".docx")
             for path in (docx.with_suffix(".pdf"), docx, config.COVER_LETTERS_DIR / name):
                 if path.is_file():
-                    self._reveal(path)
+                    self._desktop.reveal(path)
                     shown.append(f"{what} ({path.name})")
                     break
         if not shown:
@@ -209,7 +209,7 @@ class AssistantApi:
                 have = {it["question"].lower() for it in items}
                 items += [{"question": i["question"], "answer": i["answer"], "check": ""} for i in learned if i["question"].lower() not in have]
                 j["form_answers"] = {"made": (j.get("form_answers") or {}).get("made") or form_answers.stamp(), "items": items}
-            self._change(last["job_id"], keep, render=False)
+            self._jobs.change(last["job_id"], keep, render=False)
         if not learned:
             return {"ok": True, "learned": 0, "say": "You changed none of the answers I wrote, so there is nothing new to remember."}
         return {"ok": True, "learned": len(learned),
@@ -247,7 +247,7 @@ class AssistantApi:
         fresh = [q["label"] for q in asked if q["label"].lower() not in kept]
         if not fresh:
             return kept, ""
-        cv_text = self._cv_text()
+        cv_text = self._cv.text()
         if not cv_text.strip():
             return kept, "Your master CV could not be read, so no answer could be built from it."
         try:
@@ -259,7 +259,7 @@ class AssistantApi:
         def keep(jobs, j):          # may run twice (the running search's copy): the result is the same
             items = [i for i in form_answers.tidy((j.get("form_answers") or {}).get("items")) if i["question"].lower() not in new]
             j["form_answers"] = {"made": form_answers.stamp(), "items": items + list(new.values())}
-        self._change(job["id"], keep, render=False)
+        self._jobs.change(job["id"], keep, render=False)
         return {**kept, **{k: v for k, v in new.items() if v["answer"]}}, ""
 
     def _menu(self, n: int, url: str, typed: str = "") -> list[str]:
@@ -305,7 +305,7 @@ class AssistantApi:
         open_ones = [c for c in choices if not picks[c["n"]] and (c["kind"] in ("number", "text") or c["options"])]
         why = ""
         if open_ones:
-            cv_text = self._cv_text()
+            cv_text = self._cv.text()
             if not cv_text.strip():
                 why = "Your master CV could not be read, so nothing could be chosen from it."
             else:
@@ -386,7 +386,7 @@ class AssistantApi:
             elif f["kind"] == "email" and mine.get("email") and f["value"].strip() and f["value"].strip().lower() != mine["email"].lower():
                 problems.append({"field": f["label"], "problem": f"It is not the address in My details ({mine['email']})."})
         note = ""
-        cv_text = self._cv_text()
+        cv_text = self._cv.text()
         if cv_text.strip():
             try:
                 seen = {p["field"] for p in problems}
@@ -622,7 +622,7 @@ class AssistantApi:
         label = f"{job.get('title', '')} at {job.get('company', '')}" if job else ""
         if job and filled and job.get("status") in store.LEAD_STATUSES:
             today = date.today().isoformat()        # so that the app can remind you when a filled form was never marked applied
-            self._change(job["id"], lambda jobs, j: j.__setitem__("form_filled", today), render=False)
+            self._jobs.change(job["id"], lambda jobs, j: j.__setitem__("form_filled", today), render=False)
         # what the assistant itself wrote as answers: the only fields it may read back later, to learn your corrections
         self._last_fill = {"url": page["url"], "job_id": job["id"] if job else "", "company": job.get("company", "") if job else "",
                            "items": [{"n": i["n"], "label": i["label"], "value": i["value"]} for i in fill

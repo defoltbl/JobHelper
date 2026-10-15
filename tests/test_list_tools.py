@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from jobhelper import agent2_search, agent3_letters, config, cover_letter, llm, store, ui_api, vault
+from jobhelper import api_core, agent2_search, agent3_letters, config, cover_letter, llm, store, ui_api, vault
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = ROOT / "data" / "cover_letter_template.docx"
@@ -18,7 +18,7 @@ pytestmark = pytest.mark.skipif(not TEMPLATE.exists(), reason="letter template n
 def api(isolate_data, monkeypatch):
     config.ensure_dirs()
     shutil.copy2(TEMPLATE, config.LETTER_TEMPLATE)
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: CV)
     return ui_api.Api()
 
 
@@ -175,7 +175,7 @@ def test_saving_changes_only_the_paragraphs_and_keeps_the_old_version(api):
     after = cover_letter.read_letter(path)
     assert after["paragraphs"][2].startswith("I built a REST API") and "—" not in after["paragraphs"][2]    # em dash cleaned
     assert after["date_text"] == before["date_text"]
-    assert before["title_line"] == "Junior Developer" and after["title_line"] == cover_letter.own_title(api._cv_text()) != "", \
+    assert before["title_line"] == "Junior Developer" and after["title_line"] == cover_letter.own_title(api.cv_text()) != "", \
         "the head carries your own title from your CV, also in a letter written before that was so"
     assert after["paragraphs"][0] == PARAS[0]
     assert cover_letter.verify(config.LETTER_TEMPLATE, path, []) == []                 # layout identical to the template

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from jobhelper import config, store, ui_api, vault
+from jobhelper import api_core, config, store, ui_api, vault
 
 
 @pytest.fixture
@@ -83,7 +83,7 @@ def test_apply_job_unknown_id(api):
 
 def test_open_doc_prefers_docx_and_reports_missing(api, monkeypatch):
     opened = []
-    monkeypatch.setattr(ui_api.Api, "_open", lambda self, path: opened.append(path))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, path: opened.append(path))
     config.ensure_dirs()
     (config.LETTERS_DIR / "letter.md").write_text("x", encoding="utf-8")
     (config.LETTERS_DIR / "letter.docx").write_bytes(b"x")
@@ -95,7 +95,7 @@ def test_open_doc_prefers_docx_and_reports_missing(api, monkeypatch):
 
 def test_open_url_needs_a_link(api, monkeypatch):
     opened = []
-    monkeypatch.setattr(ui_api.Api, "_open", lambda self, path: opened.append(path))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, path: opened.append(path))
     _seed(store.new_job(id="with", url="https://example.com/job"), store.new_job(id="without"))
     assert api.open_url("with")["ok"] and opened == ["https://example.com/job"]
     assert api.open_url("without") == {"ok": False}
@@ -142,7 +142,7 @@ OLD = _OLD_DAY.isoformat()
 
 
 def test_job_detail_compares_keywords_with_the_master_cv(api, monkeypatch):
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Python, Docker, FastAPI. English B2.")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Python, Docker, FastAPI. English B2.")
     _seed(store.new_job(id="x", title="Backend Developer", company="Acme", location="Prague", url="https://e.x/j",
                         description="Python, FastAPI, Kubernetes and Kafka. English.", match_score=72,
                         match_tier="strong", match_reason="Good Python fit.", status="letter_ready"))
@@ -173,7 +173,7 @@ def test_job_detail_reports_existing_pdf_copies(api):
 
 def test_open_doc_pdf_only_opens_an_existing_pdf(api, monkeypatch):
     opened = []
-    monkeypatch.setattr(ui_api.Api, "_open", lambda self, path: opened.append(path.name))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, path: opened.append(path.name))
     config.ensure_dirs()
     (config.TAILORED_CV_DIR / "cv.docx").write_bytes(b"x")
     assert api.open_doc("cv_pdf", "cv.docx") == {"ok": False}
@@ -330,7 +330,7 @@ def test_job_window_says_why_a_good_score_has_no_documents(api):
 # ── show a document in its folder ───────────────────────────────────────────
 def test_show_in_folder_reveals_the_pdf_when_there_is_one(api, monkeypatch):
     shown = []
-    monkeypatch.setattr(ui_api.Api, "_reveal", lambda self, target: shown.append(target))
+    monkeypatch.setattr(api_core.Desktop, "reveal", lambda self, target: shown.append(target))
     config.ensure_dirs()
     (config.TAILORED_CV_DIR / "CV_a.docx").write_bytes(b"cv")
     (config.TAILORED_CV_DIR / "CV_a.pdf").write_bytes(b"%PDF")
@@ -628,13 +628,13 @@ def test_options_can_say_which_professions_are_taken_as_yours(api, monkeypatch):
     assert real([])["all"] == list(prefilter.FIELDS) and len(real([])["all"]) > 5            # every profession the app knows, for the pick list
     monkeypatch.setattr(api, "profession_fields", lambda wanted=None: {k: v for k, v in real(wanted).items() if k != "all"})
     monkeypatch.setattr(agent1_cv, "load_profile", lambda: {"target_roles": ["Backend Developer"], "adjacent_roles": ["Data Analyst"]})
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Nurse on a ward, then a nurse in a clinic.")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Nurse on a ward, then a nurse in a clinic.")
     assert api.profession_fields() == {"fields": ["software and IT"], "from_cv": False}                    # nothing typed: the CV analysis' roles
     assert api.profession_fields(["registered nurse"]) == {"fields": ["software and IT", "care and health"], "from_cv": False}   # adjacent roles count too
     monkeypatch.setattr(agent1_cv, "load_profile", lambda: {})
     assert api.profession_fields(["registered nurse", "", "  "]) == {"fields": ["care and health"], "from_cv": False}
     assert api.profession_fields(["beekeeper"]) == {"fields": ["care and health"], "from_cv": True}       # roles say nothing: the CV does
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "")
     assert api.profession_fields(["beekeeper"]) == {"fields": [], "from_cv": True} and api.profession_fields(None)["fields"] == []
 
     def broken():
@@ -770,7 +770,7 @@ def test_documents_are_written_for_one_job_on_request(isolate_data, monkeypatch)
                                    cover_letter_file="L.docx", tailored_cv_file="CV.docx"),
                      store.new_job(id="bare", title="Dev", company="Dyne", status="found", match_score=35, description=""),
                      store.new_job(id="app", title="Dev", company="Eon", status="waiting", description=text)])
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython, SQL.")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython, SQL.")
     monkeypatch.setattr(agent1_cv, "find_cv", lambda: None)
     calls = []
     monkeypatch.setattr(agent3_letters, "_make_tailored_cv", lambda job, cv_text, cv_path, fields: calls.append(("cv", job["id"])) or f"CV_{job['id']}.docx")
@@ -791,7 +791,7 @@ def test_documents_are_written_for_one_job_on_request(isolate_data, monkeypatch)
     assert "already has its CV and its letter" in api.write_documents("done")["msg"]
     assert "a letter written from a title alone would be generic" in api.write_documents("bare")["msg"]
     assert "for a new job only" in api.write_documents("app")["msg"] and "for a new job only" in api.write_documents("nope")["msg"]
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "")
     store.save_jobs(store.load_jobs() + [store.new_job(id="x", title="Dev", company="Fox", status="found", description=text)])
     assert "master CV could not be read" in api.write_documents("x")["msg"]
     assert len(calls) == 3
@@ -801,7 +801,7 @@ def test_a_failure_while_writing_documents_is_said_and_changes_nothing(isolate_d
     from jobhelper import agent1_cv, agent3_letters, llm
     text = "We build planning tools in Python and SQL. " * 30
     store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="found", match_score=25, description=text)])
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython.")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython.")
     monkeypatch.setattr(agent1_cv, "find_cv", lambda: None)
     monkeypatch.setattr(agent3_letters, "_make_tailored_cv", lambda *a: (_ for _ in ()).throw(RuntimeError("no connection")))
     monkeypatch.setattr(agent3_letters, "_make_letter", lambda *a: (_ for _ in ()).throw(RuntimeError("no connection")))
@@ -913,7 +913,7 @@ def test_a_reached_limit_is_said_when_documents_are_asked_for_one_job(isolate_da
     text = "We build planning tools in Python and SQL. " * 30
     store.save_jobs([store.new_job(id="a", title="Python Developer", company="Acme", status="found", match_score=65, description=text),
                      store.new_job(id="b", title="Tester", company="Borg", status="found", match_score=62, description=text)])
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython, SQL.")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython, SQL.")
     monkeypatch.setattr(agent1_cv, "find_cv", lambda: None)
     limit = llm.LimitReached("Claude's 5-hour limit is used up (100%). It resets at 18:00 on 10 Oct.")
 

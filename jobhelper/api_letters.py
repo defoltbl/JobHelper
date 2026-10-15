@@ -63,7 +63,7 @@ class LettersApi:
         parts = cover_letter.read_letter(path)
         draft = path.with_name(path.stem + ".editing.docx")
         try:
-            cover_letter.build_docx(config.LETTER_TEMPLATE, draft, cover_letter.own_title(self._cv_text()) or parts["title_line"], texts,
+            cover_letter.build_docx(config.LETTER_TEMPLATE, draft, cover_letter.own_title(self._cv.text()) or parts["title_line"], texts,
                                     date_text=parts["date_text"])
             # Only a damaged file stops the save. Wording that breaks a letter rule is
             # your call in a hand edit: it comes back as a warning below.
@@ -74,11 +74,11 @@ class LettersApi:
             draft.replace(path)
         finally:
             draft.unlink(missing_ok=True)
-        warnings = cover_letter.letter_warnings(texts, self._cv_text())
+        warnings = cover_letter.letter_warnings(texts, self._cv.text())
         made = pdf.to_pdf(path)
         if made and pdf.page_count(made) > 1:
             warnings.append("The letter is now longer than one page.")
-        self._change(job_id, lambda all_jobs, job: job.__setitem__("last_update", date.today().isoformat()), render=False)
+        self._jobs.change(job_id, lambda all_jobs, job: job.__setitem__("last_update", date.today().isoformat()), render=False)
         return {"ok": True, "warnings": warnings, "words": sum(len(t.split()) for t in texts)}
 
     def rewrite_paragraph(self, job_id, paragraphs, index, hint=""):
@@ -87,7 +87,7 @@ class LettersApi:
         if not self._editable_letter(j):
             return {"ok": False, "msg": "Only letters the app wrote can be rewritten here."}
         texts = [str(p) for p in (paragraphs or [])]
-        cv_text = self._cv_text()
+        cv_text = self._cv.text()
         if not cv_text.strip():
             return {"ok": False, "msg": "Your master CV could not be read, so the paragraph cannot be checked against it."}
         try:
@@ -138,7 +138,7 @@ class LettersApi:
         out = pdf.combine(parts, config.DATA_DIR / "combined" / f"{stem}.pdf")
         if out is None:
             return {"ok": False, "msg": "The two PDF files could not be joined."}
-        self._open(out)
+        self._desktop.open(out)
         return {"ok": True, "file": out.name, "pages": pdf.page_count(out)}
 
     def my_letters(self):
@@ -156,5 +156,5 @@ class LettersApi:
             folder.mkdir(parents=True, exist_ok=True)
         except OSError:
             return {"ok": False}
-        self._open(folder)
+        self._desktop.open(folder)
         return {"ok": True}

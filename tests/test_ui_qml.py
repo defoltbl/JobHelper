@@ -14,7 +14,7 @@ from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression, qmlContext  # n
 from PySide6.QtQuick import QQuickItem  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
-from jobhelper import config, notify, qt_bridge, schedule, store, ui_api  # noqa: E402
+from jobhelper import api_core, config, notify, qt_bridge, schedule, store, ui_api  # noqa: E402
 from tests.conftest import ROOT  # noqa: E402
 
 READY = {"claude": True, "plan": "pro", "claude_email": "me@example.com", "paid_api": False,
@@ -470,7 +470,7 @@ def test_follow_up_count_is_shown_in_the_sidebar(ui):
 
 
 def test_detail_view_shows_score_keywords_and_follow_up(ui, monkeypatch):
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Python and Docker")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Python and Docker")
     dialog = ui.find("detailDialog")
     ui.js('detailDialog.show("app")')
     ui.wait(500)
@@ -832,7 +832,7 @@ def test_letter_editor_edits_rewrites_and_saves(ui, monkeypatch):
         pytest.skip("letter template not present")
     monkeypatch.setattr(config, "LETTER_TEMPLATE", config.DATA_DIR / "cover_letter_template.docx")
     shutil.copy2(template, config.LETTER_TEMPLATE)
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython, Docker.")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython, Docker.")
     paras = [("I am applying because the work matches what I build every day. " * 5).strip() for _ in range(5)]
     cover_letter.build_docx(config.LETTER_TEMPLATE, config.LETTERS_DIR / "L.docx", "QA Engineer", paras, date_text="7 October 2026")
     jobs = _store.load_jobs()
@@ -870,7 +870,7 @@ def test_letter_editor_edits_rewrites_and_saves(ui, monkeypatch):
 
 # ── insights and interview preparation ──────────────────────────────────────
 def test_insights_view_lists_roles_keywords_and_skills(ui, monkeypatch):
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Python and Docker")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Python and Docker")
     ui.js('openView("ins")')
     ui.wait(450)
     rows = [(ui.js(f"listView.model[{i}].primary"), ui.js(f"listView.model[{i}].heading")) for i in range(ui.find("listView").property("count"))]
@@ -888,7 +888,7 @@ def test_insights_view_lists_roles_keywords_and_skills(ui, monkeypatch):
 
 def test_interview_preparation_from_the_job_window(ui, monkeypatch):
     from jobhelper import llm
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython, Docker.")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython, Docker.")
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {
         "summary": "Mostly Python.", "ask_them": ["What is the team like?"], "revise": ["Docker"],
         "questions": [{"kind": "about you", "question": "Tell me about yourself.", "why": "Opening.", "answer": "I am a junior developer."},
@@ -1001,7 +1001,7 @@ def test_options_take_your_own_salary_figure_and_currency(ui):
     ui.wait(350)
 
     # the job window and the list say it in that currency
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(salary="70 000 - 80 000 CZK", desired_monthly_czk=58000), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(salary="70 000 - 80 000 CZK", desired_monthly_czk=58000), render=False)
     detail = ui.bridge.jobDetail("lead")
     assert detail["desired_text"] == "3 200 EUR/mo target" and detail["pay_text"] == "posting says 2 800–3 200 EUR/mo"
     assert [r["desired"] for r in ui.bridge.leads() if r["id"] == "lead"] == ["3 200 EUR/mo"]
@@ -1018,7 +1018,7 @@ def test_options_take_your_own_salary_figure_and_currency(ui):
     detail = ui.bridge.jobDetail("lead")
     assert detail["desired_text"] == "58 000 CZK/mo target" and detail["pay_text"] == "posting says 70–80k CZK/mo"
     assert ui.bridge.saveOptions({**ui.bridge.options(), "where": start.get("where", ""), "country": start.get("country", "")})["ok"] is True
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(salary="", desired_monthly_czk=""), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(salary="", desired_monthly_czk=""), render=False)
     ui.js("optsData = bridge.options()")
     assert "CZK/mo" not in (ROOT / "ui_qt" / "DetailDialog.qml").read_text(encoding="utf-8") and "CZK/mo" not in (ROOT / "ui_qt" / "views.js").read_text(encoding="utf-8")
     assert ui.warnings == []
@@ -1320,7 +1320,7 @@ def test_cv_comparison_window(ui, monkeypatch):
     ui.js("compareDialog.show(detailDialog.job.id)")
     ui.wait(150)
     assert ui.find("compareDialog").property("visible") is False                   # and nothing opens
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", salary="50 000 - 60 000 CZK"), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", salary="50 000 - 60 000 CZK"), render=False)
     ui.js("detailDialog.refresh()")
     assert ui.find("compareCv").property("visible") is True
     assert ui.js("detailDialog.job.pay.low") == 50000
@@ -1339,8 +1339,8 @@ def test_cv_comparison_window(ui, monkeypatch):
 
 
 def test_insights_list_what_postings_pay(ui, monkeypatch):
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Python and Docker")
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(salary="50 000 - 60 000 CZK", desired_monthly_czk=55000), render=False)
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Python and Docker")
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(salary="50 000 - 60 000 CZK", desired_monthly_czk=55000), render=False)
     ui.js('openView("ins")')
     ui.wait(450)
     count = ui.find("listView").property("count")
@@ -1380,7 +1380,7 @@ def test_application_only_cards_are_hidden_for_a_new_job_and_nothing_overflows(u
         (config.TAILORED_CV_DIR / name).write_bytes(b"x")
     for name in ("L_lead.docx", "L_lead.pdf"):
         (config.LETTERS_DIR / name).write_bytes(b"x")
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
                                                              url="https://example.com/job"), render=False)
     monkeypatch.setattr(ui_api.Api, "_comparable", lambda self, j: True)
     monkeypatch.setattr(ui_api.Api, "_editable_letter", lambda self, j: True)
@@ -1403,7 +1403,7 @@ def test_application_only_cards_are_hidden_for_a_new_job_and_nothing_overflows(u
         assert ui.find(card).property("visible") is True, card
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="", cover_letter_file="", url=""), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="", cover_letter_file="", url=""), render=False)
     assert ui.warnings == []
 
 
@@ -1536,7 +1536,7 @@ def test_bring_back_button_in_the_filtered_out_list(ui):
 # ── calendar file, thank-you note, answers, the last 7 days ─────────────────
 def test_thank_you_card_appears_after_the_interview_day(ui, monkeypatch):
     opened = []
-    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(str(target)))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(str(target)))
     today = date.today().isoformat()
     _open_job(ui)
     assert ui.find("thanksCard").property("visible") is False and ui.find("evCalendar").property("visible") is False
@@ -1637,12 +1637,12 @@ def test_start_up_check_still_runs_when_the_sign_in_check_is_slow(ui):
 # ── apply checklist, one PDF, search in Answers ─────────────────────────────
 def test_apply_checklist_ticks_steps_and_marks_applied(ui, monkeypatch):
     opened = []
-    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(str(target)))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(str(target)))
     monkeypatch.setattr(ui_api.Api, "combined_pdf", lambda self, job_id: {"ok": True, "file": "both.pdf", "pages": 3})
     monkeypatch.setattr(ui_api.Api, "_can_combine", lambda self, j: bool(j.get("tailored_cv_file")))
     for folder, name in ((config.TAILORED_CV_DIR, "cv_lead.docx"), (config.LETTERS_DIR, "L_lead.docx")):
         (folder / name).write_bytes(b"x")
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
                                                              url="https://example.com/job", apply_steps=[]), render=False)
     _open_job(ui, "lead")
     assert ui.find("applyCard").property("visible") is True and ui.find("onePdf").property("visible") is True
@@ -1669,26 +1669,26 @@ def test_apply_checklist_ticks_steps_and_marks_applied(ui, monkeypatch):
     assert ui.find("applyCard").property("visible") is False                      # already applied: no checklist
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="", cover_letter_file="", url="", apply_steps=[]), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="", cover_letter_file="", url="", apply_steps=[]), render=False)
     assert ui.warnings == []
 
 
 def test_a_failed_step_is_not_ticked(ui, monkeypatch):
     monkeypatch.setattr(ui_api.Api, "combined_pdf", lambda self, job_id: {"ok": False, "msg": "The two PDF files could not be joined."})
     (config.TAILORED_CV_DIR / "cv_lead.docx").write_bytes(b"x")
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", url="", apply_steps=[]), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", url="", apply_steps=[]), render=False)
     _open_job(ui, "lead")
     ui.js('detailDialog.doStep("combined"); detailDialog.doStep("posting")')      # no single PDF, and this job has no link
     assert ui.js("detailDialog.stepsDone") == 0 and ui.js("(detailDialog.job.apply_steps || []).length") == 0
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="", apply_steps=[]), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="", apply_steps=[]), render=False)
     assert ui.warnings == []
 
 
 def test_options_show_your_own_letters_folder(ui, monkeypatch):
     opened = []
-    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(target))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(target))
     config.COVER_LETTERS_DIR.mkdir(parents=True, exist_ok=True)
     (config.COVER_LETTERS_DIR / "Alex_Novak_CoverLetter_Acme.docx").write_bytes(b"mine")
     dialog = ui.find("optDialog")
@@ -1825,7 +1825,7 @@ def test_form_answers_are_drafted_per_job_edited_and_kept(ui, monkeypatch):
     import time
 
     from jobhelper import llm
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython, Docker.")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython, Docker.")
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"answers": [
         {"n": 1, "answer": "I like how Beta tests its products.", "needs_you": ""},
         {"n": 2, "answer": "I expect [your figure] CZK gross per month.", "needs_you": "Your salary figure"}]})
@@ -1874,7 +1874,7 @@ def test_form_answers_show_the_reason_when_claude_cannot_be_asked(ui, monkeypatc
 
     def limit(*a, **k):
         raise llm.LimitReached("Claude's 7-day limit is used up (99%). It resets at 18:00 on 08 Oct.")
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython.")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython.")
     monkeypatch.setattr(llm, "ask_json", limit)
     ui.js('formDialog.show("app"); fmQuestions.text = "Why us?"; formDialog.draft()')
     for _ in range(200):
@@ -1983,7 +1983,7 @@ def test_preparation_opens_as_a_document_from_both_windows(ui, monkeypatch):
     calls = []
     monkeypatch.setattr(ui_api.Api, "prep_document", lambda self, job_id, reveal=False: calls.append((job_id, reveal)) or {"ok": True, "file": "Alex_Beta_Prep_HR.docx",
                                                                                                                   "files": ["Alex_Beta_Prep_HR.docx", "Alex_Beta_Prep_Technical.docx"]})
-    ui.bridge._api._change("app", lambda jobs, j: j.__setitem__("interview_prep", {"made": "2026-10-08", "summary": "s", "questions": [
+    ui.bridge._api.editor.change("app", lambda jobs, j: j.__setitem__("interview_prep", {"made": "2026-10-08", "summary": "s", "questions": [
         {"kind": "about you", "question": "Tell me about yourself.", "why": "", "answer": "I am a junior developer.", "check": ""}]}), render=False)
     _open_job(ui, "app")
     assert ui.find("prepDocument").property("visible") is True
@@ -1998,7 +1998,7 @@ def test_preparation_opens_as_a_document_from_both_windows(ui, monkeypatch):
     ui.wait(350)
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
+    ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
     _open_job(ui, "app")
     assert ui.find("prepDocument").property("visible") is False                 # nothing prepared yet: no document button
     ui.js("detailDialog.close()")
@@ -2010,7 +2010,7 @@ def test_show_in_folder_buttons_and_the_laid_out_description(ui, monkeypatch):
     shown = []
     monkeypatch.setattr(ui_api.Api, "show_in_folder", lambda self, kind, job_id: shown.append((kind, job_id)) or {"ok": True, "file": "CV.pdf"})
     (config.TAILORED_CV_DIR / "cv_app.docx").write_bytes(b"x")
-    ui.bridge._api._change("app", lambda jobs, j: j.update(tailored_cv_file="cv_app.docx",
+    ui.bridge._api.editor.change("app", lambda jobs, j: j.update(tailored_cv_file="cv_app.docx",
                            description="We build tools. Requirements Strong Python Benefits Flexible hours"), render=False)
     _open_job(ui, "app")
     assert ui.find("showCv").property("visible") is True and ui.find("showLetter").property("visible") is False
@@ -2019,7 +2019,7 @@ def test_show_in_folder_buttons_and_the_laid_out_description(ui, monkeypatch):
     assert ui.find("descText").property("text") == "We build tools.\n\nREQUIREMENTS\nStrong Python\n\nBENEFITS\nFlexible hours"
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("app", lambda jobs, j: j.update(tailored_cv_file="", description="We use Python, Docker and Kubernetes."), render=False)
+    ui.bridge._api.editor.change("app", lambda jobs, j: j.update(tailored_cv_file="", description="We use Python, Docker and Kubernetes."), render=False)
     assert ui.warnings == []
 
 
@@ -2052,7 +2052,7 @@ def test_preparation_window_groups_questions_by_who_asks(ui):
 
 
 def test_preparation_window_shows_what_you_can_ask_each_listener(ui):
-    ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep={"made": "2026-10-08", "summary": "s", "questions": [
+    ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep={"made": "2026-10-08", "summary": "s", "questions": [
         {"audience": "hr", "kind": "about you", "question": "Tell me about yourself.", "why": "", "answer": "I am a junior developer.", "check": ""}],
         "ask_hr": ["What are the next steps?"], "ask_technical": ["What would I own first?"], "ask_them": []}), render=False)
     ui.js('prepDialog.show("app")')
@@ -2061,7 +2061,7 @@ def test_preparation_window_shows_what_you_can_ask_each_listener(ui):
     assert ui.js("prepDialog.prep.ask_hr[0]") == "What are the next steps?"
     ui.js("prepDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
+    ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
     assert ui.warnings == []
 
 
@@ -2112,11 +2112,11 @@ def test_wanted_and_unwanted_roles_are_edited_in_options(ui):
 
 
 def test_the_preparation_can_be_edited_and_wrong_steps_are_explained(ui, monkeypatch):
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython, Docker.")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython, Docker.")
     prep = {"made": "2026-10-08", "summary": "They will ask about Python.", "pitch": "I am a junior developer.", "fit": ["Python", "Docker"],
             "questions": [{"audience": "hr", "kind": "about you", "question": "Tell me about yourself.", "why": "", "answer": "I am a junior developer.", "check": ""}],
             "ask_hr": ["What are the next steps?"], "ask_technical": [], "ask_them": [], "checks": []}
-    ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep=dict(prep)), render=False)
+    ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep=dict(prep)), render=False)
     ui.js('prepEditDialog.show("app")')
     ui.wait(450)
     dialog, note = ui.find("prepEditDialog"), ui.find("peNote")
@@ -2146,7 +2146,7 @@ def test_the_preparation_can_be_edited_and_wrong_steps_are_explained(ui, monkeyp
     assert "Making it again replaces the changes you made in the sheet." in source and 'objectName: "prepEdit"' in source
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
+    ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
     ui.js('prepEditDialog.show("app")')                                          # nothing to edit: said, no empty window
     ui.wait(250)
     assert dialog.property("visible") is False and "Prepare the interview first" in ui.js("ticker.text")
@@ -2275,7 +2275,7 @@ def test_score_again_from_the_job_window(ui, monkeypatch):
     import time
 
     from jobhelper import llm
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython.")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython.")
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": 35, "match_reason": "Another field."})
     _open_job(ui, "lead")
     assert ui.find("scoreAgain").property("text") == "Score again" and ui.js("detailDialog.job.can_rescore") is True
@@ -2298,7 +2298,7 @@ def test_score_again_from_the_job_window(ui, monkeypatch):
     assert ui.js("detailDialog.job.can_rescore") is False                         # an application is not scored again
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(match_score=80, match_reason="", score_before=None), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(match_score=80, match_reason="", score_before=None), render=False)
     assert ui.warnings == []
 
 
@@ -2393,10 +2393,10 @@ def _wait_scored(ui):
 # ── what a score rests on, pasted text, documents left from a higher score ──
 def test_a_title_only_score_is_marked_and_the_posting_can_be_pasted(ui, monkeypatch):
     from jobhelper import llm
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython.")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython.")
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": 65, "match_reason": "Fits."})
     start = store.find(store.load_jobs(), "lead")
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(description="", match_score=40), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(description="", match_score=40), render=False)
     ui.js('openView("new")')
     ui.wait(450)
     assert "scored from the title only" in ui.js("listView.model[0].secondary")
@@ -2420,7 +2420,7 @@ def test_a_title_only_score_is_marked_and_the_posting_can_be_pasted(ui, monkeypa
     assert ui.js("detailDialog.job.score") == 65 and ui.js("detailDialog.scoreLead") == ""
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(description=start.get("description", ""), match_score=80, description_by_hand=False), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(description=start.get("description", ""), match_score=80, description_by_hand=False), render=False)
     assert ui.warnings == []
 
 
@@ -2428,7 +2428,7 @@ def test_documents_from_a_higher_score_are_marked_and_moved_only_after_asking(ui
     for folder, name in ((config.TAILORED_CV_DIR, "cv_lead.docx"), (config.LETTERS_DIR, "L_lead.docx")):
         (folder / name).write_bytes(b"x")
     monkeypatch.setattr(ui_api.Api, "_threshold", lambda self: 50)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
                                                              status="letter_ready", match_score=30), render=False)
     ui.js('openView("new")')
     ui.wait(450)
@@ -2444,14 +2444,14 @@ def test_documents_from_a_higher_score_are_marked_and_moved_only_after_asking(ui
     assert ui.js("detailDialog.job.docs_stale") is False and ui.find("shelveDocs").property("visible") is False
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(match_score=80, status="letter_ready"), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(match_score=80, status="letter_ready"), render=False)
     assert ui.warnings == []
 
 
 def test_read_it_again_button_reports_both_outcomes(ui, monkeypatch):
     from jobhelper import agent2_search
     start = store.find(store.load_jobs(), "lead")
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(description="", match_score=40, url="https://example.com/job"), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(description="", match_score=40, url="https://example.com/job"), render=False)
     _open_job(ui, "lead")
     assert ui.find("rereadPosting").property("visible") is True
     got = ui.js("bridge.rereadPosting(detailDialog.job.id)")
@@ -2467,8 +2467,8 @@ def test_read_it_again_button_reports_both_outcomes(ui, monkeypatch):
     ui.js("win.appRunning = false")
 
     from jobhelper import llm
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Alex Novak\nPython.")
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(description="", match_score=40), render=False)
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython.")
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(description="", match_score=40), render=False)
     ui.js("detailDialog.refresh()")
 
     def limit(*a, **k):
@@ -2481,12 +2481,12 @@ def test_read_it_again_button_reports_both_outcomes(ui, monkeypatch):
     assert note.startswith(f"Read {len(text)} characters of the posting. Not scored again:") and ui.js("detailDialog.scoreBad") is True
     assert store.find(store.load_jobs(), "lead")["description"] == text and ui.js("detailDialog.job.score") == 40
 
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(description="", match_score=None), render=False)   # a job with no score yet
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(description="", match_score=None), render=False)   # a job with no score yet
     ui.js("detailDialog.refresh(); detailDialog.readAgain()")
     assert ui.js("detailDialog.scoreBusy") is False and ui.js("ticker.text") == f"Read {len(text)} characters of the posting. The next search will score it."
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(description=start.get("description", ""), match_score=80, url=""), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(description=start.get("description", ""), match_score=80, url=""), render=False)
     assert ui.warnings == []
 
 
@@ -2495,7 +2495,7 @@ def test_documents_below_the_limit_are_moved_together_only_after_asking(ui, monk
     for folder, name in ((config.TAILORED_CV_DIR, "cv_lead.docx"), (config.LETTERS_DIR, "L_lead.docx")):
         (folder / name).write_bytes(b"x")
     monkeypatch.setattr(ui_api.Api, "_threshold", lambda self: 50)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cover_letter_file="L_lead.docx",
                                                              status="letter_ready", match_score=30), render=False)
     ui.js('openView("new")')
     ui.wait(450)
@@ -2585,12 +2585,12 @@ def test_documents_below_the_limit_are_moved_together_only_after_asking(ui, monk
     assert bar.property("visible") is False                                         # only in New Jobs
     ui.js("tableDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(match_score=80, status="letter_ready"), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(match_score=80, status="letter_ready"), render=False)
     assert ui.warnings == []
 
 
 def test_the_list_shows_the_score_before(ui):
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(score_before=55, match_score=30), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(score_before=55, match_score=30), render=False)
     ui.js('openView("new")')
     ui.wait(450)
     row = ui.js("(function(){ var m = listView.model; for (var i = 0; i < m.length; i++) if (m[i].id === 'lead') return m[i]; return {}; })()")
@@ -2598,7 +2598,7 @@ def test_the_list_shows_the_score_before(ui):
     assert not row["secondary"].startswith(" ") and "·   ·" not in row["secondary"]      # no separator before the first note
     ui.js("tableDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(score_before=80, match_score=80), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(score_before=80, match_score=80), render=False)
     ui.js('openView("new")')
     ui.wait(450)
     assert ui.js("tableDialog.anyWas") is False and ui.js("listView.model.map(function (r) { return r.was || ''; }).join('')") == ""
@@ -2782,7 +2782,7 @@ def test_no_text_in_the_window_is_cut_with_an_ellipsis():
 def test_a_long_title_makes_its_row_taller_instead_of_being_cut(ui):
     long_title = "Senior Principal Associate Vice Coordinator of Cross-Functional Platform Reliability and Developer Experience Enablement (Remote, EMEA)"
     start = store.find(store.load_jobs(), "lead")["title"]
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(title=long_title), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(title=long_title), render=False)
     try:
         ui.js('openView("new")')
         ui.wait(450)
@@ -2804,7 +2804,7 @@ def test_a_long_title_makes_its_row_taller_instead_of_being_cut(ui):
         assert ui.js("statusBar.height") > 46 and ui.js("ticker.truncated") is False
         ui.js('ticker.text = ""')
     finally:
-        ui.bridge._api._change("lead", lambda jobs, j: j.update(title=start), render=False)
+        ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(title=start), render=False)
     assert ui.warnings == []
 
 
@@ -2902,7 +2902,7 @@ def test_a_reply_is_filed_under_another_application_from_its_window(ui, monkeypa
     assert ui.js("responseDialog.r.job_id") == "" and "not filed under any application now" in note.property("text")
     ui.js("responseDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("app", lambda jobs, j: j.update(status="waiting"), render=False)
+    ui.bridge._api.editor.change("app", lambda jobs, j: j.update(status="waiting"), render=False)
     ui.bridge._set_running(True)
     assert "running" in ui.bridge.refileResponse("<move>", "app")["msg"]              # the backend refuses the same
     ui.bridge._set_running(False)
@@ -2915,7 +2915,7 @@ def test_the_job_window_writes_documents_on_request(ui, monkeypatch):
     monkeypatch.setattr(ui_api.Api, "can_write_documents", lambda self, j: "" if j and j["id"] == "lead" else "no")
     monkeypatch.setattr(ui_api.Api, "write_documents", lambda self, job_id: asked.append(job_id) or {"ok": True, "cv": True, "letter": True,
                                                                                                       "msg": "Written: the CV and the letter."})
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="", cover_letter_file=""), render=False)   # whatever earlier tests left
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="", cover_letter_file=""), render=False)   # whatever earlier tests left
     ui.js('detailDialog.show("lead")')
     ui.wait(450)
     button, note = ui.find("writeDocs"), ui.find("docsNote")
@@ -3129,7 +3129,7 @@ def test_a_long_company_name_in_options_wraps_and_stays_clear_of_the_remove_mark
 
 
 def test_the_job_window_says_what_to_check_in_the_adapted_cv(ui):
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cv_check=["cost center", "vendor master"]), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", cv_check=["cost center", "vendor master"]), render=False)
     ui.js('detailDialog.show("lead")')
     ui.wait(450)
     note = ui.find("cvCheck")
@@ -3137,13 +3137,13 @@ def test_the_job_window_says_what_to_check_in_the_adapted_cv(ui):
     assert "It speaks of cost center, vendor master, which are terms of the posting that your own CV does not mention" in note.property("text")
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(cv_check=["cost center"]), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(cv_check=["cost center"]), render=False)
     ui.js('detailDialog.show("lead")')
     ui.wait(450)
     assert "which is a term of the posting" in note.property("text")
     ui.js("detailDialog.close()")
     ui.wait(350)
-    ui.bridge._api._change("lead", lambda jobs, j: j.update(cover_letter_file="L_lead.docx", letter_check=["tax codes"]), render=False)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(cover_letter_file="L_lead.docx", letter_check=["tax codes"]), render=False)
     ui.js('detailDialog.show("lead")')
     ui.wait(450)
     assert "It says you have done something with tax codes, which is a term of the posting" in ui.find("letterCheck").property("text")
@@ -3154,7 +3154,7 @@ def test_the_job_window_says_what_to_check_in_the_adapted_cv(ui):
         j.pop("cv_check", None)
         j.pop("letter_check", None)
         j["tailored_cv_file"] = j["cover_letter_file"] = ""
-    ui.bridge._api._change("lead", clear, render=False)
+    ui.bridge._api.editor.change("lead", clear, render=False)
     assert ui.bridge.jobDetail("lead")["letter_check"] == []
     assert ui.bridge.jobDetail("lead")["cv_check"] == []
     assert ui.warnings == []
@@ -4202,7 +4202,7 @@ def test_the_preparation_window_shows_projects_and_skills(ui):
                           "tech": [{"tool": "PyTorch", "about": "A library for neural networks.", "use": "It trained the policy.", "why": "It is fast to try ideas in <2 lines>."}],
                           "result": "Shown at two conferences.", "ask": []}],
             "skills": [{"skill": "Python", "proof": "Used in every project.", "detail": "I wrote the training loop."}]}
-    ui.bridge._api._change("app", lambda jobs, j: j.__setitem__("interview_prep", prep), render=False)
+    ui.bridge._api.editor.change("app", lambda jobs, j: j.__setitem__("interview_prep", prep), render=False)
     try:
         ui.js('prepDialog.show("app")'); _until_open(ui, "prepDialog")
         assert ui.find("prepProjects").property("visible") is True and ui.find("prepSkills").property("visible") is True
@@ -4212,10 +4212,10 @@ def test_the_preparation_window_shows_projects_and_skills(ui):
         assert any("<b>PyTorch.</b>" in t and "<i>Why:</i> It is fast to try ideas in &lt;2 lines&gt;." in t for t in said)   # its own < is a letter
         assert any("<b>Python:</b> Used in every project. I wrote the training loop." in t for t in said)
         ui.js("prepDialog.close()"); ui.wait(350)
-        ui.bridge._api._change("app", lambda jobs, j: j.__setitem__("interview_prep", dict(prep, projects=[], skills=[])), render=False)
+        ui.bridge._api.editor.change("app", lambda jobs, j: j.__setitem__("interview_prep", dict(prep, projects=[], skills=[])), render=False)
         ui.js('prepDialog.show("app")'); _until_open(ui, "prepDialog")
         assert ui.find("prepProjects").property("visible") is False and ui.find("prepNoProjects").property("visible") is True
     finally:
         ui.js("prepDialog.close()"); ui.wait(350)
-        ui.bridge._api._change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
+        ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
     assert ui.warnings == []

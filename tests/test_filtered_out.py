@@ -3,7 +3,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from jobhelper import agent2_search, config, store, ui_api, vault
+from jobhelper import api_core, agent2_search, config, store, ui_api, vault
 
 EN = "We are hiring a developer to join our team and build backend services in Python. "
 
@@ -87,7 +87,7 @@ def test_the_list_is_saved_encrypted_and_replaced_by_the_next_search(isolate_dat
 def test_api_lists_them_and_opens_only_a_saved_web_link(isolate_data, monkeypatch):
     config.ensure_dirs()
     opened = []
-    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(target))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(target))
     agent2_search.save_dropped([{"title": "A", "company": "C", "url": "https://example.com/a", "group": "closed", "reason": "R."},
                                 {"title": "B", "company": "C", "url": "file:///etc/passwd", "group": "closed", "reason": "R."},
                                 {"title": "D", "company": "C", "url": "", "group": "closed", "reason": "R."}])

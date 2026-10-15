@@ -1,4 +1,4 @@
-from jobhelper import letters, store
+from jobhelper import api_core, letters, store
 
 
 def test_parse_company():
@@ -64,7 +64,7 @@ def test_the_app_counts_opens_and_never_changes_your_own_letters(isolate_data, m
     from jobhelper import config, store, ui_api
     config.ensure_dirs()
     opened = []
-    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: opened.append(target))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(target))
     api = ui_api.Api()
     assert api.my_letters() == {"folder": str(config.COVER_LETTERS_DIR), "name": "my_letters", "count": 0, "inside_app": True}
     mine = config.COVER_LETTERS_DIR / "Alex_Novak_CoverLetter_Acme.docx"

@@ -1,7 +1,7 @@
 """Keyword comparison between a posting and the CV (no model call)."""
 import pytest
 
-from jobhelper import keywords
+from jobhelper import api_core, keywords
 
 CV = "Python, Kotlin, SQL (PostgreSQL), FastAPI, Docker, GitHub Actions (CI/CD), React, Git, Linux. English B2, Czech beginner."
 
@@ -119,7 +119,7 @@ def test_the_app_reads_ahead_every_posting_and_the_cv(isolate_data, monkeypatch)
     from jobhelper import store, ui_api
     store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", description="Python and SQL"),
                      store.new_job(id="b", title="QA", company="Borg", description="")])
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "Java developer")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Java developer")
     seen = []
     monkeypatch.setattr(keywords, "read_ahead", lambda texts, pause=0.004: seen.extend(texts) or len(texts))
     assert ui_api.Api().read_ahead() == 3 and seen == ["Python and SQL", "", "Java developer"]

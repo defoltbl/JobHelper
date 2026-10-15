@@ -1,7 +1,7 @@
 """Answers for one job's application form: drafted per job, from the CV, never beyond it."""
 import pytest
 
-from jobhelper import config, form_answers, llm, store, ui_api
+from jobhelper import api_core, config, form_answers, llm, store, ui_api
 
 CV = ("Alex Novak\nJunior Software Developer\nPython, Kotlin, SQL, PostgreSQL, FastAPI, Docker, Git, Linux.\n"
       "Built a document search service with FastAPI and pgvector. English B2.")
@@ -130,7 +130,7 @@ def test_tidy_keeps_only_what_belongs():
 @pytest.fixture
 def api(isolate_data, monkeypatch):
     config.ensure_dirs()
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: CV)
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: CV)
     store.save_jobs([store.new_job(**JOB), store.new_job(id="b", title="QA", company="Beta")])
     return ui_api.Api()
 
@@ -156,7 +156,7 @@ def test_api_says_why_nothing_was_drafted(api, monkeypatch):
     assert "Paste the questions" in api.make_form_answers("a", "  \n ")["msg"]
     assert "not in the list" in api.make_form_answers("zzz", "Why us?")["msg"]
     assert api.form_answers("zzz") == {} and api.save_form_answers("zzz", [])["ok"] is False
-    monkeypatch.setattr(ui_api.Api, "_cv_text", lambda self: "")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "")
     assert "master CV could not be read" in api.make_form_answers("a", "Why us?")["msg"]
 
 

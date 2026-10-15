@@ -77,7 +77,7 @@ class DocumentsApi:
             if j.get("hold") == agent3_letters.NO_TEXT:
                 j.pop("hold", None)
             j["doc_attempts"] = 0
-        return self._change(job_id, go, render=False)
+        return self._jobs.change(job_id, go, render=False)
 
     def reread_posting(self, job_id):
         """Try to read a posting's text from its board again (no Claude). Score it again afterwards."""
@@ -95,7 +95,7 @@ class DocumentsApi:
             if job.get("hold") == agent3_letters.NO_TEXT:
                 job.pop("hold", None)
             job["doc_attempts"] = 0
-        saved = self._change(job_id, go, render=False)
+        saved = self._jobs.change(job_id, go, render=False)
         return {"ok": bool(saved.get("ok")), "chars": len(text)}
 
     SHELF = "below_your_limit"        # the folder in backups/ that documents below your limit go to
@@ -141,7 +141,7 @@ class DocumentsApi:
                 j["status"] = "found"
             j["apply_steps"] = []
             j["last_update"] = date.today().isoformat()
-        result = self._change(job_id, go)
+        result = self._jobs.change(job_id, go)
         return {"ok": True, "moved": moved.get("n", 0)} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "Couldn't move the documents."}
 
     @staticmethod
@@ -202,7 +202,7 @@ class DocumentsApi:
             j["apply_steps"] = list(record.get("apply_steps") or [])
             j["last_update"] = date.today().isoformat()
             j.pop("shelved", None)
-        result = self._change(job_id, go)
+        result = self._jobs.change(job_id, go)
         return {"ok": True, "restored": done.get("n", 0)} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "Couldn't put the documents back."}
 
     # ── moved documents that have grown old ─────────────────────
@@ -312,7 +312,7 @@ class DocumentsApi:
                 j["cover_letter_file"] = ""
             j["tailored_cv_file"], j["match_tier"] = "", ""
             j["status"], j["last_update"] = store.NOT_INTERESTED, date.today().isoformat()
-        return self._change(job_id, go)
+        return self._jobs.change(job_id, go)
 
     def restore_job(self, job_id):
         """Undo "not interested": the job is a lead again (documents are written on the next run)."""
@@ -321,7 +321,7 @@ class DocumentsApi:
                 return {"ok": False, "msg": "That job is not in the not-interested list."}
             j["status"], j["last_update"] = "found", date.today().isoformat()
             j["doc_attempts"] = 0
-        return self._change(job_id, go)
+        return self._jobs.change(job_id, go)
 
     @_guarded(list)
     def dismissed(self):

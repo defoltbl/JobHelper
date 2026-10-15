@@ -3,7 +3,7 @@ application form and the interview preparation."""
 from __future__ import annotations
 
 
-from . import (agent1_cv, answer_memory, cv_tailor, form_answers, prep_doc, config, db, followup, interview_prep, planner, store,
+from . import (agent1_cv, answer_memory, cv_tailor, form_answers, prep_doc, config, db, interview_prep, planner, store,
                vault)
 from .api_base import _guarded
 
@@ -16,10 +16,10 @@ class InterviewApi:
         def go(jobs, j):
             problem = planner.set_event(j, day, time_text, kind, note)
             return {"ok": False, "msg": problem} if problem else {"ok": True}
-        return self._change(job_id, go, render=False)
+        return self._jobs.change(job_id, go, render=False)
 
     def clear_event(self, job_id):
-        return self._change(job_id, lambda jobs, j: planner.clear_event(j), render=False)
+        return self._jobs.change(job_id, lambda jobs, j: planner.clear_event(j), render=False)
 
     @_guarded(list)
     def upcoming(self, limit=0):
@@ -34,7 +34,7 @@ class InterviewApi:
         due = planner.due_reminders(jobs)
         if due:
             store.save_jobs(jobs)
-            live = self.live
+            live = self._jobs.live
             for item in due:                         # a run in progress must not lose the mark
                 twin = store.find(live, item["id"]) if live is not None else None
                 saved = store.find(jobs, item["id"])
@@ -53,26 +53,18 @@ class InterviewApi:
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / (store.slugify(f"{j.get('company', '')} {j['event'].get('kind', '')} {j['event']['date']}") + ".ics")
         path.write_text(text, encoding="utf-8", newline="")
-        self._open(path)
+        self._desktop.open(path)
         return {"ok": True, "file": path.name}
 
     # ── a thank-you note after an interview ─────────────────────
-    def _my_name(self) -> str:
-        try:
-            profile = agent1_cv.load_profile()
-        except Exception:  # noqa: BLE001
-            profile = None
-        cv = agent1_cv.find_cv()
-        return followup.candidate_name(profile, cv.name if cv else "")
-
     def thanks_draft(self, job_id):
         j = store.find(store.load_jobs(), job_id)
         if not j:
             return {}
-        return planner.thanks_draft(j, self._my_name(), planner.company_notes(j.get("company", "")).get("contact", ""))
+        return planner.thanks_draft(j, self._cv.name(), planner.company_notes(j.get("company", "")).get("contact", ""))
 
     def mark_thanked(self, job_id):
-        return bool(self._change(job_id, lambda jobs, j: planner.mark_thanked(j), render=False).get("ok"))
+        return bool(self._jobs.change(job_id, lambda jobs, j: planner.mark_thanked(j), render=False).get("ok"))
 
     # ── answers for one job's application form ──────────────────
     @_guarded(dict)
@@ -100,7 +92,7 @@ class InterviewApi:
         if checked["problem"]:
             return {"ok": False, "msg": checked["problem"]}
         questions = checked["questions"]
-        cv_text = self._cv_text()
+        cv_text = self._cv.text()
         if not cv_text.strip():
             return {"ok": False, "msg": "Your master CV could not be read, so answers cannot be built from it."}
         try:
@@ -109,7 +101,7 @@ class InterviewApi:
             return {"ok": False, "msg": str(e)}
         kept = {"made": form_answers.stamp(), "items": items}
         # saved through _change: the call took a while, so re-read instead of writing an old copy back
-        saved = self._change(job_id, lambda jobs, job: job.__setitem__("form_answers", kept), render=False)
+        saved = self._jobs.change(job_id, lambda jobs, job: job.__setitem__("form_answers", kept), render=False)
         return {"ok": bool(saved.get("ok")), "count": len(items), "to_check": sum(1 for i in items if i["check"])}
 
     def save_form_answers(self, job_id, items):
@@ -130,7 +122,7 @@ class InterviewApi:
                 j["form_answers"] = {"made": made, "items": clean}
             else:
                 j.pop("form_answers", None)
-        saved = self._change(job_id, go, render=False)
+        saved = self._jobs.change(job_id, go, render=False)
         if saved.get("ok"):                 # an answer you rewrote is yours: it is used for the same question elsewhere
             for item in clean:
                 if item["question"].lower() in earlier and answer_memory.changed(earlier[item["question"].lower()], item["answer"]):
@@ -152,7 +144,7 @@ class InterviewApi:
             return {"ok": False, "msg": "That job is not in the list any more."}
         if j["status"] not in store.APPLICATION_STATUSES:
             return {"ok": False, "msg": "Interview preparation is for jobs you have applied to."}
-        cv_text = self._cv_text()
+        cv_text = self._cv.text()
         if not cv_text.strip():
             return {"ok": False, "msg": "Your master CV could not be read, so answers cannot be built from it."}
         emails = [r for r in db.all_responses() if r.get("job_id") == job_id]
@@ -161,7 +153,7 @@ class InterviewApi:
         except Exception as e:  # noqa: BLE001 - shown to the user as the reason
             return {"ok": False, "msg": str(e)}
         # saved through _change: the call took a while, so re-read instead of writing an old copy back
-        return {"ok": bool(self._change(job_id, lambda jobs, job: job.__setitem__("interview_prep", prep),
+        return {"ok": bool(self._jobs.change(job_id, lambda jobs, job: job.__setitem__("interview_prep", prep),
                                         render=False).get("ok"))}
 
     @_guarded(dict)
@@ -177,7 +169,7 @@ class InterviewApi:
 
     def save_prep_parts(self, job_id, edited):
         """Put the user's edits into the saved preparation. Refused with the reason when a part is empty or too long."""
-        cv_text, notes = self._cv_text(), config.experience_notes()
+        cv_text, notes = self._cv.text(), config.experience_notes()
         outcome = {}
 
         def go(jobs, j):
@@ -189,7 +181,7 @@ class InterviewApi:
                 return {"ok": False, "msg": problem}
             j["interview_prep"] = new
             outcome["to_check"] = len(new.get("checks") or []) + sum(1 for q in new["questions"] if q.get("check"))
-        result = self._change(job_id, go, render=False)
+        result = self._jobs.change(job_id, go, render=False)
         return {"ok": True, **outcome} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "The changes could not be saved."}
 
     def _prep_file(self, j, audience="hr"):
@@ -210,10 +202,10 @@ class InterviewApi:
         except Exception as e:  # noqa: BLE001 - shown to the user as the reason
             return {"ok": False, "msg": f"The documents could not be written ({e})."}
         if reveal:
-            self._reveal(paths[0])                  # one Finder window, with both files side by side
+            self._desktop.reveal(paths[0])                  # one Finder window, with both files side by side
         else:
             for path in paths:
-                self._open(path)
+                self._desktop.open(path)
         return {"ok": True, "file": paths[0].name, "files": [path.name for path in paths]}
 
     @_guarded(str)

@@ -4,7 +4,7 @@ from email.utils import format_datetime
 
 import pytest
 
-from jobhelper import config, db, planner, store, summary, ui_api
+from jobhelper import api_core, config, db, planner, store, summary, ui_api
 
 TODAY = date(2026, 10, 7)
 
@@ -120,7 +120,7 @@ def api(isolate_data, monkeypatch):
     config.ensure_dirs()
     api = ui_api.Api()
     api.opened = []
-    monkeypatch.setattr(ui_api.Api, "_open", lambda self, target: api.opened.append(target))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: api.opened.append(target))
     return api
 
 
@@ -137,7 +137,7 @@ def test_api_calendar_file_is_written_and_opened(api):
 
 
 def test_api_thank_you_flow_and_week_summary(api, monkeypatch):
-    monkeypatch.setattr(ui_api.Api, "_my_name", lambda self: "Alex Novak")
+    monkeypatch.setattr(api_core.CvSource, "name", lambda self: "Alex Novak")
     store.save_jobs([_app(event=_event(date.today().isoformat()))])
     planner.save_company_notes("Acme", {"contact": "Jana"})
     assert api.job_detail("a")["thanks_due"] is True
