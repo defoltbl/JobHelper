@@ -392,7 +392,7 @@ Table 6.3 groups the other modules by what they are for.
 |---|---|---|
 | Reading postings | `job_sources`, `scrapers_cz`, `scrapers_intl`, `scrapers_remote`, `scrapers_ats`, `scrapers_page` | Each board, feed or API is one `JobSource` with the same interface: find, reset, available. One scraper module per kind of site. A site that turns programs away is left alone |
 | Rules without a model call | `filters`, `prefilter`, `language`, `places`, `keywords`, `salary`, `merge`, `followup`, `planner` | Level, years, language, location, profession, pay, duplicates, reminders |
-| Writing | `cv_tailor`, `cover_letter`, `letters`, `form_answers`, `interview_prep`, `prep_doc`, `pdf` | The adapted CV, the letter, form answers, the interview documents (one for HR, one technical) |
+| Writing | `word_document`, `cv_tailor`, `cover_letter`, `letters`, `form_answers`, `interview_prep`, `prep_doc`, `pdf` | The adapted CV, the letter, form answers, the interview documents (one for HR, one technical). `WordDocument` opens a .docx and saves it with only the text changed; every other part stays byte for byte |
 | Mail | `email_client`, `mailhosts` | Reading mailboxes read-only; which server a mailbox is read from |
 | The assistant | `assistant`, `assistant_brain`, `assistant_notes`, `details`, `chrome`, `form_fill`, `form_choices`, `answer_memory` | The fixed requests and the facts about the app. What Claude makes of a free request, checked before anything happens. The details of the person. The link to the browser. Reading a form, deciding what each field is, and filling it in. Choosing from lists and menus. The wording of the person, remembered |
 | Claude | `llm`, `usage` | The one place that asks Claude; counting usage and knowing the limits |

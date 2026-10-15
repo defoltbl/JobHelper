@@ -17,17 +17,15 @@ import re
 import shutil
 import tempfile
 import unicodedata
-import zipfile
 from pathlib import Path
 from typing import Any
 
 from lxml import etree
 
+from .word_document import P, R, T, Paragraph, WordDocument, set_run_text, text_of
 from . import config, llm, pdf, store
 
-W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
-_P, _R, _T = f"{{{W}}}p", f"{{{W}}}r", f"{{{W}}}t"
+_P, _R, _T = P, R, T                # the Word text, paragraph and run tags (word_document)
 
 # Technologies the master does not contain (instruction, section 4). Used when
 # the instruction file is missing or has no "Not in the master" line.
@@ -206,22 +204,14 @@ def _mentions(text: str, term: str) -> bool:
 
 
 # ── docx (document.xml) helpers ──────────────────────────────────────────────
-def _text(p) -> str:
-    return "".join(t.text or "" for t in p.iter(_T))
+_text = text_of                     # all the text of a paragraph
 
 
 def _norm(s: str) -> str:
     return re.sub(r"[\s ]+", "", s).upper()
 
 
-def _set_run_text(run, text: str) -> None:
-    ts = run.findall(_T)
-    if not ts:
-        ts = [etree.SubElement(run, _T)]
-    ts[0].text = text
-    ts[0].set(XML_SPACE, "preserve")
-    for extra in ts[1:]:
-        run.remove(extra)
+_set_run_text = set_run_text
 
 
 # How CVs head the two parts that are adapted (compared without spaces, so "K E Y  S K I L L S" counts).
@@ -271,58 +261,45 @@ def _sections(body) -> dict[str, Any]:
 def adaptable(master_path) -> bool:
     """True if this Word CV has a profile section the app can find (so a full adapted copy can be made)."""
     try:
-        with zipfile.ZipFile(master_path) as z:
-            body = etree.fromstring(z.read("word/document.xml")).find(f"{{{W}}}body")
-        return _sections(body)["profile"] is not None
+        return _sections(WordDocument(master_path).body)["profile"] is not None
     except Exception:  # noqa: BLE001 - not a Word file the app can read
         return False
 
 
 def master_rows(master_path) -> list[str]:
-    with zipfile.ZipFile(master_path) as z:
-        body = etree.fromstring(z.read("word/document.xml")).find(f"{{{W}}}body")
-    return [_text(p) for p in _sections(body)["rows"]]
+    return [_text(p) for p in _sections(WordDocument(master_path).body)["rows"]]
 
 
 def build_docx(master_path, out_path, profile: str, skills: list[dict[str, str]]) -> None:
-    """Write `out_path`: the master package with only document.xml changed."""
-    with zipfile.ZipFile(master_path) as zin:
-        root = etree.fromstring(zin.read("word/document.xml"))
-        body = root.find(f"{{{W}}}body")
-        sec = _sections(body)
-        if sec["profile"] is None:
-            raise ValueError("The master CV has no PROFILE section.")
+    """Write `out_path`: the master CV with only its profile and its skills rows changed."""
+    doc = WordDocument(master_path)
+    body = doc.body
+    sec = _sections(body)
+    if sec["profile"] is None:
+        raise ValueError("The master CV has no PROFILE section.")
+    profile_para = Paragraph(sec["profile"])
+    if not profile_para.writable:       # the paragraph's text sits inside a link or a content control: nothing to write into
+        raise ValueError("The PROFILE paragraph of the master CV is built in a way the app cannot rewrite "
+                         "(its text is inside a link or a form control). Retype that paragraph as plain text in Word.")
+    profile_para.write(profile)
 
-        runs = sec["profile"].findall(_R)
-        if not runs:                    # the paragraph's text sits inside a link or a content control: nothing to write into
-            raise ValueError("The PROFILE paragraph of the master CV is built in a way the app cannot rewrite "
-                             "(its text is inside a link or a form control). Retype that paragraph as plain text in Word.")
-        _set_run_text(runs[0], profile)
-        for r in runs[1:]:
-            _set_run_text(r, "")
-
-        if skills and sec["rows"] and sec["rows"][0].findall(_R):       # (a first row without plain text: the rows are left as they are)
-            template = sec["rows"][0]
-            anchor = body.index(template)
-            for p in sec["rows"]:
-                body.remove(p)
-            for n, row in enumerate(skills):
-                p = copy.deepcopy(template)
-                rr = p.findall(_R)
-                _set_run_text(rr[0], f"{row['label']}: ")       # bold label run
-                if len(rr) > 1:
-                    _set_run_text(rr[1], row["items"])         # regular items run
-                    for r in rr[2:]:
-                        p.remove(r)
-                else:
-                    _set_run_text(rr[0], f"{row['label']}: {row['items']}")
-                body.insert(anchor + n, p)
-
-        new_xml = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
-        with zipfile.ZipFile(out_path, "w") as zout:
-            for item in zin.infolist():                         # every other file byte-for-byte
-                data = new_xml if item.filename == "word/document.xml" else zin.read(item.filename)
-                zout.writestr(item, data, compress_type=zipfile.ZIP_DEFLATED)
+    if skills and sec["rows"] and sec["rows"][0].findall(_R):       # (a first row without plain text: the rows are left as they are)
+        template = sec["rows"][0]
+        anchor = body.index(template)
+        for p in sec["rows"]:
+            body.remove(p)
+        for n, row in enumerate(skills):
+            p = copy.deepcopy(template)
+            rr = p.findall(_R)
+            _set_run_text(rr[0], f"{row['label']}: ")       # bold label run
+            if len(rr) > 1:
+                _set_run_text(rr[1], row["items"])         # regular items run
+                for r in rr[2:]:
+                    p.remove(r)
+            else:
+                _set_run_text(rr[0], f"{row['label']}: {row['items']}")
+            body.insert(anchor + n, p)
+    doc.save(out_path)                  # every other part of the file byte for byte
 
 
 # ── checks ───────────────────────────────────────────────────────────────────
@@ -398,13 +375,11 @@ def clean(text: str) -> str:
 def verify(master_path, out_path) -> list[str]:
     """Checks 2-4 of the instruction on the finished file."""
     problems = []
-    with zipfile.ZipFile(master_path) as zm, zipfile.ZipFile(out_path) as zo:
-        for name in zm.namelist():
-            if name != "word/document.xml" and zm.read(name) != zo.read(name):
-                problems.append(f"{name} differs from the master.")
-        mb = etree.fromstring(zm.read("word/document.xml")).find(f"{{{W}}}body")
-        ob = etree.fromstring(zo.read("word/document.xml")).find(f"{{{W}}}body")
-    ms, os_ = _sections(mb), _sections(ob)
+    master, out = WordDocument(master_path), WordDocument(out_path)
+    for name in master.names():
+        if name != WordDocument.TEXT and master.part(name) != out.part(name):
+            problems.append(f"{name} differs from the master.")
+    ms, os_ = _sections(master.body), _sections(out.body)
 
     def locked(sec):
         skip = {id(sec["profile"])} | {id(p) for p in sec["rows"]}
@@ -485,9 +460,7 @@ def master_pages(master_path) -> int:
 def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
     """Create the adapted CV for `job`; returns the file name in TAILORED_CV_DIR."""
     master_path = Path(master_path)
-    with zipfile.ZipFile(master_path) as z:
-        body = etree.fromstring(z.read("word/document.xml")).find(f"{{{W}}}body")
-    sec = _sections(body)
+    sec = _sections(WordDocument(master_path).body)
     master_profile = _text(sec["profile"]) if sec["profile"] is not None else ""
     m_rows = [_text(p) for p in sec["rows"]]
     unverified = unverified_terms(cv_text)

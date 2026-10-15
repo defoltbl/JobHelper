@@ -13,15 +13,14 @@ the candidate wants to work with, never as something already done.
 from __future__ import annotations
 
 import re
-import zipfile
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 from lxml import etree
 
 from . import config, cv_tailor, llm, store
-from .cv_tailor import W, _P, _R, _T, _mentions, _set_run_text, _text, clean
+from .cv_tailor import _mentions, clean
+from .word_document import P as _P, T as _T, XML_SPACE, Paragraph, WordDocument, text_of as _text
 
 BODY_PARAGRAPHS = 5
 MIN_WORDS, MAX_WORDS = 320, 410        # instruction: about 330-400 words
@@ -230,13 +229,11 @@ def _slots(body) -> dict[str, Any]:
 
 
 def _set_para(p, text: str) -> None:
-    runs = p.findall(_R)
-    if not runs:                        # its text sits inside a link or a form control: there is nothing to write into
+    para = Paragraph(p)
+    if not para.writable:               # its text sits inside a link or a form control: there is nothing to write into
         raise ValueError("A paragraph of the letter template is built in a way the app cannot fill in "
                          "(its text is inside a link or a form control). Retype it as plain text in Word.")
-    _set_run_text(runs[0], text)
-    for r in runs[1:]:
-        _set_run_text(r, "")
+    para.write(text)
 
 
 def letter_date(d: date | None = None) -> str:
@@ -246,20 +243,15 @@ def letter_date(d: date | None = None) -> str:
 
 def build_docx(template_path, out_path, title_line: str, paragraphs: list[str], when: date | None = None,
                date_text: str = "") -> None:
-    with zipfile.ZipFile(template_path) as zin:
-        root = etree.fromstring(zin.read("word/document.xml"))
-        slots = _slots(root.find(f"{{{W}}}body"))
-        if len(slots["body"]) != len(paragraphs):
-            raise ValueError(f"The template has {len(slots['body'])} body paragraphs, the letter {len(paragraphs)}.")
-        _set_para(slots["title"], title_line)
-        _set_para(slots["date"], date_text or letter_date(when))
-        for p, text in zip(slots["body"], paragraphs):
-            _set_para(p, text)
-        new_xml = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
-        with zipfile.ZipFile(out_path, "w") as zout:
-            for item in zin.infolist():
-                data = new_xml if item.filename == "word/document.xml" else zin.read(item.filename)
-                zout.writestr(item, data, compress_type=zipfile.ZIP_DEFLATED)
+    doc = WordDocument(template_path)
+    slots = _slots(doc.body)
+    if len(slots["body"]) != len(paragraphs):
+        raise ValueError(f"The template has {len(slots['body'])} body paragraphs, the letter {len(paragraphs)}.")
+    _set_para(slots["title"], title_line)
+    _set_para(slots["date"], date_text or letter_date(when))
+    for p, text in zip(slots["body"], paragraphs):
+        _set_para(p, text)
+    doc.save(out_path)
 
 
 _NOT_A_TITLE = re.compile(r"@|https?:|www\.|\.(?:com|cz|org|net|io|dev)\b|\d{4,}|[.!?]$")
@@ -283,29 +275,18 @@ def set_title(path, title: str) -> bool:
     title = clean(str(title)).strip()
     if not title:
         return False
-    with zipfile.ZipFile(path) as zin:
-        root = etree.fromstring(zin.read("word/document.xml"))
-        slot = _slots(root.find(f"{{{W}}}body"))["title"]
-        if _text(slot).strip() == title:
-            return False
-        _set_para(slot, title)
-        new_xml = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
-        items = [(item, new_xml if item.filename == "word/document.xml" else zin.read(item.filename)) for item in zin.infolist()]
-    draft = Path(path).with_name(Path(path).stem + ".retitling.docx")
-    try:
-        with zipfile.ZipFile(draft, "w") as zout:
-            for item, data in items:
-                zout.writestr(item, data, compress_type=zipfile.ZIP_DEFLATED)
-        draft.replace(path)
-    finally:
-        draft.unlink(missing_ok=True)
+    doc = WordDocument(path)
+    slot = _slots(doc.body)["title"]
+    if _text(slot).strip() == title:
+        return False
+    _set_para(slot, title)
+    doc.save_over(path)
     return True
 
 
 def read_letter(path) -> dict[str, Any]:
     """The editable parts of a letter this app built: title line, date, body paragraphs."""
-    with zipfile.ZipFile(path) as z:
-        slots = _slots(etree.fromstring(z.read("word/document.xml")).find(f"{{{W}}}body"))
+    slots = _slots(WordDocument(path).body)
     return {"title_line": _text(slots["title"]), "date_text": _text(slots["date"]),
             "paragraphs": [_text(p) for p in slots["body"]]}
 
@@ -396,19 +377,19 @@ def _formatting_only(xml: bytes) -> bytes:
     root = etree.fromstring(xml)
     for t in root.iter(_T):
         t.text = ""
-        t.attrib.pop(cv_tailor.XML_SPACE, None)      # whitespace handling of the text, not formatting
+        t.attrib.pop(XML_SPACE, None)      # whitespace handling of the text, not formatting
     return etree.tostring(root)
 
 
 def verify(template_path, out_path, unverified: list[str] | None = None) -> list[str]:
     problems = []
-    with zipfile.ZipFile(template_path) as zt, zipfile.ZipFile(out_path) as zo:
-        for name in zt.namelist():
-            if name != "word/document.xml" and zt.read(name) != zo.read(name):
-                problems.append(f"{name} differs from the template.")
-        if _formatting_only(zt.read("word/document.xml")) != _formatting_only(zo.read("word/document.xml")):
-            problems.append("The formatting differs from the template.")
-        body = etree.fromstring(zo.read("word/document.xml")).find(f"{{{W}}}body")
+    template, out = WordDocument(template_path), WordDocument(out_path)
+    for name in template.names():
+        if name != WordDocument.TEXT and template.part(name) != out.part(name):
+            problems.append(f"{name} differs from the template.")
+    if _formatting_only(template.part(WordDocument.TEXT)) != _formatting_only(out.part(WordDocument.TEXT)):
+        problems.append("The formatting differs from the template.")
+    body = out.body
     paragraphs = [_text(p) for p in _slots(body)["body"]]
     full = "\n".join(_text(p) for p in body if p.tag == _P)
     if "—" in full:
@@ -437,9 +418,7 @@ def _adapted_cv_text(job: dict[str, Any]) -> str:
     path = config.TAILORED_CV_DIR / name if name else None
     if not path or path.suffix.lower() != ".docx" or not path.exists():
         return ""
-    with zipfile.ZipFile(path) as z:
-        body = etree.fromstring(z.read("word/document.xml")).find(f"{{{W}}}body")
-    sec = cv_tailor._sections(body)
+    sec = cv_tailor._sections(WordDocument(path).body)
     lines = ([_text(sec["profile"])] if sec["profile"] is not None else []) + [_text(p) for p in sec["rows"]]
     return "\n".join(lines)
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import docx
 import pytest
 
-from jobhelper import config, cv_tailor, llm, store
+from jobhelper import word_document, config, cv_tailor, llm, store
 
 ROOT = Path(__file__).resolve().parent.parent
 # A frozen copy of the master CV the approved examples were made from, so these
@@ -137,7 +137,7 @@ def _body(path):
 
     from lxml import etree
     with zipfile.ZipFile(path) as z:
-        return etree.fromstring(z.read("word/document.xml")).find(f"{{{cv_tailor.W}}}body")
+        return etree.fromstring(z.read("word/document.xml")).find(f"{{{word_document.W}}}body")
 
 
 def test_another_cv_layout_keeps_its_experience_section(tmp_path):

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from jobhelper import api_core, agent2_search, agent3_letters, config, cover_letter, llm, store, ui_api, vault
+from jobhelper import word_document, api_core, agent2_search, agent3_letters, config, cover_letter, llm, store, ui_api, vault
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = ROOT / "data" / "cover_letter_template.docx"
@@ -141,7 +141,7 @@ def test_a_letter_with_another_shape_than_the_template_is_not_offered_for_editin
     with zipfile.ZipFile(path) as z:
         parts = {n: z.read(n) for n in z.namelist()}
     root = etree.fromstring(parts["word/document.xml"])
-    body = root.find(f"{{{cover_letter.W}}}body")
+    body = root.find(f"{{{word_document.W}}}body")
     for p in cover_letter._slots(body)["body"][:3]:
         body.remove(p)
     parts["word/document.xml"] = etree.tostring(root)

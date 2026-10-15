@@ -2,7 +2,7 @@
 from pathlib import Path
 import pytest
 
-from jobhelper import job_sources, api_core, agent2_search, config, db, insights, interview_prep, llm, store, ui_api
+from jobhelper import word_document, job_sources, api_core, agent2_search, config, db, insights, interview_prep, llm, store, ui_api
 
 CV = ("Alex Novak\nJunior Software Developer\nPython, Kotlin, SQL, PostgreSQL, FastAPI, Docker, Azure, Git, Linux, React.\n"
       "Built a document search service with FastAPI and pgvector. English B2.")
@@ -688,7 +688,7 @@ def test_a_cv_or_template_paragraph_that_cannot_be_rewritten_is_said_in_words(tm
     """Text inside a link or a form control has no plain run to write into: the builders used to stop with "list index out of range"."""
     from lxml import etree
     from jobhelper import cover_letter, cv_tailor
-    W = cv_tailor.W
+    W = word_document.W
     para = etree.fromstring(f'<w:p xmlns:w="{W}"><w:hyperlink><w:r><w:t>text in a link</w:t></w:r></w:hyperlink></w:p>')
     with pytest.raises(ValueError, match="Retype it as plain text"):
         cover_letter._set_para(para, "new")
