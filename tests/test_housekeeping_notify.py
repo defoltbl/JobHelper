@@ -167,9 +167,7 @@ def test_example_rule_files_are_generic_and_usable(isolate_data):
 def test_letter_prompt_carries_the_persons_own_facts_not_built_in_ones(isolate_data, monkeypatch):
     import shutil
     from jobhelper import llm
-    template = ROOT / "data" / "cover_letter_template.docx"
-    if not template.exists():
-        pytest.skip("letter template not present")
+    template = ROOT / "tests" / "fixtures" / "letter_example_deutscheborse.docx"      # never your own template in data/
     config.ensure_dirs()
     shutil.copy2(template, config.LETTER_TEMPLATE)
     ui_api.Api().save_options({"where": "Berlin", "about_right_to_work": "EU citizen", "about_start": "one month"})

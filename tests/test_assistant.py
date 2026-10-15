@@ -1267,7 +1267,6 @@ def test_area_the_filled_form_is_read_back_and_reviewed():
     assert review["ok"] and review["job_id"] == "vt" and out["sent"] is False and out["clicked"] is False
     found = {p["field"]: p["problem"] for p in review["problems"]}
     assert found["Why do you want to work at Northwind?"] == "It names Northwind, but the job is at Vantor.", "what Claude sees against the CV and the job"
-    assert all("required" not in p for p in found.values()) or True
     assert "nothing wrong" not in review["say"] and "did not send anything" in review["say"]
     assert out["state"]["pw"] == "" and out["state"]["dob"] == "", "reading back changes nothing"
 

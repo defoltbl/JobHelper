@@ -282,11 +282,9 @@ def test_the_mailbox_only_ever_reads_and_always_signs_out(imap):
     assert all(e[2] is True for e in imap.log if e[0] == "select") and imap.log[-1] == ("logout",)
     assert not [name for name in vars(email_client.Mailbox) if re.search(r"store|copy|move|expunge|append|delete|flag", name)]
     imap.log.clear()
-    try:
+    with pytest.raises(RuntimeError):
         with email_client.Mailbox("me@example.com", "pw") as box:
             raise RuntimeError("something failed while reading")
-    except RuntimeError:
-        pass
     assert imap.log[-1] == ("logout",)                                  # signed out after an error too
 
 

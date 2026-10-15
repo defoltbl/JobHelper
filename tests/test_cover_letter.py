@@ -8,7 +8,7 @@ import pytest
 from jobhelper import config, cover_letter, llm, store
 
 ROOT = Path(__file__).resolve().parent.parent
-TEMPLATE = ROOT / "data" / "cover_letter_template.docx"
+TEMPLATE = ROOT / "tests" / "fixtures" / "letter_example_deutscheborse.docx"      # never your own template in data/
 # A frozen copy of the master CV the approved examples were made from, so these
 # tests do not change when the real CV in data/cv/ is edited.
 MASTER = Path(__file__).parent / "fixtures" / "Candidate_CV_EN.docx"

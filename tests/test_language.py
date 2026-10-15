@@ -96,7 +96,7 @@ def test_english_ads_are_not_taken_for_another_language():
            # English with foreign names, a German company form and a few borrowed words
            "Müller & Söhne GmbH is hiring an accountant in Zürich. You will prepare the monthly reports for our offices in "
            "München and Wien, work with the finance team and help with the year-end closing. Good English is required.",
-           "Junior Developer at Škoda Auto in Kolín. You will work on our internal tools with Python and SQL, "
+           "Junior Developer at Kestrel Motors in Hradec Králové. You will work on our internal tools with Python and SQL, "
            "in a team of five. We offer mentoring, a learning budget and the possibility to work from home two days a week.",
            "Data Analyst (m/w/d)", "Software Engineer", "", "QA"]
     for text in ads:

@@ -7,7 +7,7 @@ import pytest
 from jobhelper import word_document, api_core, agent2_search, agent3_letters, config, cover_letter, llm, store, ui_api, vault
 
 ROOT = Path(__file__).resolve().parent.parent
-TEMPLATE = ROOT / "data" / "cover_letter_template.docx"
+TEMPLATE = ROOT / "tests" / "fixtures" / "letter_example_deutscheborse.docx"      # never your own template in data/
 CV = "Alex Novak\nJunior Software Developer\nPython, Kotlin, PostgreSQL, FastAPI, Docker, Azure."
 PARAS = [("I am applying for this role because the work on data pipelines matches what I build. " * 4).strip() for _ in range(5)]
 

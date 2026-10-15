@@ -827,9 +827,7 @@ def test_not_interested_hides_the_lead_and_the_filter_restores_it(ui):
 def test_letter_editor_edits_rewrites_and_saves(ui, monkeypatch):
     import shutil
     from jobhelper import cover_letter, llm, store as _store
-    template = ROOT / "data" / "cover_letter_template.docx"
-    if not template.exists():
-        pytest.skip("letter template not present")
+    template = ROOT / "tests" / "fixtures" / "letter_example_deutscheborse.docx"      # never your own template in data/
     monkeypatch.setattr(config, "LETTER_TEMPLATE", config.DATA_DIR / "cover_letter_template.docx")
     shutil.copy2(template, config.LETTER_TEMPLATE)
     monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython, Docker.")

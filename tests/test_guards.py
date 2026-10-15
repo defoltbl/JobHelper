@@ -605,3 +605,12 @@ def test_a_state_code_is_not_the_united_states_for_someone_whose_country_has_tha
     monkeypatch.setattr(config, "search_country", lambda: country)
     assert filters.is_us_location(location, where) is us
     assert filters.is_us_location("Bangalore, IN") is True, "without a search city the old, wide reading stays"
+
+
+def test_the_run_notices_any_change_to_your_own_data_folder():
+    """The session guard in conftest compares data/ before and after the run (sizes and times, never contents)."""
+    from tests.conftest import data_changes
+    before = {"jobs.json": (100, 1), "my_details.json": (50, 1)}
+    assert data_changes(before, dict(before)) == []
+    assert data_changes(before, {"jobs.json": (100, 2), "my_details.json": (50, 1), "new.json": (1, 1)}) == ["jobs.json", "new.json"]
+    assert data_changes(before, {"jobs.json": (100, 1)}) == ["my_details.json"]

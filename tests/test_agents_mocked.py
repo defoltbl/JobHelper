@@ -5,18 +5,16 @@ import pytest
 
 from jobhelper import agent1_cv, agent3_letters, config, llm, store
 
-REAL_CV_DIR = Path(__file__).resolve().parent.parent / "data" / "cv"
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 # ── Agent 1 ─────────────────────────────────────────────────────────────────
-def test_read_real_cvs_if_present():
-    found = False
-    files = sorted(REAL_CV_DIR.glob("*.docx")) + sorted(REAL_CV_DIR.glob("*.pdf")) if REAL_CV_DIR.is_dir() else []
-    for p in files:                       # whoever's CV is in data/cv
-        found = True
+def test_read_word_cvs():
+    """The CVs that come with the tests (never the ones in data/cv: a test does not read your own files)."""
+    files = sorted(FIXTURE_DIR.glob("*cv*.docx")) + sorted(FIXTURE_DIR.glob("*CV*.docx"))
+    assert files
+    for p in files:
         assert len(agent1_cv.read_cv_text(p)) > 200
-    if not found:
-        pytest.skip("no real CV files present")
 
 
 def test_read_txt_cv(isolate_data):

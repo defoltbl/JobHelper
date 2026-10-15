@@ -20,6 +20,43 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 TEST_KEY = base64.urlsafe_b64encode(bytes(range(32))).decode("ascii")
 
 
+# ── the last line of defence: the run fails if anything in your own data/ changed ──
+def _data_snapshot() -> dict[str, tuple[int, int]]:
+    """Size and change time of every file in data/ (the contents are never read)."""
+    root = ROOT / "data"
+    if not root.is_dir():
+        return {}
+    out = {}
+    for path in root.rglob("*"):
+        if path.is_file() and not path.name.startswith("."):          # Finder's own .DS_Store files are not data
+            info = path.stat()
+            out[str(path.relative_to(root))] = (info.st_size, info.st_mtime_ns)
+    return out
+
+
+def data_changes(before: dict, after: dict) -> list[str]:
+    """The files of data/ that were added, removed or changed between two snapshots."""
+    return sorted(name for name in set(before) | set(after) if before.get(name) != after.get(name))
+
+
+def pytest_sessionstart(session):
+    session.config.stash_data_before = _data_snapshot()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    before = getattr(session.config, "stash_data_before", None)
+    if before is None:
+        return
+    changed = data_changes(before, _data_snapshot())
+    if changed:
+        reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+        message = ("Files in your own data/ folder changed during the test run: " + ", ".join(changed[:10])
+                   + ". A test must use isolate_data. (If the app was open, it may have been the app.)")
+        if reporter:
+            reporter.write_line(message, red=True, bold=True)
+        session.exitstatus = 1
+
+
 def _fresh_keychain():
     from jobhelper import vault
     vault.use_keychain(vault.MemoryKeychain({vault.KEY_ACCOUNT: TEST_KEY}))
