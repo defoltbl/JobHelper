@@ -120,7 +120,7 @@ Table 2.4 lists what reaches outside the Mac.
 | Technology | Used for | Why it was chosen |
 |---|---|---|
 | `requests` with `beautifulsoup4` and `lxml` | Reading the job boards and company career sites | The boards have no common interface, so their public pages are read as a browser would read them, at a modest pace. No search needs a key or an account |
-| `imaplib`, from Python itself | Reading replies | IMAP works with almost all mail providers. It can open a mailbox read-only. This keeps the promise of the app: it never sends, deletes or marks mail |
+| `imaplib`, from Python itself | Reading replies | IMAP works with almost all mail providers. It can open a mailbox read-only. This keeps the promise of the app: it never sends, deletes or marks mail. `email_client.Mailbox` is the only way the app reads a mailbox. It opens each folder read-only, reads with PEEK and always signs out. It has no method that writes |
 | An app password instead of a sign-in window | Access to the mailbox | The person can cancel it at the provider at any time, without a change to the real password. The app needs no registration with each provider |
 
 ### Privacy and the Mac

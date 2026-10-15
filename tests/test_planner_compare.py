@@ -1,6 +1,7 @@
 """Dates to remember, notes per company, the CV comparison, stated pay,
 the wider mailbox scan and replies pasted in by hand."""
 import imaplib
+import re
 from datetime import date, timedelta
 from email.message import EmailMessage
 
@@ -225,13 +226,13 @@ def imap(monkeypatch):
 
 
 def test_inbox_only_by_default(imap):
-    got = email_client._fetch_box("me@example.com", "pw", "07-Sep-2026")
+    got = email_client.read_mailbox("me@example.com", "pw", "07-Sep-2026")
     assert [(m["msg_id"], m["folder"]) for m in got] == [("<self>", "inbox"), ("<1>", "inbox")]
     assert [e[1] for e in imap.log if e[0] == "select"] == ["INBOX"]
 
 
 def test_all_folders_adds_archive_and_spam_read_only(imap):
-    got = email_client._fetch_box("me@example.com", "pw", "07-Sep-2026", all_folders=True)
+    got = email_client.read_mailbox("me@example.com", "pw", "07-Sep-2026", all_folders=True)
     assert [(m["msg_id"], m["folder"]) for m in got] == [("<self>", "inbox"), ("<1>", "inbox"), ("<arch>", "archive"), ("<spam>", "spam")]
     selects = [e for e in imap.log if e[0] == "select"]
     assert [s[1].strip('"') for s in selects] == ["INBOX", "[Gmail]/All Mail", "[Gmail]/Spam"] and all(s[2] is True for s in selects)
@@ -243,26 +244,50 @@ def test_all_folders_adds_archive_and_spam_read_only(imap):
 
 def test_other_providers_fall_back_to_a_plain_date_search(imap):
     imap.gm_raw = False
-    got = email_client._fetch_box("me@example.com", "pw", "07-Sep-2026", all_folders=True)
+    got = email_client.read_mailbox("me@example.com", "pw", "07-Sep-2026", all_folders=True)
     assert "<arch>" in [m["msg_id"] for m in got]
     assert ("search", "[Gmail]/All Mail", '(SINCE "07-Sep-2026")') in imap.log
 
 
 def test_a_folder_that_cannot_be_opened_is_a_warning_not_an_error(imap):
     imap.broken = ("[Gmail]/Spam",)
-    got = email_client._fetch_box("me@example.com", "pw", "07-Sep-2026", all_folders=True)
+    got = email_client.read_mailbox("me@example.com", "pw", "07-Sep-2026", all_folders=True)
     assert "<arch>" in [m["msg_id"] for m in got] and "<spam>" not in [m["msg_id"] for m in got]
     assert email_client.last_warnings == ["The spam folder of me@example.com could not be read."]
 
 
 def test_folders_are_found_by_flag_in_any_language(imap):
     imap.listing = [b'(\\HasNoChildren) "/" "INBOX"', b'(\\All) "/" "[Gmail]/V&AWE-echny zpr&AOE-vy"', b'(\\Junk) "/" "[Gmail]/Spam"']
-    assert email_client._extra_folders(imap()) == {"archive": '"[Gmail]/V&AWE-echny zpr&AOE-vy"', "spam": '"[Gmail]/Spam"'}
+    with email_client.Mailbox("me@example.com", "pw") as box:
+        assert box.folders() == {"archive": '"[Gmail]/V&AWE-echny zpr&AOE-vy"', "spam": '"[Gmail]/Spam"'}
 
     class NoList:
+        def login(self, user, password):
+            pass
+
         def list(self):
             raise OSError("down")
-    assert email_client._extra_folders(NoList()) == {}
+
+        def logout(self):
+            pass
+    with email_client.Mailbox("me@example.com", "pw", connect=NoList) as box:
+        assert box.folders() == {}
+
+
+def test_the_mailbox_only_ever_reads_and_always_signs_out(imap):
+    """The exact commands: sign in, open read-only, search, read with PEEK, list folders, sign out. Nothing else."""
+    with email_client.Mailbox("me@example.com", "pw") as box:
+        box.recent("07-Sep-2026", all_folders=True)
+    assert {e[0] for e in imap.log} <= {"login", "select", "search", "fetch", "list", "logout"}
+    assert all(e[2] is True for e in imap.log if e[0] == "select") and imap.log[-1] == ("logout",)
+    assert not [name for name in vars(email_client.Mailbox) if re.search(r"store|copy|move|expunge|append|delete|flag", name)]
+    imap.log.clear()
+    try:
+        with email_client.Mailbox("me@example.com", "pw") as box:
+            raise RuntimeError("something failed while reading")
+    except RuntimeError:
+        pass
+    assert imap.log[-1] == ("logout",)                                  # signed out after an error too
 
 
 def test_the_option_decides_whether_other_folders_are_read(imap, monkeypatch):

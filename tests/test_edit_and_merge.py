@@ -193,7 +193,7 @@ def mail(isolate_data, monkeypatch):
             raise boxes[user]
         return [dict(m, mailbox=user) for m in boxes[user]]
 
-    monkeypatch.setattr(email_client, "_fetch_box", fetch)
+    monkeypatch.setattr(email_client, "read_mailbox", fetch)
     return boxes, asked
 
 

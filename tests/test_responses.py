@@ -493,11 +493,18 @@ def test_one_header_or_message_nobody_can_decode_does_not_end_a_scan(monkeypatch
     assert email_client._decode(None) == "" and email_client._decode("Plain") == "Plain"
 
     class Box:
+        def login(self, user, password):
+            pass
+
         def fetch(self, num, what):
             return "OK", [(b"1 (BODY[] {5}", b"From: a@b.c\r\nSubject: Hi\r\n\r\nBody text here")]
-    assert email_client._read(Box(), b"1", "me@example.com", "inbox")["subject"] == "Hi"
-    monkeypatch.setattr(email_client, "_message", lambda *a: (_ for _ in ()).throw(ValueError("broken")))
-    assert email_client._read(Box(), b"1", "me@example.com", "inbox") is None, "left out; the other messages are still read"
+
+        def logout(self):
+            pass
+    with email_client.Mailbox("me@example.com", "pw", connect=Box) as box:
+        assert box.message(b"1", "inbox")["subject"] == "Hi"
+        monkeypatch.setattr(email_client, "_message", lambda *a: (_ for _ in ()).throw(ValueError("broken")))
+        assert box.message(b"1", "inbox") is None, "left out; the other messages are still read"
 
 
 def test_two_writers_to_the_replies_at_once_lose_nothing(isolate_data):

@@ -134,6 +134,6 @@ def test_the_mail_server_gets_a_time_limit_and_an_empty_answer_is_no_mail(monkey
         def search(self, *args): return "OK", [None]
         def logout(self): made["out"] = True
     monkeypatch.setattr(email_client.imaplib, "IMAP4_SSL", Server)
-    assert email_client._fetch_box("me@example.com", "pw", "01-Oct-2026", host="imap.example.com") == []
+    assert email_client.read_mailbox("me@example.com", "pw", "01-Oct-2026", host="imap.example.com") == []
     assert made == {"host": "imap.example.com", "timeout": email_client.SERVER_TIMEOUT, "readonly": True, "out": True}
     assert email_client._numbers([b"1 2 3"]) == [b"1", b"2", b"3"] and email_client._numbers([]) == [] and email_client._numbers(None) == []

@@ -12,7 +12,7 @@ import re
 import unicodedata
 from datetime import datetime, timedelta
 from email.header import decode_header
-from typing import Any
+from typing import Any, Callable
 
 from . import config, store
 
@@ -136,36 +136,124 @@ def rejection_wording(text: str) -> str:
 last_warnings: list[str] = []      # problems with the optional second mailbox during the last fetch
 
 
-def _extra_folders(imap) -> dict[str, str]:
-    """The provider's "all mail" and "spam" folders, whatever they are called
-    (their names depend on the account's language), found by their IMAP flags."""
-    found: dict[str, str] = {}
-    try:
-        _typ, lines = imap.list()
-    except Exception:  # noqa: BLE001
+SERVER_TIMEOUT = 60.0       # seconds a mail server gets for one answer
+
+
+class Mailbox:
+    """One mailbox, opened read-only. Use it with `with`: it signs out at the end, also after an error.
+
+    Read-only by design: `open()` always opens a folder read-only and `message()` always reads
+    with PEEK, so nothing is marked, moved or changed. The class has no way to write.
+    `connect` makes the connection to the server (tests pass a stand-in)."""
+
+    def __init__(self, user: str, password: str, host: str = "", timeout: float = SERVER_TIMEOUT,
+                 connect: Callable[[], Any] | None = None) -> None:
+        self.user = user
+        self._password, self._host, self._timeout = password, host, timeout
+        self._connect = connect or (lambda: imaplib.IMAP4_SSL(self._host or config.imap_host(1), config.IMAP_PORT, timeout=self._timeout))
+        self._imap: Any = None
+
+    def __enter__(self) -> "Mailbox":
+        # a time limit on every step: a server that stops answering ends the scan with an error, not holds it for ever
+        self._imap = self._connect()
+        try:
+            self._imap.login(self.user, self._password)
+        except BaseException:
+            self.close()
+            raise
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def close(self) -> None:
+        try:
+            if self._imap is not None:
+                self._imap.logout()
+        except Exception:  # noqa: BLE001 - the connection is gone either way
+            pass
+        self._imap = None
+
+    def folders(self) -> dict[str, str]:
+        """The provider's "all mail" and "spam" folders, whatever they are called
+        (their names depend on the account's language), found by their IMAP flags."""
+        found: dict[str, str] = {}
+        try:
+            _typ, lines = self._imap.list()
+        except Exception:  # noqa: BLE001
+            return found
+        for line in lines or []:
+            raw = line.decode("ascii", "replace") if isinstance(line, bytes) else str(line)
+            name = raw.split(' "/" ', 1)[-1].strip() if ' "/" ' in raw else ""
+            if not name:
+                continue
+            if "\\All" in raw:
+                found["archive"] = name
+            elif "\\Junk" in raw or "\\Spam" in raw:
+                found["spam"] = name
         return found
-    for line in lines or []:
-        raw = line.decode("ascii", "replace") if isinstance(line, bytes) else str(line)
-        name = raw.split(' "/" ', 1)[-1].strip() if ' "/" ' in raw else ""
-        if not name:
-            continue
-        if "\\All" in raw:
-            found["archive"] = name
-        elif "\\Junk" in raw or "\\Spam" in raw:
-            found["spam"] = name
-    return found
 
+    def open(self, folder: str) -> None:
+        """Open a folder, always read-only."""
+        self._imap.select(folder, readonly=True)
 
-def _read(imap, num, user: str, folder: str) -> dict[str, Any] | None:
-    _typ, msg_data = imap.fetch(num, "(BODY.PEEK[])")
-    if not msg_data or not isinstance(msg_data[0], tuple):
-        return None
-    try:
-        return _message(msg_data[0][1], num, user, folder)
-    except Exception as e:  # noqa: BLE001 - one message that cannot be taken apart is left out; the others are still read
-        from . import trouble
-        trouble.note("reading one message of the mailbox", RuntimeError(type(e).__name__))
-        return None
+    def since(self, since: str) -> list[bytes]:
+        """The numbers of the messages in the open folder from that day on ("07-Sep-2026")."""
+        _typ, data = self._imap.search(None, f'(SINCE "{since}")')
+        return _numbers(data)
+
+    def archive_only(self, since: str) -> list[bytes]:
+        """Gmail: the archived messages from that day on that are in no other folder we read or wrote."""
+        after = datetime.strptime(since, "%d-%b-%Y").strftime("%Y/%m/%d")
+        _typ, data = self._imap.search(None, "X-GM-RAW", f'"-in:inbox -in:sent -in:drafts -in:chats after:{after}"')
+        return _numbers(data)
+
+    def message(self, num, folder: str) -> dict[str, Any] | None:
+        """One message of the open folder, read without marking it."""
+        _typ, msg_data = self._imap.fetch(num, "(BODY.PEEK[])")
+        if not msg_data or not isinstance(msg_data[0], tuple):
+            return None
+        try:
+            return _message(msg_data[0][1], num, self.user, folder)
+        except Exception as e:  # noqa: BLE001 - one message that cannot be taken apart is left out; the others are still read
+            from . import trouble
+            trouble.note("reading one message of the mailbox", RuntimeError(type(e).__name__))
+            return None
+
+    def recent(self, since: str, all_folders: bool = False) -> list[dict[str, Any]]:
+        """Recent messages: the Inbox, and with all_folders also archived mail and spam (not Sent or
+        Drafts, and nothing you wrote yourself). A folder that cannot be opened is a warning."""
+        out: list[dict[str, Any]] = []
+        seen: set[str] = set()
+
+        def take(folder: str, numbers, own_too: bool = False) -> None:
+            for num in reversed(numbers):            # newest first
+                item = self.message(num, folder)
+                if item and item["msg_id"] not in seen and (own_too or self.user.lower() not in item["sender"].lower()):
+                    seen.add(item["msg_id"])
+                    out.append(item)
+
+        self.open("INBOX")
+        take("inbox", self.since(since), own_too=True)  # the Inbox keeps mail you sent to yourself too
+        if all_folders:
+            extra = self.folders()
+            if extra.get("archive"):
+                try:
+                    self.open(extra["archive"])
+                    try:
+                        numbers = self.archive_only(since)
+                    except imaplib.IMAP4.error:
+                        numbers = self.since(since)
+                    take("archive", numbers)
+                except imaplib.IMAP4.error:
+                    last_warnings.append(f"The archive folder of {self.user} could not be read.")
+            if extra.get("spam"):
+                try:
+                    self.open(extra["spam"])
+                    take("spam", self.since(since))
+                except imaplib.IMAP4.error:
+                    last_warnings.append(f"The spam folder of {self.user} could not be read.")
+        return out
 
 
 def _message(raw: bytes, num, user: str, folder: str) -> dict[str, Any]:
@@ -180,9 +268,6 @@ def _message(raw: bytes, num, user: str, folder: str) -> dict[str, Any]:
         "mailbox": user,
         "folder": folder,
     }
-
-
-SERVER_TIMEOUT = 60.0       # seconds a mail server gets for one answer
 
 
 def _numbers(data) -> list[bytes]:
@@ -215,58 +300,10 @@ def try_login(user: str, password: str, timeout: float = 8.0, host: str = "") ->
     return {"ok": True, "msg": ""}
 
 
-def _fetch_box(user: str, password: str, since: str, all_folders: bool = False, host: str = "") -> list[dict[str, Any]]:
-    """Recent messages of one mailbox: the Inbox, and with all_folders also
-    archived mail and spam (not Sent or Drafts, and nothing you wrote yourself).
-    Read-only: folders are opened read-only and messages are fetched with PEEK,
-    so nothing is marked, moved or changed."""
-    # a time limit on every step: a server that stops answering must end the scan with an error, not hold it for ever
-    imap = imaplib.IMAP4_SSL(host or config.imap_host(1), config.IMAP_PORT, timeout=SERVER_TIMEOUT)
-    out: list[dict[str, Any]] = []
-    seen: set[str] = set()
-
-    def take(folder: str, numbers) -> None:
-        for num in reversed(numbers):            # newest first
-            item = _read(imap, num, user, folder)
-            if item and item["msg_id"] not in seen and user.lower() not in item["sender"].lower():
-                seen.add(item["msg_id"])
-                out.append(item)
-
-    try:
-        imap.login(user, password)
-        imap.select("INBOX", readonly=True)
-        _typ, data = imap.search(None, f'(SINCE "{since}")')
-        for num in reversed(_numbers(data)):   # newest first; the Inbox keeps mail you sent to yourself too
-            item = _read(imap, num, user, "inbox")
-            if item and item["msg_id"] not in seen:
-                seen.add(item["msg_id"])
-                out.append(item)
-        if all_folders:
-            extra = _extra_folders(imap)
-            if extra.get("archive"):
-                try:
-                    imap.select(extra["archive"], readonly=True)
-                    after = datetime.strptime(since, "%d-%b-%Y").strftime("%Y/%m/%d")
-                    try:                           # Gmail: only what is in no other place we read or wrote
-                        _typ, data = imap.search(None, "X-GM-RAW", f'"-in:inbox -in:sent -in:drafts -in:chats after:{after}"')
-                    except imaplib.IMAP4.error:
-                        _typ, data = imap.search(None, f'(SINCE "{since}")')
-                    take("archive", _numbers(data))
-                except imaplib.IMAP4.error:
-                    last_warnings.append(f"The archive folder of {user} could not be read.")
-            if extra.get("spam"):
-                try:
-                    imap.select(extra["spam"], readonly=True)
-                    _typ, data = imap.search(None, f'(SINCE "{since}")')
-                    take("spam", _numbers(data))
-                except imaplib.IMAP4.error:
-                    last_warnings.append(f"The spam folder of {user} could not be read.")
-    finally:
-        try:
-            imap.logout()
-        except Exception:  # noqa: BLE001 - the connection is gone either way
-            pass
-    return out
+def read_mailbox(user: str, password: str, since: str, all_folders: bool = False, host: str = "") -> list[dict[str, Any]]:
+    """Recent messages of one mailbox (see `Mailbox.recent`); it is signed out of at the end."""
+    with Mailbox(user, password, host) as box:
+        return box.recent(since, all_folders)
 
 
 def fetch_recent(lookback_days: int | None = None, all_folders: bool | None = None) -> list[dict[str, Any]]:
@@ -284,11 +321,11 @@ def fetch_recent(lookback_days: int | None = None, all_folders: bool | None = No
     if all_folders is None:
         all_folders = config.ui_settings().get("scan_all_folders") is True
     last_warnings.clear()
-    out = _fetch_box(boxes[0]["user"], boxes[0]["password"], since, all_folders, host=boxes[0].get("host", ""))
+    out = read_mailbox(boxes[0]["user"], boxes[0]["password"], since, all_folders, host=boxes[0].get("host", ""))
     seen = {m["msg_id"] for m in out}
     for box in boxes[1:]:
         try:
-            extra = _fetch_box(box["user"], box["password"], since, all_folders, host=box.get("host", ""))
+            extra = read_mailbox(box["user"], box["password"], since, all_folders, host=box.get("host", ""))
         except imaplib.IMAP4.error:
             last_warnings.append(f"Couldn't sign in to {box['user']}: check its password in the Account card.")
             continue
