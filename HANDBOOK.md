@@ -235,6 +235,9 @@ data/                your data; only the *.example.* files are in git
   `app_qt.main()` before anything reads data, and the app then starts itself again. Tests set
   `JOBHELPER_HOME` to a temporary folder in `conftest.py`, and the guard watches both the Library
   folder and the old `data/`.
+- **Word files and PDFs hide text from `git grep`.** The first privacy check missed a real CV in
+  `tests/fixtures/*.docx` because the text is zipped. `scripts/push_check.py` opens them, and the
+  pre-push hook runs it on every push. The repository will be public.
 - **In the sandbox, "home" is the widget's container.** `homeDirectoryForCurrentUser` / `NSHomeDirectory()`
   point to ~/Library/Containers/<widget id>/Data; the real home comes from `getpwuid(getuid())`. The
   temporary-exception path in the entitlements is relative to the real home. After installing a new

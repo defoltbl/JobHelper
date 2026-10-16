@@ -523,6 +523,17 @@ A few decisions worth highlighting:
   in a password, a payment field or a personal-status question.
 - An answer comes back whole, not word by word, because the app checks it before showing it.
 
+## Before you push
+
+```bash
+python scripts/push_check.py --install-hook   # once: git runs the check before every push
+python scripts/push_check.py                  # check the whole history now
+```
+
+The check stops a push that would publish a personal detail (read from your own CV and settings,
+never stored here), a secret, a non-noreply author email, an assistant credit line, or the data
+folder. It reads Word files and PDFs too.
+
 ## License
 
 JobHelper's own code is released under the [PolyForm Noncommercial License 1.0.0](LICENSE).

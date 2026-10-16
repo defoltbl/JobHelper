@@ -488,6 +488,27 @@ Table 6.4 lists the programs from outside that the app uses, and what it does wi
 | LibreOffice | The PATH, then its usual folders (`pdf._CANDIDATES`), also for an app that Finder opens | No PDF copies. The **PDF copies** row of the Account card says how to get them |
 | The notifier | A small helper app in `data/notifier`, built at the first notification | `osascript` shows the notification. A message that waits more than `notify.STALE_HOURS` is not shown late |
 
+### The check before a push
+
+`scripts/push_check.py` examines what a `git push` would publish. Without arguments, it examines
+the whole history. As git's pre-push hook, it examines only the commits that the remote does not
+have yet. To install the hook, use `python scripts/push_check.py --install-hook`. The hook stops the
+push when it finds one of these problems:
+
+- A personal detail of the owner: the name, an email address, a phone number or a profile address.
+  The check reads them from the master CV and the mailbox settings in the data home. It also reads
+  `push_check_words.txt` there, with one word on each line. Thus the list is never in the repository.
+  The owner can be named in two places only: the README's "Author" section and the copyright line
+  of `LICENSE`.
+- A secret: an API key, a token, a password or a private key. A value with fewer than 10 different
+  characters is a made-up test value and does not count.
+- An author or committer email that is not a GitHub noreply address.
+- An assistant credit line in a commit message.
+- The data folder or a `.env` file.
+
+The check also reads the text inside Word files and PDFs. The report gives the kind of problem and
+its place, but never the private word itself.
+
 ### The macOS widget
 
 The widget is a WidgetKit extension in Swift: `widget/JobHelperWidget.swift`. `scripts/build_app.py`
