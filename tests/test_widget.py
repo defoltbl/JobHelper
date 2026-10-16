@@ -146,16 +146,15 @@ class Clock:
     def __call__(self): return self.t
 
 
-def _reloader(started, clock=None, helper=Path("/x/JobHelper.app/Contents/MacOS/JobHelperWidgetReload")):
-    return widget_feed.WidgetReloader(helper, clock=clock or Clock(), start=lambda cmd, **kw: started.append((cmd, kw)))
+def _reloader(started, clock=None):
+    return widget_feed.WidgetReloader(lambda: started.append(True), clock=clock or Clock())
 
 
 def test_the_widget_is_redrawn_when_what_it_shows_changes(jobs):
     started, clock = [], Clock()
     reloader = _reloader(started, clock)
     s = widget_feed.WidgetFeed(FakeApp(), jobs / "w").snapshot(now=datetime(2026, 10, 16, 10, 0))
-    assert reloader.after_write(s) is True                              # the app has just started
-    assert started[0][0] == ["/x/JobHelper.app/Contents/MacOS/JobHelperWidgetReload"] and started[0][1]["start_new_session"]
+    assert reloader.after_write(s) is True and started == [True]       # the app has just started
     assert reloader.after_write(dict(s, updated="2026-10-16T10:05:00")) is False    # only the time stamp: no reload used up
     assert reloader.after_write(dict(s, counts=dict(s["counts"], leads=10))) is True
     assert reloader.after_write(dict(s, counts=dict(s["counts"], leads=10), next=[])) is True       # a date passed or was cleared
@@ -179,8 +178,8 @@ def test_no_helper_no_reload_and_a_failure_is_only_noted(jobs, monkeypatch):
     assert widget_feed.WidgetReloader.of_the_app().after_write(s) is False        # tests and `python app_qt.py`: never a real reload
     noted = []
     monkeypatch.setattr(trouble, "note", lambda what, e=None: noted.append(what))
-    def broken(cmd, **kw): raise OSError("gone")
-    failing = widget_feed.WidgetReloader(Path("/x/helper"), start=broken)
+    def broken(): raise OSError("gone")
+    failing = widget_feed.WidgetReloader(broken)
     assert failing.after_write(s) is False and noted == ["asking macOS to redraw the widget"]
     assert failing.needed(s) is True                                    # it asks again next time
 
@@ -199,6 +198,32 @@ def test_the_app_keeps_one_reloader_between_updates(jobs, monkeypatch):
     assert isinstance(system._widget_reloader, widget_feed.WidgetReloader)
 
 
+def test_the_reload_library_is_loaded_once_and_called(tmp_path, monkeypatch):
+    calls, loaded = [], []
+
+    class Library:
+        def __init__(self, path): loaded.append(path)
+        @property
+        def jobhelper_reload_widgets(self):
+            f = lambda: calls.append(True)
+            return type("F", (), {"__call__": lambda self: f(), "restype": 1})()
+    monkeypatch.setattr(widget_feed.ctypes, "CDLL", Library)
+    call = widget_feed._LibraryCall(tmp_path / "lib.dylib", "jobhelper_reload_widgets")
+    call(); call()
+    assert loaded == [str(tmp_path / "lib.dylib")] and calls == [True, True]
+
+
+def test_the_built_app_finds_the_library_in_its_frameworks(tmp_path, monkeypatch):
+    from jobhelper import app_info
+    app = tmp_path / "JobHelper.app" / "Contents"
+    (app / "MacOS").mkdir(parents=True); (app / "Frameworks").mkdir()
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(app / "MacOS" / "JobHelper"))
+    assert widget_feed.WidgetReloader.of_the_app()._reload is None                  # not built in: asks nothing
+    (app / "Frameworks" / app_info.WIDGET_RELOAD).write_bytes(b"")
+    assert isinstance(widget_feed.WidgetReloader.of_the_app()._reload, widget_feed._LibraryCall)
+
+
 def test_the_reload_helper_is_built_into_the_app():
     sys.path.insert(0, str(ROOT / "scripts"))
     try:
@@ -206,9 +231,9 @@ def test_the_reload_helper_is_built_into_the_app():
     finally:
         sys.path.remove(str(ROOT / "scripts"))
     from jobhelper import app_info
-    assert str(build_app.WidgetBuild(Path("/x/JobHelper.app")).reload_helper).endswith("Contents/MacOS/" + app_info.WIDGET_RELOAD)
+    assert str(build_app.WidgetBuild(Path("/x/JobHelper.app")).reload_helper).endswith("Contents/Frameworks/" + app_info.WIDGET_RELOAD)
     helper = (ROOT / "widget" / "WidgetReload.swift").read_text(encoding="utf-8")
-    assert "WidgetCenter.shared.reloadAllTimelines()" in helper
+    assert "WidgetCenter.shared.reloadAllTimelines()" in helper and '@_cdecl("jobhelper_reload_widgets")' in helper
     assert "RELOAD_SOURCE" in (ROOT / "scripts" / "build_app.py").read_text(encoding="utf-8")
 
 

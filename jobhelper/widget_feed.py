@@ -12,10 +12,10 @@ would show the new summary only at its next scheduled read, up to 15 minutes lat
 """
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import re
-import subprocess
 import sys
 import time
 from datetime import datetime
@@ -37,25 +37,25 @@ def folder() -> Path:
 class WidgetReloader:
     """Asks macOS to redraw the widget at once after the app wrote a new summary.
 
-    Only the app that holds a widget may ask WidgetKit for that, so a small helper built into
-    JobHelper.app does it (widget/WidgetReload.swift). macOS allows each app a limited number of
-    such reloads a day, so it asks only when something the widget shows changed: always for the
-    numbers, the dates, the last run and the weekly run; for the Claude usage alone at most every
-    USAGE_EVERY seconds. Outside the built app (tests, `python app_qt.py`) there is no helper and it asks nothing."""
+    Only the app that holds a widget may ask WidgetKit for that, from its own process: the built app
+    loads a small library for it (widget/WidgetReload.swift, in Contents/Frameworks). macOS allows each
+    app a limited number of such reloads a day, so it asks only when something the widget shows changed:
+    always for the numbers, the dates, the last run and the weekly run; for the Claude usage alone at most
+    every USAGE_EVERY seconds. Outside the built app (tests, `python app_qt.py`) it asks nothing."""
 
     USAGE_EVERY = 30 * 60
 
-    def __init__(self, helper: Path | None = None, clock: Callable[[], float] = time.monotonic,
-                 start: Callable[..., Any] = subprocess.Popen) -> None:
-        self._helper = helper
-        self._clock, self._start = clock, start
+    def __init__(self, reload: Callable[[], Any] | None = None, clock: Callable[[], float] = time.monotonic) -> None:
+        self._reload, self._clock = reload, clock
         self._asked: tuple[dict[str, Any], float] | None = None      # the summary it last asked for, and when
 
     @classmethod
     def of_the_app(cls) -> "WidgetReloader":
-        """The reloader of the running app: its helper sits beside the app's program when the app is built."""
-        helper = Path(sys.executable).parent / app_info.WIDGET_RELOAD if getattr(sys, "frozen", False) else None
-        return cls(helper if helper is not None and helper.is_file() else None)
+        """The reloader of the running app: the library is in the built app's Frameworks folder."""
+        if not getattr(sys, "frozen", False):
+            return cls(None)
+        library = Path(sys.executable).resolve().parent.parent / "Frameworks" / app_info.WIDGET_RELOAD
+        return cls(_LibraryCall(library, "jobhelper_reload_widgets") if library.is_file() else None)
 
     @staticmethod
     def _shown(summary: dict[str, Any]) -> dict[str, Any]:
@@ -72,15 +72,29 @@ class WidgetReloader:
 
     def after_write(self, summary: dict[str, Any]) -> bool:
         """Ask for a redraw when it is needed. True when it asked."""
-        if self._helper is None or not self.needed(summary):
+        if self._reload is None or not self.needed(summary):
             return False
         try:
-            self._start([str(self._helper)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-        except OSError as e:
+            self._reload()
+        except (OSError, AttributeError) as e:
             trouble.note("asking macOS to redraw the widget", e)
             return False
         self._asked = (self._shown(summary), self._clock())
         return True
+
+
+class _LibraryCall:
+    """A function without arguments in a library, loaded the first time it is called."""
+
+    def __init__(self, path: Path, name: str) -> None:
+        self._path, self._name = path, name
+        self._function = None
+
+    def __call__(self) -> None:
+        if self._function is None:
+            self._function = getattr(ctypes.CDLL(str(self._path)), self._name)
+            self._function.restype = None
+        self._function()
 
 
 class WidgetFeed:

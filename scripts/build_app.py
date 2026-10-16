@@ -68,7 +68,9 @@ class AppCheck:
         widget_info = plistlib.loads((widget / "Contents" / "Info.plist").read_bytes()) if (widget / "Contents" / "Info.plist").is_file() else {}
         self._expect(widget_info.get("NSExtension", {}).get("NSExtensionPointIdentifier") == "com.apple.widgetkit-extension"
                      and (widget / "Contents" / "MacOS" / app_info.WIDGET_NAME).is_file(), "it carries the macOS widget")
-        self._expect(os.access(WidgetBuild(self._app).reload_helper, os.X_OK), "it carries the helper that redraws the widget at once")
+        reload = WidgetBuild(self._app).reload_helper
+        exported = subprocess.run(["nm", "-gU", str(reload)], capture_output=True, text=True).stdout if reload.is_file() else ""
+        self._expect("_jobhelper_reload_widgets" in exported, "it carries the library that redraws the widget at once")
         program = widget / "Contents" / "MacOS" / app_info.WIDGET_NAME
         if program.is_file():
             started = subprocess.run([str(program)], capture_output=True, text=True, timeout=30)
@@ -102,8 +104,9 @@ class AppCheck:
 class WidgetBuild:
     """The macOS widget: compiled from widget/JobHelperWidget.swift with the Swift of the Command Line Tools,
     put into the app as Contents/PlugIns/JobHelperWidget.appex, signed with its sandbox entitlements.
-    Beside it, Contents/MacOS/JobHelperWidgetReload (widget/WidgetReload.swift) lets the app ask macOS to
-    redraw the widget at once. The app is signed again afterwards, because its contents changed."""
+    Beside it, Contents/Frameworks/libJobHelperWidgetReload.dylib (widget/WidgetReload.swift) lets the app ask
+    macOS to redraw the widget at once, from its own process. The app is signed again afterwards, because its
+    contents changed."""
 
     SOURCE = ROOT / "widget" / "JobHelperWidget.swift"
     RELOAD_SOURCE = ROOT / "widget" / "WidgetReload.swift"
@@ -119,7 +122,7 @@ class WidgetBuild:
 
     @property
     def reload_helper(self) -> Path:
-        return self._app / "Contents" / "MacOS" / app_info.WIDGET_RELOAD
+        return self._app / "Contents" / "Frameworks" / app_info.WIDGET_RELOAD
 
     def info(self) -> dict:
         return {
@@ -150,12 +153,15 @@ class WidgetBuild:
                                str(self.SOURCE), "-o", str(macos / app_info.WIDGET_NAME)])
         if done.returncode:
             return done.returncode
-        done = subprocess.run([swiftc, "-O", "-target", f"{arch}-apple-macos{self.MIN_MACOS}", "-sdk", sdk, "-framework", "WidgetKit",
+        self.reload_helper.parent.mkdir(parents=True, exist_ok=True)
+        done = subprocess.run([swiftc, "-emit-library", "-O", "-target", f"{arch}-apple-macos{self.MIN_MACOS}", "-sdk", sdk,
+                               "-framework", "WidgetKit", "-module-name", "JobHelperWidgetReload",
                                str(self.RELOAD_SOURCE), "-o", str(self.reload_helper)])
         if done.returncode:
             return done.returncode
         (self.appex / "Contents" / "Info.plist").write_bytes(plistlib.dumps(self.info()))
         for cmd in (["codesign", "--force", "--sign", "-", "--entitlements", str(self.ENTITLEMENTS), str(self.appex)],
+                    ["codesign", "--force", "--sign", "-", str(self.reload_helper)],
                     ["codesign", "--force", "--sign", "-", str(self._app)]):
             done = subprocess.run(cmd, capture_output=True, text=True)
             if done.returncode:
