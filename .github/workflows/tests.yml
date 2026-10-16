@@ -1,0 +1,39 @@
+# Runs the checks of README "Testing" on every push and pull request: pyflakes, then the whole test suite.
+# macOS, because the app is a Mac app (Keychain, Qt Quick off-screen, the bundled Claude program).
+# The tests are offline: they never ask Claude, read a job board or a mailbox, or touch a real Keychain.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements.lock
+
+      - name: Install the exact, hash-checked packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r requirements.lock
+          python -m pip install "pyflakes==4.0.2"
+
+      - name: Pyflakes
+        run: python -m pyflakes jobhelper tests scripts app_qt.py run.py status.py
+
+      - name: Tests
+        run: python -m pytest

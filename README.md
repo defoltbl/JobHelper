@@ -9,11 +9,13 @@ Code program – no API key, no per-token bill – and everything it knows about
 Mac, encrypted.
 
 ![Platform](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)
 ![UI](https://img.shields.io/badge/UI-Qt%20Quick%20(PySide6)-41CD52?logo=qt&logoColor=white)
 ![Model](https://img.shields.io/badge/model-Claude%20(subscription)-D97757)
 ![Storage](https://img.shields.io/badge/data-AES--256%20encrypted-2E7D32)
-![Tests](https://img.shields.io/badge/tests-1600%2B%20offline-blue)
+![Tests](https://github.com/defoltbl/JobHelper/actions/workflows/tests.yml/badge.svg)
+![Test count](https://img.shields.io/badge/tests-1900%2B%20offline-blue)
+![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-yellow)
 
 ![The main window](docs/img/02_main.png)
 
@@ -23,6 +25,7 @@ Mac, encrypted.
 
 - [Overview](#overview)
 - [Key features](#key-features)
+- [The widget](#the-widget)
 - [The assistant](#the-assistant)
 - [Architecture](#architecture)
 - [How it works](#how-it-works)
@@ -36,6 +39,9 @@ Mac, encrypted.
 - [Documentation](#documentation)
 - [Engineering notes](#engineering-notes)
 - [Known limits](#known-limits)
+- [Before you push](#before-you-push)
+- [License](#license)
+- [Author](#author)
 
 ---
 
@@ -204,7 +210,7 @@ And a request in free words is decided by Claude but carried out by the app:
 
 | Layer | Technology | Why |
 |---|---|---|
-| Language | Python 3.10+ | Mature libraries for Word, Excel, mail and web pages; the official Claude library is Python |
+| Language | Python 3.14 | Mature libraries for Word, Excel, mail and web pages; the official Claude library is Python |
 | Window | Qt Quick (QML) with PySide6 | A native, GPU-drawn window with no browser inside |
 | Model | Claude through `claude-agent-sdk` and the Claude Code program | Uses the subscription instead of a per-use API bill |
 | Documents | `python-docx`, `pypdf`, LibreOffice (optional) | Edits the person's own Word file, so fonts and layout survive |
@@ -217,7 +223,7 @@ And a request in free words is decided by Claude but carried out by the app:
 | Scheduling | macOS LaunchAgent | Runs with the window closed |
 | Mac app | PyInstaller, ad-hoc signed | Opens from Applications with no Python; built and checked by one script |
 | Widget | Swift, SwiftUI and WidgetKit | A native desktop widget; it reads only a small summary, never the encrypted data |
-| Quality | `pytest`, `pyflakes`, hash-pinned packages | Every change comes with tests; packages cannot change unnoticed |
+| Quality | `pytest`, `pyflakes`, hash-pinned packages, GitHub Actions | Every change comes with tests, run again on every push; packages cannot change unnoticed |
 
 The reasons in full, and what was deliberately left out, are in
 [docs/CODE.md](docs/CODE.md#2-know-the-tech-stack).
@@ -255,6 +261,7 @@ JobHelper/
 ├── scripts/                  # building and checking the app, the PDF builder, the numbering check, the diagrams
 ├── docs/                     # user guide, technical documentation, their PDFs, pictures
 ├── examples/                 # example rule files and career sites, to copy into your data folder
+├── .github/workflows/        # CI: pyflakes and the tests on every push (GitHub Actions)
 ├── LICENSE                   # PolyForm Noncommercial 1.0.0
 ├── requirements.txt          # dependencies
 └── requirements.lock         # the same, pinned by SHA-256
@@ -265,7 +272,7 @@ JobHelper/
 ### Prerequisites
 
 - macOS.
-- Python 3.10 or newer.
+- Python 3.14 (the version the app is built and tested with).
 - The Claude Code program, signed in with a Claude subscription.
 - Optional: LibreOffice, for PDF copies of the documents.
 - For the assistant's form filling: Chrome, Brave, Edge, Opera or Safari, with its
@@ -396,11 +403,13 @@ into the data folder, with the same names without `.example`. With a letter of y
 ## Testing
 
 ```bash
-python -m pytest -q
-python -m pyflakes jobhelper tests scripts
+python -m pyflakes jobhelper tests scripts app_qt.py run.py status.py
+python -m pytest
 ```
 
-More than 1,800 tests in about five minutes, with no network. They never touch real data, the Keychain
+More than 1,900 tests in about five minutes, with no network. GitHub Actions runs the same two
+commands on a Mac after every push and pull request ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)).
+They never touch real data, the Keychain
 or `.env`, never ask Claude, never read a real job board or mail server, never reach into a
 real browser, and never open a file or put anything in the Trash: every test works in
 temporary folders with stand-ins.
@@ -475,7 +484,8 @@ A few decisions worth highlighting:
 **The app as a whole**
 
 - macOS only.
-- It is started from a terminal. Packaging it as an app that opens from Finder is planned.
+- The built app is signed only for the Mac that built it, not by Apple. On another Mac it opens
+  after **Open Anyway** in System Settings → Privacy & Security.
 - It needs a Claude subscription and the Claude Code CLI. When the 5-hour or the weekly limit
   of the subscription is used up, writing, scoring and the assistant's answers wait for the
   reset; a running search pauses and goes on by itself.

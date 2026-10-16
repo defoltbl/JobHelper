@@ -373,3 +373,17 @@ def test_the_ste100_checker_counts_the_way_the_rule_says(tmp_path):
                                 "| A | " + " ".join(["cell"] * 27) + " |", "*Figure 1.1 – " + " ".join(["caption"] * 30) + "*"]), encoding="utf-8")
     found = ste_check.problems(doc)
     assert [(n, words) for n, words, _ in found] == [(3, 21), (5, 26), (13, 27)]       # a step over 20, a text over 25, a table cell; never code or captions
+
+
+def test_ci_runs_what_the_readme_says_on_a_mac_with_the_locked_packages():
+    """GitHub Actions runs the README's two test commands after every push, with the hash-checked packages."""
+    workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    commands = readme.split("## Testing")[1].split("```bash")[1].split("```")[0].strip().splitlines()
+    assert len(commands) == 2
+    for command in commands:
+        assert f"run: {command}" in workflow, command
+    assert "runs-on: macos-" in workflow and "--require-hashes -r requirements.lock" in workflow
+    assert 'python-version: "3.14"' in workflow and "QT_QPA_PLATFORM: offscreen" in workflow
+    assert "push:" in workflow and "pull_request:" in workflow and "permissions:\n  contents: read" in workflow
+    assert "ANTHROPIC_API_KEY" not in workflow and "secrets." not in workflow        # the tests need no key at all
