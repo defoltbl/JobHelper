@@ -33,6 +33,13 @@ struct Snapshot: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case version, updated, counts, next, lastRun = "last_run", usage, weekly }
 }
 
+extension Snapshot {
+    /// The dates still to come at `now`: a date drops off once it has passed (When.gone), even when the app is closed.
+    func upcoming(at now: Date) -> [Event] {
+        next.filter { e in When.gone(e).map { now < $0 } ?? true }
+    }
+}
+
 extension Snapshot.Counts {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Key.self)
@@ -123,6 +130,23 @@ enum When {
         updated.count >= 16 ? String(updated.dropFirst(11).prefix(5)) : updated
     }
 
+    /// When an event leaves "Coming up": an hour after its time (it may be going on), or at the end of its
+    /// day when it has no time. The same rule as the app (jobhelper/planner.py, PASSED_AFTER).
+    static let passedAfter: TimeInterval = 3600
+    static let dayTime: DateFormatter = { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm"; f.locale = Locale(identifier: "en_US_POSIX"); return f }()
+
+    static func gone(_ e: Snapshot.Event) -> Date? {
+        if !e.time.isEmpty, let at = dayTime.date(from: "\(e.date) \(e.time)") { return at.addingTimeInterval(passedAfter) }
+        guard let date = day.date(from: e.date) else { return nil }
+        return Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: date))
+    }
+
+    /// The moments the widget must look different: when a shown date passes, and at midnight ("Tomorrow" becomes "Today").
+    static func changes(_ s: Snapshot?, after now: Date) -> [Date] {
+        let passing = (s?.next ?? []).compactMap(gone).filter { $0 > now && $0 < now.addingTimeInterval(2 * 86_400) }
+        return Array(Set(passing + [nextMidnight(after: now)]).sorted().prefix(8))
+    }
+
     static func nextMidnight(after now: Date) -> Date {
         Calendar.current.nextDate(after: now, matching: DateComponents(hour: 0, minute: 1), matchingPolicy: .nextTime) ?? now.addingTimeInterval(3600)
     }
@@ -144,8 +168,9 @@ struct Provider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> Void) {
         let now = Date.now
         let snapshot = Feed.read()
-        // "Tomorrow" becomes "Today" at midnight; the file itself is read again every 15 minutes.
-        let entries = [Entry(date: now, snapshot: snapshot), Entry(date: When.nextMidnight(after: now), snapshot: snapshot)]
+        // A passed date leaves when it passes, "Tomorrow" becomes "Today" at midnight; the file itself is read again
+        // every 15 minutes, and at once when the app asks (WidgetReload.swift).
+        let entries = [Entry(date: now, snapshot: snapshot)] + When.changes(snapshot, after: now).map { Entry(date: $0, snapshot: snapshot) }
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(15 * 60))))
     }
 }
@@ -317,7 +342,7 @@ struct SmallView: View {
         VStack(alignment: .leading, spacing: 6) {
             Header()
             Spacer(minLength: 0)
-            if let e = s.next.first {
+            if let e = s.upcoming(at: now).first {
                 DayTile(event: e, now: now, size: 34)
                 Text(e.company.isEmpty ? e.title : e.company).font(.headline).lineLimit(1)
                 Text(When.label(e, now: now)).font(.caption.weight(.semibold))
@@ -343,7 +368,7 @@ struct MediumView: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 Header()
-                NextDate(event: s.next.first, now: now, tile: 40)
+                NextDate(event: s.upcoming(at: now).first, now: now, tile: 40)
                 Spacer(minLength: 0)
                 OpenButton()
             }
@@ -375,10 +400,10 @@ struct LargeView: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("Coming up").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                if s.next.isEmpty {
+                if s.upcoming(at: now).isEmpty {
                     Label("No dates coming up", systemImage: "calendar").font(.callout).foregroundStyle(.secondary)
                 }
-                ForEach(Array(s.next.prefix(3).enumerated()), id: \.offset) { _, e in
+                ForEach(Array(s.upcoming(at: now).prefix(3).enumerated()), id: \.offset) { _, e in
                     NextDate(event: e, now: now, tile: 34)
                 }
             }
@@ -433,10 +458,10 @@ struct ExtraLargeView: View {
             .frame(width: 200, alignment: .leading)
             VStack(alignment: .leading, spacing: 10) {
                 Text("Coming up").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                if s.next.isEmpty {
+                if s.upcoming(at: now).isEmpty {
                     Label("No dates coming up", systemImage: "calendar").font(.callout).foregroundStyle(.secondary)
                 }
-                ForEach(Array(s.next.prefix(5).enumerated()), id: \.offset) { _, e in
+                ForEach(Array(s.upcoming(at: now).prefix(5).enumerated()), id: \.offset) { _, e in
                     NextDate(event: e, now: now, tile: 38)
                 }
                 Spacer(minLength: 0)

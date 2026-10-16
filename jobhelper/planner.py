@@ -71,9 +71,27 @@ def _when(job: dict[str, Any]) -> tuple[str, str]:
     return e.get("date", ""), e.get("time", "") or "99:99"
 
 
-def upcoming(jobs: list[dict[str, Any]], today: date | None = None, limit: int = 0) -> list[dict[str, Any]]:
-    """Events from today on, soonest first: {id, company, title, date, time, kind, note, days, label}."""
-    today = today or date.today()
+PASSED_AFTER = timedelta(hours=1)    # an event with a time stays for its first hour (it may be going on), then it has passed
+
+
+def has_passed(event: dict[str, Any], now: datetime) -> bool:
+    """True when an event with a time started more than PASSED_AFTER ago. An event without a time
+    lasts the whole day (the date check covers it)."""
+    try:
+        at = datetime.combine(date.fromisoformat(event.get("date", "")), datetime.strptime(event.get("time", ""), "%H:%M").time())
+    except ValueError:
+        return False
+    return now >= at + PASSED_AFTER
+
+
+def upcoming(jobs: list[dict[str, Any]], today: date | None = None, limit: int = 0,
+             now: datetime | None = None) -> list[dict[str, Any]]:
+    """Events from today on, soonest first: {id, company, title, date, time, kind, note, days, label}.
+    `now` (the clock when neither is given) also drops today's events whose time has passed;
+    a caller that gives only `today` asks about the whole day."""
+    if now is None and today is None:
+        now = datetime.now()
+    today = today or now.date()
     out = []
     for j in sorted((j for j in jobs if (j.get("event") or {}).get("date")), key=_when):
         e = j["event"]
@@ -83,6 +101,8 @@ def upcoming(jobs: list[dict[str, Any]], today: date | None = None, limit: int =
             continue
         if days < 0 or j.get("status") in _OVER:
             continue                                # passed, or the application is closed
+        if days == 0 and now is not None and has_passed(e, now):
+            continue                                # today, but its time is over
         label = "today" if days == 0 else "tomorrow" if days == 1 else f"in {days} days"
         out.append({"id": j["id"], "company": j.get("company", ""), "title": j.get("title", ""), "date": e["date"],
                     "time": e.get("time", ""), "kind": e.get("kind", "other"), "note": e.get("note", ""),
@@ -110,7 +130,7 @@ def due_reminders(jobs: list[dict[str, Any]], today: date | None = None, now: da
     now = now or (datetime.combine(today, datetime.min.time()) if today else datetime.now())
     today = today or now.date()
     due = []
-    for item in upcoming(jobs, today):
+    for item in upcoming(jobs, today, now=now):          # no "today" reminder for an interview that is already over
         if item["days"] > 1:
             continue
         job = next(j for j in jobs if j["id"] == item["id"])

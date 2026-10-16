@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 16 October 2026
 
+- The widget is **brought up to date as soon as the app starts** and whenever your numbers or dates change; before, it showed the new numbers only at its next own check, up to 15 minutes later.
+- A date with a time **leaves "Coming up" one hour after it starts**, in the window, the widget and the reminders. Before, an interview at 13:30 still showed as coming up in the evening.
 - The widget's last run shows the **same number of new jobs as the window** (it showed 0), and the weekly run reads "Weekly run off" instead of just "Off".
 - The widget now **shows your numbers**: it had looked for them in its own sandbox folder and said "Open JobHelper once" while the app was open.
 - The widget has a fourth size, **extra large**, with all the numbers, the next five dates and the Claude usage side by side.

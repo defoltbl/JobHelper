@@ -2,7 +2,7 @@
 the wider mailbox scan and replies pasted in by hand."""
 import imaplib
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from email.message import EmailMessage
 
 import docx
@@ -62,6 +62,28 @@ def test_upcoming_is_sorted_and_skips_the_past():
     assert len(planner.upcoming(jobs, TODAY, limit=2)) == 2
     jobs[0]["status"] = "rejected"                                    # a closed application is not announced
     assert "later" not in [g["id"] for g in planner.upcoming(jobs, TODAY)]
+
+
+def test_a_date_with_a_time_leaves_an_hour_after_it_started():
+    """A 13:30 interview still showed under "Coming up" at 18:52: only the date was compared, never the time."""
+    jobs = [_job("talk", event={"date": TODAY.isoformat(), "time": "13:30", "kind": "interview", "note": ""}),
+            _job("allday", event={"date": TODAY.isoformat(), "time": "", "kind": "deadline", "note": ""}),
+            _job("next", event={"date": (TODAY + timedelta(days=1)).isoformat(), "time": "09:00", "kind": "call", "note": ""})]
+
+    def shown(hour, minute):
+        return [g["id"] for g in planner.upcoming(jobs, now=datetime.combine(TODAY, time(hour, minute)))]
+    assert shown(13, 0) == ["talk", "allday", "next"]
+    assert shown(14, 29) == ["talk", "allday", "next"]               # its first hour: it may be going on
+    assert shown(14, 30) == ["allday", "next"] == shown(18, 52)
+    assert shown(23, 59) == ["allday", "next"]                         # without a time it lasts the whole day
+    assert [g["id"] for g in planner.upcoming(jobs, TODAY)] == ["talk", "allday", "next"]   # asked about the whole day
+    assert planner.has_passed({"date": TODAY.isoformat(), "time": "bad"}, datetime.combine(TODAY, time(23, 0))) is False
+
+
+def test_no_reminder_for_a_date_that_is_already_over():
+    jobs = [_job("talk", event={"date": TODAY.isoformat(), "time": "09:00", "kind": "interview", "note": ""})]
+    assert planner.due_reminders(jobs, now=datetime.combine(TODAY, time(18, 0))) == []
+    assert [d["id"] for d in planner.due_reminders(jobs, now=datetime.combine(TODAY, time(7, 0)))] == ["talk"]
 
 
 def test_reminders_once_the_day_before_and_once_on_the_day():
@@ -454,7 +476,6 @@ def test_compare_says_when_the_cv_was_adapted_from_an_earlier_master(api, monkey
 
 
 # ── reminders by the hour, for a date with a time ───────────────────────────
-from datetime import datetime  # noqa: E402
 
 
 def _at(hour, minute=0, day=TODAY):

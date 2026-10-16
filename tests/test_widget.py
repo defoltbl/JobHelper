@@ -140,6 +140,87 @@ def test_the_widget_is_built_into_the_app():
     assert str(build_app.WidgetBuild(Path("/x/JobHelper.app")).appex).endswith("Contents/PlugIns/JobHelperWidget.appex")
 
 
+# ── redrawn at once: the app asks macOS after writing (widget/WidgetReload.swift) ──
+class Clock:
+    def __init__(self): self.t = 1000.0
+    def __call__(self): return self.t
+
+
+def _reloader(started, clock=None, helper=Path("/x/JobHelper.app/Contents/MacOS/JobHelperWidgetReload")):
+    return widget_feed.WidgetReloader(helper, clock=clock or Clock(), start=lambda cmd, **kw: started.append((cmd, kw)))
+
+
+def test_the_widget_is_redrawn_when_what_it_shows_changes(jobs):
+    started, clock = [], Clock()
+    reloader = _reloader(started, clock)
+    s = widget_feed.WidgetFeed(FakeApp(), jobs / "w").snapshot(now=datetime(2026, 10, 16, 10, 0))
+    assert reloader.after_write(s) is True                              # the app has just started
+    assert started[0][0] == ["/x/JobHelper.app/Contents/MacOS/JobHelperWidgetReload"] and started[0][1]["start_new_session"]
+    assert reloader.after_write(dict(s, updated="2026-10-16T10:05:00")) is False    # only the time stamp: no reload used up
+    assert reloader.after_write(dict(s, counts=dict(s["counts"], leads=10))) is True
+    assert reloader.after_write(dict(s, counts=dict(s["counts"], leads=10), next=[])) is True       # a date passed or was cleared
+
+
+def test_a_usage_change_alone_redraws_at_most_every_half_hour(jobs):
+    started, clock = [], Clock()
+    reloader = _reloader(started, clock)
+    s = widget_feed.WidgetFeed(FakeApp(), jobs / "w").snapshot()
+    reloader.after_write(s)
+    used = dict(s, usage={"five_hour_left": 40, "week_left": 80})
+    clock.t += 29 * 60
+    assert reloader.after_write(used) is False
+    clock.t += 60
+    assert reloader.after_write(used) is True and len(started) == 2
+
+
+def test_no_helper_no_reload_and_a_failure_is_only_noted(jobs, monkeypatch):
+    s = widget_feed.WidgetFeed(FakeApp(), jobs / "w").snapshot()
+    assert widget_feed.WidgetReloader(None).after_write(s) is False
+    assert widget_feed.WidgetReloader.of_the_app().after_write(s) is False        # tests and `python app_qt.py`: never a real reload
+    noted = []
+    monkeypatch.setattr(trouble, "note", lambda what, e=None: noted.append(what))
+    def broken(cmd, **kw): raise OSError("gone")
+    failing = widget_feed.WidgetReloader(Path("/x/helper"), start=broken)
+    assert failing.after_write(s) is False and noted == ["asking macOS to redraw the widget"]
+    assert failing.needed(s) is True                                    # it asks again next time
+
+
+def test_writing_the_summary_asks_for_a_redraw(jobs):
+    started = []
+    path = widget_feed.WidgetFeed(FakeApp(), jobs / "w", _reloader(started)).write()
+    assert path.is_file() and len(started) == 1
+
+
+def test_the_app_keeps_one_reloader_between_updates(jobs, monkeypatch):
+    monkeypatch.setattr(widget_feed, "folder", lambda: jobs / "widget")
+    service = ui_api.Api()
+    service.widget_update(); service.widget_update()
+    system = next(v for v in vars(service).values() if isinstance(v, api_system.SystemService))
+    assert isinstance(system._widget_reloader, widget_feed.WidgetReloader)
+
+
+def test_the_reload_helper_is_built_into_the_app():
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import build_app
+    finally:
+        sys.path.remove(str(ROOT / "scripts"))
+    from jobhelper import app_info
+    assert str(build_app.WidgetBuild(Path("/x/JobHelper.app")).reload_helper).endswith("Contents/MacOS/" + app_info.WIDGET_RELOAD)
+    helper = (ROOT / "widget" / "WidgetReload.swift").read_text(encoding="utf-8")
+    assert "WidgetCenter.shared.reloadAllTimelines()" in helper
+    assert "RELOAD_SOURCE" in (ROOT / "scripts" / "build_app.py").read_text(encoding="utf-8")
+
+
+def test_the_widget_drops_a_date_once_it_has_passed_like_the_app():
+    """The widget hides a passed date by itself (the app may be closed) with the app's rule, and redraws at that moment."""
+    from jobhelper import planner
+    assert "static let passedAfter: TimeInterval = 3600" in SWIFT and planner.PASSED_AFTER.total_seconds() == 3600
+    views = SWIFT.split("// ── how it looks")[1]
+    assert "s.next" not in views and views.count("s.upcoming(at: now)") >= 6
+    assert "When.changes(snapshot, after: now)" in SWIFT
+
+
 def test_the_system_service_offers_it_on_the_facade():
     assert "widget_update" in vars(api_system.SystemService) and hasattr(ui_api.Api, "widget_update")
 

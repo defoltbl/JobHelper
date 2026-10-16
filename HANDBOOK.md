@@ -242,6 +242,13 @@ data/                your data; only the *.example.* files are in git
   point to ~/Library/Containers/<widget id>/Data; the real home comes from `getpwuid(getuid())`. The
   temporary-exception path in the entitlements is relative to the real home. After installing a new
   build, `pkill -x JobHelperWidget` makes chronod start the new binary at its next refresh.
+- **The app asks macOS to redraw the widget.** Only the app that holds a widget may call `WidgetCenter`; the
+  Python app starts `Contents/MacOS/JobHelperWidgetReload` (widget/WidgetReload.swift), which macOS treats as part of
+  JobHelper.app (chronod logs "Reload … externalRequest … immediate-budgeted"). Reloads come from a daily budget, so
+  `widget_feed.WidgetReloader` asks only when what the widget shows changed (usage alone: every 30 minutes at most).
+  Buttons inside a widget need App Intents metadata from Xcode; with the Command Line Tools only, there is no refresh button.
+- **A passed date leaves "Coming up" one hour after its time** (`planner.PASSED_AFTER`); the widget applies the same
+  rule itself (`When.gone`) and puts a timeline entry at that moment, so it is right even when the app is closed.
 - **A widget extension must start in `_NSExtensionMain`.** Linked like a plain program (entry `main`),
   `WidgetBundle.main()` returned at once on macOS 26: chronod logged "query failed … Code=4099" and the
   gallery stayed empty. Link with `-Xlinker -e -Xlinker _NSExtensionMain`. Read logs with `/usr/bin/log`:

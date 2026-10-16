@@ -6,17 +6,23 @@ The app writes a small summary there: how many new jobs, applications, interview
 follow-ups there are; the next five dates (kind, company, role, day, time); the last run; the Claude
 usage left; and the weekly run. Nothing else: no letters, no CV, no mail, no notes. The file is
 readable by you only (0600).
+
+After writing, the app asks macOS to redraw the widget at once (WidgetReloader); otherwise the widget
+would show the new summary only at its next scheduled read, up to 15 minutes later.
 """
 from __future__ import annotations
 
 import json
 import os
 import re
+import subprocess
+import sys
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from . import config, schedule, store
+from . import app_info, config, schedule, store, trouble
 
 FILE_NAME = "snapshot.json"
 VERSION = 1
@@ -28,12 +34,62 @@ def folder() -> Path:
     return config.HOME.library / "widget"
 
 
+class WidgetReloader:
+    """Asks macOS to redraw the widget at once after the app wrote a new summary.
+
+    Only the app that holds a widget may ask WidgetKit for that, so a small helper built into
+    JobHelper.app does it (widget/WidgetReload.swift). macOS allows each app a limited number of
+    such reloads a day, so it asks only when something the widget shows changed: always for the
+    numbers, the dates, the last run and the weekly run; for the Claude usage alone at most every
+    USAGE_EVERY seconds. Outside the built app (tests, `python app_qt.py`) there is no helper and it asks nothing."""
+
+    USAGE_EVERY = 30 * 60
+
+    def __init__(self, helper: Path | None = None, clock: Callable[[], float] = time.monotonic,
+                 start: Callable[..., Any] = subprocess.Popen) -> None:
+        self._helper = helper
+        self._clock, self._start = clock, start
+        self._asked: tuple[dict[str, Any], float] | None = None      # the summary it last asked for, and when
+
+    @classmethod
+    def of_the_app(cls) -> "WidgetReloader":
+        """The reloader of the running app: its helper sits beside the app's program when the app is built."""
+        helper = Path(sys.executable).parent / app_info.WIDGET_RELOAD if getattr(sys, "frozen", False) else None
+        return cls(helper if helper is not None and helper.is_file() else None)
+
+    @staticmethod
+    def _shown(summary: dict[str, Any]) -> dict[str, Any]:
+        return {k: v for k, v in summary.items() if k != "updated"}
+
+    def needed(self, summary: dict[str, Any]) -> bool:
+        if self._asked is None:
+            return True
+        before, at = self._asked
+        now = self._shown(summary)
+        if {k: v for k, v in now.items() if k != "usage"} != {k: v for k, v in before.items() if k != "usage"}:
+            return True
+        return now.get("usage") != before.get("usage") and self._clock() - at >= self.USAGE_EVERY
+
+    def after_write(self, summary: dict[str, Any]) -> bool:
+        """Ask for a redraw when it is needed. True when it asked."""
+        if self._helper is None or not self.needed(summary):
+            return False
+        try:
+            self._start([str(self._helper)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError as e:
+            trouble.note("asking macOS to redraw the widget", e)
+            return False
+        self._asked = (self._shown(summary), self._clock())
+        return True
+
+
 class WidgetFeed:
     """Builds the summary from the app's back end (`ui_api.Api`) and writes it for the widget."""
 
-    def __init__(self, app, target: Path) -> None:
+    def __init__(self, app, target: Path, reloader: WidgetReloader | None = None) -> None:
         self._app = app
         self._target = Path(target)
+        self._reloader = reloader
 
     @property
     def file(self) -> Path:
@@ -64,10 +120,13 @@ class WidgetFeed:
     def write(self) -> Path:
         """Write the summary (a draft first, then swapped in, so the widget never reads half a file)."""
         self._target.mkdir(parents=True, exist_ok=True)
+        summary = self.snapshot()
         draft = self.file.with_name(FILE_NAME + ".draft")
-        draft.write_text(json.dumps(self.snapshot(), ensure_ascii=False, indent=1), encoding="utf-8")
+        draft.write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
         os.chmod(draft, 0o600)
         draft.replace(self.file)
+        if self._reloader is not None:
+            self._reloader.after_write(summary)
         return self.file
 
 

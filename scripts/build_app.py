@@ -68,6 +68,7 @@ class AppCheck:
         widget_info = plistlib.loads((widget / "Contents" / "Info.plist").read_bytes()) if (widget / "Contents" / "Info.plist").is_file() else {}
         self._expect(widget_info.get("NSExtension", {}).get("NSExtensionPointIdentifier") == "com.apple.widgetkit-extension"
                      and (widget / "Contents" / "MacOS" / app_info.WIDGET_NAME).is_file(), "it carries the macOS widget")
+        self._expect(os.access(WidgetBuild(self._app).reload_helper, os.X_OK), "it carries the helper that redraws the widget at once")
         program = widget / "Contents" / "MacOS" / app_info.WIDGET_NAME
         if program.is_file():
             started = subprocess.run([str(program)], capture_output=True, text=True, timeout=30)
@@ -101,9 +102,11 @@ class AppCheck:
 class WidgetBuild:
     """The macOS widget: compiled from widget/JobHelperWidget.swift with the Swift of the Command Line Tools,
     put into the app as Contents/PlugIns/JobHelperWidget.appex, signed with its sandbox entitlements.
-    The app is signed again afterwards, because its contents changed."""
+    Beside it, Contents/MacOS/JobHelperWidgetReload (widget/WidgetReload.swift) lets the app ask macOS to
+    redraw the widget at once. The app is signed again afterwards, because its contents changed."""
 
     SOURCE = ROOT / "widget" / "JobHelperWidget.swift"
+    RELOAD_SOURCE = ROOT / "widget" / "WidgetReload.swift"
     ENTITLEMENTS = ROOT / "widget" / "JobHelperWidget.entitlements"
     MIN_MACOS = "14.0"
 
@@ -113,6 +116,10 @@ class WidgetBuild:
     @property
     def appex(self) -> Path:
         return self._app / "Contents" / "PlugIns" / f"{app_info.WIDGET_NAME}.appex"
+
+    @property
+    def reload_helper(self) -> Path:
+        return self._app / "Contents" / "MacOS" / app_info.WIDGET_RELOAD
 
     def info(self) -> dict:
         return {
@@ -141,6 +148,10 @@ class WidgetBuild:
                                # the widget's own main. Started in main, the widget ended at once on macOS 26.
                                "-Xlinker", "-e", "-Xlinker", "_NSExtensionMain",
                                str(self.SOURCE), "-o", str(macos / app_info.WIDGET_NAME)])
+        if done.returncode:
+            return done.returncode
+        done = subprocess.run([swiftc, "-O", "-target", f"{arch}-apple-macos{self.MIN_MACOS}", "-sdk", sdk, "-framework", "WidgetKit",
+                               str(self.RELOAD_SOURCE), "-o", str(self.reload_helper)])
         if done.returncode:
             return done.returncode
         (self.appex / "Contents" / "Info.plist").write_bytes(plistlib.dumps(self.info()))

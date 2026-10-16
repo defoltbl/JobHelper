@@ -26,6 +26,7 @@ class SystemService:
     def __init__(self, app, editor, cv, desktop) -> None:
         """`app` is the facade (`ui_api.Api`): what this service needs from the others is asked through it."""
         self._app, self._editor, self._cv, self._desktop = app, editor, cv, desktop
+        self._widget_reloader = None              # made on the first widget update: it remembers what it last asked macOS to redraw
 
     # ── read: status / data ─────────────────────────────────────
     def connections(self):
@@ -142,7 +143,9 @@ class SystemService:
         """Write the summary the macOS widget shows: {ok} (msg when it could not be written)."""
         from . import widget_feed
         try:
-            widget_feed.WidgetFeed(self._app, widget_feed.folder()).write()
+            if self._widget_reloader is None:
+                self._widget_reloader = widget_feed.WidgetReloader.of_the_app()
+            widget_feed.WidgetFeed(self._app, widget_feed.folder(), self._widget_reloader).write()
         except Exception as e:  # noqa: BLE001 - the widget keeps its last summary; noted for the log of small problems
             trouble.note("writing the summary for the widget", e)
             return {"ok": False, "msg": trouble._safe(e)}
