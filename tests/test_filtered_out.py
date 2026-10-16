@@ -33,7 +33,7 @@ POSTINGS = [
 @pytest.fixture
 def boards(monkeypatch):
     monkeypatch.setattr(agent2_search.job_sources, "sources_for",
-                        lambda source, max_age_days=0: [job_sources.Board("fake", lambda q, where, n: [dict(j) for j in POSTINGS])])
+                        lambda source, max_age_days=0, country="": [job_sources.Board("fake", lambda q, where, n: [dict(j) for j in POSTINGS])])
 
 
 def test_every_removed_posting_has_a_reason(boards):
@@ -242,7 +242,7 @@ def test_a_failing_board_prints_no_key(monkeypatch, capsys):
 
     def failing(q, where, n):
         raise requests.HTTPError("503 for url: https://api.example.com/search?app_key=SECRETKEY99&q=x")
-    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0: [job_sources.Board("example", failing)])
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0, country="": [job_sources.Board("example", failing)])
     assert agent2_search.search(["python"], where="Prague") == []
     out = capsys.readouterr().out
     assert "example error for 'python'" in out and "SECRETKEY99" not in out and "app_key" not in out
@@ -476,7 +476,7 @@ def test_a_search_leaves_out_an_ad_in_any_other_language(monkeypatch):
     found = [_job("de", "Softwareentwickler", description=german), _job("en", "Software Developer"),
              _job("fr", "Support Agent", description=EN + "You must speak fluent French with our customers every day.")]
     monkeypatch.setattr(agent2_search.job_sources, "sources_for",
-                        lambda source, max_age_days=0: [job_sources.Board("fake", lambda q, where, n: [dict(j) for j in found])])
+                        lambda source, max_age_days=0, country="": [job_sources.Board("fake", lambda q, where, n: [dict(j) for j in found])])
     dropped = []
     kept = agent2_search.search(["developer"], where="Prague", dropped=dropped)
     assert [j["id"] for j in kept] == ["en"]

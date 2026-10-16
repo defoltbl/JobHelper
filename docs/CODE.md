@@ -284,6 +284,9 @@ Some important points:
   other apps. So `app_qt.main()` changes to `config.work_dir()`, an empty folder in the data
   folder, before it does anything. `llm.options_for` and `ClaudeCli.auth_status` give the Claude
   program the same folder.
+- The questions of the app start none of the person's claude.ai connectors (`mcp_servers={}`,
+  `--strict-mcp-config` and `ENABLE_CLAUDEAI_MCP_SERVERS=false` in `llm.options_for`). The questions
+  have no tools, and the connectors cost about 1.5 seconds for each question.
 
 ### Run a search without the window
 

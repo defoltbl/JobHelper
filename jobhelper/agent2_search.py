@@ -19,7 +19,7 @@ from typing import Any
 
 import requests
 
-from . import config, email_client, filters, job_sources, language, salary, scrapers_intl, store, textfmt
+from . import config, email_client, filters, job_sources, language, places, salary, scrapers_intl, store, textfmt
 
 _clean = textfmt.strip_tags          # text from a board, without its HTML
 
@@ -440,7 +440,10 @@ def search(
     """
     if not str(where or "").strip():
         raise RuntimeError("No city to search in. Choose one in the app's Options.")
-    sources = job_sources.sources_for(source, max_age_days=max_age_days)
+    country = places.country_of(config.search_country() or where)       # Options' Country, else the city's
+    sources = job_sources.sources_for(source, max_age_days=max_age_days, country=country)
+    for names, served in job_sources.left_out(source, country):
+        print(f"  · {' and '.join(names)}: only for places in {' and '.join(c.title() for c in served)}, so not used for {where}")
     # What a source read is remembered while one search asks its roles, not from one search to the next:
     # the app can stay open for days.
     for src in sources:

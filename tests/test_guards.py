@@ -128,7 +128,7 @@ def test_search_reports_progress_per_request(monkeypatch):
         return [store.new_job(id="p-" + query, title="Junior Python Developer " + query.upper(), company="Acme",
                               location=where, description=ENGLISH_AD)]
 
-    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0: [job_sources.Board("one", provider), job_sources.Board("two", provider)])
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0, country="": [job_sources.Board("one", provider), job_sources.Board("two", provider)])
     seen = []
     found = agent2_search.search(["a", "b", "c"], where="Prague", progress=lambda done, total: seen.append((done, total)))
     assert seen == [(i, 6) for i in range(6)]
@@ -136,7 +136,7 @@ def test_search_reports_progress_per_request(monkeypatch):
 
 
 def test_search_without_progress_callback_still_works(monkeypatch):
-    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0: [job_sources.Board("one", lambda q, w, n: [])])
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0, country="": [job_sources.Board("one", lambda q, w, n: [])])
     assert agent2_search.search(["a"], where="Prague") == []
 
 
@@ -194,7 +194,7 @@ def test_search_drops_us_jobs_heavy_experience_and_duplicates(monkeypatch):
                           description=ENGLISH_AD + " Requires 8+ years of platform security experience."),
         ]
 
-    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0: [job_sources.Board("one", provider)])
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0, country="": [job_sources.Board("one", provider)])
     found = agent2_search.search(["python"], where="Prague")
     assert [j["id"] for j in found] == ["dup"]            # of the two copies, the fuller description wins
 
@@ -237,7 +237,7 @@ def test_search_hides_part_time_roles_unless_allowed(monkeypatch):
         return [store.new_job(id="full", title="Junior Python Developer", company="Acme", location="Prague", description=ENGLISH_AD),
                 store.new_job(id="part", title="Python Intern (part time)", company="Beta", location="Prague", description=ENGLISH_AD)]
 
-    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0: [job_sources.Board("one", provider)])
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0, country="": [job_sources.Board("one", provider)])
     assert [j["id"] for j in agent2_search.search(["python"], where="Prague")] == ["full"]
     assert [j["id"] for j in agent2_search.search(["python"], where="Prague", full_time_only=False)] == ["full", "part"]
 
@@ -302,7 +302,7 @@ def test_search_leaves_out_skipped_titles(monkeypatch):
                 store.new_job(id="grad", title="Graduate Program Intern", company="SAP", location="Prague", description=ENGLISH_AD),
                 store.new_job(id="internal", title="Internal Tools Engineer", company="Alma", location="Prague", description=ENGLISH_AD)]
 
-    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0: [job_sources.Board("one", provider)])
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0, country="": [job_sources.Board("one", provider)])
     assert [j["id"] for j in agent2_search.search(["x"], where="Prague", skip_words=["intern"])] == ["dev", "internal"]
     assert [j["id"] for j in agent2_search.search(["x"], where="Prague", skip_words=["intern"], keep_words=["graduate program"])] == ["dev", "grad", "internal"]
     assert len(agent2_search.search(["x"], where="Prague")) == 4
@@ -310,7 +310,7 @@ def test_search_leaves_out_skipped_titles(monkeypatch):
 
 def test_roles_requiring_czech_are_only_dropped_with_english_only(monkeypatch):
     czech_role = ENGLISH_AD + " Fluent Czech is required for this role."
-    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0: [job_sources.Board("one", lambda q, w, n: [store.new_job(id="cz", title="IT Support Specialist", company="Acme", location="Prague", description=czech_role)])])
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0, country="": [job_sources.Board("one", lambda q, w, n: [store.new_job(id="cz", title="IT Support Specialist", company="Acme", location="Prague", description=czech_role)])])
     assert agent2_search.search(["x"], where="Prague") == []                                      # English only (the default)
     assert [j["id"] for j in agent2_search.search(["x"], where="Prague", english_only=False)] == ["cz"]     # for someone who speaks Czech
 
@@ -511,7 +511,7 @@ def test_every_search_reads_the_boards_afresh(monkeypatch):
     forgot = []
     stub = job_sources.Board("stub", lambda q, where, n: [], forget=lambda: forgot.append("stub"))
     careers = job_sources.Board("careers", lambda q, where, n: [], forget=scrapers_ats.forget)
-    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0: [stub, careers])
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0, country="": [stub, careers])
     agent2_search.search(["dev"], where="Prague")
     assert forgot == ["stub"] and scrapers_ats._cache == {}          # what a search three days ago was told is not used again
     from jobhelper import scrapers_remote

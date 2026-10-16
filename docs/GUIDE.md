@@ -1817,7 +1817,7 @@ Table 16.1 lists the Search settings.
 |---|---|---|---|
 | **City** | Where to search | A city name | The app will not search without one |
 | **Country** | Which postings count as "here", from the career site of a company and from remote jobs. They can be in the city, anywhere in this country, or in the region of the country ("Europe", "EMEA"). A remote job counts if it is not tied to another part of the world | A country's name in English. Empty = the country of the city, shown in grey | Type it when the field says that it does not know the city. Also type it when you want jobs from a neighbouring country |
-| **Job source** | Which job boards are read | Czech boards, LinkedIn and careers; LinkedIn only; Company career sites only; All sources (+ remote) | More sources find more and take longer |
+| **Job source** | Which job boards are read. The app reads the Czech boards only for a city in Czechia. For a city in another country, the log of the run says that they were not used | Czech boards, LinkedIn and careers; LinkedIn only; Company career sites only; All sources (+ remote) | More sources find more and take longer |
 | **Search roles** | The words typed into the job boards, in English | One or more roles | Too few results: add a role. Too many poor ones: remove one |
 | **Skip titles with** | Words that drop a posting by its title | Words | To get rid of a kind of posting that keeps appearing |
 | **…but keep titles with** | Exceptions to the line above | Words | To keep a title that a skip word would drop |

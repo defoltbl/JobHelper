@@ -68,7 +68,7 @@ def test_what_the_app_takes_a_city_s_country_to_be():
 def test_a_search_in_the_united_states_keeps_american_postings(isolate_data, monkeypatch):
     text = "We are looking for a developer to join our team. You will work with Python and SQL, and we offer mentoring."
     found = [store.new_job(id="tx", title="Software Developer", company="Acme", location="Austin, TX", description=text, url="https://example.com/tx")]
-    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0: [job_sources.Board("fake", lambda q, where, n: [dict(j) for j in found])])
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0, country="": [job_sources.Board("fake", lambda q, where, n: [dict(j) for j in found])])
     dropped = []
     assert agent2_search.search(["developer"], where="Prague", dropped=dropped) == [] and "United States" in dropped[0]["reason"]
     dropped = []

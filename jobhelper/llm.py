@@ -35,6 +35,11 @@ def options_for(system: str | None, model: str) -> ClaudeAgentOptions:
         # so this won't cause tool-loop iterations.
         max_turns=6,
         cwd=str(config.work_dir()),    # its own empty folder: the program watches where it works (never the whole disk)
+        # Only the servers given here (none): your claude.ai connectors are not started for the app's questions,
+        # which have no tools anyway. Starting them cost about 1.5 s per question.
+        mcp_servers={},
+        extra_args={"strict-mcp-config": None},
+        env={"ENABLE_CLAUDEAI_MCP_SERVERS": "false"},
     )
 
 

@@ -5,6 +5,8 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 16 October 2026
 
+- A search for a **city outside Czechia** no longer reads jobs.cz and prace.cz, even when Job source is still set to the Czech boards. The log of the run says so.
+- Each question the app sends to Claude is about **1.5 seconds faster**: your claude.ai connectors are no longer started for it.
 - The Mac app no longer makes macOS ask for your **Desktop, Downloads, music, removable disks or other apps' data**. The Claude program it starts had looked at the whole disk; it now works in an empty folder of the app's own.
 - JobHelper is now a **Mac app**, JobHelper.app: it opens from Applications like any other app, with no Python or terminal. The user guide shows how to open it the first time.
 - The welcome card now names what is still needed, for example **your master CV**, instead of always saying two things.

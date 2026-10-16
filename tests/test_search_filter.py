@@ -122,3 +122,42 @@ def test_the_same_link_twice_is_one_posting():
     removed = agent2_search.prune_duplicate_leads(jobs)
     assert sorted(j["id"] for j in removed) == ["lead", "pracecz-999"]            # the scored copy and the application stay
     assert [j["id"] for j in jobs] == ["pracecz-111", "other", "app", "n1", "n2"]  # postings without a link are left alone
+
+
+# ── a city in another country: the Czech boards are not asked ───────────────
+def test_the_czech_boards_are_only_for_places_in_czechia():
+    abroad = [s.name for s in job_sources.sources_for("czech", country="germany")]
+    assert "jobs.cz" not in abroad and "prace.cz" not in abroad and "linkedin" in abroad
+    for here in ("czechia", ""):                       # '' = a place the app does not know: it may be a Czech town
+        assert [s.name for s in job_sources.sources_for("czech", country=here)][:2] == ["jobs.cz", "prace.cz"]
+    assert "jobs.cz" not in [s.name for s in job_sources.sources_for("all", country="poland")]
+    assert job_sources.left_out("czech", "germany") == [(["jobs.cz", "prace.cz"], ("czechia",))]
+    assert job_sources.left_out("czech", "czechia") == [] and job_sources.left_out("linkedin", "germany") == []
+
+
+def _search_in(monkeypatch, where, country_option=""):
+    from jobhelper import config, scrapers_ats, scrapers_cz, scrapers_intl
+    asked = []
+    monkeypatch.setattr(config, "search_country", lambda: country_option)
+    monkeypatch.setattr(scrapers_cz, "jobs_cz", lambda q, w, n: asked.append("jobs.cz") or [])
+    monkeypatch.setattr(scrapers_cz, "prace_cz", lambda q, w, n: asked.append("prace.cz") or [])
+    monkeypatch.setattr(scrapers_intl, "linkedin", lambda q, w, n, max_age_days=0: asked.append("linkedin") or [])
+    monkeypatch.setattr(scrapers_ats, "load_companies", lambda: [])
+    agent2_search.search(["python developer"], where=where, source="czech")
+    return asked
+
+
+def test_a_search_in_berlin_with_the_czech_setting_never_asks_the_czech_boards(monkeypatch, capsys):
+    assert _search_in(monkeypatch, "Berlin") == ["linkedin"]
+    assert "jobs.cz and prace.cz: only for places in Czechia, so not used for Berlin" in capsys.readouterr().out
+
+
+def test_a_search_in_brno_still_asks_them(monkeypatch, capsys):
+    assert _search_in(monkeypatch, "Brno") == ["jobs.cz", "prace.cz", "linkedin"]
+    assert "not used for" not in capsys.readouterr().out
+
+
+def test_the_country_in_options_decides_for_a_town_the_app_does_not_know(monkeypatch):
+    assert _search_in(monkeypatch, "Kladno") == ["jobs.cz", "prace.cz", "linkedin"]               # may be Czech
+    assert _search_in(monkeypatch, "Kladno", country_option="Czechia") == ["jobs.cz", "prace.cz", "linkedin"]
+    assert _search_in(monkeypatch, "Freiburg", country_option="Germany") == ["linkedin"]

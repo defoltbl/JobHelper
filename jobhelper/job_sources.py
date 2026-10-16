@@ -22,9 +22,17 @@ Fetch = Callable[[str, str, int], list[dict[str, Any]]]
 class JobSource(ABC):
     """One place to find postings. `groups` are the settings of Options' "Job source" that include it."""
 
+    # The countries a source has postings for (as `places.country_of` names them); empty = anywhere.
+    countries: tuple[str, ...] = ()
+
     def __init__(self, name: str, groups: tuple[str, ...]) -> None:
         self.name = name
         self.groups = groups
+
+    def serves(self, country: str) -> bool:
+        """Whether it has postings for a search in `country` ('' = a place the app does not know: it may be
+        in any country, so a source is not left out for it)."""
+        return not self.countries or not country or country in self.countries
 
     def available(self) -> bool:
         """Whether it can be asked now (a key that is set, a list of companies that exists)."""
@@ -42,9 +50,11 @@ class Board(JobSource):
     """A board read by a scraper function (jobs.cz, prace.cz, RemoteOK, We Work Remotely, the career sites)."""
 
     def __init__(self, name: str, fetch: Fetch, groups: tuple[str, ...] = ("all",),
-                 forget: Callable[[], None] | None = None, needs: Callable[[], Any] | None = None) -> None:
+                 forget: Callable[[], None] | None = None, needs: Callable[[], Any] | None = None,
+                 countries: tuple[str, ...] = ()) -> None:
         super().__init__(name, groups)
         self._fetch, self._forget, self._needs = fetch, forget, needs
+        self.countries = countries
 
     def available(self) -> bool:
         return bool(self._needs()) if self._needs else True
@@ -121,8 +131,8 @@ class JoobleSource(JobSource):
 def all_sources(max_age_days: int = 0) -> list[JobSource]:
     """Every source the app knows, in the order a search asks them."""
     return [
-        Board("jobs.cz", scrapers_cz.jobs_cz, ("czech", "all")),
-        Board("prace.cz", scrapers_cz.prace_cz, ("czech", "all")),
+        Board("jobs.cz", scrapers_cz.jobs_cz, ("czech", "all"), countries=("czechia",)),     # Czech postings only
+        Board("prace.cz", scrapers_cz.prace_cz, ("czech", "all"), countries=("czechia",)),
         LinkedInSource(max_age_days),
         Board("remoteok", scrapers_remote.remoteok, ("remote", "all"), forget=scrapers_remote.forget_remoteok),
         Board("weworkremotely", scrapers_remote.weworkremotely, ("remote", "all"), forget=scrapers_remote.forget_wwr),
@@ -132,7 +142,7 @@ def all_sources(max_age_days: int = 0) -> list[JobSource]:
     ]
 
 
-def sources_for(source: str = "czech", max_age_days: int = 0) -> list[JobSource]:
+def sources_for(source: str = "czech", max_age_days: int = 0, country: str = "") -> list[JobSource]:
     """The sources a search uses for Options' "Job source" setting:
 
       "czech"    jobs.cz + prace.cz + LinkedIn + your companies' career sites (default; the Prague market)
@@ -143,5 +153,16 @@ def sources_for(source: str = "czech", max_age_days: int = 0) -> list[JobSource]
       "jooble"   the Jooble API (needs a key for the region)
       "all"      every source that is set up
 
-    `max_age_days` limits LinkedIn to recent postings."""
-    return [s for s in all_sources(max_age_days) if source in s.groups and s.available()]
+    `max_age_days` limits LinkedIn to recent postings. `country` is where the search is: a board for
+    another country only (jobs.cz, prace.cz outside Czechia) is left out, see `left_out`."""
+    return [s for s in all_sources(max_age_days) if source in s.groups and s.available() and s.serves(country)]
+
+
+def left_out(source: str, country: str) -> list[tuple[list[str], tuple[str, ...]]]:
+    """The sources of this setting that a search in `country` does not use, because they are for another
+    country: [(their names, the countries they are for)], one entry per set of countries."""
+    grouped: dict[tuple[str, ...], list[str]] = {}
+    for s in all_sources():
+        if source in s.groups and not s.serves(country):
+            grouped.setdefault(s.countries, []).append(s.name)
+    return [(names, served) for served, names in grouped.items()]

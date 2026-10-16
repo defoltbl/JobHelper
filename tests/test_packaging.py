@@ -134,3 +134,9 @@ def test_the_sign_in_check_runs_in_the_apps_folder(isolate_data, tmp_path, monke
     monkeypatch.chdir("/")
     done = ClaudeCli(program, which=lambda name: None, places=()).auth_status()
     assert done.stdout.strip() == str((isolate_data / "work").resolve())
+
+
+def test_the_apps_questions_start_none_of_your_claude_connectors(isolate_data):
+    options = llm.options_for("system", "haiku")
+    assert options.mcp_servers == {} and "strict-mcp-config" in options.extra_args
+    assert options.env.get("ENABLE_CLAUDEAI_MCP_SERVERS") == "false"
