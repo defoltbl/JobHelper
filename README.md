@@ -78,15 +78,18 @@ profession, for any city.
   that your CV lacks, what postings pay, how long companies take, why jobs score low.
 - **A weekly run.** macOS can do the search and the email scan once a week with the window
   closed.
+- **A real Mac app.** `JobHelper.app` opens from Applications with no Python or terminal, keeps your
+  data in `~/Library/Application Support/JobHelper`, and has a desktop widget.
 - **Pauses, never fails, on the limit.** When the subscription limit is used up the run saves,
   says when the limit resets, and resumes from the same job.
 
 ## The widget
 
-A macOS widget in three sizes shows the search at a glance: new jobs, applications, interviews,
+A macOS widget in four sizes (small to extra large) shows the search at a glance: new jobs, applications, interviews,
 follow-ups, the next dates, the last run and the Claude usage left. Add it with **Edit Widgets**
 on the desktop. It is built into `JobHelper.app` (`widget/JobHelperWidget.swift`) and reads only a
-small summary the app writes for it, never the encrypted data.
+small summary the app writes for it, never the encrypted data. Its **Open** button, or a click
+anywhere on it, opens the app.
 
 ## The assistant
 
@@ -212,6 +215,8 @@ And a request in free words is decided by Claude but carried out by the app:
 | Form filling | Apple events (`osascript`) to the person's browser | Fills the form where you are signed in, with nothing to install |
 | Security | AES-256-GCM (`cryptography`), macOS Keychain, HMAC-signed rule files | Private data; a tampered file is refused, not read |
 | Scheduling | macOS LaunchAgent | Runs with the window closed |
+| Mac app | PyInstaller, ad-hoc signed | Opens from Applications with no Python; built and checked by one script |
+| Widget | Swift, SwiftUI and WidgetKit | A native desktop widget; it reads only a small summary, never the encrypted data |
 | Quality | `pytest`, `pyflakes`, hash-pinned packages | Every change comes with tests; packages cannot change unnoticed |
 
 The reasons in full, and what was deliberately left out, are in
@@ -225,7 +230,7 @@ JobHelper/
 ├── run.py                    # the same search from the command line (used by the weekly run)
 ├── status.py                 # command-line tools: list, sync, security, usage …
 ├── packaging/JobHelper.spec   # how JobHelper.app is built (scripts/build_app.py runs it)
-├── jobhelper/                # all the logic, no window code (63 modules)
+├── jobhelper/                # all the logic, no window code (75 modules)
 │   ├── agent1_cv.py … agent5_responses.py     # the five agents
 │   ├── scrapers_*.py         # one module per kind of job source
 │   ├── filters.py, prefilter.py, language.py, places.py, keywords.py, salary.py
@@ -243,10 +248,11 @@ JobHelper/
 │   └── ui_api.py, api_*.py, qt_bridge.py, bridge_*.py
 │                             # what the window calls
 ├── ui_qt/                    # the window: one QML file per dialog or part (40 files)
-├── tests/                    # more than 1,600 tests, offline, in temporary folders
+├── tests/                    # more than 1,800 tests, offline, in temporary folders
 │   ├── guide_shots.py        # takes the pictures of the user guide
 │   └── fixtures/forms/       # the assistant's test area: forms it must fill and must not send
-├── scripts/                  # the PDF builder, the numbering check, the diagrams, the lock file
+├── widget/                   # the macOS widget (Swift, WidgetKit) and its sandbox rights
+├── scripts/                  # building and checking the app, the PDF builder, the numbering check, the diagrams
 ├── docs/                     # user guide, technical documentation, their PDFs, pictures
 ├── examples/                 # example rule files and career sites, to copy into your data folder
 ├── requirements.txt          # dependencies
@@ -393,7 +399,7 @@ python -m pytest -q
 python -m pyflakes jobhelper tests scripts
 ```
 
-More than 1,600 tests in about five minutes, with no network. They never touch real data, the Keychain
+More than 1,800 tests in about five minutes, with no network. They never touch real data, the Keychain
 or `.env`, never ask Claude, never read a real job board or mail server, never reach into a
 real browser, and never open a file or put anything in the Trash: every test works in
 temporary folders with stand-ins.

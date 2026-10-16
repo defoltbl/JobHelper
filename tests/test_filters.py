@@ -52,7 +52,7 @@ CV_LANGS = ("Prague, Czech Republic\nNative Polish and Italian speaker, B2 Engli
 
 
 def test_languages_read_from_a_cv():
-    assert filters.cv_languages(CV_LANGS) == {"english", "russian", "ukrainian"}        # "Czech Master's" is not a language; Beginner does not count
+    assert filters.cv_languages(CV_LANGS) == {"english", "italian", "polish"}        # "Czech Master's" is not a language; Beginner does not count
     assert filters.cv_languages("German – C1 · French – A2 · Spanish (fluent)") == {"english", "german", "spanish"}
     assert filters.cv_languages("") == {"english"}
 
@@ -75,6 +75,6 @@ def test_required_languages(text, groups):
 
 def test_unmet_language_names_what_is_missing():
     assert filters.unmet_language("Excellent communication skills in Czech or Slovak and English (B2+)", CV_LANGS) == "Czech or Slovak"
-    assert filters.unmet_language("Fluent English is required. Russian is a plus.", CV_LANGS) == ""
-    assert filters.unmet_language("Fluent in Ukrainian or Polish.", CV_LANGS) == ""            # one of the alternatives is enough
+    assert filters.unmet_language("Fluent English is required. Italian is a plus.", CV_LANGS) == ""
+    assert filters.unmet_language("Fluent in Portuguese or Polish.", CV_LANGS) == ""            # one of the alternatives is enough
     assert filters.unmet_language("Fluent German and English required.", "German – C1") == ""

@@ -41,7 +41,7 @@ def test_answers_come_back_in_the_order_of_the_questions(monkeypatch):
     assert items[0]["answer"].startswith("I expect about 60 000 CZK") and "—" not in items[0]["answer"]      # em dash cleaned
     assert items[1] == {"question": "When can you start?", "answer": "I can start within two weeks.", "check": ""}
     assert "1. Salary expectations?\n2. When can you start?" in seen["prompt"] and "about 60 000 CZK gross per month" in seen["prompt"]
-    assert "Acme" in seen["prompt"] and "RAG assistant" in seen["prompt"] and seen["tag"] == "form_answers"
+    assert "Acme" in seen["prompt"] and "document search service" in seen["prompt"] and seen["tag"] == "form_answers"
 
 
 def test_what_the_app_cannot_know_is_marked_for_you(monkeypatch):
