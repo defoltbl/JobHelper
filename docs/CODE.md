@@ -502,6 +502,10 @@ dates, the last run, the Claude usage left and the weekly run. It holds no lette
 notes, and its mode is 0600. `SystemService.widget_update` writes it. The window calls it at start,
 after each reload and every 5 minutes. `weekly.main()` calls it after the weekly run.
 
+The widget is linked with `-e _NSExtensionMain`, as Xcode links an extension. Started in its own
+`main`, it stopped at once on macOS 26. The **Open** button and a click open `jobhelper://open`,
+which the app registers in `CFBundleURLTypes`.
+
 The widget reads the file again every 15 minutes, and at midnight it changes "Tomorrow" to
 "Today". A test makes sure that the widget knows each key that the app writes. To draw the
 pictures of the user guide, compile with `-D PICTURES` and `scripts/widget_pictures.swift`.

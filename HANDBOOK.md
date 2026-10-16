@@ -235,6 +235,10 @@ data/                your data; only the *.example.* files are in git
   `app_qt.main()` before anything reads data, and the app then starts itself again. Tests set
   `JOBHELPER_HOME` to a temporary folder in `conftest.py`, and the guard watches both the Library
   folder and the old `data/`.
+- **A widget extension must start in `_NSExtensionMain`.** Linked like a plain program (entry `main`),
+  `WidgetBundle.main()` returned at once on macOS 26: chronod logged "query failed … Code=4099" and the
+  gallery stayed empty. Link with `-Xlinker -e -Xlinker _NSExtensionMain`. Read logs with `/usr/bin/log`:
+  in zsh, `log` is a builtin and prints nothing useful.
 - **The widget is built without Xcode.** `swiftc -application-extension` + an `.appex` with
   `NSExtensionPointIdentifier = com.apple.widgetkit-extension`, ad-hoc signed with sandbox
   entitlements (a temporary exception for one home-relative folder), then the app signed again.

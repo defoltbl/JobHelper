@@ -6,3 +6,4 @@ APPLE_EVENTS_REASON = ("JobHelper fills in the job forms you open in Google Chro
                        "when you sign in to Claude.")
 WIDGET_ID = BUNDLE_ID + ".widget"        # the widget inside the app (widget/JobHelperWidget.swift)
 WIDGET_NAME = "JobHelperWidget"
+URL_SCHEME = "jobhelper"                  # jobhelper://open: the widget's Open button and a click on the widget

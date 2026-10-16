@@ -500,8 +500,11 @@ Table 3.6 lists what each size shows.
 | Large | All of the numbers, the next three dates, the last run, both Claude usage windows, offers, replies and the weekly run |
 
 The widget gets new numbers every 15 minutes. The app writes them when it starts, after each
-change, every 5 minutes while it is open, and after the weekly run. To open the app, click the
-widget. When the numbers are older than a day, the widget tells you to open the app.
+change, every 5 minutes while it is open, and after the weekly run. When the numbers are older
+than a day, the widget tells you to open the app.
+
+To open the app, select **Open** on the medium or the large widget. You can also click anywhere
+on a widget of any size.
 
 The widget cannot open your encrypted data. The app writes a short summary for it, in the
 folder JobHelper of your Library. The summary contains numbers, the companies and roles of the

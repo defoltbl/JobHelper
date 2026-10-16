@@ -142,3 +142,25 @@ def test_the_widget_is_built_into_the_app():
 
 def test_the_system_service_offers_it_on_the_facade():
     assert "widget_update" in vars(api_system.SystemService) and hasattr(ui_api.Api, "widget_update")
+
+
+def test_the_widget_is_linked_to_start_as_an_extension():
+    """Started in its own main, the widget ended at once on macOS 26 and the gallery never showed it."""
+    build = (ROOT / "scripts" / "build_app.py").read_text(encoding="utf-8")
+    assert '"-Xlinker", "-e", "-Xlinker", "_NSExtensionMain"' in build and '"-application-extension"' in build
+
+
+def test_the_open_button_and_a_click_open_the_app():
+    from jobhelper import app_info
+    spec = (ROOT / "packaging" / "JobHelper.spec").read_text(encoding="utf-8")
+    assert "CFBundleURLTypes" in spec and "app_info.URL_SCHEME" in spec
+    assert f'URL(string: "{app_info.URL_SCHEME}://open")' in SWIFT
+    assert "Link(destination: Look.openURL)" in SWIFT and ".widgetURL(Look.openURL)" in SWIFT
+
+
+def test_the_widget_looks_like_a_macos_widget():
+    """The system gives the margins and the background; the numbers use the system's rounded font."""
+    views = SWIFT.split("// ── how it looks")[1]
+    assert ".containerBackground(" in views and "design: .rounded" in views and "widgetAccentable()" in views
+    assert "systemName:" in views                                                    # SF Symbols
+    assert ".capitalized" not in SWIFT                                               # "Call With Hr"

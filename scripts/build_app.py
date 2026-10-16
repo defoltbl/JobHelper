@@ -68,6 +68,13 @@ class AppCheck:
         widget_info = plistlib.loads((widget / "Contents" / "Info.plist").read_bytes()) if (widget / "Contents" / "Info.plist").is_file() else {}
         self._expect(widget_info.get("NSExtension", {}).get("NSExtensionPointIdentifier") == "com.apple.widgetkit-extension"
                      and (widget / "Contents" / "MacOS" / app_info.WIDGET_NAME).is_file(), "it carries the macOS widget")
+        program = widget / "Contents" / "MacOS" / app_info.WIDGET_NAME
+        if program.is_file():
+            started = subprocess.run([str(program)], capture_output=True, text=True, timeout=30)
+            self._expect("cannot be run directly" in started.stdout + started.stderr,
+                         "the widget starts as an extension (in NSExtensionMain), so macOS can keep it running")
+        schemes = [s for t in info.get("CFBundleURLTypes", []) for s in t.get("CFBundleURLSchemes", [])]
+        self._expect(app_info.URL_SCHEME in schemes, f"the widget's Open button can open the app ({app_info.URL_SCHEME}://)")
         rights = subprocess.run(["codesign", "-d", "--entitlements", "-", "--xml", str(widget)], capture_output=True, text=True).stdout
         self._expect("com.apple.security.app-sandbox" in rights and "JobHelper/widget/" in rights and "read-write" not in rights,
                      "the widget is sandboxed and may only read its own folder")
@@ -130,6 +137,9 @@ class WidgetBuild:
         done = subprocess.run([swiftc, "-parse-as-library", "-application-extension", "-O",
                                "-target", f"{arch}-apple-macos{self.MIN_MACOS}", "-sdk", sdk,
                                "-framework", "WidgetKit", "-framework", "SwiftUI",
+                               # as Xcode does for an extension: the process starts in NSExtensionMain, which then calls
+                               # the widget's own main. Started in main, the widget ended at once on macOS 26.
+                               "-Xlinker", "-e", "-Xlinker", "_NSExtensionMain",
                                str(self.SOURCE), "-o", str(macos / app_info.WIDGET_NAME)])
         if done.returncode:
             return done.returncode

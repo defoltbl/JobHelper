@@ -64,7 +64,6 @@ enum Feed {
 // ── when things are ─────────────────────────────────────────────────────────
 enum When {
     static let day: DateFormatter = { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX"); return f }()
-    static let stamp: ISO8601DateFormatter = { let f = ISO8601DateFormatter(); f.formatOptions = [.withFullDate, .withTime, .withColonSeparatorInTime, .withDashSeparatorInDate]; return f }()
 
     /// "Today", "Tomorrow", "In 3 days", "Fri 24 Oct", with the time when there is one.
     static func label(_ e: Snapshot.Event, now: Date) -> String {
@@ -84,6 +83,22 @@ enum When {
         return e.time.isEmpty ? text : "\(text) · \(e.time)"
     }
 
+    static let month: DateFormatter = { let f = DateFormatter(); f.dateFormat = "MMM"; f.locale = Locale(identifier: "en_GB"); return f }()
+    static let dayNumber: DateFormatter = { let f = DateFormatter(); f.dateFormat = "d"; return f }()
+
+    /// The app writes its local time as "2026-10-16T10:56:00".
+    static let local: DateFormatter = { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"; f.locale = Locale(identifier: "en_US_POSIX"); return f }()
+
+    /// When the app wrote the summary.
+    static func made(_ s: Snapshot) -> Date? { local.date(from: s.updated) }
+
+    static func stamp(_ date: Date) -> String { local.string(from: date) }
+
+    /// "call with HR" -> "Call with HR": only the first letter changes (capitalized would give "Call With Hr").
+    static func sentence(_ text: String) -> String { text.prefix(1).uppercased() + text.dropFirst() }
+    static let clock: DateFormatter = { let f = DateFormatter(); f.dateFormat = "HH:mm"; return f }()
+    static let dayMonth: DateFormatter = { let f = DateFormatter(); f.dateFormat = "d MMM"; f.locale = Locale(identifier: "en_GB"); return f }()
+
     static func isSoon(_ e: Snapshot.Event, now: Date) -> Bool {
         guard let date = day.date(from: e.date) else { return false }
         return date.timeIntervalSince(Calendar.current.startOfDay(for: now)) < 2 * 86_400
@@ -91,8 +106,7 @@ enum When {
 
     /// The summary is older than a day: the app has not been opened since.
     static func isStale(_ s: Snapshot, now: Date) -> Bool {
-        let text = s.updated.count == 19 ? s.updated + "Z" : s.updated
-        guard let made = stamp.date(from: text) ?? ISO8601DateFormatter().date(from: text) else { return false }
+        guard let made = made(s) else { return false }
         return now.timeIntervalSince(made) > 36 * 3600
     }
 
@@ -135,80 +149,252 @@ enum Sample {
         s.counts.leads = 9; s.counts.applications = 6; s.counts.interviews = 1; s.counts.followups = 1; s.counts.responses = 5
         var e = Snapshot.Event(); e.kind = "interview"; e.company = "Brightline Works"
         e.date = When.day.string(from: Date.now.addingTimeInterval(2 * 86_400)); e.time = "11:30"
-        s.next = [e]
+        var call = Snapshot.Event(); call.kind = "call with HR"; call.company = "Northwind Data"
+        call.date = When.day.string(from: Date.now.addingTimeInterval(6 * 86_400)); call.time = "15:00"
+        s.next = [e, call]
         s.lastRun = Snapshot.LastRun(when: "Today 09:12", found: 9, letters: 5)
         s.usage = Snapshot.Usage(fiveHourLeft: 66, weekLeft: 88)
         s.weekly = "Mon 09:00"
-        s.updated = "2026-10-16T09:14:00"
+        s.updated = When.stamp(Date.now.addingTimeInterval(-300))       // written five minutes ago
         return s
     }
 }
 
-// ── how it looks ────────────────────────────────────────────────────────────
+// ── how it looks: the way macOS's own widgets look ──────────────────────────
+// No padding of its own (macOS gives every widget its margins), the system background, the system
+// rounded font for numbers, SF Symbols, and colours marked accentable, so the widget also reads well
+// when the desktop shows widgets dimmed or tinted.
 enum Look {
-    static let accent = Color(red: 0.95, green: 0.62, blue: 0.20)      // the app's orange
-    static let good = Color(red: 0.29, green: 0.85, blue: 0.50)
-    static let lead = Color(red: 0.24, green: 0.73, blue: 0.47)
-    static let applied = Color(red: 0.96, green: 0.58, blue: 0.22)
-    static let interview = Color(red: 0.40, green: 0.55, blue: 0.98)
-    static let follow = Color(red: 0.93, green: 0.36, blue: 0.43)
+    static let accent = Color.orange
+    static let lead = Color.green
+    static let applied = Color.orange
+    static let interview = Color.blue
+    static let follow = Color.pink
+    static let offer = Color.mint
+    static let openURL = URL(string: "jobhelper://open")!
 }
 
+/// "JobHelper" with the briefcase, as macOS widgets name their app.
 struct Header: View {
     var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "briefcase.fill").foregroundStyle(Look.accent).font(.caption.weight(.bold))
-            Text("JobHelper").font(.caption.weight(.bold)).foregroundStyle(.secondary)
-            Spacer(minLength: 0)
+        HStack(spacing: 4) {
+            Image(systemName: "briefcase.fill").foregroundStyle(Look.accent).widgetAccentable()
+            Text("JobHelper")
         }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
     }
 }
 
-struct Count: View {
-    let value: Int, label: String, color: Color
+/// The button that opens the app (medium and large; a small widget opens the app wherever it is clicked).
+struct OpenButton: View {
+    var body: some View {
+#if PICTURES
+        face                                          // the pictures of the guide cannot draw a link
+#else
+        Link(destination: Look.openURL) { face }
+#endif
+    }
+
+    var face: some View {
+        Label("Open", systemImage: "arrow.up.forward.app.fill")
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 9).padding(.vertical, 4)
+            .background(Capsule().fill(Look.accent.opacity(0.18)))
+            .foregroundStyle(Look.accent)
+            .widgetAccentable()
+    }
+}
+
+/// One number with its symbol and name.
+struct Stat: View {
+    let value: Int, label: String, symbol: String, color: Color
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text("\(value)").font(.title2.weight(.bold)).monospacedDigit().foregroundStyle(color)
-            Text(label).font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            Label(label, systemImage: symbol)
+                .font(.caption2.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
+                .labelStyle(StatLabel(color: color))
+            Text(value, format: .number)
+                .font(.system(.title2, design: .rounded).weight(.semibold)).monospacedDigit()
+                .contentTransition(.numericText())
         }
     }
 }
 
+struct StatLabel: LabelStyle {
+    let color: Color
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 3) {
+            configuration.icon.foregroundStyle(color).widgetAccentable()
+            configuration.title
+        }
+    }
+}
+
+/// The day of a date as a little calendar page, as in the Calendar app.
+struct DayTile: View {
+    let event: Snapshot.Event, now: Date, size: CGFloat
+    var body: some View {
+        let date = When.day.date(from: event.date)
+        VStack(spacing: 0) {
+            Text(date.map { When.month.string(from: $0).uppercased() } ?? "")
+                .font(.system(size: size * 0.22, weight: .bold)).foregroundStyle(When.isSoon(event, now: now) ? Look.accent : .red)
+                .widgetAccentable()
+            Text(date.map { When.dayNumber.string(from: $0) } ?? "–")
+                .font(.system(size: size * 0.46, weight: .medium, design: .rounded)).monospacedDigit()
+        }
+        .frame(width: size, height: size)
+        .background(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous).fill(.quaternary))
+    }
+}
+
+/// The next date: its day tile, the company, what it is, and when.
 struct NextDate: View {
-    let event: Snapshot.Event?, now: Date, big: Bool
+    let event: Snapshot.Event?, now: Date, tile: CGFloat
     var body: some View {
         if let e = event {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(e.kind.capitalized).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                Text(e.company.isEmpty ? e.title : e.company).font(big ? .headline : .subheadline.weight(.semibold)).lineLimit(2)
-                Text(When.label(e, now: now)).font(.caption.weight(.semibold))
-                    .foregroundStyle(When.isSoon(e, now: now) ? Look.accent : .secondary)
+            HStack(spacing: 8) {
+                DayTile(event: e, now: now, size: tile)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(e.company.isEmpty ? e.title : e.company).font(.headline).lineLimit(1)
+                    Text(When.sentence(e.kind)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(When.label(e, now: now)).font(.caption.weight(.semibold))
+                        .foregroundStyle(When.isSoon(e, now: now) ? Look.accent : .secondary).widgetAccentable()
+                }
             }
         } else {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Coming up").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                Text("No dates").font(.subheadline.weight(.semibold))
-            }
+            Label("No dates coming up", systemImage: "calendar").font(.caption).foregroundStyle(.secondary)
         }
     }
 }
 
-struct UsageBar: View {
+/// A Claude limit as a slim bar with its name and what is left, as in the battery widget.
+struct UsageGauge: View {
     let label: String, left: Int?
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Text(label).font(.caption2).foregroundStyle(.secondary)
-                Spacer(minLength: 0)
-                Text(left.map { "\($0)% left" } ?? "–").font(.caption2.weight(.semibold)).monospacedDigit()
+                Text(label)
+                Spacer(minLength: 4)
+                Text(left.map { "\($0)% left" } ?? "–").monospacedDigit().foregroundStyle(.primary)
             }
+            .font(.caption2.weight(.medium)).foregroundStyle(.secondary)
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(.quaternary)
-                    Capsule().fill((left ?? 100) < 20 ? Look.follow : Look.good)
-                        .frame(width: g.size.width * CGFloat(max(0, min(100, left ?? 0))) / 100)
+                    Capsule().fill((left ?? 100) < 20 ? Color.red : Color.green)
+                        .frame(width: max(4, g.size.width * CGFloat(max(0, min(100, left ?? 0))) / 100))
+                        .widgetAccentable()
                 }
-            }.frame(height: 4)
+            }
+            .frame(height: 5)
+        }
+    }
+}
+
+/// When the summary was written: "Updated 10:56", or "Updated 15 Oct" when it is from another day.
+struct Updated: View {
+    let s: Snapshot, now: Date
+    var body: some View {
+        if let made = When.made(s) {
+            Text("Updated " + (Calendar.current.isDate(made, inSameDayAs: now) ? When.clock.string(from: made) : When.dayMonth.string(from: made)))
+                .font(.caption2).foregroundStyle(.tertiary)
+        }
+    }
+}
+
+struct SmallView: View {
+    let s: Snapshot, now: Date
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Header()
+            Spacer(minLength: 0)
+            if let e = s.next.first {
+                DayTile(event: e, now: now, size: 34)
+                Text(e.company.isEmpty ? e.title : e.company).font(.headline).lineLimit(1)
+                Text(When.label(e, now: now)).font(.caption.weight(.semibold))
+                    .foregroundStyle(When.isSoon(e, now: now) ? Look.accent : .secondary).widgetAccentable()
+            } else {
+                Text(s.counts.leads, format: .number).font(.system(.largeTitle, design: .rounded).weight(.semibold))
+                Text("new jobs").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            HStack(spacing: 10) {
+                Label("\(s.counts.leads)", systemImage: "sparkles").labelStyle(StatLabel(color: Look.lead))
+                Label("\(s.counts.applications)", systemImage: "paperplane.fill").labelStyle(StatLabel(color: Look.applied))
+            }
+            .font(.caption.weight(.semibold)).monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+struct MediumView: View {
+    let s: Snapshot, now: Date
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Header()
+                NextDate(event: s.next.first, now: now, tile: 40)
+                Spacer(minLength: 0)
+                OpenButton()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 10) {
+                GridRow {
+                    Stat(value: s.counts.leads, label: "New", symbol: "sparkles", color: Look.lead)
+                    Stat(value: s.counts.applications, label: "Applied", symbol: "paperplane.fill", color: Look.applied)
+                }
+                GridRow {
+                    Stat(value: s.counts.interviews, label: "Interviews", symbol: "person.2.fill", color: Look.interview)
+                    Stat(value: s.counts.followups, label: "Follow up", symbol: "arrow.uturn.left", color: Look.follow)
+                }
+            }
+        }
+    }
+}
+
+struct LargeView: View {
+    let s: Snapshot, now: Date
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack { Header(); Spacer(minLength: 0); OpenButton() }
+            HStack(alignment: .top, spacing: 0) {
+                Stat(value: s.counts.leads, label: "New", symbol: "sparkles", color: Look.lead).frame(maxWidth: .infinity, alignment: .leading)
+                Stat(value: s.counts.applications, label: "Applied", symbol: "paperplane.fill", color: Look.applied).frame(maxWidth: .infinity, alignment: .leading)
+                Stat(value: s.counts.interviews, label: "Interviews", symbol: "person.2.fill", color: Look.interview).frame(maxWidth: .infinity, alignment: .leading)
+                Stat(value: s.counts.followups, label: "Follow up", symbol: "arrow.uturn.left", color: Look.follow).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Coming up").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                if s.next.isEmpty {
+                    Label("No dates coming up", systemImage: "calendar").font(.callout).foregroundStyle(.secondary)
+                }
+                ForEach(Array(s.next.prefix(3).enumerated()), id: \.offset) { _, e in
+                    NextDate(event: e, now: now, tile: 34)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)     // takes the room that is left
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.quaternary.opacity(0.6)))
+            HStack(spacing: 14) {
+                UsageGauge(label: "Claude · 5 hours", left: s.usage.fiveHourLeft)
+                UsageGauge(label: "Claude · 7 days", left: s.usage.weekLeft)
+            }
+            HStack(spacing: 14) {
+                Label("\(s.counts.offers) offers", systemImage: "checkmark.seal.fill").labelStyle(StatLabel(color: Look.offer))
+                Label("\(s.counts.responses) replies", systemImage: "envelope.fill").labelStyle(StatLabel(color: .secondary))
+                Label(s.weekly, systemImage: "calendar.badge.clock").labelStyle(StatLabel(color: .secondary))
+                Spacer(minLength: 0)
+            }
+            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            HStack {
+                if let run = s.lastRun, !run.when.isEmpty {
+                    Text("Last run \(run.when) · \(run.found) new · \(run.letters) letters").font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Updated(s: s, now: now)
+            }
         }
     }
 }
@@ -222,96 +408,7 @@ struct Message: View {
             Text(text).font(.callout).foregroundStyle(.secondary)
             Spacer(minLength: 0)
         }
-    }
-}
-
-struct SmallView: View {
-    let s: Snapshot, now: Date
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Header()
-            NextDate(event: s.next.first, now: now, big: true)
-            Spacer(minLength: 0)
-            HStack(spacing: 12) {
-                Count(value: s.counts.leads, label: "New", color: Look.lead)
-                Count(value: s.counts.applications, label: "Applied", color: Look.applied)
-            }
-        }
-    }
-}
-
-struct MediumView: View {
-    let s: Snapshot, now: Date
-    var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                Header()
-                NextDate(event: s.next.first, now: now, big: false)
-                Spacer(minLength: 0)
-                UsageBar(label: "Claude, 5 h", left: s.usage.fiveHourLeft)
-            }
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
-                GridRow {
-                    Count(value: s.counts.leads, label: "New jobs", color: Look.lead)
-                    Count(value: s.counts.applications, label: "Applied", color: Look.applied)
-                }
-                GridRow {
-                    Count(value: s.counts.interviews, label: "Interviews", color: Look.interview)
-                    Count(value: s.counts.followups, label: "Follow up", color: Look.follow)
-                }
-            }
-        }
-    }
-}
-
-struct LargeView: View {
-    let s: Snapshot, now: Date
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Header()
-            HStack(spacing: 0) {
-                Count(value: s.counts.leads, label: "New jobs", color: Look.lead).frame(maxWidth: .infinity, alignment: .leading)
-                Count(value: s.counts.applications, label: "Applied", color: Look.applied).frame(maxWidth: .infinity, alignment: .leading)
-                Count(value: s.counts.interviews, label: "Interviews", color: Look.interview).frame(maxWidth: .infinity, alignment: .leading)
-                Count(value: s.counts.followups, label: "Follow up", color: Look.follow).frame(maxWidth: .infinity, alignment: .leading)
-            }
-            Divider()
-            Text("COMING UP").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-            if s.next.isEmpty {
-                Text("No dates").font(.subheadline).foregroundStyle(.secondary)
-            }
-            ForEach(Array(s.next.prefix(3).enumerated()), id: \.offset) { _, e in
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(e.company.isEmpty ? e.title : e.company).font(.subheadline.weight(.semibold)).lineLimit(1)
-                        Text(e.kind.capitalized).font(.caption2).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 6)
-                    Text(When.label(e, now: now)).font(.caption.weight(.semibold))
-                        .foregroundStyle(When.isSoon(e, now: now) ? Look.accent : .secondary)
-                }
-            }
-            Divider()
-            if let run = s.lastRun, !run.when.isEmpty {
-                Text("Last run \(run.when): \(run.found) new, \(run.letters) letters")
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.85)
-            }
-            HStack(spacing: 14) {
-                UsageBar(label: "Claude, 5 h", left: s.usage.fiveHourLeft)
-                UsageBar(label: "Claude, 7 days", left: s.usage.weekLeft)
-            }
-            Divider()
-            HStack(spacing: 0) {
-                Count(value: s.counts.offers, label: "Offers", color: Look.good).frame(maxWidth: .infinity, alignment: .leading)
-                Count(value: s.counts.responses, label: "Replies read", color: .secondary).frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(s.weekly).font(.title3.weight(.bold)).lineLimit(1).minimumScaleFactor(0.7)
-                    Text("Weekly run").font(.caption2).foregroundStyle(.secondary)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }
-            Spacer(minLength: 0)
-            Text("Updated \(When.time(s.updated))").font(.caption2).foregroundStyle(.tertiary)
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -335,7 +432,7 @@ struct WidgetView: View {
             }
         }
         .containerBackground(.background, for: .widget)
-        .widgetURL(URL(string: "jobhelper://open"))
+        .widgetURL(Look.openURL)                      // a click anywhere opens the app
     }
 
     @ViewBuilder func content(_ s: Snapshot) -> some View {

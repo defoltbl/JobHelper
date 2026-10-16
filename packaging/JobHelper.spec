@@ -71,5 +71,7 @@ app = BUNDLE(
         "NSHighResolutionCapable": True,
         # macOS asks once before the app may control another app: Chrome for the forms, Terminal for the sign-in
         "NSAppleEventsUsageDescription": app_info.APPLE_EVENTS_REASON,
+        # jobhelper://open starts or brings up the app: the widget's Open button and a click on the widget
+        "CFBundleURLTypes": [{"CFBundleURLName": app_info.BUNDLE_ID, "CFBundleURLSchemes": [app_info.URL_SCHEME]}],
     },
 )
