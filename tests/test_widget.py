@@ -176,3 +176,13 @@ def test_the_widget_reads_the_real_home_not_its_sandbox_container():
     and the widget said "Open JobHelper once" while the app was open."""
     feed = SWIFT.split("enum Feed {")[1].split("\n}\n")[0]
     assert "getpwuid(getuid())" in feed and "static let file = realHome" in feed
+
+
+@pytest.mark.parametrize("written, count", [("+27 new", 27), (27, 27), ("0 new", 0), ("", 0), (None, 0), ("none", 0), (True, 0), (3.0, 3)])
+def test_the_last_run_count_is_read_as_the_app_writes_it(written, count):
+    """The last run stores "found" as text ("+27 new"): the widget showed 0 new while the window showed +27."""
+    assert widget_feed._number(written) == count
+
+
+def test_the_weekly_run_says_what_is_off():
+    assert '"Weekly run off"' in SWIFT

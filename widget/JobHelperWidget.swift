@@ -392,7 +392,7 @@ struct LargeView: View {
             HStack(spacing: 14) {
                 Label("\(s.counts.offers) offers", systemImage: "checkmark.seal.fill").labelStyle(StatLabel(color: Look.offer))
                 Label("\(s.counts.responses) replies", systemImage: "envelope.fill").labelStyle(StatLabel(color: .secondary))
-                Label(s.weekly, systemImage: "calendar.badge.clock").labelStyle(StatLabel(color: .secondary))
+                Label(s.weekly == "Off" ? "Weekly run off" : "Weekly \(s.weekly)", systemImage: "calendar.badge.clock").labelStyle(StatLabel(color: .secondary))
                 Spacer(minLength: 0)
             }
             .font(.caption).foregroundStyle(.secondary).lineLimit(1)

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -71,10 +72,13 @@ class WidgetFeed:
 
 
 def _number(value) -> int:
-    try:
-        return int(value or 0)
-    except (TypeError, ValueError):
+    """A count, also from the way the last run writes it ("+27 new" is 27)."""
+    if isinstance(value, bool):
         return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    found = re.search(r"\d+", str(value or ""))
+    return int(found.group()) if found else 0
 
 
 def _left(used) -> int | None:
