@@ -107,6 +107,29 @@ class Ui:
         _wait(ms)
 
 
+# the windows a test may leave open (stacked ones before the window under them)
+DIALOGS = ["detailDialog", "compareDialog", "formDialog", "assistantDialog", "prepEditDialog", "helpDialog", "prepDialog",
+           "letterDialog", "responseDialog", "limitDialog", "optDialog", "schedDialog", "tableDialog"]
+
+
+@pytest.fixture(autouse=True)
+def _windows_closed_after(request):
+    """A test that fails half-way must not leave a window open for the next one. On GitHub's slow runner one late
+    window (a job left open in review) made five later assistant tests fail: the assistant takes the open job as its context."""
+    yield
+    if "ui" not in request.fixturenames:
+        return
+    ui = request.getfixturevalue("ui")
+    ui.js("detailDialog.reviewQueue = []")
+    left = [d for d in (ui.win.findChild(QObject, name) for name in DIALOGS) if d is not None and d.property("visible")]
+    for dialog in left:
+        ui.js("close()", dialog)
+    for _ in range(120):
+        if not any(d.property("visible") for d in left):
+            break
+        ui.wait(50)
+
+
 @pytest.fixture(scope="module")
 def ui(qapp, tmp_path_factory):
     data = tmp_path_factory.mktemp("ui_data")
@@ -1247,6 +1270,14 @@ def _until_open(ui, name, most_ms=4000):
     while dialog.property("opened") is not True and waited < most_ms:
         ui.wait(50); waited += 50
     assert dialog.property("opened") is True
+
+
+def _until_closed(ui, name, most_ms=4000):
+    """Wait for a window's closing animation to end."""
+    dialog, waited = ui.find(name), 0
+    while dialog.property("visible") is not False and waited < most_ms:
+        ui.wait(50); waited += 50
+    assert dialog.property("visible") is False
 
 
 def test_a_date_on_a_job_shows_on_the_main_screen_and_is_announced(ui):
@@ -3192,7 +3223,7 @@ def test_new_jobs_can_be_reviewed_one_by_one(ui, monkeypatch):
     monkeypatch.setattr(ui_api.Api, "dismiss_job", lambda self, job_id: done.append(("dismiss", job_id)) or {"ok": True})
     try:
         ui.js('openView("new")')
-        ui.wait(450)
+        _until_open(ui, "tableDialog")
         table, detail = ui.find("tableDialog"), ui.find("detailDialog")
         ui.js('tableDialog.groupFilter = "stretch"; tableDialog.apply()')
         ui.wait(120)
@@ -3200,7 +3231,7 @@ def test_new_jobs_can_be_reviewed_one_by_one(ui, monkeypatch):
         assert start.property("visible") is True and start.property("text") == "Review these 4 one by one"
         assert ui.js("tableDialog.reviewIds().join(',')") == "r0,r1,r2,r3"                  # the list as it is shown, in its order
         ui.js("detailDialog.startReview(tableDialog.reviewIds())")
-        ui.wait(450)
+        _until_open(ui, "detailDialog")
         where = ui.find("reviewWhere")
         assert detail.property("opened") is True and ui.js("detailDialog.job.id") == "r0" and ui.find("reviewBar").property("visible") is True
         assert where.property("text").startswith("Reviewing 1 of 4 left.")
@@ -3230,18 +3261,18 @@ def test_new_jobs_can_be_reviewed_one_by_one(ui, monkeypatch):
         assert ui.js("detailDialog.job.id") == "r0" and where.property("text").startswith("Reviewing 1 of 1 left · 3 decided")
         assert ui.find("reviewNext").property("enabled") is False
         ui.js("detailDialog.notInterested()")                                               # the last one: the round ends
-        ui.wait(450)
+        _until_closed(ui, "detailDialog")
         assert detail.property("opened") is False and "That was the last of the 4 jobs." in ui.js("ticker.text")
         assert ui.js("detailDialog.reviewQueue.length") == 0
         # opened the ordinary way, the window has no review bar and closes after a decision as before
         ui.js('detailDialog.show("lead")')
-        ui.wait(450)
+        _until_open(ui, "detailDialog")
         assert ui.find("reviewBar").property("visible") is False
         ui.js("detailDialog.startReview(['lead', 'r0']); detailDialog.close()")             # closing ends a round
-        ui.wait(450)
+        _until_closed(ui, "detailDialog")
         assert ui.js("detailDialog.reviewQueue.length") == 0
         ui.js('tableDialog.groupFilter = ""; tableDialog.apply(); tableDialog.close()')
-        ui.wait(350)
+        _until_closed(ui, "tableDialog")
     finally:
         store.save_jobs(kept)
         ui.js("win.reloadAll()")
@@ -3341,7 +3372,7 @@ def test_the_assistant_takes_a_request_and_shows_what_it_filled(ui, monkeypatch)
                 "kept": 0, "boxes": 1, "say": "I filled in 2 fields on careers.northwind.example. I never press Submit."}
     monkeypatch.setattr(ui_api.Api, "assistant_ask", answer)
     ui.js("assistantDialog.show()")
-    ui.wait(450)
+    _until_open(ui, "assistantDialog")
     assert dialog.property("page") == "ask", "details are saved: it opens ready to be asked"
     assert [j["id"] for j in dialog.property("jobs").toVariant()] == ["", "lead", "app"]
     before = ui.js("talk.count")
@@ -3403,7 +3434,7 @@ def test_the_assistant_looks_at_the_pointer_nods_and_shakes_its_head(ui):
 
 
 def _wait_idle(ui, dialog):
-    for _ in range(100):
+    for _ in range(200):                  # up to 6 s: GitHub's Mac runners are about three times slower
         if not dialog.property("busy"):
             return
         ui.wait(30)
@@ -3423,7 +3454,7 @@ def test_after_a_fill_the_assistant_offers_what_applies(ui, monkeypatch):
     monkeypatch.setattr(ui_api.Api, "assistant_memory", lambda self: {"count": len([d for d in did if d[0] == "learn"])})
     monkeypatch.setattr(ui_api.Api, "assistant_forget", lambda self: did.append(("forget",)) or {"ok": True, "say": "Forgotten: 1 remembered answers."})
     ui.js("assistantDialog.show()")
-    ui.wait(450)
+    _until_open(ui, "assistantDialog")
     assert not ui.find("asNext").property("visible"), "nothing is offered before anything was done"
     ui.js('assistantDialog.ask("fill the form")')
     _wait_idle(ui, dialog)
@@ -3497,7 +3528,7 @@ def test_a_press_on_empty_space_ends_the_editing_of_a_field(ui):
     from PySide6.QtCore import QPoint, QPointF, Qt
     dialog = ui.find("assistantDialog")
     ui.js("assistantDialog.show()")
-    ui.wait(500)
+    _until_open(ui, "assistantDialog")
     ui.js('assistantDialog.page = "ask"')
     box = ui.find("asBox")
     ui.js("forceActiveFocus()", box)
@@ -3549,7 +3580,7 @@ def test_my_details_takes_several_jobs_degrees_a_salary_with_its_currency_and_fi
     details.path().unlink(missing_ok=True)
     dialog = ui.find("assistantDialog")
     ui.js("assistantDialog.show()")
-    ui.wait(450)
+    _until_open(ui, "assistantDialog")
     ui.js('assistantDialog.page = "details"')
     ui.js('assistantDialog.setField("first_name", "Alex"); assistantDialog.setField("last_name", "Novak")')
     # jobs: any number, several may be current
@@ -3621,7 +3652,7 @@ def test_my_answers_are_written_drafted_saved_and_removed(ui, monkeypatch):
     answer_memory.forget_all()
     dialog = ui.find("assistantDialog")
     ui.js("assistantDialog.show()")
-    ui.wait(450)
+    _until_open(ui, "assistantDialog")
     ui.js('assistantDialog.page = "answers"')
     assert ui.js("answerModel.count") == 0 and "When can you start?" in _listed(dialog.property("starters"))
     ui.js('assistantDialog.addAnswer("When can you start?")')
@@ -3680,7 +3711,7 @@ def test_the_assistant_asks_before_it_changes_anything_and_shows_what_it_found(u
         "ok": True, "action": "done", "say": "Moved Junior Python Developer at Acme to Applications, as waiting.", "job_id": "lead", "changed": True})
     monkeypatch.setattr(ui_api.Api, "assistant_briefing", lambda self: {"headline": "", "lines": [], "nudges": []})
     ui.js("assistantDialog.show()")
-    ui.wait(450)
+    _until_open(ui, "assistantDialog")
     ui.js('assistantDialog.page = "ask"')
     assert not ui.find("asConfirm").property("visible")
     ui.js('assistantDialog.ask("mark the Acme job as applied")')
@@ -3718,7 +3749,7 @@ def test_the_assistant_asks_before_it_changes_anything_and_shows_what_it_found(u
     ui.js('detailDialog.show("app")')
     ui.wait(400)
     ui.js("assistantDialog.show()")
-    ui.wait(400)
+    _until_open(ui, "assistantDialog")
     ui.js('assistantDialog.ask("why did this score 64?")')
     _wait_idle(ui, dialog)
     assert did[-1] == ("talk", "why did this score 64?", "app", ""), "the job whose window is open is “this job”"
@@ -3740,7 +3771,7 @@ def test_practising_an_interview_goes_question_by_question(ui, monkeypatch):
         return {"ok": True, "action": "practice_feedback", "say": "Good. Add the pipeline you built."}
     monkeypatch.setattr(ui_api.Api, "assistant_practice_answer", feedback)
     ui.js("assistantDialog.show()")
-    ui.wait(450)
+    _until_open(ui, "assistantDialog")
     ui.js('assistantDialog.page = "ask"; assistantDialog.ask("practise the interview for Beta")')
     _wait_idle(ui, dialog)
     assert dialog.property("practising") and ui.find("asPractice").property("visible") and ui.js("talk.get(talk.count - 1).text") == "Question 1 of 2: Why testing?"
@@ -3780,7 +3811,7 @@ def test_the_assistant_speaks_first_reviews_a_form_and_notices_one_only_when_tol
     bot.setProperty("greeting", False)
     # the window lists what to look at, and a nudge can be told to stop
     ui.js("talk.clear(); assistantDialog.show()")
-    ui.wait(450)
+    _until_open(ui, "assistantDialog")
     ui.js('assistantDialog.page = "ask"')
     assert ui.find("asNudges").property("visible") and ui.js("nudgeModel.count") == 1 and ui.js("talk.get(0).text") == "Today: 2 jobs are ready to send; 1 follow-up due."
     ui.js("assistantDialog.dropNudge(0)")
@@ -3837,7 +3868,7 @@ def test_the_assistant_at_pro_level_in_the_window(ui, monkeypatch):
     monkeypatch.setattr(ui_api.Api, "assistant_notes_list", lambda self: {"notes": list(notes)})
     monkeypatch.setattr(ui_api.Api, "assistant_forget_note", lambda self, number: did.append(("forget", number)) or (notes.clear() or {"ok": True, "text": "x"}))
     ui.js("talk.clear(); assistantDialog.show()")
-    ui.wait(450)
+    _until_open(ui, "assistantDialog")
     ui.js('assistantDialog.page = "ask"')
     assert ui.find("asFill").property("text") == "Fill in the form" and "open in Google Chrome" in ui.find("asErr").property("text") and ui.find("asStarters").property("visible")
     # several things at once: what only shows is done, the rest is one question; then it can be taken back
@@ -3907,7 +3938,7 @@ def test_a_job_is_found_for_the_assistant_by_typing_part_of_its_name(ui, monkeyp
             {"id": "vt", "label": "Vantor · Junior Tester"}, {"id": "bp", "label": "Brightpath s.r.o. · Machine Learning Engineer"}]
     monkeypatch.setattr(ui_api.Api, "assistant_jobs", lambda self: jobs)
     ui.js("assistantDialog.show()")
-    ui.wait(500)
+    _until_open(ui, "assistantDialog")
     ui.js('assistantDialog.page = "ask"')
     ui.wait(100)
     dialog, find, combo, err = ui.find("assistantDialog"), ui.find("asJobFind"), ui.find("asJob"), ui.find("asJobFindErr")
@@ -4010,7 +4041,7 @@ def test_my_details_keeps_languages_and_what_you_did_in_each_job(ui):
     assert details.save(saved)["ok"]
     dialog = ui.find("assistantDialog")
     ui.js("assistantDialog.show()")
-    ui.wait(500)
+    _until_open(ui, "assistantDialog")
     ui.js('assistantDialog.page = "details"')
     ui.wait(300)
     assert ui.js("jobModel.get(0).location") == "Brno, Czechia" and ui.js("jobModel.get(0).description") == "Built SQL reports\nAutomated the monthly close"
