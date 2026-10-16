@@ -164,3 +164,10 @@ def test_the_repositorys_own_address_may_name_its_owner(repo):
     assert _check(repo) == []
     _commit(repo, {"notes.md": "see https://github.com/jordan-w/other-project\n"})
     assert "a personal detail: notes.md:1" in _check(repo)
+
+
+def test_a_polyform_required_notice_may_name_the_owner(repo):
+    _commit(repo, {"LICENSE": "Required Notice: Copyright 2026 Jordan Weber (https://github.com/jordan-w)\n\n# PolyForm Noncommercial License 1.0.0\n"})
+    assert _check(repo) == []
+    _commit(repo, {"LICENSE": "Required Notice: Copyright 2026 Jordan Weber\n\nWritten by Jordan Weber.\n"})
+    assert _check(repo) == ["a personal detail: LICENSE:3"]
