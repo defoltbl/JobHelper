@@ -341,7 +341,7 @@ After every batch of changes, without being asked:
 | Answers are not streamed word by word from Claude | A decision is one object that must be checked whole before anything of it is shown or done. The window says what is being done meanwhile and writes the checked answer out. |
 | A note the person asks the assistant to remember changes only its answers | Changing what a search finds through a sentence in a talk would be app logic nobody can see. The Options do that. |
 | Noticing a form in the browser is off until turned on | It means looking at the browser without being asked. When on, only the address, the title and the number of empty fields of the tab in front are looked at. |
-| A review reads the values of a form | The owner asked for it. Passwords and files are never read, and personal and payment values are not sent to Claude. |
+| A review reads the values of a form | A deliberate choice. Passwords and files are never read, and personal and payment values are not sent to Claude. |
 | Only what the person wrote or corrected is remembered as their wording | A draft nobody read is not their answer. An answer that names its company is not offered to another one. |
 | A free question to the assistant is one Claude call with facts from the app | So an answer cannot come from anywhere else; when the facts do not hold it, the assistant says so. |
 | A request to the assistant is understood by its words, not by a model | It costs nothing and always means the same. Only a form's open questions go to Claude, in one call. |
@@ -381,7 +381,7 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
    Sites that build their fields in unusual ways (their own drop-downs, forms inside a frame from another site,
    pages that rebuild a field after it is written) will need a look one by one. Tick boxes and dates are left to
    the person on purpose. File fields for the CV, the letter and other attachments are given the job's documents
-   (asked for after the first real form, 10 October 2026); a page that draws its uploader without a file field
+   (added after the first real form, 10 October 2026); a page that draws its uploader without a file field
    until it is clicked cannot be reached, and the files are then shown in Finder as before.
 
 **Needs the person**
@@ -393,7 +393,7 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
   that runs a script, but commented out. Chrome, Brave, Edge, Opera and Safari have not been tried live on this Mac.
 - Decided on 10 October 2026: in the PDFs the next section of the same chapter may begin in a gap (one section further at most, never a chapter; figures and tables keep their order). The whole-window size is `QT_SCALE_FACTOR`, set in `app_qt.apply_text_size` from the option `text_size`, so it needs a restart. When the person can start stays in Options (`about_start`); `form_fill.start_day` turns it into a day for date pickers.
 - Rows in forms (10 October 2026, from real forms): a job's block also holds its own Location and Role description (`job_location`, `job_description`, by nearness to the row's fields, `ROW_NEAR`); dates may be split into Month and Year boxes (`part`, `group` from READ); languages are a third list (`lang_name`, `lang_level`, `fluent_box`). The two tick boxes the assistant may tick are "I currently work here" and "I am fluent in this language"; nothing else.
-- The README's Author section is the one tracked place that names the person (they asked for it on 10 October 2026). Code, tests and the other documents still name nobody.
+- The README's Author section is the one tracked place that names the person (since 10 October 2026). Code, tests and the other documents still name nobody.
 - The 19 jobs whose documents were moved to the backup on 9 October: they can be put back until about 16 October.
 - Whether the README should name its author (the rule keeps the name out of tracked files).
 - Whether the text of the next section may come forward in the PDFs to fill the space a figure left at the end

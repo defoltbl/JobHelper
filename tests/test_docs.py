@@ -268,7 +268,7 @@ def _piece(kind, words=40):
 def test_text_of_the_same_section_fills_the_space_a_figure_left(laid_out):
     """A figure that has to start on the next page no longer leaves the rest of its page empty: what follows it in
     its own section is brought forward, and when the section has nothing more, the next section of the same chapter
-    begins in the space (asked for on 10 October 2026). Nothing crosses a chapter, and the pieces keep their order."""
+    begins in the space (since 10 October 2026). Nothing crosses a chapter, and the pieces keep their order."""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtGui import QGuiApplication
     app = QGuiApplication.instance() or QGuiApplication([])
