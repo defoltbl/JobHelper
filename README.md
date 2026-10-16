@@ -255,6 +255,7 @@ JobHelper/
 ├── scripts/                  # building and checking the app, the PDF builder, the numbering check, the diagrams
 ├── docs/                     # user guide, technical documentation, their PDFs, pictures
 ├── examples/                 # example rule files and career sites, to copy into your data folder
+├── LICENSE                   # PolyForm Noncommercial 1.0.0
 ├── requirements.txt          # dependencies
 └── requirements.lock         # the same, pinned by SHA-256
 ```
@@ -521,6 +522,20 @@ A few decisions worth highlighting:
 - It never presses Submit or Next, never ticks a box that agrees to something, and never fills
   in a password, a payment field or a personal-status question.
 - An answer comes back whole, not word by word, because the app checks it before showing it.
+
+## License
+
+JobHelper's own code is released under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+You may read, run, change and share it for any noncommercial purpose: personal use, study,
+research, hobby projects, and use by charities, schools and public bodies. Selling it, or using it
+to make money, is not allowed without the author's written permission. Keep the licence and its
+"Required Notice" line with every copy. For a commercial licence, contact the author (see below).
+
+The libraries it uses keep their own licences: `claude-agent-sdk`, `python-docx`, `openpyxl`,
+`beautifulsoup4` and `pytest` (MIT); `requests` and `cryptography` (Apache-2.0); `pypdf`, `lxml` and
+`python-dotenv` (BSD-3-Clause); PySide6 and Qt (LGPL-3.0). `JobHelper.app` is not published here: a
+built app contains Qt and the Claude Code program, which is Anthropic's software under Anthropic's
+own terms. Build it yourself with `python scripts/build_app.py`.
 
 ## Author
 

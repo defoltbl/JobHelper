@@ -137,3 +137,13 @@ def test_no_personal_name_in_code_or_docs():
              if owner.search(line) and not (f.name == "README.md" and f.parent == root and n > signed)]
     assert found == [], "a personal name is written into: " + ", ".join(found[:8])
     assert not any("@" in line or "+420" in line for line in readme[signed:]), "a name and public profiles, never an email address or a phone number"
+    raw = (root / "LICENSE").read_bytes()
+    licence = raw.decode("utf-8").splitlines()
+    named = [n for n, line in enumerate(licence, 1) if owner.search(line)]
+    assert licence[0].startswith("Required Notice: Copyright 2026 ") and named == [1], \
+        "the licence names its copyright holder once, on its Required Notice line, and nowhere else"
+    assert not any("@" in line or "+420" in line for line in licence)
+    import hashlib                                      # below the notice: the official text, word for word
+    body = raw.split(b"\n", 2)[2]
+    assert hashlib.sha256(body).hexdigest() == "c0ea4a896d2c8c394b29f9427589996db826cd501c512279ff0ed3ef48fabbe5", "the PolyForm Noncommercial 1.0.0 text was changed"
+    assert licence[2] == "# PolyForm Noncommercial License 1.0.0"
