@@ -14,6 +14,7 @@ struct Pictures {
             ("widget_small", AnyView(SmallView(s: s, now: now)), CGSize(width: 170, height: 170)),
             ("widget_medium", AnyView(MediumView(s: s, now: now)), CGSize(width: 364, height: 170)),
             ("widget_large", AnyView(LargeView(s: s, now: now)), CGSize(width: 364, height: 382)),
+            ("widget_extra_large", AnyView(ExtraLargeView(s: s, now: now)), CGSize(width: 746, height: 382)),
         ]
         for (name, view, size) in sizes {
             let card = view

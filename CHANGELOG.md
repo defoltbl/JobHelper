@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 16 October 2026
 
+- The widget has a fourth size, **extra large**, with all the numbers, the next five dates and the Claude usage side by side.
 - The widget now **appears in Edit Widgets**, looks like the macOS widgets, and has an **Open** button that opens the app.
 - New **JobHelper widget** for the desktop and the Notification Center, in three sizes: new jobs, applications, interviews, follow-ups, the next dates, the last run and the Claude usage left. Add it with Edit Widgets.
 - A search for a **city outside Czechia** no longer reads jobs.cz and prace.cz, even when Job source is still set to the Czech boards. The log of the run says so.

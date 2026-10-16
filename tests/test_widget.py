@@ -164,3 +164,8 @@ def test_the_widget_looks_like_a_macos_widget():
     assert ".containerBackground(" in views and "design: .rounded" in views and "widgetAccentable()" in views
     assert "systemName:" in views                                                    # SF Symbols
     assert ".capitalized" not in SWIFT                                               # "Call With Hr"
+
+
+def test_the_widget_has_all_four_macos_sizes():
+    assert ".supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge])" in SWIFT
+    assert "case .systemExtraLarge: ExtraLargeView" in SWIFT and widget_feed.NEXT_DATES == 5

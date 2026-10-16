@@ -497,7 +497,7 @@ Then it signs the app again, because the contents of the app changed. Xcode is n
 
 macOS runs a widget in its sandbox, so the widget cannot open the encrypted data. The entitlements
 give it read-only access to one folder: `~/Library/Application Support/JobHelper/widget`.
-`widget_feed.WidgetFeed` writes `snapshot.json` there. The file holds the counts, the next three
+`widget_feed.WidgetFeed` writes `snapshot.json` there. The file holds the counts, the next five
 dates, the last run, the Claude usage left and the weekly run. It holds no letters, CVs, mail or
 notes, and its mode is 0600. `SystemService.widget_update` writes it. The window calls it at start,
 after each reload and every 5 minutes. `weekly.main()` calls it after the weekly run.

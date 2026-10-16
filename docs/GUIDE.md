@@ -467,7 +467,7 @@ The rows of the **Last run** card (Table 3.5):
 ### The JobHelper widget
 
 The JobHelper widget shows your job search on the desktop of your Mac, also when the window is
-closed. It has three sizes (Figure 3.5, Figure 3.6 and Figure 3.7).
+closed. It has four sizes (Figure 3.5, Figure 3.6, Figure 3.7 and Figure 3.8).
 
 To add the widget:
 
@@ -489,6 +489,10 @@ To add the widget:
 
 *Figure 3.7 – The large widget*
 
+![The extra large widget](img/widget_extra_large.png)
+
+*Figure 3.8 – The extra large widget*
+
 Table 3.6 lists what each size shows.
 
 *Table 3.6 – What the widget shows*
@@ -498,6 +502,7 @@ Table 3.6 lists what each size shows.
 | Small | The next date, and the number of new jobs and applications |
 | Medium | The next date, the new jobs, applications, interviews and follow-ups, and the Claude usage of the 5-hour window |
 | Large | All of the numbers, the next three dates, the last run, both Claude usage windows, offers, replies and the weekly run |
+| Extra large | All of the numbers, the next five dates, both Claude usage windows, the weekly run and the last run, side by side |
 
 The widget gets new numbers every 15 minutes. The app writes them when it starts, after each
 change, every 5 minutes while it is open, and after the weekly run. When the numbers are older

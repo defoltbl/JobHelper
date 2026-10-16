@@ -3,7 +3,7 @@
 The widget (widget/JobHelperWidget.swift) runs in macOS's sandbox: it cannot open the app's
 encrypted data, and it may read one folder only, ~/Library/Application Support/JobHelper/widget.
 The app writes a small summary there: how many new jobs, applications, interviews, offers and
-follow-ups there are; the next dates (kind, company, role, day, time); the last run; the Claude
+follow-ups there are; the next five dates (kind, company, role, day, time); the last run; the Claude
 usage left; and the weekly run. Nothing else: no letters, no CV, no mail, no notes. The file is
 readable by you only (0600).
 """
@@ -19,7 +19,7 @@ from . import config, schedule, store
 
 FILE_NAME = "snapshot.json"
 VERSION = 1
-NEXT_DATES = 3
+NEXT_DATES = 5          # the large widget shows three, the extra large five
 
 
 def folder() -> Path:

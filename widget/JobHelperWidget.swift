@@ -399,6 +399,64 @@ struct LargeView: View {
     }
 }
 
+/// Extra large (macOS 14+): the numbers, the next dates and the state of the app side by side.
+struct ExtraLargeView: View {
+    let s: Snapshot, now: Date
+    var body: some View {
+        HStack(alignment: .top, spacing: 18) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack { Header(); Spacer(minLength: 0); OpenButton() }
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 12) {
+                    GridRow {
+                        Stat(value: s.counts.leads, label: "New", symbol: "sparkles", color: Look.lead)
+                        Stat(value: s.counts.applications, label: "Applied", symbol: "paperplane.fill", color: Look.applied)
+                    }
+                    GridRow {
+                        Stat(value: s.counts.interviews, label: "Interviews", symbol: "person.2.fill", color: Look.interview)
+                        Stat(value: s.counts.followups, label: "Follow up", symbol: "arrow.uturn.left", color: Look.follow)
+                    }
+                    GridRow {
+                        Stat(value: s.counts.offers, label: "Offers", symbol: "checkmark.seal.fill", color: Look.offer)
+                        Stat(value: s.counts.responses, label: "Replies", symbol: "envelope.fill", color: .secondary)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(width: 200, alignment: .leading)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Coming up").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                if s.next.isEmpty {
+                    Label("No dates coming up", systemImage: "calendar").font(.callout).foregroundStyle(.secondary)
+                }
+                ForEach(Array(s.next.prefix(5).enumerated()), id: \.offset) { _, e in
+                    NextDate(event: e, now: now, tile: 38)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.quaternary.opacity(0.6)))
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Claude").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                UsageGauge(label: "5 hours", left: s.usage.fiveHourLeft)
+                UsageGauge(label: "7 days", left: s.usage.weekLeft)
+                Divider()
+                Label(s.weekly == "Off" ? "Weekly run off" : "Weekly run \(s.weekly)", systemImage: "calendar.badge.clock")
+                    .labelStyle(StatLabel(color: .secondary)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if let run = s.lastRun, !run.when.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Last run \(run.when)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text("\(run.found) new · \(run.letters) letters").font(.caption.weight(.semibold)).monospacedDigit()
+                    }
+                }
+                Spacer(minLength: 0)
+                Updated(s: s, now: now)
+            }
+            .frame(width: 190, alignment: .leading)
+        }
+    }
+}
+
 struct Message: View {
     let text: String
     var body: some View {
@@ -439,6 +497,7 @@ struct WidgetView: View {
         switch family {
         case .systemSmall: SmallView(s: s, now: entry.date)
         case .systemLarge: LargeView(s: s, now: entry.date)
+        case .systemExtraLarge: ExtraLargeView(s: s, now: entry.date)
         default: MediumView(s: s, now: entry.date)
         }
     }
@@ -454,6 +513,6 @@ struct JobHelperWidget: Widget {
         }
         .configurationDisplayName("JobHelper")
         .description("Your job search at a glance: new jobs, applications, the next interview and Claude usage.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge])
     }
 }
