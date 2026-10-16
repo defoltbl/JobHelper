@@ -387,3 +387,5 @@ def test_ci_runs_what_the_readme_says_on_a_mac_with_the_locked_packages():
     assert 'python-version: "3.14"' in workflow and "QT_QPA_PLATFORM: offscreen" in workflow
     assert "push:" in workflow and "pull_request:" in workflow and "permissions:\n  contents: read" in workflow
     assert "ANTHROPIC_API_KEY" not in workflow and "secrets." not in workflow        # the tests need no key at all
+    assert "actions/checkout@v7" in workflow and "actions/setup-python@v7" in workflow     # Node 24; Node 20 actions stop in Sep 2026
+    assert "if: failure()" in workflow and "::error title=" in workflow and "GITHUB_STEP_SUMMARY" in workflow   # failures readable without a sign-in

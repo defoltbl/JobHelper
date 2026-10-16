@@ -437,8 +437,7 @@ def test_elapsed_time_format(ui):
 @pytest.mark.parametrize("name", ["optDialog", "schedDialog"])
 def test_dialogs_open_and_close(ui, name):
     dialog = ui.find(name)
-    ui.js("open()", dialog)
-    ui.wait(500)
+    _open(ui, dialog, 500)
     assert dialog.property("opened") is True
     ui.js("close()", dialog)
     ui.wait(400)
@@ -552,16 +551,14 @@ def test_email_scan_shows_real_progress(ui):
 
 def test_follow_up_days_option_is_loaded_and_saved(ui):
     dialog = ui.find("optDialog")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     spin = ui.find("fuSpin")
     assert spin.property("value") == 10
     ui.js("close()", dialog)
     ui.wait(350)
     ui.bridge.saveOptions({**ui.bridge.options(), "followup_days": 21})
     ui.js("optsData = bridge.options()")              # what Save does in the window
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert spin.property("value") == 21
     ui.js("close()", dialog)
     ui.wait(350)
@@ -571,8 +568,7 @@ def test_scan_period_option_is_loaded_and_saved(ui):
     dialog = ui.find("optDialog")
     ui.bridge.saveOptions({**ui.bridge.options(), "scan_days": 45})
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.find("scanSpin").property("value") == 45
     ui.js("close()", dialog)
     ui.wait(350)
@@ -625,8 +621,7 @@ def test_typed_number_is_saved_without_pressing_enter(ui):
     dialog, spin = ui.find("optDialog"), ui.find("scanSpin")
     ui.bridge.saveOptions({**ui.bridge.options(), "scan_days": 120})
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert spin.property("value") == 120
     assert spin.property("activeFocus") is False                 # nothing is pre-selected on open
     ui.js("contentItem.forceActiveFocus(); contentItem.selectAll()", spin)
@@ -701,8 +696,7 @@ def test_second_mailbox_row_follows_the_connection(ui):
 def test_skip_words_and_exceptions_are_edited_loaded_and_saved(ui):
     dialog, skip, keep = ui.find("optDialog"), ui.find("skipTags"), ui.find("keepTags")
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.js('all().join(",")', skip) == "intern,internship"          # the default
     assert ui.js('add("Student")', skip) is True and ui.js('add("student")', skip) is False
     assert "already" in skip.property("err")
@@ -714,8 +708,7 @@ def test_skip_words_and_exceptions_are_edited_loaded_and_saved(ui):
     ui.wait(350)
     ui.bridge.saveOptions({**ui.bridge.options(), "skip_words": ["sales"], "keep_words": ["sales engineer"]})
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.js('all().join(",")', skip) == "sales" and ui.js('all().join(",")', keep) == "sales engineer"
     ui.js("close()", dialog)
     ui.wait(350)
@@ -946,8 +939,7 @@ def test_interview_preparation_from_the_job_window(ui, monkeypatch):
 def test_help_opens_from_the_button_and_covers_the_app(ui):
     dialog = ui.find("helpDialog")
     assert ui.find("helpButton").property("text") == "Help"
-    ui.js("open()", dialog)
-    ui.wait(500)
+    _open(ui, dialog, 500)
     assert dialog.property("opened") is True
     titles = ui.js("topics.map(function (t) { return t.title; }).join('|')", dialog)
     for expected in ("What JobHelper does", "A normal week", "Scores and labels", "The assistant", "Claude and the limit", "Privacy and safety"):
@@ -1003,8 +995,7 @@ def test_options_take_your_own_salary_figure_and_currency(ui):
     dialog = ui.find("optDialog")
     start = ui.bridge.options()
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     spin, combo, note = ui.find("salarySpin"), ui.find("currencyCombo"), ui.find("salaryNote")
     assert spin.property("value") == 0 and combo.property("currentText") == "CZK" and combo.property("count") >= 10
     ui.js('cityCombo.editText = "Prague"; countryField.text = ""', dialog)
@@ -1027,8 +1018,7 @@ def test_options_take_your_own_salary_figure_and_currency(ui):
     assert detail["desired_text"] == "3 200 EUR/mo target" and detail["pay_text"] == "posting says 2 800–3 200 EUR/mo"
     assert [r["desired"] for r in ui.bridge.leads() if r["id"] == "lead"] == ["3 200 EUR/mo"]
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.find("salarySpin").property("value") == 3200 and ui.find("currencyCombo").property("currentText") == "EUR"   # loaded again
     ui.js("confirmClose = true; close()", dialog)
     ui.wait(350)
@@ -1048,8 +1038,7 @@ def test_options_take_your_own_salary_figure_and_currency(ui):
 def test_options_has_a_country_for_any_city(ui):
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     field = ui.find("countryField")
     ui.js('cityCombo.editText = "Prague"', dialog)
     assert field.property("text") == "" and field.property("placeholderText") == "Czechia (from the city)"
@@ -1080,8 +1069,7 @@ def test_options_can_start_one_longer_email_scan(ui, monkeypatch):
     monkeypatch.setattr(config, "IMAP_PASSWORD", "abcdabcdabcdabcd")
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     saved_days = ui.find("scanSpin").property("value")
     spin, note = ui.find("backSpin"), ui.find("backNote")
     assert spin.property("value") == 90 and note.property("visible") is False
@@ -1154,8 +1142,7 @@ def test_usage_card_corrects_itself_when_a_reset_time_passes(ui):
 def test_a_long_choice_in_a_combo_box_wraps_instead_of_being_cut(ui):
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     ui.js("srcCombo.currentIndex = 1", dialog)                  # "LinkedIn only": short
     ui.wait(80)
     short = ui.js("srcCombo.height", dialog)
@@ -1219,8 +1206,7 @@ def test_new_options_are_loaded_and_saved(ui):
     ui.bridge.saveOptions({**ui.bridge.options(), "about_right_to_work": "EU citizen", "about_start": "one month",
                            "notifications": False, "keep_backups": 25})
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.find("rightField").property("text") == "EU citizen" and ui.find("startField").property("text") == "one month"
     assert ui.find("notifySw").property("checked") is False and ui.find("keepSpin").property("value") == 25
     ui.js("close()", dialog)
@@ -1242,6 +1228,16 @@ def test_help_marks_key_words(ui):
 def _open_job(ui, job_id="app"):
     ui.js(f'detailDialog.show("{job_id}")')
     _until_open(ui, "detailDialog")
+
+
+def _open(ui, dialog, ms=450, most_ms=6000):
+    """Open a window and wait until its opening animation has ended (its onOpened has run). A fixed pause was
+    too short on GitHub's busier Mac runners: the Options window had not read its backup folder yet."""
+    ui.js("open()", dialog)
+    ui.wait(ms)
+    waited = 0
+    while dialog.property("opened") is False and waited < most_ms:
+        ui.wait(50); waited += 50
 
 
 def _until_open(ui, name, most_ms=4000):
@@ -1378,16 +1374,14 @@ def test_scan_all_folders_switch_is_saved(ui):
     dialog = ui.find("optDialog")
     assert ui.bridge.options()["scan_all_folders"] is False
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     switch = ui.find("foldersSw")
     assert switch.property("checked") is False
     ui.bridge.saveOptions({**ui.bridge.options(), "scan_all_folders": True})
     ui.js("close()", dialog)
     ui.wait(350)
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert switch.property("checked") is True
     ui.js("close()", dialog)
     ui.wait(350)
@@ -1504,8 +1498,7 @@ def test_level_words_and_years_are_edited_in_options(ui):
     start = ui.bridge.options()
     ui.bridge.saveOptions({**start, "level_words": ["senior", "lead"], "max_years": 6})
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.js("levelTags.all().join(',')") == "senior,lead" and ui.find("yearsSpin").property("value") == 6
     ui.js('levelTags.add("Principal")')
     assert ui.js("levelTags.all().join(',')") == "senior,lead,principal"
@@ -1517,8 +1510,7 @@ def test_level_words_and_years_are_edited_in_options(ui):
 
 def test_help_has_a_what_changed_tab(ui):
     dialog = ui.find("helpDialog")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.js("helpDialog.tab") == "how" and ui.js("helpDialog.changes.length") >= 2
     ui.js('helpDialog.tab = "new"')
     ui.wait(150)
@@ -1736,8 +1728,7 @@ def test_options_show_your_own_letters_folder(ui, monkeypatch):
     (config.COVER_LETTERS_DIR / "Alex_Novak_CoverLetter_Acme.docx").write_bytes(b"mine")
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.js("optDialog.myLetters.count") == 1 and ui.js("optDialog.myLetters.name") == config.COVER_LETTERS_DIR.name
     assert ui.find("myLettersOpen").property("text") == "Open folder"
     assert ui.js("bridge.openMyLetters().ok") is True and opened == [config.COVER_LETTERS_DIR]
@@ -2071,8 +2062,7 @@ def test_more_about_your_work_is_saved_and_checked(ui):
     start = ui.bridge.options()
     ui.bridge.saveOptions({**start, "where": "Prague", "about_experience": "At Acme I wrote the import service in Python."})
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     field = ui.find("expField")
     assert field.property("text") == "At Acme I wrote the import service in Python."
     assert ui.find("expCount").property("text") == "45 of 4000 characters"
@@ -2113,8 +2103,7 @@ def test_wanted_and_unwanted_roles_are_edited_in_options(ui):
     start = ui.bridge.options()
     ui.bridge.saveOptions({**start, "where": "Prague", "wanted_roles": ["backend developer"], "unwanted_roles": ["economist"]})
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.js("wantedTags.all().join(',')") == "backend developer" and ui.js("unwantedTags.all().join(',')") == "economist"
     assert ui.js('unwantedTags.add("x")') is False and "job title" in ui.js("unwantedTags.err")       # wrong input is explained
     source = qml_source()
@@ -2144,8 +2133,7 @@ def test_wanted_and_unwanted_roles_are_edited_in_options(ui):
     ui.wait(350)
     ui.bridge.saveOptions({**start, "where": "Prague", "wanted_roles": ["backend developer"], "my_fields": ["law", "no such field", "finance"]})
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.js("optDialog.pickedFields.join('|')") == "finance|law" and ui.js("optDialog.changed()") is False   # an unknown name is dropped on load
     assert "Let the app decide" in source and "Pick it below if you want that." in source
     ui.js("close()", dialog)
@@ -2244,8 +2232,7 @@ def test_form_answers_and_preparation_lists_explain_their_limits(ui, monkeypatch
 def test_number_fields_say_what_they_accept_instead_of_going_silent(ui):
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     spin = ui.find("scanSpin")                                                   # 1 to 365
     start = spin.property("value")
     ui.js('scanSpin.contentItem.text = "999"; scanSpin.contentItem.textEdited()')
@@ -2269,8 +2256,7 @@ def test_number_fields_say_what_they_accept_instead_of_going_silent(ui):
 def test_career_site_name_is_checked(ui):
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.js('optDialog.addCompany("' + "n" * 61 + '", "greenhouse", "acme")') is False
     assert ui.js("optDialog.coErr") == "The company name is 61 characters long; the most is 60."
     assert ui.js('optDialog.addCompany("Компания", "greenhouse", "acme")') is False and "Latin letters" in ui.js("optDialog.coErr")
@@ -2395,14 +2381,12 @@ def test_options_ask_once_before_discarding_changes(ui):
     start = ui.bridge.options()
     ui.bridge.saveOptions({**start, "where": "Prague"})
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.js("optDialog.changed()") is False
     ui.js("optDialog.tryClose()")                                               # nothing changed: closes at once
     ui.wait(450)
     assert dialog.property("visible") is False
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     ui.js("thrSpin.value = thrSpin.value + 5")
     assert ui.js("optDialog.changed()") is True
     ui.js("optDialog.tryClose()")
@@ -2667,8 +2651,7 @@ def test_old_moved_documents_are_removed_from_options_after_asking(ui):
         return path
     fresh, old_one, old_two = copy("fresh", 1), copy("one", 40), copy("two", 90)
     dialog = ui.find("optDialog")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     note, button = ui.find("shelfNote"), ui.find("tidyShelf")
     assert note.property("text") == "3 moved documents are in the backup (12 KB). 2 are older than 30 days (8 KB)."
     assert button.property("text") == "Remove" and button.property("enabled") is True
@@ -2700,8 +2683,7 @@ def test_old_moved_documents_are_removed_from_options_after_asking(ui):
     assert "wrapMode: Text.WordWrap" in qml_source().split('objectName: "shelfNote"')[1][:200]
     ui.js("close()", dialog)
     ui.wait(350)
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert note.property("text") == "1 moved document is in the backup (4 KB). None is older than 30 days."
     ui.js("close()", dialog)
     ui.wait(350)
@@ -2862,8 +2844,7 @@ def test_help_describes_what_was_added_since_it_was_written():
 def test_a_search_role_outside_software_can_be_added(ui):
     """The words the app knew for roles were all from software jobs: "registered nurse" was refused as not a role."""
     dialog = ui.find("optDialog")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     before = ui.js("rolesModel.count")
     assert ui.js('optDialog.addRole("registered nurse")') is True and ui.js("optDialog.roleErr") == ""       # a profession the app knows
     assert ui.js('optDialog.addRole("junior accountant")') is True
@@ -3030,8 +3011,7 @@ def test_options_make_and_check_backups(ui, monkeypatch):
     monkeypatch.setattr(ui_api.Api, "backup_export", lambda self, folder: asked.append(("export", folder)) or {"ok": True, "msg": "Saved 12 readable files."})
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     note = ui.find("storageNote")
 
     def done():
@@ -3096,8 +3076,7 @@ def test_options_take_a_salary_of_its_own_for_a_kind_of_role(ui):
     dialog = ui.find("optDialog")
     start = ui.bridge.options()
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     role, amount, err = ui.find("payRole"), ui.find("payAmount"), ui.find("payErr")
     for typed, value, part in (("", 40000, "kind of role in words"), ("7", 40000, "kind of role in words"), ("поддержка", 40000, "in English"),
                                ("support", 0, "a number above 0")):
@@ -3116,8 +3095,7 @@ def test_options_take_a_salary_of_its_own_for_a_kind_of_role(ui):
     ui.js("confirmClose = true; close()", dialog)
     ui.wait(350)
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.js("payModel.count", dialog) == 1 and ui.js("payModel.get(0).role", dialog) == "support"      # loaded again
     chips = {t.property("text") for t in ui.seen("payChips") if isinstance(t.property("text"), str)}
     assert any(t.startswith("support · 42 000 ") for t in chips)
@@ -3158,8 +3136,7 @@ def test_the_account_card_tries_the_saved_mailboxes(ui, monkeypatch):
 def test_a_long_company_name_in_options_wraps_and_stays_clear_of_the_remove_mark(ui):
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     ui.js('companiesModel.append({ name: "The Very Long Named International Engineering and Consulting Company of Central Europe Limited", ats: "greenhouse", token: "' + "x" * 60 + '" })', dialog)
     ui.wait(120)
     line = next(i for i in ui.seen("optScroll") if i.objectName() == "companyLine")
@@ -3989,8 +3966,7 @@ def test_the_size_of_text_and_controls_is_an_option_used_at_the_next_start(ui, m
     assert api.options()["text_size"] == 100, "a wrong size changes nothing"
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     combo = ui.find("sizeCombo")
     assert combo.property("currentText") == "100%" and combo.property("count") == 4
     def hint():                                     # the line of small words beside the setting
@@ -4015,8 +3991,7 @@ def test_the_size_of_text_and_controls_is_an_option_used_at_the_next_start(ui, m
     assert app_qt.apply_text_size({}) == "", "the window opens whatever the settings file holds"
     monkeypatch.undo()
     ui.js("optsData = bridge.options()")
-    ui.js("open()", dialog)
-    ui.wait(450)
+    _open(ui, dialog, 450)
     assert ui.find("sizeCombo").property("currentText") == "125%", "the saved size is shown again"
     ui.js("close()", dialog)
     ui.wait(350)

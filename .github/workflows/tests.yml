@@ -18,9 +18,9 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
           cache: pip
@@ -37,3 +37,24 @@ jobs:
 
       - name: Tests
         run: python -m pytest
+        env:
+          PYTEST_ADDOPTS: --junitxml=test-report.xml
+
+      # The log needs a sign-in; annotations and the run summary do not. So each failed test is shown there too.
+      - name: Show failed tests on the run page
+        if: failure()
+        run: |
+          python - <<'EOF'
+          import os, xml.etree.ElementTree as ET
+          if not os.path.exists("test-report.xml"):
+              raise SystemExit(0)
+          lines = ["## Failed tests", ""]
+          for case in ET.parse("test-report.xml").iter("testcase"):
+              for bad in list(case.findall("failure")) + list(case.findall("error")):
+                  name = f"{case.get('classname')}::{case.get('name')}"
+                  why = (bad.get("message") or "").replace("\n", " ")[:300]
+                  print(f"::error title={name}::{why}")
+                  lines.append(f"- `{name}`: {why}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write("\n".join(lines) + "\n")
+          EOF
