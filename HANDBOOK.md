@@ -235,6 +235,11 @@ data/                your data; only the *.example.* files are in git
   `app_qt.main()` before anything reads data, and the app then starts itself again. Tests set
   `JOBHELPER_HOME` to a temporary folder in `conftest.py`, and the guard watches both the Library
   folder and the old `data/`.
+- **The widget is built without Xcode.** `swiftc -application-extension` + an `.appex` with
+  `NSExtensionPointIdentifier = com.apple.widgetkit-extension`, ad-hoc signed with sandbox
+  entitlements (a temporary exception for one home-relative folder), then the app signed again.
+  `pluginkit -m -i local.jobhelper.app.widget` shows whether macOS knows it. Dropped Qt parts left
+  SYMLINK entries behind that broke `codesign --strict`; the spec drops those links too.
 - **An app started by Finder or launchd works in `/`.** The Claude program watches its working folder
   ("Watching / for /.claude to appear" in its debug log), and that made macOS ask the first user of
   JobHelper.app for Desktop, Downloads, Music, removable disks and other apps' data. Everything now

@@ -81,6 +81,13 @@ profession, for any city.
 - **Pauses, never fails, on the limit.** When the subscription limit is used up the run saves,
   says when the limit resets, and resumes from the same job.
 
+## The widget
+
+A macOS widget in three sizes shows the search at a glance: new jobs, applications, interviews,
+follow-ups, the next dates, the last run and the Claude usage left. Add it with **Edit Widgets**
+on the desktop. It is built into `JobHelper.app` (`widget/JobHelperWidget.swift`) and reads only a
+small summary the app writes for it, never the encrypted data.
+
 ## The assistant
 
 A sixth robot stands at the end of the assembly line. It blinks, follows the pointer with its

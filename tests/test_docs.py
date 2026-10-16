@@ -112,7 +112,10 @@ def test_the_pictures_exist_and_come_from_their_scripts():
     used = re.findall(r"\]\(img/([^)]+)\)", guide)
     assert len(used) >= 30 and len(set(used)) == len(used)
     shots = (ROOT / "tests" / "guide_shots.py").read_text(encoding="utf-8")
-    assert set(re.findall(r'shot\("([^"]+)"', shots)) == {name[:-4] for name in used}, "every picture the script takes is in the guide, and the other way round"
+    widget = (ROOT / "scripts" / "widget_pictures.swift").read_text(encoding="utf-8")     # the widget, drawn by its own views
+    taken = set(re.findall(r'shot\("([^"]+)"', shots)) | set(re.findall(r'\("(widget_\w+)"', widget))
+    assert taken == {name[:-4] for name in used}, "every picture the scripts make is in the guide, and the other way round"
+    assert {"widget_small", "widget_medium", "widget_large"} <= taken
     drawn = re.findall(r"\]\(img/([^)]+)\)", code)
     diagrams = _script("code_diagram")
     assert drawn[0] == "code_pipeline.png" and sorted(drawn[1:]) == sorted(f"{name}.png" for name in diagrams.DIAGRAMS), \

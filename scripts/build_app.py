@@ -64,7 +64,14 @@ class AppCheck:
         if claude is not None:
             done = subprocess.run([str(claude), "--version"], capture_output=True, text=True, timeout=60)
             self._expect(done.returncode == 0 and "Claude Code" in done.stdout, "the Claude program starts")
-        signed = subprocess.run(["codesign", "--verify", "--deep", str(self._app)], capture_output=True, text=True)
+        widget = WidgetBuild(self._app).appex
+        widget_info = plistlib.loads((widget / "Contents" / "Info.plist").read_bytes()) if (widget / "Contents" / "Info.plist").is_file() else {}
+        self._expect(widget_info.get("NSExtension", {}).get("NSExtensionPointIdentifier") == "com.apple.widgetkit-extension"
+                     and (widget / "Contents" / "MacOS" / app_info.WIDGET_NAME).is_file(), "it carries the macOS widget")
+        rights = subprocess.run(["codesign", "-d", "--entitlements", "-", "--xml", str(widget)], capture_output=True, text=True).stdout
+        self._expect("com.apple.security.app-sandbox" in rights and "JobHelper/widget/" in rights and "read-write" not in rights,
+                     "the widget is sandboxed and may only read its own folder")
+        signed = subprocess.run(["codesign", "--verify", "--deep", "--strict", str(self._app)], capture_output=True, text=True)
         self._expect(signed.returncode == 0, "the app is signed (for this Mac only)")
         if self.program.is_file():
             self._window_check()
@@ -84,6 +91,58 @@ class AppCheck:
             self._expect(refused.returncode == 2, "the window check refuses to run on real data")
 
 
+class WidgetBuild:
+    """The macOS widget: compiled from widget/JobHelperWidget.swift with the Swift of the Command Line Tools,
+    put into the app as Contents/PlugIns/JobHelperWidget.appex, signed with its sandbox entitlements.
+    The app is signed again afterwards, because its contents changed."""
+
+    SOURCE = ROOT / "widget" / "JobHelperWidget.swift"
+    ENTITLEMENTS = ROOT / "widget" / "JobHelperWidget.entitlements"
+    MIN_MACOS = "14.0"
+
+    def __init__(self, app: Path) -> None:
+        self._app = Path(app)
+
+    @property
+    def appex(self) -> Path:
+        return self._app / "Contents" / "PlugIns" / f"{app_info.WIDGET_NAME}.appex"
+
+    def info(self) -> dict:
+        return {
+            "CFBundleIdentifier": app_info.WIDGET_ID, "CFBundleName": app_info.WIDGET_NAME,
+            "CFBundleDisplayName": app_info.NAME, "CFBundleExecutable": app_info.WIDGET_NAME,
+            "CFBundlePackageType": "XPC!", "CFBundleInfoDictionaryVersion": "6.0",
+            "CFBundleShortVersionString": app_info.VERSION, "CFBundleVersion": app_info.VERSION,
+            "LSMinimumSystemVersion": self.MIN_MACOS,
+            "NSExtension": {"NSExtensionPointIdentifier": "com.apple.widgetkit-extension"},
+        }
+
+    def run(self) -> int:
+        swiftc = shutil.which("swiftc")
+        if not swiftc:
+            print("swiftc is not installed (xcode-select --install): the app is built without its widget.")
+            return 1
+        shutil.rmtree(self.appex, ignore_errors=True)
+        macos = self.appex / "Contents" / "MacOS"
+        macos.mkdir(parents=True)
+        sdk = subprocess.run(["xcrun", "--show-sdk-path"], capture_output=True, text=True).stdout.strip()
+        arch = subprocess.run(["uname", "-m"], capture_output=True, text=True).stdout.strip() or "arm64"
+        done = subprocess.run([swiftc, "-parse-as-library", "-application-extension", "-O",
+                               "-target", f"{arch}-apple-macos{self.MIN_MACOS}", "-sdk", sdk,
+                               "-framework", "WidgetKit", "-framework", "SwiftUI",
+                               str(self.SOURCE), "-o", str(macos / app_info.WIDGET_NAME)])
+        if done.returncode:
+            return done.returncode
+        (self.appex / "Contents" / "Info.plist").write_bytes(plistlib.dumps(self.info()))
+        for cmd in (["codesign", "--force", "--sign", "-", "--entitlements", str(self.ENTITLEMENTS), str(self.appex)],
+                    ["codesign", "--force", "--sign", "-", str(self._app)]):
+            done = subprocess.run(cmd, capture_output=True, text=True)
+            if done.returncode:
+                print(done.stderr.strip())
+                return done.returncode
+        return 0
+
+
 def _size(path: Path) -> int:
     return sum(p.stat().st_size for p in path.rglob("*") if p.is_file() and not p.is_symlink())
 
@@ -100,7 +159,7 @@ def build() -> int:
 
 def main(argv: list[str]) -> int:
     if "--check" not in argv:
-        code = build()
+        code = build() or WidgetBuild(APP).run()
         if code:
             return code
     ok = AppCheck(APP).run()

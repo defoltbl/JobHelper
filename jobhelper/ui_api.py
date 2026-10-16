@@ -83,6 +83,7 @@ class Api:
     backup_check = _Via("_system")
     backup_export = _Via("_system")
     fix_problem = _Via("_system")
+    widget_update = _Via("_system")
     repair_statuses = _Via("_system")
     restore_data = _Via("_system")
 

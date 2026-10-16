@@ -464,6 +464,51 @@ The rows of the **Last run** card (Table 3.5):
 | **You paid** | *subscription only*: nothing was billed for the run |
 | **Same search via API** or **Same scan via API** | What the last run alone would have cost with pay-per-use billing. It is a measure of how much work was done, not a bill |
 
+### The JobHelper widget
+
+The JobHelper widget shows your job search on the desktop of your Mac, also when the window is
+closed. It has three sizes (Figure 3.5, Figure 3.6 and Figure 3.7).
+
+To add the widget:
+
+1. Open JobHelper one time, so that it can write what the widget shows.
+2. Right-click an empty area of the desktop, then select **Edit Widgets**.
+3. In the search field, type **JobHelper**.
+4. Select a size, then drag the widget to the desktop or to the Notification Center.
+5. Select **Done**.
+
+![The small widget](img/widget_small.png)
+
+*Figure 3.5 – The small widget*
+
+![The medium widget](img/widget_medium.png)
+
+*Figure 3.6 – The medium widget*
+
+![The large widget](img/widget_large.png)
+
+*Figure 3.7 – The large widget*
+
+Table 3.6 lists what each size shows.
+
+*Table 3.6 – What the widget shows*
+
+| Size | What it shows |
+|---|---|
+| Small | The next date, and the number of new jobs and applications |
+| Medium | The next date, the new jobs, applications, interviews and follow-ups, and the Claude usage of the 5-hour window |
+| Large | All of the numbers, the next three dates, the last run, both Claude usage windows, offers, replies and the weekly run |
+
+The widget gets new numbers every 15 minutes. The app writes them when it starts, after each
+change, every 5 minutes while it is open, and after the weekly run. To open the app, click the
+widget. When the numbers are older than a day, the widget tells you to open the app.
+
+The widget cannot open your encrypted data. The app writes a short summary for it, in the
+folder JobHelper of your Library. The summary contains numbers, the companies and roles of the
+next dates, and their days and times. It contains no letters, CVs, emails or notes. Only you
+can read the file.
+
+
 ### Next steps
 
 - [Run a search](#4-run-a-search)

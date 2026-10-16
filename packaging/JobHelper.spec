@@ -35,14 +35,20 @@ UNUSED_QT = ("Qt3D", "QtCharts", "QtDataVisualization", "QtGraphs", "QtLocation"
              "QtTextToSpeech", "QtVirtualKeyboard", "QtWebChannel", "QtWebEngine", "QtWebSockets", "QtWebView")
 
 
-def _used(entry) -> bool:
-    parts = Path(entry[0]).parts
+def _in_unused_qt(path) -> bool:
+    parts = Path(path).parts
     for folder in ("lib", "qml"):
         if "Qt" in parts and folder in parts:
             at = parts.index(folder) + 1
             if at < len(parts) and parts[at].startswith(UNUSED_QT):
-                return False
-    return True
+                return True
+    return False
+
+
+def _used(entry) -> bool:
+    """Not a dropped Qt part, nor a shortcut (SYMLINK) to one: a shortcut left behind breaks the app's signature."""
+    name, source, kind = entry[0], entry[1], entry[2]
+    return not _in_unused_qt(name) and not (kind == "SYMLINK" and _in_unused_qt(source))
 
 
 a.binaries = [entry for entry in a.binaries if _used(entry)]

@@ -284,6 +284,11 @@ class Bridge(RunSlots, JobSlots, QObject):
         threading.Thread(target=work, daemon=True).start()
 
     @Slot()
+    def refreshWidget(self):
+        """Write the summary for the macOS widget, in the background (it reads the job list and the replies)."""
+        threading.Thread(target=self._api.widget_update, daemon=True).start()
+
+    @Slot()
     def refreshUsage(self):
         threading.Thread(target=self._ping_usage, daemon=True).start()
 

@@ -488,6 +488,24 @@ Table 6.4 lists the programs from outside that the app uses, and what it does wi
 | LibreOffice | The PATH, then its usual folders (`pdf._CANDIDATES`), also for an app that Finder opens | No PDF copies. The **PDF copies** row of the Account card says how to get them |
 | The notifier | A small helper app in `data/notifier`, built at the first notification | `osascript` shows the notification. A message that waits more than `notify.STALE_HOURS` is not shown late |
 
+### The macOS widget
+
+The widget is a WidgetKit extension in Swift: `widget/JobHelperWidget.swift`. `scripts/build_app.py`
+compiles it with the Swift of the Command Line Tools (`WidgetBuild`). It puts the result into the
+app as `Contents/PlugIns/JobHelperWidget.appex` and signs it with `widget/JobHelperWidget.entitlements`.
+Then it signs the app again, because the contents of the app changed. Xcode is not necessary.
+
+macOS runs a widget in its sandbox, so the widget cannot open the encrypted data. The entitlements
+give it read-only access to one folder: `~/Library/Application Support/JobHelper/widget`.
+`widget_feed.WidgetFeed` writes `snapshot.json` there. The file holds the counts, the next three
+dates, the last run, the Claude usage left and the weekly run. It holds no letters, CVs, mail or
+notes, and its mode is 0600. `SystemService.widget_update` writes it. The window calls it at start,
+after each reload and every 5 minutes. `weekly.main()` calls it after the weekly run.
+
+The widget reads the file again every 15 minutes, and at midnight it changes "Tomorrow" to
+"Today". A test makes sure that the widget knows each key that the app writes. To draw the
+pictures of the user guide, compile with `-D PICTURES` and `scripts/widget_pictures.swift`.
+
 ### The start-up check and its fixes
 
 `health.run()` makes each check of `health.CHECKS`. A check returns an empty string when all is

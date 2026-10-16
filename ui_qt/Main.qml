@@ -49,6 +49,7 @@ ApplicationWindow {
     // every five minutes, so a date with a time can also be announced about three hours and one hour before
     Timer { interval: 300 * 1000; repeat: true; running: true; onTriggered: { bridge.remind(); win.upcomingData = bridge.upcoming(); } }
     Timer { interval: 4000; running: true; onTriggered: bridge.remind() }
+    Timer { interval: 300 * 1000; repeat: true; running: true; onTriggered: bridge.refreshWidget() }   // usage and "in 2 days" change
     property bool appRunning: false   // mirror of bridge.running (avoids teardown binding churn)
     property bool usageBusy: false
     property var schedData: ({})
@@ -139,6 +140,7 @@ ApplicationWindow {
         lastRunData = bridge.lastRun();
         upcomingData = bridge.upcoming();
         bridge.checkConnections();          // answers through onConnectionsReady
+        bridge.refreshWidget();             // the macOS widget shows what the window shows
         if (!welcome.shown) bridge.warmUp();   // in the background: makes the first Insights view open at once
     }
     // Not while the welcome screen is up: preparing Insights is heavy enough to make its animation stutter.

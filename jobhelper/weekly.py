@@ -71,4 +71,7 @@ class WeeklyRun:
 
 def main() -> int:
     from . import config
-    return WeeklyRun(config.DATA_DIR / LOG_NAME).run()
+    code = WeeklyRun(config.DATA_DIR / LOG_NAME).run()
+    from . import ui_api
+    ui_api.Api().widget_update()                     # the widget shows what the run found
+    return code

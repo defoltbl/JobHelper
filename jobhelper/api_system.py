@@ -137,6 +137,17 @@ class SystemService:
         return {"ok": True, "msg": f"Your {what} is back as it was on {made}. Changes made after that time are not in it. "
                                    "The damaged file is kept in the backups, in the folder damaged."}
 
+    # ── the macOS widget ────────────────────────────────────────
+    def widget_update(self):
+        """Write the summary the macOS widget shows: {ok} (msg when it could not be written)."""
+        from . import widget_feed
+        try:
+            widget_feed.WidgetFeed(self._app, widget_feed.folder()).write()
+        except Exception as e:  # noqa: BLE001 - the widget keeps its last summary; noted for the log of small problems
+            trouble.note("writing the summary for the widget", e)
+            return {"ok": False, "msg": trouble._safe(e)}
+        return {"ok": True}
+
     # ── what changed (CHANGELOG.md, shown in Help) ──────────────
     @_guarded(list)
     def changelog(self):
