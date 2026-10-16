@@ -33,6 +33,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ZERO = "0" * 40
+PROJECT = "JobHelper"        # the repository's own address github.com/<owner>/JobHelper is public anyway (badges need it)
 NOREPLY = "@users.noreply.github.com"
 
 SECRETS = {
@@ -148,12 +149,19 @@ class PushCheck:
         for number, line in enumerate(lines, 1):
             if number in allowed:
                 continue
-            low = line.lower()
+            low = self._without_own_address(line.lower())
             if any(w in low for _w, w in self._words):
                 found.append(Finding("a personal detail", f"{path}:{number}" if not path.endswith((".docx", ".pdf")) else path))
                 if path.endswith((".docx", ".pdf")):
                     break
         return found
+
+    def _without_own_address(self, low: str) -> str:
+        """The line without this repository's own GitHub address (the owner's name in it is public with the repository)."""
+        for word, w in self._words:
+            if w.startswith("github.com/"):
+                low = low.replace(f"{w}/{PROJECT.lower()}", "")
+        return low
 
     @staticmethod
     def _random(match: re.Match) -> bool:

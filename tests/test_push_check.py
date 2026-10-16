@@ -12,7 +12,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import push_check  # noqa: E402
 
 NOREPLY = "12345+jordan-example@users.noreply.github.com"
-OWNER = push_check.PrivateWords(["Jordan", "Weber", "jordan.weber@private-mail.example", "777888999", "linkedin.com/in/jordan-w-1234"])
+OWNER = push_check.PrivateWords(["Jordan", "Weber", "jordan.weber@private-mail.example", "777888999", "linkedin.com/in/jordan-w-1234",
+                                 "github.com/jordan-w"])
 
 
 def _git(repo, *args, email=NOREPLY):
@@ -155,3 +156,11 @@ def test_a_made_up_test_value_is_not_a_secret(repo):
     assert _check(repo) == []
     _commit(repo, {"settings.py": "ADZUNA_APP_" + "KEY = 'f3a9Kq72LmZ0xW5bT8'\n"})
     assert "a password or key in a setting: settings.py" in _check(repo)
+
+
+def test_the_repositorys_own_address_may_name_its_owner(repo):
+    """A badge needs github.com/<owner>/JobHelper; that address is public with the repository. Other addresses of the owner are not."""
+    _commit(repo, {"README.md": "# App\n![Tests](https://github.com/jordan-w/JobHelper/actions/workflows/tests.yml/badge.svg)\n"})
+    assert _check(repo) == []
+    _commit(repo, {"notes.md": "see https://github.com/jordan-w/other-project\n"})
+    assert "a personal detail: notes.md:1" in _check(repo)
