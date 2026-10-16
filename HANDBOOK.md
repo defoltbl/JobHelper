@@ -235,6 +235,10 @@ data/                your data; only the *.example.* files are in git
   `app_qt.main()` before anything reads data, and the app then starts itself again. Tests set
   `JOBHELPER_HOME` to a temporary folder in `conftest.py`, and the guard watches both the Library
   folder and the old `data/`.
+- **In the sandbox, "home" is the widget's container.** `homeDirectoryForCurrentUser` / `NSHomeDirectory()`
+  point to ~/Library/Containers/<widget id>/Data; the real home comes from `getpwuid(getuid())`. The
+  temporary-exception path in the entitlements is relative to the real home. After installing a new
+  build, `pkill -x JobHelperWidget` makes chronod start the new binary at its next refresh.
 - **A widget extension must start in `_NSExtensionMain`.** Linked like a plain program (entry `main`),
   `WidgetBundle.main()` returned at once on macOS 26: chronod logged "query failed … Code=4099" and the
   gallery stayed empty. Link with `-Xlinker -e -Xlinker _NSExtensionMain`. Read logs with `/usr/bin/log`:

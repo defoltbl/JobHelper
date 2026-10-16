@@ -5,6 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 16 October 2026
 
+- The widget now **shows your numbers**: it had looked for them in its own sandbox folder and said "Open JobHelper once" while the app was open.
 - The widget has a fourth size, **extra large**, with all the numbers, the next five dates and the Claude usage side by side.
 - The widget now **appears in Edit Widgets**, looks like the macOS widgets, and has an **Open** button that opens the app.
 - New **JobHelper widget** for the desktop and the Notification Center, in three sizes: new jobs, applications, interviews, follow-ups, the next dates, the last run and the Claude usage left. Add it with Edit Widgets.

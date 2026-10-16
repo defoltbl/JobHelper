@@ -169,3 +169,10 @@ def test_the_widget_looks_like_a_macos_widget():
 def test_the_widget_has_all_four_macos_sizes():
     assert ".supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge])" in SWIFT
     assert "case .systemExtraLarge: ExtraLargeView" in SWIFT and widget_feed.NEXT_DATES == 5
+
+
+def test_the_widget_reads_the_real_home_not_its_sandbox_container():
+    """In the sandbox, homeDirectoryForCurrentUser is the widget's own container: the summary is not there,
+    and the widget said "Open JobHelper once" while the app was open."""
+    feed = SWIFT.split("enum Feed {")[1].split("\n}\n")[0]
+    assert "getpwuid(getuid())" in feed and "static let file = realHome" in feed

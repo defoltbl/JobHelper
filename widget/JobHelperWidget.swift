@@ -52,8 +52,16 @@ struct Key: CodingKey {
 }
 
 enum Feed {
-    static let file = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/JobHelper/widget/snapshot.json")
+    /// The real home folder. In the sandbox, "the home folder" (homeDirectoryForCurrentUser, NSHomeDirectory)
+    /// is the widget's own container, where the app's summary is not; the user record names the real one.
+    static var realHome: URL {
+        if let record = getpwuid(getuid()), let dir = record.pointee.pw_dir {
+            return URL(fileURLWithPath: String(cString: dir), isDirectory: true)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
+    }
+
+    static let file = realHome.appendingPathComponent("Library/Application Support/JobHelper/widget/snapshot.json")
 
     static func read() -> Snapshot? {
         guard let data = try? Data(contentsOf: file) else { return nil }
