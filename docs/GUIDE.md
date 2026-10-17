@@ -1786,12 +1786,15 @@ by reason (Table 14.1).
 
 | Reason | Meaning | Where to change the rule |
 |---|---|---|
-| **too senior** | The title is above your level | **Skip levels above yours** |
+| **level** | The title is above your level | **Skip levels above yours** |
 | **other language** | The ad is written in another language (the reason names it), or the role requires one at a working level | **English only** |
-| **part time** | You asked for full-time only | **Full-time only** |
+| **other country** | The job is on site in another country. Or it is a remote job for another country or part of the world | **Country**, **Remote jobs** |
+| **part-time** | You asked for full-time only | **Full-time only** |
 | **too old** | Posted longer ago than your limit | **Max job age** |
-| **years** | Asks for more years of experience than you accept | **Skip jobs asking for** |
+| **too many years** | Asks for more years of experience than you accept | **Skip jobs asking for** |
 | **skip word** | The title has a word you skip | **Skip titles with** |
+| **duplicate** | The same role is on another board too, and the search keeps that copy | Nothing to change |
+| **closed** | The posting no longer accepts applications | Nothing to change |
 | **already applied** | You applied to this role at this company | Nothing to change |
 
 ### Bring a posting back
