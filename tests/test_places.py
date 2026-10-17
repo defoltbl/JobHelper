@@ -214,3 +214,23 @@ def test_the_window_gets_every_country_by_name():
     every = ui_api.Api().countries()
     assert {"key": "south korea", "name": "South Korea", "area": "asia"} in every
     assert ui_api.Api().country_of("Sarajevo") == "Bosnia and Herzegovina"
+
+
+def test_the_window_asks_the_rule_what_it_offers():
+    offered = ui_api.Api().remote_choices()
+    assert [s["key"] for s in offered["scopes"]] == ["country", "world"] and offered["most"] == places.RemoteReach.MAX_COUNTRIES
+    assert offered["areas"][0] == {"key": "", "name": "All"}
+    assert {a["key"] for a in offered["areas"][1:]} == set(places.AREA_OF.values())     # every part of the world a country is in
+    assert {"key": "middle east", "name": "Middle East"} in offered["areas"]
+
+
+def test_the_check_of_the_remote_choice_lives_with_the_rule():
+    assert places.RemoteReach.problem({}) == "" and places.RemoteReach.problem({"remote_countries": ["Poland"]}) == ""
+    assert "anywhere in the world" in places.RemoteReach.problem({"remote_where": "moon"})
+    assert "Narnia" in places.RemoteReach.problem({"remote_countries": ["Narnia"]})
+
+
+def test_a_source_knows_whether_it_lists_remote_jobs_only():
+    remote_only = {s.name for s in job_sources.all_sources() if s.remote_only}
+    assert remote_only == {"remoteok", "weworkremotely"}
+    assert job_sources.is_remote_board("remoteok") and not job_sources.is_remote_board("linkedin")

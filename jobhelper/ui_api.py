@@ -94,6 +94,7 @@ class Api:
     salary_hint = _Via("_settings")
     country_of = _Via("_settings")
     countries = _Via("_settings")
+    remote_choices = _Via("_settings")
     last_run = _Via("_settings")
     note_run = _Via("_settings")
     options = _Via("_settings")

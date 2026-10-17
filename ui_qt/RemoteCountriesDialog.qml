@@ -23,11 +23,10 @@ Dialog {
     padding: 0
 
     readonly property var all: bridge ? bridge.countries() : []        // [{key, name, area}], by name
-    readonly property int most: 40                                     // places.RemoteReach.MAX_COUNTRIES
-    // the parts of the world to filter by: places.AREA_OF's names
-    readonly property var areas: [["", "All"], ["europe", "Europe"], ["asia", "Asia"], ["middle east", "Middle East"],
-                                  ["africa", "Africa"], ["north america", "North America"], ["latin america", "Latin America"],
-                                  ["oceania", "Oceania"]]
+    // the two choices, the parts of the world to filter by, and the most countries: places.RemoteReach.offered()
+    readonly property var choices: bridge ? bridge.remoteChoices() : ({})
+    readonly property int most: choices.most || 0
+    readonly property var areas: choices.areas || []
     property string home: ""            // your own country's key: always included, so it is not a choice here
     property var picked: []             // the keys ticked
     property string query: ""
@@ -83,16 +82,16 @@ Dialog {
             Flow { objectName: "areaChips"; Layout.fillWidth: true; spacing: 6
                 Repeater { model: remoteDialog.areas
                     Rectangle {
-                        readonly property bool on: remoteDialog.area === modelData[0]
-                        objectName: "area_" + (modelData[0] || "all")
+                        readonly property bool on: remoteDialog.area === modelData.key
+                        objectName: "area_" + (modelData.key || "all")
                         height: 26; radius: 13; width: arT.implicitWidth + 20
                         color: on ? theme.accent : (arMa.containsMouse ? theme.surface2 : theme.inset)
                         border.width: 1; border.color: on ? win.clearOf(theme.line) : theme.line
                         Behavior on color { ColorAnimation { duration: 140 } }
-                        Text { id: arT; anchors.centerIn: parent; text: modelData[1]; font.pixelSize: 11; font.bold: parent.on
+                        Text { id: arT; anchors.centerIn: parent; text: modelData.name; font.pixelSize: 11; font.bold: parent.on
                             color: parent.on ? theme.accentInk : theme.soft }
                         MouseArea { id: arMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: remoteDialog.area = modelData[0] } } } }
+                            onClicked: remoteDialog.area = modelData.key } } } }
             Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; radius: 10; color: theme.surface; border.color: theme.line; border.width: 1
                 clip: true
                 ListView {
