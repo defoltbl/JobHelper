@@ -8,6 +8,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 ## Unreleased
 
 - **Notifications now reach you.** macOS had kept every JobHelper notification without showing it. The app now shows them itself, so macOS asks once and lists JobHelper in System Settings → Notifications. **Options → Notifications** has a **Test** button and says in red when macOS has them turned off.
+- In the **country picker for remote jobs**, the **job table** and the **filing list for a reply**, a click on the list now ends typing in the search box. Before, its outline and cursor stayed.
 - The licence file is now **LICENSE.md**, so GitHub shows its headings and links instead of raw text. The text of the licence did not change.
 - New **Remote jobs** choice in Options. A remote job tied to one country ("USA Only", "Remote, South Korea") is kept only for your country and the countries you add in a window that finds them by name or by part of the world. A job for a part of the world ("Remote – APAC") is kept when your country is in it, or always with **Anywhere in the world**. It applies to remote jobs from every source. Before, a remote job tied to a country the app did not know, such as "Remote, South Korea", was kept as if it were open to anyone; the app now knows every country.
 - A job posted on **two boards is no longer lost** when the copy the search kept was then filtered out, for example as written in Czech or as too old. The duplicate check now comes after the other filters, so a copy is left out as a duplicate only when another copy is kept.

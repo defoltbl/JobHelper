@@ -118,7 +118,10 @@ Dialog {
                             onClicked: remoteDialog.toggle(modelData.key) } }
                 }
                 Text { objectName: "noCountry"; anchors.centerIn: parent; visible: remoteDialog.shown.length === 0
-                    text: "No country matches “" + remoteDialog.query.trim() + "”."; color: theme.faint; font.pixelSize: 12 } }
+                    text: "No country matches “" + remoteDialog.query.trim() + "”."; color: theme.faint; font.pixelSize: 12 }
+                // over the list, not under it: a press on a country or on the empty list ends the editing of the
+                // search box first, then goes on to the row, so ticking and scrolling work as before
+                FocusCatcher { z: 2 } }
             Text { objectName: "remoteErr"; visible: remoteDialog.err !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
                 text: remoteDialog.err; color: theme.crit; font.pixelSize: 11; font.bold: true }
         }

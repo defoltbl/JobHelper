@@ -238,6 +238,7 @@ Dialog {
             id: listView; objectName: "listView"; Layout.fillWidth: true; Layout.fillHeight: true; clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar {}
+            FocusCatcher { z: 2 }          // over the rows: a press anywhere in the list ends the editing of the search box first
             delegate: Rectangle {
                 width: listView.width; implicitHeight: Math.max(54, rowWords.implicitHeight + 18)     // a long title makes the row taller, it is not cut
                 readonly property bool openable: !!modelData.id || !!modelData.rid

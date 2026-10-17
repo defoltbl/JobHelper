@@ -228,6 +228,8 @@ data/                your data; only the *.example.* files are in git
 - **A text field does not let go of the focus by itself.** In Qt Quick a press on empty space leaves the field
   outlined with its cursor blinking. Every window with a field needs `FocusCatcher {}` in its background and as the
   first child of each scroll area (it also covers the space under short content); a test fails for a window without one.
+  A list (`ListView`) beside a field needs `FocusCatcher { z: 2 }` over its rows: the rows take the press, so a
+  catcher under them never sees it. It passes the press on, so rows and scrolling work as before.
 - **An answer sent from a worker thread must carry plain values.** The start-up check travels inside the
   connection answer as text (`info.health`, JSON) and the window parses it.
 - **Where the data is, is decided once, when `config` is imported.** `config.DATA_DIR` comes from

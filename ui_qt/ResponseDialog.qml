@@ -115,6 +115,7 @@ Dialog {
             ListView { id: pickList; objectName: "pickList"; Layout.fillWidth: true; clip: true
                 implicitHeight: Math.min(contentHeight, 190); model: responseDialog.targets; spacing: 4
                 ScrollBar.vertical: ScrollBar {}
+                FocusCatcher { z: 2 }      // over the rows: picking one ends the editing of the filter box first
                 delegate: Rectangle { width: pickList.width - 8; radius: 8; implicitHeight: pickRow.implicitHeight + 12
                     readonly property bool here: modelData.id === responseDialog.r.job_id
                     color: pickMouse.containsMouse && !here ? theme.surface2 : theme.inset; border.width: 1; border.color: theme.line
