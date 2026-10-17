@@ -31,7 +31,8 @@ python scripts/push_check.py                                       # before ever
   Keychain, Claude, a mailbox, a job board or a browser. `tests/conftest.py` fails the run if the
   real data changes. Do not run the tests while a script changes the real data.
 - **Every change comes with tests**, then pyflakes and the whole suite. In window tests, wait for a
-  state (`_until_open`, `_until_closed`), never a fixed pause: CI on a slow Mac fails on pauses.
+  state (`_until_open`, `_until_closed`, `_until_shown`, `_until_true`), never a fixed pause: CI on a slow Mac
+  fails on pauses. The cleanup after each window test closes every window and ends a pretend run.
 - **What the model writes is checked in plain code** against the master CV (`cv_tailor`,
   `cover_letter`, `form_answers`). Do not weaken these checks to make a test or a text pass.
 - **The app never acts in the person's name:** the mailbox is read-only, and the assistant never
