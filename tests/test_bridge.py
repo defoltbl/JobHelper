@@ -308,12 +308,14 @@ def test_pipeline_uses_the_keywords_from_options(bridge, monkeypatch):
     asked = {}
 
     def search(queries, progress=None, **kw):
-        asked.update(queries=list(queries), where=kw["where"], source=kw["source"])
+        asked.update(queries=list(queries), where=kw["where"], source=kw["source"].kinds)
         return []
 
     _stub_agents(monkeypatch, search)
-    bridge._pipeline({"queries": ["qa engineer"], "where": "Brno", "source": "linkedin"})
-    assert asked == {"queries": ["qa engineer"], "where": "Brno", "source": "linkedin"}
+    bridge._pipeline({"queries": ["qa engineer"], "where": "Brno", "sources": ["linkedin"]})
+    assert asked == {"queries": ["qa engineer"], "where": "Brno", "source": ("linkedin",)}
+    bridge._pipeline({"queries": ["qa engineer"], "where": "Brno", "sources": ["remote", "boards"]})
+    assert asked["source"] == ("boards", "remote")                                              # what Options ticks, in one search
 
 
 def test_pipeline_failure_ends_cleanly(bridge, monkeypatch):

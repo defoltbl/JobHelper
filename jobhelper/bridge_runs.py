@@ -13,7 +13,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QMetaObject, Qt, Slot
 
-from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, config, letters, notify, store, trouble, usage)
+from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, config, job_sources, letters, notify, store, trouble, usage)
 
 
 class RunCancelled(BaseException):
@@ -320,19 +320,11 @@ class RunSlots:
                       full_time_only=o.get("full_time_only", True) is not False,
                       skip_words=list(o.get("skip_words") or []), keep_words=list(o.get("keep_words") or []),
                       level_words=list(o.get("level_words") or []), max_years=int(o.get("max_years") or 0))
-            remote_too = agent2_search.remote_added(o["source"], o.get("include_remote"))
-            # two passes share one bar: the main sources fill most of it, remote the rest
-            share = 0.85 if remote_too else 1.0
             dropped = []                                     # what the filters remove, with the reason
             kw["dropped"] = dropped
-            found = agent2_search.search(
-                queries, source=o["source"],
-                progress=lambda d, t: self._tick("a2", int(d * share * 100), max(1, t * 100)), **kw)
-            if remote_too:
-                found += agent2_search.search(
-                    queries, source="remote",
-                    progress=lambda d, t: self._tick(
-                        "a2", int((share + (1 - share) * d / max(1, t)) * 1000), 1000), **kw)
+            found = agent2_search.search(                    # every kind of source ticked in Options, in one pass
+                queries, source=job_sources.SourceChoice.from_options(o),
+                progress=lambda d, t: self._tick("a2", int(d * 100), max(1, t * 100)), **kw)
             found, _ = agent2_search.drop_known_applications(found, jobs, dropped=dropped)
             added, _ = store.upsert(jobs, found)
             added -= len(agent2_search.prune_duplicate_leads(jobs))     # same role already listed from another board

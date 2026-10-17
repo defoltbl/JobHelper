@@ -44,7 +44,7 @@ def cli(isolate_data, monkeypatch):
 def test_defaults_without_saved_options(cli):
     seen = cli("--where", "Brno")
     first = seen["searches"][0]
-    assert (first["where"], first["source"], first["queries"]) == ("Brno", "czech", ["from the cv"])
+    assert (first["where"], first["source"].kinds, first["queries"]) == ("Brno", ("boards", "linkedin", "careers"), ["from the cv"])
     assert seen["threshold"] == config.DEFAULT_THRESHOLD
     assert len(seen["searches"]) == 1
 
@@ -53,12 +53,21 @@ def test_saved_options_drive_the_run(cli):
     seen = cli(settings={"where": "Brno", "source": "linkedin", "threshold": 77, "per_query": 5,
                          "max_age_days": 3, "all_languages": True, "include_remote": True,
                          "queries": ["qa engineer"], "model": "opus", "min_lead_score": 45})
-    first, remote = seen["searches"]
-    assert (first["where"], first["source"], first["per_query"], first["max_age_days"]) == ("Brno", "linkedin", 5, 3)
+    [first] = seen["searches"]                       # "LinkedIn only" stays only that: no second, remote search
+    assert (first["where"], first["source"].kinds, first["per_query"], first["max_age_days"]) == ("Brno", ("linkedin",), 5, 3)
     assert first["queries"] == ["qa engineer"] and first["english_only"] is False
-    assert remote["source"] == "remote"
     assert seen["threshold"] == 77
     assert (config.MODEL, config.MIN_LEAD_SCORE) == ("opus", 45)
+
+
+def test_the_weekly_run_reads_the_sources_ticked_in_options(cli):
+    seen = cli(settings={"where": "Brno", "sources": ["linkedin", "remote"], "source": "czech"})
+    assert [s["source"].kinds for s in seen["searches"]] == [("linkedin", "remote")]
+
+
+def test_sources_typed_on_the_command_line_beat_options(cli):
+    seen = cli("--source", "linkedin", "--include-remote", settings={"where": "Brno", "sources": ["boards"]})
+    assert [s["source"].kinds for s in seen["searches"]] == [("linkedin", "remote")]      # typed by hand: both, as asked
 
 
 def test_command_line_flags_beat_saved_options(cli):

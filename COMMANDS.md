@@ -1,4 +1,4 @@
-# JobHelper — Command Cheat Sheet
+# JobHelper – Command Cheat Sheet
 
 Quick reference for every command. Run all of these from the project root with
 the virtual environment activated.
@@ -28,17 +28,17 @@ Your data lives in `~/Library/Application Support/JobHelper/data`; every `data/�
 file is inside that folder. (Older versions used the project's `data/`; the app moves it once and keeps
 the old folder as `data_moved_to_Library`.)
 
-Put your CV (English) in `data/cv/` — e.g. `data/cv/FirstnameLastname_CV_EN.docx`.
+Put your CV (English) in `data/cv/` – e.g. `data/cv/FirstnameLastname_CV_EN.docx`.
 
-**Important:** do NOT set `ANTHROPIC_API_KEY` — leaving it unset is what makes the
+**Important:** do NOT set `ANTHROPIC_API_KEY` – leaving it unset is what makes the
 app use your subscription instead of the paid API.
 
 **No terminal?** After `pip install` + `python app_qt.py`, the app's welcome
 card (and later the **Account** chip) handles the rest: Claude login, your job
-mailbox and its password, and picking your CV — so you can skip the `.env` and
+mailbox and its password, and picking your CV – so you can skip the `.env` and
 `data/cv/` steps.
 
-**Do this once after the first start** — save your recovery key (see section 10). In the
+**Do this once after the first start** – save your recovery key (see section 10). In the
 app: **Account** chip → *Data protection* → **Recovery key**. Or:
 
 ```bash
@@ -57,37 +57,37 @@ python app_qt.py                      # open the JobHelper window (native Qt app
 ```
 
 Inside the window:
-- **Run search** — runs Agents 1→4 (the robots work with their hands as each runs).
+- **Run search** – runs Agents 1→4 (the robots work with their hands as each runs).
   While it runs the button becomes **■ Stop**: the run ends after the step it is on
   (one search request, one job, one email) and everything finished before that is saved.
-- **When Claude's limit is used up** — at 99% of the 5-hour or 7-day window (or when Claude
+- **When Claude's limit is used up** – at 99% of the 5-hour or 7-day window (or when Claude
   says the limit is hit) the run **pauses** instead of failing job after job: everything
   done so far is saved, a warning window opens with a sound, and **Stop** is replaced by a
   grey **Resume** button whose tooltip says when the limit resets. When it has reset the
   button turns blue; press it and the run continues with the job it was on. A small
   **Stop** button next to it ends the run instead. From the command line `run.py` saves and
   exits with a message; run it again later and only the unfinished jobs are done.
-- **Scan email** — runs Agent 5 (Postman reads inbox replies), with a real progress bar.
-- **New Jobs / Applications / Responses / Analytics** — click to see tables;
+- **Scan email** – runs Agent 5 (Postman reads inbox replies), with a real progress bar.
+- **New Jobs / Applications / Responses / Analytics** – click to see tables;
   each row has *open* buttons for the cover letter, tailored CV, or Excel file.
-- **New Jobs rows** — *open ↗* opens the job posting in your browser (to apply),
+- **New Jobs rows** – *open ↗* opens the job posting in your browser (to apply),
   then *mark applied* moves the lead to Applications.
-- **Click any job row** — opens the job in full: the description, why it got its
+- **Click any job row** – opens the job in full: the description, why it got its
   score, which keywords from the posting are in your CV and which are not, notes,
   and buttons for the posting, CV, letter and their PDF copies.
-- **Full-time only** — Options switch (on by default) that hides part-time roles.
+- **Full-time only** – Options switch (on by default) that hides part-time roles.
   Jobs asking for up to 2 years of experience are kept: your internships count as experience.
-- **Email scan period** — Options → *Scan emails from the last N days* sets how far back
+- **Email scan period** – Options → *Scan emails from the last N days* sets how far back
   **Scan email** looks. Emails that were already read are skipped, so a long period
   costs nothing extra after the first scan.
-- **Change an application by hand** — in the job window: **Waiting / Interview / Offer /
+- **Change an application by hand** – in the job window: **Waiting / Interview / Offer /
   Rejected** buttons (for news that did not come through the scanned mailbox) and an
   **Applied on** date field (YYYY-MM-DD). A date you set is never changed by emails.
-- **Same application twice** — when one application was recorded twice (for example
+- **Same application twice** – when one application was recorded twice (for example
   "CSOB" from your letters folder and "ČSOB (KBC)" from an email), certain cases are merged
   automatically after each scan; uncertain ones show a card with **Merge into one** /
   **They are different**. Nothing is lost in a merge, and your own letter stays protected.
-- **Fewer Claude calls per search** — postings that are plainly another profession, need
+- **Fewer Claude calls per search** – postings that are plainly another profession, need
   another language or a far higher level are skipped before scoring (shown as *skipped*
   with the reason; **Score it anyway** sends one to the next run), and the rest are scored
   five postings per call. What counts as "another profession" follows the roles you look for
@@ -95,127 +95,127 @@ Inside the window:
   shows what the app takes as your profession, and you can pick it yourself there (the chips
   under "Kinds of role you want"; **Let the app decide** goes back). If nothing is picked and
   the app cannot tell, nothing is skipped for its profession. A language your CV shows at a working level is not a reason to skip.
-- **Closed postings** — a search also asks the pages of LinkedIn postings found earlier whether they
+- **Closed postings** – a search also asks the pages of LinkedIn postings found earlier whether they
   still accept applications (at most 40 pages per search, each posting at most every 3 days). A
   closed posting without documents goes to the filtered-out list with that reason; one that has a
   letter or CV stays in New Jobs, marked "no longer accepts applications".
-- **Second mailbox (optional)** — Account card → *Job email* → **Add** under "Second
+- **Second mailbox (optional)** – Account card → *Job email* → **Add** under "Second
   mailbox". Its replies are read in the same scan; one mailbox is enough if you only use one.
-- **Skip words** — Options → Search → *Skip titles with*: jobs whose title contains one of
+- **Skip words** – Options → Search → *Skip titles with*: jobs whose title contains one of
   these words are left out of the search (default: intern, internship). *…but keep titles
   with* lists exceptions that beat a skip word. Whole words only: "intern" does not match
   "Internal". A search role may not contain a word you skip.
-- **Responses** — click a reply to read it in full (what it says, the rejection reason, the
+- **Responses** – click a reply to read it in full (what it says, the rejection reason, the
   next step, subject and sender) and jump to its application.
-- **Analytics** — applications by status and reply emails by kind, each group adding up to
+- **Analytics** – applications by status and reply emails by kind, each group adding up to
   its total.
-- **Search, filter, sort** — New Jobs, Applications and Responses have a search box (company,
+- **Search, filter, sort** – New Jobs, Applications and Responses have a search box (company,
   role, place; all words must match), filter chips with counts (strong / moderate / stretch /
   no documents; or by status; or by kind of reply) and a sort menu. The title shows "12 of 116".
-- **Not interested** — in a lead's window. The job leaves the list, its app-written CV and
+- **Not interested** – in a lead's window. The job leaves the list, its app-written CV and
   letter go to an encrypted backup, and later searches do not bring it back (also not as a
   repost). The *not interested* filter chip in New Jobs lists them with **restore**.
-- **Edit letter** — in the job window, for letters the app wrote (never your own). Edit the five
+- **Edit letter** – in the job window, for letters the app wrote (never your own). Edit the five
   paragraphs, or **Rewrite this paragraph** with an optional note about what to change (asks
   Claude once or twice). Save rewrites the Word file and PDF with the same head, date and
   layout; the previous version is kept in an encrypted backup. Rule breaks in a hand edit
   are shown as notes, not refused.
-- **Insights** (left column) — worked out on your Mac, no Claude call: which kinds of role and
+- **Insights** (left column) – worked out on your Mac, no Claude call: which kinds of role and
   which sources got you interviews and which only rejections; how each search keyword performs
   (a keyword whose jobs never reach your letter score is marked *drop?*); and **Skills to
   learn**: technologies the postings ask for most that are not in your CV. That list is only
   shown; nothing from it is ever added to a CV or letter.
-- **Interview preparation** — in an application's window: **Prepare** asks Claude (once or
+- **Interview preparation** – in an application's window: **Prepare** asks Claude (once or
   twice) for about fourteen likely questions (half as HR asks them, half as someone who does
   the work asks them) with answers built only from your CV, questions to
   ask them, and topics to revise. It is saved with the job; **Copy all** puts it on the
   clipboard. An answer that claims something your CV lacks is marked "Check this answer".
-- **Help** — the button under Options has three tabs: **How it works** (ten short topics: what
+- **Help** – the button under Options has three tabs: **How it works** (ten short topics: what
   the app does, a normal week, scores and labels, the limit, privacy, what to do when something
   looks wrong), **What changed** (this project's CHANGELOG) and **Usage and problems** (every
   question asked of Claude so far, in all and by kind of work, and the last errors the app
   carried on after, with a button that shows the log file in Finder).
-- **Last run card, cost rows** — *You paid: subscription only* and *Same search via API: ≈ $…*
+- **Last run card, cost rows** – *You paid: subscription only* and *Same search via API: ≈ $…*
   (or *Same scan via API*): the estimated price of the last run alone with pay-per-use API billing.
-- **Last run card, Emails read** — how many messages the last scan went through and how many were
+- **Last run card, Emails read** – how many messages the last scan went through and how many were
   sent to Claude. **Options → Email scan → Look further back once** runs one longer scan.
-- **More about your work** (Options → About you) — what you really did in each job beyond the
+- **More about your work** (Options → About you) – what you really did in each job beyond the
   CV: tasks, tools, team, results (up to 4,000 characters, in English). Interview preparation
   and form answers treat it like the CV, so the work-experience part of the interview sheet
   gets as detailed as what you write here. Nothing is invented for you.
-- **About you** (Options) — *Right to work* and *You can start*: the only personal facts,
+- **About you** (Options) – *Right to work* and *You can start*: the only personal facts,
   besides your CV, that letters and interview answers may state. Left empty, they are not mentioned.
-- **Show in folder** (job window) — selects the CV, the letter or the single PDF in Finder (the
+- **Show in folder** (job window) – selects the CV, the letter or the single PDF in Finder (the
   PDF copy when there is one), so you can drag it into an application form.
 - **Notifications come from "JobHelper"**, with its icon. The first one makes a small helper
   app in `data/notifier/`; macOS may ask once whether JobHelper may show notifications.
-- **Notifications** (Options, on by default) — a macOS notification when a search or scan
+- **Notifications** (Options, on by default) – a macOS notification when a search or scan
   finishes or pauses on the limit while the app is in the background, and always for an
   interview invitation. The weekly run notifies too.
-- **Keep backups** (Options) — only the newest N backups in `data/backups/` are kept; older ones
+- **Keep backups** (Options) – only the newest N backups in `data/backups/` are kept; older ones
   are deleted for good at every start (0 = keep all). Weekly log files keep their last 400 lines.
-- **Back up everything** (Options → Notifications and storage) — **Back up now** (one encrypted
+- **Back up everything** (Options → Notifications and storage) – **Back up now** (one encrypted
   backup of the data, your CV, your letters, the documents and the rules), **Check backups**
   (restores one into a throwaway folder and compares it) and **Save a readable copy…** (the
   newest full backup, not encrypted, into an empty folder you choose). The same as
   `python status.py security backup-all`, `test-restore` and `restore`.
-- **A date to remember** (job window of an application) — an interview, deadline, test task or call with a
+- **A date to remember** (job window of an application) – an interview, deadline, test task or call with a
   date (`YYYY-MM-DD`), an optional time and a note. The next ones are listed under
   **Coming up** on the main screen; a macOS notification comes the day before and on the
   day (once each; the app must be open, and Notifications must be on). With a time set it
   also comes about three hours and one hour before.
-- **Paste a reply** (job window of an application) — for an answer that came on LinkedIn or in a company
+- **Paste a reply** (job window of an application) – for an answer that came on LinkedIn or in a company
   portal. It is filed like an email: one Claude call reads it, or the app's own wording
   rules when the limit is used up. The same text cannot be added twice.
-- **Notes about the company** (job window of an application; on a new job only when you already keep notes on that company) — who you spoke to, salary mentioned, what they
+- **Notes about the company** (job window of an application; on a new job only when you already keep notes on that company) – who you spoke to, salary mentioned, what they
   asked, free notes. Kept per company (`data/company_notes.json`, encrypted), so they show
   on every job at that company, also when you apply there again.
-- **Compare CV** (job window, when an adapted Word CV exists) — master CV on the left,
+- **Compare CV** (job window, when an adapted Word CV exists) – master CV on the left,
   adapted CV on the right, only the paragraphs that differ; replaced words are struck
   through, new words are bold.
-- **Week by week**, **How long companies take to decide**, **Why jobs score low** (Insights) —
+- **Week by week**, **How long companies take to decide**, **Why jobs score low** (Insights) –
   applications and replies per calendar week; days from applying to the first rejection or
   invitation (middle value, the point by which 4 of 5 decisions came, and the waiting
   applications past it); and what the scorer's explanations of low scores mention most.
   All counted locally, no Claude.
-- **What the postings pay** (Insights) — every posting in your lists that states pay,
+- **What the postings pay** (Insights) – every posting in your lists that states pay,
   converted to gross pay per month in your currency (yearly ÷ 12, other currencies at rough
   fixed rates), next to what you ask for, with the middle value.
-- **Salary you ask for** (Options → About you) — your own figure and currency, and under **A
+- **Salary you ask for** (Options → About you) – your own figure and currency, and under **A
   different figure for** another figure for a kind of role ("support"). With none given the app
   uses its own estimate, which exists only for software roles in Czechia.
-- **Country** (Options → Search) — which postings of company career sites and which remote jobs
+- **Country** (Options → Search) – which postings of company career sites and which remote jobs
   count as "here": your city, this country, its region ("Europe", "EMEA") or remote without
   being tied to another part of the world. Empty = the country of the city.
-- **File under…** (a reply's window) — files a reply under another application, or under none.
+- **File under…** (a reply's window) – files a reply under another application, or under none.
   The application it moves to follows the reply; the one it leaves keeps its status.
-- **Write CV and letter** (job window) — writes the documents for one new job on request, for
+- **Write CV and letter** (job window) – writes the documents for one new job on request, for
   example one below your limit. A letter of your own is never replaced.
-- **Review these … one by one** (New Jobs) — walks through the jobs listed now (after the search
+- **Review these … one by one** (New Jobs) – walks through the jobs listed now (after the search
   box and the filter chip) in one window: **Not interested** or **Mark applied** decides and
   brings the next, **Next ›** leaves a job as it is.
-- **Check your adapted CV / cover letter** (job window) — shown when a document states a
+- **Check your adapted CV / cover letter** (job window) – shown when a document states a
   two-word term of the posting as your experience although your CV has neither word. The app
   asked for it to be removed once; what is left is yours to judge.
-- **Also archived mail and spam** (Options, off by default) — the email scan also reads
+- **Also archived mail and spam** (Options, off by default) – the email scan also reads
   the mailbox's archive ("All Mail") and spam folders, never Sent or Drafts, and still
   read-only. Turn it on if replies get archived by a filter or land in spam.
-- **Filtered out · see why** (Last run card) — every posting the last search removed before
+- **Filtered out · see why** (Last run card) – every posting the last search removed before
   scoring, each with its reason (located in the United States, asks for 6+ years, a word you
   skip, part-time, duplicate, senior title, other language, too old, already applied, closed).
   Filter by reason, search, and open the posting to check a rule. **bring back** adds a posting to New Jobs so
   the next search run scores it (not offered for duplicates, closed postings and roles you already applied for). The list is replaced by
   each search (`data/filtered_out.json`, encrypted, at most 600 rows).
-- **Kinds of role you want / do not want** (Options) — tells the scorer your direction. The list
+- **Kinds of role you want / do not want** (Options) – tells the scorer your direction. The list
   you want starts from the roles read from your CV. A role in another field that merely accepts
   your degree scores 40 at most; a kind you do not want scores 20 at most. A posting whose title
   names a kind you do not want (and none you want) is skipped before scoring, with that reason.
-- **Score again** (job window) and **Score all again** (New Jobs list) — scores a new job, or every
+- **Score again** (job window) and **Score all again** (New Jobs list) – scores a new job, or every
   scored new job, again with the rules as they are now (your direction, the language check).
   One Claude call per job, or one per five when all are done; "all" runs like a search (progress,
   Stop, pause on the limit). Only the score and its reason change; the job window keeps showing
   what the score was before.
-- **What a score rests on** — a job the app could only read the title of is marked "scored from the
+- **What a score rests on** – a job the app could only read the title of is marked "scored from the
   title only", scores 40 at most and gets no letter or CV; one with only a short summary is marked
   "scored from a short summary". A search tries each empty or short posting again before scoring
   (three searches at most per job), and **Read it again** in the job window does the same for one
@@ -226,7 +226,7 @@ Inside the window:
   site still gives nothing, **paste the posting's text** there (200 to 20,000 characters). Either
   way the job is then scored again by itself (one Claude call); if a search is running, press
   **Score again** when it has finished. A job that was scored again shows "was 55" under its score.
-- **Documents from a higher score** — a new job that now scores below "Write letters above" but still
+- **Documents from a higher score** – a new job that now scores below "Write letters above" but still
   has a letter and CV is marked in the list. **Move documents to backup** (job window) puts the files
   the app wrote into `data/backups/below_your_limit/`; a letter of your own is never moved.
   **Move them to backup** at the top of New Jobs does it for all such jobs at once, after naming them.
@@ -235,27 +235,27 @@ Inside the window:
   Moved documents are never cleaned up by "Keep backups". **Options → Notifications and storage →
   Moved documents older than … days → Remove** moves the old ones to the Trash, after asking with
   the count (never copies younger than 7 days). Empty the Trash to free the space.
-- **Required-language check** — after scoring, the app itself looks for a required language your CV
+- **Required-language check** – after scoring, the app itself looks for a required language your CV
   does not show at a working level (basic, A1 and A2 do not count) and lowers the score to 25,
   with the reason in the job window. A language named as a plus is ignored.
-- **Skip levels above yours** and **Skip jobs asking for … years** (Options) — the title
+- **Skip levels above yours** and **Skip jobs asking for … years** (Options) – the title
   words that mark a role above your level (senior, lead, manager, …) and the number of years
   of experience from which a posting is skipped (0 = never). Both start from the level in
   your CV: the usual list and 4 years for a junior, 7 for mid, nothing for a senior. Change
   them freely; a title that itself says junior or graduate is never skipped by a level word.
-- **Before you apply** (top of a new job's window) — the steps in order: open the posting,
+- **Before you apply** (top of a new job's window) – the steps in order: open the posting,
   check the CV, check the letter, make one PDF, draft the answers for the form. Each step you do gets a
   tick that is kept with the job; **Mark applied** is at the end.
-- **One PDF** (job window) — the letter followed by the adapted CV as one file, written to
+- **One PDF** (job window) – the letter followed by the adapted CV as one file, written to
   `data/combined/` and opened. Needs the PDF copies (LibreOffice makes them).
-- **Add to calendar** (job window, next to a saved date) — writes `data/calendar/<company>-<kind>-<date>.ics`
+- **Add to calendar** (job window, next to a saved date) – writes `data/calendar/<company>-<kind>-<date>.ics`
   and opens it; confirm it in Calendar and it syncs to your phone with its own reminders
   (a day and an hour before; for a date without a time, 9:00 the day before and on the day).
-- **Thank-you draft** (job window) — offered from the day of an interview or call, for an
+- **Thank-you draft** (job window) – offered from the day of an interview or call, for an
   application that is still open. Plain template, no Claude; copy it, add one real detail,
   send it yourself, then **Mark as sent**.
 - **The assistant** (the light-blue robot at the end of the assembly line, or **Fill the form** in a job's
-  window) — fills in the application form that is open in your browser (Chrome, Brave, Edge, Opera or Safari; not Opera GX or Firefox): your details from its **My details** page,
+  window) – fills in the application form that is open in your browser (Chrome, Brave, Edge, Opera or Safari; not Opera GX or Firefox): your details from its **My details** page,
   answers to open questions drafted from your CV for the job. It writes into empty fields only, lists what it left
   and why, and never sends the form. Once, in the browser: turn on Allow JavaScript from Apple Events (the My details page says where that switch is).
   It also chooses from lists, yes/no buttons and menus when your details or CV settle the answer, reuses answers
@@ -263,30 +263,30 @@ Inside the window:
   about a job or the app (one Claude call). It can be talked to in your own words: it answers from your data, and
   asks for your yes before it marks a job applied, sets a date, changes a status or saves a rewrite. It reviews a
   filled form, lets you practise an interview, and tells you what needs attention when the app opens.
-- **Form answers** (job window, and the last step of **Before you apply**) — paste the questions
+- **Form answers** (job window, and the last step of **Before you apply**) – paste the questions
   of that job's application form, one per line, and Claude drafts the answers in one call from
   your master CV, the posting and *About you* in Options. They are kept with the job and can be
   edited and copied. What the app cannot know (a notice period, a reference) is written in
   square brackets and marked **Check**; a claim your CV does not back is marked too.
-- **The last 7 days** (top of Analytics) — new jobs, ready to send, applications sent, replies,
+- **The last 7 days** (top of Analytics) – new jobs, ready to send, applications sent, replies,
   follow-ups due, thank-you notes, dates coming up. `python status.py sync --summary` prints
   the same and sends it as one notification; the weekly run does this.
-- **Start-up check** — at launch the app checks the data key, the job list, the replies
+- **Start-up check** – at launch the app checks the data key, the job list, the replies
   database, saved Options, the rule files and template, the master CV, write access to its
   folders and the Claude sign-in. All well: you see nothing. Otherwise one red line above the
   assembly line says what is wrong and what to do (**Show all** lists every check).
-- **Follow-up reminders** — an application still *waiting* with no reply for N days
+- **Follow-up reminders** – an application still *waiting* with no reply for N days
   (Options → *Remind me after*, default 10, 0 = never; counted from the day you applied,
   the company's last email or your last follow-up; never for applications whose date is
   unknown, and not after 45 days of silence) gets a **follow up** badge and
   is listed first; the sidebar shows how many. In the job view, **Draft follow-up**
   writes a short email for you to **Copy** and send yourself (the app never sends
   mail); **Mark as followed up** restarts the count.
-- **Options** — macOS-style settings: city (EU-city picker) and country, job source,
+- **Options** – macOS-style settings: city (EU-city picker) and country, job sources (any combination),
   **search keywords** (add/remove the roles Scout searches for, with suggestions),
   date window, score thresholds, and model. Saved (encrypted) to `data/ui_settings.json`;
   `run.py` and the weekly run use the same saved Options.
-- **Welcome screen / Account chip** — the app opens on a short splash, then a
+- **Welcome screen / Account chip** – the app opens on a short splash, then a
   welcome card showing Claude, job email, master CV and data protection; press
   **Start** (or Enter) to enter. The **Account** chip in the left column reopens the
   same card: a *Sign in with Claude* button, the job mailbox and its password (any
@@ -295,16 +295,16 @@ Inside the window:
   mailboxes, a CV picker (or drop the file on the card) that copies it into `data/cv/`,
   **Recovery key**, and, when a protected file was changed outside the app, **See what
   changed** and **Approve** (section 10). Russian mail services are never used.
-- **Status bar and stepper** — while a run is going you see the current step, a
+- **Status bar and stepper** – while a run is going you see the current step, a
   progress bar with percent and "6 / 14 jobs", and the elapsed time.
-- **Weekly run card** — click it to turn the weekly schedule on/off and pick the
-  day + time (writes the macOS LaunchAgent for you — see section 9).
-- **Usage left** — your 5-hour / 7-day subscription windows; refreshes on open and
+- **Weekly run card** – click it to turn the weekly schedule on/off and pick the
+  day + time (writes the macOS LaunchAgent for you – see section 9).
+- **Usage left** – your 5-hour / 7-day subscription windows; refreshes on open and
   with the **↻ refresh** button. With less than 20% left it also shows when the window resets; when Claude
   has refused a call it shows **0% left** in red until that time.
 - Hover any robot for its name, role, and latest result.
 
-Everything it does is the same as the commands below — the window just wraps them.
+Everything it does is the same as the commands below – the window just wraps them.
 If you use the app, sections 0, 4, 7 and 9 below are optional (the app covers them).
 Section 10 (security) is worth reading once either way.
 
@@ -335,6 +335,9 @@ python run.py --no-tailor-cv          # skip the per-job tailored CVs (letters o
 
 ### Choose the job source
 
+Without these flags, `run.py` and the weekly run read the **Job sources** selected in Options.
+Typed here, they win; `--include-remote` adds the remote boards to any `--source`.
+
 ```bash
 python run.py --source czech          # jobs.cz + prace.cz + LinkedIn + your career sites (default)
 python run.py --source linkedin       # LinkedIn only
@@ -362,7 +365,7 @@ Supported ATS platforms (public APIs): **greenhouse**, **lever**,
 (e.g. `boards.greenhouse.io/gitlab` → `gitlab`). See `examples/companies.example.json`.
 
 **Not supported:** SAP (jobs.sap.com) and Microsoft careers block scraping. For
-those, set up their own **job agent / email alert** on the company site — Agent 5
+those, set up their own **job agent / email alert** on the company site – Agent 5
 reads the reply emails into your tracker (`python status.py sync`).
 
 ---
@@ -388,13 +391,13 @@ Valid statuses: `found` · `letter_ready` (leads, in **new_jobs.xlsx**) ·
 **applications.xlsx**).
 
 **Two files:**
-- `new_jobs.xlsx` — fresh leads from search you haven't applied to yet. Companies
+- `new_jobs.xlsx` – fresh leads from search you haven't applied to yet. Companies
   you've already applied to or been rejected by are automatically excluded.
-- `applications.xlsx` — applications you've sent. Status starts at `waiting`;
+- `applications.xlsx` – applications you've sent. Status starts at `waiting`;
   when an email reply arrives, `sync` updates it (interview / rejected / offer)
   and fills the interview-progress path.
 
-When you apply to a lead, run `apply <id>` — it moves from new_jobs.xlsx to
+When you apply to a lead, run `apply <id>` – it moves from new_jobs.xlsx to
 applications.xlsx as `waiting`.
 
 ---

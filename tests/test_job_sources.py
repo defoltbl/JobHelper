@@ -61,30 +61,58 @@ def test_the_api_sources_turn_their_answers_into_job_records(monkeypatch):
     assert [j["id"] for j in found] == ["jooble-1"] and found[0]["source"] == "jooble/jobs.cz"
 
 
-# ── remote boards on top of the chosen source ───────────────────────────────
-@pytest.mark.parametrize("source, on, added", [
-    ("czech", True, True), ("czech", False, False), ("", True, True),
-    ("linkedin", True, False), ("careers", True, False),          # "… only" stays only that
-    ("all", True, False), ("remote", True, False),                # they hold the remote boards already
-    ("czech", "yes", False)])
-def test_remote_boards_are_added_only_where_they_add_something(source, on, added):
-    """"+ Remote" stayed on the main screen, and the boards were searched, with "LinkedIn only" or "career sites only"."""
-    from jobhelper import agent2_search
-    assert agent2_search.remote_added(source, on) is added
+# ── which kinds of job source a search reads ────────────────────────────────
+@pytest.mark.parametrize("opts, kinds", [
+    ({"source": "czech"}, ("boards", "linkedin", "careers")),
+    ({"source": "czech", "include_remote": True}, ("boards", "linkedin", "careers", "remote")),
+    ({"source": "linkedin", "include_remote": True}, ("linkedin",)),          # "LinkedIn only" stays only that
+    ({"source": "careers", "include_remote": True}, ("careers",)),
+    ({"source": "all"}, ("boards", "linkedin", "careers", "remote", "adzuna", "jooble")),
+    ({"sources": ["linkedin", "boards"]}, ("boards", "linkedin")),             # any combination, always in one order
+    ({"sources": ["remote"], "source": "czech", "include_remote": False}, ("remote",)),   # the newer setting wins
+    ({"sources": ["nonsense"]}, ("boards", "linkedin", "careers")),            # nothing known: the default
+    ({}, ("boards", "linkedin", "careers"))])
+def test_the_choice_reads_the_new_and_the_older_settings(opts, kinds):
+    assert job_sources.SourceChoice.from_options(opts).kinds == kinds
 
 
-def test_the_search_the_options_and_the_window_use_one_rule(isolate_data):
+def test_a_search_asks_every_source_of_the_kinds_picked(monkeypatch):
+    monkeypatch.setattr(scrapers_ats, "load_companies", lambda: [{"name": "Acme"}])
+    def names(choice, country="czechia"):
+        return [s.name for s in job_sources.sources_for(choice, country=country)]
+    choice = job_sources.SourceChoice
+    assert names(choice(["linkedin", "boards"])) == ["jobs.cz", "prace.cz", "linkedin"]
+    assert names(choice(["linkedin"])) == ["linkedin"] and names(choice(["careers"])) == ["careers"]
+    assert names(choice(["remote"])) == ["remoteok", "weworkremotely"]
+    assert names("czech") == ["jobs.cz", "prace.cz", "linkedin", "careers"] and names("linkedin") == ["linkedin"]   # the older values still work
+    assert names(choice(["boards"]), "germany") == []                           # Czech boards are for Czechia only, and that is said
+    assert job_sources.left_out(choice(["boards", "linkedin"]), "germany") == [(["jobs.cz", "prace.cz"], ("czechia",))]
+
+
+def test_the_names_shown_and_offered():
+    choice = job_sources.SourceChoice
+    assert choice(["remote", "linkedin"]).names() == ["LinkedIn", "Remote boards"]
+    assert [k["name"] for k in choice.offered()] == ["Czech boards", "LinkedIn", "Career sites", "Remote boards"]
+    assert choice.known("boards") and choice.known("adzuna") and not choice.known("czech")
+
+
+def test_the_search_the_weekly_run_the_options_and_the_window_use_one_choice(isolate_data):
     import json
     from pathlib import Path
-    from jobhelper import config, ui_api, vault
+    from jobhelper import ui_api, vault
     root = Path(__file__).resolve().parent.parent
-    assert 'agent2_search.remote_added(o["source"], o.get("include_remote"))' in (root / "jobhelper" / "bridge_runs.py").read_text(encoding="utf-8")
-    assert "optsData.remote_added === true" in (root / "ui_qt" / "NavPanel.qml").read_text(encoding="utf-8")
-    assert "bridge.remoteCanBeAdded(srcCombo.currentValue)" in (root / "ui_qt" / "OptionsDialog.qml").read_text(encoding="utf-8")
+    assert "source=job_sources.SourceChoice.from_options(o)" in (root / "jobhelper" / "bridge_runs.py").read_text(encoding="utf-8")
+    assert "job_sources.SourceChoice.from_options(" in (root / "run.py").read_text(encoding="utf-8")
+    assert "optsData.source_names" in (root / "ui_qt" / "NavPanel.qml").read_text(encoding="utf-8")
+    assert "bridge.sourceKinds()" in (root / "ui_qt" / "OptionsDialog.qml").read_text(encoding="utf-8")
     config.ensure_dirs()
-    for source, added in (("czech", True), ("linkedin", False), ("careers", False)):
-        vault.write_text(config.DATA_DIR / "ui_settings.json", json.dumps({"source": source, "include_remote": True}))
-        assert ui_api.Api().options()["remote_added"] is added, source
-    clean, problem = ui_api.Api().check_options({"source": "czech", "remote_added": True})
-    assert problem == "" and "remote_added" not in clean                  # worked out when read, never saved
-
+    vault.write_text(config.DATA_DIR / "ui_settings.json", json.dumps({"source": "czech", "include_remote": True}))
+    o = ui_api.Api().options()
+    assert o["sources"] == ["boards", "linkedin", "careers", "remote"] and o["source_names"] == ["Czech boards", "LinkedIn", "Career sites", "Remote boards"]
+    vault.write_text(config.DATA_DIR / "ui_settings.json", json.dumps({"sources": ["linkedin", "boards"]}))
+    assert ui_api.Api().options()["source_names"] == ["Czech boards", "LinkedIn"]
+    check = ui_api.Api().check_options
+    assert check({"sources": []})[1] == "Choose at least one job source."
+    assert "not a job source" in check({"sources": ["somewhere"]})[1]
+    clean, problem = check({"sources": ["remote", "boards"], "source_names": ["x"]})
+    assert problem == "" and clean["sources"] == ["boards", "remote"] and "source_names" not in clean     # worked out when read, never saved

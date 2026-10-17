@@ -5,7 +5,7 @@ Format: a `## date` line, then one `- ` line per change; `**words**` are shown i
 
 ## 17 October 2026
 
-- **"LinkedIn only" and "Company career sites only" now search only that**: the "Include remote jobs" switch added the remote boards to them too, and "+ Remote" stayed on the main screen. The switch now sits under **Job source** and shows only where it adds something.
+- **Job sources in any combination**: Options now has a chip for each kind (Czech boards, LinkedIn, Career sites, Remote boards); select one or more. The main screen shows the names of the sources a search reads instead of "+ Remote". Before, "LinkedIn only" and "Company career sites only" also read the remote boards when "Include remote jobs" was on.
 
 ## 16 October 2026
 

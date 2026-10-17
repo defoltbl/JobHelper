@@ -131,8 +131,8 @@ class JoobleSource(JobSource):
 def all_sources(max_age_days: int = 0) -> list[JobSource]:
     """Every source the app knows, in the order a search asks them."""
     return [
-        Board("jobs.cz", scrapers_cz.jobs_cz, ("czech", "all"), countries=("czechia",)),     # Czech postings only
-        Board("prace.cz", scrapers_cz.prace_cz, ("czech", "all"), countries=("czechia",)),
+        Board("jobs.cz", scrapers_cz.jobs_cz, ("czech", "boards", "all"), countries=("czechia",)),     # Czech postings only
+        Board("prace.cz", scrapers_cz.prace_cz, ("czech", "boards", "all"), countries=("czechia",)),
         LinkedInSource(max_age_days),
         Board("remoteok", scrapers_remote.remoteok, ("remote", "all"), forget=scrapers_remote.forget_remoteok),
         Board("weworkremotely", scrapers_remote.weworkremotely, ("remote", "all"), forget=scrapers_remote.forget_wwr),
@@ -142,7 +142,66 @@ def all_sources(max_age_days: int = 0) -> list[JobSource]:
     ]
 
 
-def sources_for(source: str = "czech", max_age_days: int = 0, country: str = "") -> list[JobSource]:
+class SourceChoice:
+    """Which kinds of job source a search reads: any combination of the ones Options offers (the Czech
+    boards, LinkedIn, the career sites, the remote boards). The search, the weekly run and the main
+    screen's chips all read it from here, so they cannot disagree.
+
+    Older settings had one "Job source" value and an "Include remote jobs" switch; they are read as the
+    same choice, so nothing changes until the person changes it."""
+
+    KINDS = (("boards", "Czech boards"), ("linkedin", "LinkedIn"), ("careers", "Career sites"), ("remote", "Remote boards"))
+    EXTRA = (("adzuna", "Adzuna"), ("jooble", "Jooble"))          # with a key, from the command line
+    _LEGACY = {"czech": ("boards", "linkedin", "careers"), "linkedin": ("linkedin",), "careers": ("careers",),
+               "remote": ("remote",), "adzuna": ("adzuna",), "jooble": ("jooble",),
+               "all": ("boards", "linkedin", "careers", "remote", "adzuna", "jooble")}
+
+    def __init__(self, kinds) -> None:
+        wanted = set(kinds or ())
+        self._kinds = tuple(key for key, _name in self.KINDS + self.EXTRA if key in wanted)
+
+    @classmethod
+    def offered(cls) -> list[dict[str, str]]:
+        """The kinds Options lets you pick, in their order: [{key, name}]."""
+        return [{"key": key, "name": name} for key, name in cls.KINDS]
+
+    @classmethod
+    def known(cls, key) -> bool:
+        return any(key == k for k, _name in cls.KINDS + cls.EXTRA)
+
+    @classmethod
+    def from_options(cls, opts: dict[str, Any]) -> "SourceChoice":
+        chosen = opts.get("sources")
+        if isinstance(chosen, (list, tuple)) and any(cls.known(k) for k in chosen):
+            return cls(chosen)
+        source = str(opts.get("source") or "czech")
+        kinds = cls._LEGACY.get(source, cls._LEGACY["czech"])
+        if opts.get("include_remote") is True and source == "czech":   # the old switch added them to the mixed source only
+            kinds += ("remote",)
+        return cls(kinds)
+
+    @property
+    def kinds(self) -> tuple[str, ...]:
+        return self._kinds
+
+    def names(self) -> list[str]:
+        """The names to show, e.g. ["Czech boards", "LinkedIn"]."""
+        return [name for key, name in self.KINDS + self.EXTRA if key in self._kinds]
+
+    def includes(self, source: "JobSource") -> bool:
+        return any(kind in source.groups for kind in self._kinds)
+
+
+def _tags(source) -> set[str]:
+    """The groups a setting stands for: one old value ("czech", "all") or a SourceChoice / list of kinds."""
+    if isinstance(source, SourceChoice):
+        return set(source.kinds)
+    if isinstance(source, str):
+        return {source}
+    return set(source or ())
+
+
+def sources_for(source="czech", max_age_days: int = 0, country: str = "") -> list[JobSource]:
     """The sources a search uses for Options' "Job source" setting:
 
       "czech"    jobs.cz + prace.cz + LinkedIn + your companies' career sites (default; the Prague market)
@@ -154,15 +213,18 @@ def sources_for(source: str = "czech", max_age_days: int = 0, country: str = "")
       "all"      every source that is set up
 
     `max_age_days` limits LinkedIn to recent postings. `country` is where the search is: a board for
-    another country only (jobs.cz, prace.cz outside Czechia) is left out, see `left_out`."""
-    return [s for s in all_sources(max_age_days) if source in s.groups and s.available() and s.serves(country)]
+    another country only (jobs.cz, prace.cz outside Czechia) is left out, see `left_out`. `source` may
+    also be a SourceChoice (or a list of its kinds): then every source of any chosen kind is asked."""
+    tags = _tags(source)
+    return [s for s in all_sources(max_age_days) if tags & set(s.groups) and s.available() and s.serves(country)]
 
 
-def left_out(source: str, country: str) -> list[tuple[list[str], tuple[str, ...]]]:
+def left_out(source, country: str) -> list[tuple[list[str], tuple[str, ...]]]:
     """The sources of this setting that a search in `country` does not use, because they are for another
     country: [(their names, the countries they are for)], one entry per set of countries."""
     grouped: dict[tuple[str, ...], list[str]] = {}
+    tags = _tags(source)
     for s in all_sources():
-        if source in s.groups and not s.serves(country):
+        if tags & set(s.groups) and not s.serves(country):
             grouped.setdefault(s.countries, []).append(s.name)
     return [(names, served) for served, names in grouped.items()]
