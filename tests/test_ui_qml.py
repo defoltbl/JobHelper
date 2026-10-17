@@ -1146,7 +1146,8 @@ def test_remote_jobs_are_kept_in_your_country_with_added_countries_or_anywhere(u
     ui.js("dropRemote('germany')", dialog)
     assert plain(ui.js("optDialog.collect().options.remote_countries", dialog)) == ["south korea"]
     ui.js("remoteWhere = 'world'", dialog)
-    assert ui.find("remoteCountries").property("visible") is False and "Every remote job is kept" in ui.find("remoteNote").property("text")
+    assert ui.find("remoteCountries").property("visible") is True                       # added countries count in both choices
+    assert "any part of the world" in ui.find("remoteNote").property("text") and "except for these" in ui.find("remoteNote").property("text")
     ui.js("remoteWhere = 'country'", dialog)
     start = ui.bridge.options()
     ui.js("optSaveBtn.clicked()", dialog)

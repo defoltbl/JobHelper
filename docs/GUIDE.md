@@ -1870,7 +1870,7 @@ Table 16.1 lists the Search settings.
 |---|---|---|---|
 | **City** | Where to search | A city name | The app will not search without one |
 | **Country** | Which postings count as "here", from the career site of a company. They can be in the city, anywhere in this country, or in the region of the country ("Europe", "EMEA"). **Remote jobs** uses this country too | A country's name in English. Empty = the country of the city, shown in grey | Type it when the field says that it does not know the city. Also type it when you want jobs from a neighbouring country |
-| **Remote jobs** | Which remote jobs a search keeps, from all job sources. **In** your country keeps a remote job that is open to your country or to all countries. Add countries to keep their remote jobs too. **Anywhere in the world** keeps all remote jobs | In your country, with added countries; or anywhere in the world | Add a country when you can work for a company there. Select anywhere when all time zones suit you |
+| **Remote jobs** | Which remote jobs a search keeps, from all job sources. A job open to all countries is always kept. A job for one country is kept only for your country and the countries you add. **In** your country keeps a job for a part of the world that your country is in. **Anywhere in the world** keeps a job for any part of the world | In your country or anywhere in the world, with added countries | Add a country when you have the right to work there. Select anywhere when all time zones suit you |
 | **Job sources** | Which job boards are read. Select one or more: a search reads all that you select. The app reads the Czech boards only for a city in Czechia. For a city in another country, the log of the run says that they were not used | Czech boards, LinkedIn, Career sites, Remote boards, in any combination | More sources find more and take longer |
 | **Search roles** | The words typed into the job boards, in English | One or more roles | Too few results: add a role. Too many poor ones: remove one |
 | **Skip titles with** | Words that drop a posting by its title | Words | To get rid of a kind of posting that keeps appearing |
@@ -1886,9 +1886,10 @@ Table 16.1 lists the Search settings.
 
 ### Remote jobs
 
-A remote job is often open to people in some countries only, for example "Remote, Germany". The
-search keeps a remote job when it is open to your country or to all countries. To keep the remote
-jobs of more countries, add those countries (Figure 16.2).
+A remote job is often open to people in some countries only, for example "Remote, Germany" or
+"USA Only". You must usually live in that country or have the right to work there. Thus the search
+skips such a job, unless the country is your country. To keep the remote jobs of more countries,
+add those countries (Figure 16.2). The added countries apply to both choices.
 
 ![The countries for remote jobs](img/34_remote_countries.png)
 
@@ -1896,7 +1897,7 @@ jobs of more countries, add those countries (Figure 16.2).
 
 To add countries:
 
-1. In Options, under **Remote jobs**, select **In** and the name of your country.
+1. In Options, find **Remote jobs**.
 2. Click **+ Add countries**. The window opens.
 3. To find a country, type its name or select a part of the world.
 4. Select each country that you want. Your own country is always included.
@@ -1905,8 +1906,9 @@ To add countries:
 To remove a country, click the **✕** on its name. You can add up to 40 countries.
 
 > **Note**
-> A posting that names a region, for example "Remote – EMEA", is kept when your country or an
-> added country is in that region. A job on site in an added country is not kept.
+> A posting that names a part of the world, for example "Remote – EMEA", is kept when your country
+> or an added country is in it. With **Anywhere in the world**, it is always kept. A job on site in
+> an added country is not kept.
 
 ### Your profession
 
