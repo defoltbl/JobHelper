@@ -53,6 +53,8 @@ python scripts/push_check.py                                       # before ever
 - Version numbers follow semantic versioning: a fix only is `1.0.1`, new features `1.1.0`, a change
   that breaks saved data or habits `2.0.0`. The number is `app_info.VERSION`.
 - Never commit to `main`: each change is a branch and a pull request that merges only with green CI.
+- A new push to a pull request cancels that pull request's older CI run (`concurrency` in
+  `.github/workflows/tests.yml`); a run on `main` is never cancelled.
 - Each pull request adds its lines to [CHANGELOG.md](CHANGELOG.md) under `## Unreleased`.
 - To release, one pull request renames `## Unreleased` to `## X.Y.Z – <date>` and sets
   `app_info.VERSION`. After it is merged: `git tag -a vX.Y.Z -m "JobHelper X.Y.Z"` on that commit of

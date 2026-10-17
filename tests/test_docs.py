@@ -389,3 +389,6 @@ def test_ci_runs_what_the_readme_says_on_a_mac_with_the_locked_packages():
     assert "ANTHROPIC_API_KEY" not in workflow and "secrets." not in workflow        # the tests need no key at all
     assert "actions/checkout@v7" in workflow and "actions/setup-python@v7" in workflow     # Node 24; Node 20 actions stop in Sep 2026
     assert "if: failure()" in workflow and "::error title=" in workflow and "GITHUB_STEP_SUMMARY" in workflow   # failures readable without a sign-in
+    # a new push to a pull request cancels its older run, but a run on main always finishes
+    assert "group: tests-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}" in workflow
+    assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in workflow

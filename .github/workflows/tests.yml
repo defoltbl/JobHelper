@@ -11,6 +11,13 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels that pull request's older run: only its latest commit counts for the
+# "Protect main" ruleset, and an outdated run would hold one of the few Mac runners. Each run on main has a group
+# of its own (its run id), so a run on main is never cancelled or replaced, also when merges come close together.
+concurrency:
+  group: tests-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     runs-on: macos-latest
