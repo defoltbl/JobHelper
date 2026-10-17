@@ -489,6 +489,19 @@ class JobSlots:
             return {"ok": False, "msg": "A search or scan is running. Try again when it has finished."}
         return self._api.fix_problem(action)
 
+    @Slot(result=str)
+    def notificationPermission(self):
+        """Whether macOS shows JobHelper's notifications: "allowed", "off", "not asked" or "unknown"."""
+        return self._api.notification_permission()
+
+    @Slot(result="QVariantMap")
+    def testNotification(self):
+        return self._api.test_notification()
+
+    @Slot()
+    def openNotificationSettings(self):
+        self._api.open_notification_settings()
+
     @Slot(result="QVariantList")
     def changelog(self):
         return self._api.changelog()

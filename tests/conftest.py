@@ -99,8 +99,7 @@ def safe_environment(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(llm, "_ask_async", no_claude)         # never spend the subscription from a test
     from jobhelper import notify
     monkeypatch.setattr(notify, "_run", lambda cmd: None)     # never show a real notification from a test
-    monkeypatch.setattr(notify, "ensure_app", lambda: None)   # nor build the helper app
-    monkeypatch.setattr(notify, "_open", lambda app: False)   # nor start it
+    monkeypatch.setattr(notify.AppNotifier, "of_the_app", classmethod(lambda cls: None))   # nor the app's own way
     import types
 
     from jobhelper import api_core, api_system  # noqa: F401

@@ -71,6 +71,7 @@ python scripts/push_check.py                                       # before ever
 | `jobhelper/qt_bridge.py`, `bridge_*.py` | Slots and signals between the window and the back end |
 | `ui_qt/` | The window, one QML file per dialog or part |
 | `widget/` | The macOS widget (Swift) and the library that asks macOS to redraw it |
+| `macos/` | Swift for the app's own notifications (`Notify.swift`), built into the app as a library |
 | `tests/` | The tests; `guide_shots.py` takes the user guide's pictures |
 | `scripts/` | Building and checking the app, the PDFs, the diagrams, the push check |
 | `docs/` | [User guide](docs/GUIDE.md), [technical documentation](docs/CODE.md), [notes and limits](docs/NOTES.md) |

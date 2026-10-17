@@ -1175,6 +1175,26 @@ def test_remote_jobs_are_kept_in_your_country_with_added_countries_or_anywhere(u
     assert ui.warnings == []
 
 
+def test_options_says_in_red_when_macos_hides_the_notifications(ui):
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    row = ui.find("notifyOffRow")
+    assert ui.js("optDialog.notifyPermission", dialog) == "unknown" and row.property("visible") is False   # tests: not the built app
+    ui.js('notifySw.checked = true; optDialog.notifyPermission = "off"', dialog)
+    assert _until_true(ui, lambda: row.property("visible") is True)
+    assert "System Settings → Notifications → JobHelper" in ui.find("notifyOff").property("text")
+    ui.js("notifySw.checked = false", dialog)                                # switched off in the app: nothing to say
+    assert _until_true(ui, lambda: row.property("visible") is False)
+    ui.js('notifySw.checked = true; optDialog.notifyPermission = "allowed"', dialog)
+    assert row.property("visible") is False
+    ui.js("notifyTestBtn.clicked()", dialog)                                 # the plain way in tests: never a real notification
+    assert ui.find("notifyNote").property("visible") is True and ui.find("notifyNote").property("text") != ""
+    ui.js("confirmClose = true; close()", dialog)
+    _until_closed(ui, "optDialog")
+    assert ui.warnings == []
+
+
 def test_the_main_screen_names_the_sources_a_search_reads(ui):
     def chips():
         return [item.property("text") for item in ui.seen("navPanel") if isinstance(item.property("text"), str)]

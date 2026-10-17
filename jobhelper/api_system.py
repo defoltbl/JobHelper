@@ -28,6 +28,24 @@ class SystemService:
         self._app, self._editor, self._cv, self._desktop = app, editor, cv, desktop
         self._widget_reloader = None              # made on the first widget update: it remembers what it last asked macOS to redraw
 
+    # ── notifications: whether macOS shows them ─────────────────
+    _NOTIFICATION_SETTINGS = "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+
+    def notification_permission(self):
+        """"allowed", "off" (turned off in System Settings), "not asked" or "unknown" (outside the installed app)."""
+        from . import notify
+        return notify.notifier().permission()
+
+    def test_notification(self):
+        """One test notification from Options, with what macOS did in words."""
+        from . import notify
+        return notify.send_test()
+
+    def open_notification_settings(self):
+        """System Settings at its Notifications page, where JobHelper's notifications are turned on."""
+        self._desktop.open(self._NOTIFICATION_SETTINGS)
+        return {"ok": True}
+
     # ── read: status / data ─────────────────────────────────────
     def connections(self):
         claude, plan, claude_email = False, "", ""

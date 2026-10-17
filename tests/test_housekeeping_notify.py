@@ -190,83 +190,65 @@ def test_tests_cannot_show_a_real_notification(monkeypatch):
     assert notify.send("made-up result", "Search finished") is True
 
 
-# ── the app's own notifier (its name and icon) ──────────────────────────────
-def test_with_the_helper_app_a_message_goes_through_its_queue(isolate_data, monkeypatch):
-    calls = []
-    app = isolate_data / "notifier" / "JobHelper.app"
+# ── the installed app shows its own notifications (macos/Notify.swift) ─────
+class FakeLibrary:
+    """What macos/Notify.swift answers: 1 shown, 2 waiting for the first answer, 0 turned off, -1 refused."""
+
+    def __init__(self, answer=1, permission=1):
+        self.answer, self.allowed, self.shown = answer, permission, []
+
+    def show(self, title: bytes, body: bytes) -> int:
+        self.shown.append((title.decode(), body.decode()))
+        return self.answer
+
+    def permission(self) -> int:
+        return self.allowed
+
+
+@pytest.fixture
+def app_library(isolate_data, monkeypatch):
+    library = FakeLibrary()
     monkeypatch.setattr(notify.sys, "platform", "darwin")
-    monkeypatch.setattr(notify, "ensure_app", lambda: app)
-    monkeypatch.setattr(notify, "_run", lambda cmd: pytest.fail("the helper started: no plain notification"))
-    monkeypatch.setattr(notify, "_open", lambda started: calls.append(started) or True)
+    monkeypatch.setattr(notify.AppNotifier, "of_the_app", classmethod(lambda cls: cls(library.show, library.permission)))
+    monkeypatch.setattr(notify, "_run", lambda cmd: pytest.fail("the app's own way is used: no osascript"))
+    return library
+
+
+def test_the_installed_app_shows_its_notifications_itself(app_library):
     assert notify.send('Tomorrow at 11:30:\ninterview · "BRIGHTLINE"', "Reminder") is True
-    assert calls == [app]
-    queued = list((isolate_data / "notifier" / "queue").glob("*.txt"))
-    assert len(queued) == 1 and queued[0].read_text(encoding="utf-8") == 'Reminder\nTomorrow at 11:30: interview · "BRIGHTLINE"'
+    assert app_library.shown == [("Reminder", 'Tomorrow at 11:30: interview · "BRIGHTLINE"')]
     notify.send("No headline given")
-    texts = sorted(p.read_text(encoding="utf-8") for p in (isolate_data / "notifier" / "queue").glob("*.txt"))
-    assert "JobHelper\nNo headline given" in texts                        # the app's name stands in for a headline
+    assert app_library.shown[-1] == ("JobHelper", "No headline given")         # the app's name stands in for a headline
 
 
-def test_a_helper_that_does_not_start_falls_back_to_the_plain_way_once(isolate_data, monkeypatch):
-    plain = []
-    app = isolate_data / "notifier" / "JobHelper.app"
-    monkeypatch.setattr(notify.sys, "platform", "darwin")
-    monkeypatch.setattr(notify, "ensure_app", lambda: app)
-    monkeypatch.setattr(notify, "_open", lambda started: False)
-    monkeypatch.setattr(notify, "_run", plain.append)
-    assert notify.send("Today at 13:30: interview", "Reminder") is True
-    assert plain and plain[0][0] == "osascript" and "Today at 13:30: interview" in plain[0][-1]
-    assert list((isolate_data / "notifier" / "queue").glob("*.txt")) == []        # not shown a second time later
+@pytest.mark.parametrize("answer, handed", [(1, True), (2, True), (0, False), (-1, False)])
+def test_what_macos_answered_is_reported(app_library, answer, handed):
+    app_library.answer = answer                                       # 2: macOS still waits for the person's first answer
+    assert notify.send("3 new jobs", "Search finished") is handed
 
 
-def test_a_message_that_waited_too_long_is_not_shown_late(isolate_data, monkeypatch):
-    import os
-    import time
-    queue = isolate_data / "notifier" / "queue"
-    queue.mkdir(parents=True)
-    old, recent = queue / "1.txt", queue / "2.txt"
-    old.write_text("Reminder\nToday at 13:30: interview", encoding="utf-8")
-    recent.write_text("Search finished\n3 new jobs", encoding="utf-8")
-    stamp = time.time() - (notify.STALE_HOURS + 1) * 3600
-    os.utime(old, (stamp, stamp))
-    monkeypatch.setattr(notify.sys, "platform", "darwin")
-    monkeypatch.setattr(notify, "ensure_app", lambda: isolate_data / "notifier" / "JobHelper.app")
-    monkeypatch.setattr(notify, "_open", lambda started: True)
-    notify.send("Something new")
-    left = sorted(p.read_text(encoding="utf-8") for p in queue.glob("*.txt"))
-    assert left == ["JobHelper\nSomething new", "Search finished\n3 new jobs"]
+@pytest.mark.parametrize("code, said", [(1, "allowed"), (0, "off"), (2, "not asked"), (-1, "unknown"), (7, "unknown")])
+def test_the_permission_in_system_settings_is_read_in_words(app_library, code, said):
+    app_library.allowed = code
+    assert notify.notifier().permission() == said
 
 
-def test_the_helper_app_is_built_once_with_the_icon_and_name(isolate_data, monkeypatch):
-    import plistlib
-    built = []
-
-    def fake_build(cmd):
-        built.append(cmd[0])
-        if cmd[0] == "osacompile":                                        # what the real tool leaves behind
-            app = Path(cmd[2])
-            (app / "Contents" / "Resources").mkdir(parents=True)
-            (app / "Contents" / "Info.plist").write_bytes(plistlib.dumps({"CFBundleName": "applet"}))
-            (app / "Contents" / "Resources" / "applet.icns").write_bytes(b"default icon")
-        return True
-    monkeypatch.undo()                                                    # this test needs the real ensure_app …
+def test_outside_the_installed_app_the_plain_way_is_used(isolate_data, monkeypatch):
+    monkeypatch.undo()                                                # the real of_the_app: not frozen, so no library
     monkeypatch.setattr(config, "DATA_DIR", isolate_data)
-    monkeypatch.setattr(notify.sys, "platform", "darwin")
-    monkeypatch.setattr(notify, "_build", fake_build)                     # … but never the real build tools
-    monkeypatch.setattr(notify, "_run", lambda cmd: None)
-    app = notify.ensure_app()
-    assert app == isolate_data / "notifier" / "JobHelper.app" and built == ["osacompile", "codesign"]
-    info = plistlib.loads((app / "Contents" / "Info.plist").read_bytes())
-    assert info["CFBundleName"] == "JobHelper" and info["LSUIElement"] is True
-    assert (app / "Contents" / "Resources" / "applet.icns").read_bytes() == (ROOT / "ui_qt" / "icon.icns").read_bytes()
-    script = (isolate_data / "notifier" / "notifier.applescript").read_text(encoding="utf-8")
-    assert str(isolate_data / "notifier" / "queue") in script and "display notification" in script
-    assert notify.ensure_app() == app and built == ["osacompile", "codesign"]      # not rebuilt on the next message
-    monkeypatch.setattr(notify, "_build", lambda cmd: False)
-    monkeypatch.setattr(config, "DATA_DIR", isolate_data / "elsewhere")
-    assert notify.ensure_app() is None                                    # a failed build: the plain way is used instead
-    monkeypatch.setattr(notify.sys, "platform", "linux")
-    assert notify.ensure_app() is None
+    assert notify.AppNotifier.of_the_app() is None
+    assert isinstance(notify.notifier(), notify.ScriptNotifier) and notify.ScriptNotifier().permission() == "unknown"
+    monkeypatch.setattr(notify.sys, "frozen", True, raising=False)     # a built app without the library: the plain way too
+    monkeypatch.setattr(notify.sys, "executable", str(isolate_data / "JobHelper.app" / "Contents" / "MacOS" / "JobHelper"))
+    assert notify.AppNotifier.of_the_app() is None
+
+
+def test_the_hidden_helper_app_is_gone():
+    """A script app could not ask macOS for permission, so every notification was kept without being shown."""
+    assert not hasattr(notify, "ensure_app") and not hasattr(notify, "_APPLET")
+    swift = (ROOT / "macos" / "Notify.swift").read_text(encoding="utf-8")
+    assert '@_cdecl("jobhelper_notify")' in swift and '@_cdecl("jobhelper_notify_permission")' in swift
+    assert "requestAuthorization" in swift and "willPresent" in swift
 
 
 @pytest.mark.parametrize("new, ready, text", [
@@ -425,3 +407,37 @@ def test_damaged_options_fall_back_to_defaults_and_leave_a_note(isolate_data):
         trouble.note("filling the log", "x")
     housekeeping.trim_logs()
     assert len((config.DATA_DIR / trouble.LOG_NAME).read_text(encoding="utf-8").splitlines()) == housekeeping.LOG_LINES
+
+
+def test_options_says_when_macos_has_the_notifications_turned_off(app_library, monkeypatch):
+    opened = []
+    api = ui_api.Api()
+    monkeypatch.setattr(api._system._desktop, "open", lambda target: opened.append(target))
+    app_library.allowed = 0
+    assert api.notification_permission() == "off"
+    assert api.open_notification_settings() == {"ok": True} and opened == ["x-apple.systempreferences:com.apple.Notifications-Settings.extension"]
+    app_library.allowed = 1
+    assert api.notification_permission() == "allowed"
+
+
+@pytest.mark.parametrize("allowed, answer, ok, says", [
+    (1, 1, True, "Sent."), (2, 2, True, "Choose Allow"), (0, 0, False, "turned off in System Settings"),
+])
+def test_the_test_button_says_what_macos_did(app_library, allowed, answer, ok, says):
+    app_library.allowed, app_library.answer = allowed, answer
+    ui_api.Api().save_options({"notifications": False})                  # a test is sent even with the switch off
+    result = ui_api.Api().test_notification()
+    assert result["ok"] is ok and says in result["msg"]
+    assert app_library.shown == [(notify.TEST_HEADLINE, notify.TEST_MESSAGE)]
+
+
+def test_the_command_line_test_waits_for_the_persons_first_answer(app_library):
+    answers = iter([2, 2, 1])                                          # not asked, still not asked, then allowed
+    app_library.answer = 2
+    app_library.permission = lambda: next(answers, 1)
+    slept = []
+    result = notify.send_test(patience=60, sleep=slept.append)
+    assert result["ok"] is True and result["msg"].startswith("Sent.") and len(slept) == 2
+    app_library.permission = lambda: 2                                 # never answered: it gives up after `patience`
+    slept.clear()
+    assert "Choose Allow" in notify.send_test(patience=3, sleep=slept.append)["msg"] and len(slept) == 3

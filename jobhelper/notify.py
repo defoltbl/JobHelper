@@ -2,14 +2,22 @@
 
 Short, and never with anything private beyond a company name or a count. Does
 nothing on other systems, or when notifications are switched off in Options.
+
+The installed app shows them itself (`AppNotifier`), so macOS asks once and lists JobHelper in
+System Settings → Notifications. Run from Python (`python app_qt.py`), they go the plain way
+(`ScriptNotifier`), which macOS shows under Script Editor.
 """
 from __future__ import annotations
 
+import ctypes
 import subprocess
 import sys
+import time
+from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Callable
 
-from . import config
+from . import app_info, config
 
 TITLE = "JobHelper"
 
@@ -23,102 +31,101 @@ def _quote(text: str) -> str:
 
 
 def _run(cmd: list[str]) -> None:
-    """The one place a notification leaves the app (tests replace it, so they never show one)."""
+    """The one place a plain notification leaves the app (tests replace it, so they never show one)."""
     subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-
-def _open(app: Path) -> bool:
-    """Start the helper app in the background; False when macOS did not start it (tests replace this)."""
-    try:
-        return subprocess.run(["open", "-g", "-n", str(app)], capture_output=True, timeout=15).returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        return False
-
-
-STALE_HOURS = 12      # a message that waited longer than this is out of date: it is not shown late
-
-
-# ── the app's own notifier, so notifications carry its name and icon ────────
-# A notification sent through plain `osascript` shows the Script Editor icon. macOS takes the
-# icon from the app that posts it, so the first time one is needed a tiny helper app is built
-# in the data folder (an AppleScript applet with the JobHelper icon). It reads what to show from
-# a queue folder, shows it and quits.
-APP_NAME = "JobHelper"
-_APPLET = """on run
-	set q to "%s/"
-	try
-		set names to paragraphs of (do shell script "ls " & quoted form of q & " 2>/dev/null")
-	on error
-		set names to {}
-	end try
-	repeat with f in names
-		if (f as text) is not "" then
-			try
-				set body to do shell script "cat " & quoted form of (q & f)
-				do shell script "rm -f " & quoted form of (q & f)
-				set parts to paragraphs of body
-				if (count of parts) > 1 then
-					display notification (item 2 of parts) with title (item 1 of parts)
-				else
-					display notification body with title "JobHelper"
-				end if
-				delay 0.3
-			end try
-		end if
-	end repeat
-end run
-"""
-
-
-def _folder() -> Path:
-    return config.DATA_DIR / "notifier"
-
-
-def app_path() -> Path:
-    return _folder() / f"{APP_NAME}.app"
-
-
-def _build(cmd: list[str]) -> bool:
-    """Run one build tool (osacompile, codesign). Tests replace this."""
-    return subprocess.run(cmd, capture_output=True, timeout=60).returncode == 0
-
-
-def ensure_app() -> Path | None:
-    """The helper app, built on first use. None when it cannot be made (not macOS, no
-    icon, a build tool failed): notifications then go out the plain way."""
-    if sys.platform != "darwin":
-        return None
-    app, queue = app_path(), _folder() / "queue"
-    marker = _folder() / "built_for.txt"
-    icon = config.ROOT / "ui_qt" / "icon.icns"
-    try:
-        if app.is_dir() and marker.is_file() and marker.read_text(encoding="utf-8") == str(queue):
-            return app
-        if not icon.is_file():
-            return None
-        import plistlib
-        import shutil
-        queue.mkdir(parents=True, exist_ok=True)
-        shutil.rmtree(app, ignore_errors=True)
-        source = _folder() / "notifier.applescript"
-        source.write_text(_APPLET % str(queue).replace("\\", "\\\\").replace('"', '\\"'), encoding="utf-8")
-        if not _build(["osacompile", "-o", str(app), str(source)]) or not app.is_dir():
-            return None
-        shutil.copyfile(icon, app / "Contents" / "Resources" / "applet.icns")
-        plist = app / "Contents" / "Info.plist"
-        info = plistlib.loads(plist.read_bytes())
-        info.update(CFBundleName=APP_NAME, CFBundleDisplayName=APP_NAME, CFBundleIdentifier="local.jobhelper.notifier",
-                    LSUIElement=True)                       # no Dock icon while it shows a message
-        plist.write_bytes(plistlib.dumps(info))
-        _build(["codesign", "--force", "--deep", "--sign", "-", str(app)])     # changed after building: sign it again
-        marker.write_text(str(queue), encoding="utf-8")
-        return app
-    except Exception:  # noqa: BLE001 - never let a notification problem break a run
-        return None
 
 
 def _one_line(text: str, limit: int = 240) -> str:
     return " ".join((text or "").split())[:limit]
+
+
+class Notifier(ABC):
+    """Shows one notification: a headline ("Search finished") and the detail."""
+
+    @abstractmethod
+    def show(self, headline: str, message: str) -> bool:
+        """True when it was handed to macOS."""
+
+    def permission(self) -> str:
+        """"allowed", "off" (turned off in System Settings), "not asked" or "unknown"."""
+        return "unknown"
+
+
+class ScriptNotifier(Notifier):
+    """The plain way, through osascript: for `python app_qt.py`, where there is no app of our own."""
+
+    def show(self, headline: str, message: str) -> bool:
+        script = f"display notification {_quote(message)} with title {_quote(TITLE)}"
+        if headline and headline != TITLE:
+            script += f" subtitle {_quote(headline)}"
+        try:
+            _run(["osascript", "-e", script])
+        except OSError:
+            return False
+        return True
+
+
+class AppNotifier(Notifier):
+    """The installed app's own notifications (macos/Notify.swift, in Contents/Frameworks). They carry
+    JobHelper's name and icon, and macOS asks the person once whether to show them."""
+
+    _PERMISSION = {1: "allowed", 0: "off", 2: "not asked"}
+
+    def __init__(self, show: Callable[[bytes, bytes], int], permission: Callable[[], int]) -> None:
+        self._show, self._permission = show, permission
+
+    @classmethod
+    def of_the_app(cls) -> "AppNotifier | None":
+        """The notifier of the running app, or None outside the built app (tests, `python app_qt.py`)."""
+        if not getattr(sys, "frozen", False):
+            return None
+        library = Path(sys.executable).resolve().parent.parent / "Frameworks" / app_info.NOTIFY_LIBRARY
+        if not library.is_file():
+            return None
+        try:
+            loaded = ctypes.CDLL(str(library))
+        except OSError:
+            return None
+        show, permission = loaded.jobhelper_notify, loaded.jobhelper_notify_permission
+        show.argtypes, show.restype = [ctypes.c_char_p, ctypes.c_char_p], ctypes.c_int32
+        permission.argtypes, permission.restype = [], ctypes.c_int32
+        return cls(show, permission)
+
+    def show(self, headline: str, message: str) -> bool:
+        # 1 shown, 2 waiting for the person's first answer (shown once they allow it); 0 turned off, -1 refused
+        return self._show(headline.encode("utf-8"), message.encode("utf-8")) in (1, 2)
+
+    def permission(self) -> str:
+        return self._PERMISSION.get(self._permission(), "unknown")
+
+
+def notifier() -> Notifier:
+    """The app's own notifier when it runs as the installed app, else the plain way."""
+    return AppNotifier.of_the_app() or ScriptNotifier()
+
+
+TEST_HEADLINE = "Test notification"
+TEST_MESSAGE = "This is how JobHelper tells you that a search finished or an interview invitation came."
+
+
+def send_test(patience: float = 0.0, sleep: Callable[[float], None] = time.sleep) -> dict:
+    """Send one test notification, whatever the switch in Options says, and say in words what macOS did.
+    The first time, macOS asks the person; `patience` is how many seconds to wait for that answer (the
+    command line waits, because its program would end and take the question with it; the window does not)."""
+    if sys.platform != "darwin":
+        return {"ok": False, "msg": "Notifications are shown on macOS only."}
+    way = notifier()
+    handed = way.show(TEST_HEADLINE, TEST_MESSAGE)
+    allowed, waited = way.permission(), 0.0
+    while allowed == "not asked" and waited < patience:
+        sleep(1.0)
+        waited += 1.0
+        allowed = way.permission()
+    if allowed == "off" or not handed:
+        return {"ok": False, "msg": "macOS did not show it: JobHelper's notifications are turned off in System Settings."}
+    if allowed == "not asked":
+        return {"ok": True, "msg": "macOS asks whether to allow JobHelper's notifications. Choose Allow."}
+    return {"ok": True, "msg": "Sent. It shows at the top right of the screen."}
 
 
 def send(message: str, subtitle: str = "") -> bool:
@@ -126,27 +133,7 @@ def send(message: str, subtitle: str = "") -> bool:
     True if it was handed to the system."""
     if not message or not enabled() or sys.platform != "darwin":
         return False
-    try:
-        app = ensure_app()
-        if app is not None:
-            import time
-            queue = _folder() / "queue"
-            queue.mkdir(parents=True, exist_ok=True)
-            for old in queue.glob("*.txt"):          # left by a helper that did not start: out of date now
-                if time.time() - old.stat().st_mtime > STALE_HOURS * 3600:
-                    old.unlink(missing_ok=True)
-            entry = queue / f"{time.time_ns()}.txt"
-            entry.write_text(f"{_one_line(subtitle) or TITLE}\n{_one_line(message)}", encoding="utf-8")
-            if _open(app):
-                return True
-            entry.unlink(missing_ok=True)            # the helper did not start: the plain way below, shown once
-        script = f"display notification {_quote(message)} with title {_quote(TITLE)}"
-        if subtitle:
-            script += f" subtitle {_quote(subtitle)}"
-        _run(["osascript", "-e", script])
-        return True
-    except OSError:
-        return False
+    return notifier().show(_one_line(subtitle) or TITLE, _one_line(message))
 
 
 def search_text(new_jobs: int, ready: int) -> str:
