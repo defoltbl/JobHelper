@@ -372,7 +372,7 @@ def test_a_refused_app_password_is_not_saved(ui, monkeypatch):
     ui.js("welcome.saveEmail()")
     _email_answer(ui)
     assert saved == [("jobs@example.com", "abcdabcdabcdabcd")] and welcome.property("editEmail") is False
-    note = ui.find("emailNote")
+    note = _until_shown(ui, "emailNote")                           # the card may still be fading in on a slow machine
     assert note.property("visible") is True and "not tried" in note.property("text")
     ui.js('welcome.emailNote = ""; welcome.finish()')
     ui.wait(700)
@@ -1370,6 +1370,14 @@ def _until_open(ui, name, most_ms=4000):
     while dialog.property("opened") is not True and waited < most_ms:
         ui.wait(50); waited += 50
     assert dialog.property("opened") is True
+
+
+def _until_shown(ui, name, most_ms=4000):
+    """Wait until an item is really on screen: a window that fades in (the welcome card) shows nothing before."""
+    item, waited = ui.find(name), 0
+    while item.property("visible") is not True and waited < most_ms:
+        ui.wait(50); waited += 50
+    return item
 
 
 def _until_closed(ui, name, most_ms=4000):
