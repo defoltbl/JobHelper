@@ -98,8 +98,9 @@ class OptionsService:
                 defaults.update(json.loads(vault.read_text(p)))
         except Exception as e:  # noqa: BLE001 - the defaults are used; the start-up check tells the user
             trouble.note("reading the saved Options", e)
-        from . import agent2_search
-        defaults["remote_added"] = agent2_search.remote_added(defaults.get("source"), defaults.get("include_remote"))   # for the main screen's chip
+        from . import job_sources
+        choice = job_sources.SourceChoice.from_options(defaults)        # also reads the older one-source settings
+        defaults["sources"], defaults["source_names"] = list(choice.kinds), choice.names()   # the names: the main screen's chips
         return defaults
 
     OPTION_NUMBERS = {"salary_target": (0, 100_000_000), "threshold": (0, 100), "min_lead_score": (0, 100), "max_age_days": (0, 3650), "per_query": (1, 100),
@@ -116,7 +117,15 @@ class OptionsService:
         if not isinstance(opts, dict):
             return {}, "Those are not Options."
         clean = dict(opts)
-        clean.pop("remote_added", None)          # worked out from source + include_remote when read, never stored
+        clean.pop("source_names", None)          # worked out from the sources when read, never stored
+        if "sources" in clean:
+            from . import job_sources
+            picked = clean["sources"]
+            if not isinstance(picked, (list, tuple)) or not picked:
+                return {}, "Choose at least one job source."
+            if any(not job_sources.SourceChoice.known(k) for k in picked):
+                return {}, "That is not a job source the app knows."
+            clean["sources"] = list(job_sources.SourceChoice(picked).kinds)
         for key, (low, high) in self.OPTION_NUMBERS.items():
             if key in clean:
                 value = clean[key]

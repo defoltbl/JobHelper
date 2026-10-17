@@ -1870,7 +1870,7 @@ Table 16.1 lists the Search settings.
 |---|---|---|---|
 | **City** | Where to search | A city name | The app will not search without one |
 | **Country** | Which postings count as "here", from the career site of a company and from remote jobs. They can be in the city, anywhere in this country, or in the region of the country ("Europe", "EMEA"). A remote job counts if it is not tied to another part of the world | A country's name in English. Empty = the country of the city, shown in grey | Type it when the field says that it does not know the city. Also type it when you want jobs from a neighbouring country |
-| **Job source** | Which job boards are read. The app reads the Czech boards only for a city in Czechia. For a city in another country, the log of the run says that they were not used | Czech boards, LinkedIn and careers; LinkedIn only; Company career sites only; All sources (+ remote) | More sources find more and take longer |
+| **Job sources** | Which job boards are read. Select one or more: a search reads all that you select. The app reads the Czech boards only for a city in Czechia. For a city in another country, the log of the run says that they were not used | Czech boards, LinkedIn, Career sites, Remote boards, in any combination | More sources find more and take longer |
 | **Search roles** | The words typed into the job boards, in English | One or more roles | Too few results: add a role. Too many poor ones: remove one |
 | **Skip titles with** | Words that drop a posting by its title | Words | To get rid of a kind of posting that keeps appearing |
 | **…but keep titles with** | Exceptions to the line above | Words | To keep a title that a skip word would drop |
@@ -1878,7 +1878,6 @@ Table 16.1 lists the Search settings.
 | **Kinds of role you do not want** | Skipped when the title names one, scored low otherwise | Roles | To keep a neighbouring field out |
 | **Skip levels above yours** | Level words that drop a posting | Words such as senior, lead | A senior candidate empties this list |
 | **Skip jobs asking for** | Drops postings that ask for this many years or more | 0 to 30; 0 = never | To keep out postings you are not yet eligible for |
-| **Include remote jobs** | Adds the remote boards | On or off | To widen the search beyond your city |
 | **Full-time only** | Hides part-time roles | On or off | Turn off if part-time suits you |
 | **English only** | Hides postings written in another language, and roles that require another language at a working level | On or off | Turn off if you also work in the local language. A posting that requires a language your CV does not show is then scored low instead |
 | **Max job age** | Drops postings older than this | Days; 0 = any date | Old postings are often already filled |
@@ -2128,7 +2127,7 @@ Table 18.4 lists ways to use less of your limit.
 | Do this | Why it helps |
 |---|---|
 | Keep fewer **Search roles** | Fewer postings to score |
-| Choose Czech boards instead of all sources | Fewer postings to score |
+| Select fewer **Job sources** | Fewer postings to score |
 | Raise **Write letters above** | Fewer documents to write. Writing costs more than scoring |
 | Set **Kinds of role you want** | More postings are skipped before scoring |
 | Choose the **sonnet** model | It uses the limit more slowly than opus |

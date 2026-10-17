@@ -1085,27 +1085,41 @@ def test_options_has_a_country_for_any_city(ui):
     assert ui.warnings == []
 
 
-def test_the_remote_switch_is_under_the_source_and_shows_only_where_it_adds_something(ui):
+def test_job_sources_are_picked_in_any_combination(ui):
+    """One dropdown of fixed sets plus a remote switch could not say "LinkedIn and the Czech boards": each kind is now a chip."""
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
     _open(ui, dialog, 450)
-    row, shown = ui.find("remoteRow"), {}
-    for i in range(4):
-        ui.js(f"srcCombo.currentIndex = {i}", dialog)
-        shown[ui.js("srcCombo.currentValue", dialog)] = row.property("visible")
-    assert shown == {"czech": True, "linkedin": False, "careers": False, "all": False}
-    ui.js("srcCombo.currentIndex = 0; confirmClose = true; close()", dialog)
+    plain = lambda v: v.toVariant() if hasattr(v, "toVariant") else v                    # noqa: E731
+    assert [k["name"] for k in plain(ui.js("optDialog.sourceKinds", dialog))] == ["Czech boards", "LinkedIn", "Career sites", "Remote boards"]
+    ui.js("pickedSources = ['boards', 'linkedin', 'careers']", dialog)
+    ui.js("toggleSource('careers'); toggleSource('remote'); toggleSource('linkedin'); toggleSource('linkedin')", dialog)
+    assert plain(ui.js("optDialog.collect().options.sources", dialog)) == ["boards", "linkedin", "remote"]      # always in one order
+    chip = lambda key: ui.drawn("source_" + key, root="sourceChips")                    # noqa: E731 - drawn by a Repeater
+    assert chip("careers").property("picked") is False and chip("remote").property("picked") is True
+    assert ui.find("sourcesErr").property("visible") is False
+    ui.js("toggleSource('boards'); toggleSource('linkedin'); toggleSource('remote')", dialog)
+    assert ui.find("sourcesErr").property("visible") is True                # none left: said at once, in red
+    ui.js('cityCombo.editText = "Prague"', dialog)
+    before = ui.bridge.options()["sources"]
+    ui.js("optSaveBtn.clicked()", dialog)                                   # Save with nothing picked: refused, nothing stored
+    assert ui.js("optErr", dialog) == "Choose at least one job source." and dialog.property("opened") is True
+    assert "at least one job source" in ui.bridge.saveOptions({**ui.bridge.options(), "sources": []})["msg"]   # the back end refuses it too
+    assert ui.bridge.options()["sources"] == before
+    ui.js("confirmClose = true; close()", dialog)
     _until_closed(ui, "optDialog")
+    ui.js("optsData = bridge.options()")
 
 
-def test_the_remote_chip_follows_what_the_search_does(ui):
+def test_the_main_screen_names_the_sources_a_search_reads(ui):
     def chips():
         return [item.property("text") for item in ui.seen("navPanel") if isinstance(item.property("text"), str)]
-    for source, on, chip in (("czech", "true", True), ("linkedin", "true", False), ("careers", "true", False), ("czech", "false", False)):
-        ui.js(f'optsData = Object.assign({{}}, bridge.options(), {{ source: "{source}", include_remote: {on}, '
-              f'remote_added: bridge.remoteCanBeAdded("{source}") && {on} }})')
-        ui.wait(60)
-        assert ("+ Remote" in chips()) is chip, (source, on)
+    ui.js('optsData = Object.assign({}, bridge.options(), { source_names: ["Czech boards", "LinkedIn"] })')
+    ui.wait(60)
+    assert "Czech boards" in chips() and "LinkedIn" in chips() and "+ Remote" not in chips() and "Remote boards" not in chips()
+    ui.js('optsData = Object.assign({}, bridge.options(), { source_names: ["LinkedIn", "Remote boards"] })')
+    ui.wait(60)
+    assert "Remote boards" in chips() and "Czech boards" not in chips()
     ui.js("optsData = bridge.options()")
     assert ui.warnings == []
 
@@ -1188,22 +1202,25 @@ def test_usage_card_corrects_itself_when_a_reset_time_passes(ui):
 
 
 def test_a_long_choice_in_a_combo_box_wraps_instead_of_being_cut(ui):
+    """ThemedCombo (the assistant's job and browser boxes use it): a long choice wraps, never cut. Tried on a box made
+    for the test, the size Options' old "Job source" box had."""
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
     _open(ui, dialog, 450)
-    ui.js("srcCombo.currentIndex = 1", dialog)                  # "LinkedIn only": short
+    combo = ui.js('Qt.createQmlObject(\'import QtQuick; ThemedCombo { implicitWidth: 210; textRole: "text"; valueRole: "value"; '
+                  'model: [{ text: "LinkedIn only", value: "a" }, { text: "Czech boards, LinkedIn & careers", value: "b" }] }\', '
+                  'sourcesBox, Qt.resolvedUrl("WrapTest.qml"))', dialog)
+    combo.setProperty("currentIndex", 0)                         # short
     ui.wait(80)
-    short = ui.js("srcCombo.height", dialog)
-    assert short == 32 and ui.js("srcCombo.contentItem.lineCount", dialog) == 1
-    ui.js("srcCombo.implicitWidth = 150", dialog)                # a box that cannot hold the longest choice on one line
-    ui.js("srcCombo.currentIndex = 0", dialog)                  # "Czech boards, LinkedIn & careers"
+    short, line = combo.property("height"), combo.property("contentItem")
+    assert short == 32 and line.property("lineCount") == 1
+    combo.setProperty("implicitWidth", 150)                       # a box that cannot hold the longest choice on one line
+    combo.setProperty("currentIndex", 1)
     ui.wait(80)
-    assert ui.js("srcCombo.contentItem.lineCount", dialog) >= 2 and ui.js("srcCombo.height", dialog) > short
-    assert ui.js("srcCombo.contentItem.truncated", dialog) is False
-    assert ui.js("srcCombo.contentItem.text", dialog) == "Czech boards, LinkedIn & careers"
-    assert ui.js("srcCombo.contentItem.x + srcCombo.contentItem.width", dialog) <= ui.js("srcCombo.width", dialog)   # clear of the arrow's side
+    assert line.property("lineCount") >= 2 and combo.property("height") > short
+    assert line.property("truncated") is False and line.property("text") == "Czech boards, LinkedIn & careers"
+    assert line.property("x") + line.property("width") <= combo.property("width")          # clear of the arrow's side
     # and it is really drawn: the box holds pixels in the text's colour (a blank box once passed every check above)
-    line = ui.js("srcCombo.contentItem", dialog)
     assert line.property("visible") is True and line.property("opacity") == 1
     from PySide6.QtQuick import QQuickWindow
     corner = line.mapToScene(line.boundingRect().topLeft())
@@ -1212,8 +1229,9 @@ def test_a_long_choice_in_a_combo_box_wraps_instead_of_being_cut(ui):
     close = lambda c: abs(c.red() - ink.red()) + abs(c.green() - ink.green()) + abs(c.blue() - ink.blue()) < 90      # noqa: E731
     assert sum(close(picture.pixelColor(x, y)) for x in range(0, picture.width(), 2) for y in range(0, picture.height(), 2)) > 20
     assert ui.js("cityCombo.height", dialog) == 32               # an editable box keeps its one-line field
-    ui.js("srcCombo.implicitWidth = 210; confirmClose = false; close()", dialog)
-    ui.wait(350)
+    combo.deleteLater()
+    ui.js("confirmClose = false; close()", dialog)
+    _until_closed(ui, "optDialog")
     assert ui.warnings == []
 
 

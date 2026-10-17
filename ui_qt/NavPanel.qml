@@ -132,12 +132,13 @@ Rectangle {
             Layout.fillWidth: true; spacing: 6
             Repeater {
                 model: [ win.cityEN(optsData.where) || "No city yet",
-                         (optsData.all_languages === true) ? "All languages" : "English only",
-                         (optsData.remote_added === true) ? "+ Remote" : "",      // the same rule as the search (agent2_search.remote_added)
+                         (optsData.all_languages === true) ? "All languages" : "English only" ]
+                       .concat(optsData.source_names || [])        // the sources a search reads (job_sources.SourceChoice)
+                       .concat([
                          (optsData.full_time_only === false) ? "Part-time too" : "Full-time only",
                          (optsData.max_age_days && optsData.max_age_days > 0) ? ("≤ " + optsData.max_age_days + " days old") : "Any date",
                          "Letters from " + (optsData.threshold !== undefined ? optsData.threshold : 50) + "+"
-                       ].filter(function (t) { return t !== ""; })
+                       ]).filter(function (t) { return t !== ""; })
                 Rectangle {
                     height: 24; radius: 12; width: chipTxt.implicitWidth + 18
                     color: chipHover.hovered ? theme.surface2 : theme.inset

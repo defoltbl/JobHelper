@@ -13,8 +13,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from jobhelper import (agent1_cv, agent2_search, agent3_letters, agent4_tracker,
-                       config, integrity, letters, llm, notify, store, usage, vault)
+from jobhelper import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, config, integrity, job_sources, letters, llm, notify, store, usage, vault)
 
 
 DEFAULT_SKIP = ["intern", "internship"]      # same default as the app's Options
@@ -90,22 +89,20 @@ def main() -> int:
     if not args.skip_search:
         queries = (saved.get("queries") or profile.get("search_queries")
                    or profile.get("target_roles") or [])
-        print(f"\n② Agent 2: searching {args.where} ({args.source}) for {len(queries)} queries …")
+        # what Options ticks (the weekly run), unless --source / --include-remote were typed on the command line
+        typed = any(a.startswith(("--source", "--include-remote")) for a in sys.argv[1:])
+        if typed:                       # typed by hand: --include-remote adds the remote boards to any --source
+            choice = job_sources.SourceChoice(job_sources.SourceChoice.from_options({"source": args.source}).kinds
+                                              + (("remote",) if args.include_remote else ()))
+        else:
+            choice = job_sources.SourceChoice.from_options(saved)
+        print(f"\n② Agent 2: searching {args.where} ({', '.join(choice.names())}) for {len(queries)} queries …")
         try:
             seniority = profile.get("seniority", "junior")
             filtered = []
             new_jobs = agent2_search.search(queries, where=args.where, per_query=args.per_query,
-                                            source=args.source, english_only=not args.all_languages,
+                                            source=choice, english_only=not args.all_languages,
                                             candidate_seniority=seniority, max_age_days=args.max_age_days,
-                                            full_time_only=saved.get("full_time_only", True) is not False,
-                                            skip_words=saved.get("skip_words", DEFAULT_SKIP), keep_words=saved.get("keep_words", []),
-                                            dropped=filtered,
-                                            level_words=saved.get("level_words"), max_years=saved.get("max_years"))
-            if args.include_remote and args.source not in ("remote", "all"):
-                print("   + adding remote roles (RemoteOK + We Work Remotely) …")
-                new_jobs += agent2_search.search(queries, where=args.where, per_query=args.per_query,
-                                                 source="remote", english_only=not args.all_languages,
-                                                 candidate_seniority=seniority, max_age_days=args.max_age_days,
                                             full_time_only=saved.get("full_time_only", True) is not False,
                                             skip_words=saved.get("skip_words", DEFAULT_SKIP), keep_words=saved.get("keep_words", []),
                                             dropped=filtered,

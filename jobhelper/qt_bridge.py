@@ -134,11 +134,11 @@ class Bridge(RunSlots, JobSlots, QObject):
         except Exception:  # noqa: BLE001 - a line of explanation must never break Options
             return {"fields": [], "from_cv": False, "all": []}
 
-    @Slot(str, result=bool)
-    def remoteCanBeAdded(self, source):
-        """True if the "Include remote jobs" switch means something for this job source (agent2_search.remote_added)."""
-        from . import agent2_search
-        return agent2_search.remote_added(str(source or ""), True)
+    @Slot(result="QVariantList")
+    def sourceKinds(self):
+        """The kinds of job source Options lets you tick: [{key, name}] (job_sources.SourceChoice)."""
+        from . import job_sources
+        return job_sources.SourceChoice.offered()
 
     @Slot(str, result=bool)
     def knownRole(self, text):

@@ -114,8 +114,7 @@ Dialog {
         }
         var pays = [];
         for (var p = 0; p < payModel.count; p++) pays.push({ role: "" + payModel.get(p).role, amount: payModel.get(p).amount });
-        return { options: { where: cityCombo.editText, country: countryField.text.trim(), source: srcCombo.currentValue,
-                            include_remote: remoteSw.checked, all_languages: !engSw.checked,
+        return { options: { where: cityCombo.editText, country: countryField.text.trim(), sources: pickedSources.slice(), all_languages: !engSw.checked,
                             full_time_only: fullSw.checked,
                             skip_words: skipTags.all(), keep_words: keepTags.all(),
                             level_words: levelTags.all(), max_years: yearsSpin.value,
@@ -135,6 +134,14 @@ Dialog {
     function changed() { return loaded !== "" && JSON.stringify(collect()) !== loaded; }
     // your profession for the free first look: read from the roles, or picked by hand here
     property var pickedFields: []
+    // the kinds of job source ticked: keys of bridge.sourceKinds(), in its order
+    readonly property var sourceKinds: bridge ? bridge.sourceKinds() : []
+    property var pickedSources: []
+    function toggleSource(key) {
+        var on = pickedSources.indexOf(key) >= 0;
+        pickedSources = sourceKinds.map(function (k) { return k.key; })
+                                   .filter(function (k) { return k === key ? !on : pickedSources.indexOf(k) >= 0; });
+    }
     function toggleField(name, all) {
         var on = pickedFields.indexOf(name) >= 0;
         pickedFields = (all || []).filter(function (f) { return f === name ? !on : pickedFields.indexOf(f) >= 0; });
@@ -237,8 +244,7 @@ Dialog {
         var o = win.optsData;
         cityCombo.editText = cityDisplay(o.where);
         countryField.text = o.country || "";
-        srcCombo.currentIndex = Math.max(0, srcCombo.indexOfValue(o.source || "czech"));
-        remoteSw.checked = o.include_remote === true;
+        pickedSources = (o.sources || []).slice();
         fullSw.checked = o.full_time_only !== false;
         skipTags.setAll(o.skip_words !== undefined ? o.skip_words : ["intern", "internship"]);
         keepTags.setAll(o.keep_words || []);
@@ -335,19 +341,25 @@ Dialog {
                                     border.color: countryField.activeFocus ? theme.accent
                                                   : optDialog.countryProblem(countryField.text) !== "" ? theme.crit : theme.line } } }
                         Sep {}
-                        SRow { label: "Job source"
-                            ThemedCombo { id: srcCombo; implicitWidth: 210; textRole: "text"; valueRole: "value"
-                                model: [
-                                    { text: "Czech boards, LinkedIn & careers", value: "czech" },
-                                    { text: "LinkedIn only", value: "linkedin" },
-                                    { text: "Company career sites only", value: "careers" },
-                                    { text: "All sources (+ remote)", value: "all" } ] } }
+                        // the kinds of job source a search reads, in any combination (job_sources.SourceChoice)
+                        SRow { label: "Job sources"; hint: "pick one or more · a search reads every one you pick" }
+                        ColumnLayout { id: sourcesBox; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12; spacing: 6
+                            Flow { objectName: "sourceChips"; Layout.fillWidth: true; spacing: 6
+                                Repeater { model: optDialog.sourceKinds
+                                    Rectangle {
+                                        readonly property bool picked: optDialog.pickedSources.indexOf(modelData.key) >= 0
+                                        objectName: "source_" + modelData.key
+                                        height: 28; radius: 14; width: scT.implicitWidth + 24
+                                        color: picked ? theme.accent : (scMa.containsMouse ? theme.surface2 : theme.inset)
+                                        border.width: 1; border.color: picked ? win.clearOf(theme.line) : theme.line
+                                        Behavior on color { ColorAnimation { duration: 140 } }
+                                        Text { id: scT; anchors.centerIn: parent; text: (parent.picked ? "✓ " : "") + modelData.name
+                                            font.pixelSize: 12; font.bold: parent.picked; color: parent.picked ? theme.accentInk : theme.soft }
+                                        MouseArea { id: scMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                            onClicked: optDialog.toggleSource(modelData.key) } } } }
+                            Text { objectName: "sourcesErr"; visible: optDialog.pickedSources.length === 0; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                color: theme.crit; font.pixelSize: 11; font.bold: true; text: "Choose at least one job source." } }
                         Sep {}
-                        // remote boards on top of the source above: only where that adds something ("… only" stays only that)
-                        SRow { id: remoteRow; objectName: "remoteRow"; label: "Include remote jobs"; hint: "remote boards on top of the source above"
-                            visible: bridge.remoteCanBeAdded(srcCombo.currentValue)
-                            ThemedSwitch { id: remoteSw; objectName: "remoteSw" } }
-                        Sep { visible: remoteRow.visible }
                         // search roles: autocomplete field + add, chips below
                         SRow { label: "Search roles"; hint: "in English"
                             RowLayout { spacing: 6
@@ -693,7 +705,7 @@ Dialog {
                 color: theme.crit; font.pixelSize: 12; font.bold: true; text: optDialog.optErr }
             Item { Layout.fillWidth: optDialog.optErr === "" }
             SmallButton { objectName: "optCancel"; text: optDialog.confirmClose ? "Discard changes" : "Cancel"; onClicked: optDialog.close() }
-            PillButton { primaryStyle: true; text: "Save"
+            PillButton { id: optSaveBtn; objectName: "optSave"; primaryStyle: true; text: "Save"
                 onClicked: {
                     optSink.forceActiveFocus();        // finish any field that is still being edited
                     optDialog.optErr = ""; optDialog.confirmClose = false;
@@ -704,6 +716,7 @@ Dialog {
                         optDialog.optErr = "City must be in English (Latin letters), e.g. Prague."; return;
                     }
                     if (optDialog.countryProblem(countryField.text) !== "") { optDialog.optErr = optDialog.countryProblem(countryField.text); return; }
+                    if (optDialog.pickedSources.length === 0) { optDialog.optErr = "Choose at least one job source."; return; }
                     var qs = [];
                     for (var i = 0; i < rolesModel.count; i++) qs.push("" + rolesModel.get(i).text);
                     if (expField.text.length > optDialog.expMax) {
