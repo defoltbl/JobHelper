@@ -320,7 +320,7 @@ class RunSlots:
                       full_time_only=o.get("full_time_only", True) is not False,
                       skip_words=list(o.get("skip_words") or []), keep_words=list(o.get("keep_words") or []),
                       level_words=list(o.get("level_words") or []), max_years=int(o.get("max_years") or 0))
-            remote_too = bool(o.get("include_remote")) and o["source"] not in ("remote", "all")
+            remote_too = agent2_search.remote_added(o["source"], o.get("include_remote"))
             # two passes share one bar: the main sources fill most of it, remote the rest
             share = 0.85 if remote_too else 1.0
             dropped = []                                     # what the filters remove, with the reason

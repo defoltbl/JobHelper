@@ -135,6 +135,12 @@ class Bridge(RunSlots, JobSlots, QObject):
             return {"fields": [], "from_cv": False, "all": []}
 
     @Slot(str, result=bool)
+    def remoteCanBeAdded(self, source):
+        """True if the "Include remote jobs" switch means something for this job source (agent2_search.remote_added)."""
+        from . import agent2_search
+        return agent2_search.remote_added(str(source or ""), True)
+
+    @Slot(str, result=bool)
     def knownRole(self, text):
         """True if a search role names a profession the app knows (any of them, not only software)."""
         from . import prefilter

@@ -1085,6 +1085,31 @@ def test_options_has_a_country_for_any_city(ui):
     assert ui.warnings == []
 
 
+def test_the_remote_switch_is_under_the_source_and_shows_only_where_it_adds_something(ui):
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    row, shown = ui.find("remoteRow"), {}
+    for i in range(4):
+        ui.js(f"srcCombo.currentIndex = {i}", dialog)
+        shown[ui.js("srcCombo.currentValue", dialog)] = row.property("visible")
+    assert shown == {"czech": True, "linkedin": False, "careers": False, "all": False}
+    ui.js("srcCombo.currentIndex = 0; confirmClose = true; close()", dialog)
+    _until_closed(ui, "optDialog")
+
+
+def test_the_remote_chip_follows_what_the_search_does(ui):
+    def chips():
+        return [item.property("text") for item in ui.seen("navPanel") if isinstance(item.property("text"), str)]
+    for source, on, chip in (("czech", "true", True), ("linkedin", "true", False), ("careers", "true", False), ("czech", "false", False)):
+        ui.js(f'optsData = Object.assign({{}}, bridge.options(), {{ source: "{source}", include_remote: {on}, '
+              f'remote_added: bridge.remoteCanBeAdded("{source}") && {on} }})')
+        ui.wait(60)
+        assert ("+ Remote" in chips()) is chip, (source, on)
+    ui.js("optsData = bridge.options()")
+    assert ui.warnings == []
+
+
 def test_options_can_start_one_longer_email_scan(ui, monkeypatch):
     started = []
     monkeypatch.setattr(qt_bridge.Bridge, "_scan", lambda self, days=None: started.append(days))

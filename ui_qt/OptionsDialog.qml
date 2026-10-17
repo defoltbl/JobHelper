@@ -343,6 +343,11 @@ Dialog {
                                     { text: "Company career sites only", value: "careers" },
                                     { text: "All sources (+ remote)", value: "all" } ] } }
                         Sep {}
+                        // remote boards on top of the source above: only where that adds something ("… only" stays only that)
+                        SRow { id: remoteRow; objectName: "remoteRow"; label: "Include remote jobs"; hint: "remote boards on top of the source above"
+                            visible: bridge.remoteCanBeAdded(srcCombo.currentValue)
+                            ThemedSwitch { id: remoteSw; objectName: "remoteSw" } }
+                        Sep { visible: remoteRow.visible }
                         // search roles: autocomplete field + add, chips below
                         SRow { label: "Search roles"; hint: "in English"
                             RowLayout { spacing: 6
@@ -420,9 +425,6 @@ Dialog {
                         Sep {}
                         SRow { label: "Skip jobs asking for"; hint: "years of experience or more · 0 = never"
                             ThemedSpin { id: yearsSpin; objectName: "yearsSpin"; from: 0; to: 30; value: 4 } }
-                        Sep {}
-                        SRow { label: "Include remote jobs"
-                            ThemedSwitch { id: remoteSw; objectName: "remoteSw" } }
                         Sep {}
                         SRow { label: "Full-time only"; hint: "hide part-time roles"
                             ThemedSwitch { id: fullSw; objectName: "fullSw" } }

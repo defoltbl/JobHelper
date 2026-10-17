@@ -59,3 +59,32 @@ def test_the_api_sources_turn_their_answers_into_job_records(monkeypatch):
         {"id": 2, "title": "QA 2"}]}))
     found = job_sources.JoobleSource().find("qa", "Prague", 1)
     assert [j["id"] for j in found] == ["jooble-1"] and found[0]["source"] == "jooble/jobs.cz"
+
+
+# ── remote boards on top of the chosen source ───────────────────────────────
+@pytest.mark.parametrize("source, on, added", [
+    ("czech", True, True), ("czech", False, False), ("", True, True),
+    ("linkedin", True, False), ("careers", True, False),          # "… only" stays only that
+    ("all", True, False), ("remote", True, False),                # they hold the remote boards already
+    ("czech", "yes", False)])
+def test_remote_boards_are_added_only_where_they_add_something(source, on, added):
+    """"+ Remote" stayed on the main screen, and the boards were searched, with "LinkedIn only" or "career sites only"."""
+    from jobhelper import agent2_search
+    assert agent2_search.remote_added(source, on) is added
+
+
+def test_the_search_the_options_and_the_window_use_one_rule(isolate_data):
+    import json
+    from pathlib import Path
+    from jobhelper import config, ui_api, vault
+    root = Path(__file__).resolve().parent.parent
+    assert 'agent2_search.remote_added(o["source"], o.get("include_remote"))' in (root / "jobhelper" / "bridge_runs.py").read_text(encoding="utf-8")
+    assert "optsData.remote_added === true" in (root / "ui_qt" / "NavPanel.qml").read_text(encoding="utf-8")
+    assert "bridge.remoteCanBeAdded(srcCombo.currentValue)" in (root / "ui_qt" / "OptionsDialog.qml").read_text(encoding="utf-8")
+    config.ensure_dirs()
+    for source, added in (("czech", True), ("linkedin", False), ("careers", False)):
+        vault.write_text(config.DATA_DIR / "ui_settings.json", json.dumps({"source": source, "include_remote": True}))
+        assert ui_api.Api().options()["remote_added"] is added, source
+    clean, problem = ui_api.Api().check_options({"source": "czech", "remote_added": True})
+    assert problem == "" and "remote_added" not in clean                  # worked out when read, never saved
+
