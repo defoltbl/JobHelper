@@ -157,7 +157,7 @@ _STOP = {"junior", "senior", "medior", "mid", "entry", "graduate", "intern", "tr
 
 
 def _loc_ok(loc: str, where: str) -> bool:
-    """In the searched city, in its country, or remote without being tied to another part of the world."""
+    """In the searched city, in its country, or remote in a way that fits (one location; `careers` makes its Placement once)."""
     return filters.location_fits(loc, where)
 
 
@@ -170,10 +170,11 @@ def careers(keyword: str, where: str, limit: int, with_description: bool = True)
     if not companies:
         return []
     terms = [t for t in re.findall(r"[a-z0-9+#]{3,}", keyword.lower()) if t not in _STOP]
+    placement = filters.Placement.for_search(where)                 # Options read once, not for every posting
     results: list[dict[str, Any]] = []
     for c in companies:
         for job in _company_jobs(c.get("name", c["token"]), c["ats"], c["token"]):
-            if not _loc_ok(job["location"], where):
+            if not placement.fits(job["location"]):
                 continue
             title = job["title"].lower()
             if terms and not any(t in title for t in terms):

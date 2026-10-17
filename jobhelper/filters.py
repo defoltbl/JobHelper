@@ -113,15 +113,21 @@ def is_us_location(location: str, where: str | None = None) -> bool:
     `where` is the city of the search. A state's code is also the code of some country (IN is Indiana and
     India, IL is Illinois and Israel), so for someone searching in such a country, or in one the app has
     no table for, only a location that names the United States counts. Without `where`: any state code."""
+    if where is None:
+        return _names_the_us(location, None, home_known=False)
+    return _names_the_us(location, places.country_of(config.search_country()) or places.country_of(where))
+
+
+def _names_the_us(location: str, home: str | None, home_known: bool = True) -> bool:
+    """The rule of `is_us_location` for a search whose country is `home` (see there)."""
     text = location or ""
     if _US_NAMED.search(text):
         return True
     state = _US_STATE.search(text)
     if not state:
         return False
-    if where is None:
+    if not home_known:
         return True
-    home = places.country_of(config.search_country()) or places.country_of(where)
     if not home:
         return False                    # a country the app does not know: its own code may look like a state's
     return _OWN_CODE.get(home) != state.group(1)
@@ -129,18 +135,55 @@ def is_us_location(location: str, where: str | None = None) -> bool:
 
 def searching_in_the_us(where: str) -> bool:
     """Someone whose own search is in the United States keeps those postings."""
-    return (places.country_of(config.search_country()) or places.country_of(where)) == "united states"
+    return Placement(where, config.search_country()).in_the_us
+
+
+class Placement:
+    """Where one search is, and which remote jobs fit it. Made once per search from Options
+    (`for_search`), it decides whether a posting is in the right place and says why not. The search
+    and the career-site reader ask it, instead of reading the settings again for every posting."""
+
+    def __init__(self, where: str, country: str = "", reach: places.RemoteReach | None = None) -> None:
+        self.where = str(where or "")
+        self.country = str(country or "")
+        self.reach = reach or places.RemoteReach()
+        self._home = places.country_of(self.country) or places.country_of(self.where)
+
+    @classmethod
+    def for_search(cls, where: str) -> "Placement":
+        """The country and the "Remote jobs" choice from Options, read once."""
+        return cls(where, config.search_country(), places.RemoteReach.from_options(config.ui_settings()))
+
+    @property
+    def in_the_us(self) -> bool:
+        """Someone whose own search is in the United States keeps those postings."""
+        return self._home == "united states"
+
+    def fits(self, location: str, remote: bool = False) -> bool:
+        """In the city, its country, or remote in a way that fits (see places.fits). Unknown locations pass."""
+        return places.fits(location, self.where, self.country, self.reach, remote)
+
+    def us_reason(self, location: str, remote_board: bool = False) -> str:
+        """A "Prague" search can return Prague, Nebraska. Remote jobs are left to `place_reason`."""
+        if self.in_the_us or remote_board or places.is_remote(location) or not _names_the_us(location, self._home):
+            return ""
+        return f"Located in the United States ({location})."
+
+    def place_reason(self, location: str, source: str, remote_board: bool = False) -> str:
+        """Why a remote job, or a career-site job, is not for this search ('' = it is)."""
+        if remote_board or places.is_remote(location):
+            return "" if self.fits(location, remote=True) else f"A remote job for people in another part of the world ({location})."
+        if source == "careers" and not self.fits(location):
+            return f"A career-site job somewhere else ({location or 'no location given'})."
+        return ""
 
 
 def location_fits(location: str, where: str, country: str | None = None,
                   reach: places.RemoteReach | None = None, remote: bool = False) -> bool:
-    """For sources that list a company's jobs worldwide (career sites), and for remote jobs: is this one
-    in the searched city, in its country, or remote in a way that fits? Unknown locations pass.
-    The country is the one in Options, or the one the city is in; which remote jobs fit is the
-    "Remote jobs" choice in Options (see places.py). `remote`: from a board of remote jobs only."""
+    """`Placement.fits` for one location. A search makes its Placement once instead (this reads Options each time)."""
     if reach is None:
         reach = places.RemoteReach.from_options(config.ui_settings())
-    return places.fits(location, where, config.search_country() if country is None else country, reach, remote)
+    return Placement(where, config.search_country() if country is None else country, reach).fits(location, remote)
 
 
 _PART_TIME = re.compile(r"part[\s-]?time|teilzeit|částečný úvazek|zkrácený úvazek|poloviční úvazek|\bbrigáda\b", re.IGNORECASE)
