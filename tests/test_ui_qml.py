@@ -121,6 +121,13 @@ def _windows_closed_after(request):
         return
     ui = request.getfixturevalue("ui")
     ui.js("detailDialog.reviewQueue = []")
+    # A test that failed after starting a pretend run left the window "running" (and maybe paused), so every later
+    # test that starts something was refused with "A search or scan is running" (six failures on main, 17 October).
+    if ui.bridge._running or ui.win.property("paused"):
+        ui.bridge.limitChanged.emit({"paused": False, "can_resume": False, "window": "", "used": 0, "resets_at": "",
+                                     "resets_day": "", "message": ""})
+        ui.bridge._set_running(False)
+        ui.js('resultFade.stop(); runResult = ""; runMode = ""; runProgress = 0')
     left = [d for d in (ui.win.findChild(QObject, name) for name in DIALOGS) if d is not None and d.property("visible")]
     for dialog in left:
         ui.js("close()", dialog)
@@ -608,7 +615,7 @@ def test_pause_shows_resume_warning_and_sound_then_resume_turns_blue(ui, monkeyp
     info = {"paused": True, "can_resume": False, "window": "5-hour", "used": 99, "resets_at": "13:20",
             "resets_day": "07 Oct", "message": "limit"}
     ui.bridge.limitChanged.emit(info)
-    ui.wait(450)
+    _until_open(ui, "limitDialog")
     assert ui.win.property("paused") is True and ui.win.property("working") is False
     assert run.property("visible") is False and resume.property("visible") is True
     assert ui.find("stopWhilePaused").property("visible") is True
@@ -620,10 +627,10 @@ def test_pause_shows_resume_warning_and_sound_then_resume_turns_blue(ui, monkeyp
     assert "Can't resume yet" in why and "13:20" in why and "turns blue" in why
     grey = resume.property("color").name()
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, "limitDialog")
 
     ui.bridge.limitChanged.emit({**info, "can_resume": True})
-    ui.wait(350)
+    _until_true(ui, lambda: resume.property("color").name() != grey)
     assert ui.win.property("canResume") is True and "limit is back" in ui.win.property("limitWhy")
     assert resume.property("color").name() != grey                       # grey -> blue
     assert dialog.property("visible") is False and played == ["afplay"]  # no second warning for the same pause
@@ -1370,6 +1377,14 @@ def _until_open(ui, name, most_ms=4000):
     while dialog.property("opened") is not True and waited < most_ms:
         ui.wait(50); waited += 50
     assert dialog.property("opened") is True
+
+
+def _until_true(ui, check, most_ms=4000):
+    """Wait until `check()` is true, letting the window work meanwhile; a fixed pause is too short on a busy machine."""
+    waited = 0
+    while not check() and waited < most_ms:
+        ui.wait(50); waited += 50
+    return check()
 
 
 def _until_shown(ui, name, most_ms=4000):
@@ -3346,27 +3361,27 @@ def test_new_jobs_can_be_reviewed_one_by_one(ui, monkeypatch):
         assert where.property("text").startswith("Reviewing 1 of 4 left.")
         assert ui.find("reviewPrev").property("enabled") is False and ui.find("reviewNext").property("enabled") is True
         ui.js("detailDialog.reviewStep(1)")                                                 # leave it as it is, on to the next
-        ui.wait(200)
+        _until_true(ui, lambda: ui.js("detailDialog.job.id") == "r1")
         assert ui.js("detailDialog.job.id") == "r1" and where.property("text").startswith("Reviewing 2 of 4 left.") and done == []
         ui.js("detailDialog.notInterested()")                                               # decided: the next one comes by itself
-        ui.wait(250)
+        _until_true(ui, lambda: ui.js("detailDialog.job.id") == "r2")
         assert done == [("dismiss", "r1")] and ui.js("detailDialog.job.id") == "r2" and detail.property("opened") is True
         assert where.property("text").startswith("Reviewing 2 of 3 left · 1 decided · Removed from New Jobs.")
         ui.js("detailDialog.reviewStep(-1)")
-        ui.wait(200)
+        _until_true(ui, lambda: ui.js("detailDialog.job.id") == "r0")
         assert ui.js("detailDialog.job.id") == "r0"
         # unsaved text is asked about before moving on, as everywhere in this window
         ui.js('cnNotes.text = "They pay monthly."')
         ui.js("detailDialog.reviewStep(1)")
         assert ui.js("detailDialog.job.id") == "r0" and "press Next once more" in ui.find("closeNote").property("text")
         ui.js("detailDialog.reviewStep(1)")
-        ui.wait(200)
+        _until_true(ui, lambda: ui.js("detailDialog.job.id") == "r2")
         assert ui.js("detailDialog.job.id") == "r2"
         ui.js("detailDialog.markApplied()")
-        ui.wait(250)
+        _until_true(ui, lambda: ui.js("detailDialog.job.id") == "r3")
         assert done[-1] == ("apply", "r2") and ui.js("detailDialog.job.id") == "r3" and table.property("opened") is True     # the list stays behind it
         ui.js("detailDialog.notInterested()")
-        ui.wait(250)
+        _until_true(ui, lambda: ui.js("detailDialog.job.id") == "r0")
         assert ui.js("detailDialog.job.id") == "r0" and where.property("text").startswith("Reviewing 1 of 1 left · 3 decided")
         assert ui.find("reviewNext").property("enabled") is False
         ui.js("detailDialog.notInterested()")                                               # the last one: the round ends
