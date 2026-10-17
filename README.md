@@ -73,7 +73,7 @@ that would publish a personal detail, a secret or the data folder
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE): free to read, run, change and share for any
+[PolyForm Noncommercial 1.0.0](LICENSE.md): free to read, run, change and share for any
 noncommercial purpose; selling it or using it to make money needs the author's written
 permission. The libraries keep their own licences. `JobHelper.app` is not published here, because a
 built app contains Qt and Anthropic's Claude Code program under their own terms: build it yourself.
