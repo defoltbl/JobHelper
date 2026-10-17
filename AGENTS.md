@@ -48,6 +48,17 @@ python scripts/push_check.py                                       # before ever
   shows also updates its text, its pictures and its PDF.
 - **No Russian services:** no such mail provider, job board, API or host.
 
+## Versions and releases
+
+- Version numbers follow semantic versioning: a fix only is `1.0.1`, new features `1.1.0`, a change
+  that breaks saved data or habits `2.0.0`. The number is `app_info.VERSION`.
+- Never commit to `main`: each change is a branch and a pull request that merges only with green CI.
+- Each pull request adds its lines to [CHANGELOG.md](CHANGELOG.md) under `## Unreleased`.
+- To release, one pull request renames `## Unreleased` to `## X.Y.Z – <date>` and sets
+  `app_info.VERSION`. After it is merged: `git tag -a vX.Y.Z -m "JobHelper X.Y.Z"` on that commit of
+  `main`, push the tag, and `gh release create vX.Y.Z` with that version's changelog as its notes.
+- Never attach the built `JobHelper.app` to a release: it contains Qt and the Claude Code program.
+
 ## Where things are
 
 | Path | What it holds |
