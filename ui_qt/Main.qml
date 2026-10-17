@@ -445,6 +445,7 @@ ApplicationWindow {
 
     // ───────────────────────── options (macOS-style) ─────────────────────────
     OptionsDialog { id: optDialog }
+    RemoteCountriesDialog { id: remoteDialog }      // opened from Options: countries for remote jobs
 
     // ───────────────────────── weekly schedule ─────────────────────────
     ScheduleDialog { id: schedDialog }

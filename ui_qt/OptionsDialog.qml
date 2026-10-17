@@ -114,7 +114,8 @@ Dialog {
         }
         var pays = [];
         for (var p = 0; p < payModel.count; p++) pays.push({ role: "" + payModel.get(p).role, amount: payModel.get(p).amount });
-        return { options: { where: cityCombo.editText, country: countryField.text.trim(), sources: pickedSources.slice(), all_languages: !engSw.checked,
+        return { options: { where: cityCombo.editText, country: countryField.text.trim(), sources: pickedSources.slice(),
+                            remote_where: remoteWhere, remote_countries: pickedRemote.slice(), all_languages: !engSw.checked,
                             full_time_only: fullSw.checked,
                             skip_words: skipTags.all(), keep_words: keepTags.all(),
                             level_words: levelTags.all(), max_years: yearsSpin.value,
@@ -141,6 +142,17 @@ Dialog {
         var on = pickedSources.indexOf(key) >= 0;
         pickedSources = sourceKinds.map(function (k) { return k.key; })
                                    .filter(function (k) { return k === key ? !on : pickedSources.indexOf(k) >= 0; });
+    }
+    // which remote jobs a search keeps (places.RemoteReach): open to your country and the ones added, or anywhere
+    property string remoteWhere: "country"
+    property var pickedRemote: []         // country keys, as bridge.countries() gives them
+    // your country as the window shows it: the one typed, or the city's
+    readonly property string homeName: bridge.countryOf(countryField.text.trim() !== "" ? countryField.text : cityCombo.editText)
+    function dropRemote(key) { pickedRemote = pickedRemote.filter(function (k) { return k !== key; }); }
+    function countryName(key) {
+        var all = remoteDialog.all;
+        for (var i = 0; i < all.length; i++) if (all[i].key === key) return all[i].name;
+        return key;
     }
     function toggleField(name, all) {
         var on = pickedFields.indexOf(name) >= 0;
@@ -245,6 +257,8 @@ Dialog {
         cityCombo.editText = cityDisplay(o.where);
         countryField.text = o.country || "";
         pickedSources = (o.sources || []).slice();
+        remoteWhere = o.remote_where === "world" ? "world" : "country";
+        pickedRemote = (o.remote_countries || []).slice();
         fullSw.checked = o.full_time_only !== false;
         skipTags.setAll(o.skip_words !== undefined ? o.skip_words : ["intern", "internship"]);
         keepTags.setAll(o.keep_words || []);
@@ -340,6 +354,44 @@ Dialog {
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
                                     border.color: countryField.activeFocus ? theme.accent
                                                   : optDialog.countryProblem(countryField.text) !== "" ? theme.crit : theme.line } } }
+                        Sep {}
+                        // which remote jobs a search keeps, from any source (places.RemoteReach)
+                        SRow { label: "Remote jobs"; hint: "from any source · which places they must be open to" }
+                        ColumnLayout { id: remoteBox; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12; spacing: 8
+                            Flow { objectName: "remoteScope"; Layout.fillWidth: true; spacing: 6
+                                Repeater { model: [["country", optDialog.homeName !== "" ? "In " + optDialog.homeName : "In my country"],
+                                                   ["world", "Anywhere in the world"]]
+                                    Rectangle {
+                                        readonly property bool picked: optDialog.remoteWhere === modelData[0]
+                                        objectName: "remote_" + modelData[0]
+                                        height: 28; radius: 14; width: rwT.implicitWidth + 24
+                                        color: picked ? theme.accent : (rwMa.containsMouse ? theme.surface2 : theme.inset)
+                                        border.width: 1; border.color: picked ? win.clearOf(theme.line) : theme.line
+                                        Behavior on color { ColorAnimation { duration: 140 } }
+                                        Text { id: rwT; anchors.centerIn: parent; text: (parent.picked ? "✓ " : "") + modelData[1]
+                                            font.pixelSize: 12; font.bold: parent.picked; color: parent.picked ? theme.accentInk : theme.soft }
+                                        MouseArea { id: rwMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                            onClicked: optDialog.remoteWhere = modelData[0] } } } }
+                            // the countries added to your own: only with "In <country>"; anywhere covers them all
+                            Text { objectName: "remoteNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
+                                text: optDialog.remoteWhere === "world"
+                                      ? "Every remote job is kept, wherever it is open. Jobs on site stay in your city and country."
+                                      : optDialog.pickedRemote.length === 0
+                                        ? "Remote jobs open to your country, or to anyone. Add countries to keep their remote jobs too."
+                                        : "Remote jobs open to your country, or to anyone, and also to:" }
+                            Flow { objectName: "remoteCountries"; Layout.fillWidth: true; spacing: 6; visible: optDialog.remoteWhere === "country"
+                                Repeater { model: optDialog.pickedRemote
+                                    Rectangle { objectName: "remoteCountry_" + modelData
+                                        height: 26; radius: 13; width: rcT.implicitWidth + rcX.implicitWidth + 28
+                                        color: theme.inset; border.width: 1; border.color: theme.line
+                                        Text { id: rcT; anchors.left: parent.left; anchors.leftMargin: 12; anchors.verticalCenter: parent.verticalCenter
+                                            text: optDialog.countryName(modelData); color: theme.ink; font.pixelSize: 12 }
+                                        Text { id: rcX; anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
+                                            text: "✕"; color: rcMa.containsMouse ? theme.crit : theme.faint; font.pixelSize: 10
+                                            MouseArea { id: rcMa; anchors.fill: parent; anchors.margins: -6; hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor; onClicked: optDialog.dropRemote(modelData) } } } }
+                                SmallButton { id: remoteAddBtn; objectName: "remoteAdd"; text: optDialog.pickedRemote.length === 0 ? "+ Add countries" : "Change"
+                                    onClicked: remoteDialog.show(optDialog.pickedRemote, optDialog.homeName) } } }
                         Sep {}
                         // the kinds of job source a search reads, in any combination (job_sources.SourceChoice)
                         SRow { label: "Job sources"; hint: "pick one or more · a search reads every one you pick" }

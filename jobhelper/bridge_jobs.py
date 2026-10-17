@@ -141,6 +141,11 @@ class JobSlots:
     def countryOf(self, city):
         return self._api.country_of(city)
 
+    @Slot(result="QVariantList")
+    def countries(self):
+        """Every country the app knows, for the remote-jobs country picker: [{key, name, area}]."""
+        return self._api.countries()
+
     @Slot(str, str, result="QVariantMap")
     def mailServer(self, address, typed):
         """What the app knows about an address's mail provider, for the line under the fields:

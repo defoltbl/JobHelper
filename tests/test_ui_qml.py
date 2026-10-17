@@ -71,7 +71,7 @@ class Ui:
 
     # each window lives in its own file; names inside a window are only known in that window's context
     WINDOWS = ["tableDialog", "detailDialog", "compareDialog", "formDialog", "assistantDialog", "prepEditDialog", "helpDialog", "prepDialog", "letterDialog",
-               "responseDialog", "limitDialog", "welcome", "optDialog", "schedDialog",
+               "responseDialog", "limitDialog", "welcome", "optDialog", "remoteDialog", "schedDialog",
                "navPanel", "stagePanel", "statusPanel", "pipelineBar"]      # the parts of the main screen
 
     def _inside(self, obj):
@@ -109,7 +109,7 @@ class Ui:
 
 # the windows a test may leave open (stacked ones before the window under them)
 DIALOGS = ["detailDialog", "compareDialog", "formDialog", "assistantDialog", "prepEditDialog", "helpDialog", "prepDialog",
-           "letterDialog", "responseDialog", "limitDialog", "optDialog", "schedDialog", "tableDialog"]
+           "letterDialog", "responseDialog", "limitDialog", "remoteDialog", "optDialog", "schedDialog", "tableDialog"]
 
 
 @pytest.fixture(autouse=True)
@@ -1109,6 +1109,62 @@ def test_job_sources_are_picked_in_any_combination(ui):
     ui.js("confirmClose = true; close()", dialog)
     _until_closed(ui, "optDialog")
     ui.js("optsData = bridge.options()")
+
+
+def test_remote_jobs_are_kept_in_your_country_with_added_countries_or_anywhere(ui):
+    dialog, picker = ui.find("optDialog"), ui.find("remoteDialog")
+    plain = lambda v: v.toVariant() if hasattr(v, "toVariant") else v                    # noqa: E731
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    ui.js('cityCombo.editText = "Prague"; countryField.text = ""; remoteWhere = "country"; pickedRemote = []', dialog)
+    scope = lambda key: ui.drawn("remote_" + key, root="remoteScope")                   # noqa: E731 - drawn by a Repeater
+    assert scope("country").property("picked") is True and ui.js("optDialog.homeName", dialog) == "Czechia"
+    assert ui.find("remoteAdd").property("text") == "+ Add countries"
+    # the picker: your own country is not a choice, the list filters by name and by part of the world
+    ui.js("remoteAddBtn.clicked()", dialog)
+    _until_open(ui, "remoteDialog")
+    assert ui.js("remoteDialog.home") == "czechia" and ui.js("remoteDialog.shown.some(c => c.key === 'czechia')") is False
+    assert "Czechia is always included" in ui.find("remoteHomeNote").property("text")
+    ui.js('searchField.text = "kor"', picker)
+    assert [c["key"] for c in plain(ui.js("remoteDialog.shown"))] == ["north korea", "south korea"]
+    ui.js('searchField.text = "xyz"', picker)
+    assert ui.find("noCountry").property("visible") is True
+    ui.js('searchField.text = ""; remoteDialog.area = "oceania"', picker)
+    assert all(c["area"] == "oceania" for c in plain(ui.js("remoteDialog.shown"))) and len(plain(ui.js("remoteDialog.shown"))) >= 10
+    ui.js("remoteDialog.area = ''; remoteDialog.toggle('south korea'); remoteDialog.toggle('germany'); remoteDialog.toggle('poland');"
+          "remoteDialog.toggle('poland')")
+    assert plain(ui.js("remoteDialog.picked")) == ["germany", "south korea"]             # in the list's order
+    assert ui.find("pickedCount").property("text") == "2 countries added"
+    ui.js("remoteDialog.picked = remoteDialog.all.slice(0, 40).map(c => c.key); remoteDialog.toggle('vietnam')")
+    assert "up to 40 countries" in ui.find("remoteErr").property("text")                # a 41st is refused in red
+    ui.js("remoteDialog.picked = ['germany', 'south korea']; remoteDialog.err = ''")
+    ui.js("remoteDoneBtn.clicked()", picker)
+    _until_closed(ui, "remoteDialog")
+    # back in Options: the countries are chips with a cross; Save stores them
+    assert plain(ui.js("optDialog.pickedRemote", dialog)) == ["germany", "south korea"]
+    assert ui.drawn("remoteCountry_south korea", root="remoteCountries") is not None and ui.find("remoteAdd").property("text") == "Change"
+    ui.js("dropRemote('germany')", dialog)
+    assert plain(ui.js("optDialog.collect().options.remote_countries", dialog)) == ["south korea"]
+    ui.js("remoteWhere = 'world'", dialog)
+    assert ui.find("remoteCountries").property("visible") is False and "Every remote job is kept" in ui.find("remoteNote").property("text")
+    ui.js("remoteWhere = 'country'", dialog)
+    start = ui.bridge.options()
+    ui.js("optSaveBtn.clicked()", dialog)
+    _until_closed(ui, "optDialog")
+    saved = ui.bridge.options()
+    assert saved["remote_where"] == "country" and saved["remote_countries"] == ["south korea"]
+    # Cancel in the picker leaves the choice as it was
+    _open(ui, dialog, 450)
+    ui.js("remoteAddBtn.clicked()", dialog)
+    _until_open(ui, "remoteDialog")
+    ui.js("remoteDialog.toggle('japan'); remoteDialog.close()")
+    _until_closed(ui, "remoteDialog")
+    assert plain(ui.js("optDialog.pickedRemote", dialog)) == ["south korea"]
+    ui.js("confirmClose = true; close()", dialog)
+    _until_closed(ui, "optDialog")
+    ui.bridge.saveOptions(start)
+    ui.js("optsData = bridge.options()")
+    assert ui.warnings == []
 
 
 def test_the_main_screen_names_the_sources_a_search_reads(ui):

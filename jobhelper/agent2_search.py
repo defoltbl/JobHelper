@@ -503,14 +503,27 @@ def search(
     sift("closed", lambda j: "No longer accepts applications."
          if filters.is_closed(f"{j.get('title','')} {j.get('description','')}") else "",
          "closed / no-longer-accepting postings")
-    # A "Prague" search can return Prague, Nebraska.
+    def remote_job(j) -> bool:
+        return job_sources.is_remote_board(j.get("source", "")) or places.is_remote(j.get("location", ""))
+
+    # A "Prague" search can return Prague, Nebraska. Remote jobs are left to the "Remote jobs" choice below.
     if not filters.searching_in_the_us(where):
         sift("other country", lambda j: f"Located in the United States ({j.get('location', '')})."
-             if filters.is_us_location(j.get("location", ""), where) else "", "jobs located in the United States")
-    # Career sites list a company's openings everywhere; keep the ones here or remote.
-    sift("other country", lambda j: f"A career-site job somewhere else ({j.get('location', '') or 'no location given'})."
-         if j.get("source") == "careers" and not filters.location_fits(j.get("location", ""), where) else "",
-         "career-site jobs in other countries")
+             if filters.is_us_location(j.get("location", ""), where) and not remote_job(j) else "", "jobs located in the United States")
+    # Career sites list a company's openings everywhere; keep the ones here. A remote job from any
+    # source is kept when it is open to your country (or the ones you added), or always with
+    # "Anywhere in the world" in Options.
+    reach = places.RemoteReach.from_options(config.ui_settings())
+
+    def place_reason(j):
+        location = j.get("location", "")
+        if remote_job(j):
+            if not filters.location_fits(location, where, reach=reach, remote=True):
+                return f"A remote job for people in another part of the world ({location})."
+        elif j.get("source") == "careers" and not filters.location_fits(location, where, reach=reach):
+            return f"A career-site job somewhere else ({location or 'no location given'})."
+        return ""
+    sift("other country", place_reason, "jobs in other countries, and remote jobs not open to yours")
     sift("too many years", lambda j: f"Asks for {filters.years_required(j.get('description', ''))}+ years of experience."
          if filters.needs_too_many_years(j.get("description", ""), candidate_seniority, max_years) else "",
          "roles asking for many years of experience")

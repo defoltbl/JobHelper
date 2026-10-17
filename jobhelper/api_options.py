@@ -51,7 +51,11 @@ class OptionsService:
     def country_of(self, city):
         """The country the app takes a city to be in ("Czechia"), or '' when it does not know the city."""
         name = places.country_of(str(city or ""))
-        return " ".join(part.capitalize() for part in name.split())
+        return places.shown(name) if name else ""
+
+    def countries(self):
+        """Every country the app knows, for the remote-jobs country picker: [{key, name, area}] by name."""
+        return places.all_countries()
 
     # ── the last run (shown on the Last run card, also after a restart) ──
     def last_run(self):
@@ -101,6 +105,7 @@ class OptionsService:
         from . import job_sources
         choice = job_sources.SourceChoice.from_options(defaults)        # also reads the older one-source settings
         defaults["sources"], defaults["source_names"] = list(choice.kinds), choice.names()   # the names: the main screen's chips
+        defaults.update(places.RemoteReach.from_options(defaults).as_options())       # which remote jobs fit
         return defaults
 
     OPTION_NUMBERS = {"salary_target": (0, 100_000_000), "threshold": (0, 100), "min_lead_score": (0, 100), "max_age_days": (0, 3650), "per_query": (1, 100),
@@ -184,6 +189,18 @@ class OptionsService:
             return {}, "“assistant browser” must be one of: " + ", ".join(chrome.BROWSERS) + "."
         if clean.get("country") and not re.fullmatch(r"[^\W\d_]+(?:[ '.\-]+[^\W\d_]+)*\.?", clean["country"]):
             return {}, "“country” must be a country's name in letters, for example Germany."
+        if "remote_where" in clean and clean["remote_where"] not in dict(places.RemoteReach.SCOPES):
+            return {}, "“Remote jobs” must be in your country or anywhere in the world."
+        if "remote_countries" in clean:
+            picked = clean["remote_countries"]
+            if not isinstance(picked, (list, tuple)) or any(not isinstance(c, str) for c in picked):
+                return {}, "“Remote jobs” takes a list of countries."
+            if len(picked) > places.RemoteReach.MAX_COUNTRIES:
+                return {}, f"“Remote jobs” takes up to {places.RemoteReach.MAX_COUNTRIES} countries."
+            unknown = next((c for c in picked if places.plain(c) not in places.COUNTRIES), None)
+            if unknown is not None:
+                return {}, f"“{unknown[:40]}” is not a country the app knows. Choose it from the list."
+            clean["remote_countries"] = list(places.RemoteReach("country", picked).countries)
         for key in ("include_remote", "all_languages", "full_time_only", "notifications", "scan_all_folders", "assistant_watch"):
             if key in clean and not isinstance(clean[key], bool):
                 return {}, f"“{key.replace('_', ' ')}” must be on or off."
