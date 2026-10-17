@@ -110,17 +110,23 @@ def test_added_countries_and_their_regions_count_too():
     assert places.fits("Berlin, Germany", "Prague", "", reach) is False  # an added country is for remote jobs only
 
 
-def test_anywhere_in_the_world_keeps_every_remote_job_but_not_jobs_on_site_elsewhere():
+def test_anywhere_in_the_world_keeps_jobs_for_any_region_but_never_for_one_other_country():
     reach = places.RemoteReach("world")
-    for location in ("Remote, South Korea", "Remote - APAC", "Remote, US"):
-        assert places.fits(location, "Prague", "", reach) is True
-    assert places.fits("Seoul, South Korea", "Prague", "", reach) is False
+    for location in ("Remote", "Remote - APAC", "Remote - Americas", "Remote (EMEA)", "Remote, Czechia"):
+        assert places.fits(location, "Prague", "", reach) is True, location
+    # tied to a country you may not live or work in: skipped whatever the choice
+    for location in ("Remote, South Korea", "Remote, US", "Remote - India", "Remote Ireland; Remote, France"):
+        assert places.fits(location, "Prague", "", reach) is False, location
+    assert places.fits("Seoul, South Korea", "Prague", "", reach) is False                # on site elsewhere
+    added = places.RemoteReach("world", ["United States"])
+    assert places.fits("Remote, US", "Prague", "", added) is True and places.fits("Remote, South Korea", "Prague", "", added) is False
 
 
 def test_a_job_from_a_remote_board_is_remote_even_when_its_location_does_not_say_so():
     assert places.fits("USA Only", "Prague", "", remote=True) is False
     assert places.fits("Europe Only", "Prague", "", remote=True) is True
-    assert places.fits("USA Only", "Prague", "", places.RemoteReach("world"), remote=True) is True
+    assert places.fits("USA Only", "Prague", "", places.RemoteReach("world"), remote=True) is False
+    assert places.fits("Americas Only", "Prague", "", places.RemoteReach("world"), remote=True) is True
 
 
 @pytest.mark.parametrize("options, scope, countries", [
@@ -184,8 +190,10 @@ def test_a_search_keeps_the_remote_jobs_open_to_your_country(isolate_data, monke
 def test_a_search_with_added_countries_or_anywhere(isolate_data, monkeypatch):
     kept, _ = _kept(monkeypatch, remote_countries=["Germany", "South Korea"])
     assert kept == ["brno", "eu-board", "germany", "korea", "plain"]
-    kept, dropped = _kept(monkeypatch, remote_where="world")
-    assert kept == ["brno", "eu-board", "germany", "korea", "plain", "usa-board"] and list(dropped) == ["seoul"]
+    kept, dropped = _kept(monkeypatch, remote_where="world", remote_countries=[])
+    assert kept == ["brno", "eu-board", "plain"] and sorted(dropped) == ["germany", "korea", "seoul", "usa-board"]
+    kept, _ = _kept(monkeypatch, remote_where="world", remote_countries=["United States"])
+    assert kept == ["brno", "eu-board", "plain", "usa-board"]
 
 
 def test_the_remote_choice_is_saved_and_checked(isolate_data):

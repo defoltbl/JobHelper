@@ -372,14 +372,15 @@ Dialog {
                                             font.pixelSize: 12; font.bold: parent.picked; color: parent.picked ? theme.accentInk : theme.soft }
                                         MouseArea { id: rwMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                             onClicked: optDialog.remoteWhere = modelData[0] } } } }
-                            // the countries added to your own: only with "In <country>"; anywhere covers them all
+                            // a job tied to one country is kept, in both choices, only for yours and the ones added here
                             Text { objectName: "remoteNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
-                                text: optDialog.remoteWhere === "world"
-                                      ? "Every remote job is kept, wherever it is open. Jobs on site stay in your city and country."
-                                      : optDialog.pickedRemote.length === 0
-                                        ? "Remote jobs open to your country, or to anyone. Add countries to keep their remote jobs too."
-                                        : "Remote jobs open to your country, or to anyone, and also to:" }
-                            Flow { objectName: "remoteCountries"; Layout.fillWidth: true; spacing: 6; visible: optDialog.remoteWhere === "country"
+                                text: (optDialog.remoteWhere === "world"
+                                       ? "Kept: remote jobs open to anyone, or to any part of the world (APAC, Americas). "
+                                       : "Kept: remote jobs open to anyone, to your country, or to a part of the world it is in. ")
+                                      + (optDialog.pickedRemote.length === 0
+                                         ? "A job tied to another country is skipped. Add countries where you may work to keep their jobs too."
+                                         : "A job tied to another country is skipped, except for these:") }
+                            Flow { objectName: "remoteCountries"; Layout.fillWidth: true; spacing: 6
                                 Repeater { model: optDialog.pickedRemote
                                     Rectangle { objectName: "remoteCountry_" + modelData
                                         height: 26; radius: 13; width: rcT.implicitWidth + rcX.implicitWidth + 28

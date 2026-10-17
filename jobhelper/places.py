@@ -264,9 +264,11 @@ def in_region(region: str, countries: Iterable[str]) -> bool:
 
 
 class RemoteReach:
-    """Which remote jobs a search keeps: those open to people in your country and in the countries
-    you add ("country"), or remote jobs anywhere in the world ("world"). Options, the search and
-    the window all read it from here."""
+    """Which remote jobs a search keeps. Always: a job open to anyone, and a job tied to your country
+    or to a country you added. A job tied to other countries ("USA Only", "Remote, South Korea") is
+    never kept: it asks you to live or have the right to work there. For a job tied to a part of the
+    world ("Remote – APAC"): "country" keeps it when your country or an added one is in it, "world"
+    keeps it wherever it is. Options, the search and the window all read it from here."""
 
     SCOPES = (("country", "In my country"), ("world", "Anywhere in the world"))
     MAX_COUNTRIES = 40
@@ -292,13 +294,11 @@ class RemoteReach:
 
     def allows(self, location: str, home: str) -> bool:
         """For a remote job: is it open to you? One that names no place is open to anyone."""
-        if self.worldwide:
-            return True
         named, regions = named_countries(location), named_regions(location)
-        if not named and not regions:
-            return True
         allowed = self.open_to(home)
-        if named & allowed:
+        if named:                                   # tied to countries: one of them must be yours or added
+            return bool(named & allowed)
+        if not regions or self.worldwide:
             return True
         return any(not home or in_region(r, allowed) for r in regions)
 
