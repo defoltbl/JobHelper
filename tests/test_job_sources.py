@@ -20,10 +20,10 @@ def test_each_setting_asks_its_own_sources_in_order(monkeypatch):
 
 def test_every_source_has_the_same_interface():
     for source in job_sources.all_sources(max_age_days=7):
-        assert isinstance(source, job_sources.JobSource) and source.name and source.groups
+        assert isinstance(source, job_sources.JobSource) and source.name and job_sources.SourceChoice.known(source.kind)
         assert callable(source.find) and callable(source.reset) and isinstance(source.available(), bool)
     with pytest.raises(TypeError):
-        job_sources.JobSource("abstract", ("all",))                                   # the interface itself finds nothing
+        job_sources.JobSource("abstract", "boards")                                   # the interface itself finds nothing
 
 
 def test_a_board_hands_the_search_to_its_function_and_linkedin_keeps_its_age_limit(monkeypatch):
@@ -116,3 +116,44 @@ def test_the_search_the_weekly_run_the_options_and_the_window_use_one_choice(iso
     assert "not a job source" in check({"sources": ["somewhere"]})[1]
     clean, problem = check({"sources": ["remote", "boards"], "source_names": ["x"]})
     assert problem == "" and clean["sources"] == ["boards", "remote"] and "source_names" not in clean     # worked out when read, never saved
+
+
+# ── pinned before the OOP rewrite (18 October 2026): every setting finds exactly the same sources ──
+_CZ = ["jobs.cz", "prace.cz"]
+_PINNED = [
+    ("czech", "czechia", _CZ + ["linkedin", "careers"], []), ("czech", "germany", ["linkedin", "careers"], [(_CZ, ("czechia",))]),
+    ("czech", "", _CZ + ["linkedin", "careers"], []), ("linkedin", "germany", ["linkedin"], []),
+    ("remote", "czechia", ["remoteok", "weworkremotely"], []), ("careers", "", ["careers"], []),
+    ("adzuna", "czechia", ["adzuna"], []), ("jooble", "germany", ["jooble"], []),
+    ("all", "czechia", _CZ + ["linkedin", "remoteok", "weworkremotely", "careers", "jooble", "adzuna"], []),
+    ("all", "germany", ["linkedin", "remoteok", "weworkremotely", "careers", "jooble", "adzuna"], [(_CZ, ("czechia",))]),
+    (["boards"], "czechia", _CZ, []), (["boards"], "germany", [], [(_CZ, ("czechia",))]),
+    (["boards", "remote"], "", _CZ + ["remoteok", "weworkremotely"], []),
+    (["linkedin", "careers"], "czechia", ["linkedin", "careers"], []),
+    (("choice", ["remote", "linkedin"]), "germany", ["linkedin", "remoteok", "weworkremotely"], []),
+    (("options", {"source": "czech", "include_remote": True}), "germany",
+     ["linkedin", "remoteok", "weworkremotely", "careers"], [(_CZ, ("czechia",))]),
+]
+
+
+@pytest.mark.parametrize("setting, country, names, left", _PINNED)
+def test_every_setting_finds_the_same_sources_as_before(setting, country, names, left, monkeypatch):
+    for cls in (job_sources.JobSource, job_sources.Board, job_sources.AdzunaSource, job_sources.JoobleSource):
+        monkeypatch.setattr(cls, "available", lambda self: True)                     # every source set up
+    if isinstance(setting, tuple):
+        kind, value = setting
+        setting = job_sources.SourceChoice(value) if kind == "choice" else job_sources.SourceChoice.from_options(value)
+    assert [s.name for s in job_sources.sources_for(setting, country=country)] == names
+    assert job_sources.left_out(setting, country) == left
+
+
+def test_one_owner_decides_which_sources_a_setting_includes():
+    """SourceChoice is the only place that knows the older words; a source knows just its own kind."""
+    assert job_sources.SourceChoice.of("czech").kinds == ("boards", "linkedin", "careers")
+    assert job_sources.SourceChoice.of(["remote", "boards"]).kinds == ("boards", "remote")
+    assert job_sources.SourceChoice.of("no such word").kinds == ()
+    choice = job_sources.SourceChoice(["linkedin"])
+    assert job_sources.SourceChoice.of(choice) is choice
+    assert job_sources.SourceChoice.from_command_line("linkedin", True).kinds == ("linkedin", "remote")
+    assert not hasattr(job_sources, "_tags")
+    assert {s.kind for s in job_sources.all_sources()} <= {k for k, _n in job_sources.SourceChoice.KINDS + job_sources.SourceChoice.EXTRA}

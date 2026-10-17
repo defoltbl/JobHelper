@@ -21,20 +21,21 @@ Fetch = Callable[[str, str, int], list[dict[str, Any]]]
 
 
 class JobSource(ABC):
-    """One place to find postings. `groups` are the settings of Options' "Job source" that include it."""
+    """One place to find postings. Its `kind` is one of `SourceChoice.KINDS` or `EXTRA` ("boards", "linkedin",
+    "remote" …); which settings include it is decided by `SourceChoice`, not here."""
 
     # The countries a source has postings for (as `places.country_of` names them); empty = anywhere.
     countries: tuple[str, ...] = ()
 
-    def __init__(self, name: str, groups: tuple[str, ...]) -> None:
+    def __init__(self, name: str, kind: str) -> None:
         self.name = name
-        self.groups = groups
+        self.kind = kind
 
     @property
     def remote_only(self) -> bool:
         """Does it list remote jobs only (RemoteOK, We Work Remotely)? Their postings are remote even when
         the location says only "USA Only" or "Europe"."""
-        return "remote" in self.groups
+        return self.kind == "remote"
 
     def serves(self, country: str) -> bool:
         """Whether it has postings for a search in `country` ('' = a place the app does not know: it may be
@@ -56,10 +57,10 @@ class JobSource(ABC):
 class Board(JobSource):
     """A board read by a scraper function (jobs.cz, prace.cz, RemoteOK, We Work Remotely, the career sites)."""
 
-    def __init__(self, name: str, fetch: Fetch, groups: tuple[str, ...] = ("all",),
+    def __init__(self, name: str, fetch: Fetch, kind: str = "",
                  forget: Callable[[], None] | None = None, needs: Callable[[], Any] | None = None,
                  countries: tuple[str, ...] = ()) -> None:
-        super().__init__(name, groups)
+        super().__init__(name, kind)
         self._fetch, self._forget, self._needs = fetch, forget, needs
         self.countries = countries
 
@@ -78,7 +79,7 @@ class LinkedInSource(JobSource):
     """LinkedIn's public job search, limited to recent postings when Options asks for that."""
 
     def __init__(self, max_age_days: int = 0) -> None:
-        super().__init__("linkedin", ("czech", "linkedin", "all"))
+        super().__init__("linkedin", "linkedin")
         self._max_age_days = max_age_days
 
     def find(self, query: str, where: str, per_query: int) -> list[dict[str, Any]]:
@@ -91,7 +92,7 @@ class AdzunaSource(JobSource):
     URL = "https://api.adzuna.com/v1/api/jobs/{country}/search/{page}"
 
     def __init__(self) -> None:
-        super().__init__("adzuna", ("adzuna", "all"))
+        super().__init__("adzuna", "adzuna")
 
     def available(self) -> bool:
         return bool(config.adzuna_available())
@@ -120,7 +121,7 @@ class JoobleSource(JobSource):
     URL = "https://jooble.org/api/{key}"
 
     def __init__(self) -> None:
-        super().__init__("jooble", ("jooble", "all"))
+        super().__init__("jooble", "jooble")
 
     def available(self) -> bool:
         return bool(config.has_jooble())
@@ -138,12 +139,12 @@ class JoobleSource(JobSource):
 def all_sources(max_age_days: int = 0) -> list[JobSource]:
     """Every source the app knows, in the order a search asks them."""
     return [
-        Board("jobs.cz", scrapers_cz.jobs_cz, ("czech", "boards", "all"), countries=("czechia",)),     # Czech postings only
-        Board("prace.cz", scrapers_cz.prace_cz, ("czech", "boards", "all"), countries=("czechia",)),
+        Board("jobs.cz", scrapers_cz.jobs_cz, "boards", countries=("czechia",)),     # Czech postings only
+        Board("prace.cz", scrapers_cz.prace_cz, "boards", countries=("czechia",)),
         LinkedInSource(max_age_days),
-        Board("remoteok", scrapers_remote.remoteok, ("remote", "all"), forget=scrapers_remote.forget_remoteok),
-        Board("weworkremotely", scrapers_remote.weworkremotely, ("remote", "all"), forget=scrapers_remote.forget_wwr),
-        Board("careers", scrapers_ats.careers, ("careers", "czech", "all"), forget=scrapers_ats.forget, needs=scrapers_ats.load_companies),
+        Board("remoteok", scrapers_remote.remoteok, "remote", forget=scrapers_remote.forget_remoteok),
+        Board("weworkremotely", scrapers_remote.weworkremotely, "remote", forget=scrapers_remote.forget_wwr),
+        Board("careers", scrapers_ats.careers, "careers", forget=scrapers_ats.forget, needs=scrapers_ats.load_companies),
         JoobleSource(),
         AdzunaSource(),
     ]
@@ -187,6 +188,16 @@ class SourceChoice:
         return any(key == k for k, _name in cls.KINDS + cls.EXTRA)
 
     @classmethod
+    def of(cls, value) -> "SourceChoice":
+        """Any way a setting is written, as one choice: a SourceChoice, a list of kinds, or one older word
+        ("czech", "all", "linkedin" …; `--source` on the command line). An unknown word reads no source."""
+        if isinstance(value, SourceChoice):
+            return value
+        if isinstance(value, str):
+            return cls(cls._LEGACY.get(value, ()))
+        return cls(value)
+
+    @classmethod
     def from_options(cls, opts: dict[str, Any]) -> "SourceChoice":
         chosen = opts.get("sources")
         if isinstance(chosen, (list, tuple)) and any(cls.known(k) for k in chosen):
@@ -197,6 +208,11 @@ class SourceChoice:
             kinds += ("remote",)
         return cls(kinds)
 
+    @classmethod
+    def from_command_line(cls, source: str, include_remote: bool) -> "SourceChoice":
+        """`--source` as typed, and `--include-remote`, which adds the remote boards to any source."""
+        return cls(cls.of(source).kinds + (("remote",) if include_remote else ()))
+
     @property
     def kinds(self) -> tuple[str, ...]:
         return self._kinds
@@ -206,16 +222,7 @@ class SourceChoice:
         return [name for key, name in self.KINDS + self.EXTRA if key in self._kinds]
 
     def includes(self, source: "JobSource") -> bool:
-        return any(kind in source.groups for kind in self._kinds)
-
-
-def _tags(source) -> set[str]:
-    """The groups a setting stands for: one old value ("czech", "all") or a SourceChoice / list of kinds."""
-    if isinstance(source, SourceChoice):
-        return set(source.kinds)
-    if isinstance(source, str):
-        return {source}
-    return set(source or ())
+        return source.kind in self._kinds
 
 
 def sources_for(source="czech", max_age_days: int = 0, country: str = "") -> list[JobSource]:
@@ -232,16 +239,16 @@ def sources_for(source="czech", max_age_days: int = 0, country: str = "") -> lis
     `max_age_days` limits LinkedIn to recent postings. `country` is where the search is: a board for
     another country only (jobs.cz, prace.cz outside Czechia) is left out, see `left_out`. `source` may
     also be a SourceChoice (or a list of its kinds): then every source of any chosen kind is asked."""
-    tags = _tags(source)
-    return [s for s in all_sources(max_age_days) if tags & set(s.groups) and s.available() and s.serves(country)]
+    choice = SourceChoice.of(source)
+    return [s for s in all_sources(max_age_days) if choice.includes(s) and s.available() and s.serves(country)]
 
 
 def left_out(source, country: str) -> list[tuple[list[str], tuple[str, ...]]]:
     """The sources of this setting that a search in `country` does not use, because they are for another
     country: [(their names, the countries they are for)], one entry per set of countries."""
     grouped: dict[tuple[str, ...], list[str]] = {}
-    tags = _tags(source)
+    choice = SourceChoice.of(source)
     for s in all_sources():
-        if tags & set(s.groups) and not s.serves(country):
+        if choice.includes(s) and not s.serves(country):
             grouped.setdefault(s.countries, []).append(s.name)
     return [(names, served) for served, names in grouped.items()]
