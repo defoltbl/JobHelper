@@ -165,7 +165,7 @@ def test_locked_data_shows_empty_lists_not_a_crash(isolate_data):
     db.mark_seen("<1@x>")
     vault.use_keychain(vault.MemoryKeychain())                      # key gone
     api = ui_api.Api()
-    assert api.counts() == {"leads": 0, "applications": 0, "responses": 0, "followups": 0, "duplicates": 0}
+    assert api.counts() == {"leads": 0, "applications": 0, "interviews": 0, "offers": 0, "responses": 0, "followups": 0, "duplicates": 0}
     assert api.leads() == [] and api.applications() == [] and api.responses() == []
     with pytest.raises(vault.VaultError):
         store.load_jobs()

@@ -74,14 +74,29 @@ def _when(job: dict[str, Any]) -> tuple[str, str]:
 PASSED_AFTER = timedelta(hours=1)    # an event with a time stays for its first hour (it may be going on), then it has passed
 
 
+def leaves_at(event: dict[str, Any]) -> datetime | None:
+    """When an event leaves "Coming up": PASSED_AFTER after its time, or at the end of its day when it has
+    no time. The window, the reminders and the widget all use this moment (None: no date)."""
+    try:
+        day = date.fromisoformat(event.get("date", ""))
+    except ValueError:
+        return None
+    try:
+        start = datetime.combine(day, datetime.strptime(event.get("time", ""), "%H:%M").time())
+    except ValueError:
+        return datetime.combine(day + timedelta(days=1), datetime.min.time())
+    return start + PASSED_AFTER
+
+
 def has_passed(event: dict[str, Any], now: datetime) -> bool:
     """True when an event with a time started more than PASSED_AFTER ago. An event without a time
     lasts the whole day (the date check covers it)."""
     try:
-        at = datetime.combine(date.fromisoformat(event.get("date", "")), datetime.strptime(event.get("time", ""), "%H:%M").time())
+        datetime.strptime(event.get("time", ""), "%H:%M")
     except ValueError:
         return False
-    return now >= at + PASSED_AFTER
+    leaves = leaves_at(event)
+    return leaves is not None and now >= leaves
 
 
 def upcoming(jobs: list[dict[str, Any]], today: date | None = None, limit: int = 0,
