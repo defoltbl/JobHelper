@@ -409,6 +409,18 @@ def load_dropped() -> dict[str, Any]:
             "total": total if isinstance(total, int) and not isinstance(total, bool) and total >= len(rows) else len(rows)}
 
 
+
+# Sources that already hold the remote boards, or promise one kind of board only ("LinkedIn only").
+_NO_REMOTE_EXTRA = ("remote", "all", "linkedin", "careers")
+
+
+def remote_added(source: str, include_remote) -> bool:
+    """Whether a search adds the remote boards to `source`. The "Include remote jobs" switch adds them
+    to a mixed source such as the Czech boards; a source called "… only" stays only that, and a source
+    that has them already is not searched twice. The window's switch and chip use the same rule."""
+    return include_remote is True and (source or "czech") not in _NO_REMOTE_EXTRA
+
+
 def search(
     queries: list[str],
     where: str = "",

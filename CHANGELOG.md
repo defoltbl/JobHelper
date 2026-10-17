@@ -3,6 +3,10 @@
 The newest changes are first. The Help window in the app shows this file under "What changed".
 Format: a `## date` line, then one `- ` line per change; `**words**` are shown in bold.
 
+## 17 October 2026
+
+- **"LinkedIn only" and "Company career sites only" now search only that**: the "Include remote jobs" switch added the remote boards to them too, and "+ Remote" stayed on the main screen. The switch now sits under **Job source** and shows only where it adds something.
+
 ## 16 October 2026
 
 - The widget is **brought up to date as soon as the app starts** and whenever your numbers or dates change; before, it showed the new numbers only at its next own check, up to 15 minutes later.
