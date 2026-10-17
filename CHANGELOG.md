@@ -1,7 +1,9 @@
 # What changed
 
 The newest changes are first. The Help window in the app shows this file under "What changed".
-Format: a `## date` line, then one `- ` line per change; `**words**` are shown in bold.
+Format: a `## ` heading, then one `- ` line per change; `**words**` are shown in bold. Changes not yet
+in a version go under `## Unreleased`; a released version's heading is `## 1.1.0 – 18 October 2026`
+(its tag is `v1.1.0` on GitHub). Version 1.0.0 is everything up to 17 October 2026, listed by date.
 
 ## 17 October 2026
 
