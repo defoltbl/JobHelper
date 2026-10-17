@@ -521,3 +521,13 @@ def test_two_writers_to_the_replies_at_once_lose_nothing(isolate_data):
     for w in workers:
         w.join()
     assert db.total() == 60 and all(db.is_seen(f"<{k * 100 + n}@x>") for k in range(4) for n in range(15))
+
+
+def test_only_a_known_column_can_be_counted(isolate_data):
+    """The column name goes into the SQL text, so anything else is refused."""
+    import pytest
+    from jobhelper import db
+    assert db.counts_by("stage") == {}
+    for bad in ("stage; DROP TABLE responses", "msg_id", ""):
+        with pytest.raises(ValueError):
+            db.counts_by(bad)
