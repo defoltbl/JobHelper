@@ -146,6 +146,9 @@ Dialog {
     // which remote jobs a search keeps (places.RemoteReach): open to your country and the ones added, or anywhere
     property string remoteWhere: "country"
     property var pickedRemote: []         // country keys, as bridge.countries() gives them
+    property string notifyPermission: ""  // whether macOS shows the notifications (bridge.notificationPermission), read on opening
+    property string notifyNote: ""        // what the Test button found
+    property bool notifyBad: false
     // your country as the window shows it: the one typed, or the city's
     readonly property string homeName: bridge.countryOf(countryField.text.trim() !== "" ? countryField.text : cityCombo.editText)
     function dropRemote(key) { pickedRemote = pickedRemote.filter(function (k) { return k !== key; }); }
@@ -258,6 +261,7 @@ Dialog {
         countryField.text = o.country || "";
         pickedSources = (o.sources || []).slice();
         remoteWhere = o.remote_where === "world" ? "world" : "country";
+        notifyPermission = bridge.notificationPermission(); notifyNote = ""; notifyBad = false;
         pickedRemote = (o.remote_countries || []).slice();
         fullSw.checked = o.full_time_only !== false;
         skipTags.setAll(o.skip_words !== undefined ? o.skip_words : ["intern", "internship"]);
@@ -681,7 +685,23 @@ Dialog {
                                 model: ["100%", "110%", "125%", "150%"] } }
                         Sep {}
                         SRow { label: "Notifications"; hint: "run finished, paused on the limit, interview invitation"
-                            ThemedSwitch { id: notifySw; objectName: "notifySw" } }
+                            RowLayout { spacing: 8
+                                SmallButton { id: notifyTestBtn; objectName: "notifyTest"; text: "Test"
+                                    onClicked: { var r = bridge.testNotification(); optDialog.notifyNote = r.msg || "";
+                                                 optDialog.notifyBad = !(r && r.ok); optDialog.notifyPermission = bridge.notificationPermission(); } }
+                                ThemedSwitch { id: notifySw; objectName: "notifySw" } } }
+                        Text { objectName: "notifyNote"; visible: optDialog.notifyNote !== "" && !(notifySw.checked && optDialog.notifyPermission === "off")
+                            Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 8; wrapMode: Text.WordWrap
+                            font.pixelSize: 11; font.bold: optDialog.notifyBad; color: optDialog.notifyBad ? theme.crit : theme.good
+                            text: optDialog.notifyNote }
+                        // macOS decides whether they are shown: say so in red when it has them turned off
+                        RowLayout { objectName: "notifyOffRow"; visible: notifySw.checked && optDialog.notifyPermission === "off"
+                            Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 10; spacing: 8
+                            Text { objectName: "notifyOff"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit
+                                font.pixelSize: 11; font.bold: true
+                                text: "macOS does not show JobHelper's notifications. Turn them on in System Settings → Notifications → JobHelper." }
+                            SmallButton { objectName: "notifySettings"; text: "Open System Settings"
+                                onClicked: bridge.openNotificationSettings() } }
                         Sep {}
                         SRow { label: "Keep backups"; hint: "newest ones kept, older deleted · 0 = keep all"
                             ThemedSpin { id: keepSpin; objectName: "keepSpin"; from: 0; to: 200; value: 10 } }

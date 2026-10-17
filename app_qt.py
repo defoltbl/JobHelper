@@ -39,6 +39,7 @@ def apply_text_size(environ=None) -> str:
 
 
 CHECK_FLAG = "--check-window"
+NOTIFY_TEST_FLAG = "--notify-test"       # the installed app sends one test notification and says what macOS did
 
 
 def check_refusal(environ) -> str:
@@ -58,6 +59,12 @@ def main() -> int:
     os.chdir(config.work_dir())
     if weekly.FLAG in sys.argv[1:]:
         return weekly.main()                          # the weekly run: no window, everything into its log
+    if NOTIFY_TEST_FLAG in sys.argv[1:]:
+        from jobhelper import notify
+        print("If macOS asks whether to allow JobHelper's notifications, choose Allow.")
+        result = notify.send_test(patience=60)
+        print(f"notification: {result['msg']} (permission: {notify.notifier().permission()})")
+        return 0 if result["ok"] else 1
     checking = CHECK_FLAG in sys.argv[1:]
     if checking:
         refusal = check_refusal(os.environ)

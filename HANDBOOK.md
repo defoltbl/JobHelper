@@ -252,6 +252,11 @@ data/                your data; only the *.example.* files are in git
 - **A passed date leaves "Coming up" one hour after its time** (`planner.PASSED_AFTER`, `planner.leaves_at`). The
   summary for the widget carries that moment with each date ("leaves"), so the widget has no copy of the rule: it
   hides the date then (`When.gone`) and puts a timeline entry there, also when the app is closed.
+- **Notifications come from the app's own process** (`macos/Notify.swift`, `notify.AppNotifier`). A script app
+  (osascript applet) cannot ask macOS for permission, so macOS kept every notification without showing it, also
+  not in the Notification Center. macOS asks an app once; a question that goes away unanswered (the program
+  ended) counts as "Don't Allow", which only the person can change in System Settings. So `--notify-test`
+  waits for the answer, and Options says in red when notifications are off.
 - **A widget extension must start in `_NSExtensionMain`.** Linked like a plain program (entry `main`),
   `WidgetBundle.main()` returned at once on macOS 26: chronod logged "query failed … Code=4099" and the
   gallery stayed empty. Link with `-Xlinker -e -Xlinker _NSExtensionMain`. Read logs with `/usr/bin/log`:

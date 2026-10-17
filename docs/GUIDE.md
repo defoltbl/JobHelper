@@ -1996,7 +1996,7 @@ Table 16.4 lists the Notifications and storage settings.
 | Setting | What it does | Values |
 |---|---|---|
 | **Size of text and controls** | Draws everything in the window larger, for a large or very sharp screen. It is used the next time you open the app | 100%, 110%, 125% or 150% |
-| **Notifications** | A macOS notification when a run finishes, pauses on the limit, or an interview invitation arrives | On or off |
+| **Notifications** | A macOS notification when a run finishes, pauses on the limit, or an interview invitation arrives. **Test** sends one now and says what macOS did. When macOS has JobHelper's notifications turned off, a red line says so, with **Open System Settings** | On or off |
 | **Keep backups** | How many automatic backups are kept; older ones are removed | 0 to 200; 0 = keep all |
 | **Back up everything** | **Back up now** makes one encrypted backup of everything. **Check backups** proves that a backup can be restored. **Save a readable copy…** puts the newest full backup, not encrypted, into an empty folder you choose | Three buttons |
 | **Moved documents older than** | Moves old copies in the backup to the Trash, after asking | 7 days or more |
@@ -2302,6 +2302,7 @@ Table 20.4 lists other problems.
 |---|---|---|
 | Something failed quietly | The app carried on after an error | Open **Help** > **Usage and problems**: the second card lists such errors, newest first, and **Show the file in Finder** shows the whole log |
 | The data cannot be opened on a new Mac | The data key is in the old Mac's Keychain | Paste your recovery key in the **Account** card (section 2) |
+| No notifications come | macOS has JobHelper's notifications turned off. macOS asks only once, the first time | Open **Options** > **Notifications and storage**. Select **Open System Settings**, select **JobHelper** and turn on **Allow notifications**. Then select **Test** |
 
 ---
 

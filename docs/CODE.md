@@ -486,7 +486,7 @@ Table 6.4 lists the programs from outside that the app uses, and what it does wi
 | Program | Where the app finds it | Without it |
 |---|---|---|
 | LibreOffice | The PATH, then its usual folders (`pdf._CANDIDATES`), also for an app that Finder opens | No PDF copies. The **PDF copies** row of the Account card says how to get them |
-| The notifier | A small helper app in `data/notifier`, built at the first notification | `osascript` shows the notification. A message that waits more than `notify.STALE_HOURS` is not shown late |
+| The notifications | `Contents/Frameworks/libJobHelperNotify.dylib` in the built app (`macos/Notify.swift`, Apple's notification framework, loaded by `notify.AppNotifier`). macOS asks once and lists JobHelper in System Settings | `osascript` shows the notification (`notify.ScriptNotifier`), for `python app_qt.py` |
 
 ### The check before a push
 

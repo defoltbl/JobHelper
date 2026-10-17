@@ -147,8 +147,9 @@ Inside the window:
   besides your CV, that letters and interview answers may state. Left empty, they are not mentioned.
 - **Show in folder** (job window) – selects the CV, the letter or the single PDF in Finder (the
   PDF copy when there is one), so you can drag it into an application form.
-- **Notifications come from "JobHelper"**, with its icon. The first one makes a small helper
-  app in `data/notifier/`; macOS may ask once whether JobHelper may show notifications.
+- **Notifications come from "JobHelper"**, with its icon. macOS asks once whether JobHelper may
+  show them; if they are off, Options says so in red. `JobHelper --notify-test` (the installed
+  app's program) sends a test and waits up to a minute for that answer.
 - **Notifications** (Options, on by default) – a macOS notification when a search or scan
   finishes or pauses on the limit while the app is in the background, and always for an
   interview invitation. The weekly run notifies too.

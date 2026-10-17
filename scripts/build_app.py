@@ -71,6 +71,10 @@ class AppCheck:
         reload = WidgetBuild(self._app).reload_helper
         exported = subprocess.run(["nm", "-gU", str(reload)], capture_output=True, text=True).stdout if reload.is_file() else ""
         self._expect("_jobhelper_reload_widgets" in exported, "it carries the library that redraws the widget at once")
+        notify = NotifyBuild(self._app).library
+        exported = subprocess.run(["nm", "-gU", str(notify)], capture_output=True, text=True).stdout if notify.is_file() else ""
+        self._expect("_jobhelper_notify" in exported and "_jobhelper_notify_permission" in exported,
+                     "it carries the library that shows its own notifications")
         program = widget / "Contents" / "MacOS" / app_info.WIDGET_NAME
         if program.is_file():
             started = subprocess.run([str(program)], capture_output=True, text=True, timeout=30)
@@ -170,6 +174,36 @@ class WidgetBuild:
         return 0
 
 
+class NotifyBuild:
+    """The app's own notifications: macos/Notify.swift compiled into Contents/Frameworks/libJobHelperNotify.dylib
+    and signed. The app loads it into its own process, so macOS shows the notifications under JobHelper's name
+    and asks the person once. WidgetBuild signs the whole app afterwards, because its contents changed."""
+
+    SOURCE = ROOT / "macos" / "Notify.swift"
+
+    def __init__(self, app: Path) -> None:
+        self._app = Path(app)
+
+    @property
+    def library(self) -> Path:
+        return self._app / "Contents" / "Frameworks" / app_info.NOTIFY_LIBRARY
+
+    def run(self) -> int:
+        swiftc = shutil.which("swiftc")
+        if not swiftc:
+            print("swiftc is not installed (xcode-select --install): the app is built without its own notifications.")
+            return 1
+        sdk = subprocess.run(["xcrun", "--show-sdk-path"], capture_output=True, text=True).stdout.strip()
+        arch = subprocess.run(["uname", "-m"], capture_output=True, text=True).stdout.strip() or "arm64"
+        self.library.parent.mkdir(parents=True, exist_ok=True)
+        done = subprocess.run([swiftc, "-emit-library", "-O", "-target", f"{arch}-apple-macos{WidgetBuild.MIN_MACOS}", "-sdk", sdk,
+                               "-framework", "UserNotifications", "-module-name", "JobHelperNotify",
+                               str(self.SOURCE), "-o", str(self.library)])
+        if done.returncode:
+            return done.returncode
+        return subprocess.run(["codesign", "--force", "--sign", "-", str(self.library)]).returncode
+
+
 def _size(path: Path) -> int:
     return sum(p.stat().st_size for p in path.rglob("*") if p.is_file() and not p.is_symlink())
 
@@ -186,7 +220,7 @@ def build() -> int:
 
 def main(argv: list[str]) -> int:
     if "--check" not in argv:
-        code = build() or WidgetBuild(APP).run()
+        code = build() or NotifyBuild(APP).run() or WidgetBuild(APP).run()
         if code:
             return code
     ok = AppCheck(APP).run()

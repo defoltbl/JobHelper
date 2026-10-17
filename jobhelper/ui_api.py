@@ -72,6 +72,9 @@ class Api:
 
     # ── The app itself: connections, usage, problems, backups (SystemService) ──
     connections = _Via("_system")
+    notification_permission = _Via("_system")
+    open_notification_settings = _Via("_system")
+    test_notification = _Via("_system")
     usage_info = _Via("_system")
     self_check = _Via("_system")
     changelog = _Via("_system")
