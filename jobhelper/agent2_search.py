@@ -523,13 +523,6 @@ def search(
         sift("part-time", lambda j: "Part-time, and you search for full-time only."
              if filters.is_part_time(j["title"], j.get("description", "")) else "", "part-time roles")
 
-    # The same role posted twice (jobs.cz + prace.cz, or a LinkedIn repost).
-    removed = prune_duplicate_leads(results)
-    for job in removed:
-        note_dropped(dropped, job, "duplicate", "The same role is already listed from another board.")
-    if removed:
-        print(f"  · filtered out {len(removed)} duplicate postings")
-
     # Roles above the candidate's level (junior/mid only).
     def level_reason(j):
         word = filters.level_word(j["title"], candidate_seniority, level_words)
@@ -542,6 +535,15 @@ def search(
     if max_age_days and max_age_days > 0:
         sift("too old", lambda j: "" if _is_recent(j, max_age_days) else f"Posted more than {max_age_days} days ago.",
              f"jobs older than {max_age_days} days")
+
+    # The same role posted twice (jobs.cz + prace.cz, or a LinkedIn repost). Last, so that a copy is
+    # dropped as a duplicate only when another copy is kept: the copies of one role can differ in
+    # language or date, and a filter must not remove the one that was kept and hide the other.
+    removed = prune_duplicate_leads(results)
+    for job in removed:
+        note_dropped(dropped, job, "duplicate", "The same role is already listed from another board.")
+    if removed:
+        print(f"  · filtered out {len(removed)} duplicate postings")
 
     # Add a Prague market-rate desired-salary estimate to each listing.
     for job in results:

@@ -485,3 +485,26 @@ def test_a_search_leaves_out_an_ad_in_any_other_language(monkeypatch):
     dropped = []
     kept = agent2_search.search(["developer"], where="Prague", dropped=dropped, english_only=False)      # someone who works in other languages too
     assert sorted(j["id"] for j in kept) == ["de", "en", "fr"] and dropped == []
+
+
+def test_a_role_on_two_boards_is_not_lost_when_the_kept_copy_is_filtered_out(monkeypatch):
+    # The longer copy would be kept as the duplicate's winner; it is in Czech, the other copy is in English.
+    czech = ("Hledáme nového kolegu do našeho týmu. Budeš vyvíjet software pro naše klienty a pracovat s moderními "
+             "technologiemi. Nabízíme práci v Praze, vzdělávání a dobrý kolektiv lidí, kteří tě rádi všechno naučí.") * 3
+    found = [_job("cs", "Junior Software Engineer", company="Acme", description=czech),
+             _job("en", "Junior Software Engineer", company="Acme"),
+             _job("en-old", "Junior QA Engineer", company="Beta", description=EN * 3,
+                  date_posted=(date.today() - timedelta(days=40)).isoformat()),
+             _job("en-new", "Junior QA Engineer", company="Beta")]
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for",
+                        lambda source, max_age_days=0, country="": [job_sources.Board("fake", lambda q, where, n: [dict(j) for j in found])])
+    dropped = []
+    kept = agent2_search.search(["engineer"], where="Prague", max_age_days=10, dropped=dropped)
+    assert sorted(j["id"] for j in kept) == ["en", "en-new"]
+    by = {d["url"].rsplit("/", 1)[-1]: d["reason"] for d in dropped}
+    assert by == {"cs": "The ad is written in Czech.", "en-old": "Posted more than 10 days ago."}
+    # Two copies that both pass the filters: one is kept, the other is noted as the duplicate.
+    dropped = []
+    kept = agent2_search.search(["engineer"], where="Prague", max_age_days=10, dropped=dropped, english_only=False)
+    assert sorted(j["id"] for j in kept) == ["cs", "en-new"]
+    assert {d["url"].rsplit("/", 1)[-1]: d["group"] for d in dropped} == {"en": "duplicate", "en-old": "too old"}
