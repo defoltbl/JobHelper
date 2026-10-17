@@ -359,19 +359,21 @@ Dialog {
                         SRow { label: "Remote jobs"; hint: "from any source · which places they must be open to" }
                         ColumnLayout { id: remoteBox; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12; spacing: 8
                             Flow { objectName: "remoteScope"; Layout.fillWidth: true; spacing: 6
-                                Repeater { model: [["country", optDialog.homeName !== "" ? "In " + optDialog.homeName : "In my country"],
-                                                   ["world", "Anywhere in the world"]]
+                                Repeater { model: remoteDialog.choices.scopes || []
                                     Rectangle {
-                                        readonly property bool picked: optDialog.remoteWhere === modelData[0]
-                                        objectName: "remote_" + modelData[0]
+                                        readonly property bool picked: optDialog.remoteWhere === modelData.key
+                                        objectName: "remote_" + modelData.key
                                         height: 28; radius: 14; width: rwT.implicitWidth + 24
                                         color: picked ? theme.accent : (rwMa.containsMouse ? theme.surface2 : theme.inset)
                                         border.width: 1; border.color: picked ? win.clearOf(theme.line) : theme.line
                                         Behavior on color { ColorAnimation { duration: 140 } }
-                                        Text { id: rwT; anchors.centerIn: parent; text: (parent.picked ? "✓ " : "") + modelData[1]
+                                        // "In my country" names the country when the window knows it
+                                        Text { id: rwT; anchors.centerIn: parent
+                                            text: (parent.picked ? "✓ " : "") + (modelData.key === "country" && optDialog.homeName !== ""
+                                                                                  ? "In " + optDialog.homeName : modelData.name)
                                             font.pixelSize: 12; font.bold: parent.picked; color: parent.picked ? theme.accentInk : theme.soft }
                                         MouseArea { id: rwMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                            onClicked: optDialog.remoteWhere = modelData[0] } } } }
+                                            onClicked: optDialog.remoteWhere = modelData.key } } } }
                             // a job tied to one country is kept, in both choices, only for yours and the ones added here
                             Text { objectName: "remoteNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                                 text: (optDialog.remoteWhere === "world"

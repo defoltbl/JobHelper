@@ -57,6 +57,10 @@ class OptionsService:
         """Every country the app knows, for the remote-jobs country picker: [{key, name, area}] by name."""
         return places.all_countries()
 
+    def remote_choices(self):
+        """What Options and the country picker offer for remote jobs (places.RemoteReach.offered)."""
+        return places.RemoteReach.offered()
+
     # ── the last run (shown on the Last run card, also after a restart) ──
     def last_run(self):
         try:
@@ -189,18 +193,11 @@ class OptionsService:
             return {}, "“assistant browser” must be one of: " + ", ".join(chrome.BROWSERS) + "."
         if clean.get("country") and not re.fullmatch(r"[^\W\d_]+(?:[ '.\-]+[^\W\d_]+)*\.?", clean["country"]):
             return {}, "“country” must be a country's name in letters, for example Germany."
-        if "remote_where" in clean and clean["remote_where"] not in dict(places.RemoteReach.SCOPES):
-            return {}, "“Remote jobs” must be in your country or anywhere in the world."
+        remote_problem = places.RemoteReach.problem(clean)
+        if remote_problem:
+            return {}, remote_problem
         if "remote_countries" in clean:
-            picked = clean["remote_countries"]
-            if not isinstance(picked, (list, tuple)) or any(not isinstance(c, str) for c in picked):
-                return {}, "“Remote jobs” takes a list of countries."
-            if len(picked) > places.RemoteReach.MAX_COUNTRIES:
-                return {}, f"“Remote jobs” takes up to {places.RemoteReach.MAX_COUNTRIES} countries."
-            unknown = next((c for c in picked if places.plain(c) not in places.COUNTRIES), None)
-            if unknown is not None:
-                return {}, f"“{unknown[:40]}” is not a country the app knows. Choose it from the list."
-            clean["remote_countries"] = list(places.RemoteReach("country", picked).countries)
+            clean["remote_countries"] = list(places.RemoteReach("country", clean["remote_countries"]).countries)
         for key in ("include_remote", "all_languages", "full_time_only", "notifications", "scan_all_folders", "assistant_watch"):
             if key in clean and not isinstance(clean[key], bool):
                 return {}, f"“{key.replace('_', ' ')}” must be on or off."

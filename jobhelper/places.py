@@ -305,6 +305,28 @@ class RemoteReach:
     def as_options(self) -> dict[str, Any]:
         return {"remote_where": self.scope, "remote_countries": list(self.countries)}
 
+    @classmethod
+    def problem(cls, opts: dict[str, Any]) -> str:
+        """What is wrong with the remote-jobs part of Options as sent ('' = nothing). Only the keys present are checked."""
+        if "remote_where" in opts and opts["remote_where"] not in dict(cls.SCOPES):
+            return "“Remote jobs” must be in your country or anywhere in the world."
+        if "remote_countries" not in opts:
+            return ""
+        picked = opts["remote_countries"]
+        if not isinstance(picked, (list, tuple)) or any(not isinstance(c, str) for c in picked):
+            return "“Remote jobs” takes a list of countries."
+        if len(picked) > cls.MAX_COUNTRIES:
+            return f"“Remote jobs” takes up to {cls.MAX_COUNTRIES} countries."
+        unknown = next((c for c in picked if plain(c) not in COUNTRIES), None)
+        return f"“{unknown[:40]}” is not a country the app knows. Choose it from the list." if unknown is not None else ""
+
+    @classmethod
+    def offered(cls) -> dict[str, Any]:
+        """What the window offers: the two choices, the parts of the world to filter the country list by, and the most countries."""
+        return {"scopes": [{"key": key, "name": name} for key, name in cls.SCOPES],
+                "areas": [{"key": "", "name": "All"}] + [{"key": area, "name": shown(area)} for area in _AREAS],
+                "most": cls.MAX_COUNTRIES}
+
 
 def all_countries() -> list[dict[str, str]]:
     """Every country the app knows, by name, for the window's country picker: [{key, name, area}]."""

@@ -7,6 +7,7 @@ itself does not change.
 """
 from __future__ import annotations
 
+import functools
 from abc import ABC, abstractmethod
 from typing import Any, Callable
 
@@ -28,6 +29,12 @@ class JobSource(ABC):
     def __init__(self, name: str, groups: tuple[str, ...]) -> None:
         self.name = name
         self.groups = groups
+
+    @property
+    def remote_only(self) -> bool:
+        """Does it list remote jobs only (RemoteOK, We Work Remotely)? Their postings are remote even when
+        the location says only "USA Only" or "Europe"."""
+        return "remote" in self.groups
 
     def serves(self, country: str) -> bool:
         """Whether it has postings for a search in `country` ('' = a place the app does not know: it may be
@@ -142,10 +149,14 @@ def all_sources(max_age_days: int = 0) -> list[JobSource]:
     ]
 
 
+@functools.cache
+def _remote_board_names() -> frozenset[str]:
+    return frozenset(s.name for s in all_sources() if s.remote_only)
+
+
 def is_remote_board(name: str) -> bool:
-    """Does this source list remote jobs only (RemoteOK, We Work Remotely)? Their postings are remote
-    even when the location says only "USA Only" or "Europe"."""
-    return name in {s.name for s in all_sources() if "remote" in s.groups}
+    """Is a posting's `source` one of the boards that list remote jobs only (`JobSource.remote_only`)?"""
+    return name in _remote_board_names()
 
 
 class SourceChoice:
