@@ -20,7 +20,8 @@ class FakeApp:
     """What the feed asks the back end, with invented numbers."""
 
     def __init__(self, **over):
-        self.values = {"counts": {"leads": 9, "applications": 6, "responses": 5, "followups": 1, "duplicates": 2},
+        self.values = {"counts": {"leads": 9, "applications": 6, "interviews": 1, "offers": 1, "responses": 5, "followups": 1,
+                                  "duplicates": 2},
                        "upcoming": [{"id": "a", "kind": "interview", "company": "Brightline Works", "title": "Junior Backend Developer",
                                      "date": "2026-10-18", "time": "11:30", "days": 2, "label": "in 2 days", "note": "bring ID"}],
                        "last_run": {"when": "16 Oct 09:12", "found": 9, "letters": 5, "cost": 0.42, "scan_detail": "x"},
@@ -48,7 +49,7 @@ def test_the_summary_holds_the_numbers_and_dates_and_nothing_private(jobs):
     assert s["updated"] == "2026-10-16T10:00:00" and s["version"] == 1
     assert s["counts"] == {"leads": 9, "applications": 6, "interviews": 1, "offers": 1, "followups": 1, "responses": 5}
     assert s["next"] == [{"kind": "interview", "company": "Brightline Works", "title": "Junior Backend Developer",
-                          "date": "2026-10-18", "time": "11:30"}]                                 # no notes, no id
+                          "date": "2026-10-18", "time": "11:30", "leaves": "2026-10-18T12:30:00"}]   # no notes, no id
     assert s["last_run"] == {"when": "16 Oct 09:12", "found": 9, "letters": 5}                   # no costs or mail detail
     assert s["usage"] == {"five_hour_left": 66, "week_left": 88} and s["weekly"] == "Mon 09:00"
     assert set(s) == {"version", "updated", "counts", "next", "last_run", "usage", "weekly"}
@@ -240,7 +241,9 @@ def test_the_reload_helper_is_built_into_the_app():
 def test_the_widget_drops_a_date_once_it_has_passed_like_the_app():
     """The widget hides a passed date by itself (the app may be closed) with the app's rule, and redraws at that moment."""
     from jobhelper import planner
-    assert "static let passedAfter: TimeInterval = 3600" in SWIFT and planner.PASSED_AFTER.total_seconds() == 3600
+    gone = SWIFT.split("static func gone")[1].split("static func changes")[0]
+    assert "passedAfter" not in SWIFT and "3600" not in gone and "e.leaves" in gone          # no copy of the rule: the app's moment
+    assert "e.leaves" in SWIFT and planner.PASSED_AFTER.total_seconds() == 3600
     views = SWIFT.split("// ── how it looks")[1]
     assert "s.next" not in views and views.count("s.upcoming(at: now)") >= 6
     assert "When.changes(snapshot, after: now)" in SWIFT
@@ -292,3 +295,22 @@ def test_the_last_run_count_is_read_as_the_app_writes_it(written, count):
 
 def test_the_weekly_run_says_what_is_off():
     assert '"Weekly run off"' in SWIFT
+
+
+def test_the_widget_gets_its_numbers_from_the_apps_one_count(jobs):
+    """Interviews and offers are counted where the window counts jobs, not again by the widget."""
+    from jobhelper import ui_api
+    counts = ui_api.Api().counts()
+    assert (counts["interviews"], counts["offers"]) == (1, 1)
+    s = widget_feed.WidgetFeed(FakeApp(counts={**counts, "interviews": 7}), jobs / "w").snapshot()
+    assert s["counts"]["interviews"] == 7                                   # whatever the app counts, the widget shows
+
+
+def test_each_date_says_when_it_leaves_coming_up():
+    from jobhelper import planner
+    assert planner.leaves_at({"date": "2026-10-18", "time": "11:30"}) == datetime(2026, 10, 18, 12, 30)
+    assert planner.leaves_at({"date": "2026-10-18", "time": ""}) == datetime(2026, 10, 19, 0, 0)     # no time: the whole day
+    assert planner.leaves_at({"date": "", "time": "11:30"}) is None
+    assert planner.has_passed({"date": "2026-10-18", "time": "11:30"}, datetime(2026, 10, 18, 12, 30)) is True
+    assert planner.has_passed({"date": "2026-10-18", "time": "11:30"}, datetime(2026, 10, 18, 12, 29)) is False
+    assert planner.has_passed({"date": "2026-10-18", "time": ""}, datetime(2026, 10, 19, 1, 0)) is False   # the date check decides

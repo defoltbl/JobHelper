@@ -249,8 +249,9 @@ data/                your data; only the *.example.* files are in git
   `jobhelper_reload_widgets()`. Reloads come from a daily budget, so
   `widget_feed.WidgetReloader` asks only when what the widget shows changed (usage alone: every 30 minutes at most).
   Buttons inside a widget need App Intents metadata from Xcode; with the Command Line Tools only, there is no refresh button.
-- **A passed date leaves "Coming up" one hour after its time** (`planner.PASSED_AFTER`); the widget applies the same
-  rule itself (`When.gone`) and puts a timeline entry at that moment, so it is right even when the app is closed.
+- **A passed date leaves "Coming up" one hour after its time** (`planner.PASSED_AFTER`, `planner.leaves_at`). The
+  summary for the widget carries that moment with each date ("leaves"), so the widget has no copy of the rule: it
+  hides the date then (`When.gone`) and puts a timeline entry there, also when the app is closed.
 - **A widget extension must start in `_NSExtensionMain`.** Linked like a plain program (entry `main`),
   `WidgetBundle.main()` returned at once on macOS 26: chronod logged "query failed … Code=4099" and the
   gallery stayed empty. Link with `-Xlinker -e -Xlinker _NSExtensionMain`. Read logs with `/usr/bin/log`:

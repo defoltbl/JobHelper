@@ -22,7 +22,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from . import app_info, config, schedule, store, trouble
+from . import app_info, config, planner, schedule, trouble
 
 FILE_NAME = "snapshot.json"
 VERSION = 1
@@ -112,18 +112,16 @@ class WidgetFeed:
     def snapshot(self, now: datetime | None = None) -> dict[str, Any]:
         now = now or datetime.now()
         counts = self._app.counts()
-        jobs = store.load_jobs()
         usage = self._app.usage_info()
         run = self._app.last_run()
         return {
             "version": VERSION,
             "updated": now.isoformat(timespec="seconds"),
-            "counts": {"leads": int(counts.get("leads", 0)), "applications": int(counts.get("applications", 0)),
-                       "interviews": sum(1 for j in jobs if j.get("status") == "interview"),
-                       "offers": sum(1 for j in jobs if j.get("status") == "offer"),
-                       "followups": int(counts.get("followups", 0)), "responses": int(counts.get("responses", 0))},
+            # the numbers come from the app's one place that counts jobs (api_jobs.counts)
+            "counts": {key: int(counts.get(key, 0)) for key in ("leads", "applications", "interviews", "offers", "followups", "responses")},
+            # each date carries the moment it leaves "Coming up" (planner.leaves_at): the widget has no copy of that rule
             "next": [{"kind": str(e.get("kind") or ""), "company": str(e.get("company") or ""), "title": str(e.get("title") or ""),
-                      "date": str(e.get("date") or ""), "time": str(e.get("time") or "")}
+                      "date": str(e.get("date") or ""), "time": str(e.get("time") or ""), "leaves": _moment(planner.leaves_at(e))}
                      for e in self._app.upcoming(NEXT_DATES)],
             "last_run": {"when": str(run.get("when") or ""), "found": _number(run.get("found")),
                          "letters": _number(run.get("letters"))} if run else None,
@@ -152,6 +150,11 @@ def _number(value) -> int:
         return int(value)
     found = re.search(r"\d+", str(value or ""))
     return int(found.group()) if found else 0
+
+
+def _moment(when: datetime | None) -> str:
+    """A moment as the widget reads it ("2026-10-18T14:30:00"), or '' when there is none."""
+    return when.isoformat(timespec="seconds") if when else ""
 
 
 def _left(used) -> int | None:

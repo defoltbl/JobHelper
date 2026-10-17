@@ -43,11 +43,13 @@ class JobsService:
         self._desktop.reveal(target)
         return {"ok": True, "file": target.name}
 
-    @_guarded(lambda: {"leads": 0, "applications": 0, "responses": 0, "followups": 0, "duplicates": 0})
+    @_guarded(lambda: {"leads": 0, "applications": 0, "interviews": 0, "offers": 0, "responses": 0, "followups": 0, "duplicates": 0})
     def counts(self):
         jobs = store.load_jobs()
         return {"leads": sum(1 for j in jobs if j["status"] in store.LEAD_STATUSES),
                 "applications": sum(1 for j in jobs if j["status"] in store.APPLICATION_STATUSES),
+                "interviews": sum(1 for j in jobs if j["status"] == "interview"),
+                "offers": sum(1 for j in jobs if j["status"] == "offer"),
                 "responses": db.total(),
                 "followups": len(followup.due_jobs(jobs, db.all_responses(), self._app.followup_days())),
                 "duplicates": len(merge.find(jobs))}

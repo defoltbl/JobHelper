@@ -15,6 +15,7 @@ struct Snapshot: Decodable, Sendable {
     }
     struct Event: Decodable, Sendable {
         var kind = "", company = "", title = "", date = "", time = ""
+        var leaves: String? = nil          // when it leaves "Coming up", worked out by the app (planner.leaves_at)
     }
     struct LastRun: Decodable, Sendable {
         var when = "", found = 0, letters = 0
@@ -130,15 +131,11 @@ enum When {
         updated.count >= 16 ? String(updated.dropFirst(11).prefix(5)) : updated
     }
 
-    /// When an event leaves "Coming up": an hour after its time (it may be going on), or at the end of its
-    /// day when it has no time. The same rule as the app (jobhelper/planner.py, PASSED_AFTER).
-    static let passedAfter: TimeInterval = 3600
-    static let dayTime: DateFormatter = { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm"; f.locale = Locale(identifier: "en_US_POSIX"); return f }()
-
+    /// When an event leaves "Coming up". The app works it out (jobhelper/planner.py, leaves_at) and writes it
+    /// with the date, so the widget has no rule of its own; a summary without it keeps the date shown.
     static func gone(_ e: Snapshot.Event) -> Date? {
-        if !e.time.isEmpty, let at = dayTime.date(from: "\(e.date) \(e.time)") { return at.addingTimeInterval(passedAfter) }
-        guard let date = day.date(from: e.date) else { return nil }
-        return Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: date))
+        guard let leaves = e.leaves, !leaves.isEmpty else { return nil }
+        return local.date(from: leaves)
     }
 
     /// The moments the widget must look different: when a shown date passes, and at midnight ("Tomorrow" becomes "Today").
