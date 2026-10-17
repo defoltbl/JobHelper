@@ -64,6 +64,7 @@ mailbox or a browser. GitHub Actions runs the same two commands on a Mac after e
 | [Engineering notes and known limits](docs/NOTES.md) | The decisions behind the design, and what the app cannot do yet |
 | [Command reference](COMMANDS.md) | Every command-line command and option |
 | [Handbook](HANDBOOK.md) | The rules the app is built by and what is left to do |
+| [AGENTS.md](AGENTS.md) | Instructions for AI coding agents: commands and the rules they must keep |
 | [Changelog](CHANGELOG.md) | What changed, day by day |
 
 Before you publish a fork, run `python scripts/push_check.py --install-hook` once: it stops a push
