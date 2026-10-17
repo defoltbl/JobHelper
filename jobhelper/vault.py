@@ -351,6 +351,13 @@ def encrypt_tree(root: Path) -> int:
     return done
 
 
+def _backup_copy(dest: Path, plain: bytes) -> Path:
+    """Write a file into a backup: with ".enc" and encrypted while protection is on, as it is otherwise. Returns it."""
+    out = dest.with_name(dest.name + BACKUP_SUFFIX) if enabled() else dest
+    _write_atomic(out, encrypt(plain) if enabled() else plain)
+    return out
+
+
 def make_backup(label: str, paths: list[Path] | None = None) -> Path:
     """Copy the given files (default: the data files) into an encrypted backup folder."""
     dest = backups_dir() / f"{label}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -358,9 +365,7 @@ def make_backup(label: str, paths: list[Path] | None = None) -> Path:
     for src in (paths if paths is not None else data_files()):
         src = Path(src)
         if src.is_file():
-            plain = read_bytes(src)
-            _write_atomic(dest / (src.name + (BACKUP_SUFFIX if enabled() else "")),
-                          encrypt(plain) if enabled() else plain)
+            _backup_copy(dest / src.name, read_bytes(src))
     return dest
 
 
@@ -371,10 +376,7 @@ def keep_copy(path: Path, folder: str) -> Path | None:
     if not path.is_file():
         return None
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dest = backups_dir() / folder / f"{path.stem}.{stamp}{path.suffix}{BACKUP_SUFFIX if enabled() else ''}"
-    plain = path.read_bytes()
-    _write_atomic(dest, encrypt(plain) if enabled() else plain)
-    return dest
+    return _backup_copy(backups_dir() / folder / f"{path.stem}.{stamp}{path.suffix}", path.read_bytes())
 
 
 def stash(paths, folder: str) -> int:
@@ -550,9 +552,7 @@ def backup_everything() -> dict:
     files = size = 0
     for path, name in everything():
         plain = read_bytes(path)                    # data files are decrypted first, documents are read as they are
-        out = dest / (name + (BACKUP_SUFFIX if enabled() else ""))
-        out.parent.mkdir(parents=True, exist_ok=True)
-        _write_atomic(out, encrypt(plain) if enabled() else plain)
+        _backup_copy(dest / name, plain)
         files += 1
         size += len(plain)
     return {"folder": dest, "files": files, "bytes": size}

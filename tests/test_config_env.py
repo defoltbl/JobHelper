@@ -44,6 +44,27 @@ def test_set_imap_blank_password_keeps_the_stored_one(env_file):
     config.set_imap("me@example.com", "abcdabcdabcdabcd")
     config.set_imap("other@example.com", "")
     assert vault.get_secret(vault.IMAP_ACCOUNT) == "abcdabcdabcdabcd"
+    # and the running app still has it: before, the next scan acted as if no mailbox was set up
+    assert config.IMAP_USER == "other@example.com" and config.IMAP_PASSWORD == "abcdabcdabcdabcd" and config.has_imap()
+
+
+def test_without_a_keychain_a_blank_password_does_not_wipe_the_saved_one(env_file):
+    vault.use_keychain(vault.NoKeychain())
+    config.set_imap("me@example.com", "abcdabcdabcdabcd")
+    config.set_imap("other@example.com", "")
+    text = env_file.read_text(encoding="utf-8")
+    assert "IMAP_PASSWORD=abcdabcdabcdabcd" in text and "IMAP_USER=other@example.com" in text
+    assert config.IMAP_PASSWORD == "abcdabcdabcdabcd"
+
+
+def test_both_mailboxes_are_saved_by_the_same_rule(env_file, monkeypatch):
+    for name in ("IMAP_USER_2", "IMAP_PASSWORD_2", "IMAP_HOST", "IMAP_HOST_2"):
+        monkeypatch.setattr(config, name, getattr(config, name))
+    config.set_imap2("two@example.com", "efghefghefghefgh", host="imap.example.net")
+    config.set_imap2("two-new@example.com", "")
+    assert config.IMAP_USER_2 == "two-new@example.com" and config.IMAP_PASSWORD_2 == "efghefghefghefgh"
+    assert vault.get_secret(vault.IMAP_ACCOUNT_2) == "efghefghefghefgh"
+    assert "IMAP_HOST_2=imap.example.net" in env_file.read_text(encoding="utf-8")
 
 
 def test_set_imap_without_a_keychain_falls_back_to_env(env_file):

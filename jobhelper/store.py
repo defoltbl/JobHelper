@@ -125,7 +125,6 @@ def repair_statuses(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Give every job with a status the app does not know one it does: an application (it has an apply date, or came
     from an email) becomes "waiting", anything else a new job again. Each one gets a note. Returns the jobs that were
     changed. Changes `jobs`."""
-    from datetime import date
     fixed = []
     for j in jobs:
         if j.get("status") in STATUSES:

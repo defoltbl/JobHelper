@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -218,24 +219,43 @@ def _keep_host(key: str, host: str | None) -> str:
     return host
 
 
+@dataclass(frozen=True)
+class _Mailbox:
+    """Where one mailbox is kept: its address in .env, its password in the Keychain (in .env only without one)."""
+    user_key: str
+    password_key: str
+    account: str
+
+    def save(self, user: str, password: str, known: str, also: dict | None = None) -> str:
+        """Save the address (and `also`, more .env lines) and the password. A blank password keeps the one
+        already saved (`known`): the address can change without typing the password again. Returns the password in use."""
+        values = {self.user_key: user, **(also or {})}
+        if vault.keychain().available:
+            if password:
+                vault.set_secret(self.account, password)
+            update_env(values)
+            remove_env([self.password_key])
+        else:
+            update_env({**values, self.password_key: password} if password else values)
+        return password or known
+
+
+_FIRST_MAILBOX = _Mailbox("IMAP_USER", "IMAP_PASSWORD", vault.IMAP_ACCOUNT)
+_SECOND_MAILBOX = _Mailbox("IMAP_USER_2", "IMAP_PASSWORD_2", vault.IMAP_ACCOUNT_2)
+
+
 def set_imap(user: str, password: str, lookback: int | None = None, host: str | None = None) -> None:
     """Save the mailbox login and apply it live: the address goes to .env,
     the app password to the macOS Keychain (to .env only where there is none)."""
     global IMAP_USER, IMAP_PASSWORD, IMAP_LOOKBACK_DAYS, IMAP_HOST
     user, password = user.strip(), password.strip()
     IMAP_HOST = _keep_host("IMAP_HOST", host)
-    vals = {"IMAP_USER": user}
+    also = {}
     if lookback is not None:
-        vals["IMAP_LOOKBACK_DAYS"] = str(int(lookback))
+        also["IMAP_LOOKBACK_DAYS"] = str(int(lookback))
         IMAP_LOOKBACK_DAYS = int(lookback)
-    if vault.keychain().available:
-        if password:
-            vault.set_secret(vault.IMAP_ACCOUNT, password)
-        update_env(vals)
-        remove_env(["IMAP_PASSWORD"])
-    else:
-        update_env({**vals, "IMAP_PASSWORD": password})
-    IMAP_USER, IMAP_PASSWORD = user, password
+    IMAP_PASSWORD = _FIRST_MAILBOX.save(user, password, IMAP_PASSWORD, also)
+    IMAP_USER = user
 
 
 def mailboxes() -> list[dict[str, str]]:
@@ -253,14 +273,8 @@ def set_imap2(user: str, password: str, host: str | None = None) -> None:
     global IMAP_USER_2, IMAP_PASSWORD_2, IMAP_HOST_2
     user, password = user.strip(), password.strip()
     IMAP_HOST_2 = _keep_host("IMAP_HOST_2", host)
-    if vault.keychain().available:
-        if password:
-            vault.set_secret(vault.IMAP_ACCOUNT_2, password)
-        update_env({"IMAP_USER_2": user})
-        remove_env(["IMAP_PASSWORD_2"])
-    else:
-        update_env({"IMAP_USER_2": user, "IMAP_PASSWORD_2": password})
-    IMAP_USER_2, IMAP_PASSWORD_2 = user, password or IMAP_PASSWORD_2
+    IMAP_PASSWORD_2 = _SECOND_MAILBOX.save(user, password, IMAP_PASSWORD_2)
+    IMAP_USER_2 = user
 
 
 def remove_imap2() -> None:

@@ -36,6 +36,9 @@ CREATE TABLE IF NOT EXISTS responses (
 );
 """
 
+_COLUMNS = ("received_date", "from_addr", "subject", "job_id", "company", "role", "stage", "rejection_reason",
+            "rejection_category", "sentiment", "next_step", "summary")      # of `responses`, besides msg_id
+
 REJECTION_CATEGORIES = [
     "experience_insufficient", "skills_mismatch", "position_filled",
     "overqualified", "language_required", "location_or_visa",
@@ -112,9 +115,7 @@ def set_response_job(msg_id: str, job_id: str, company: str | None = None) -> bo
 
 
 def upsert_response(rec: dict[str, Any]) -> None:
-    cols = ["msg_id", "received_date", "from_addr", "subject", "job_id", "company",
-            "role", "stage", "rejection_reason", "rejection_category", "sentiment",
-            "next_step", "summary"]
+    cols = ["msg_id", *_COLUMNS]
     values = [rec.get(c, "") for c in cols]
     placeholders = ", ".join("?" for _ in cols)
     updates = ", ".join(f"{c}=excluded.{c}" for c in cols if c != "msg_id")
@@ -167,6 +168,9 @@ def relink_responses(old_job_id: str, new_job_id: str) -> int:
 
 
 def counts_by(column: str) -> dict[str, int]:
+    """How many replies there are for each value of one column. Only a known column may be named: it goes into the SQL."""
+    if column not in _COLUMNS:
+        raise ValueError(f"No such column: {column!r}")
     with _connect() as conn:
         rows = conn.execute(
             f"SELECT COALESCE(NULLIF({column}, ''), '(none)') AS k, COUNT(*) AS n "
