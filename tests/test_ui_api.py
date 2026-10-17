@@ -309,7 +309,10 @@ def test_the_real_changelog_is_well_formed():
     import re
     got = ui_api.Api().changelog()
     assert len(got) >= 2 and all(e["items"] for e in got)
-    assert re.fullmatch(r"\d{1,2} \w+ \d{4}", got[0]["date"])    # the newest entry carries a real date
+    # each heading is "Unreleased", a version with its date, a date (before versions), or the oldest "Earlier"
+    for entry in got:
+        assert re.fullmatch(r"Unreleased|Earlier|(\d+\.\d+\.\d+ – )?\d{1,2} \w+ \d{4}", entry["date"]), entry["date"]
+    assert all(entry["date"] != "Unreleased" for entry in got[1:])          # only the newest entry may be unreleased
     for entry in got:
         for item in entry["items"]:
             assert item.count("<b>") == item.count("</b>") and "**" not in item and "—" not in item

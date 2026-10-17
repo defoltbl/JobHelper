@@ -1588,7 +1588,8 @@ def test_help_has_a_what_changed_tab(ui):
     assert ui.js("helpDialog.tab") == "how" and ui.js("helpDialog.changes.length") >= 2
     ui.js('helpDialog.tab = "new"')
     ui.wait(150)
-    assert "2026" in ui.js("helpDialog.changes[0].date") and "<b>" in ui.js("helpDialog.changes[0].items[0]")
+    first = ui.js("helpDialog.changes[0].date")
+    assert (first == "Unreleased" or "2026" in first) and "<b>" in ui.js("helpDialog.changes.map(c => c.items.join(' ')).join(' ')")
     ui.js('helpDialog.tab = "how"; helpDialog.close()')
     ui.wait(350)
     assert ui.warnings == []

@@ -5,6 +5,10 @@ Format: a `## ` heading, then one `- ` line per change; `**words**` are shown in
 in a version go under `## Unreleased`; a released version's heading is `## 1.1.0 – 18 October 2026`
 (its tag is `v1.1.0` on GitHub). Version 1.0.0 is everything up to 17 October 2026, listed by date.
 
+## Unreleased
+
+- A job posted on **two boards is no longer lost** when the copy the search kept was then filtered out, for example as written in Czech or as too old. The duplicate check now comes after the other filters, so a copy is left out as a duplicate only when another copy is kept.
+
 ## 17 October 2026
 
 - **Job sources in any combination**: Options now has a chip for each kind (Czech boards, LinkedIn, Career sites, Remote boards); select one or more. The main screen shows the names of the sources a search reads instead of "+ Remote". Before, "LinkedIn only" and "Company career sites only" also read the remote boards when "Include remote jobs" was on.
