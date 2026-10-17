@@ -337,6 +337,9 @@ After every batch of changes, without being asked:
 | Only LinkedIn pages are asked whether a posting closed, 40 per search, each at most every 3 days | It is the only board that answers clearly, and asking every page on every search would hammer it. |
 | The app does not invent job duties for interview stories | Stories come from the CV and the user's notes; "typical tasks" are labelled as general knowledge. |
 | Removing old moved documents uses the Trash | Deleting cannot be taken back. |
+| A remote job tied to one country is kept only for your country and the countries you add, also with "Anywhere in the world" | Such a job asks you to live in that country or to have the right to work there. "Anywhere" adds only jobs for whole parts of the world ("Remote – APAC"). One rule, `places.RemoteReach`, for the search, Options and the window. |
+| The app knows every country, each with its part of the world | An unknown name was read as "no place": "Remote, South Korea" passed as open to anyone. Codes that are also US state codes (IL, ID, MA …) count as the country for someone who searches there; "City, DE" stays Germany. |
+| Duplicates are removed after all other filters | The copy kept as the duplicate's winner could then be dropped (in Czech, too old), and the other copy was lost with the reason "duplicate". |
 | The rule files and the letter template are optional | Without them the built-in rules and a plain letter are used, so their absence is not reported as a problem. |
 | A search role the app does not know is asked about once, not refused | The words it knows grew up with software jobs. |
 | No Windows or Linux version | Not wanted. |
