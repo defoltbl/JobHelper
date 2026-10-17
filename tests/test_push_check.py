@@ -171,3 +171,13 @@ def test_a_polyform_required_notice_may_name_the_owner(repo):
     assert _check(repo) == []
     _commit(repo, {"LICENSE": "Required Notice: Copyright 2026 Jordan Weber\n\nWritten by Jordan Weber.\n"})
     assert _check(repo) == ["a personal detail: LICENSE:3"]
+
+
+def test_the_licence_as_markdown_keeps_the_same_rule(repo):
+    """LICENSE.md (shown with headings on GitHub) may name the owner on its notice line only, like LICENSE did."""
+    _commit(repo, {"LICENSE.md": "Required Notice: Copyright 2026 Jordan Weber (https://github.com/jordan-w)\n\n# PolyForm Noncommercial License 1.0.0\n"})
+    assert _check(repo) == []
+    _commit(repo, {"LICENSE.md": "Required Notice: Copyright 2026 Jordan Weber\n\nWritten by Jordan Weber.\n"})
+    assert _check(repo) == ["a personal detail: LICENSE.md:3"]
+    _commit(repo, {"NOTICE.md": "Required Notice: Copyright 2026 Jordan Weber\n"})       # only the licence has this exception
+    assert "a personal detail: NOTICE.md:1" in _check(repo)

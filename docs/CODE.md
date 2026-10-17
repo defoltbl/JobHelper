@@ -499,7 +499,7 @@ push when it finds one of these problems:
   The check reads them from the master CV and the mailbox settings in the data home. It also reads
   `push_check_words.txt` there, with one word on each line. Thus the list is never in the repository.
   The owner can be named in two places only: the README's "Author" section and the copyright line
-  of `LICENSE`.
+  of `LICENSE.md`.
 - A secret: an API key, a token, a password or a private key. A value with fewer than 10 different
   characters is a made-up test value and does not count.
 - An author or committer email that is not a GitHub noreply address.

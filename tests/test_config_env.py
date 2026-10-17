@@ -134,10 +134,12 @@ def test_no_personal_name_in_code_or_docs():
     assert "## Author" not in readme or not any(line.startswith("## ") for line in readme[signed:]), "the Author section is the last one"
     found = [f"{f.relative_to(root)}:{n}" for f in files if f.is_file()
              for n, line in enumerate(f.read_text(encoding="utf-8", errors="ignore").splitlines(), 1)
-             if owner.search(line) and not (f.name == "README.md" and f.parent == root and n > signed)]
+             if owner.search(line) and not (f.name == "README.md" and f.parent == root and n > signed)
+             and not (f.name == "LICENSE.md" and f.parent == root and n == 1)]          # its Required Notice line, checked below
     assert found == [], "a personal name is written into: " + ", ".join(found[:8])
     assert not any("@" in line or "+420" in line for line in readme[signed:]), "a name and public profiles, never an email address or a phone number"
-    raw = (root / "LICENSE").read_bytes()
+    assert not (root / "LICENSE").exists(), "the licence is LICENSE.md, so GitHub shows its headings and links"
+    raw = (root / "LICENSE.md").read_bytes()
     licence = raw.decode("utf-8").splitlines()
     named = [n for n, line in enumerate(licence, 1) if owner.search(line)]
     assert licence[0].startswith("Required Notice: Copyright 2026 ") and named == [1], \

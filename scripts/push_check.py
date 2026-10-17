@@ -11,7 +11,7 @@ The check looks at every commit that a push would send, and at every file in tho
 - a personal detail of the owner: the name, an email address, a phone number or a profile
   address. They are read at run time from the master CV and the mailbox settings in the data
   home (and from push_check_words.txt there, one word per line), so the list itself is never
-  in the repository. Allowed: the README's "## Author" section and the copyright line of LICENSE
+  in the repository. Allowed: the README's "## Author" section and the copyright line of LICENSE.md
   ("Copyright (c) …" or "Required Notice: Copyright …");
 - a secret: an API key, a token, a password, a private key;
 - an author or committer email that is not a GitHub noreply address;
@@ -95,6 +95,8 @@ class PrivateWords:
 class PushCheck:
     """Everything a push would publish, checked against the rules above."""
 
+    LICENCE_FILES = ("LICENSE.md", "LICENSE")      # the licence, and its name in older commits
+
     def __init__(self, repo: Path, private: PrivateWords) -> None:
         self._repo = Path(repo)
         self._words = [(w, w.lower()) for w in private.words]
@@ -171,10 +173,11 @@ class PushCheck:
 
     @staticmethod
     def _allowed_lines(path: str, lines: list[str]) -> set[int]:
-        """Where the owner may be named: README's Author section (the last one), and LICENSE's copyright line."""
+        """Where the owner may be named: README's Author section (the last one), and the licence's copyright line
+        (LICENSE.md; LICENSE in commits from before 17 October 2026)."""
         if path == "README.md" and "## Author" in lines:
             return set(range(lines.index("## Author") + 1, len(lines) + 1))
-        if path == "LICENSE":
+        if path in PushCheck.LICENCE_FILES:
             return {n for n, line in enumerate(lines, 1) if line.startswith(("Copyright (c)", "Required Notice: Copyright"))}
         return set()
 
