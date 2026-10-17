@@ -92,8 +92,7 @@ def main() -> int:
         # what Options ticks (the weekly run), unless --source / --include-remote were typed on the command line
         typed = any(a.startswith(("--source", "--include-remote")) for a in sys.argv[1:])
         if typed:                       # typed by hand: --include-remote adds the remote boards to any --source
-            choice = job_sources.SourceChoice(job_sources.SourceChoice.from_options({"source": args.source}).kinds
-                                              + (("remote",) if args.include_remote else ()))
+            choice = job_sources.SourceChoice.from_command_line(args.source, args.include_remote)
         else:
             choice = job_sources.SourceChoice.from_options(saved)
         print(f"\n② Agent 2: searching {args.where} ({', '.join(choice.names())}) for {len(queries)} queries …")

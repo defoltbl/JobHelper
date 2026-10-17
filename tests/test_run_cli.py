@@ -102,3 +102,14 @@ def test_a_command_line_run_updates_the_last_run_card(cli):
     cli(settings={"where": "Brno"})
     saved = ui_api.Api().last_run()
     assert saved["found"] == "+0 new" and saved["filtered"] == 0 and saved["letters"] == 0 and saved["when"]
+
+
+@pytest.mark.parametrize("typed, kinds", [
+    (("--source", "czech", "--include-remote"), ("boards", "linkedin", "careers", "remote")),
+    (("--source", "all"), ("boards", "linkedin", "careers", "remote", "adzuna", "jooble")),
+    (("--source", "remote", "--include-remote"), ("remote",)),
+    (("--include-remote",), ("boards", "linkedin", "careers", "remote")),
+])
+def test_typed_sources_are_read_as_before(cli, typed, kinds):
+    seen = cli(*typed, settings={"where": "Brno", "sources": ["linkedin"]})
+    assert [s["source"].kinds for s in seen["searches"]] == [kinds]
