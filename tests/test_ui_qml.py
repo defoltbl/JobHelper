@@ -3702,6 +3702,57 @@ def test_a_press_on_empty_space_ends_the_editing_of_a_field(ui):
     assert ui.warnings == []
 
 
+def test_the_country_picker_lets_go_of_its_search_box_when_you_press_the_list(ui):
+    """After typing a search and clicking a country, the search box kept its outline and cursor (17 October)."""
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    picker = ui.find("remoteDialog")
+    ui.js("remoteDialog.show([], 'Czechia')")
+    _until_open(ui, "remoteDialog")
+    field, listing = ui.find("countrySearch"), ui.find("countryList")
+    # the catcher lies over the list: it must not swallow the mouse wheel (checked before any simulated click,
+    # which leaves the off-screen window in a state real use does not)
+    from PySide6.QtCore import QCoreApplication, QPoint as _P
+    from PySide6.QtGui import QWheelEvent
+    assert _until_true(ui, lambda: (listing.property("contentHeight") or 0) > listing.property("height") * 2)   # all rows drawn
+    middle = listing.mapToScene(QPointF(listing.width() / 2, listing.height() / 2))
+    for _ in range(4):
+        QCoreApplication.sendEvent(ui.win, QWheelEvent(middle, ui.win.mapToGlobal(middle), _P(0, 0), _P(0, -120),
+                                                      Qt.NoButton, Qt.NoModifier, Qt.NoScrollPhase, False))
+    assert _until_true(ui, lambda: (listing.property("contentY") or 0) > 0), "the wheel still scrolls the list"
+    ui.js('forceActiveFocus(); text = "germ"', field)
+    assert _until_true(ui, lambda: ui.js("remoteDialog.shown.length") == 1) and field.property("activeFocus") is True
+    row = ui.drawn("country_germany", root="countryList")
+    QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, row.mapToScene(QPointF(row.width() / 2, row.height() / 2)).toPoint())
+    assert _until_true(ui, lambda: ui.js("remoteDialog.picked.indexOf('germany') >= 0")), "the click still ticks the country"
+    assert _until_true(ui, lambda: field.property("activeFocus") is False), "and the search box let go"
+    ui.js("forceActiveFocus()", field)
+    assert _until_true(ui, lambda: field.property("activeFocus") is True)
+    empty = listing.mapToScene(QPointF(listing.width() / 2, listing.height() - 20)).toPoint()     # below the one row: empty space
+    QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, QPoint(empty.x(), empty.y()))
+    assert _until_true(ui, lambda: field.property("activeFocus") is False), "a press on the empty list lets go too"
+    assert ui.js("remoteDialog.picked.length") == 1                                    # and changed nothing
+    QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, field.mapToScene(QPointF(field.width() / 2, field.height() / 2)).toPoint())
+    assert _until_true(ui, lambda: field.property("activeFocus") is True), "a click in the box still starts typing"
+    ui.js("remoteDialog.close()")
+    _until_closed(ui, "remoteDialog")
+    assert picker.property("visible") is False and ui.warnings == []
+
+
+def test_the_job_table_lets_go_of_its_search_box_when_you_press_the_list(ui):
+    from PySide6.QtCore import QPointF, Qt
+    ui.js('openView("new")')
+    _until_open(ui, "tableDialog")
+    field, listing = ui.find("searchField"), ui.find("listView")
+    ui.js("forceActiveFocus()", field)
+    assert _until_true(ui, lambda: field.property("activeFocus") is True)
+    empty = listing.mapToScene(QPointF(listing.width() / 2, listing.height() - 8)).toPoint()      # the bottom of the list
+    QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, empty)
+    assert _until_true(ui, lambda: field.property("activeFocus") is False), "the search box let go"
+    ui.js("tableDialog.close()")
+    _until_closed(ui, "tableDialog")
+    assert ui.warnings == []
+
+
 def test_every_window_with_a_text_field_lets_go_of_it():
     """A window that has a field to type in must have a way to end the editing by pressing beside it."""
     fields = re.compile(r"\b(TextField|TextEdit|TextArea|AutoField|ThemedSpin|TimeField|TagEditor) \{")
@@ -3712,6 +3763,9 @@ def test_every_window_with_a_text_field_lets_go_of_it():
         for scroll in re.findall(r"\n( +)Flickable \{\n(?:.*\n){0,6}?\1    (\w+) \{", text):
             if "FocusCatcher {}" in text:
                 assert scroll[1] in ("FocusCatcher", "MouseArea"), f"{path.name}: a scroll area without a FocusCatcher as its first child"
+        if fields.search(text):                    # a list beside a field: rows take the press, so a catcher lies over them
+            assert text.count("FocusCatcher { z: 2 }") >= text.count("ListView {"), \
+                f"{path.name}: a list where pressing a row or the empty space keeps the field's outline"
 
 
 def _listed(value):
