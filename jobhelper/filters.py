@@ -100,8 +100,11 @@ _US_STATES = ("AL AK AZ AR CA CO CT FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN
               "NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC").split()
 _US_NAMED = re.compile(r"\bUnited States\b|\bUSA\b")
 _US_STATE = re.compile(r",\s*(%s)\b(?!\w)" % "|".join(_US_STATES))
-# Countries the app knows whose own two-letter code is also a state's ("Bangalore, IN", "Toronto, CA").
-_OWN_CODE = {"india": "IN", "canada": "CA"}
+# Countries the app knows whose own two-letter code is also a state's ("Bangalore, IN", "Toronto, CA", "Tel Aviv, IL").
+_OWN_CODE = {"india": "IN", "canada": "CA", "israel": "IL", "indonesia": "ID", "albania": "AL",
+             "argentina": "AR", "azerbaijan": "AZ", "colombia": "CO", "gabon": "GA", "laos": "LA", "morocco": "MA",
+             "moldova": "MD", "montenegro": "ME", "mongolia": "MN", "malta": "MT", "niger": "NE", "panama": "PA",
+             "seychelles": "SC", "sudan": "SD", "tunisia": "TN", "vatican city": "VA"}
 
 
 def is_us_location(location: str, where: str | None = None) -> bool:
@@ -129,11 +132,15 @@ def searching_in_the_us(where: str) -> bool:
     return (places.country_of(config.search_country()) or places.country_of(where)) == "united states"
 
 
-def location_fits(location: str, where: str, country: str | None = None) -> bool:
-    """For sources that list a company's jobs worldwide (career sites): is this one in the
-    searched city, in its country, or remote in a way that fits? Unknown locations pass.
-    The country is the one in Options, or the one the city is in (see places.py)."""
-    return places.fits(location, where, config.search_country() if country is None else country)
+def location_fits(location: str, where: str, country: str | None = None,
+                  reach: places.RemoteReach | None = None, remote: bool = False) -> bool:
+    """For sources that list a company's jobs worldwide (career sites), and for remote jobs: is this one
+    in the searched city, in its country, or remote in a way that fits? Unknown locations pass.
+    The country is the one in Options, or the one the city is in; which remote jobs fit is the
+    "Remote jobs" choice in Options (see places.py). `remote`: from a board of remote jobs only."""
+    if reach is None:
+        reach = places.RemoteReach.from_options(config.ui_settings())
+    return places.fits(location, where, config.search_country() if country is None else country, reach, remote)
 
 
 _PART_TIME = re.compile(r"part[\s-]?time|teilzeit|částečný úvazek|zkrácený úvazek|poloviční úvazek|\bbrigáda\b", re.IGNORECASE)

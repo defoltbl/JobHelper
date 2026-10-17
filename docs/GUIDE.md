@@ -1869,7 +1869,8 @@ Table 16.1 lists the Search settings.
 | Setting | What it does | Values | Why you would change it |
 |---|---|---|---|
 | **City** | Where to search | A city name | The app will not search without one |
-| **Country** | Which postings count as "here", from the career site of a company and from remote jobs. They can be in the city, anywhere in this country, or in the region of the country ("Europe", "EMEA"). A remote job counts if it is not tied to another part of the world | A country's name in English. Empty = the country of the city, shown in grey | Type it when the field says that it does not know the city. Also type it when you want jobs from a neighbouring country |
+| **Country** | Which postings count as "here", from the career site of a company. They can be in the city, anywhere in this country, or in the region of the country ("Europe", "EMEA"). **Remote jobs** uses this country too | A country's name in English. Empty = the country of the city, shown in grey | Type it when the field says that it does not know the city. Also type it when you want jobs from a neighbouring country |
+| **Remote jobs** | Which remote jobs a search keeps, from all job sources. **In** your country keeps a remote job that is open to your country or to all countries. Add countries to keep their remote jobs too. **Anywhere in the world** keeps all remote jobs | In your country, with added countries; or anywhere in the world | Add a country when you can work for a company there. Select anywhere when all time zones suit you |
 | **Job sources** | Which job boards are read. Select one or more: a search reads all that you select. The app reads the Czech boards only for a city in Czechia. For a city in another country, the log of the run says that they were not used | Czech boards, LinkedIn, Career sites, Remote boards, in any combination | More sources find more and take longer |
 | **Search roles** | The words typed into the job boards, in English | One or more roles | Too few results: add a role. Too many poor ones: remove one |
 | **Skip titles with** | Words that drop a posting by its title | Words | To get rid of a kind of posting that keeps appearing |
@@ -1883,13 +1884,37 @@ Table 16.1 lists the Search settings.
 | **Max job age** | Drops postings older than this | Days; 0 = any date | Old postings are often already filled |
 | **Results per query** | How many postings each role asks each board for | 1 to 100 | Raise it for a wider search, lower it for a faster one |
 
+### Remote jobs
+
+A remote job is often open to people in some countries only, for example "Remote, Germany". The
+search keeps a remote job when it is open to your country or to all countries. To keep the remote
+jobs of more countries, add those countries (Figure 16.2).
+
+![The countries for remote jobs](img/34_remote_countries.png)
+
+*Figure 16.2 – The countries for remote jobs*
+
+To add countries:
+
+1. In Options, under **Remote jobs**, select **In** and the name of your country.
+2. Click **+ Add countries**. The window opens.
+3. To find a country, type its name or select a part of the world.
+4. Select each country that you want. Your own country is always included.
+5. Click **Done**, and then click **Save** in Options.
+
+To remove a country, click the **✕** on its name. You can add up to 40 countries.
+
+> **Note**
+> A posting that names a region, for example "Remote – EMEA", is kept when your country or an
+> added country is in that region. A job on site in an added country is not kept.
+
 ### Your profession
 
-Figure 16.2 shows the roles you want and your profession in Options.
+Figure 16.3 shows the roles you want and your profession in Options.
 
 ![Options: the roles you want and your profession](img/20_options_roles.png)
 
-*Figure 16.2 – Options: the roles you want and your profession*
+*Figure 16.3 – Options: the roles you want and your profession*
 
 Under **Kinds of role you want**, chips show what the app takes as your profession. The app
 reads it from the roles you want (the outlined chip). It decides which titles are skipped as
@@ -1928,11 +1953,11 @@ Table 16.2 lists the Matching and Follow-up settings.
 
 ### About you
 
-Figure 16.3 shows the About you settings.
+Figure 16.4 shows the About you settings.
 
 ![Options: about you](img/32_options_about_you.png)
 
-*Figure 16.3 – Options: about you*
+*Figure 16.4 – Options: about you*
 
 Table 16.3 lists the About you settings.
 
@@ -1953,11 +1978,11 @@ Table 16.3 lists the About you settings.
 
 ### Notifications and storage
 
-Figure 16.4 shows the Notifications and storage settings.
+Figure 16.5 shows the Notifications and storage settings.
 
 ![Options: notifications and storage](img/21_options_storage.png)
 
-*Figure 16.4 – Options: notifications and storage*
+*Figure 16.5 – Options: notifications and storage*
 
 Table 16.4 lists the Notifications and storage settings.
 
@@ -1973,11 +1998,11 @@ Table 16.4 lists the Notifications and storage settings.
 
 ### Email scan
 
-Figure 16.5 shows the Email scan and Model settings.
+Figure 16.6 shows the Email scan and Model settings.
 
 ![Options: email and the model](img/33_options_email.png)
 
-*Figure 16.5 – Options: email and the model*
+*Figure 16.6 – Options: email and the model*
 
 Table 16.5 lists the Email scan settings.
 

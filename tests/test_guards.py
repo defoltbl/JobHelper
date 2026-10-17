@@ -597,7 +597,8 @@ def test_an_address_needs_a_password_the_first_time(isolate_data, monkeypatch):
     ("Prague, NE", "Prague", "", True), ("Austin, TX", "Prague", "", True), ("Remote, USA", "Bangalore", "India", True),
     ("Bangalore, IN", "Bangalore", "India", False), ("Indianapolis, IN", "Prague", "", True), ("Toronto, CA", "Toronto", "", False),
     ("San Jose, CA", "Brno", "", True), ("Tel Aviv, IL", "Tel Aviv", "Israel", False), ("Jakarta, ID", "Jakarta", "", False),
-    ("Chicago, IL, United States", "Tel Aviv", "Israel", True), ("Praha", "Prague", "", False)])
+    ("Chicago, IL, United States", "Tel Aviv", "Israel", True), ("Praha", "Prague", "", False),
+    ("Rabat, MA", "Rabat", "", False), ("Boston, MA", "Prague", "", True)])
 def test_a_state_code_is_not_the_united_states_for_someone_whose_country_has_that_code(location, where, country, us, monkeypatch):
     """IN is Indiana and India, CA is California and Canada, IL is Illinois and Israel. For someone searching in such a country
     every local posting written "City, XX" was filtered out as "Located in the United States"."""

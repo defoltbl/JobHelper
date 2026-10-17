@@ -4,11 +4,15 @@ Company career sites list a company's openings everywhere, so each one is asked 
 in the searched city, in the same country, or remote in a way that fits. Nothing is assumed
 about which country that is: it is read from the city (for the larger cities of the countries
 below) or taken from Options, where "Country" can be typed for any other place.
+
+Which remote jobs fit is a choice in Options (`RemoteReach`): those open to people in your
+country and in the countries you add, or remote jobs anywhere in the world.
 """
 from __future__ import annotations
 
 import re
 import unicodedata
+from typing import Any, Iterable
 
 # country: (how it is written in a posting's location, its larger cities with their other spellings)
 COUNTRIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
@@ -53,27 +57,149 @@ COUNTRIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "japan": (("japan",), ("tokyo", "osaka")),
     "brazil": (("brazil", "brasil"), ("sao paulo", "rio de janeiro")),
     "mexico": (("mexico",), ("mexico city", "guadalajara")),
+    # ── the rest of the world: a posting that names one of these is tied to it ──
+    "albania": (("albania",), ("tirana",)), "andorra": (("andorra",), ()), "armenia": (("armenia",), ("yerevan",)),
+    "azerbaijan": (("azerbaijan",), ("baku",)), "belarus": (("belarus",), ("minsk",)),
+    "bosnia and herzegovina": (("bosnia",), ("sarajevo",)), "cyprus": (("cyprus",), ("nicosia", "limassol")),
+    "georgia": (("georgia", "sakartvelo"), ("tbilisi", "batumi")), "iceland": (("iceland",), ("reykjavik",)),
+    "kosovo": (("kosovo",), ("pristina",)), "liechtenstein": (("liechtenstein",), ("vaduz",)),
+    "luxembourg": (("luxembourg",), ()), "malta": (("malta",), ("valletta",)), "moldova": (("moldova",), ("chisinau",)),
+    "monaco": (("monaco",), ()), "montenegro": (("montenegro",), ("podgorica",)),
+    "north macedonia": (("north macedonia", "macedonia"), ("skopje",)), "russia": (("russia", "russian federation"), ("moscow",)),
+    "san marino": (("san marino",), ()), "turkey": (("turkey", "turkiye"), ("istanbul", "ankara", "izmir")),
+    "vatican city": (("vatican",), ()),
+    "bahrain": (("bahrain",), ("manama",)), "iran": (("iran",), ("tehran",)), "iraq": (("iraq",), ("baghdad",)),
+    "israel": (("israel",), ("tel aviv", "jerusalem", "haifa")), "jordan": (("jordan",), ("amman",)),
+    "kuwait": (("kuwait",), ()), "lebanon": (("lebanon",), ("beirut",)), "oman": (("oman",), ("muscat",)),
+    "palestine": (("palestine",), ("ramallah",)), "qatar": (("qatar",), ("doha",)),
+    "saudi arabia": (("saudi arabia", "ksa"), ("riyadh", "jeddah")), "syria": (("syria",), ("damascus",)),
+    "united arab emirates": (("united arab emirates", "uae"), ("dubai", "abu dhabi")), "yemen": (("yemen",), ()),
+    "algeria": (("algeria",), ("algiers",)), "angola": (("angola",), ("luanda",)), "benin": (("benin",), ()),
+    "botswana": (("botswana",), ("gaborone",)), "burkina faso": (("burkina faso",), ()), "burundi": (("burundi",), ()),
+    "cameroon": (("cameroon",), ("douala", "yaounde")), "cape verde": (("cape verde", "cabo verde"), ()),
+    "central african republic": (("central african republic",), ()), "chad": (("chad",), ()), "comoros": (("comoros",), ()),
+    "congo": (("republic of the congo", "congo-brazzaville", "congo"), ("brazzaville",)),
+    "dr congo": (("democratic republic of the congo", "dr congo", "drc"), ("kinshasa",)), "djibouti": (("djibouti",), ()),
+    "egypt": (("egypt",), ("cairo", "alexandria")), "equatorial guinea": (("equatorial guinea",), ()),
+    "eritrea": (("eritrea",), ()), "eswatini": (("eswatini", "swaziland"), ()), "ethiopia": (("ethiopia",), ("addis ababa",)),
+    "gabon": (("gabon",), ()), "gambia": (("gambia",), ()), "ghana": (("ghana",), ("accra",)), "guinea": (("guinea",), ()),
+    "guinea-bissau": (("guinea-bissau",), ()), "ivory coast": (("ivory coast", "cote d'ivoire", "cote divoire"), ("abidjan",)),
+    "kenya": (("kenya",), ("nairobi",)), "lesotho": (("lesotho",), ()), "liberia": (("liberia",), ()), "libya": (("libya",), ()),
+    "madagascar": (("madagascar",), ()), "malawi": (("malawi",), ()), "mali": (("mali",), ()),
+    "mauritania": (("mauritania",), ()), "mauritius": (("mauritius",), ()), "morocco": (("morocco",), ("casablanca", "rabat")),
+    "mozambique": (("mozambique",), ("maputo",)), "namibia": (("namibia",), ("windhoek",)), "niger": (("niger",), ()),
+    "nigeria": (("nigeria",), ("lagos", "abuja")), "rwanda": (("rwanda",), ("kigali",)),
+    "sao tome and principe": (("sao tome",), ()), "senegal": (("senegal",), ("dakar",)), "seychelles": (("seychelles",), ()),
+    "sierra leone": (("sierra leone",), ()), "somalia": (("somalia",), ()),
+    "south africa": (("south africa",), ("johannesburg", "cape town", "pretoria", "durban")),
+    "south sudan": (("south sudan",), ()), "sudan": (("sudan",), ("khartoum",)), "tanzania": (("tanzania",), ("dar es salaam",)),
+    "togo": (("togo",), ()), "tunisia": (("tunisia",), ("tunis",)), "uganda": (("uganda",), ("kampala",)),
+    "zambia": (("zambia",), ("lusaka",)), "zimbabwe": (("zimbabwe",), ("harare",)),
+    "afghanistan": (("afghanistan",), ()), "bangladesh": (("bangladesh",), ("dhaka",)), "bhutan": (("bhutan",), ()),
+    "brunei": (("brunei",), ()), "cambodia": (("cambodia",), ("phnom penh",)),
+    "china": (("china",), ("beijing", "shanghai", "shenzhen", "guangzhou", "hangzhou", "chengdu")),
+    "hong kong": (("hong kong",), ()), "indonesia": (("indonesia",), ("jakarta", "bali")),
+    "kazakhstan": (("kazakhstan",), ("almaty", "astana")), "kyrgyzstan": (("kyrgyzstan",), ("bishkek",)), "laos": (("laos",), ()),
+    "malaysia": (("malaysia",), ("kuala lumpur", "penang")), "maldives": (("maldives",), ()),
+    "mongolia": (("mongolia",), ("ulaanbaatar",)), "myanmar": (("myanmar", "burma"), ("yangon",)),
+    "nepal": (("nepal",), ("kathmandu",)), "north korea": (("north korea",), ("pyongyang",)),
+    "pakistan": (("pakistan",), ("karachi", "lahore", "islamabad")), "philippines": (("philippines",), ("manila", "cebu")),
+    "south korea": (("south korea", "republic of korea", "korea"), ("seoul", "busan")),
+    "sri lanka": (("sri lanka",), ("colombo",)), "taiwan": (("taiwan",), ("taipei",)), "tajikistan": (("tajikistan",), ()),
+    "thailand": (("thailand",), ("bangkok",)), "timor-leste": (("timor-leste", "east timor"), ()),
+    "turkmenistan": (("turkmenistan",), ()), "uzbekistan": (("uzbekistan",), ("tashkent",)),
+    "vietnam": (("vietnam", "viet nam"), ("hanoi", "ho chi minh")),
+    "new zealand": (("new zealand",), ("auckland", "wellington", "christchurch")), "fiji": (("fiji",), ()),
+    "kiribati": (("kiribati",), ()), "marshall islands": (("marshall islands",), ()), "micronesia": (("micronesia",), ()),
+    "nauru": (("nauru",), ()), "palau": (("palau",), ()), "papua new guinea": (("papua new guinea",), ()),
+    "samoa": (("samoa",), ()), "solomon islands": (("solomon islands",), ()), "tonga": (("tonga",), ()),
+    "tuvalu": (("tuvalu",), ()), "vanuatu": (("vanuatu",), ()),
+    "antigua and barbuda": (("antigua",), ()), "argentina": (("argentina",), ("buenos aires", "cordoba")),
+    "bahamas": (("bahamas",), ()), "barbados": (("barbados",), ()), "belize": (("belize",), ()),
+    "bolivia": (("bolivia",), ("la paz",)), "chile": (("chile",), ("santiago de chile",)),
+    "colombia": (("colombia",), ("bogota", "medellin")), "costa rica": (("costa rica",), ()), "cuba": (("cuba",), ("havana",)),
+    "dominica": (("dominica",), ()), "dominican republic": (("dominican republic",), ("santo domingo",)),
+    "ecuador": (("ecuador",), ("quito", "guayaquil")), "el salvador": (("el salvador",), ()), "grenada": (("grenada",), ()),
+    "guatemala": (("guatemala",), ()), "guyana": (("guyana",), ()), "haiti": (("haiti",), ()), "honduras": (("honduras",), ()),
+    "jamaica": (("jamaica",), ()), "nicaragua": (("nicaragua",), ()), "panama": (("panama",), ()),
+    "paraguay": (("paraguay",), ("asuncion",)), "peru": (("peru",), ("lima",)), "puerto rico": (("puerto rico",), ("san juan",)),
+    "saint kitts and nevis": (("saint kitts", "st. kitts", "st kitts"), ()),
+    "saint lucia": (("saint lucia", "st. lucia", "st lucia"), ()),
+    "saint vincent and the grenadines": (("saint vincent", "st. vincent", "st vincent"), ()), "suriname": (("suriname",), ()),
+    "trinidad and tobago": (("trinidad",), ()), "uruguay": (("uruguay",), ("montevideo",)),
+    "venezuela": (("venezuela",), ("caracas",)),
 }
-_OUTSIDE_EUROPE = {"united states", "canada", "india", "australia", "singapore", "japan", "brazil", "mexico"}
-EUROPE = set(COUNTRIES) - _OUTSIDE_EUROPE
+
+# The part of the world each country is in, for postings that name a region ("Remote - EMEA", "APAC").
+_AREAS: dict[str, tuple[str, ...]] = {
+    "europe": ("czechia", "slovakia", "germany", "austria", "poland", "netherlands", "belgium", "france", "spain", "portugal",
+               "italy", "switzerland", "ireland", "united kingdom", "sweden", "denmark", "norway", "finland", "hungary", "romania",
+               "bulgaria", "greece", "croatia", "slovenia", "serbia", "ukraine", "estonia", "latvia", "lithuania", "albania",
+               "andorra", "armenia", "azerbaijan", "belarus", "bosnia and herzegovina", "cyprus", "georgia", "iceland", "kosovo",
+               "liechtenstein", "luxembourg", "malta", "moldova", "monaco", "montenegro", "north macedonia", "russia",
+               "san marino", "turkey", "vatican city"),
+    "middle east": ("bahrain", "iran", "iraq", "israel", "jordan", "kuwait", "lebanon", "oman", "palestine", "qatar",
+                    "saudi arabia", "syria", "united arab emirates", "yemen"),
+    "africa": ("algeria", "angola", "benin", "botswana", "burkina faso", "burundi", "cameroon", "cape verde",
+               "central african republic", "chad", "comoros", "congo", "dr congo", "djibouti", "egypt", "equatorial guinea",
+               "eritrea", "eswatini", "ethiopia", "gabon", "gambia", "ghana", "guinea", "guinea-bissau", "ivory coast", "kenya",
+               "lesotho", "liberia", "libya", "madagascar", "malawi", "mali", "mauritania", "mauritius", "morocco", "mozambique",
+               "namibia", "niger", "nigeria", "rwanda", "sao tome and principe", "senegal", "seychelles", "sierra leone",
+               "somalia", "south africa", "south sudan", "sudan", "tanzania", "togo", "tunisia", "uganda", "zambia", "zimbabwe"),
+    "asia": ("india", "singapore", "japan", "afghanistan", "bangladesh", "bhutan", "brunei", "cambodia", "china", "hong kong",
+             "indonesia", "kazakhstan", "kyrgyzstan", "laos", "malaysia", "maldives", "mongolia", "myanmar", "nepal",
+             "north korea", "pakistan", "philippines", "south korea", "sri lanka", "taiwan", "tajikistan", "thailand",
+             "timor-leste", "turkmenistan", "uzbekistan", "vietnam"),
+    "oceania": ("australia", "new zealand", "fiji", "kiribati", "marshall islands", "micronesia", "nauru", "palau",
+                "papua new guinea", "samoa", "solomon islands", "tonga", "tuvalu", "vanuatu"),
+    "north america": ("united states", "canada"),
+    "latin america": ("mexico", "brazil", "antigua and barbuda", "argentina", "bahamas", "barbados", "belize", "bolivia",
+                      "chile", "colombia", "costa rica", "cuba", "dominica", "dominican republic", "ecuador", "el salvador",
+                      "grenada", "guatemala", "guyana", "haiti", "honduras", "jamaica", "nicaragua", "panama", "paraguay",
+                      "peru", "puerto rico", "saint kitts and nevis", "saint lucia", "saint vincent and the grenadines",
+                      "suriname", "trinidad and tobago", "uruguay", "venezuela"),
+}
+AREA_OF = {country: area for area, members in _AREAS.items() for country in members}
+EUROPE = set(_AREAS["europe"])
+_NORTH_AFRICA = {"egypt", "libya", "tunisia", "algeria", "morocco"}
 # Short codes a location may end with ("Brno, CZ"), matched as whole words only.
 _CODES = {"czechia": "cz", "slovakia": "sk", "germany": "de", "austria": "at", "poland": "pl", "netherlands": "nl", "france": "fr",
           "spain": "es", "italy": "it", "united kingdom": "uk", "ireland": "ie", "switzerland": "ch", "sweden": "se",
           "hungary": "hu", "romania": "ro", "portugal": "pt", "belgium": "be", "denmark": "dk", "norway": "no", "finland": "fi",
           "united states": "us"}
-_REGIONS = {"europe": EUROPE, "emea": EUROPE, "european union": EUROPE,
-            "north america": {"united states", "canada"}, "americas": {"united states", "canada", "brazil", "mexico"},
-            "latam": {"brazil", "mexico"}, "apac": {"india", "australia", "singapore", "japan"}}
+# A region a posting may name, how it is written, and the countries in it.
+_REGIONS: dict[str, tuple[str, set[str]]] = {
+    "europe": (r"europe(?:an)?", EUROPE),
+    "european union": (r"european union|\beu", EUROPE),
+    "emea": (r"emea", EUROPE | set(_AREAS["middle east"]) | set(_AREAS["africa"])),
+    "middle east": (r"middle east|mena", set(_AREAS["middle east"]) | _NORTH_AFRICA),
+    "africa": (r"africa", set(_AREAS["africa"])),
+    "asia": (r"asia", set(_AREAS["asia"])),
+    "apac": (r"apac|asia[- ]pacific", set(_AREAS["asia"]) | set(_AREAS["oceania"])),
+    "oceania": (r"oceania", set(_AREAS["oceania"])),
+    "north america": (r"north america", set(_AREAS["north america"])),
+    "americas": (r"americas", set(_AREAS["north america"]) | set(_AREAS["latin america"])),
+    "latam": (r"latam|latin america|south america|central america", set(_AREAS["latin america"])),
+}
+_REGION_WORDS = {name: re.compile(rf"(?<![a-z])(?:{pattern})(?![a-z])") for name, (pattern, _) in _REGIONS.items()}
 _REMOTE = re.compile(r"\b(remote|anywhere|worldwide|work from home|home office)\b")
-_EU = re.compile(r"\beu\b")
-
-
+# Words that hold a country's name without being about that country.
+_NOT_A_COUNTRY = re.compile(r"\bnew mexico\b|\bnew jersey\b")
+# How a country's name is written when it is shown; the others are its name with each word capitalised.
+_SHOWN = {"dr congo": "DR Congo", "guinea-bissau": "Guinea-Bissau", "timor-leste": "Timor-Leste"}
 _STEMS = {"czech", "cesk", "slovak", "slovensk"}      # "Czech Republic", "Ceska republika", "Slovakia", "Slovensko"
+# Every way a country is written, longest first: "Papua New Guinea" is read before "Guinea", "South Sudan" before "Sudan".
+_NAMES = sorted(((name, country) for country, (names, _) in COUNTRIES.items() for name in names), key=lambda nc: -len(nc[0]))
+
+
+def _name_pattern(name: str) -> str:
+    """A country's name as a whole word, except the few stems that have endings."""
+    return rf"\b{re.escape(name)}" + ("" if name in _STEMS else r"\b")
 
 
 def _named(names, text: str) -> bool:
     """Is one of a country's names in the text? As a whole word, except the few stems that have endings."""
-    return any(re.search(rf"\b{re.escape(n)}" + ("" if n in _STEMS else r"\b"), text) for n in names)
+    return any(re.search(_name_pattern(n), text) for n in names)
 
 
 def plain(text: str) -> str:
@@ -81,37 +207,118 @@ def plain(text: str) -> str:
     return unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().lower().strip()
 
 
+def shown(country: str) -> str:
+    """A country as the window shows it: "united kingdom" is "United Kingdom", "dr congo" is "DR Congo"."""
+    key = plain(country)
+    return _SHOWN.get(key) or " ".join(w if w in ("and", "the", "of") else w.capitalize() for w in key.split())
+
+
 def country_of(place: str) -> str:
     """The country a city or a country's name belongs to, by its name in `COUNTRIES`; '' when the app does not know it."""
     text = plain(place)
     if not text:
         return ""
+    if text in COUNTRIES:
+        return text
     for country, (names, cities) in COUNTRIES.items():
-        if text == country or _named(names, text) or \
-                any(re.search(rf"\b{re.escape(c)}\b", text) for c in cities):
+        if _named(names, text) or any(re.search(rf"\b{re.escape(c)}\b", text) for c in cities):
             return country
     return ""
 
 
 def named_countries(location: str) -> set[str]:
     """Every known country a posting's location names, by itself, by a city or by a code."""
-    text = plain(location)
+    text = _NOT_A_COUNTRY.sub(" ", plain(location))
     found = set()
-    for country, (names, cities) in COUNTRIES.items():
+    rest = text
+    for name, country in _NAMES:                   # a longer name hides the shorter one inside it
+        pattern = _name_pattern(name)
+        if re.search(pattern, rest):
+            found.add(country)
+            rest = re.sub(pattern, " ", rest)
+    for country, (_, cities) in COUNTRIES.items():
         code = _CODES.get(country)
-        if _named(names, text) or any(re.search(rf"\b{re.escape(c)}\b", text) for c in cities) \
+        if any(re.search(rf"\b{re.escape(c)}\b", text) for c in cities) \
                 or (code and re.search(rf"(?:,|\(|-)\s*{code}\b\)?\s*$", text)):
             found.add(country)
+    if "georgia" in found and "united states" in found and not re.search(r"\b(tbilisi|batumi|sakartvelo)\b", text):
+        found.discard("georgia")                   # "Atlanta, Georgia, United States" is the state
     return found
 
 
-def fits(location: str, where: str, country: str = "") -> bool:
+def named_regions(location: str) -> set[str]:
+    """The parts of the world a posting's location names ("EMEA", "Remote - Europe")."""
+    text = plain(location)
+    return {name for name, words in _REGION_WORDS.items() if words.search(text)}
+
+
+def is_remote(location: str) -> bool:
+    """Does the location say the job is remote ("Remote", "Anywhere", "Home office")?"""
+    return bool(_REMOTE.search(plain(location)))
+
+
+def in_region(region: str, countries: Iterable[str]) -> bool:
+    """Is one of these countries in that part of the world?"""
+    members = _REGIONS[region][1]
+    return any(c in members for c in countries)
+
+
+class RemoteReach:
+    """Which remote jobs a search keeps: those open to people in your country and in the countries
+    you add ("country"), or remote jobs anywhere in the world ("world"). Options, the search and
+    the window all read it from here."""
+
+    SCOPES = (("country", "In my country"), ("world", "Anywhere in the world"))
+    MAX_COUNTRIES = 40
+
+    def __init__(self, scope: str = "country", countries: Iterable[str] = ()) -> None:
+        self.scope = scope if scope in dict(self.SCOPES) else "country"
+        self.countries = tuple(dict.fromkeys(c for c in (plain(x) for x in countries or ()) if c in COUNTRIES))
+
+    @classmethod
+    def from_options(cls, opts: dict[str, Any] | None) -> "RemoteReach":
+        """From the saved Options; settings from before this choice existed keep the country rule."""
+        opts = opts or {}
+        countries = opts.get("remote_countries")
+        return cls(str(opts.get("remote_where") or "country"), countries if isinstance(countries, list) else ())
+
+    @property
+    def worldwide(self) -> bool:
+        return self.scope == "world"
+
+    def open_to(self, home: str) -> set[str]:
+        """The countries a remote job may be tied to: your own and the ones you added."""
+        return ({home} if home else set()) | set(self.countries)
+
+    def allows(self, location: str, home: str) -> bool:
+        """For a remote job: is it open to you? One that names no place is open to anyone."""
+        if self.worldwide:
+            return True
+        named, regions = named_countries(location), named_regions(location)
+        if not named and not regions:
+            return True
+        allowed = self.open_to(home)
+        if named & allowed:
+            return True
+        return any(not home or in_region(r, allowed) for r in regions)
+
+    def as_options(self) -> dict[str, Any]:
+        return {"remote_where": self.scope, "remote_countries": list(self.countries)}
+
+
+def all_countries() -> list[dict[str, str]]:
+    """Every country the app knows, by name, for the window's country picker: [{key, name, area}]."""
+    return sorted(({"key": c, "name": shown(c), "area": AREA_OF.get(c, "")} for c in COUNTRIES), key=lambda c: c["name"])
+
+
+def fits(location: str, where: str, country: str = "", reach: RemoteReach | None = None, remote: bool = False) -> bool:
     """Is a posting with this location one for someone searching in `where`?
 
     Yes when the location is unknown, names the city, names the same country (by name, by one
-    of its cities, or as free text when the country is one the app has no table for), names a
-    region that country is in ("Europe", "EMEA"), or is remote without being tied to another
-    part of the world. `country` is what Options says; empty means "the country of the city"."""
+    of its cities, or as free text when the country is one the app has no table for), or names a
+    region that country is in ("Europe", "EMEA"). A remote job (`remote`: from a remote board,
+    which may not say so) fits as `reach` decides; without it, as the country rule decides.
+    `country` is what Options says; empty means "the country of the city"."""
     loc = plain(location)
     if not loc:
         return True
@@ -122,13 +329,8 @@ def fits(location: str, where: str, country: str = "") -> bool:
         return True
     if typed and not home and typed in loc:                 # a country the app has no table for: as it was typed
         return True
-    named = named_countries(location)
-    if home and home in named:
+    if remote or _REMOTE.search(loc):
+        return (reach or RemoteReach()).allows(location, home)
+    if home and home in named_countries(location):
         return True
-    regions = {name for name in _REGIONS if name in loc} | ({"european union"} if _EU.search(loc) else set())
-    if any(not home or home in _REGIONS[name] for name in regions):
-        return True
-    if _REMOTE.search(loc):
-        # remote, but pinned to somewhere else ("Remote, US", "Remote - APAC") is not for here
-        return not named and not regions
-    return False
+    return any(not home or in_region(r, {home}) for r in named_regions(location))

@@ -23,9 +23,12 @@ def test_the_country_of_a_city(city, country):
     ("Remote, Germany", "Berlin", "", True), ("Remote - Europe", "Berlin", "", True), ("Remote, US", "Berlin", "", False),
     ("Remote, Canada", "Toronto", "", True), ("Remote - Europe", "Toronto", "", False), ("Vancouver", "Toronto", "", True),
     ("Remote, US", "Austin", "United States", True), ("New York", "Austin", "United States", True),
-    # a city the app has no table for: the city itself, and the country as typed in Options
-    ("Tbilisi, Georgia", "Tbilisi", "", True), ("Batumi, Georgia", "Tbilisi", "", False), ("Batumi, Georgia", "Tbilisi", "Georgia", True),
-    ("Prague", "Tbilisi", "Georgia", False), ("Remote", "Tbilisi", "Georgia", True), ("EMEA", "Tbilisi", "", True),
+    # every country is known now, with its larger cities
+    ("Tbilisi, Georgia", "Tbilisi", "", True), ("Batumi, Georgia", "Tbilisi", "", True), ("Prague", "Tbilisi", "", False),
+    ("EMEA", "Tbilisi", "", True), ("Seoul, South Korea", "Busan", "", True), ("Remote, South Korea", "Prague", "", False),
+    # a place the app has no table for (a typing error, an invented name): the city, and the country as typed in Options
+    ("Strelsau, Ruritania", "Zenda", "", False), ("Strelsau, Ruritania", "Zenda", "Ruritania", True),
+    ("Prague", "Zenda", "Ruritania", False), ("Remote", "Zenda", "Ruritania", True), ("EMEA", "Zenda", "", True),
     # the country in Options wins over the city's own
     ("Vienna", "Bratislava", "Austria", True), ("Kosice", "Bratislava", "Austria", False),
 ])
@@ -84,3 +87,122 @@ def test_a_country_s_name_is_matched_as_a_whole_word():
     # the stems of adjectives still match their endings
     assert places.country_of("Czech Republic") == "czechia" and places.country_of("Ceska republika") == "czechia"
     assert places.country_of("Slovensko") == "slovakia" and places.named_countries("Bratislava, Slovakia") == {"slovakia"}
+
+
+# ── which remote jobs fit: your country and the ones you add, or anywhere ─────
+@pytest.mark.parametrize("location, fits", [
+    ("Remote", True), ("Remote, Czechia", True), ("Remote - Europe", True), ("Remote (EMEA)", True), ("Anywhere in the world", True),
+    ("Remote, South Korea", False), ("Remote, Israel", False), ("Remote - APAC", False), ("Remote, US", False),
+    ("Remote, Germany", False), ("Remote - LATAM", False), ("Remote, Papua New Guinea", False),
+])
+def test_in_my_country_keeps_remote_jobs_open_to_it(location, fits):
+    assert places.fits(location, "Prague", "", places.RemoteReach("country")) is fits
+    assert places.fits(location, "Prague") is fits                      # the same rule without a choice
+
+
+def test_added_countries_and_their_regions_count_too():
+    reach = places.RemoteReach("country", ["Germany", "south korea", "Atlantis", "germany"])
+    assert reach.countries == ("germany", "south korea")                # unknown names and repeats are dropped
+    assert places.fits("Remote, Germany", "Prague", "", reach) is True
+    assert places.fits("Remote, South Korea", "Prague", "", reach) is True
+    assert places.fits("Remote - APAC", "Prague", "", reach) is True     # South Korea is in APAC
+    assert places.fits("Remote, Japan", "Prague", "", reach) is False
+    assert places.fits("Berlin, Germany", "Prague", "", reach) is False  # an added country is for remote jobs only
+
+
+def test_anywhere_in_the_world_keeps_every_remote_job_but_not_jobs_on_site_elsewhere():
+    reach = places.RemoteReach("world")
+    for location in ("Remote, South Korea", "Remote - APAC", "Remote, US"):
+        assert places.fits(location, "Prague", "", reach) is True
+    assert places.fits("Seoul, South Korea", "Prague", "", reach) is False
+
+
+def test_a_job_from_a_remote_board_is_remote_even_when_its_location_does_not_say_so():
+    assert places.fits("USA Only", "Prague", "", remote=True) is False
+    assert places.fits("Europe Only", "Prague", "", remote=True) is True
+    assert places.fits("USA Only", "Prague", "", places.RemoteReach("world"), remote=True) is True
+
+
+@pytest.mark.parametrize("options, scope, countries", [
+    ({}, "country", ()), ({"remote_where": "world"}, "world", ()), ({"remote_where": "moon"}, "country", ()),
+    ({"remote_countries": ["Poland", "Narnia"]}, "country", ("poland",)), ({"remote_countries": "Poland"}, "country", ()),
+])
+def test_the_choice_is_read_from_options(options, scope, countries):
+    reach = places.RemoteReach.from_options(options)
+    assert (reach.scope, reach.countries) == (scope, countries)
+
+
+def test_longer_names_and_lookalikes_are_not_read_as_another_country():
+    assert places.named_countries("Port Moresby, Papua New Guinea") == {"papua new guinea"}
+    assert places.named_countries("Juba, South Sudan") == {"south sudan"}
+    assert places.named_countries("Kinshasa, Democratic Republic of the Congo") == {"dr congo"}
+    assert places.named_countries("Albuquerque, New Mexico, United States") == {"united states"}
+    assert places.named_countries("Atlanta, Georgia, United States") == {"united states"}
+    assert places.named_countries("Tbilisi, Georgia") == {"georgia"}
+    assert places.named_countries("Kuala Lumpur, Malaysia") == {"malaysia"} and places.named_regions("Malaysia") == set()
+    assert places.named_regions("Remote - Asia Pacific") == {"asia", "apac"}
+    assert places.named_regions("Remote (European time zones)") == {"europe"}
+
+
+def test_every_country_has_a_name_to_show_and_a_part_of_the_world():
+    every = places.all_countries()
+    assert len(every) == len(places.COUNTRIES) >= 190
+    assert all(c["area"] for c in every), [c["key"] for c in every if not c["area"]]
+    names = [c["name"] for c in every]
+    assert names == sorted(names) and "South Korea" in names and "Bosnia and Herzegovina" in names and "DR Congo" in names
+    assert places.shown("united kingdom") == "United Kingdom" and places.shown("czechia") == "Czechia"
+
+
+def _remote_postings():
+    text = "We are looking for a developer to join our team. You will work with Python and SQL, and we offer mentoring."
+    rows = [("plain", "careers", "Remote"), ("korea", "careers", "Remote, South Korea"), ("germany", "linkedin", "Remote, Germany"),
+            ("usa-board", "remoteok", "USA Only"), ("eu-board", "weworkremotely", "Europe Only"), ("seoul", "careers", "Seoul, South Korea"),
+            ("brno", "jobs.cz", "Brno")]
+    return [store.new_job(id=i, title="Software Developer", company=f"Co {i}", location=loc, source=src, description=text,
+                          url=f"https://example.com/{i}") for i, src, loc in rows]
+
+
+def _kept(monkeypatch, **options):
+    found = _remote_postings()
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for",
+                        lambda source, max_age_days=0, country="": [job_sources.Board("fake", lambda q, where, n: [dict(j) for j in found])])
+    api = ui_api.Api()
+    assert api.save_options({**api.options(), "where": "Prague", **options})["ok"] is True
+    dropped = []
+    kept = sorted(j["id"] for j in agent2_search.search(["developer"], where="Prague", dropped=dropped))
+    return kept, {d["url"].rsplit("/", 1)[-1]: d["reason"] for d in dropped}
+
+
+def test_a_search_keeps_the_remote_jobs_open_to_your_country(isolate_data, monkeypatch):
+    kept, dropped = _kept(monkeypatch)
+    assert kept == ["brno", "eu-board", "plain"]
+    assert dropped["korea"] == "A remote job for people in another part of the world (Remote, South Korea)."
+    assert dropped["usa-board"] == "A remote job for people in another part of the world (USA Only)."
+    assert dropped["germany"].startswith("A remote job") and dropped["seoul"].startswith("A career-site job somewhere else")
+
+
+def test_a_search_with_added_countries_or_anywhere(isolate_data, monkeypatch):
+    kept, _ = _kept(monkeypatch, remote_countries=["Germany", "South Korea"])
+    assert kept == ["brno", "eu-board", "germany", "korea", "plain"]
+    kept, dropped = _kept(monkeypatch, remote_where="world")
+    assert kept == ["brno", "eu-board", "germany", "korea", "plain", "usa-board"] and list(dropped) == ["seoul"]
+
+
+def test_the_remote_choice_is_saved_and_checked(isolate_data):
+    api = ui_api.Api()
+    assert api.options()["remote_where"] == "country" and api.options()["remote_countries"] == []    # before it was ever set
+    assert api.save_options({**api.options(), "remote_where": "world", "remote_countries": ["South Korea", "germany", "Germany"]})["ok"]
+    assert api.options()["remote_where"] == "world" and api.options()["remote_countries"] == ["south korea", "germany"]
+    for bad, says in ((({"remote_where": "moon"}), "in your country or anywhere"),
+                      ({"remote_countries": "Germany"}, "list of countries"), ({"remote_countries": [3]}, "list of countries"),
+                      ({"remote_countries": ["Narnia"]}, "“Narnia” is not a country the app knows"),
+                      ({"remote_countries": ["Germany"] * 41}, "up to 40 countries")):
+        result = api.save_options({**api.options(), **bad})
+        assert result["ok"] is False and says in result["msg"], (bad, result)
+    assert api.options()["remote_where"] == "world"                                   # nothing was saved
+
+
+def test_the_window_gets_every_country_by_name():
+    every = ui_api.Api().countries()
+    assert {"key": "south korea", "name": "South Korea", "area": "asia"} in every
+    assert ui_api.Api().country_of("Sarajevo") == "Bosnia and Herzegovina"

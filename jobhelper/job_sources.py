@@ -142,6 +142,12 @@ def all_sources(max_age_days: int = 0) -> list[JobSource]:
     ]
 
 
+def is_remote_board(name: str) -> bool:
+    """Does this source list remote jobs only (RemoteOK, We Work Remotely)? Their postings are remote
+    even when the location says only "USA Only" or "Europe"."""
+    return name in {s.name for s in all_sources() if "remote" in s.groups}
+
+
 class SourceChoice:
     """Which kinds of job source a search reads: any combination of the ones Options offers (the Czech
     boards, LinkedIn, the career sites, the remote boards). The search, the weekly run and the main
