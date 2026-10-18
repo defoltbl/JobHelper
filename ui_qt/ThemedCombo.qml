@@ -44,6 +44,9 @@ ComboBox {
     Binding { target: cb.contentItem; property: "color"; value: theme.ink; when: cb.editable }
     Component.onCompleted: {
         if (editable && contentItem) { try { contentItem.selectByMouse = true } catch (e) {} }
+        // The style draws a frame of its own around the typing part, in the system's highlight colour (blue), inside this
+        // box's frame: two outlines in two colours. The box keeps only its own, in the colours of every other field.
+        if (editable && contentItem && contentItem.background) contentItem.background.visible = false;
         if (!editable) { ownLine.createdLine = wrappedLine.createObject(cb); contentItem = ownLine.createdLine; }
     }
 }

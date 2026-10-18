@@ -1904,7 +1904,8 @@ To add countries:
 
 1. In Options, find **Remote jobs**.
 2. Click **+ Add countries**. The window opens.
-3. To find a country, type its name or select a part of the world.
+3. To find a country, type the start of its name or select a part of the world. Other names
+   work too: *usa* finds the United States, and *england* finds the United Kingdom.
 4. Select each country that you want. Your own country is always included.
 5. Click **Done**, and then click **Save** in Options.
 

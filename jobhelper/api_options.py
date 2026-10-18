@@ -51,7 +51,7 @@ class OptionsService:
         return places.shown(name) if name else ""
 
     def countries(self):
-        """Every country the app knows, for the remote-jobs country picker: [{key, name, area}] by name."""
+        """Every country the app knows, for the remote-jobs country picker: [{key, name, area, names}] by name."""
         return places.all_countries()
 
     def remote_choices(self):

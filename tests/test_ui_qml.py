@@ -4485,3 +4485,31 @@ def test_my_details_columns_come_from_the_back_end_with_the_same_words(ui):
     assert langs["level"]["hint"] == "Native, Fluent, Advanced, Intermediate or Basic" and langs["language"]["most"] == 40
     assert [c["key"] for c in read("schoolCols")] == [k for k, _l, _m in details.ROWS["education"]]
     assert ui.js("win.limits.answer") == 3000 and ui.js("assistantDialog.maxRequest") == 300
+
+
+def test_the_country_picker_finds_a_country_by_the_start_of_its_words_or_another_of_its_names(ui):
+    """Typing "Ge" listed Algeria, Argentina, Niger and Nigeria too (they have "ge" inside). Now what you type must start
+    a word of the name, or one of the other names the app knows for it ("usa", "england")."""
+    dialog, picker = ui.find("optDialog"), ui.find("remoteDialog")
+    plain = lambda v: v.toVariant() if hasattr(v, "toVariant") else v                    # noqa: E731
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    ui.js('cityCombo.editText = "Prague"; countryField.text = ""; remoteWhere = "country"; pickedRemote = []', dialog)
+    ui.js("remoteAddBtn.clicked()", dialog)
+    _until_open(ui, "remoteDialog")
+    keys = lambda typed: (ui.js(f'searchField.text = "{typed}"', picker), [c["key"] for c in plain(ui.js("remoteDialog.shown"))])[1]  # noqa: E731
+    assert keys("Ge") == ["georgia", "germany"] and keys("ge") == keys("GE")
+    assert keys("zealand") == ["new zealand"] and keys("usa") == ["united states"] and "united kingdom" in keys("england")
+    assert "niger" in keys("Ni") and "nigeria" in keys("Ni") and "algeria" not in keys("Ni")
+    ui.js('searchField.text = ""; remoteDialog.close()', picker)
+    _until_closed(ui, "remoteDialog")
+
+
+def test_suggestions_and_the_city_box_follow_the_same_rules_as_the_other_fields(ui):
+    """The city box drew a blue frame of the style's own inside its orange one; suggestions matched letters anywhere."""
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    assert ui.js("cityCombo.contentItem.background.visible", dialog) is False                # only the box's own frame is drawn
+    assert ui.js("win.matchesStart(['Software Developer'], 'dev')") is True and ui.js("win.matchesStart('Algeria', 'ge')") is False
+    assert ui.js("win.matchesStart(['Kraków'], 'krak')") is True and ui.js("win.matchesStart('C# Developer', 'c#')") is True

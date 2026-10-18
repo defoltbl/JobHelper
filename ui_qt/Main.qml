@@ -150,6 +150,19 @@ ApplicationWindow {
     Connections { target: welcome
         function onShownChanged() { if (!welcome.shown) warmLater.restart(); else warmLater.stop(); } }
     // ── input validation helpers ──
+    // Find-as-you-type: does what was typed start one of the words of these names? "ge" finds Georgia and Germany, not
+    // Algeria or Nigeria; "zealand" finds New Zealand; accents and case do not matter. The one rule for every list that
+    // narrows as you type (the country picker, the suggestion fields).
+    function plainWords(s) {
+        return " " + String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9+#.]+/g, " ").trim();
+    }
+    function matchesStart(names, typed) {
+        var q = plainWords(typed);
+        if (q === " ") return true;
+        var all = Array.isArray(names) ? names : [names];
+        for (var i = 0; i < all.length; i++) if (plainWords(all[i]).indexOf(q) >= 0) return true;
+        return false;
+    }
     function hasNonLatin(s) {
         return /[぀-ヿ㐀-鿿가-힯Ѐ-ӿͰ-Ͽ؀-ۿ֐-׿฀-๿ऀ-ॿ]/.test(s || "");
     }

@@ -43,14 +43,14 @@ Item {
         background: Rectangle { radius: 8; color: theme.surface; border.color: theme.line; border.width: 1 }
         ListModel { id: sugModel }
         function refresh() {
-            var q = tf.text.toLowerCase().trim();   // case-insensitive
+            var q = tf.text.trim();
             sugModel.clear();
             sugList.currentIndex = -1;
             if (q.length < 1) { close(); return; }
             var n = 0;
             for (var i = 0; i < af.suggestions.length && n < 8; i++) {
                 var s = af.suggestions[i];
-                if (s.toLowerCase().indexOf(q) !== -1) { sugModel.append({ t: s }); n++; }
+                if (win.matchesStart(s, q)) { sugModel.append({ t: s }); n++; }
             }
             if (n > 0) open(); else close();
         }
