@@ -473,7 +473,7 @@ def test_dialogs_open_and_close(ui, name):
     _open(ui, dialog, 500)
     assert dialog.property("opened") is True
     ui.js("close()", dialog)
-    ui.wait(400)
+    _until_closed(ui, dialog)
     assert dialog.property("visible") is False
     assert ui.warnings == []
 
@@ -542,7 +542,7 @@ def test_detail_view_shows_score_keywords_and_follow_up(ui, monkeypatch):
     ui.js("detailDialog.refresh(); countsData = bridge.counts()")
     assert ui.js("detailDialog.fu.due") is False and ui.js("countsData.followups") == 0
     ui.js("detailDialog.close()")
-    ui.wait(400)
+    _until_closed(ui, "detailDialog")
     assert ui.warnings == []
 
 
@@ -588,13 +588,13 @@ def test_follow_up_days_option_is_loaded_and_saved(ui):
     spin = ui.find("fuSpin")
     assert spin.property("value") == 10
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     ui.bridge.saveOptions({**ui.bridge.options(), "followup_days": 21})
     ui.js("optsData = bridge.options()")              # what Save does in the window
     _open(ui, dialog, 450)
     assert spin.property("value") == 21
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
 
 
 def test_scan_period_option_is_loaded_and_saved(ui):
@@ -604,7 +604,7 @@ def test_scan_period_option_is_loaded_and_saved(ui):
     _open(ui, dialog, 450)
     assert ui.find("scanSpin").property("value") == 45
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     assert ui.warnings == []
 
 
@@ -665,7 +665,7 @@ def test_typed_number_is_saved_without_pressing_enter(ui):
     assert spin.property("value") == 10
     assert spin.property("wheelEnabled") is False
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
 
 
 def test_last_run_card_survives_a_restart(ui):
@@ -700,7 +700,7 @@ def test_status_buttons_and_apply_date_in_the_job_view(ui):
     assert ui.js("detailDialog.dateErr") == "" and ui.js("detailDialog.job.applied") == "2026-09-30"
     assert ui.js("detailDialog.job.applied_from_email") is False
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     assert ui.warnings == []
 
 
@@ -738,13 +738,13 @@ def test_skip_words_and_exceptions_are_edited_loaded_and_saved(ui):
     assert ui.js('add("graduate program")', keep) is True
     assert ui.js('all().join(",")', skip) == "intern,internship,student"
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     ui.bridge.saveOptions({**ui.bridge.options(), "skip_words": ["sales"], "keep_words": ["sales engineer"]})
     ui.js("optsData = bridge.options()")
     _open(ui, dialog, 450)
     assert ui.js('all().join(",")', skip) == "sales" and ui.js('all().join(",")', keep) == "sales engineer"
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     ui.bridge.saveOptions({**ui.bridge.options(), "skip_words": ["intern", "internship"], "keep_words": []})
     assert ui.warnings == []
 
@@ -798,7 +798,7 @@ def test_analytics_rows_add_up(ui):
                                     + rows["↳ rejections"] + rows["↳ other"])
     assert rows["Why the rejection emails said no"] == rows["↳ rejections"]
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
 
 
 # ── search / filter / sort, not interested, letter editor ───────────────────
@@ -839,7 +839,7 @@ def test_tables_can_be_searched_filtered_and_sorted(ui):
         assert groups == "strong:1,stretch:1,no documents:1,not scored:1"
     finally:
         ui.js("tableDialog.close()")
-        ui.wait(350)
+        _until_closed(ui, "tableDialog")
         _store.save_jobs(jobs)
     assert ui.warnings == []
 
@@ -868,7 +868,7 @@ def test_not_interested_hides_the_lead_and_the_filter_restores_it(ui):
         assert any(t.startswith("Boring Role") for t in _titles(ui))
     finally:
         ui.js("tableDialog.close()")
-        ui.wait(350)
+        _until_closed(ui, "tableDialog")
         _store.save_jobs(jobs)
     assert ui.warnings == []
 
@@ -909,7 +909,7 @@ def test_letter_editor_edits_rewrites_and_saves(ui, monkeypatch):
     ui.js('letterDialog.setText(0, ""); letterDialog.save()')
     assert "5 paragraphs" in ui.js("letterDialog.err") and dialog.property("opened") is True        # red message, stays open
     ui.js("letterDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "letterDialog")
     lead["cover_letter_file"] = ""
     _store.save_jobs(jobs)
     assert ui.warnings == []
@@ -929,7 +929,7 @@ def test_insights_view_lists_roles_keywords_and_skills(ui, monkeypatch):
     assert any(text == "Kubernetes" for text, _ in rows)                           # asked for in the seeded posting, not in the CV
     assert ui.js("sorts.length", ui.find("tableDialog")) == 0                      # a plain list, no toolbar
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     assert ui.warnings == []
 
 
@@ -982,7 +982,7 @@ def test_help_opens_from_the_button_and_covers_the_app(ui):
     assert "never sends" in text and "never invents experience" in text and "recovery key" in text
     assert "—" not in text                                             # en dash rule applies to the help too
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     assert ui.warnings == []
 
 
@@ -1270,7 +1270,7 @@ def test_closing_buttons_ask_once_before_they_discard_unsaved_text(ui, monkeypat
     ui.wait(350)
     assert done[-1] == ("apply", "lead") and ui.find("detailDialog").property("opened") is False
     ui.js("tableDialog.close()")
-    ui.wait(300)
+    _until_closed(ui, "tableDialog")
     source = (ROOT / "ui_qt" / "DetailDialog.qml").read_text(encoding="utf-8")
     assert source.count("bridge.applyJob(") == 1 and source.count("bridge.dismissJob(") == 1, "both buttons go through the asking functions"
     assert ui.warnings == []
@@ -1426,9 +1426,9 @@ def _until_shown(ui, name, most_ms=4000):
     return item
 
 
-def _until_closed(ui, name, most_ms=4000):
-    """Wait for a window's closing animation to end."""
-    dialog, waited = ui.find(name), 0
+def _until_closed(ui, window, most_ms=4000):
+    """Wait for a window's closing animation to end. `window` is its name or the window itself."""
+    dialog, waited = (ui.find(window) if isinstance(window, str) else window), 0
     while dialog.property("visible") is not False and waited < most_ms:
         ui.wait(50); waited += 50
     assert dialog.property("visible") is False
@@ -1455,7 +1455,7 @@ def test_a_date_on_a_job_shows_on_the_main_screen_and_is_announced(ui):
     ui.js("bridge.clearEvent(detailDialog.job.id); detailDialog.refresh(); upcomingData = bridge.upcoming()")
     assert card.property("visible") is False and ui.find("evDate").property("text") == ""
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     assert ui.warnings == []
 
 
@@ -1466,13 +1466,13 @@ def test_company_notes_are_kept_for_the_company(ui):
     assert ui.js("detailDialog.notesInfo") == "Saved for Beta."
     assert planner.company_notes("beta")["asked"] == "SQL joins"
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     _open_job(ui)
     assert ui.find("cnContact").property("text") == "Jana, HR" and ui.find("cnNotes").property("text") == "Nice team"
     ui.js('cnContact.text = ""; cnSalary.text = ""; cnAsked.text = ""; cnNotes.text = ""; detailDialog.saveNotes()')
     assert planner.company_notes("Beta")["updated"] == ""
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     assert ui.warnings == []
 
 
@@ -1498,7 +1498,7 @@ def test_a_pasted_reply_is_filed_from_the_job_window(ui, monkeypatch):
     rows = [r for r in db.all_responses() if r["msg_id"].startswith("pasted-")]
     assert len(rows) == 1 and rows[0]["job_id"] == "app"
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     assert ui.warnings == []
 
 
@@ -1534,9 +1534,9 @@ def test_cv_comparison_window(ui, monkeypatch):
     assert ui.js("compareDialog.data.rows[0].adapted") == "I know Python<b> and SQL</b>."
     assert ui.js("compareDialog.data.rows[0].master") == "I know Python."
     ui.js("compareDialog.close()")
-    ui.wait(300)
+    _until_closed(ui, "compareDialog")
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     assert ui.warnings == []
 
 
@@ -1551,7 +1551,7 @@ def test_insights_list_what_postings_pay(ui, monkeypatch):
     assert pay and pay[0][2] == "60k" and "50–60k CZK" in pay[0][1] and "your target 55k: around your target" in pay[0][1]
     assert any("1 of 2 postings state it" in str(r[1]) for r in rows)
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     assert ui.warnings == []
 
 
@@ -1564,12 +1564,12 @@ def test_scan_all_folders_switch_is_saved(ui):
     assert switch.property("checked") is False
     ui.bridge.saveOptions({**ui.bridge.options(), "scan_all_folders": True})
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     ui.js("optsData = bridge.options()")
     _open(ui, dialog, 450)
     assert switch.property("checked") is True
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     ui.bridge.saveOptions({**ui.bridge.options(), "scan_all_folders": False})
     assert ui.warnings == []
 
@@ -1597,12 +1597,12 @@ def test_application_only_cards_are_hidden_for_a_new_job_and_nothing_overflows(u
     assert ui.find("notesCard").property("visible") is True and ui.find("eventCard").property("visible") is False
     planner.save_company_notes("Acme", {})
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     _open_job(ui, "app")
     for card in ("eventCard", "replyCard", "notesCard"):
         assert ui.find(card).property("visible") is True, card
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="", cover_letter_file="", url=""), render=False)
     assert ui.warnings == []
 
@@ -1649,7 +1649,7 @@ def test_filtered_out_list_opens_from_the_last_run_card(ui):
     assert ui.js("listView.model[0].actions.length") == 1 and ui.js("listView.model[1].actions.length") == 0
     assert ui.js("tableDialog.groups.length") == 2                                # a filter chip per reason
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     agent2_search.save_dropped([])
     assert ui.warnings == []
 
@@ -1666,7 +1666,7 @@ def test_polish_empty_filtered_row_older_master_note_and_old_letter_chip(ui, mon
     _until_open(ui, "compareDialog")
     assert note.property("visible") is True
     ui.js("compareDialog.close()")
-    ui.wait(300)
+    _until_closed(ui, "compareDialog")
     monkeypatch.setattr(ui_api.Api, "cv_compare", lambda self, job_id: {
         "ok": True, "company": "Acme", "title": "Dev", "file": "x.docx", "older_master": False,
         "rows": [], "same": 3, "changed": 0, "added": 0, "removed": 0})
@@ -1674,7 +1674,7 @@ def test_polish_empty_filtered_row_older_master_note_and_old_letter_chip(ui, mon
     _until_open(ui, "compareDialog")
     assert note.property("visible") is False
     ui.js("compareDialog.close()")
-    ui.wait(300)
+    _until_closed(ui, "compareDialog")
     assert ui.warnings == []
 
 
@@ -1688,7 +1688,7 @@ def test_level_words_and_years_are_edited_in_options(ui):
     ui.js('levelTags.add("Principal")')
     assert ui.js("levelTags.all().join(',')") == "senior,lead,principal"
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     ui.bridge.saveOptions(start)
     assert ui.warnings == []
 
@@ -1724,7 +1724,7 @@ def test_bring_back_button_in_the_filtered_out_list(ui):
     ui.wait(300)
     assert ui.find("listView").property("count") == 1 and ui.js("countsData.leads") == before + 1
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     jobs = [j for j in store.load_jobs() if j["id"] != "back1"]
     store.save_jobs(jobs)
     agent2_search.save_dropped([])
@@ -1762,7 +1762,7 @@ def test_analytics_start_with_the_last_seven_days(ui):
     assert labels == ["New jobs found", "Ready to send", "Applications sent", "Replies received", "Follow-ups due"]
     assert ui.js("listView.model[6].primary") == "All time"
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     assert ui.warnings == []
 
 
@@ -1781,7 +1781,7 @@ def test_start_up_check_shows_one_line_only_when_something_is_wrong(ui):
     assert ui.find("listView").property("count") == 3
     assert ui.js("listView.model[0].secondary") == "No master CV yet." and ui.js("listView.model[2].secondary") == "fine"
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     ui.js("healthHidden = true")
     assert banner.property("visible") is False
     ui.js("healthHidden = false; healthData = bridge.selfCheck(true)")
@@ -1879,17 +1879,17 @@ def test_apply_checklist_ticks_steps_and_marks_applied(ui, monkeypatch):
     ui.js('formDialog.fill({ items: [{ question: "Why us?", answer: "Because of your product.", check: "" }] }); formDialog.copy(0)')
     assert ui.js("detailDialog.stepsDone") == 4                                   # an answer was copied
     ui.js("formDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "formDialog")
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     _open_job(ui, "lead")                                                         # the ticks are still there
     assert ui.find("applyCount").property("text").startswith("4 of 5 done")
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     _open_job(ui, "app")
     assert ui.find("applyCard").property("visible") is False                      # already applied: no checklist
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="", cover_letter_file="", url="", apply_steps=[]), render=False)
     assert ui.warnings == []
 
@@ -1902,7 +1902,7 @@ def test_a_failed_step_is_not_ticked(ui, monkeypatch):
     ui.js('detailDialog.doStep("combined"); detailDialog.doStep("posting")')      # no single PDF, and this job has no link
     assert ui.js("detailDialog.stepsDone") == 0 and ui.js("(detailDialog.job.apply_steps || []).length") == 0
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="", apply_steps=[]), render=False)
     assert ui.warnings == []
 
@@ -1936,7 +1936,7 @@ def test_without_a_city_the_search_does_not_start_and_options_open(ui):
     assert "city" in ui.js("ticker.text").lower()
     assert ui.js("cityCombo.editText") == ""                                      # and no city is filled in for you
     ui.js("optDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "optDialog")
     ui.bridge.saveOptions(start)
     ui.js("optsData = bridge.options()")
     assert ui.warnings == []
@@ -2071,17 +2071,17 @@ def test_form_answers_are_drafted_per_job_edited_and_kept(ui, monkeypatch):
     ui.js('fmModel.setProperty(1, "answer", "I expect 60 000 CZK gross per month."); formDialog.dirty = true; formDialog.save()')
     assert ui.js("formDialog.note") == "Saved with this job." and ui.js("formDialog.dirty") is False
     ui.js("formDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "formDialog")
     ui.js('formDialog.show("app")')                        # they are still there, and only for this job
     _until_open(ui, "formDialog")
     assert ui.js("fmModel.get(1).answer") == "I expect 60 000 CZK gross per month."
     ui.js("formDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "formDialog")
     ui.js('formDialog.show("lead")')
     _until_open(ui, "formDialog")
     assert ui.js("fmModel.count") == 0 and ui.js("fmQuestions.text") == ""
     ui.js("formDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "formDialog")
     ui.bridge.saveFormAnswers("app", [])
     assert ui.warnings == []
 
@@ -2104,7 +2104,7 @@ def test_form_answers_show_the_reason_when_claude_cannot_be_asked(ui, monkeypatc
     assert "limit is used up" in ui.js("formDialog.err") and ui.find("formDialog").property("visible") is True    # stays open
     assert ui.js("fmQuestions.text") == "Why us?"                                 # what you pasted is not lost
     ui.js("formDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "formDialog")
     assert ui.warnings == []
 
 
@@ -2214,14 +2214,14 @@ def test_preparation_opens_as_a_document_from_both_windows(ui, monkeypatch):
     ui.js("prepDialog.note = ''"); QMetaObject.invokeMethod(ui.find("prepDoc"), "clicked"); ui.wait(30)
     assert ui.js("prepDialog.note") == "Opened in Word: Alex_Beta_Prep_HR.docx and Alex_Beta_Prep_Technical.docx."
     ui.js("prepDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "prepDialog")
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
     _open_job(ui, "app")
     assert ui.find("prepDocument").property("visible") is False                 # nothing prepared yet: no document button
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     assert ui.warnings == []
 
 
@@ -2237,7 +2237,7 @@ def test_show_in_folder_buttons_and_the_laid_out_description(ui, monkeypatch):
     assert shown == [("cv", "app")]
     assert ui.find("descText").property("text") == "We build tools.\n\nREQUIREMENTS\nStrong Python\n\nBENEFITS\nFlexible hours"
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("app", lambda jobs, j: j.update(tailored_cv_file="", description="We use Python, Docker and Kubernetes."), render=False)
     assert ui.warnings == []
 
@@ -2278,7 +2278,7 @@ def test_preparation_window_shows_what_you_can_ask_each_listener(ui):
     assert ui.find("askHr").property("visible") is True and ui.find("askTech").property("visible") is True
     assert ui.js("prepDialog.prep.ask_hr[0]") == "What are the next steps?"
     ui.js("prepDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "prepDialog")
     ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
     assert ui.warnings == []
 
@@ -2315,14 +2315,14 @@ def test_wanted_and_unwanted_roles_are_edited_in_options(ui):
     ui.js("optDialog.pickedFields = []")                                                              # "Let the app decide"
     assert "as the app reads it from these roles: software and IT" in note.property("text") and ui.js("optDialog.changed()") is False
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     ui.bridge.saveOptions({**start, "where": "Prague", "wanted_roles": ["backend developer"], "my_fields": ["law", "no such field", "finance"]})
     ui.js("optsData = bridge.options()")
     _open(ui, dialog, 450)
     assert ui.js("optDialog.pickedFields.join('|')") == "finance|law" and ui.js("optDialog.changed()") is False   # an unknown name is dropped on load
     assert "Let the app decide" in source and "Pick it below if you want that." in source
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     ui.bridge.saveOptions(start)
     assert ui.warnings == []
 
@@ -2361,7 +2361,7 @@ def test_the_preparation_can_be_edited_and_wrong_steps_are_explained(ui, monkeyp
     source = qml_source()
     assert "Making it again replaces the changes you made in the sheet." in source and 'objectName: "prepEdit"' in source
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
     ui.js('prepEditDialog.show("app")')                                          # nothing to edit: said, no empty window
     ui.wait(250)
@@ -2434,7 +2434,7 @@ def test_number_fields_say_what_they_accept_instead_of_going_silent(ui):
     assert spin.property("value") == 45 and ui.js("scanSpin.note") == "Left at 45"
     ui.js(f"scanSpin.value = {start}; scanSpin.note = ''")
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     assert ui.warnings == []
 
 
@@ -2448,7 +2448,7 @@ def test_career_site_name_is_checked(ui):
     assert ui.js('optDialog.addCompany("Acme", "greenhouse", "")') is False and "token" in ui.js("optDialog.coErr")
     assert ui.find("coName").property("maximumLength") == 60
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     assert ui.warnings == []
 
 
@@ -2503,15 +2503,15 @@ def test_score_again_from_the_job_window(ui, monkeypatch):
     assert ui.find("scoreNote").property("text") == "Scored again: 80 before, 35 now."
     assert ui.js("detailDialog.job.score") == 35 and ui.js("detailDialog.job.score_before") == 80
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     _open_job(ui, "lead")                                                       # later it still says what it was
     assert ui.find("scoreNote").property("text") == "It was 80 before it was scored again."
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     _open_job(ui, "app")
     assert ui.js("detailDialog.job.can_rescore") is False                         # an application is not scored again
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(match_score=80, match_reason="", score_before=None), render=False)
     assert ui.warnings == []
 
@@ -2534,7 +2534,7 @@ def test_score_again_says_why_it_failed_and_keeps_the_score(ui, monkeypatch):
     assert "Not scored again: Claude's 7-day limit is used up" in ui.find("scoreNote").property("text") and ui.js("detailDialog.scoreBad") is True
     assert ui.js("detailDialog.job.score") == 80
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     assert ui.warnings == []
 
 
@@ -2550,13 +2550,13 @@ def test_score_all_again_asks_before_spending_the_limit(ui, monkeypatch):
     ui.js("tableDialog.confirmRescore = true; tableDialog.rescoreJobs = 1")
     assert button.property("text") == "Yes, score 1 again"
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     assert ui.js("tableDialog.confirmRescore") is False and started == []         # closing takes the confirmation back; nothing started
     ui.js('openView("app")')
     _until_open(ui, "tableDialog")
     assert button.property("visible") is False                                    # only in New Jobs
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     assert ui.warnings == []
 
 
@@ -2613,7 +2613,7 @@ def test_a_title_only_score_is_marked_and_the_posting_can_be_pasted(ui, monkeypa
     _until_open(ui, "tableDialog")
     assert "scored from the title only" in ui.js("listView.model[0].secondary")
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     _open_job(ui, "lead")
     assert ui.find("basisRow").property("visible") is True and ui.js("detailDialog.job.basis") == "title"
     ui.js('detailDialog.pasteOpen = true; pastedText.text = "too short"; detailDialog.savePasted()')
@@ -2631,7 +2631,7 @@ def test_a_title_only_score_is_marked_and_the_posting_can_be_pasted(ui, monkeypa
     assert ui.find("scoreNote").property("text") == "The posting's text is saved. Scored again: 40 before, 65 now."
     assert ui.js("detailDialog.job.score") == 65 and ui.js("detailDialog.scoreLead") == ""
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(description=start.get("description", ""), match_score=80, description_by_hand=False), render=False)
     assert ui.warnings == []
 
@@ -2646,7 +2646,7 @@ def test_documents_from_a_higher_score_are_marked_and_moved_only_after_asking(ui
     _until_open(ui, "tableDialog")
     assert "documents from a higher score" in ui.js("listView.model[0].secondary")
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     _open_job(ui, "lead")
     assert ui.find("staleRow").property("visible") is True and "below your limit of 50" in ui.find("staleText").property("text")
     ui.js("detailDialog.shelve()")
@@ -2655,7 +2655,7 @@ def test_documents_from_a_higher_score_are_marked_and_moved_only_after_asking(ui
     assert ui.find("staleText").property("text").endswith("files moved to the backup.") and not (config.LETTERS_DIR / "L_lead.docx").exists()
     assert ui.js("detailDialog.job.docs_stale") is False and ui.find("shelveDocs").property("visible") is False
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(match_score=80, status="letter_ready"), render=False)
     assert ui.warnings == []
 
@@ -2697,7 +2697,7 @@ def test_read_it_again_button_reports_both_outcomes(ui, monkeypatch):
     ui.js("detailDialog.refresh(); detailDialog.readAgain()")
     assert ui.js("detailDialog.scoreBusy") is False and ui.js("ticker.text") == f"Read {len(text)} characters of the posting. The next search will score it."
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(description=start.get("description", ""), match_score=80, url=""), render=False)
     assert ui.warnings == []
 
@@ -2722,7 +2722,7 @@ def test_documents_below_the_limit_are_moved_together_only_after_asking(ui, monk
     ui.js('tableDialog.confirmStale = false')                                       # Cancel
     assert button.property("text") == "Move them to backup" and (config.LETTERS_DIR / "L_lead.docx").exists()
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     ui.js('openView("new")')
     _until_open(ui, "tableDialog")
     assert ui.js("tableDialog.confirmStale") is False                               # a closed window forgets the question
@@ -2769,13 +2769,13 @@ def test_documents_below_the_limit_are_moved_together_only_after_asking(ui, monk
     assert undo.property("visible") is False and ui.find("staleBarText").property("visible") is True                    # below the limit again, so offered again
     assert "documents from a higher score" in ui.js("listView.model[0].secondary")
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
 
     _open_job(ui, "lead")                                                           # the same for one job, in its window
     ui.js("detailDialog.shelve(); detailDialog.shelve()")
     assert not (config.LETTERS_DIR / "L_lead.docx").exists() and ui.find("unshelveDocs").property("visible") is True
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     _open_job(ui, "lead")
     assert ui.find("staleRow").property("visible") is True and ui.find("staleText").property("text").startswith("The documents the app wrote for this job were moved to the backup on 20")
     ui.js("win.appRunning = true; detailDialog.unshelve()")
@@ -2790,13 +2790,13 @@ def test_documents_below_the_limit_are_moved_together_only_after_asking(ui, monk
     assert (config.LETTERS_DIR / "L_lead.docx").read_bytes() == b"x" and ui.find("unshelveDocs").property("visible") is False
     assert ui.find("shelveDocs").property("visible") is True
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
 
     ui.js('openView("app")')
     _until_open(ui, "tableDialog")
     assert bar.property("visible") is False                                         # only in New Jobs
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(match_score=80, status="letter_ready"), render=False)
     assert ui.warnings == []
 
@@ -2809,13 +2809,13 @@ def test_the_list_shows_the_score_before(ui):
     assert row["was"] == "was 55" and row["value"] == "30" and ui.js("tableDialog.anyWas") is True
     assert not row["secondary"].startswith(" ") and "·   ·" not in row["secondary"]      # no separator before the first note
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(score_before=80, match_score=80), render=False)
     ui.js('openView("new")')
     _until_open(ui, "tableDialog")
     assert ui.js("tableDialog.anyWas") is False and ui.js("listView.model.map(function (r) { return r.was || ''; }).join('')") == ""
     ui.js("tableDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "tableDialog")
     assert "the score it had before it was scored again" in qml_source()
     assert ui.warnings == []
 
@@ -2867,11 +2867,11 @@ def test_old_moved_documents_are_removed_from_options_after_asking(ui):
     assert not old_one.exists() and not old_two.exists() and fresh.exists() and button.property("enabled") is False
     assert "wrapMode: Text.WordWrap" in qml_source().split('objectName: "shelfNote"')[1][:200]
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     _open(ui, dialog, 450)
     assert note.property("text") == "1 moved document is in the backup (4 KB). None is older than 30 days."
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     fresh.unlink()
     assert ui.warnings == []
 
@@ -2905,7 +2905,7 @@ def test_jobs_that_could_not_be_put_back_are_listed_one_by_one(ui, monkeypatch):
         source = qml_source().split('objectName: "staleFailed"')[1][:260]
         assert "textFormat: Text.PlainText" in qml_source().split('objectName: "staleFailed"')[0][-120:] + source and "wrapMode: Text.WordWrap" in source
         ui.js("tableDialog.close()")
-        ui.wait(350)
+        _until_closed(ui, "tableDialog")
         assert ui.js("tableDialog.staleFailed.length") == 0
     finally:
         store.save_jobs([j for j in store.load_jobs() if not j["id"].startswith("pb_")])
@@ -2976,7 +2976,7 @@ def test_the_label_on_a_main_button_follows_the_theme(ui):
         ui.wait(50)
         assert ui.js('"" + theme.accentInk') == "#ffffff" and ui.js('"" + contentItem.color', button) == "#ffffff"
         ui.js("tableDialog.close()")
-        ui.wait(350)
+        _until_closed(ui, "tableDialog")
     finally:
         ui.js("win.dark = %s" % ("true" if start else "false"))
     assert ui.warnings == []
@@ -3000,12 +3000,12 @@ def test_a_long_title_makes_its_row_taller_instead_of_being_cut(ui):
         heights = [int(h) for h in heights.split(",") if h]
         assert max(heights) > 54 and min(heights) >= 54                                 # the long one grew, the others kept their size
         ui.js("tableDialog.close()")
-        ui.wait(350)
+        _until_closed(ui, "tableDialog")
         _open_job(ui, "lead")
         title = ui.find("detailTitle")
         assert title.property("truncated") is False and title.property("lineCount") >= 2 and title.property("text") == long_title
         ui.js("detailDialog.close()")
-        ui.wait(350)
+        _until_closed(ui, "detailDialog")
         ui.js('ticker.text = "' + "A long message in the status line that has to be read to its last word. " * 4 + '"')
         for _ in range(60):                                  # the bar grows with its message (slower on a busy machine)
             ui.wait(50)
@@ -3044,7 +3044,7 @@ def test_a_search_role_outside_software_can_be_added(ui):
     assert ui.bridge.knownRole("staff nurse") is True and ui.bridge.knownRole("beekeeper") is False and ui.bridge.knownRole("") is False
     ui.js("optDialog.pendingRole = ''; optDialog.roleErr = ''; optDialog.load()")
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     assert ui.warnings == []
 
 
@@ -3076,7 +3076,7 @@ def test_the_job_window_asks_before_closing_with_unsaved_text(ui):
     _open_job(ui, "lead")                                                                               # a new job has none of those fields filled
     assert ui.js("detailDialog.pending.length") == 0
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     assert ui.warnings == []
 
 
@@ -3110,7 +3110,7 @@ def test_a_reply_is_filed_under_another_application_from_its_window(ui, monkeypa
     ui.js('responseDialog.fileUnder("")')
     assert ui.js("responseDialog.r.job_id") == "" and "not filed under any application now" in note.property("text")
     ui.js("responseDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "responseDialog")
     ui.bridge._api.editor.change("app", lambda jobs, j: j.update(status="waiting"), render=False)
     ui.bridge._set_running(True)
     assert "running" in ui.bridge.refileResponse("<move>", "app")["msg"]              # the backend refuses the same
@@ -3148,12 +3148,12 @@ def test_the_job_window_writes_documents_on_request(ui, monkeypatch):
             break
     assert note.property("text") == "Not written: Claude's 5-hour limit is used up." and ui.find("detailDialog").property("docsBad") is True
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.js('detailDialog.show("app")')                                # an application: the row is not offered
     _until_open(ui, "detailDialog")
     assert ui.find("writeDocsRow").property("visible") is False
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     assert ui.warnings == []
 
 
@@ -3180,7 +3180,7 @@ def test_help_shows_usage_and_the_log_of_problems(ui, monkeypatch):
     monkeypatch.setattr(ui_api.Api, "usage_overview", lambda self: {"calls": 0, "cost": 0.0, "kinds": []})
     monkeypatch.setattr(ui_api.Api, "trouble_log", lambda self, most=25: {"lines": [], "total": 0, "file": "app_trouble.log"})
     ui.js("helpDialog.close()")
-    ui.wait(300)
+    _until_closed(ui, "helpDialog")
     ui.js('helpDialog.open(); helpDialog.tab = "use"')
     _until_open(ui, "helpDialog")
     assert "Nothing yet" in ui.find("usageTotal").property("text") and ui.find("logShow").property("visible") is False
@@ -3345,19 +3345,19 @@ def test_the_job_window_says_what_to_check_in_the_adapted_cv(ui):
     assert ui.js("detailDialog.job.cv_check.length") == 2
     assert "It speaks of cost center, vendor master, which are terms of the posting that your own CV does not mention" in note.property("text")
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(cv_check=["cost center"]), render=False)
     ui.js('detailDialog.show("lead")')
     _until_open(ui, "detailDialog")
     assert "which is a term of the posting" in note.property("text")
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(cover_letter_file="L_lead.docx", letter_check=["tax codes"]), render=False)
     ui.js('detailDialog.show("lead")')
     _until_open(ui, "detailDialog")
     assert "It says you have done something with tax codes, which is a term of the posting" in ui.find("letterCheck").property("text")
     ui.js("detailDialog.close()")
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
 
     def clear(jobs, j):
         j.pop("cv_check", None)
@@ -4223,7 +4223,7 @@ def test_the_size_of_text_and_controls_is_an_option_used_at_the_next_start(ui, m
     assert "saved with Save" in hint(), "said where you look: nothing changes until Save, and then at the next start"
     assert ui.js("optDialog.collect().options.text_size", dialog) == 125 and ui.js("optDialog.changed()") is True, "Save stores it, and closing asks first"
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     assert api.save_options({"text_size": 125})["ok"] and api.options()["text_size"] == 125 and config.text_scale() == 1.25
     env = {}
     assert app_qt.apply_text_size(env) == "1.25" and env == {"QT_SCALE_FACTOR": "1.25"}
@@ -4237,7 +4237,7 @@ def test_the_size_of_text_and_controls_is_an_option_used_at_the_next_start(ui, m
     _open(ui, dialog, 450)
     assert ui.find("sizeCombo").property("currentText") == "125%", "the saved size is shown again"
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, dialog)
     api.save_options({"text_size": 100})
     assert ui.warnings == []
 
