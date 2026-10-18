@@ -106,7 +106,7 @@ def is_us_location(location: str, where: str | None = None) -> bool:
     no table for, only a location that names the United States counts. Without `where`: any state code."""
     if where is None:
         return _names_the_us(location, None, home_known=False)
-    return _names_the_us(location, places.country_of(config.search_country()) or places.country_of(where))
+    return _names_the_us(location, Placement(where, config.search_country()).home)
 
 
 def _names_the_us(location: str, home: str | None, home_known: bool = True) -> bool:
@@ -139,6 +139,12 @@ class Placement:
         self.country = str(country or "")
         self.reach = reach or places.RemoteReach()
         self._home = places.country_of(self.country) or places.country_of(self.where)
+
+    @property
+    def home(self) -> str:
+        """The country this search is in: the Country from Options when the app knows it, else the city's ('' = not known).
+        The one rule for it: the sources, the place checks and the assistant's right-to-work answer all ask here."""
+        return self._home
 
     @classmethod
     def for_search(cls, where: str) -> "Placement":
