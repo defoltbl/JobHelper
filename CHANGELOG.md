@@ -5,7 +5,7 @@ Format: a `## ` heading, then one `- ` line per change; `**words**` are shown in
 in a version go under `## Unreleased`; a released version's heading is `## 1.1.0 – 18 October 2026`
 (its tag is `v1.1.0` on GitHub). Version 1.0.0 is everything up to 17 October 2026, listed by date.
 
-## Unreleased
+## 1.1.0 – 18 October 2026
 
 - When the assistant fills in a form whose **phone code menu** is drawn by the page itself, a number such as +1 now gets the country in My details (Canada, not the United States). Lists of the normal kind already worked this way.
 - Two companies with the same **legal form** in their names, such as "Alfa spol. s r.o." and "Beta spol. s r.o." or two companies ending in "Corp" or "LLC", are no longer taken for one company. Before, a reply from one could be filed under the other's application, and a search could leave out a job as one you had already applied for.
