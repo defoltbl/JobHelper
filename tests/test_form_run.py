@@ -42,7 +42,7 @@ def test_one_rule_says_which_pages_the_assistant_works_on():
     from jobhelper import form_fill
     page = form_fill.PageAddress("  https://careers.northwind.example/apply?id=4 ")
     assert page.is_web and not page.refused and page.host == "careers.northwind.example" and page.url.startswith("https://")
-    for bad in ("", "chrome://settings", "file:///Users/x/form.html", "https://", "javascript:alert(1)"):
+    for bad in ("", "chrome://settings", "file:///tmp/form.html", "https://", "javascript:alert(1)"):
         assert not form_fill.PageAddress(bad).is_web, bad
     assert form_fill.PageAddress("https://jobs.example.ru/1").refused
     assert form_fill.PageAddress("https://x.ru").refusal("read this site") == \

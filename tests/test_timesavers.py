@@ -245,3 +245,13 @@ def test_nudges_remind_once_of_what_is_left_undone(isolate_data):
     assert [(n["kind"], n["job_id"]) for n in got] == [("apply", "l"), ("prep", "i")]
     assert "is tomorrow and there is no preparation yet" in got[1]["text"]
     assert len(summary.nudges([dict(lead, id=f"l{i}") for i in range(9)], [], today)) == summary.MAX_NUDGES
+
+
+def test_an_invitation_without_a_date_is_a_nudge_for_two_weeks(isolate_data):
+    from jobhelper import store, summary
+    today = date(2026, 10, 19)
+    job = store.new_job(id="a", title="QA", company="Brightline", status="waiting")
+    reply = {"job_id": "a", "stage": "interview", "received_date": "Mon, 12 Oct 2026 10:00:00 +0200"}
+    assert [n["kind"] for n in summary.nudges([job], [reply], today)] == ["date"]
+    assert summary.nudges([job], [reply], date(2026, 10, 30)) == [], "older than 14 days: no longer said"
+    assert "date" not in [n["kind"] for n in summary.nudges([dict(job, event={"kind": "interview", "date": "2026-10-22"})], [reply], today)]

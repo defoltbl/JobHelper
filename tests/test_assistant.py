@@ -1320,6 +1320,10 @@ def test_noticing_a_form_is_off_until_you_turn_it_on_and_offers_each_page_once(i
     tab["url"] = "https://careers.northwind.example/jobs/42?step=2"
     monkeypatch.setattr(chrome, "run", lambda script: json.dumps({"url": tab["url"], "fields": 6, "first": "a|b", "empty": 1}))
     assert api.assistant_notice() == {"ok": False}, "nothing left to fill in: nothing to offer"
+    for odd in ("https://", "https://jobs.example.ru/apply"):                    # no host, or a Russian site: never offered
+        tab["url"] = odd
+        monkeypatch.setattr(chrome, "run", lambda script: pytest.fail("such a page is not read"))
+        assert api.assistant_notice() == {"ok": False}, odd
     tab.update(url="https://news.example.org/today", title="News")
     assert api.assistant_notice() == {"ok": False}, "a page that belongs to no job of yours"
     tab.update(url="chrome://settings", title="Settings")

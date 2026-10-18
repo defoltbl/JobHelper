@@ -8,7 +8,7 @@ import time
 from datetime import date, datetime
 
 from .api_base import _guarded, _stem
-from . import (agent2_search, agent3_letters, textfmt, config, db, followup, keywords, merge, pdf, planner, salary, store, vault)
+from . import (agent2_search, form_fill, agent3_letters, textfmt, config, db, followup, keywords, merge, pdf, planner, salary, store, vault)
 
 
 class JobsService:
@@ -296,8 +296,9 @@ class JobsService:
     def open_url(self, job_id):
         """Open a lead's job posting in the default browser (to go apply)."""
         job = store.find(store.load_jobs(), job_id)
-        url = str((job or {}).get("url", "") or "").strip()
-        if not url.startswith(("http://", "https://")):         # a job board hands this over: only a web page is opened
+        address = form_fill.PageAddress((job or {}).get("url", ""))
+        url = address.url
+        if not address.is_web or address.refused:              # a job board hands this over: only a web page, never a Russian site
             return {"ok": False}
         self._desktop.open(url)
         self.note_opened(job_id)                                # the form you fill in next is most likely this job's
