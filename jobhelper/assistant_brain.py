@@ -17,6 +17,7 @@ from datetime import date
 from typing import Any
 
 from . import db, llm, planner, store
+from .cv_tailor import en_dashes
 
 MAX_TURNS, MAX_TURN, MAX_JOBS, MAX_SHOWN, MAX_ACTIONS = 6, 400, 70, 30, 3
 STATUSES = tuple(sorted(store.APPLICATION_STATUSES))       # what set_status may set: the statuses of an application
@@ -182,7 +183,7 @@ def check(data: Any, ids: set[str], notes: int = 0) -> dict[str, Any]:
     """Claude's reply made safe: only words, known actions with arguments of the right kind, and ids that exist."""
     if not isinstance(data, dict):
         raise ValueError("Claude's answer could not be read. Ask again in other words.")
-    say = " ".join(str(data.get("say") or "").replace("—", "–").split())[:1500]
+    say = " ".join(en_dashes(str(data.get("say") or "")).split())[:1500]
     shown = [str(i) for i in (data.get("show") if isinstance(data.get("show"), list) else []) if str(i) in ids][:MAX_SHOWN]
     asked = data.get("actions") if isinstance(data.get("actions"), list) else ([data["action"]] if isinstance(data.get("action"), dict) else [])
     clean, dropped = [], False
@@ -386,7 +387,7 @@ RATED_SHAPE = '\n\nReturn JSON with exactly this shape:\n{"rating": "good" | "ok
 
 
 def _plain(text: Any, most: int = 1500) -> str:
-    return " ".join(str(text or "").replace("—", "–").split())[:most]
+    return " ".join(en_dashes(str(text or "")).split())[:most]
 
 
 def brief(job: dict[str, Any], notes: dict[str, Any], replies: list[dict[str, Any]]) -> str:
@@ -421,7 +422,7 @@ def reply(job: dict[str, Any], message: dict[str, Any], how: str, name: str) -> 
                                        subject=_plain(message.get("subject"), 200), summary=_plain(message.get("summary"), 800) or "(no summary stored)",
                                        next_step=_plain(message.get("next_step"), 300) or "(nothing stated)",
                                        how=_plain(how, 300) or "a polite, positive answer to what they ask"), system=REPLY_SYSTEM, tag="assistant")
-    return str(text or "").replace("—", "–").strip()[:2000]
+    return en_dashes(str(text or "")).strip()[:2000]
 
 
 def posting(title: str, url: str, text: str) -> dict[str, Any]:

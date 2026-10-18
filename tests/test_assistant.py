@@ -2138,3 +2138,9 @@ def test_the_form_limits_and_the_unfilled_rule_live_in_one_place():
     assert assistant.check_answer("When can you start?", "On [date].")["field"] == "answer"
     assert form_fill.RowDate("3/2023").mm == "03" and form_fill.RowDate("2023").month == 0 and not form_fill.RowDate("")
     assert form_fill.RowDate("13/2023").month == 0                                      # not a month: only the year is known
+
+
+def test_the_assistant_writes_en_dashes_by_the_one_rule():
+    from jobhelper import assistant_brain, cv_tailor
+    assert assistant_brain.en_dashes is cv_tailor.en_dashes
+    assert assistant_brain.check({"say": "Yes — it is open.", "actions": []}, set())["say"] == "Yes – it is open."
