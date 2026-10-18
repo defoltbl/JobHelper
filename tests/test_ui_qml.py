@@ -7,6 +7,9 @@ from datetime import date, timedelta
 import pytest
 
 pytest.importorskip("PySide6")
+# The tests share one window and follow on from each other (one saves the details, a later one needs them):
+# with the tests running on many cores, all of them stay on one worker, in this order.
+pytestmark = pytest.mark.xdist_group("window")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QMetaObject, QObject, QPointF, QUrl  # noqa: E402

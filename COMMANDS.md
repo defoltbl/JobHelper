@@ -453,6 +453,7 @@ Claude Code terminal.
 pytest                                # run the full offline test suite
 pytest -v                             # verbose
 pytest tests/test_scrapers.py         # run one test file
+pytest -n 0 tests/test_scrapers.py    # the same without the parallel workers (quicker for one file)
 ```
 
 Tests use no network and no Claude usage (scrapers run against saved fixtures,
