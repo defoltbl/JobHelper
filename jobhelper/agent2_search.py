@@ -526,6 +526,59 @@ class SearchFilters:
         return "" if _is_recent(job, self.max_age_days) else f"Posted more than {self.max_age_days} days ago."
 
 
+@dataclass(frozen=True)
+class SearchSettings:
+    """How one search is run, from the Options: the city, how many results per keyword, and what the filters skip.
+    The window and the command line (the weekly run) make it the same way, so both search alike."""
+    where: str
+    per_query: int = 15
+    english_only: bool = True
+    seniority: str = "junior"
+    max_age_days: int = 0
+    full_time_only: bool = True
+    skip_words: tuple[str, ...] = ()
+    keep_words: tuple[str, ...] = ()
+    level_words: tuple[str, ...] | None = None      # None: decide from the level in the CV
+    max_years: int | None = None                    # None: the usual limit for that level; 0: never
+
+    @classmethod
+    def from_options(cls, options: dict[str, Any], seniority: str = "junior") -> "SearchSettings":
+        """From the Options as `ui_api.Api().options()` gives them (saved values over the defaults)."""
+        o = options or {}
+        level = o.get("level_words")
+        return cls(where=str(o.get("where") or ""), per_query=int(o.get("per_query") or 15),
+                   english_only=not o.get("all_languages"), seniority=seniority or "junior",
+                   max_age_days=int(o.get("max_age_days") or 0), full_time_only=o.get("full_time_only", True) is not False,
+                   skip_words=tuple(o.get("skip_words") or ()), keep_words=tuple(o.get("keep_words") or ()),
+                   level_words=tuple(level) if isinstance(level, (list, tuple)) else None,
+                   max_years=None if o.get("max_years") is None else int(o["max_years"]))
+
+    def run(self, queries: list[str], source, dropped: list | None = None, progress=None) -> list[dict[str, Any]]:
+        """The search itself (see `search`)."""
+        return search(queries, where=self.where, per_query=self.per_query, source=source, english_only=self.english_only,
+                      candidate_seniority=self.seniority, max_age_days=self.max_age_days, progress=progress,
+                      full_time_only=self.full_time_only, skip_words=list(self.skip_words), keep_words=list(self.keep_words),
+                      dropped=dropped, level_words=None if self.level_words is None else list(self.level_words),
+                      max_years=self.max_years)
+
+
+def take_in(jobs: list[dict[str, Any]], found: list[dict[str, Any]], english_only: bool = True,
+            dropped: list | None = None) -> dict[str, int]:
+    """Add what a search found to the job list, the same way after every search: roles you already applied to are
+    left out, a role already listed from another board is kept once, an empty posting is read once more, and
+    postings that stopped taking applications are noted. The Filtered out list is saved. Mutates `jobs`.
+    Returns {found, added, skipped, known, closed}."""
+    dropped = dropped if dropped is not None else []
+    found, known = drop_known_applications(found, jobs, dropped=dropped)
+    added, skipped = store.upsert(jobs, found)
+    added -= len(prune_duplicate_leads(jobs))                       # same role already listed from another board
+    added -= reread_missing(jobs, english_only=english_only, dropped=dropped)["removed"]
+    closed = check_closed(jobs, dropped=dropped)                    # postings that stopped accepting applications
+    save_dropped(dropped)
+    return {"found": len(found), "added": added, "skipped": skipped, "known": known,
+            "closed": closed["removed"] + closed["marked"]}
+
+
 def search(
     queries: list[str],
     where: str = "",

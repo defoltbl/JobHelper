@@ -209,6 +209,8 @@ data/                your data; only the *.example.* files are in git
 - **A new search filter is one `Sift` in `agent2_search.SearchFilters.sifts()`**, in its place in the order. The
   duplicate check stays last (`apply`): it keeps one copy only after every filter that can drop a copy has run.
   The country of a search is `filters.Placement.home`: never work it out again from the city or Options.
+  The window and `run.py` (the weekly run) make the search with `SearchSettings.from_options` and add its
+  postings with `take_in`: a new setting or step goes there once, not into each of them.
 - **The folder `backups/below_your_limit`** holds documents that can be put back. The automatic
   clean-up of old backups must never count it as a backup.
 
