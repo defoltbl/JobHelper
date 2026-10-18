@@ -58,3 +58,37 @@ def test_a_job_with_documents_is_marked_ready_the_same_way_everywhere():
     applied = {"status": "waiting", "match_score": 80}
     agent3_letters.mark_ready(applied)
     assert applied["status"] == "waiting" and applied["match_tier"] == "strong"         # an application keeps its status
+
+
+def test_each_posting_that_cannot_be_scored_is_logged_once(monkeypatch, capsys):
+    def ask_json(prompt, **k):
+        if "Developer 1" in prompt:
+            raise ValueError("no JSON")
+        return {"nothing": True}
+    monkeypatch.setattr(llm, "ask_json", ask_json)
+    missed = Scorer(PROFILE, rules="r").score(_jobs(1) + [dict(_jobs(2)[1])], lambda job, r: isinstance(r, dict) and "score" in r)
+    out = capsys.readouterr().out
+    assert [j["id"] for j in missed] == ["j1", "j2"]
+    assert out.count("Developer 1") == 1 and "no JSON" in out                 # an error: one line, with the reason
+    assert out.count("Developer 2") == 1 and "unusable reply" in out           # an answer without a score: one line
+
+
+def test_scoring_again_sends_the_same_text_for_a_posting_without_one(isolate_data, monkeypatch):
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or {"score": 50, "reason": "ok"})
+    jobs = [{"id": "x", "title": "Analyst", "company": "Orbis", "status": "found", "match_score": 40}]
+    agent3_letters.rescore(jobs, ["x"], PROFILE, cv_text="Python")
+    assert agent3_letters.NO_DESCRIPTION in prompts[0]
+
+
+def test_a_limit_wait_is_one_object_for_scoring_and_writing():
+    waits, calls = [], []
+    wait = agent3_letters.LimitWait(waits.append)
+
+    def step():
+        calls.append(1)
+        if len(calls) == 1:
+            raise llm.LimitReached("used up")
+        return "done"
+    assert wait(step) == "done" and len(waits) == 1
+    assert Scorer(PROFILE, on_limit=wait, rules="r").ask is wait                 # the search shares its wait with the Scorer
