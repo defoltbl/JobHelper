@@ -144,7 +144,6 @@ class TalkService:
         special.setdefault("rows", rows)
         return special
 
-
     def _ready(self, action: dict[str, Any], job) -> str:
         """'' or why this change cannot be made, said before you are asked about it."""
         name, args = action["name"], action["args"]

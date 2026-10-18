@@ -408,9 +408,10 @@ def test_only_web_links_and_plain_file_names_are_opened(isolate_data, monkeypatc
     store.save_jobs([store.new_job(id="web", title="T", company="C", url="https://example.com/job"),
                      store.new_job(id="file", title="T", company="C", url="file:///etc/hosts"),
                      store.new_job(id="app", title="T", company="C", url="x-custom-scheme://run"),
-                     store.new_job(id="none", title="T", company="C")])
+                     store.new_job(id="none", title="T", company="C"),
+                     store.new_job(id="ru", title="T", company="C", url="https://jobs.example.ru/1")])
     api = ui_api.Api()
-    assert api.open_url("web")["ok"] is True and [api.open_url(i)["ok"] for i in ("file", "app", "none", "zzz")] == [False] * 4
+    assert api.open_url("web")["ok"] is True and [api.open_url(i)["ok"] for i in ("file", "app", "none", "zzz", "ru")] == [False] * 5
     assert api.open_doc("letter", "L.docx")["ok"] is True
     assert api.open_doc("letter", "../secret.docx")["ok"] is False and api.open_doc("letter", str(config.DATA_DIR / "secret.docx"))["ok"] is False
     assert opened == ["https://example.com/job", str(config.LETTERS_DIR / "L.docx")]

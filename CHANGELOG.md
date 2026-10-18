@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Open posting** no longer opens a job's link when it points to a Russian site, the same rule the assistant follows for every page.
 - When the file with your **notes per company** is damaged, saving a note no longer replaces it with that one note. Now the app shows a red line that it cannot read the notes, and leaves the file as it is.
 - `python status.py sync` and `responses --scan` now also say when a mail folder or the second mailbox could not be read, as the window already did.
 - **About you** is now a window of its own, opened under **Options** in the right column. It shows the **date forms will get** for "You can start" (or a red line when the app cannot read a date in your words), offers the **usual answers about your right to work**, shows the **app's own salary estimate** for your kinds of role when you give no figure, lets you **change or remove** each figure per kind of role, and has **one box for each job** in My details for the notes about your work.
