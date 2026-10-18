@@ -388,7 +388,7 @@ Table 6.2 names the module of each agent and what it may ask Claude.
 |---|---|---|---|
 | Profiler | `agent1_cv` | Reads the CV and builds the profile and the search roles | Once per CV |
 | Scout | `agent2_search` | Searches the boards, filters, keeps every dropped posting with its reason. `SearchFilters` holds the rules of one search in their order | Never |
-| Scribe | `agent3_letters` | Scores postings five per call; writes the adapted CV and the letter | Yes |
+| Scribe | `agent3_letters` | Scores postings five per call; writes the adapted CV and the letter. `Scorer` is the one way of scoring, for a search and for scoring again | Yes |
 | Tracker | `agent4_tracker` | Writes the Excel tables | Never |
 | Postman | `agent5_responses` | Reads replies and files each to its application | For new replies only |
 
