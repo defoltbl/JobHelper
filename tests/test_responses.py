@@ -531,3 +531,33 @@ def test_only_a_known_column_can_be_counted(isolate_data):
     for bad in ("stage; DROP TABLE responses", "msg_id", ""):
         with pytest.raises(ValueError):
             db.counts_by(bad)
+
+
+def test_every_scan_ends_the_same_way_and_says_it_the_same_way(monkeypatch):
+    """The window, `status.py sync` and the weekly run each repeated the steps after reading mail and the choice of
+    notification; now agent5_responses.after_scan and scan_notice own them."""
+    from pathlib import Path
+    from jobhelper import agent2_search, agent5_responses as a5
+    done = []
+    monkeypatch.setattr(a5, "backfill_roles", lambda jobs: done.append("roles"))
+    monkeypatch.setattr(a5, "annotate_progress", lambda jobs: done.append("steps"))
+    monkeypatch.setattr(agent2_search, "prune_applied_leads", lambda jobs: done.append("leads") or ["x"])
+    assert a5.after_scan([]) == ["x"] and done == ["roles", "steps", "leads"]
+    assert a5.scan_notice({"invites": ["Acme"], "new_responses": 1})[1:] == ("Interview invitation", True)
+    assert a5.scan_notice({"new_responses": 0}) == ("No new replies.", "Email scan finished", False)
+    root = Path(a5.__file__).resolve().parent.parent
+    for path in (root / "status.py", root / "jobhelper" / "bridge_runs.py"):
+        text = path.read_text(encoding="utf-8")
+        assert "after_scan(jobs)" in text and "scan_notice(stats)" in text and "backfill_roles" not in text, path.name
+
+
+def test_the_days_of_a_scan_and_of_a_follow_up_are_read_in_one_place(isolate_data):
+    import json
+    from jobhelper import config, followup, vault
+    from jobhelper.ui_api import Api
+    assert config.scan_days() == config.IMAP_LOOKBACK_DAYS and followup.saved_days() == followup.DEFAULT_DAYS
+    config.ensure_dirs()
+    vault.write_text(config.DATA_DIR / "ui_settings.json", json.dumps({"scan_days": 14, "followup_days": 0}))
+    assert config.scan_days() == 14 and followup.saved_days() == 0 and Api().followup_days() == 0
+    vault.write_text(config.DATA_DIR / "ui_settings.json", json.dumps({"followup_days": "soon"}))
+    assert followup.saved_days() == followup.DEFAULT_DAYS

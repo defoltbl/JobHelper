@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-import status
 from jobhelper import config, weekly
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -111,4 +110,4 @@ def test_sync_takes_its_period_from_options(monkeypatch):
     for saved, days in (({"scan_days": 10}, 10), ({"scan_days": "14"}, 14), ({}, 120), ({"scan_days": 0}, 120),
                         ({"scan_days": "soon"}, 120), ({"scan_days": -3}, 120)):
         monkeypatch.setattr(config, "ui_settings", lambda saved=saved: saved)
-        assert status.scan_days() == days
+        assert config.scan_days() == days

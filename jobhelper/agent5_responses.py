@@ -203,6 +203,26 @@ def scan_detail(stats: dict[str, Any]) -> str:
     return f"{stats.get('scanned', 0)} · {stats.get('asked', 0)} asked"
 
 
+def after_scan(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What every scan does with the replies it read, in the window, on the command line and in the weekly run: real
+    role titles for applications known only by their company, the steps of each application, and leads you have
+    applied to since are removed. Returns the removed leads. Mutates `jobs`; saving is the caller's."""
+    from . import agent2_search
+    backfill_roles(jobs)
+    annotate_progress(jobs)
+    return agent2_search.prune_applied_leads(jobs)
+
+
+def scan_notice(stats: dict[str, Any]) -> tuple[str, str, bool]:
+    """The notification after a scan: (text, title, urgent). An invitation is urgent, worth showing even while the app
+    is in front; otherwise the news of the replies."""
+    from . import notify
+    invited = notify.invites_text(stats.get("invites") or [])
+    if invited:
+        return invited + ". Open JobHelper to prepare for it.", "Interview invitation", True
+    return replies_text(stats), "Email scan finished", False
+
+
 def replies_text(stats: dict[str, Any]) -> str:
     """The same news as scan_summary, as a notification: only what arrived."""
     n = stats.get("new_responses", 0)

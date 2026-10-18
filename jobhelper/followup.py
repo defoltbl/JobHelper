@@ -35,6 +35,15 @@ def _day(text: str) -> date | None:
         return None
 
 
+def saved_days() -> int:
+    """After how many days of silence a follow-up is due, as set in Options (0 = never); DEFAULT_DAYS when unset."""
+    from . import config
+    try:
+        return max(0, int(config.ui_settings().get("followup_days", DEFAULT_DAYS)))
+    except (TypeError, ValueError):
+        return DEFAULT_DAYS
+
+
 def last_reply_by_job(responses: list[dict[str, Any]]) -> dict[str, date]:
     """job id -> day of the latest stored reply."""
     out: dict[str, date] = {}

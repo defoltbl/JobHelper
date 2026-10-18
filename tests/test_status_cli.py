@@ -79,7 +79,7 @@ def test_responses_scan_keeps_what_was_read_when_the_limit_is_reached(isolate_da
     monkeypatch.setattr(agent5_responses, "process_inbox", read)
     assert _run(monkeypatch, "responses", "--scan") == 3
     assert "What was read is saved" in capsys.readouterr().out and store.find(store.load_jobs(), "a")["status"] == "interview"
-    assert asked == [status.scan_days()], "without --days it looks as far back as the app's Options say, not nowhere"
+    assert asked == [config.scan_days()], "without --days it looks as far back as the app's Options say, not nowhere"
     monkeypatch.setattr(agent5_responses, "process_inbox", lambda jobs, lookback_days=None, **kw: (_ for _ in ()).throw(RuntimeError("No mailbox is connected.")))
     assert _run(monkeypatch, "responses", "--scan") == 1 and "No mailbox is connected." in capsys.readouterr().out
 
