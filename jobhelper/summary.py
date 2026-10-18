@@ -71,3 +71,52 @@ def headline(w: dict[str, Any]) -> str:
     if w["coming"]:
         parts.append(f"{len(w['coming'])} date" + ("" if len(w["coming"]) == 1 else "s") + " coming up")
     return ", ".join(parts) + "."
+
+
+def briefing_lines(w: dict[str, Any]) -> list[str]:
+    """The assistant's lines when the app opens, from `week`: what is ready to send, invitations, follow-ups due, and
+    the next three dates."""
+    lines = []
+    if w["ready_total"]:
+        lines.append(f"{w['ready_total']} {'job is' if w['ready_total'] == 1 else 'jobs are'} ready to send" + (f" ({w['new_ready']} new this week)" if w["new_ready"] else ""))
+    if w["invites"]:
+        lines.append(f"{w['invites']} {'reply' if w['invites'] == 1 else 'replies'} this week that {'looks' if w['invites'] == 1 else 'look'} like an invitation")
+    if w["followups"]:
+        lines.append(f"{w['followups']} follow-up{'' if w['followups'] == 1 else 's'} due")
+    return lines + [c["text"] for c in w["coming"][:3]]
+
+
+MAX_NUDGES = 6
+
+
+def nudges(jobs: list[dict[str, Any]], responses: list[dict[str, Any]], today: date) -> list[dict[str, str]]:
+    """What the assistant reminds you of, at most MAX_NUDGES, each until you act on it (a job's "nudged" list): a form
+    filled in but not marked applied, an interview within two days without preparation, an invitation in the last
+    14 days without a date. [{kind, job_id, text}]"""
+    out = []
+    last: dict[str, dict[str, Any]] = {}
+    for r in responses:
+        if r.get("job_id") and r["job_id"] not in last:
+            last[r["job_id"]] = r
+    for j in jobs:
+        what, done = f"{j.get('title', '')} at {j.get('company', '')}", set(j.get("nudged") or [])
+        filled = str(j.get("form_filled") or "")
+        if j.get("status") in store.LEAD_STATUSES and filled and filled < today.isoformat() and "apply" not in done:
+            out.append({"kind": "apply", "job_id": j["id"], "text": f"You filled in the form for {what} on {filled} but did not mark it applied."})
+        event = j.get("event") or {}
+        if event.get("kind") == "interview" and event.get("date") and "prep" not in done and not (j.get("interview_prep") or {}).get("questions"):
+            try:
+                away = (date.fromisoformat(event["date"]) - today).days
+            except ValueError:
+                away = -1
+            if 0 <= away <= 2:
+                when = ("today", "tomorrow", "in two days")[away]
+                out.append({"kind": "prep", "job_id": j["id"], "text": f"The interview for {what} is {when} and there is no preparation yet."})
+        reply = last.get(j["id"])
+        if reply and reply.get("stage") in ("interview", "assessment") and j.get("status") in store.APPLICATION_STATUSES - {"rejected"} \
+                and not event.get("date") and "date" not in done:
+            when = db.received_at(reply.get("received_date", "")).date()
+            if 0 <= (today - when).days <= 14:
+                out.append({"kind": "date", "job_id": j["id"], "text": f"{j.get('company', '')} invited you on {when.isoformat()} and no date is set for it."})
+    return out[:MAX_NUDGES]
+

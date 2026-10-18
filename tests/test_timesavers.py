@@ -220,3 +220,28 @@ def test_apply_steps_are_kept_with_the_job(api):
     assert api.job_detail("lead")["apply_steps"] == ["cv", "posting"]
     assert api.apply_step("lead", "format-disk") == {"ok": False} and api.apply_step("zzz", "cv") == {"ok": False}
     assert ui_api.Api().job_detail("lead")["apply_steps"] == ["cv", "posting"]      # after a restart too
+
+
+def test_the_briefing_counts_follow_ups_with_the_days_every_other_place_uses(isolate_data):
+    """The briefing asks followup.saved_days() (through the facade), like the insights page and the scan, instead of
+    reading the setting itself: with Options never saved it still counts after the default number of days."""
+    from datetime import timedelta
+    from jobhelper import config, followup, store, ui_api
+    config.ensure_dirs()
+    assert "followup_days" not in config.ui_settings()
+    applied = (date.today() - timedelta(days=followup.DEFAULT_DAYS + 20)).isoformat()
+    store.save_jobs([store.new_job(id="w", title="QA Engineer", company="Fernhill", status="waiting", date_applied=applied)])
+    lines = ui_api.Api().assistant_briefing()["lines"]
+    assert any("follow-up" in line and "due" in line for line in lines), lines
+
+
+def test_nudges_remind_once_of_what_is_left_undone(isolate_data):
+    from jobhelper import store, summary
+    today = date(2026, 10, 19)
+    lead = dict(store.new_job(id="l", title="Dev", company="Acme", status="letter_ready"), form_filled="2026-10-17")
+    soon = dict(store.new_job(id="i", title="QA", company="Brightline", status="interview"), event={"kind": "interview", "date": "2026-10-20"})
+    done = dict(store.new_job(id="d", title="Ops", company="Cyan", status="letter_ready"), form_filled="2026-10-10", nudged=["apply"])
+    got = summary.nudges([lead, soon, done], [], today)
+    assert [(n["kind"], n["job_id"]) for n in got] == [("apply", "l"), ("prep", "i")]
+    assert "is tomorrow and there is no preparation yet" in got[1]["text"]
+    assert len(summary.nudges([dict(lead, id=f"l{i}") for i in range(9)], [], today)) == summary.MAX_NUDGES
