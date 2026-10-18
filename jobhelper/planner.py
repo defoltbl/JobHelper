@@ -9,12 +9,11 @@
 """
 from __future__ import annotations
 
-import json
 import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from . import config, email_client, store, vault
+from . import email_client, store, trouble, vault
 
 KINDS = ["interview", "deadline", "test task", "call", "other"]
 NOTE_FIELDS = ["contact", "salary", "asked", "notes"]
@@ -197,27 +196,8 @@ def reminder_text(item: dict[str, Any]) -> str:
 
 
 # ── notes per company ───────────────────────────────────────────────────────
-def _path():
-    return config.DATA_DIR / "company_notes.json"
-
-
-def _load() -> dict[str, dict[str, str]]:
-    try:
-        data = json.loads(vault.read_text(_path()))
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError, vault.VaultError):
-        return {}
-
-
 def company_key(company: str) -> str:
     return email_client.norm_company(company)
-
-
-def company_notes(company: str) -> dict[str, str]:
-    """The notes kept for this company (empty strings where nothing was written)."""
-    saved = _load().get(company_key(company), {})
-    return {f: str(saved.get(f, "")) for f in NOTE_FIELDS} | {"updated": str(saved.get("updated", "")),
-                                                              "name": str(saved.get("name", company or ""))}
 
 
 def check_company_notes(fields: dict[str, Any]) -> str:
@@ -229,20 +209,59 @@ def check_company_notes(fields: dict[str, Any]) -> str:
     return ""
 
 
+class CompanyNotes:
+    """The notes of every company, by company key; read from their file at each call.
+
+    A file the data key cannot open shows as no notes, but a save stops with VaultError: it must not
+    write the one company's notes over every other company's."""
+
+    UNREADABLE = "The notes for companies cannot be read, so nothing was saved. The file is left as it is."
+
+    def __init__(self, file: vault.JsonFile) -> None:
+        self._file = file
+
+    @property
+    def path(self):
+        return self._file.path
+
+    def _read(self) -> dict[str, dict[str, str]]:
+        data = self._file.read()
+        return data if isinstance(data, dict) else {}
+
+    def of(self, company: str) -> dict[str, str]:
+        """The notes kept for this company (empty strings where nothing was written)."""
+        try:
+            saved = self._read().get(company_key(company), {})
+        except vault.VaultError as e:
+            trouble.note("company notes", e)
+            saved = {}
+        return {f: str(saved.get(f, "")) for f in NOTE_FIELDS} | {"updated": str(saved.get("updated", "")),
+                                                                  "name": str(saved.get("name", company or ""))}
+
+    def save(self, company: str, fields: dict[str, Any]) -> bool:
+        key = company_key(company)
+        if not key or key == "unknown" or check_company_notes(fields):
+            return False
+        data = self._read()
+        entry = {f: str(fields.get(f, "") or "").strip() for f in NOTE_FIELDS}
+        if any(entry.values()):
+            entry.update(name=company, updated=date.today().isoformat())
+            data[key] = entry
+        else:
+            data.pop(key, None)                        # everything emptied: no entry
+        self._file.write(data)
+        return True
+
+
+COMPANY_NOTES = CompanyNotes(vault.JsonFile("company_notes.json"))
+
+
+def company_notes(company: str) -> dict[str, str]:
+    return COMPANY_NOTES.of(company)
+
+
 def save_company_notes(company: str, fields: dict[str, Any]) -> bool:
-    key = company_key(company)
-    if not key or key == "unknown" or check_company_notes(fields):
-        return False
-    data = _load()
-    entry = {f: str(fields.get(f, "") or "").strip() for f in NOTE_FIELDS}
-    if any(entry.values()):
-        entry.update(name=company, updated=date.today().isoformat())
-        data[key] = entry
-    else:
-        data.pop(key, None)                        # everything emptied: no entry
-    config.ensure_dirs()
-    vault.write_text(_path(), json.dumps(data, ensure_ascii=False, indent=2))
-    return True
+    return COMPANY_NOTES.save(company, fields)
 
 
 # ── a calendar file for a date, so the phone reminds you too ────────────────

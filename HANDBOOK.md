@@ -200,6 +200,11 @@ data/                your data; only the *.example.* files are in git
 - **An event's day and start are read only by `planner.Event`**: "Coming up", the reminders, the calendar file
   and the thank-you note ask it. A dated line in a job's notes is `store.add_note`; a title the app gives a job it
   knows only by its company is one of `store.PLACEHOLDER_TITLES` (`store.has_real_title`).
+- **Each small store is one object over one `vault.JsonFile`**: `assistant_notes.AssistantNotes`,
+  `answer_memory.AnswerMemory`, `planner.CompanyNotes`. A file the data key cannot open raises `VaultError`;
+  a save never treats it as empty, or it would write over it (`CompanyNotes` shows no notes, and the save gives
+  `CompanyNotes.UNREADABLE`). `usage.UsageLog` owns usage.json (not
+  encrypted) and the counts of this run; `api_system` asks `usage.totals()` / `usage.by_tag()`.
 - **The window keeps no copy of a limit.** How long a typed text may be comes from the module that checks it,
   through `Api.limits()` (`win.limits` in QML) or with the data of a dialog (`columns` of My details, `max_part`
   of a preparation). A new limit goes into the owner and into that map; `tests/test_window_limits.py` keeps

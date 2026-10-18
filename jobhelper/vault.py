@@ -24,6 +24,7 @@ import sys
 import threading
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 SERVICE = os.getenv("JOBHELPER_VAULT_SERVICE", "JobHelper")
 MAGIC = b"JHENC1\n"                 # start of every encrypted file
@@ -296,6 +297,38 @@ def write_text(path: Path, text: str) -> None:
     write_bytes(path, text.encode("utf-8"))
 
 
+class JsonFile:
+    """One small JSON store in the data folder, kept encrypted.
+
+    `read` gives the saved value, or None when there is no file or it cannot be parsed. A file that
+    the data key cannot open raises VaultError: the store must not read as empty, or its next save
+    writes an empty store over what is kept."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    @property
+    def path(self) -> Path:
+        from . import config
+        return config.DATA_DIR / self._name
+
+    def read(self) -> Any:
+        try:
+            return json.loads(read_text(self.path))
+        except VaultError:
+            raise
+        except (OSError, ValueError):
+            return None
+
+    def exists(self) -> bool:
+        return self.path.exists()
+
+    def write(self, value: Any) -> None:
+        from . import config
+        config.ensure_dirs()
+        write_text(self.path, json.dumps(value, ensure_ascii=False, indent=2))
+
+
 def file_is_encrypted(path: Path) -> bool:
     try:
         with Path(path).open("rb") as f:
@@ -306,10 +339,10 @@ def file_is_encrypted(path: Path) -> bool:
 
 def data_files() -> list[Path]:
     """The files that are kept encrypted."""
-    from . import config
+    from . import answer_memory, assistant_notes, config, planner     # each small store names its own file
     return [config.JOBS_JSON, config.PROFILE_JSON, config.ui_settings_file(), config.RESPONSES_DB,
-            config.DATA_DIR / "last_run.json", config.DATA_DIR / "company_notes.json",
-            config.DATA_DIR / "filtered_out.json", config.DATA_DIR / "my_details.json", config.DATA_DIR / "answer_memory.json", config.DATA_DIR / "assistant_notes.json"]
+            config.DATA_DIR / "last_run.json", planner.COMPANY_NOTES.path, config.DATA_DIR / "filtered_out.json",
+            config.DATA_DIR / "my_details.json", answer_memory.MEMORY.path, assistant_notes.NOTES.path]
 
 
 def encrypt_file(path: Path) -> bool:

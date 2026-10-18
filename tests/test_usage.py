@@ -79,4 +79,4 @@ def test_two_threads_noting_calls_at_once_lose_none(isolate_data):
         w.start()
     for w in workers:
         w.join()
-    assert usage._load()["totals"]["calls"] == 100 and usage._load()["by_tag"]["t"]["input_tokens"] == 100
+    assert usage.totals()["calls"] == 100 and usage.by_tag()["t"]["input_tokens"] == 100
