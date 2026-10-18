@@ -340,9 +340,14 @@ data/                your data; only the *.example.* files are in git
 ## 4. Checking a change
 
 ```bash
-pytest -q                                  # everything, about two minutes
+pytest -q                                  # everything on every core (pytest-xdist), about three minutes
 python -m pyflakes jobhelper tests run.py status.py app_qt.py
 ```
+
+The window tests (`tests/test_ui_qml.py`) share one window and follow on from each other, so they stay on
+one worker in their order (`pytestmark = pytest.mark.xdist_group("window")`, `--dist loadgroup` in
+pytest.ini). Spread over the workers, three of them failed. A new test file that shares state between its
+tests needs a group of its own. To run one test alone without the workers: `pytest -n 0 <test>`.
 
 After every batch of changes, without being asked:
 

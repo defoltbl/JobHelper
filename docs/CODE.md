@@ -146,7 +146,8 @@ Table 2.6 lists what keeps the code correct.
 
 | Technology | Used for | Why it was chosen |
 |---|---|---|
-| `pytest` | More than 1,900 tests | Every change comes with tests. The suite needs no network and never touches real data, so it can be run at any time |
+| `pytest` | More than 2,000 tests | Every change comes with tests. The suite needs no network and never touches real data, so it can be run at any time |
+| `pytest-xdist` | Running the tests on every core | The suite takes about three minutes instead of six. The window tests share one window and follow on from each other, so they stay on one worker in their order (`xdist_group`) |
 | The window loaded without a screen | Tests of the window | The real QML is loaded and driven, so a broken binding or a missing name fails a test instead of reaching the person |
 | `pyflakes` | Unused and undefined names | It finds a whole kind of mistake in a second, before a test has to |
 | Git and GitHub | The history of changes, and the public copy of the project | Every finished step is a commit that can be gone back to. Each change is a branch and a pull request. The `main` branch takes a change only after the tests pass on GitHub Actions. `scripts/push_check.py` runs before every push and stops one that would publish a personal detail, a secret or the data folder |
@@ -221,7 +222,7 @@ Table 3.1 lists the main packages and what each is for.
 | `openpyxl` | The Excel tables |
 | `requests`, `beautifulsoup4`, `lxml` | Reading the job boards |
 | `cryptography` | AES-256-GCM encryption of the data files and the backups |
-| `pytest` | The tests. `pyflakes`, installed separately with `pip install pyflakes`, checks for unused or undefined names |
+| `pytest`, `pytest-xdist` | The tests, on every core. `pyflakes`, installed separately with `pip install pyflakes`, checks for unused or undefined names |
 
 ## 4. Run the app
 
@@ -758,7 +759,8 @@ Follow these rules when code changes data:
 
 ### Run the tests
 
-1. Run the whole suite. It takes about two minutes and needs no network:
+1. Run the whole suite. It uses every core of the computer, takes about three minutes and needs no
+   network:
 
    ```bash
    python -m pytest -q

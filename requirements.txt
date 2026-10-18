@@ -9,4 +9,5 @@ beautifulsoup4>=4.12      # parse jobs.cz / prace.cz search pages
 lxml>=5.0                 # fast HTML parser backend for BeautifulSoup
 cryptography>=42.0        # AES-256-GCM encryption of data files and backups
 pytest>=8.0               # unit tests (dev)
+pytest-xdist>=3.6         # runs the tests on every core (dev)
 PySide6>=6.6              # native desktop app (Qt Quick / QML) -> python app_qt.py

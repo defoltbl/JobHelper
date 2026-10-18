@@ -25,7 +25,7 @@ API key, no per-token bill – and your data stays on your Mac, encrypted.
   Submit.
 - **Private by design.** AES-256-GCM encrypted data, keys in the macOS Keychain, signed rule files.
 - **A real Mac app** with a desktop widget and a weekly run with the window closed.
-- **1,900+ offline tests**, run by GitHub Actions on every push.
+- **2,000+ offline tests**, run on every core here and by GitHub Actions on every push.
 
 ## Quick start
 
