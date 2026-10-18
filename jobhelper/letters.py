@@ -123,7 +123,7 @@ def import_letters(
         else:
             job = store.new_job(
                 id=f"letter-{store.slugify(rec['company'])}",
-                title="(existing application)",
+                title=store.EXISTING_APPLICATION,
                 company=rec["company"],
                 source="manual",
                 cover_letter_file=rec["file_name"],

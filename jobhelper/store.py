@@ -69,6 +69,23 @@ def upsert(jobs: list[dict[str, Any]], new_jobs: list[dict[str, Any]]) -> tuple[
     return added, skipped
 
 
+def add_note(job: dict[str, Any], text: str, day: str = "") -> None:
+    """Put a dated line at the top of a job's notes ("[2026-10-18] Followed up by email."): the newest first."""
+    stamp = day or date.today().isoformat()
+    job["notes"] = (f"[{stamp}] {text}\n" + (job.get("notes") or "")).strip()
+
+
+# Titles the app gives a job it knows only by its company: an application imported from your letters, or one a
+# reply named. They are no role (Insights groups them apart, a real title from a reply replaces them).
+EXISTING_APPLICATION, FROM_EMAIL = "(existing application)", "(from email response)"
+PLACEHOLDER_TITLES = frozenset({EXISTING_APPLICATION, FROM_EMAIL, "(unknown role)"})
+
+
+def has_real_title(job: dict[str, Any]) -> bool:
+    title = str(job.get("title") or "").strip()
+    return bool(title) and title.lower() not in PLACEHOLDER_TITLES
+
+
 def find(jobs: list[dict[str, Any]], job_id: str) -> dict[str, Any] | None:
     for j in jobs:
         if j["id"] == job_id:
@@ -135,8 +152,7 @@ def repair_statuses(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if j.get("status") in STATUSES:
             continue
         applied = bool(j.get("date_applied")) or j.get("source") in ("email", "manual")
-        j["notes"] = (f"[{date.today().isoformat()}] Status was \"{j.get('status')}\", which the app does not know; set to "
-                      f"{'waiting' if applied else 'found'}.\n" + (j.get("notes") or "")).strip()
+        add_note(j, f"Status was \"{j.get('status')}\", which the app does not know; set to {'waiting' if applied else 'found'}.")
         j["status"] = "waiting" if applied else "found"
         fixed.append(j)
     return fixed

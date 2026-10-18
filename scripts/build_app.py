@@ -105,6 +105,35 @@ class AppCheck:
             self._expect(refused.returncode == 2, "the window check refuses to run on real data")
 
 
+class SwiftCompiler:
+    """The Swift of the Command Line Tools, set up once for this Mac: the SDK, the processor and the oldest macOS the
+    app supports. Both Swift parts of the app (the widget, the notifications) are compiled through it."""
+
+    MIN_MACOS = "14.0"
+
+    def __init__(self) -> None:
+        self.swiftc = shutil.which("swiftc")
+        self._sdk = self._arch = ""
+
+    def __bool__(self) -> bool:
+        return bool(self.swiftc)
+
+    def _base(self) -> list[str]:
+        if not self._sdk:
+            self._sdk = subprocess.run(["xcrun", "--show-sdk-path"], capture_output=True, text=True).stdout.strip()
+            self._arch = subprocess.run(["uname", "-m"], capture_output=True, text=True).stdout.strip() or "arm64"
+        return [self.swiftc, "-O", "-target", f"{self._arch}-apple-macos{self.MIN_MACOS}", "-sdk", self._sdk]
+
+    def program(self, source: Path, out: Path, frameworks: list[str], extra: list[str]) -> int:
+        flags = [f for name in frameworks for f in ("-framework", name)]
+        return subprocess.run(self._base() + extra + flags + [str(source), "-o", str(out)]).returncode
+
+    def library(self, source: Path, out: Path, frameworks: list[str], module: str) -> int:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        flags = [f for name in frameworks for f in ("-framework", name)]
+        return subprocess.run(self._base() + ["-emit-library"] + flags + ["-module-name", module, str(source), "-o", str(out)]).returncode
+
+
 class WidgetBuild:
     """The macOS widget: compiled from widget/JobHelperWidget.swift with the Swift of the Command Line Tools,
     put into the app as Contents/PlugIns/JobHelperWidget.appex, signed with its sandbox entitlements.
@@ -115,10 +144,11 @@ class WidgetBuild:
     SOURCE = ROOT / "widget" / "JobHelperWidget.swift"
     RELOAD_SOURCE = ROOT / "widget" / "WidgetReload.swift"
     ENTITLEMENTS = ROOT / "widget" / "JobHelperWidget.entitlements"
-    MIN_MACOS = "14.0"
+    MIN_MACOS = SwiftCompiler.MIN_MACOS
 
-    def __init__(self, app: Path) -> None:
+    def __init__(self, app: Path, swift: SwiftCompiler | None = None) -> None:
         self._app = Path(app)
+        self._swift = swift or SwiftCompiler()
 
     @property
     def appex(self) -> Path:
@@ -139,30 +169,21 @@ class WidgetBuild:
         }
 
     def run(self) -> int:
-        swiftc = shutil.which("swiftc")
-        if not swiftc:
+        if not self._swift:
             print("swiftc is not installed (xcode-select --install): the app is built without its widget.")
             return 1
         shutil.rmtree(self.appex, ignore_errors=True)
         macos = self.appex / "Contents" / "MacOS"
         macos.mkdir(parents=True)
-        sdk = subprocess.run(["xcrun", "--show-sdk-path"], capture_output=True, text=True).stdout.strip()
-        arch = subprocess.run(["uname", "-m"], capture_output=True, text=True).stdout.strip() or "arm64"
-        done = subprocess.run([swiftc, "-parse-as-library", "-application-extension", "-O",
-                               "-target", f"{arch}-apple-macos{self.MIN_MACOS}", "-sdk", sdk,
-                               "-framework", "WidgetKit", "-framework", "SwiftUI",
-                               # as Xcode does for an extension: the process starts in NSExtensionMain, which then calls
-                               # the widget's own main. Started in main, the widget ended at once on macOS 26.
-                               "-Xlinker", "-e", "-Xlinker", "_NSExtensionMain",
-                               str(self.SOURCE), "-o", str(macos / app_info.WIDGET_NAME)])
-        if done.returncode:
-            return done.returncode
-        self.reload_helper.parent.mkdir(parents=True, exist_ok=True)
-        done = subprocess.run([swiftc, "-emit-library", "-O", "-target", f"{arch}-apple-macos{self.MIN_MACOS}", "-sdk", sdk,
-                               "-framework", "WidgetKit", "-module-name", "JobHelperWidgetReload",
-                               str(self.RELOAD_SOURCE), "-o", str(self.reload_helper)])
-        if done.returncode:
-            return done.returncode
+        # as Xcode does for an extension: the process starts in NSExtensionMain, which then calls
+        # the widget's own main. Started in main, the widget ended at once on macOS 26.
+        code = self._swift.program(self.SOURCE, macos / app_info.WIDGET_NAME, ["WidgetKit", "SwiftUI"],
+                                   ["-parse-as-library", "-application-extension", "-Xlinker", "-e", "-Xlinker", "_NSExtensionMain"])
+        if code:
+            return code
+        code = self._swift.library(self.RELOAD_SOURCE, self.reload_helper, ["WidgetKit"], "JobHelperWidgetReload")
+        if code:
+            return code
         (self.appex / "Contents" / "Info.plist").write_bytes(plistlib.dumps(self.info()))
         for cmd in (["codesign", "--force", "--sign", "-", "--entitlements", str(self.ENTITLEMENTS), str(self.appex)],
                     ["codesign", "--force", "--sign", "-", str(self.reload_helper)],
@@ -181,26 +202,21 @@ class NotifyBuild:
 
     SOURCE = ROOT / "macos" / "Notify.swift"
 
-    def __init__(self, app: Path) -> None:
+    def __init__(self, app: Path, swift: SwiftCompiler | None = None) -> None:
         self._app = Path(app)
+        self._swift = swift or SwiftCompiler()
 
     @property
     def library(self) -> Path:
         return self._app / "Contents" / "Frameworks" / app_info.NOTIFY_LIBRARY
 
     def run(self) -> int:
-        swiftc = shutil.which("swiftc")
-        if not swiftc:
+        if not self._swift:
             print("swiftc is not installed (xcode-select --install): the app is built without its own notifications.")
             return 1
-        sdk = subprocess.run(["xcrun", "--show-sdk-path"], capture_output=True, text=True).stdout.strip()
-        arch = subprocess.run(["uname", "-m"], capture_output=True, text=True).stdout.strip() or "arm64"
-        self.library.parent.mkdir(parents=True, exist_ok=True)
-        done = subprocess.run([swiftc, "-emit-library", "-O", "-target", f"{arch}-apple-macos{WidgetBuild.MIN_MACOS}", "-sdk", sdk,
-                               "-framework", "UserNotifications", "-module-name", "JobHelperNotify",
-                               str(self.SOURCE), "-o", str(self.library)])
-        if done.returncode:
-            return done.returncode
+        code = self._swift.library(self.SOURCE, self.library, ["UserNotifications"], "JobHelperNotify")
+        if code:
+            return code
         return subprocess.run(["codesign", "--force", "--sign", "-", str(self.library)]).returncode
 
 
@@ -220,7 +236,8 @@ def build() -> int:
 
 def main(argv: list[str]) -> int:
     if "--check" not in argv:
-        code = build() or NotifyBuild(APP).run() or WidgetBuild(APP).run()
+        swift = SwiftCompiler()
+        code = build() or NotifyBuild(APP, swift).run() or WidgetBuild(APP, swift).run()
         if code:
             return code
     ok = AppCheck(APP).run()

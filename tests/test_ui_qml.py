@@ -1439,7 +1439,7 @@ def test_a_date_on_a_job_shows_on_the_main_screen_and_is_announced(ui):
     assert ui.js("bridge.remind()") == 1 and ui.js("bridge.remind()") == 0         # once a day
     assert ui.sent == [("Tomorrow at 14:30: call · Beta", "Reminder")]
     ui.js('detailDialog.show("app")')                                              # reopening shows what was saved
-    ui.wait(200)
+    _until_open(ui, "detailDialog")
     assert ui.find("evDate").property("text") == tomorrow and ui.find("evNote").property("text") == "Teams call"
     ui.js("bridge.clearEvent(detailDialog.job.id); detailDialog.refresh(); upcomingData = bridge.upcoming()")
     assert card.property("visible") is False and ui.find("evDate").property("text") == ""
@@ -2063,7 +2063,7 @@ def test_form_answers_are_drafted_per_job_edited_and_kept(ui, monkeypatch):
     ui.js("formDialog.close()")
     ui.wait(350)
     ui.js('formDialog.show("app")')                        # they are still there, and only for this job
-    ui.wait(400)
+    _until_open(ui, "formDialog")
     assert ui.js("fmModel.get(1).answer") == "I expect 60 000 CZK gross per month."
     ui.js("formDialog.close()")
     ui.wait(350)
@@ -3140,7 +3140,7 @@ def test_the_job_window_writes_documents_on_request(ui, monkeypatch):
     ui.js("detailDialog.close()")
     ui.wait(350)
     ui.js('detailDialog.show("app")')                                # an application: the row is not offered
-    ui.wait(450)
+    _until_open(ui, "detailDialog")
     assert ui.find("writeDocsRow").property("visible") is False
     ui.js("detailDialog.close()")
     ui.wait(350)
@@ -3154,7 +3154,7 @@ def test_help_shows_usage_and_the_log_of_problems(ui, monkeypatch):
     shown = []
     monkeypatch.setattr(ui_api.Api, "show_trouble_log", lambda self: shown.append(1) or {"ok": True})
     ui.js("helpDialog.open()")
-    ui.wait(400)
+    _until_open(ui, "helpDialog")
     assert ui.find("usageCard").property("visible") is False                         # on its own tab
     ui.js('helpDialog.tab = "use"')
     ui.wait(120)
@@ -3172,7 +3172,7 @@ def test_help_shows_usage_and_the_log_of_problems(ui, monkeypatch):
     ui.js("helpDialog.close()")
     ui.wait(300)
     ui.js('helpDialog.open(); helpDialog.tab = "use"')
-    ui.wait(300)
+    _until_open(ui, "helpDialog")
     assert "Nothing yet" in ui.find("usageTotal").property("text") and ui.find("logShow").property("visible") is False
     ui.js('helpDialog.tab = "how"; helpDialog.close()')
     ui.wait(300)

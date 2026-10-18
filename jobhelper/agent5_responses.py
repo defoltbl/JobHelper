@@ -144,7 +144,7 @@ def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, An
             guess["last_update"] = date.today().isoformat()
             note = result["summary"]
             if note:
-                guess["notes"] = (f"[{date.today().isoformat()}] {note}\n" + guess.get("notes", "")).strip()
+                store.add_note(guess, note)
             stats["status_updates"] += 1
     return stage
 
@@ -368,8 +368,7 @@ def repair_unread_bodies(jobs: list[dict[str, Any]], emails: list[dict[str, Any]
             if job and job.get("status") != "rejected":
                 job["status"] = "rejected"
                 job["last_update"] = date.today().isoformat()
-                job["notes"] = (f"[{date.today().isoformat()}] Rejection found on re-reading an earlier email.\n"
-                                + (job.get("notes") or "")).strip()
+                store.add_note(job, "Rejection found on re-reading an earlier email.")
                 stats["jobs_rejected"] += 1
         elif rec and rec["stage"] == "other":
             requeue.append(msg["msg_id"])                 # the model saw no text: let it read it properly
@@ -413,7 +412,7 @@ def reconcile_jobs(jobs: list[dict[str, Any]]) -> int:
         role = next((x.get("role") for x in rs if x.get("role")), "")
         jobs.append(store.new_job(
             id=new_id,
-            title=role or "(from email response)",
+            title=role or store.FROM_EMAIL,
             company=company,
             source="email",
             status=email_client.STAGE_TO_STATUS.get(result, "waiting"),     # they wrote back, so it is an application
@@ -423,9 +422,6 @@ def reconcile_jobs(jobs: list[dict[str, Any]]) -> int:
         existing_norm.add(norm)
         created += 1
     return created
-
-
-_GENERIC_TITLES = {"", "(existing application)", "(from email response)"}
 
 
 def backfill_roles(jobs: list[dict[str, Any]]) -> int:
@@ -443,7 +439,7 @@ def backfill_roles(jobs: list[dict[str, Any]]) -> int:
 
     updated = 0
     for job in jobs:
-        if (job.get("title") or "").strip().lower() not in _GENERIC_TITLES:
+        if store.has_real_title(job):
             continue
         jtoks = email_client.company_tokens(job.get("company", ""))
         if not jtoks:

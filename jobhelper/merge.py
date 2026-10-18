@@ -18,14 +18,12 @@ from . import db, email_client, store
 from .agent2_search import role_key
 
 
-_PLACEHOLDER_TITLES = {"(existing application)", "(from email response)", "(unknown role)"}
 
 
 def is_placeholder(job: dict[str, Any]) -> bool:
     """A record the app made without knowing the role. A real title that merely
     starts with a bracket, like "(Junior) Data Engineer", is not one."""
-    title = (job.get("title") or "").strip().lower()
-    return not title or title in _PLACEHOLDER_TITLES
+    return not store.has_real_title(job)
 
 
 def _company(job: dict[str, Any]) -> str:

@@ -181,7 +181,7 @@ class JobsService:
                 j["date_applied"] = today
             j["status"], j["last_update"] = status, today
             j["status_by_hand"] = datetime.now().isoformat(timespec="seconds")      # emails older than this do not change it back
-            j["notes"] = (f"[{today}] Marked {status.replace('_', ' ')} by you.\n" + (j.get("notes") or "")).strip()
+            store.add_note(j, f"Marked {status.replace('_', ' ')} by you.", today)
             agent2_search.prune_applied_leads(jobs)
         return self._editor.change(job_id, go)
 

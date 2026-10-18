@@ -197,6 +197,9 @@ data/                your data; only the *.example.* files are in git
   measured on the real postings before a change ships: nothing that scored 30 or more may be
   skipped. A word that an ordinary posting uses ("research", "architect", "compliance") does
   not belong in them.
+- **An event's day and start are read only by `planner.Event`**: "Coming up", the reminders, the calendar file
+  and the thank-you note ask it. A dated line in a job's notes is `store.add_note`; a title the app gives a job it
+  knows only by its company is one of `store.PLACEHOLDER_TITLES` (`store.has_real_title`).
 - **The window keeps no copy of a limit.** How long a typed text may be comes from the module that checks it,
   through `Api.limits()` (`win.limits` in QML) or with the data of a dialog (`columns` of My details, `max_part`
   of a preparation). A new limit goes into the owner and into that map; `tests/test_window_limits.py` keeps
