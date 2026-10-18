@@ -2,8 +2,11 @@
 is numbered inside its chapter and referred to, and the PDFs are laid out like a thesis, with
 nothing split across pages."""
 import importlib.util
+import json
 import os
 import re
+import subprocess
+import sys
 
 import pytest
 
@@ -26,8 +29,15 @@ guide_pdf, guide_number = _script("guide_pdf"), _script("guide_number")
 
 @pytest.fixture(scope="module", params=["GUIDE", "CODE"])
 def laid_out(request):
-    _doc, report, _title = guide_pdf.compose(DOCS / f"{request.param}.md")
-    return request.param, report
+    """The layout report of a document, made in a fresh Python, as `scripts/guide_pdf.py` makes the PDF. In a process
+    where the window was loaded and taken down, Qt chose other fallback fonts and the guide came out a page longer:
+    with the tests on many cores that happened at random (a figure seemed to leave most of a page empty)."""
+    code = ("import json, sys; sys.path.insert(0, sys.argv[1]); import guide_pdf; "
+            "print(json.dumps(guide_pdf.compose(guide_pdf.ROOT / 'docs' / (sys.argv[2] + '.md'))[1]))")
+    done = subprocess.run([sys.executable, "-c", code, str(ROOT / "scripts"), request.param], capture_output=True, text=True,
+                          timeout=300, cwd=ROOT, env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
+    assert done.returncode == 0, done.stderr[-1500:]
+    return request.param, json.loads(done.stdout.strip().splitlines()[-1])
 
 
 # ── the text ────────────────────────────────────────────────────────────────
