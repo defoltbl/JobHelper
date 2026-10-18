@@ -14,7 +14,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from . import config, cover_letter, llm
+from . import claims, config, cover_letter, llm
+from .claims import ClaimCheck
 
 # ASD-STE100 Simplified Technical English, as the person asked for: short, clear sentences that a reader
 # whose first language is not English reads once and understands. Kept here so the sheet and the answers follow it.
@@ -154,24 +155,22 @@ Return JSON with exactly these keys:
 
 AUDIENCE_TITLES = {"hr": "If you speak with HR or a recruiter", "technical": "If you speak with someone who does this work or the hiring manager"}
 KINDS = ["about you", "technical", "your projects", "behavioural", "the role and company", "practical"]
-AUDIENCES = ["hr", "technical"]
+AUDIENCES = ("hr", "technical")
 QUESTIONS, HR_QUESTIONS = 14, 7
 
 
-# An honest bridge names the missing thing on purpose; that is not a claim.
-_HONEST = re.compile(r"\b(have not|haven't|do not have|don't have|not (?:yet )?(?:used|worked)|"
-                     r"no (?:(?:professional|production|hands-on|commercial|prior|direct) )?experience|"
-                     r"closest|would (?:get|learn|pick)|new to me|only (?:read|studied))\b", re.IGNORECASE)
+def audience_of(question: dict[str, Any]) -> str:
+    """Who asks a question: its "audience", or for an older or careless one, the specialist when it is about the work itself."""
+    audience = str(question.get("audience") or "").strip().lower()
+    if audience in AUDIENCES:
+        return audience
+    return "technical" if question.get("kind") in ("technical", "your projects") else "hr"
 
 
-def _unbacked(answer: str, unverified: list[str]) -> str:
-    """The first technology an answer presents as experience though the CV lacks it ('' if none)."""
-    for sentence in cover_letter._sentences(answer):
-        for term in unverified:
-            if cover_letter._mentions(sentence, term) and cover_letter._CLAIM.search(sentence) \
-                    and not cover_letter._WISH.search(sentence) and not _HONEST.search(sentence):
-                return term
-    return ""
+def unbacked(answer: str, unverified: list[str]) -> str:
+    """The first technology an answer in your voice presents as experience though the CV lacks it ('' if none).
+    In an interview an honest bridge ("I have not used X; the closest I have done is …") is the right answer, not a claim."""
+    return ClaimCheck(unverified).unbacked(answer, honest_ok=True)
 
 
 # Every HR talk should end with the next steps: asked by the app itself when the model left it out.
@@ -228,10 +227,9 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
         bad, third = prep.problems(unverified, first_name)
         if not bad and not third:
             break
-        feedback = "\nYour previous version was rejected. Fix these problems:\n" + "\n".join(
-            [f"- The answer to \"{q[:70]}\" presents '{term}' as experience, but it is not in the CV. Use the honest bridge."
-             for q, term in bad] +
-            [f"- The answer to \"{q[:70]}\" talks about the candidate by name. Write it in the first person." for q in third]) + "\n"
+        feedback = claims.rejected(
+            [f"{where} presents '{term}' as experience, but it is not in the CV. Use the honest bridge." for where, term in bad] +
+            [f"{where} talks about the candidate by name. Write it in the first person." for where in third])
     # Whatever still claims unbacked experience after the retry is marked, not hidden: the user must see it.
     prep.mark(unverified)
     saved = prep.as_dict()
@@ -279,10 +277,7 @@ class Question:
             return None
         kind = str(item.get("kind", "")).strip().lower()
         kind = kind if kind in KINDS else "about you"
-        audience = str(item.get("audience", "")).strip().lower()
-        if audience not in AUDIENCES:   # an older or careless reply: questions about the work itself go to the specialist
-            audience = "technical" if kind in ("technical", "your projects") else "hr"
-        return cls(audience, kind, question, _text(item.get("why")), answer)
+        return cls(audience_of({"audience": item.get("audience"), "kind": kind}), kind, question, _text(item.get("why")), answer)
 
     def order(self) -> tuple[int, int]:
         return AUDIENCES.index(self.audience), KINDS.index(self.kind)
@@ -407,40 +402,39 @@ class Preparation:
     def _parts(self, key: str) -> list[dict]:
         return self._data.get(key) or []
 
-    def voice(self) -> list[tuple[str, str]]:
-        """(where, text) for everything said in the candidate's own voice: what must not claim more than the CV."""
+    def _sheet_voice(self) -> list[tuple[str, str]]:
+        """(label, text) for everything outside the questions that the sheet says in the candidate's own voice."""
         d = self._data
-        return [(q["question"], q["answer"]) for q in self.questions] + [
-            ("the opening pitch", d.get("pitch", "")), ("the key question", (d.get("key_question") or {}).get("answer", "")),
-            ("what to say about the company", d.get("company_say", ""))] + [("your fit", point) for point in self._parts("fit")] + [
-            (f"the story about {e['job'][:50]}", e.get("story", "")) for e in self._parts("experience")] + [
-            (f"the plain story about {e['job'][:50]}", e.get("plain", "")) for e in self._parts("experience")] + [
-            (f"the project {pr['name'][:50]}", pr.get("what", "")) for pr in self._parts("projects")] + [
-            (f"the project {pr['name'][:50]} for HR", pr.get("plain", "")) for pr in self._parts("projects")] + [
-            (f"the result of {pr['name'][:50]}", pr.get("result", "")) for pr in self._parts("projects")] + [
-            (f"the skill {sk['skill'][:40]}", sk.get("detail", "")) for sk in self._parts("skills")]
+        return [("The opening pitch", d.get("pitch", "")), ("The answer to the key question", (d.get("key_question") or {}).get("answer", "")),
+                ("What to say about the company", d.get("company_say", ""))] \
+            + [("A point under your fit", point) for point in self._parts("fit")] \
+            + [(f"The story about {e['job'][:50]}", e.get("story", "")) for e in self._parts("experience")] \
+            + [(f"The plain story about {e['job'][:50]}", e.get("plain", "")) for e in self._parts("experience")] \
+            + [(f"The project {pr['name'][:50]}", pr.get("what", "")) for pr in self._parts("projects")] \
+            + [(f"The project {pr['name'][:50]} for HR", pr.get("plain", "")) for pr in self._parts("projects")] \
+            + [(f"The result of {pr['name'][:50]}", pr.get("result", "")) for pr in self._parts("projects")] \
+            + [(f"What {t['tool'][:30]} did in {pr['name'][:40]}", t.get("use", "") + " " + t.get("why", ""))
+               for pr in self._parts("projects") for t in pr.get("tech") or []] \
+            + [(f"The skill {sk['skill'][:40]}", sk.get("proof", "") + " " + sk.get("detail", "")) for sk in self._parts("skills")]
+
+    def voice(self) -> list[tuple[str, str]]:
+        """(where, text) for everything said in the candidate's own voice: what must not claim more than the CV.
+        The same list is sent back to the model and marked for the user, so nothing is checked in one place only."""
+        return [(f'The answer to "{q["question"][:70]}"', q["answer"]) for q in self.questions] + self._sheet_voice()
 
     def problems(self, unverified: list[str], first_name: str = "") -> tuple[list[tuple[str, str]], list[str]]:
         """What to send back to the model: (where, a technology claimed without the CV) and where it names the candidate."""
-        said = [(where, text) for where, text in self.voice() if text]
-        bad = [(where, term) for where, term in ((w, _unbacked(t, unverified)) for w, t in said) if term]
-        third = [where for where, text in said if first_name and re.search(rf"\b{re.escape(first_name)}\b", text)]
+        said = [(where, text) for where, text in self.voice() if text.strip()]
+        bad = [(where, term) for where, term in ((w, unbacked(t, unverified)) for w, t in said) if term]
+        third = [where for where, text in said if claims.names_candidate(text, first_name)]
         return bad, third
 
     def mark(self, unverified: list[str]) -> None:
         """Mark, in the saved preparation, what still claims more than the CV: each answer, and a list of checks."""
-        d = self._data
         for q in self.questions:
-            q["check"] = _unbacked(q.get("answer", ""), unverified)
-        claims = [("The opening pitch", d.get("pitch", "")), ("The answer to the key question", (d.get("key_question") or {}).get("answer", ""))] \
-            + [("A point under your fit", point) for point in self._parts("fit")] \
-            + [(f"The story about {e['job'][:50]}", e.get("story", "")) for e in self._parts("experience")] \
-            + [(f"The project {pr['name'][:50]}", pr.get("what", "")) for pr in self._parts("projects")] \
-            + [(f"The skill {sk['skill'][:40]}", sk.get("proof", "") + " " + sk.get("detail", "")) for sk in self._parts("skills")] \
-            + [(f"What {t['tool'][:30]} did in {pr['name'][:40]}", t.get("use", "") + " " + t.get("why", ""))
-               for pr in self._parts("projects") for t in pr.get("tech") or []]
-        d["checks"] = [f"{label} mentions {term} as experience, which is not in your CV."
-                       for label, term in ((label, _unbacked(text, unverified)) for label, text in claims) if term]
+            q["check"] = unbacked(q.get("answer", ""), unverified)
+        self._data["checks"] = [f"{label} mentions {term} as experience, which is not in your CV."
+                                for label, term in ((label, unbacked(text, unverified)) for label, text in self._sheet_voice()) if term]
 
 
 def _clean(data: Any) -> dict[str, Any]:
@@ -462,7 +456,7 @@ def as_text(job: dict[str, Any], prep: dict[str, Any]) -> str:
         lines += ["YOUR SKILLS FOR THIS ROLE", ""] + [f"- {sk['skill']}: {sk['proof']}" for sk in prep["skills"]] + [""]
     who = None
     for n, q in enumerate(prep.get("questions") or [], 1):
-        audience = q.get("audience") or ("technical" if q["kind"] in ("technical", "your projects") else "hr")
+        audience = audience_of(q)
         if audience != who:
             who = audience
             lines += [AUDIENCE_TITLES.get(who, str(who)).upper(), ""]
@@ -520,8 +514,7 @@ def parts(prep: dict[str, Any]) -> list[dict[str, str]]:
             add("key_question.answer", "Your answer to the key question", prep["key_question"].get("answer", ""))
         elif name == "questions":
             for i, q in enumerate(prep.get("questions") or []):
-                who = "HR asks" if (q.get("audience") or ("technical" if q.get("kind") in ("technical", "your projects") else "hr")) == "hr" \
-                    else "A specialist asks"
+                who = "HR asks" if audience_of(q) == "hr" else "A specialist asks"
                 add(f"questions.{i}.answer", f"{who}: {q['question']}", q.get("answer", ""))
     return out
 

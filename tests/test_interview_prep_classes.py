@@ -26,12 +26,42 @@ def test_a_preparation_holds_everything_said_in_your_voice_to_the_cv():
     saved = prep.as_dict()
     assert [q["audience"] for q in saved["questions"]] == ["hr", "technical"]                     # HR first, as the documents read them
     where = [w for w, _ in prep.voice()]
-    assert "the opening pitch" in where and "the project Agent" in where and "the project Agent for HR" in where and "the skill Python" in where
+    assert "The opening pitch" in where and "The project Agent" in where and "The project Agent for HR" in where and "The skill Python" in where
     bad, third = prep.problems(["Kubernetes"], "Alex")
-    assert bad == [("Tech?", "Kubernetes")] and third == ["You?"]
+    # what the model is asked to fix is what the user sees marked: the tool's use too, not only the answers
+    assert bad == [('The answer to "Tech?"', "Kubernetes"), ("What Kubernetes did in Agent", "Kubernetes")]
+    assert third == ['The answer to "You?"']
     prep.mark(["Kubernetes"])
     assert saved["questions"][1]["check"] == "Kubernetes" and saved["questions"][0]["check"] == ""
-    assert "What Kubernetes did in Agent mentions Kubernetes as experience, which is not in your CV." in saved["checks"]
+    assert saved["checks"] == ["What Kubernetes did in Agent mentions Kubernetes as experience, which is not in your CV."]
+
+
+def test_the_retry_and_the_marks_read_the_same_parts():
+    """Before, the plain stories and the words about the company were sent back but never marked, and a skill's proof
+    and a tool's use were marked but never sent back: one list now serves both."""
+    prep = ip.Preparation.from_reply({
+        "questions": [{"question": "Q", "answer": "A plain answer.", "kind": "about you", "audience": "hr"}],
+        "company_say": "I have used Kafka in production for years.",
+        "experience": [{"job": "Intern, Acme", "story": "I wrote tests.", "plain": "I ran Kafka every day."}],
+        "skills": [{"skill": "Python", "proof": "I deployed Kafka with it.", "detail": ""}]})
+    bad, _ = prep.problems(["Kafka"])
+    prep.mark(["Kafka"])
+    sent = [where for where, _ in bad]
+    marked = [c.split(" mentions ")[0] for c in prep.as_dict()["checks"]]
+    assert sent == marked == ["What to say about the company", "The plain story about Intern, Acme", "The skill Python"]
+
+
+def test_an_honest_bridge_is_fine_in_an_interview_but_not_a_claim():
+    assert ip.unbacked("I have not used Kafka; the closest I have done is RabbitMQ.", ["Kafka"]) == ""
+    assert ip.unbacked("I have worked with Kafka for two years.", ["Kafka"]) == "Kafka"
+    assert ip.unbacked("I would like to work with Kafka.", ["Kafka"]) == ""
+
+
+def test_who_asks_a_question_is_one_rule_for_the_sheet_and_the_documents():
+    from jobhelper import prep_doc
+    assert prep_doc.audience_of is ip.audience_of and prep_doc.AUDIENCES == ip.AUDIENCES
+    assert ip.audience_of({"kind": "technical"}) == "technical" and ip.audience_of({"kind": "about you"}) == "hr"
+    assert ip.audience_of({"audience": "HR ", "kind": "technical"}) == "hr" and ip.audience_of({"audience": "odd", "kind": "your projects"}) == "technical"
 
 
 def test_editing_by_hand_runs_the_same_check_as_making_it():

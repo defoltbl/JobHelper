@@ -36,25 +36,19 @@ def scan(letters_dir: Path | None = None) -> list[dict[str, str]]:
     letters_dir = letters_dir or config.COVER_LETTERS_DIR
     if not letters_dir.exists():
         return []
-    out: list[dict[str, str]] = []
-    seen_companies: dict[str, str] = {}
+    found: dict[str, dict[str, str]] = {}
     for p in sorted(letters_dir.iterdir()):
         if p.suffix.lower() not in {".docx", ".pdf"} or not p.is_file():
             continue
         company = parse_company(p.name)
-        if company.lower() in _GENERIC:
-            continue
-        # Prefer .docx over .pdf when both exist for the same company.
         key = company.lower()
-        if key in seen_companies and p.suffix.lower() == ".pdf":
+        if key in _GENERIC:
             continue
-        seen_companies[key] = p.name
-        out.append({"company": company, "file_name": p.name, "file_path": str(p)})
-    # De-dup keeping first (docx) per company.
-    uniq: dict[str, dict[str, str]] = {}
-    for rec in out:
-        uniq.setdefault(rec["company"].lower(), rec)
-    return list(uniq.values())
+        # one letter per company: the first Word file, or the first PDF when there is no Word file (whatever sorts first)
+        kept = found.get(key)
+        if kept is None or (kept["file_name"].lower().endswith(".pdf") and p.suffix.lower() == ".docx"):
+            found[key] = {"company": company, "file_name": p.name, "file_path": str(p)}
+    return list(found.values())
 
 
 def _match(company: str, jobs: list[dict[str, Any]]) -> dict[str, Any] | None:

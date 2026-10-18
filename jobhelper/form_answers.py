@@ -14,7 +14,7 @@ import re
 from datetime import date
 from typing import Any
 
-from . import config, cover_letter, interview_prep, llm, salary
+from . import claims, config, cover_letter, interview_prep, llm, salary
 
 MAX_QUESTIONS, MAX_QUESTION, MAX_ANSWER = 15, 300, 3000
 
@@ -120,6 +120,17 @@ def _salary_line(job: dict[str, Any]) -> str:
             "give it as the expectation and add that it is open to discussion)")
 
 
+def _with_notes(cv_text: str, notes: str) -> str:
+    """The CV the model reads, with the person's "More about your work" notes, which count as true like the CV."""
+    return cv_text[:12000] + (f"\n\nMore about the candidate's work, in their own words (true; use it like the CV):\n{notes}" if notes else "")
+
+
+def _unbacked_check(answer: str, unverified: list[str]) -> str:
+    """The mark for an answer that claims a technology the CV and the notes lack ('' when it claims none)."""
+    term = interview_prep.unbacked(answer, unverified)
+    return f"Mentions {term} as experience, which is not in your CV." if term else ""
+
+
 def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str = "") -> list[dict[str, str]]:
     """[{question, answer, check}] for the given questions. `check` is '' or what you must look at.
     Raises ValueError if there is nothing to answer or the reply is unusable."""
@@ -133,8 +144,7 @@ def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str
     feedback, items = "", []
     for _attempt in range(2):
         data = llm.ask_json(PROMPT.format(
-            cv_text=cv_text[:12000] + (f"\n\nMore about the candidate's work, in their own words (true; use it like the CV):\n{notes}" if notes else ""),
-            title=job.get("title", ""), company=job.get("company", ""),
+            cv_text=_with_notes(cv_text, notes), title=job.get("title", ""), company=job.get("company", ""),
             location=job.get("location", ""),
             description=(job.get("description") or "").strip()[:4000] or "(No posting text was saved; use the title and the CV.)",
             facts=config.facts_block(cv_text), salary=_salary_line(job), questions=numbered, feedback=feedback),
@@ -142,19 +152,19 @@ def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str
         items = _clean(data, questions)
         if not any(i["answer"] for i in items):
             raise ValueError("The model returned no answers.")
-        bad = [(i["question"], interview_prep._unbacked(i["answer"], unverified)) for i in items]
+        bad = [(i["question"], interview_prep.unbacked(i["answer"], unverified)) for i in items]
         bad = [(q, term) for q, term in bad if term]
-        third = [i["question"] for i in items if first_name and re.search(rf"\b{re.escape(first_name)}\b", i["answer"])]
+        third = [i["question"] for i in items if claims.names_candidate(i["answer"], first_name)]
         if not bad and not third:
             break
-        feedback = "\nYour previous version was rejected. Fix these problems:\n" + "\n".join(
-            [f"- The answer to \"{q[:70]}\" presents '{term}' as experience, but it is not in the CV. Say so plainly instead."
+        feedback = claims.rejected(
+            [f"The answer to \"{q[:70]}\" presents '{term}' as experience, but it is not in the CV. Say so plainly instead."
              for q, term in bad] +
-            [f"- The answer to \"{q[:70]}\" talks about the candidate by name. Write it in the first person." for q in third]) + "\n"
+            [f"The answer to \"{q[:70]}\" talks about the candidate by name. Write it in the first person." for q in third])
     for item in items:
-        term = interview_prep._unbacked(item["answer"], unverified)
-        if term:                                            # still there after the retry: shown, never hidden
-            item["check"] = f"Mentions {term} as experience, which is not in your CV."
+        unbacked = _unbacked_check(item["answer"], unverified)
+        if unbacked:                                        # still there after the retry: shown, never hidden
+            item["check"] = unbacked
         elif not item["answer"]:
             item["check"] = "No answer was drafted. Write this one yourself."
         elif "[" in item["answer"] and "]" in item["answer"] and not item["check"]:
@@ -191,14 +201,12 @@ def rewrite(job: dict[str, Any], cv_text: str, question: str, answer: str, how: 
     if not str(answer or "").strip():
         raise ValueError("There is no answer to rewrite yet. Draft it first.")
     data = llm.ask_json(REWRITE_PROMPT.format(
-        cv_text=cv_text[:12000] + (f"\n\nMore about the candidate's work, in their own words (true; use it like the CV):\n{notes}" if notes else ""),
-        title=job.get("title", ""), company=job.get("company", ""), question=str(question).strip()[:MAX_QUESTION],
+        cv_text=_with_notes(cv_text, notes), title=job.get("title", ""), company=job.get("company", ""), question=str(question).strip()[:MAX_QUESTION],
         answer=str(answer).strip()[:MAX_ANSWER], how=" ".join(str(how).split())[:300]), system=SYSTEM, tag="form_answers")
     new = cover_letter.clean(str((data or {}).get("answer", "") if isinstance(data, dict) else "")).strip()[:MAX_ANSWER]
     if not new:
         raise ValueError("The model returned no answer.")
-    term = interview_prep._unbacked(new, cover_letter.unverified_terms(cv_text + "\n" + (notes or "")))
-    return {"answer": new, "check": f"Mentions {term} as experience, which is not in your CV." if term else ""}
+    return {"answer": new, "check": _unbacked_check(new, cover_letter.unverified_terms(cv_text + "\n" + (notes or "")))}
 
 
 def _clean(data: Any, questions: list[str]) -> list[dict[str, str]]:

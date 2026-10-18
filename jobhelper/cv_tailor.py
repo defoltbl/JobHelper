@@ -22,10 +22,9 @@ from typing import Any
 
 from lxml import etree
 
-from .word_document import P, R, T, Paragraph, WordDocument, set_run_text, text_of
+from .word_document import P, R, Paragraph, WordDocument, set_run_text, text_of
 from . import config, llm, pdf, store
-
-_P, _R, _T = P, R, T                # the Word text, paragraph and run tags (word_document)
+from .claims import mentions
 
 # Technologies the master does not contain (instruction, section 4). Used when
 # the instruction file is missing or has no "Not in the master" line.
@@ -35,7 +34,7 @@ DEFAULT_UNVERIFIED = [
 ]
 _INTEREST = re.compile(r"\b(keen|interested|interest in|eager|grow into|looking to learn|"
                        r"motivated to learn|want to learn|excited to learn)\b", re.IGNORECASE)
-_EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿️]")
+EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿️]")
 
 CHARS_PER_LINE = 118      # Calibri 9.5 pt on the master's A4 text width (calibrated on the example)
 MAX_PAGE_TRIMS = 6        # with LibreOffice: how many items may be dropped to get back to one page
@@ -101,13 +100,17 @@ def load_rules(cv_text: str = "") -> str:
     instruction file (what may change, how to adapt, the worked example).
     Without a file the built-in general rules are used, so the app works for
     any CV. {{placeholders}} in the file are filled with the person's own facts."""
-    path = config.CV_INSTRUCTION
+    return instruction_sections(config.CV_INSTRUCTION, ("1", "4", "5"), cv_text, GENERIC_RULES)
+
+
+def instruction_sections(path: Path, numbers: tuple[str, ...], cv_text: str, fallback: str) -> str:
+    """The numbered "## N." sections of an instruction file the model is shown, with {{placeholders}} filled
+    from the person's own facts; `fallback` (the built-in general rules) when the file or those sections are missing."""
     if not path.exists():
-        return GENERIC_RULES
-    text = config.fill_placeholders(path.read_text(encoding="utf-8"), cv_text)
-    parts = re.split(r"(?m)^## ", text)
-    keep = [p for p in parts if re.match(r"(1|4|5)\.", p)]
-    return ("## " + "\n## ".join(k.strip() for k in keep)) if keep else GENERIC_RULES
+        return fallback
+    parts = re.split(r"(?m)^## ", config.fill_placeholders(path.read_text(encoding="utf-8"), cv_text))
+    keep = [p for p in parts if re.match(rf"({'|'.join(map(re.escape, numbers))})\.", p)]
+    return ("## " + "\n## ".join(k.strip() for k in keep)) if keep else fallback
 
 
 def unverified_terms(master_text: str) -> list[str]:
@@ -181,7 +184,7 @@ def borrowed_claims(profile: str, description: str, backed: str) -> list[str]:
     for sentence in re.split(r"(?<=[.!?])\s+", profile or ""):
         if _INTEREST.search(sentence):
             continue
-        claimed += [p for p in phrases if _mentions(sentence, p) and p not in claimed]
+        claimed += [p for p in phrases if mentions(sentence, p) and p not in claimed]
     return claimed
 
 
@@ -199,19 +202,10 @@ def unknown_skill_terms(items: str, master_text: str) -> list[str]:
     return unknown
 
 
-def _mentions(text: str, term: str) -> bool:
-    return bool(re.search(rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])", text, re.IGNORECASE))
-
-
 # ── docx (document.xml) helpers ──────────────────────────────────────────────
-_text = text_of                     # all the text of a paragraph
-
-
 def _norm(s: str) -> str:
     return re.sub(r"[\s ]+", "", s).upper()
 
-
-_set_run_text = set_run_text
 
 
 # How CVs head the two parts that are adapted (compared without spaces, so "K E Y  S K I L L S" counts).
@@ -230,28 +224,28 @@ def _is_heading(text: str) -> bool:
     return 3 <= len(letters) and len(text) <= 60 and letters.isupper() and ":" not in text
 
 
-def _sections(body) -> dict[str, Any]:
+def sections(body) -> dict[str, Any]:
     """Locate the PROFILE paragraph and the KEY SKILLS rows in the body.
 
     The rows run from the skills heading to the next heading of any name. (They used to end
     only at four fixed headings: in a CV whose next section was called anything else, the
     whole of that section counted as skill rows and was replaced.)"""
-    paras = [p for p in body if p.tag == _P]
-    names = [_norm(_text(p)) for p in paras]
+    paras = [p for p in body if p.tag == P]
+    names = [_norm(text_of(p)) for p in paras]
     out: dict[str, Any] = {"paras": paras, "profile": None, "rows": [], "rows_unclear": False}
     at_profile = next((i for i, name in enumerate(names) if name in PROFILE_HEADINGS), None)
     if at_profile is not None:
         for p in paras[at_profile + 1:]:
-            if _text(p).strip():
-                if not _is_heading(_text(p)):
+            if text_of(p).strip():
+                if not _is_heading(text_of(p)):
                     out["profile"] = p
                 break
     at_skills = next((i for i, name in enumerate(names) if name in SKILLS_HEADINGS), None)
     if at_skills is not None:
         for p in paras[at_skills + 1:]:
-            if _is_heading(_text(p)):
+            if _is_heading(text_of(p)):
                 break
-            if _text(p).strip():
+            if text_of(p).strip():
                 out["rows"].append(p)
         if len(out["rows"]) > MAX_MASTER_ROWS:
             out["rows"], out["rows_unclear"] = [], True
@@ -261,20 +255,20 @@ def _sections(body) -> dict[str, Any]:
 def adaptable(master_path) -> bool:
     """True if this Word CV has a profile section the app can find (so a full adapted copy can be made)."""
     try:
-        return _sections(WordDocument(master_path).body)["profile"] is not None
+        return sections(WordDocument(master_path).body)["profile"] is not None
     except Exception:  # noqa: BLE001 - not a Word file the app can read
         return False
 
 
 def master_rows(master_path) -> list[str]:
-    return [_text(p) for p in _sections(WordDocument(master_path).body)["rows"]]
+    return [text_of(p) for p in sections(WordDocument(master_path).body)["rows"]]
 
 
 def build_docx(master_path, out_path, profile: str, skills: list[dict[str, str]]) -> None:
     """Write `out_path`: the master CV with only its profile and its skills rows changed."""
     doc = WordDocument(master_path)
     body = doc.body
-    sec = _sections(body)
+    sec = sections(body)
     if sec["profile"] is None:
         raise ValueError("The master CV has no PROFILE section.")
     profile_para = Paragraph(sec["profile"])
@@ -283,21 +277,21 @@ def build_docx(master_path, out_path, profile: str, skills: list[dict[str, str]]
                          "(its text is inside a link or a form control). Retype that paragraph as plain text in Word.")
     profile_para.write(profile)
 
-    if skills and sec["rows"] and sec["rows"][0].findall(_R):       # (a first row without plain text: the rows are left as they are)
+    if skills and sec["rows"] and sec["rows"][0].findall(R):       # (a first row without plain text: the rows are left as they are)
         template = sec["rows"][0]
         anchor = body.index(template)
         for p in sec["rows"]:
             body.remove(p)
         for n, row in enumerate(skills):
             p = copy.deepcopy(template)
-            rr = p.findall(_R)
-            _set_run_text(rr[0], f"{row['label']}: ")       # bold label run
+            rr = p.findall(R)
+            set_run_text(rr[0], f"{row['label']}: ")       # bold label run
             if len(rr) > 1:
-                _set_run_text(rr[1], row["items"])         # regular items run
+                set_run_text(rr[1], row["items"])         # regular items run
                 for r in rr[2:]:
                     p.remove(r)
             else:
-                _set_run_text(rr[0], f"{row['label']}: {row['items']}")
+                set_run_text(rr[0], f"{row['label']}: {row['items']}")
             body.insert(anchor + n, p)
     doc.save(out_path)                  # every other part of the file byte for byte
 
@@ -337,10 +331,10 @@ def content_problems(profile: str, skills: list[dict[str, str]], master_profile:
             for term in unknown_skill_terms(row["items"], master_text):
                 problems.append(f"'{term}' (row '{row['label']}') is not in the master CV; remove it from KEY SKILLS.")
     for term in unverified:
-        if any(_mentions(r, term) for r in rows):
+        if any(mentions(r, term) for r in rows):
             problems.append(f"'{term}' is not in the master CV, so it must not be in KEY SKILLS.")
         for sentence in re.split(r"(?<=[.!?])\s+", profile):
-            if _mentions(sentence, term) and not _INTEREST.search(sentence):
+            if mentions(sentence, term) and not _INTEREST.search(sentence):
                 problems.append(f"'{term}' is not in the master CV; mention it in PROFILE only as an interest.")
                 break
     return problems
@@ -351,13 +345,13 @@ def enforce(profile: str, skills: list[dict[str, str]], unverified: list[str],
     """Last line of defence: strip anything the master cannot back up."""
     kept_sentences = []
     for sentence in re.split(r"(?<=[.!?])\s+", profile):
-        if any(_mentions(sentence, t) for t in unverified) and not _INTEREST.search(sentence):
+        if any(mentions(sentence, t) for t in unverified) and not _INTEREST.search(sentence):
             continue
         kept_sentences.append(sentence)
     out_rows = []
     for row in skills:
         items = [i.strip() for i in re.split(r",(?![^()]*\))", row["items"]) if i.strip()]
-        items = [i for i in items if not any(_mentions(i, t) for t in unverified)]
+        items = [i for i in items if not any(mentions(i, t) for t in unverified)]
         if master_text:
             items = [i for i in items if not unknown_skill_terms(i, master_text)]
         if items:
@@ -365,10 +359,14 @@ def enforce(profile: str, skills: list[dict[str, str]], unverified: list[str],
     return " ".join(kept_sentences), out_rows
 
 
+def en_dashes(text: str) -> str:
+    """The en dash "–" wherever the model wrote the long em dash "—" (the person's documents never use it)."""
+    return text.replace("—", "–")
+
+
 def clean(text: str) -> str:
     """En dash instead of em dash, no emojis, single spaces."""
-    text = text.replace(" — ", " – ").replace("—", "–")
-    text = _EMOJI.sub("", text)
+    text = EMOJI.sub("", en_dashes(text))
     return re.sub(r"[ \t]+", " ", text).strip()
 
 
@@ -379,7 +377,7 @@ def verify(master_path, out_path) -> list[str]:
     for name in master.names():
         if name != WordDocument.TEXT and master.part(name) != out.part(name):
             problems.append(f"{name} differs from the master.")
-    ms, os_ = _sections(master.body), _sections(out.body)
+    ms, os_ = sections(master.body), sections(out.body)
 
     def locked(sec):
         skip = {id(sec["profile"])} | {id(p) for p in sec["rows"]}
@@ -388,13 +386,13 @@ def verify(master_path, out_path) -> list[str]:
     if locked(ms) != locked(os_):
         problems.append("A locked paragraph (header, projects, experience, education, languages) changed.")
     # every heading of the master must still be there, in the same order: a section must never go missing
-    heads = lambda sec: [_norm(_text(p)) for p in sec["paras"] if _is_heading(_text(p))]     # noqa: E731
+    heads = lambda sec: [_norm(text_of(p)) for p in sec["paras"] if _is_heading(text_of(p))]     # noqa: E731
     if heads(ms) != heads(os_):
         problems.append("A section of the master CV is missing from the adapted one.")
-    full = "\n".join(_text(p) for p in os_["paras"])
+    full = "\n".join(text_of(p) for p in os_["paras"])
     if "—" in full:
         problems.append("The CV contains an em dash.")
-    if _EMOJI.search(full):
+    if EMOJI.search(full):
         problems.append("The CV contains an emoji.")
     return problems
 
@@ -460,9 +458,9 @@ def master_pages(master_path) -> int:
 def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
     """Create the adapted CV for `job`; returns the file name in TAILORED_CV_DIR."""
     master_path = Path(master_path)
-    sec = _sections(WordDocument(master_path).body)
-    master_profile = _text(sec["profile"]) if sec["profile"] is not None else ""
-    m_rows = [_text(p) for p in sec["rows"]]
+    sec = sections(WordDocument(master_path).body)
+    master_profile = text_of(sec["profile"]) if sec["profile"] is not None else ""
+    m_rows = [text_of(p) for p in sec["rows"]]
     unverified = unverified_terms(cv_text)
     backed = cv_text + "\n" + config.experience_notes()          # everything the person wrote about their own work
 

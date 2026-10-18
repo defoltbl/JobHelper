@@ -61,7 +61,7 @@ def _responses() -> str:
 
 
 def _settings() -> str:
-    path = config.DATA_DIR / "ui_settings.json"
+    path = config.ui_settings_file()
     if not path.is_file():
         return ""
     try:
