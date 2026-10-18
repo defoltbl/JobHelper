@@ -230,6 +230,9 @@ data/                your data; only the *.example.* files are in git
   (a folder, the second mailbox) travels in `email_client.Fetched.warnings` into `ScanStats.warnings`; no module
   keeps warnings between scans. How far back it reads is `config.scan_days()`; when a follow-up is due is
   `followup.saved_days()`.
+- **On the command line, reading the mailbox stops one way** (`status.scan_inbox`, `status.fetch_mail`): Claude's limit
+  saves what was read and ends with 3; a mailbox problem is one sentence (`mail_problem`) and 1. They raise
+  `Stopped(code)`, and `main()` returns its code.
 - **About you is its own window and `about_you.AboutYou` owns it**: the start-date preview (the form filler's
   `start_day`), the right-to-work choices, the salary estimate (`salary.estimate_available`) and `WorkNotes`, the
   notes per job. Everything that reads the notes calls `config.experience_notes()`, which asks `WorkNotes.text()`;

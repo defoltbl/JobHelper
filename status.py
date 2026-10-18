@@ -138,6 +138,45 @@ def mail_problem(error: Exception) -> str:
     return f"The mailbox could not be read ({type(error).__name__})."
 
 
+class Stopped(Exception):
+    """A command that cannot go on and has already said why. `code` is what the command returns: 1 when it failed,
+    3 when Claude's limit stopped it (what was done is saved)."""
+
+    def __init__(self, code: int) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+def _mail_failed(error: Exception) -> Stopped:
+    """Say why the mailbox could not be read, in one sentence: no mailbox connected says so itself; anything else is
+    told by `mail_problem`, never as a traceback (the weekly run's log gets a sentence)."""
+    print(f"✗ {error}" if isinstance(error, RuntimeError) else f"✗ {mail_problem(error)}")
+    return Stopped(1)
+
+
+def scan_inbox(jobs: list, days: int):
+    """Read the replies (read-only) the way every command here does. Claude's limit: what was read is saved, and the
+    command stops with 3; a mailbox problem: one sentence, and 1."""
+    try:
+        return agent5_responses.process_inbox(jobs, lookback_days=days)
+    except llm.LimitReached as e:
+        store.save_jobs(jobs)                    # the replies read so far have already changed these jobs
+        agent4_tracker.render_all(jobs)
+        print(f"⏸  {e}\n   What was read is saved. Run it again after the reset: nothing is read twice.")
+        raise Stopped(3) from e
+    except Exception as e:  # noqa: BLE001 - said in a sentence
+        raise _mail_failed(e) from e
+
+
+def fetch_mail(days):
+    """The recent messages, without Claude; a mailbox problem is one sentence, and the command stops with 1."""
+    from jobhelper import email_client
+    try:
+        return email_client.fetch_recent(days).messages
+    except Exception as e:  # noqa: BLE001 - said in a sentence
+        raise _mail_failed(e) from e
+
+
 def cmd_sync(args) -> int:
     jobs = store.load_jobs()
     if not jobs:
@@ -145,19 +184,7 @@ def cmd_sync(args) -> int:
         return 0
     days = args.days or config.scan_days()
     print(f"Reading inbox ({config.IMAP_USER}), last {days} days — read-only, nothing is sent or deleted …")
-    try:
-        stats = agent5_responses.process_inbox(jobs, lookback_days=days)
-    except llm.LimitReached as e:
-        store.save_jobs(jobs)                    # the replies read so far have already changed these jobs
-        agent4_tracker.render_all(jobs)
-        print(f"⏸  {e}\n   What was read is saved. Run it again after the reset: nothing is read twice.")
-        return 3
-    except RuntimeError as e:
-        print(f"✗ {e}")
-        return 1
-    except Exception as e:  # noqa: BLE001 - the weekly run's log gets a sentence, not a traceback
-        print(f"✗ {mail_problem(e)}")
-        return 1
+    stats = scan_inbox(jobs, days)
     pruned = agent5_responses.after_scan(jobs)         # leads now applied to are dropped
     if pruned:
         print(f"  · removed {len(pruned)} lead(s) from new_jobs you've applied to")
@@ -190,19 +217,7 @@ def cmd_responses(args) -> int:
     jobs = store.load_jobs()
     if args.scan:
         print(f"Reading inbox ({config.IMAP_USER}) — read-only …")
-        try:
-            stats = agent5_responses.process_inbox(jobs, lookback_days=args.days or config.scan_days())
-        except llm.LimitReached as e:
-            store.save_jobs(jobs)                    # the replies read so far have already changed these jobs
-            agent4_tracker.render_all(jobs)
-            print(f"⏸  {e}\n   What was read is saved. Run it again after the reset: nothing is read twice.")
-            return 3
-        except RuntimeError as e:
-            print(f"✗ {e}")
-            return 1
-        except Exception as e:  # noqa: BLE001
-            print(f"✗ {mail_problem(e)}")
-            return 1
+        stats = scan_inbox(jobs, args.days or config.scan_days())
         agent5_responses.annotate_progress(jobs)
         store.save_jobs(jobs)
         agent4_tracker.render_all(jobs)
@@ -308,16 +323,9 @@ def cmd_pdf(args) -> int:
 def cmd_repair_emails(args) -> int:
     """Re-read the inbox text (read-only, no Claude usage) and fix replies that an
     older version filed wrongly because it could not read HTML-only emails."""
-    from jobhelper import agent5_responses, email_client, vault
+    from jobhelper import agent5_responses, vault
     print("Reading the inbox (read-only) …")
-    try:
-        emails = email_client.fetch_recent(args.days).messages
-    except RuntimeError as e:                        # no mailbox connected: said, nothing changed
-        print(f"✗ {e}")
-        return 1
-    except Exception as e:  # noqa: BLE001
-        print(f"✗ {mail_problem(e)}")
-        return 1
+    emails = fetch_mail(args.days)                   # no mailbox, or it cannot be read: said, nothing changed
     jobs = store.load_jobs()
     backup = vault.make_backup("before_email_repair")
     stats = agent5_responses.repair_unread_bodies(jobs, emails)
@@ -473,6 +481,8 @@ def main() -> int:
         if args.cmd != "security":
             vault.protect_all()
         return args.func(args)
+    except Stopped as stop:
+        return stop.code
     except vault.VaultError as e:
         print(f"✗ {e}")
         return 2
