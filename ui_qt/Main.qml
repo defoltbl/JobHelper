@@ -15,6 +15,8 @@ ApplicationWindow {
     color: theme.winbg
 
     property bool dark: true
+    // how long what you type may be: from the back end, which checks the same numbers (the window keeps no copy)
+    readonly property var limits: bridge.limits()
     property string beltPath: "M70,200 H840 Q915,200 915,315 Q915,430 840,430 H150"
 
     // autocomplete suggestion pools

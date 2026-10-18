@@ -650,6 +650,7 @@ def test_api_edits_the_saved_preparation(isolate_data, monkeypatch):
     api.editor.change("a", lambda jobs, j: j.update(interview_prep=_saved()), render=False)
     got = api.prep_parts("a")
     assert got["ok"] and got["company"] == "BRIGHTLINE" and got["edited"] == "" and api.job_detail("a")["prep_edited"] is False
+    assert (got["max_part"], got["max_items"], got["max_item"]) == (interview_prep.MAX_PART, interview_prep.MAX_ITEMS, interview_prep.MAX_ITEM)
     refused = api.save_prep_parts("a", [{"key": "questions.0.answer", "text": ""}])
     assert refused["ok"] is False and "is empty" in refused["msg"]
     assert api.save_prep_parts("a", [{"key": "pitch", "text": "My own pitch."}]) == {"ok": True, "to_check": 0}

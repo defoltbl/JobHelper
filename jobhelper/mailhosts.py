@@ -61,7 +61,8 @@ def never_used(name: str) -> bool:
     return bool(_NEVER.search(str(name or "").strip().lower()))
 
 
-_HOST = re.compile(r"(?=.{4,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+", re.IGNORECASE)
+MAX_HOST = 253                                  # the longest name a server can have
+_HOST = re.compile(r"(?=.{4," + str(MAX_HOST) + r"}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+", re.IGNORECASE)
 MAX_PASSWORD = 128
 
 

@@ -171,6 +171,17 @@ class SystemService:
 
     # ── what changed (CHANGELOG.md, shown in Help) ──────────────
     @_guarded(list)
+    def limits(self):
+        """How long what you type may be, from the module that checks it, so the window says it before the check refuses."""
+        from . import assistant, config, cover_letter, form_answers, mailhosts, planner
+        app = self._app                             # the Options' own limits: asked through the facade, like any other service
+        return {"request": assistant.MAX_REQUEST, "question": form_answers.MAX_QUESTION, "answer": form_answers.MAX_ANSWER,
+                "event_note": planner.MAX_EVENT_NOTE, "company_notes": dict(planner.NOTE_LIMITS),
+                "experience_notes": config.MAX_EXPERIENCE_NOTES, "letter_hint": cover_letter.MAX_HINT,
+                "list_word": app.MAX_WORD, "options": dict(app.OPTION_TEXTS),
+                "company_name": app.MAX_COMPANY_NAME, "pay_role": app.MAX_PAY_ROLE,
+                "mail_server": mailhosts.MAX_HOST}
+
     def changelog(self):
         """[{date, items}] from CHANGELOG.md, newest first; **words** become <b>words</b>."""
         import html

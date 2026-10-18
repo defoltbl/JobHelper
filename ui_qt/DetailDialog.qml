@@ -250,7 +250,7 @@ Dialog {
             if (res.ok) { win.countsData = bridge.counts(); win.refreshOpenView(); }
         } }
     property bool notesBad: false         // the line under the company notes is a problem, not a confirmation
-    readonly property int notesMax: 2000
+    readonly property int notesMax: win.limits.company_notes.notes
     readonly property int replyMax: 8000
     // a single-line field stops taking letters at its limit: say so instead of going silent
     function full(field, what) { return field.text.length >= field.maximumLength ? what + " takes up to " + field.maximumLength + " characters." : ""; }
@@ -658,7 +658,7 @@ Dialog {
                                 border.color: evTime.activeFocus ? theme.accent : theme.line }
                             onTextEdited: detailDialog.eventErr = "" }
                         TextField { id: evNote; objectName: "evNote"; Layout.fillWidth: true; implicitHeight: 28; placeholderText: "note, e.g. Teams call with the team lead"
-                            placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 200
+                            placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.event_note
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1
                                 border.color: evNote.activeFocus ? theme.accent : theme.line }
                             onTextEdited: detailDialog.eventErr = detailDialog.full(evNote, "The note") }
@@ -753,17 +753,17 @@ Dialog {
                     GridLayout { Layout.fillWidth: true; columns: 2; columnSpacing: 8; rowSpacing: 6
                         Text { text: "Who you spoke to"; color: theme.soft; font.pixelSize: 12 }
                         TextField { id: cnContact; objectName: "cnContact"; Layout.fillWidth: true; implicitHeight: 28; color: theme.ink; font.pixelSize: 12
-                            selectByMouse: true; maximumLength: 200; placeholderText: "name, role"; placeholderTextColor: theme.faint
+                            selectByMouse: true; maximumLength: win.limits.company_notes.contact; placeholderText: "name, role"; placeholderTextColor: theme.faint
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1; border.color: cnContact.activeFocus ? theme.accent : theme.line }
                             onTextEdited: { detailDialog.notesInfo = detailDialog.full(cnContact, "“Who you spoke to”"); detailDialog.notesBad = detailDialog.notesInfo !== ""; } }
                         Text { text: "Salary mentioned"; color: theme.soft; font.pixelSize: 12 }
                         TextField { id: cnSalary; objectName: "cnSalary"; Layout.fillWidth: true; implicitHeight: 28; color: theme.ink; font.pixelSize: 12
-                            selectByMouse: true; maximumLength: 200; placeholderText: "what they said, what you said"; placeholderTextColor: theme.faint
+                            selectByMouse: true; maximumLength: win.limits.company_notes.salary; placeholderText: "what they said, what you said"; placeholderTextColor: theme.faint
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1; border.color: cnSalary.activeFocus ? theme.accent : theme.line }
                             onTextEdited: { detailDialog.notesInfo = detailDialog.full(cnSalary, "“Salary mentioned”"); detailDialog.notesBad = detailDialog.notesInfo !== ""; } }
                         Text { text: "What they asked"; color: theme.soft; font.pixelSize: 12 }
                         TextField { id: cnAsked; objectName: "cnAsked"; Layout.fillWidth: true; implicitHeight: 28; color: theme.ink; font.pixelSize: 12
-                            selectByMouse: true; maximumLength: 400; placeholderText: "questions, tasks"; placeholderTextColor: theme.faint
+                            selectByMouse: true; maximumLength: win.limits.company_notes.asked; placeholderText: "questions, tasks"; placeholderTextColor: theme.faint
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1; border.color: cnAsked.activeFocus ? theme.accent : theme.line }
                             onTextEdited: { detailDialog.notesInfo = detailDialog.full(cnAsked, "“What they asked”"); detailDialog.notesBad = detailDialog.notesInfo !== ""; } }
                     }
