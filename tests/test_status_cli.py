@@ -160,3 +160,19 @@ def test_the_mail_server_gets_a_time_limit_and_an_empty_answer_is_no_mail(monkey
     assert email_client.read_mailbox("me@example.com", "pw", "01-Oct-2026", host="imap.example.com") == email_client.Fetched([])
     assert made == {"host": "imap.example.com", "timeout": email_client.SERVER_TIMEOUT, "readonly": True, "out": True}
     assert email_client._numbers([b"1 2 3"]) == [b"1", b"2", b"3"] and email_client._numbers([]) == [] and email_client._numbers(None) == []
+
+
+def test_every_mail_command_says_a_mailbox_problem_the_same_way(isolate_data, monkeypatch, capsys):
+    """sync, responses --scan and repair-emails share one way to stop on the mailbox (status.scan_inbox / fetch_mail)."""
+    import imaplib
+    from jobhelper import agent5_responses, email_client
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="waiting", date_applied="2026-09-01")])
+    refused = imaplib.IMAP4.error("AUTHENTICATIONFAILED")
+    monkeypatch.setattr(agent5_responses, "process_inbox", lambda jobs, lookback_days=None, **kw: (_ for _ in ()).throw(refused))
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: (_ for _ in ()).throw(refused))
+    said = set()
+    for command in (["sync"], ["responses", "--scan"], ["repair-emails"]):
+        assert _run(monkeypatch, *command) == 1, command
+        said.add(capsys.readouterr().out.strip().splitlines()[-1])
+    assert said == {"✗ Couldn't sign in to your email. Check its password in the app's Account card."}
