@@ -10,6 +10,7 @@ import email
 import imaplib
 import re
 import unicodedata
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.header import decode_header
 from typing import Any, Callable
@@ -140,7 +141,12 @@ def rejection_wording(text: str) -> str:
     return ""
 
 
-last_warnings: list[str] = []      # problems with the optional second mailbox during the last fetch
+@dataclass(frozen=True)
+class Fetched:
+    """The messages one fetch read, and what it could not read (a folder, the second mailbox) as warnings:
+    the fetch goes on without them, and the scan says so at its end."""
+    messages: list[dict[str, Any]]
+    warnings: tuple[str, ...] = ()
 
 
 SERVER_TIMEOUT = 60.0       # seconds a mail server gets for one answer
@@ -159,6 +165,7 @@ class Mailbox:
         self._password, self._host, self._timeout = password, host, timeout
         self._connect = connect or (lambda: imaplib.IMAP4_SSL(self._host or config.imap_host(1), config.IMAP_PORT, timeout=self._timeout))
         self._imap: Any = None
+        self.warnings: list[str] = []      # folders `recent` could not read
 
     def __enter__(self) -> "Mailbox":
         # a time limit on every step: a server that stops answering ends the scan with an error, not holds it for ever
@@ -253,13 +260,13 @@ class Mailbox:
                         numbers = self.since(since)
                     take("archive", numbers)
                 except imaplib.IMAP4.error:
-                    last_warnings.append(f"The archive folder of {self.user} could not be read.")
+                    self.warnings.append(f"The archive folder of {self.user} could not be read.")
             if extra.get("spam"):
                 try:
                     self.open(extra["spam"])
                     take("spam", self.since(since))
                 except imaplib.IMAP4.error:
-                    last_warnings.append(f"The spam folder of {self.user} could not be read.")
+                    self.warnings.append(f"The spam folder of {self.user} could not be read.")
         return out
 
 
@@ -307,17 +314,17 @@ def try_login(user: str, password: str, timeout: float = 8.0, host: str = "") ->
     return {"ok": True, "msg": ""}
 
 
-def read_mailbox(user: str, password: str, since: str, all_folders: bool = False, host: str = "") -> list[dict[str, Any]]:
+def read_mailbox(user: str, password: str, since: str, all_folders: bool = False, host: str = "") -> Fetched:
     """Recent messages of one mailbox (see `Mailbox.recent`); it is signed out of at the end."""
     with Mailbox(user, password, host) as box:
-        return box.recent(since, all_folders)
+        return Fetched(box.recent(since, all_folders), tuple(box.warnings))
 
 
-def fetch_recent(lookback_days: int | None = None, all_folders: bool | None = None) -> list[dict[str, Any]]:
+def fetch_recent(lookback_days: int | None = None, all_folders: bool | None = None) -> Fetched:
     """Recent messages from the job mailbox, plus the optional second mailbox.
 
     A problem with the main mailbox is an error. A problem with the second one
-    is only noted in `last_warnings`: the scan goes on with the main mailbox."""
+    is only a warning: the scan goes on with the main mailbox."""
     boxes = config.mailboxes()
     if not boxes:
         raise RuntimeError(
@@ -327,21 +334,22 @@ def fetch_recent(lookback_days: int | None = None, all_folders: bool | None = No
     since = (datetime.now() - timedelta(days=days)).strftime("%d-%b-%Y")
     if all_folders is None:
         all_folders = config.ui_settings().get("scan_all_folders") is True
-    last_warnings.clear()
-    out = read_mailbox(boxes[0]["user"], boxes[0]["password"], since, all_folders, host=boxes[0].get("host", ""))
+    main = read_mailbox(boxes[0]["user"], boxes[0]["password"], since, all_folders, host=boxes[0].get("host", ""))
+    out, warnings = list(main.messages), list(main.warnings)
     seen = {m["msg_id"] for m in out}
     for box in boxes[1:]:
         try:
             extra = read_mailbox(box["user"], box["password"], since, all_folders, host=box.get("host", ""))
         except imaplib.IMAP4.error:
-            last_warnings.append(f"Couldn't sign in to {box['user']}: check its password in the Account card.")
+            warnings.append(f"Couldn't sign in to {box['user']}: check its password in the Account card.")
             continue
         except OSError as e:
-            last_warnings.append(f"Couldn't reach {box['user']}: {e}")
+            warnings.append(f"Couldn't reach {box['user']}: {e}")
             continue
-        out += [m for m in extra if m["msg_id"] not in seen]     # the same mail delivered to both
-        seen.update(m["msg_id"] for m in extra)
-    return out
+        out += [m for m in extra.messages if m["msg_id"] not in seen]     # the same mail delivered to both
+        seen.update(m["msg_id"] for m in extra.messages)
+        warnings += extra.warnings
+    return Fetched(out, tuple(warnings))
 
 
 # The legal form of a company and words around it ("Acme Corp", "Alfa spol. s r.o.", "Beta LLC"): never part of

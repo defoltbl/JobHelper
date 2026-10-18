@@ -390,13 +390,11 @@ class RunSlots:
             store.save_jobs(jobs)
             agent4_tracker.render_all(jobs)
             agent5_responses.build_report(jobs)
-            self.agentChanged.emit("a5", "done", "%d new" % stats["new_responses"])
-            self._api.note_run(scan="%s · %d new" % (datetime.now().strftime("%d %b"), stats["new_responses"]),
-                               scan_detail=agent5_responses.scan_detail(stats), cost=self._spent(before), cost_of="email scan")
-            from . import email_client
-            warning = (" " + " ".join(email_client.last_warnings)) if email_client.last_warnings else ""
-            self.runFinished.emit("scan", agent5_responses.scan_summary(stats) + warning)
-            text, title, urgent = agent5_responses.scan_notice(stats)
+            self.agentChanged.emit("a5", "done", "%d new" % stats.new_responses)
+            self._api.note_run(scan="%s · %d new" % (datetime.now().strftime("%d %b"), stats.new_responses),
+                               scan_detail=stats.detail(), cost=self._spent(before), cost_of="email scan")
+            self.runFinished.emit("scan", stats.closing_line())
+            text, title, urgent = stats.notice()
             if urgent:
                 notify.send(text, title)                         # worth an alert even with the app in front
             else:

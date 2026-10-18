@@ -212,8 +212,10 @@ data/                your data; only the *.example.* files are in git
 - **A form's limits and its "[to fill in]" rule are `form_answers`'s** (`MAX_QUESTION`, `MAX_ANSWER`, `unfilled`): the
   assistant and the answer memory ask it. A phone code is chosen only by `form_fill.code_option`, and a date of
   My details ("03/2023") is read only by `form_fill.RowDate`, whatever kind of field or menu the page has.
-- **Every email scan ends with `agent5_responses.after_scan` and says so with `scan_notice`**, in the window,
-  `status.py sync` and the weekly run. How far back it reads is `config.scan_days()`; when a follow-up is due is
+- **Every email scan ends with `agent5_responses.after_scan` and says so through its `ScanStats`** (`summary`,
+  `closing_line`, `detail`, `notice`), in the window, `status.py sync` and the weekly run. What a fetch could not read
+  (a folder, the second mailbox) travels in `email_client.Fetched.warnings` into `ScanStats.warnings`; no module
+  keeps warnings between scans. How far back it reads is `config.scan_days()`; when a follow-up is due is
   `followup.saved_days()`.
 - **About you is its own window and `about_you.AboutYou` owns it**: the start-date preview (the form filler's
   `start_day`), the right-to-work choices, the salary estimate (`salary.estimate_available`) and `WorkNotes`, the

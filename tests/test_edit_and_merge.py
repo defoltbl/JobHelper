@@ -191,7 +191,7 @@ def mail(isolate_data, monkeypatch):
         asked.append(user)
         if isinstance(boxes.get(user), Exception):
             raise boxes[user]
-        return [dict(m, mailbox=user) for m in boxes[user]]
+        return email_client.Fetched([dict(m, mailbox=user) for m in boxes[user]])
 
     monkeypatch.setattr(email_client, "read_mailbox", fetch)
     return boxes, asked
@@ -200,7 +200,7 @@ def mail(isolate_data, monkeypatch):
 def test_one_mailbox_is_enough(mail):
     boxes, asked = mail
     assert [b["user"] for b in config.mailboxes()] == ["main@example.com"]
-    assert [m["msg_id"] for m in email_client.fetch_recent(10)] == ["<m1>", "<both>"] and asked == ["main@example.com"]
+    assert [m["msg_id"] for m in email_client.fetch_recent(10).messages] == ["<m1>", "<both>"] and asked == ["main@example.com"]
 
 
 def test_second_mailbox_is_read_too_and_the_same_mail_counts_once(mail):
@@ -210,8 +210,8 @@ def test_second_mailbox_is_read_too_and_the_same_mail_counts_once(mail):
     text = config.ENV_PATH.read_text(encoding="utf-8")
     assert "IMAP_USER_2=second@example.com" in text and "wxyz" not in text          # password only in the Keychain
     got = email_client.fetch_recent(10)
-    assert [m["msg_id"] for m in got] == ["<m1>", "<both>", "<s1>"] and asked == ["main@example.com", "second@example.com"]
-    assert got[-1]["mailbox"] == "second@example.com" and email_client.last_warnings == []
+    assert [m["msg_id"] for m in got.messages] == ["<m1>", "<both>", "<s1>"] and asked == ["main@example.com", "second@example.com"]
+    assert got.messages[-1]["mailbox"] == "second@example.com" and got.warnings == ()
 
 
 def test_a_broken_second_mailbox_does_not_stop_the_scan(mail):
@@ -219,8 +219,8 @@ def test_a_broken_second_mailbox_does_not_stop_the_scan(mail):
     config.set_imap2("second@example.com", "wxyzwxyzwxyzwxyz")
     boxes["second@example.com"] = imaplib.IMAP4.error("AUTHENTICATIONFAILED")
     got = email_client.fetch_recent(10)
-    assert [m["msg_id"] for m in got] == ["<m1>", "<both>"]
-    assert "second@example.com" in email_client.last_warnings[0] and "check its password" in email_client.last_warnings[0]
+    assert [m["msg_id"] for m in got.messages] == ["<m1>", "<both>"]
+    assert "second@example.com" in got.warnings[0] and "check its password" in got.warnings[0]
 
 
 def test_a_broken_main_mailbox_is_still_an_error(mail):

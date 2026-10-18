@@ -160,7 +160,7 @@ def test_a_longer_scan_reads_that_period_and_leaves_the_setting(bridge, monkeypa
 
     def read(jobs, lookback_days=None, progress=None, on_limit=None):
         seen.append(lookback_days)
-        return {"scanned": 45, "already_read": 40, "asked": 5, "new_responses": 0, "rejections": 0}
+        return agent5_responses.ScanStats(scanned=45, already_read=40, asked=5)
 
     monkeypatch.setattr(agent5_responses, "process_inbox", read)
     for name in ("backfill_roles", "annotate_progress", "build_report"):
@@ -284,7 +284,7 @@ def test_an_email_scan_notes_its_own_cost(bridge, monkeypatch):
 
     def read(jobs, lookback_days=None, progress=None, on_limit=None):
         usage.record({"cost_usd": 0.075}, tag="email")
-        return {"scanned": 5, "new_responses": 0, "rejections": 0}
+        return agent5_responses.ScanStats(scanned=5)
 
     monkeypatch.setattr(agent5_responses, "process_inbox", read)
     for name in ("backfill_roles", "annotate_progress", "build_report"):
@@ -468,6 +468,22 @@ def test_stop_during_search_ends_before_scoring(bridge, monkeypatch):
     assert events[-1][2].startswith("Stopped") and bridge.running is False
 
 
+def test_a_folder_a_scan_could_not_read_is_named_at_its_end(bridge, monkeypatch):
+    warning = "The spam folder of jordan@example.com could not be read."
+    monkeypatch.setattr(agent5_responses, "process_inbox", lambda jobs, lookback_days=None, progress=None, on_limit=None:
+                        agent5_responses.ScanStats(scanned=3, asked=1, warnings=(warning,)))
+    for name in ("backfill_roles", "annotate_progress", "build_report"):
+        monkeypatch.setattr(agent5_responses, name, lambda jobs: None)
+    monkeypatch.setattr(agent4_tracker, "render_all", lambda jobs: None)
+    events = _record(bridge)
+    bridge._scan(30)
+    assert events[-1][2] == "Scanned 3 emails (0 read before, 1 sent to Claude) · 0 new. " + warning
+    monkeypatch.setattr(agent5_responses, "process_inbox", lambda jobs, lookback_days=None, progress=None, on_limit=None:
+                        agent5_responses.ScanStats(scanned=3, asked=1))
+    bridge._scan(30)
+    assert events[-1][2].endswith("· 0 new."), "the next scan does not repeat an old warning"
+
+
 def test_stop_during_email_scan_saves_progress(bridge, monkeypatch):
     def process_inbox(jobs, progress=None, **kw):
         progress(0, 5)
@@ -516,7 +532,7 @@ def test_email_scan_uses_the_period_from_options(bridge, monkeypatch):
     seen = {}
     monkeypatch.setattr(agent5_responses, "process_inbox",
                         lambda jobs, lookback_days=None, progress=None, on_limit=None: seen.update(days=lookback_days) or
-                        {"scanned": 0, "new_responses": 0, "rejections": 0})
+                        agent5_responses.ScanStats())
     for name in ("backfill_roles", "annotate_progress", "build_report"):
         monkeypatch.setattr(agent5_responses, name, lambda jobs: None)
     monkeypatch.setattr(agent4_tracker, "render_all", lambda jobs: None)
@@ -561,7 +577,7 @@ def test_search_and_scan_results_are_kept_for_the_last_run_card(bridge, monkeypa
     assert vault.file_is_encrypted(config.DATA_DIR / "last_run.json")
     monkeypatch.setattr(agent5_responses, "process_inbox",
                         lambda jobs, lookback_days=None, progress=None, on_limit=None:
-                        {"scanned": 9, "new_responses": 2, "rejections": 1})
+                        agent5_responses.ScanStats(scanned=9, new_responses=2, rejections=1))
     for name in ("backfill_roles", "annotate_progress", "build_report"):
         monkeypatch.setattr(agent5_responses, name, lambda jobs: None)
     bridge._scan()
