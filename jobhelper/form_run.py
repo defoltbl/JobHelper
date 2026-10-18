@@ -9,7 +9,7 @@ from datetime import date
 from typing import Any
 
 from . import (agent1_cv, answer_memory, assistant, chrome, config, cover_letter, details, form_answers, form_choices,
-               form_fill, mailhosts, store)
+               form_fill, store)
 
 SHOWN = 90      # characters of a filled-in value shown in the report
 
@@ -80,11 +80,12 @@ class FormFillRun:
             tab = chrome.active_tab()
         except chrome.ChromeError as e:
             raise Stop(str(e)) from e
-        host = form_fill.host_of(tab["url"])
-        if not tab["url"].lower().startswith(("http://", "https://")) or not host:
+        address = form_fill.PageAddress(tab["url"])
+        host = address.host
+        if not address.is_web:
             raise Stop(f"The tab in front is not a web page with a form. Open the application form in {chrome.short()}, bring its tab to the front, and ask me again.")
-        if mailhosts.never_used(host):
-            raise Stop("This app does not work with Russian services, so I do not fill in forms on this site.")
+        if address.refused:
+            raise Stop(address.refusal("fill in forms on this site"))
         self._page = self._read()
         if not self._page["fields"]:
             if self._page["frames"]:
@@ -108,20 +109,20 @@ class FormFillRun:
             if not self._job:
                 raise Stop("That job is not in the list any more. Choose another one.")
         else:
-            self._job = self._job_of_page([j for j in jobs if j.get("status") in store.OPEN_STATUSES], self._page)
+            self._job = self._job_of_page([j for j in jobs if j.get("status") in store.OPEN_STATUSES])
             self._guessed = self._job is not None
 
     def _plan(self) -> None:
-        self._todo = form_fill.plan(self._page["fields"], self._mine, self._letter_text(self._job), has_job=self._job is not None)
+        self._todo = form_fill.plan(self._page["fields"], self._mine, self._letter_text(), has_job=self._job is not None)
         if not self._page["adds"]:
             return
         try:                                # the form shows fewer rows than you have jobs or degrees: ask it for more, then read it again
-            self._added = self._more_rows(self._page, self._todo["rows"], self._mine)
+            self._added = self._more_rows()
             if self._added:
                 again = self._read()
                 if again["url"] == self._page["url"] and again["fields"]:
                     self._page = again
-                    self._todo = form_fill.plan(self._page["fields"], self._mine, self._letter_text(self._job), has_job=self._job is not None)
+                    self._todo = form_fill.plan(self._page["fields"], self._mine, self._letter_text(), has_job=self._job is not None)
         except (chrome.ChromeError, ValueError) as e:
             raise Stop(str(e)) from e
 
@@ -150,7 +151,7 @@ class FormFillRun:
         asked = self._todo["ask"]
         if not asked:
             return
-        answers, why = self._answers(self._job, asked)
+        answers, why = self._answers(asked)
         for q in asked:
             item = answers.get(q["label"].lower())
             if not item:
@@ -165,7 +166,7 @@ class FormFillRun:
         if not self._todo["choose"]:
             return
         try:
-            values, chosen, open_ones = self._choices(self._todo["choose"], self._page["url"], self._mine, self._job)
+            values, chosen, open_ones = FormChoices(self._page["url"], self._mine, self._job, self._cv).make(self._todo["choose"])
         except chrome.ChromeError as e:
             raise Stop(str(e)) from e
         self._fill += values
@@ -225,7 +226,7 @@ class FormFillRun:
         if not self._todo["attach"]:
             return
         try:
-            attached, not_attached, moved = self._attach(self._todo["attach"], self._page, self._job)
+            attached, not_attached, moved = FormFiles(self._page, self._job).attach(self._todo["attach"])
         except (chrome.ChromeError, ValueError) as e:
             raise Stop(str(e)) from e
         if moved:
@@ -251,8 +252,9 @@ class FormFillRun:
                        + (f" I asked the form for {added} more row{'' if added == 1 else 's'} for your jobs and degrees." if added else "")}
 
     # ── how each step talks to the page ─────────────────────────
-    def _letter_text(self, j) -> str:
+    def _letter_text(self) -> str:
         """The body of the letter the app wrote for this job ('' when there is none it can read)."""
+        j = self._job
         try:
             if j and self._app.editable_letter(j):
                 return "\n\n".join(p for p in cover_letter.read_letter(self._app.letter_path(j))["paragraphs"] if p.strip())
@@ -260,9 +262,10 @@ class FormFillRun:
             pass
         return ""
 
-    def _answers(self, job, asked: list[dict[str, Any]]) -> tuple[dict[str, dict], str]:
+    def _answers(self, asked: list[dict[str, Any]]) -> tuple[dict[str, dict], str]:
         """Answers for the open questions of a form: those kept with the job are used again, the
         rest are drafted in one call and kept. Returns ({question: item}, why some are missing)."""
+        job = self._job
         kept = {i["question"].lower(): i for i in form_answers.tidy((job.get("form_answers") or {}).get("items")) if i["answer"]}
         for q in asked:                      # your own wording for the same question elsewhere comes before a new draft
             if q["label"].lower() not in kept:
@@ -287,27 +290,48 @@ class FormFillRun:
         self._editor.change(job["id"], keep, render=False)
         return {**kept, **{k: v for k, v in new.items() if v["answer"]}}, ""
 
-    def _menu(self, n: int, url: str, typed: str = "") -> list[str]:
-        """Open a menu the page draws itself and read its entries (they are numbered on the page for the pick that follows)."""
-        chrome.run(form_fill.choose_script("open", n, typed, url))
-        options: list[str] = []
-        for wait in (0.35, 0.7, 1.2):
-            chrome.pause(wait)
-            options = form_fill.choose_answer(chrome.run(form_fill.choose_script("options", n, "", url)))["options"]
-            if options:
-                break
-        if not options:                     # some lists open on the arrow-down key, not on a press
-            chrome.run(form_fill.choose_script("key", n, "", url))
-            for wait in (0.4, 1.0):
-                chrome.pause(wait)
-                options = form_fill.choose_answer(chrome.run(form_fill.choose_script("options", n, "", url)))["options"]
-                if options:
+    def _more_rows(self) -> int:
+        """Ask the form for the rows it does not show yet: one press of "Add another job" for each job of yours that
+        has no row, the same for degrees. Returns how many rows were asked for. Nothing else is ever pressed."""
+        page, rows, mine = self._page, self._todo["rows"], self._mine
+        pressed = 0
+        for name, have in (("experience", len(mine.get("experience") or [])), ("education", len(mine.get("education") or [])),
+                           ("languages", len(mine.get("languages") or []))):
+            button = next((a for a in page["adds"] if a["kind"] == name), None)
+            if not button:
+                continue
+            for _ in range(max(0, min(have - rows.get(name, 0), 6))):
+                done = form_fill.choose_answer(chrome.run(form_fill.choose_script("add", 0, button["k"], page["url"])))
+                if not done["ok"]:
                     break
-        return options
+                pressed += 1
+                chrome.pause(0.4)
+        return pressed
 
-    def _choices(self, choices: list[dict[str, Any]], url: str, mine: dict[str, str], job) -> tuple[list[dict], list[dict], list[dict]]:
+    def _job_of_page(self, jobs: list[dict]):
+        """The job a form belongs to, although the form is rarely at the address of its posting (see form_fill.match_job)."""
+        page = self._page
+        found = form_fill.match_job(jobs, page["url"], page["title"], page.get("from", ""))
+        if not found:
+            try:
+                words = form_fill.page_answer(chrome.run(form_fill.PAGE))["text"][:6000]
+            except (chrome.ChromeError, ValueError):
+                words = ""
+            found = form_fill.match_job(jobs, page["url"], page["title"], page.get("from", ""), words, self._app.recently_opened())
+        return store.find(jobs, found) if found else None
+
+
+class FormChoices:
+    """The choices of one form: lists and number fields, menus the page draws itself, radio buttons, and text
+    fields whose answer is guessed. Settled from your details, your earlier answers, or one call to Claude."""
+
+    def __init__(self, url: str, mine: dict[str, Any], job, cv) -> None:
+        self._url, self._mine, self._job, self._cv = url, mine, job, cv
+
+    def make(self, choices: list[dict[str, Any]]) -> tuple[list[dict], list[dict], list[dict]]:
         """Decide and make the choices of a form. Returns (values for plain lists and number fields, to be
         written with the rest; what was chosen by pressing; what is left, with the reason)."""
+        url, mine, job = self._url, self._mine, self._job
         to_fill, chosen, left = [], [], []
         for extra in choices[form_choices.MAX_CHOICES + 8:]:
             left.append({"label": extra["label"], "why": form_choices.TOO_MANY})
@@ -316,11 +340,11 @@ class FormFillRun:
             if c["kind"] == "menu":
                 typed = (mine.get("city", "") if c["what"] in ("city", "location") else c["value"]) if c["typed"] else ""
                 c["search"] = typed
-                c["options"] = self._menu(c["n"], url, typed)
+                c["options"] = self._menu(c["n"], typed)
                 chrome.run(form_fill.choose_script("close", c["n"], bool(typed), url))
                 if typed and not c["options"]:      # the list knows your country under another name: all of its entries, then
                     c["search"] = ""
-                    c["options"] = self._menu(c["n"], url, "")
+                    c["options"] = self._menu(c["n"], "")
                     chrome.run(form_fill.choose_script("close", c["n"], False, url))
         picks = {c["n"]: form_choices.settle(c, mine, job) for c in choices}
         for c in choices:                            # what you chose for the same question before
@@ -352,7 +376,7 @@ class FormFillRun:
                 (chosen if done["ok"] else left).append({"label": c["label"], "value": pick, "kind": "choice", "check": form_choices.CHECK}
                                                         if done["ok"] else {"label": c["label"], "why": "The page did not take the choice. Choose it yourself."})
             else:
-                options = self._menu(c["n"], url, c.get("search", ""))
+                options = self._menu(c["n"], c.get("search", ""))
                 same = [k for k, o in enumerate(options) if o == pick]
                 done = form_fill.choose_answer(chrome.run(form_fill.choose_script("pick", c["n"], same[0], url))) if same else {"ok": False}
                 if not done["ok"]:
@@ -361,52 +385,39 @@ class FormFillRun:
                                                         if done["ok"] else {"label": c["label"], "why": "The page did not take the choice. Choose it yourself."})
         return to_fill, chosen, left
 
-    def _more_rows(self, page: dict[str, Any], rows: dict[str, int], mine: dict[str, Any]) -> int:
-        """Ask the form for the rows it does not show yet: one press of "Add another job" for each job of yours that
-        has no row, the same for degrees. Returns how many rows were asked for. Nothing else is ever pressed."""
-        pressed = 0
-        for name, have in (("experience", len(mine.get("experience") or [])), ("education", len(mine.get("education") or [])),
-                           ("languages", len(mine.get("languages") or []))):
-            button = next((a for a in page["adds"] if a["kind"] == name), None)
-            if not button:
-                continue
-            for _ in range(max(0, min(have - rows.get(name, 0), 6))):
-                done = form_fill.choose_answer(chrome.run(form_fill.choose_script("add", 0, button["k"], page["url"])))
-                if not done["ok"]:
+    def _menu(self, n: int, typed: str = "") -> list[str]:
+        """Open a menu the page draws itself and read its entries (they are numbered on the page for the pick that follows)."""
+        url = self._url
+        chrome.run(form_fill.choose_script("open", n, typed, url))
+        options: list[str] = []
+        for wait in (0.35, 0.7, 1.2):
+            chrome.pause(wait)
+            options = form_fill.choose_answer(chrome.run(form_fill.choose_script("options", n, "", url)))["options"]
+            if options:
+                break
+        if not options:                     # some lists open on the arrow-down key, not on a press
+            chrome.run(form_fill.choose_script("key", n, "", url))
+            for wait in (0.4, 1.0):
+                chrome.pause(wait)
+                options = form_fill.choose_answer(chrome.run(form_fill.choose_script("options", n, "", url)))["options"]
+                if options:
                     break
-                pressed += 1
-                chrome.pause(0.4)
-        return pressed
+        return options
 
-    def _job_docs(self, j) -> dict[str, list]:
-        """The files of a job that can go into a form: its CV and its letter, the PDF before the Word file."""
-        out: dict[str, list] = {"cv": [], "letter": []}
-        for what, base, name in (("cv", config.TAILORED_CV_DIR, j.get("tailored_cv_file", "")), ("letter", config.LETTERS_DIR, j.get("cover_letter_file", ""))):
-            name = str(name or "")
-            if not name or os.path.basename(name) != name:
-                continue
-            docx = (base / name).with_suffix(".docx")
-            tried = [docx.with_suffix(".pdf"), docx] + ([config.COVER_LETTERS_DIR / name] if what == "letter" else [])
-            out[what] = [path for path in dict.fromkeys(tried) if path.is_file()]
-        return out
 
-    def _job_of_page(self, jobs: list[dict], page: dict[str, Any]):
-        """The job a form belongs to, although the form is rarely at the address of its posting (see form_fill.match_job)."""
-        found = form_fill.match_job(jobs, page["url"], page["title"], page.get("from", ""))
-        if not found:
-            try:
-                words = form_fill.page_answer(chrome.run(form_fill.PAGE))["text"][:6000]
-            except (chrome.ChromeError, ValueError):
-                words = ""
-            found = form_fill.match_job(jobs, page["url"], page["title"], page.get("from", ""), words, self._app.recently_opened())
-        return store.find(jobs, found) if found else None
+class FormFiles:
+    """The file fields of one form, given the CV and the letter of its job."""
 
-    def _attach(self, wanted: list[dict[str, Any]], page: dict[str, Any], job) -> tuple[list[dict], list[dict], bool]:
+    def __init__(self, page: dict[str, Any], job) -> None:
+        self._page, self._job = page, job
+
+    def attach(self, wanted: list[dict[str, Any]]) -> tuple[list[dict], list[dict], bool]:
         """Give the form's file fields the CV and the letter of this job. Returns (attached, left, the tab moved).
         Only a field that holds no file is given one; the field for further documents gets the letter when the
         form has no place of its own for it. Nothing is sent: the page holds the file until you press its button."""
+        page, job = self._page, self._job
         filled, left = [], []
-        docs = self._job_docs(job) if job else {"cv": [], "letter": []}
+        docs = self.docs() if job else {"cv": [], "letter": []}
         letter_placed = any(form_fill.classify(f)[0] == "letter" for f in page["fields"]) or any(i["kind"] == "letter" for i in wanted)
         for item in wanted:
             kind, check = item["kind"], form_fill.FILE_CHECK
@@ -448,3 +459,16 @@ class FormFillRun:
             else:
                 left.append({"label": item["label"], "why": form_fill.FILE_REFUSED})
         return filled, left, False
+
+    def docs(self) -> dict[str, list]:
+        """The files of the job that can go into a form: its CV and its letter, the PDF before the Word file."""
+        j = self._job
+        out: dict[str, list] = {"cv": [], "letter": []}
+        for what, base, name in (("cv", config.TAILORED_CV_DIR, j.get("tailored_cv_file", "")), ("letter", config.LETTERS_DIR, j.get("cover_letter_file", ""))):
+            name = str(name or "")
+            if not name or os.path.basename(name) != name:
+                continue
+            docx = (base / name).with_suffix(".docx")
+            tried = [docx.with_suffix(".pdf"), docx] + ([config.COVER_LETTERS_DIR / name] if what == "letter" else [])
+            out[what] = [path for path in dict.fromkeys(tried) if path.is_file()]
+        return out

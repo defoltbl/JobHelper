@@ -28,7 +28,7 @@ from datetime import date, timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
-from . import details, email_client, form_answers, places
+from . import details, email_client, form_answers, mailhosts, places
 
 MAX_FIELDS = 200
 _MARK = re.compile(r"__([A-Z]+)__")          # where a script takes a value
@@ -1598,6 +1598,44 @@ def host_of(url: str) -> str:
         return (urlsplit(str(url or "")).hostname or "").lower()
     except ValueError:
         return ""
+
+
+RUSSIAN = "This app does not work with Russian services, so I do not {doing}."
+
+
+def plain_problems(fields: list[dict[str, Any]], email: str = "") -> list[dict[str, str]]:
+    """What a form read back by REVIEW shows wrong in plain code, without Claude: a required field left empty, a part
+    still in [square brackets], an email address that is not yours. [{field, problem}]"""
+    problems = []
+    for f in fields:
+        if f["required"] and not f["filled"]:
+            problems.append({"field": f["label"], "problem": "It is required and still empty."})
+        elif "[" in f["value"] and "]" in f["value"]:
+            problems.append({"field": f["label"], "problem": "It still has a part in [square brackets] to fill in."})
+        elif f["kind"] == "email" and email and f["value"].strip() and f["value"].strip().lower() != email.lower():
+            problems.append({"field": f["label"], "problem": f"It is not the address in My details ({email})."})
+    return problems
+
+
+class PageAddress:
+    """The address of a page the assistant is asked to work on: a web page (http or https, with a host), and never
+    a Russian service. One rule for filling in, reading, opening and noticing a page."""
+
+    def __init__(self, url: str) -> None:
+        self.url = str(url or "").strip()
+        self.host = host_of(self.url)
+
+    @property
+    def is_web(self) -> bool:
+        return self.url.lower().startswith(("http://", "https://")) and bool(self.host)
+
+    @property
+    def refused(self) -> bool:
+        """A Russian service: the assistant does nothing there."""
+        return mailhosts.never_used(self.host)
+
+    def refusal(self, doing: str) -> str:
+        return RUSSIAN.format(doing=doing)
 
 
 def _address(url: str) -> str:

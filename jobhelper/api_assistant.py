@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 
 from . import (answer_memory, assistant, assistant_brain, chrome, config, details, form_answers, form_fill, form_run,
-               mailhosts, salary, store)
+               salary, store)
 from .api_base import _guarded
 
 
@@ -122,12 +122,12 @@ class AssistantService:
     def assistant_open_form(self, url, job_id=""):
         """Open a form that sits in a frame in a tab of its own (the address comes from the page that was read), and fill
         it in there once it has loaded: one press for what used to be a press and a second request."""
-        url = str(url or "").strip()
-        host = form_fill.host_of(url)
-        if not url.lower().startswith(("http://", "https://")) or not host or len(url) > 2000:
+        address = form_fill.PageAddress(url)
+        url, host = address.url, address.host
+        if not address.is_web or len(url) > 2000:
             return {"ok": False, "msg": "That is not a web address I can open."}
-        if mailhosts.never_used(host):
-            return {"ok": False, "msg": "This app does not work with Russian services, so I do not open this site."}
+        if address.refused:
+            return {"ok": False, "msg": address.refusal("open this site")}
         self._app.browser()
         try:
             chrome.open_tab(url)
@@ -238,11 +238,12 @@ class AssistantService:
         self._app.browser()
         try:
             tab = chrome.active_tab()
-            host = form_fill.host_of(tab["url"])
-            if not tab["url"].lower().startswith(("http://", "https://")) or not host:
+            address = form_fill.PageAddress(tab["url"])
+            host = address.host
+            if not address.is_web:
                 return no("The tab in front is not a web page with a form. Bring the form to the front and ask me again.")
-            if mailhosts.never_used(host):
-                return no("This app does not work with Russian services, so I do not read forms on this site.")
+            if address.refused:
+                return no(address.refusal("read forms on this site"))
             page = form_fill.review_answer(chrome.run(form_fill.REVIEW))
         except (chrome.ChromeError, ValueError) as e:
             return no(str(e))
@@ -252,33 +253,24 @@ class AssistantService:
         jobs = store.load_jobs()
         job = store.find(jobs, job_id) if job_id else store.find(jobs, form_fill.match_job(
             [j for j in jobs if j.get("status") in store.OPEN_STATUSES], page["url"], page["title"]))
-        mine = details.load()
-        problems = []
-        for f in fields:
-            if f["required"] and not f["filled"]:
-                problems.append({"field": f["label"], "problem": "It is required and still empty."})
-            elif "[" in f["value"] and "]" in f["value"]:
-                problems.append({"field": f["label"], "problem": "It still has a part in [square brackets] to fill in."})
-            elif f["kind"] == "email" and mine.get("email") and f["value"].strip() and f["value"].strip().lower() != mine["email"].lower():
-                problems.append({"field": f["label"], "problem": f"It is not the address in My details ({mine['email']})."})
-        note = ""
-        cv_text = self._cv.text()
-        if cv_text.strip():
-            try:
-                seen = {p["field"] for p in problems}
-                problems += [p for p in assistant_brain.review(job, cv_text, self._app.facts(job), [f for f in fields if not f["private"]], self._app.pay(job))
-                             if p["field"] not in seen]
-            except Exception as e:  # noqa: BLE001 - the plain checks are still reported
-                note = f" Claude could not read it against your CV ({str(e) or type(e).__name__}), so only the plain checks were made."
-        else:
-            note = " Your master CV could not be read, so only the plain checks were made."
-        filled = sum(1 for f in fields if f["filled"])
-        if problems:
-            say = f"I read the form on {host}: {filled} of {len(fields)} fields are filled in, and {len(problems)} {'thing looks' if len(problems) == 1 else 'things look'} wrong."
-        else:
-            say = f"I read the form on {host}: {filled} of {len(fields)} fields are filled in, and I see nothing wrong."
+        problems = form_fill.plain_problems(fields, details.load().get("email", ""))
+        found, note = self._claude_review(job, fields, problems)
+        problems += found
         return {"ok": True, "action": "review", "host": host, "problems": problems[:12], "job_id": job["id"] if job else "",
-                "say": say + note + " Tick boxes, files and personal questions are yours to check. I did not send anything."}
+                "say": assistant.review_summary(host, fields, problems, note)}
+
+    def _claude_review(self, job, fields: list[dict], problems: list[dict]) -> tuple[list[dict], str]:
+        """What Claude sees wrong in the form against your CV, in one call, apart from the fields the plain checks
+        already named; and a note when it could not look ('' when it did). Personal and payment fields are not sent."""
+        cv_text = self._cv.text()
+        if not cv_text.strip():
+            return [], " Your master CV could not be read, so only the plain checks were made."
+        seen = {p["field"] for p in problems}
+        try:
+            found = assistant_brain.review(job, cv_text, self._app.facts(job), [f for f in fields if not f["private"]], self._app.pay(job))
+        except Exception as e:  # noqa: BLE001 - the plain checks are still reported
+            return [], f" Claude could not read it against your CV ({str(e) or type(e).__name__}), so only the plain checks were made."
+        return [p for p in found if p["field"] not in seen], ""
 
     def assistant_fill(self, job_id="", skip=None):
         """Fill in the form in the browser tab in front. Only empty fields are written; the only things

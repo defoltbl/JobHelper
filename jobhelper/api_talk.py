@@ -10,7 +10,7 @@ from datetime import date
 from typing import Any
 
 from . import (agent1_cv, agent3_letters, agent4_tracker, answer_memory, assistant, assistant_brain, assistant_notes, chrome,
-    config, db, details, form_answers, form_choices, form_fill, insights, mailhosts, planner, salary, store)
+    config, db, details, form_answers, form_choices, form_fill, insights, planner, salary, store)
 
 _PLAIN = re.compile(r"\b(?:but|skip|except|without|only|not|don't|do not|leave|and)\b")
 NO_JOB = "That job is not in the list any more."
@@ -209,11 +209,12 @@ class TalkService:
         self.browser()
         try:
             tab = chrome.active_tab()
-            host = form_fill.host_of(tab["url"])
-            if not tab["url"].lower().startswith(("http://", "https://")) or not host:
+            address = form_fill.PageAddress(tab["url"])
+            host = address.host
+            if not address.is_web:
                 return no("The tab in front is not a web page. Bring the job posting to the front and ask me again.")
-            if mailhosts.never_used(host):
-                return no("This app does not work with Russian services, so I do not read this site.")
+            if address.refused:
+                return no(address.refusal("read this site"))
             page = form_fill.page_answer(chrome.run(form_fill.PAGE))
         except (chrome.ChromeError, ValueError) as e:
             return no(str(e))
@@ -601,7 +602,8 @@ class TalkService:
             return {"ok": False, "problem": "" if quiet else str(e)}
         url = tab["url"]
         seen = self._noticed
-        if not url.lower().startswith(("http://", "https://")) or url in seen or mailhosts.never_used(form_fill.host_of(url)):
+        address = form_fill.PageAddress(url)
+        if not address.is_web or address.refused or url in seen:
             return {"ok": False}
         jobs = [j for j in store.load_jobs() if j.get("status") in store.OPEN_STATUSES]
         job = store.find(jobs, form_fill.match_job(jobs, url, tab["title"]))

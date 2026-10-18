@@ -132,3 +132,14 @@ def summary(host: str, filled: list[dict[str, Any]], left: list[dict[str, Any]],
         parts.append(f"The page also has {_count(boxes, 'tick box', 'tick boxes')}: those are yours.")
     parts.append("Read everything on the page, then send the form yourself. I never press Submit.")
     return " ".join(parts)
+
+
+def review_summary(host: str, fields: list[dict], problems: list[dict], note: str = "") -> str:
+    """What the assistant says after reading a form back; `note` says why Claude did not look, when it did not."""
+    filled = sum(1 for f in fields if f["filled"])
+    if problems:
+        found = f"{len(problems)} {'thing looks' if len(problems) == 1 else 'things look'} wrong"
+    else:
+        found = "I see nothing wrong"
+    return (f"I read the form on {host}: {filled} of {len(fields)} fields are filled in, and {found}."
+            + note + " Tick boxes, files and personal questions are yours to check. I did not send anything.")
