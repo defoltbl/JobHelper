@@ -85,3 +85,48 @@ def test_the_window_gets_its_boxes_from_my_details(isolate_data):
     page = ui_api.Api().about_you()
     assert [b["job"] for b in page["boxes"]] == ["Junior analyst, Northwind"] and page["max_notes"] == WorkNotes.MAX_TOTAL
     assert set(about_you.KEYS) <= set(page) and page["start"] == {"ok": True, "text": ""}
+
+
+def test_the_cv_level_has_one_reading():
+    from jobhelper import agent1_cv
+    assert agent1_cv.level_of({"seniority": "mid"}) == "mid"
+    assert agent1_cv.level_of({"seniority": ""}) == agent1_cv.level_of(None) == agent1_cv.level_of({}) == "junior"
+
+
+def test_about_you_estimates_the_roles_you_want_else_the_ones_you_search():
+    assert AboutYou({"wanted_roles": ["data analyst"], "queries": ["python developer"]}).roles() == ["data analyst"]
+    assert AboutYou({"wanted_roles": [], "queries": ["python developer"]}).roles() == ["python developer"]
+    assert AboutYou({}).roles() == []
+
+
+def test_a_role_with_ordinary_punctuation_is_english():
+    """The first English check refused a curly apostrophe: and every Options save checks every saved line."""
+    from jobhelper.api_options import OptionsService
+    check = OptionsService.__new__(OptionsService)
+    assert check.pay_problem("Customer’s support – level 1", 30000) == ""
+    assert "English" in check.pay_problem("поддержка", 30000)
+    assert "up to 20 kinds of role" in check.pay_problem("support", 30000, [f"role {n}" for n in range(20)])
+
+
+def test_the_window_and_the_back_end_name_the_same_scripts_as_not_latin():
+    import re
+    from pathlib import Path
+    from jobhelper import textfmt
+    main = (Path(__file__).resolve().parent.parent / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
+    pattern = re.search(r"function hasNonLatin\(s\) \{\s*return /\[(.+?)\]/", main).group(1)
+    window = [f"{ord(a):04x}-{ord(b):04x}" for a, b in re.findall(r"(.)-(.)", pattern)]
+    back = [f"{ord(a):04x}-{ord(b):04x}" for a, b in (r.split("-") for r in textfmt.NON_LATIN_RANGES)]
+    assert window == back
+
+
+def test_a_form_answer_backed_only_by_a_job_note_is_not_marked(isolate_data, monkeypatch):
+    """Through the real path: form_answers.generate gets the notes and must count them as backing (not only the CV)."""
+    from jobhelper import llm
+    api = ui_api.Api()
+    api.save_about_you({"about_jobs": [{"job": "Intern, Acme", "notes": "I ran our queues on Kafka."}]})
+    cv = "Alex Novak\nPython developer. Python, SQL."
+    answer = {"answers": [{"n": 1, "answer": "I have worked with Kafka for the message queues."}]}
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: answer)
+    with_notes = form_answers.generate({"title": "Developer", "company": "Orbis"}, cv, ["Which tools?"], config.experience_notes())
+    without = form_answers.generate({"title": "Developer", "company": "Orbis"}, cv, ["Which tools?"], "")
+    assert with_notes[0]["check"] == "" and "Kafka" in without[0]["check"]

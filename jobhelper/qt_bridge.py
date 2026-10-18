@@ -2,7 +2,7 @@
 
 The read methods delegate to the proven `ui_api.Api`; the long-running
 pipeline / email scan run on a worker thread and report progress through Qt
-**signals** (QML updates live — no polling needed).
+**signals** (QML updates live – no polling needed).
 
 Exposed to QML as the context property `bridge`.
 

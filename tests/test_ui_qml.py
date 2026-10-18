@@ -4594,3 +4594,24 @@ def test_the_right_column_fits_and_scrolls_only_when_the_window_is_short(ui):
     finally:
         ui.win.resize(ui.win.width(), height)
         _until_true(ui, lambda: ui.win.height() == height)
+
+
+def test_the_notes_count_includes_the_job_names_and_follows_each_box(ui):
+    """The count must be what the app reads (WorkNotes.size, with "At <job>: "), and must change as you type in a job's box."""
+    from jobhelper import details
+    from jobhelper.about_you import WorkNotes
+    start = ui.bridge.options()
+    details.save({**details.empty(), "first_name": "Alex", "last_name": "Novak", "email": "alex@example.com",
+                  "experience": [{"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True}]})
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    box = ui.drawn("boxNotes_0", root="aboutScroll")
+    box.setProperty("text", "I built the monthly SQL reports.")
+    expected = WorkNotes([{"job": "Junior analyst, Northwind", "notes": "I built the monthly SQL reports."}]).size()
+    assert _until_true(ui, lambda: ui.find("notesCount").property("text") == f"{expected} of 4000 characters, all notes together")
+    assert expected > len("I built the monthly SQL reports.")                     # the job's name counts too
+    ui.js("confirmClose = true; close()", ui.find("aboutDialog"))
+    _until_closed(ui, "aboutDialog")
+    ui.bridge.saveOptions(start)
+    details.save(details.empty())
+    assert ui.warnings == []

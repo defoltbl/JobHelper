@@ -97,7 +97,7 @@ def main() -> int:
         from jobhelper import ui_api
         options = {**ui_api.Api().options(), "where": args.where, "per_query": args.per_query,
                    "all_languages": args.all_languages, "max_age_days": args.max_age_days}
-        settings = agent2_search.SearchSettings.from_options(options, profile.get("seniority", "junior"))
+        settings = agent2_search.SearchSettings.from_options(options, agent1_cv.level_of(profile))
         filtered = []
         try:
             new_jobs = settings.run(queries, choice, dropped=filtered)
