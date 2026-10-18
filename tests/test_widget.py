@@ -314,3 +314,20 @@ def test_each_date_says_when_it_leaves_coming_up():
     assert planner.has_passed({"date": "2026-10-18", "time": "11:30"}, datetime(2026, 10, 18, 12, 30)) is True
     assert planner.has_passed({"date": "2026-10-18", "time": "11:30"}, datetime(2026, 10, 18, 12, 29)) is False
     assert planner.has_passed({"date": "2026-10-18", "time": ""}, datetime(2026, 10, 19, 1, 0)) is False   # the date check decides
+
+
+def test_both_swift_parts_are_compiled_by_one_swift_setup(monkeypatch, tmp_path):
+    """The widget, its reload library and the notifications each set up swiftc, the SDK and the target: now one SwiftCompiler."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import build_app
+    calls = []
+    monkeypatch.setattr(build_app.shutil, "which", lambda name: "/usr/bin/swiftc")
+    monkeypatch.setattr(build_app.subprocess, "run", lambda cmd, **k: calls.append(cmd) or type("Done", (), {"returncode": 0, "stdout": "x"})())
+    swift = build_app.SwiftCompiler()
+    assert build_app.WidgetBuild.MIN_MACOS == swift.MIN_MACOS
+    assert swift.library(Path("/s/Notify.swift"), tmp_path / "lib" / "n.dylib", ["UserNotifications"], "JobHelperNotify") == 0
+    compile_cmd = calls[-1]
+    assert compile_cmd[:2] == ["/usr/bin/swiftc", "-O"] and "-emit-library" in compile_cmd and f"x-apple-macos{swift.MIN_MACOS}" in compile_cmd
+    assert ["-framework", "UserNotifications"] == compile_cmd[compile_cmd.index("-framework"):compile_cmd.index("-framework") + 2]
