@@ -210,6 +210,11 @@ data/                your data; only the *.example.* files are in git
 - **Every email scan ends with `agent5_responses.after_scan` and says so with `scan_notice`**, in the window,
   `status.py sync` and the weekly run. How far back it reads is `config.scan_days()`; when a follow-up is due is
   `followup.saved_days()`.
+- **About you is its own window and `about_you.AboutYou` owns it**: the start-date preview (the form filler's
+  `start_day`), the right-to-work choices, the salary estimate (`salary.estimate_available`) and `WorkNotes`, the
+  notes per job. Everything that reads the notes calls `config.experience_notes()`, which asks `WorkNotes.text()`.
+- **Find-as-you-type matches the start of a word** (`win.matchesStart` in Main.qml): the country picker and the
+  suggestion fields use it. Do not filter a list with `indexOf` on its own.
 - **Two company names are one company only through `email_client.same_company`.** Never compare
   by "any shared word": "Accenture Czech Republic" and "PwC Czech Republic" share one. A legal form
   ("spol. s r.o.", "Corp", "LLC", "Limited") is never a word of the name: `email_client.LEGAL_WORDS`

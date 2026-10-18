@@ -236,8 +236,10 @@ def test_salary_settings_are_checked(isolate_data):
     assert api.save_options({**api.options(), "salary_target": 4000, "salary_currency": "gbp"})["ok"] is True
     assert (api.options()["salary_target"], api.options()["salary_currency"]) == (4000, "GBP")
     assert "CZK" in api.currencies() and "EUR" in api.currencies()
-    assert "software roles in Czechia only" in api.salary_hint("Prague", "") and "software roles in Czechia only" in api.salary_hint("", "")
-    assert "no estimate for this country" in api.salary_hint("Berlin", "") and "no estimate" in api.salary_hint("Prague", "Germany")
+    from jobhelper import about_you, salary
+    assert salary.estimate_available({"where": "Prague"}) and salary.estimate_available({}) and not salary.estimate_available({"where": "Berlin"})
+    assert not salary.estimate_available({"where": "Prague", "country": "Germany"})                  # the Country from Options wins
+    assert "no estimate for this country" in about_you.AboutYou({"where": "Berlin"}).salary_estimates(["python developer"])["note"]
 
 
 def test_the_salary_list_by_role_is_checked(isolate_data):

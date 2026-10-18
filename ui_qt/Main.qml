@@ -118,7 +118,7 @@ ApplicationWindow {
     // ── shared motion (same feel in the welcome screen, dialogs and buttons) ──
     readonly property int motion: 260
     readonly property color dimColor: Qt.rgba(0, 0, 0, dark ? 0.42 : 0.22)
-    readonly property bool dialogOpen: tableDialog.visible || optDialog.visible || schedDialog.visible || detailDialog.visible || limitDialog.visible || responseDialog.visible || letterDialog.visible || prepDialog.visible || helpDialog.visible || compareDialog.visible || formDialog.visible || prepEditDialog.visible || assistantDialog.visible
+    readonly property bool dialogOpen: tableDialog.visible || optDialog.visible || schedDialog.visible || detailDialog.visible || limitDialog.visible || responseDialog.visible || letterDialog.visible || prepDialog.visible || helpDialog.visible || compareDialog.visible || formDialog.visible || prepEditDialog.visible || assistantDialog.visible || aboutDialog.visible
     property bool stopping: false        // Stop was pressed; waiting for the current step to end
     property bool paused: false          // the run waits because Claude's limit is used up
     property bool canResume: false       // ...and the limit has reset, so Resume works
@@ -460,6 +460,7 @@ ApplicationWindow {
 
     // ───────────────────────── options (macOS-style) ─────────────────────────
     OptionsDialog { id: optDialog }
+    AboutYouDialog { id: aboutDialog }
     RemoteCountriesDialog { id: remoteDialog }      // opened from Options: countries for remote jobs
 
     // ───────────────────────── weekly schedule ─────────────────────────

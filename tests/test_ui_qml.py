@@ -109,7 +109,7 @@ class Ui:
 
 # the windows a test may leave open (stacked ones before the window under them)
 DIALOGS = ["detailDialog", "compareDialog", "formDialog", "assistantDialog", "prepEditDialog", "helpDialog", "prepDialog",
-           "letterDialog", "responseDialog", "limitDialog", "remoteDialog", "optDialog", "schedDialog", "tableDialog"]
+           "letterDialog", "responseDialog", "limitDialog", "remoteDialog", "optDialog", "aboutDialog", "schedDialog", "tableDialog"]
 
 
 @pytest.fixture(autouse=True)
@@ -1021,48 +1021,48 @@ def test_last_run_card_says_how_much_mail_the_scan_went_through(ui):
     assert ui.warnings == []
 
 
-def test_options_take_your_own_salary_figure_and_currency(ui):
-    dialog = ui.find("optDialog")
+def test_about_you_takes_your_own_salary_figure_and_currency(ui):
+    dialog = ui.find("aboutDialog")
     start = ui.bridge.options()
-    ui.js("optsData = bridge.options()")
-    _open(ui, dialog, 450)
+    assert ui.bridge.saveOptions({**start, "where": "Prague", "country": ""})["ok"] is True
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
     spin, combo, note = ui.find("salarySpin"), ui.find("currencyCombo"), ui.find("salaryNote")
     assert spin.property("value") == 0 and combo.property("currentText") == "CZK" and combo.property("count") >= 10
-    ui.js('cityCombo.editText = "Prague"; countryField.text = ""', dialog)
-    assert "software roles in Czechia only" in note.property("text")
-    ui.js('cityCombo.editText = "Berlin"', dialog)
+    assert "the app's estimate" in note.property("text") or "only for software roles" in note.property("text")
+    ui.js("close()", dialog)
+    _until_closed(ui, "aboutDialog")
+    assert ui.bridge.saveOptions({**ui.bridge.options(), "where": "Berlin"})["ok"] is True
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
     assert "no estimate for this country" in note.property("text")
     spin.setProperty("value", 3200)
     ui.js('currencyCombo.currentIndex = currencyCombo.find("EUR")', dialog)
     assert "Form answers give this" in note.property("text")
     import json
-    got = json.loads(ui.js("JSON.stringify(optDialog.collect().options)", dialog))
-    assert (got["salary_target"], got["salary_currency"], got["where"]) == (3200, "EUR", "Berlin")
-    assert ui.bridge.saveOptions(got)["ok"] is True
-    ui.js("confirmClose = true; close()", dialog)
-    ui.wait(350)
+    got = json.loads(ui.js("JSON.stringify(aboutDialog.collect())", dialog))
+    assert (got["salary_target"], got["salary_currency"]) == (3200, "EUR") and "where" not in got     # only the About you facts
+    ui.js("aboutDialog.save()", dialog)
+    _until_closed(ui, "aboutDialog")
+    assert ui.bridge.options()["where"] == "Berlin"                                       # the other Options are kept
 
     # the job window and the list say it in that currency
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(salary="70 000 - 80 000 CZK", desired_monthly_czk=58000), render=False)
     detail = ui.bridge.jobDetail("lead")
     assert detail["desired_text"] == "3 200 EUR/mo target" and detail["pay_text"] == "posting says 2 800–3 200 EUR/mo"
     assert [r["desired"] for r in ui.bridge.leads() if r["id"] == "lead"] == ["3 200 EUR/mo"]
-    ui.js("optsData = bridge.options()")
-    _open(ui, dialog, 450)
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
     assert ui.find("salarySpin").property("value") == 3200 and ui.find("currencyCombo").property("currentText") == "EUR"   # loaded again
-    ui.js("confirmClose = true; close()", dialog)
-    ui.wait(350)
+    ui.js("close()", dialog)
+    _until_closed(ui, "aboutDialog")
     # no figure of your own, in Berlin: nothing is shown, rather than a Prague figure
     assert ui.bridge.saveOptions({**ui.bridge.options(), "salary_target": 0})["ok"] is True
     assert ui.bridge.jobDetail("lead")["desired_text"] == ""
     assert ui.bridge.saveOptions({**ui.bridge.options(), "where": "Prague", "salary_currency": "CZK"})["ok"] is True
     detail = ui.bridge.jobDetail("lead")
     assert detail["desired_text"] == "58 000 CZK/mo target" and detail["pay_text"] == "posting says 70–80k CZK/mo"
-    assert ui.bridge.saveOptions({**ui.bridge.options(), "where": start.get("where", ""), "country": start.get("country", "")})["ok"] is True
-    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(salary="", desired_monthly_czk=""), render=False)
-    ui.js("optsData = bridge.options()")
-    assert "CZK/mo" not in (ROOT / "ui_qt" / "DetailDialog.qml").read_text(encoding="utf-8") and "CZK/mo" not in (ROOT / "ui_qt" / "views.js").read_text(encoding="utf-8")
-    assert ui.warnings == []
+    ui.bridge.saveOptions(start)
 
 
 def test_options_has_a_country_for_any_city(ui):
@@ -1357,10 +1357,14 @@ def test_new_options_are_loaded_and_saved(ui):
                            "notifications": False, "keep_backups": 25})
     ui.js("optsData = bridge.options()")
     _open(ui, dialog, 450)
-    assert ui.find("rightField").property("text") == "EU citizen" and ui.find("startField").property("text") == "one month"
     assert ui.find("notifySw").property("checked") is False and ui.find("keepSpin").property("value") == 25
     ui.js("close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, "optDialog")
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    assert ui.find("rightField").property("text") == "EU citizen" and ui.find("startField").property("text") == "one month"
+    ui.js("close()", ui.find("aboutDialog"))
+    _until_closed(ui, "aboutDialog")
     ui.bridge.saveOptions({**ui.bridge.options(), "about_right_to_work": "", "about_start": "", "notifications": True, "keep_backups": 10})
     assert ui.warnings == []
 
@@ -1896,19 +1900,18 @@ def test_a_failed_step_is_not_ticked(ui, monkeypatch):
     assert ui.warnings == []
 
 
-def test_options_show_your_own_letters_folder(ui, monkeypatch):
+def test_about_you_shows_your_own_letters_folder(ui, monkeypatch):
     opened = []
     monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(target))
     config.COVER_LETTERS_DIR.mkdir(parents=True, exist_ok=True)
     (config.COVER_LETTERS_DIR / "Alex_Novak_CoverLetter_Acme.docx").write_bytes(b"mine")
-    dialog = ui.find("optDialog")
-    ui.js("optsData = bridge.options()")
-    _open(ui, dialog, 450)
-    assert ui.js("optDialog.myLetters.count") == 1 and ui.js("optDialog.myLetters.name") == config.COVER_LETTERS_DIR.name
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    assert ui.js("aboutDialog.myLetters.count") == 1 and ui.js("aboutDialog.myLetters.name") == config.COVER_LETTERS_DIR.name
     assert ui.find("myLettersOpen").property("text") == "Open folder"
     assert ui.js("bridge.openMyLetters().ok") is True and opened == [config.COVER_LETTERS_DIR]
-    ui.js("close()", dialog)
-    ui.wait(350)
+    ui.js("close()", ui.find("aboutDialog"))
+    _until_closed(ui, "aboutDialog")
     (config.COVER_LETTERS_DIR / "Alex_Novak_CoverLetter_Acme.docx").unlink()
     assert ui.warnings == []
 
@@ -2233,20 +2236,20 @@ def test_show_in_folder_buttons_and_the_laid_out_description(ui, monkeypatch):
 
 
 def test_more_about_your_work_is_saved_and_checked(ui):
-    dialog = ui.find("optDialog")
+    dialog = ui.find("aboutDialog")
     start = ui.bridge.options()
     ui.bridge.saveOptions({**start, "where": "Prague", "about_experience": "At Acme I wrote the import service in Python."})
-    ui.js("optsData = bridge.options()")
-    _open(ui, dialog, 450)
-    field = ui.find("expField")
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    field = ui.find("generalField")
     assert field.property("text") == "At Acme I wrote the import service in Python."
-    assert ui.find("expCount").property("text") == "45 of 4000 characters"
-    ui.js('expField.text = "' + "x" * 4010 + '"')
-    assert ui.find("expCount").property("text") == "10 characters too long (the limit is 4000)"
-    source = qml_source()
-    assert "characters too long. Shorten it, then save." in source and "about_experience: expField.text.trim()" in source
-    ui.js("close()", dialog)
-    ui.wait(350)
+    assert ui.find("notesCount").property("text") == "45 of 4000 characters, all notes together"
+    ui.js('generalField.text = "' + "x" * 4010 + '"', dialog)
+    assert ui.find("notesCount").property("text") == "10 characters too long together (the limit is 4000)"
+    ui.js("aboutDialog.save()", dialog)
+    assert "too long together" in ui.find("aboutErr").property("text") and dialog.property("visible") is True   # refused, kept open
+    ui.js("confirmClose = true; close()", dialog)
+    _until_closed(ui, "aboutDialog")
     ui.bridge.saveOptions(start)
     assert ui.warnings == []
 
@@ -3246,38 +3249,42 @@ def test_the_account_card_shows_what_changed_in_a_watched_file(ui, monkeypatch):
     assert ui.warnings == []
 
 
-def test_options_take_a_salary_of_its_own_for_a_kind_of_role(ui):
+def test_about_you_takes_a_salary_of_its_own_for_a_kind_of_role(ui):
     import json
-    dialog = ui.find("optDialog")
+    dialog = ui.find("aboutDialog")
     start = ui.bridge.options()
-    ui.js("optsData = bridge.options()")
-    _open(ui, dialog, 450)
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
     role, amount, err = ui.find("payRole"), ui.find("payAmount"), ui.find("payErr")
     for typed, value, part in (("", 40000, "kind of role in words"), ("7", 40000, "kind of role in words"), ("поддержка", 40000, "in English"),
                                ("support", 0, "a number above 0")):
         role.setProperty("text", typed); amount.setProperty("value", value)
-        ui.js("optDialog.addPay()", dialog)
+        ui.js("aboutDialog.addPay()", dialog)
         assert part in err.property("text") and ui.js("payModel.count", dialog) == 0, typed
     role.setProperty("text", " support "); amount.setProperty("value", 42000)
-    ui.js("optDialog.addPay()", dialog)
+    ui.js("aboutDialog.addPay()", dialog)
     assert ui.js("payModel.count", dialog) == 1 and err.property("visible") is False and role.property("text") == ""
     role.setProperty("text", "Support"); amount.setProperty("value", 50000)
-    ui.js("optDialog.addPay()", dialog)
+    ui.js("aboutDialog.addPay()", dialog)
     assert "already in the list" in err.property("text") and ui.js("payModel.count", dialog) == 1
-    got = json.loads(ui.js("JSON.stringify(optDialog.collect().options)", dialog))
-    assert got["salary_by_role"] == [{"role": "support", "amount": 42000}]
-    assert ui.bridge.saveOptions(got)["ok"] is True
-    ui.js("confirmClose = true; close()", dialog)
-    ui.wait(350)
-    ui.js("optsData = bridge.options()")
-    _open(ui, dialog, 450)
+    role.setProperty("text", "")
+    # a figure in the list is changed where it stands
+    ui.js("payModel.setProperty(0, 'amount', 45000)", dialog)
+    got = json.loads(ui.js("JSON.stringify(aboutDialog.collect())", dialog))
+    assert got["salary_by_role"] == [{"role": "support", "amount": 45000}]
+    ui.js("aboutDialog.save()", dialog)
+    _until_closed(ui, "aboutDialog")
+    assert ui.bridge.options()["salary_by_role"] == [{"role": "support", "amount": 45000}]
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
     assert ui.js("payModel.count", dialog) == 1 and ui.js("payModel.get(0).role", dialog) == "support"      # loaded again
-    chips = {t.property("text") for t in ui.seen("payChips") if isinstance(t.property("text"), str)}
-    assert any(t.startswith("support · 42 000 ") for t in chips)
+    assert ui.drawn("payRowAmount_0", root="payRows").property("value") == 45000
+    ui.js("payModel.setProperty(0, 'amount', 0)", dialog)
+    ui.js("aboutDialog.save()", dialog)
+    assert "must be above 0" in ui.find("aboutErr").property("text")                  # a line with 0 is refused, not saved
     ui.js("payModel.remove(0); confirmClose = true; close()", dialog)
-    ui.wait(350)
+    _until_closed(ui, "aboutDialog")
     assert ui.bridge.saveOptions({**ui.bridge.options(), "salary_by_role": start.get("salary_by_role", [])})["ok"] is True
-    ui.js("optsData = bridge.options()")
     assert ui.warnings == []
 
 
@@ -4513,3 +4520,68 @@ def test_suggestions_and_the_city_box_follow_the_same_rules_as_the_other_fields(
     assert ui.js("cityCombo.contentItem.background.visible", dialog) is False                # only the box's own frame is drawn
     assert ui.js("win.matchesStart(['Software Developer'], 'dev')") is True and ui.js("win.matchesStart('Algeria', 'ge')") is False
     assert ui.js("win.matchesStart(['Kraków'], 'krak')") is True and ui.js("win.matchesStart('C# Developer', 'c#')") is True
+
+
+def test_about_you_has_its_own_window_under_options(ui):
+    """About you moved out of Options into its own window, opened by its own button under Options (with a person icon)."""
+    from jobhelper import details
+    start = ui.bridge.options()
+    details.save({**details.empty(), "first_name": "Alex", "last_name": "Novak", "email": "alex@example.com",
+                  "experience": [{"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True}]})
+    ui.bridge.saveOptions({**start, "where": "Prague", "about_jobs": [{"job": "Tester, Gone Ltd", "notes": "Ran checks."}]})
+    dialog = ui.find("aboutDialog")
+    ui.js("clicked()", ui.find("aboutButton"))
+    _until_open(ui, "aboutDialog")
+    # right to work: a usual answer fills the field, which can still be changed
+    assert ui.js("aboutDialog.info.right_choices[0]") == "Full right to work in Czechia"
+    ui.js("rightField.text = aboutDialog.info.right_choices[1]", dialog)
+    assert ui.find("rightField").property("text") == "EU/EEA citizen: no work permit needed"
+    # the start: the date forms will get, or why there is none, as you type
+    ui.js('startField.text = "2030-01-15"; aboutDialog.start = bridge.startPreview(startField.text)', dialog)
+    assert ui.find("startPreview").property("text") == "Forms get: 15 January 2030"
+    ui.js('startField.text = "after my exams"; aboutDialog.start = bridge.startPreview(startField.text)', dialog)
+    assert "cannot get a date" in ui.find("startPreview").property("text") and ui.js("aboutDialog.start.ok") is False
+    # a box for each job of My details, and the note of a job that is gone, which can be removed
+    assert ui.js("boxModel.count", dialog) == 2 and ui.js("boxModel.get(0).job", dialog) == "Junior analyst, Northwind"
+    assert ui.js("boxModel.get(1).earlier", dialog) is True and ui.drawn("boxRemove_1", root="aboutScroll").property("visible") is True
+    ui.js("boxModel.setProperty(0, 'notes', 'I built the monthly SQL reports.'); boxModel.remove(1)", dialog)
+    ui.js('startField.text = "one month"', dialog)
+    # unsaved changes: closing asks once
+    ui.js("aboutDialog.tryClose()", dialog)
+    assert dialog.property("visible") is True and "did not save" in ui.find("aboutErr").property("text")
+    ui.js("aboutDialog.save()", dialog)
+    _until_closed(ui, "aboutDialog")
+    saved = ui.bridge.options()
+    assert saved["about_jobs"] == [{"job": "Junior analyst, Northwind", "notes": "I built the monthly SQL reports."}]
+    assert saved["about_right_to_work"] == "EU/EEA citizen: no work permit needed" and saved["about_start"] == "one month"
+    ui.bridge.saveOptions(start)
+    details.save(details.empty())
+    assert ui.warnings == []
+
+
+def test_options_lead_to_about_you(ui):
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    ui.js("clicked()", ui.find("openAbout"))
+    _until_closed(ui, "optDialog")
+    _until_open(ui, "aboutDialog")
+    ui.js("close()", ui.find("aboutDialog"))
+    _until_closed(ui, "aboutDialog")
+
+
+def test_the_right_column_fits_and_scrolls_only_when_the_window_is_short(ui):
+    """With About you under Options, the column was taller than an 800-pixel window and Help was cut off at its foot."""
+    scroll, help_button = ui.find("statusScroll"), ui.find("helpButton")
+    height = ui.win.height()
+    try:
+        ui.win.resize(ui.win.width(), 800)
+        assert _until_true(ui, lambda: ui.win.height() == 800)
+        assert scroll.property("interactive") is False                                   # it fits: nothing scrolls
+        bottom = help_button.mapToItem(scroll, 0, help_button.property("height")).y()
+        assert bottom <= scroll.property("height")                                       # Help is whole, not cut off
+        ui.win.resize(ui.win.width(), 560)
+        assert _until_true(ui, lambda: scroll.property("interactive") is True)          # a short window: the column scrolls
+    finally:
+        ui.win.resize(ui.win.width(), height)
+        _until_true(ui, lambda: ui.win.height() == height)

@@ -30,7 +30,7 @@ ABOUT = """JobHelper is a desktop app for a job search. It runs on the person's 
 - New Jobs lists leads; Mark applied moves one to Applications. Statuses of an application: waiting, interview, offer, rejected, on hold.
 - Scan email reads replies read-only and files them to applications. Nothing is ever sent, deleted or marked.
 - Filtered out (Last run card) lists every posting a search dropped, with the reason.
-- Options sets the city, roles, limit, skip words, About you (right to work, start date, more about your work) and the salary you ask for.
+- Options sets the city, roles, limit and skip words. About you (its own window under Options) holds the salary you ask for, the right to work, the start date and more about your work, per job.
 - Form answers drafts answers to a form's questions from the CV. The assistant fills in the form that is open in Google Chrome and never sends it.
 - Nothing is claimed in a CV, letter or answer that the master CV or the person's own notes do not show.
 - When Claude's limit is used up, a run pauses and can be resumed after the reset time shown in the Usage card."""

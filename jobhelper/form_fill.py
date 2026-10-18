@@ -841,9 +841,9 @@ _NOT_A_ROW_DATE = re.compile(r"earliest|availab|can you|notice|birth|expected|pr
 _AVAILABLE = re.compile(r"earliest (?:possible )?(?:start|date)|availab|when (?:can|could|would) you (?:start|join|begin)|(?:possible|desired|preferred|expected|proposed) start"
                         r"|date of (?:joining|entry)|joining date|can you start|start working|nástup")
 _LONE_START = re.compile(r"\bstart(?:ing)? date\b|\bdate of start\b")
-START_UNKNOWN = "Tell me when you can start under Options, About you, and ask me again. Or pick the date yourself."
-START_NO_DATE = "I cannot turn “{text}” (Options, About you) into a date. Pick the date yourself."
-START_CHECK = "Worked out from “{text}” in Options: check the date."
+START_UNKNOWN = "Tell me when you can start in About you (under Options), and ask me again. Or pick the date yourself."
+START_NO_DATE = "I cannot turn “{text}” (About you) into a date. Pick the date yourself."
+START_CHECK = "Worked out from “{text}” in About you: check the date."
 _MONTHS = {name.lower(): n for n, name in enumerate(calendar.month_name) if name}
 _MONTHS.update({name.lower(): n for n, name in enumerate(calendar.month_abbr) if name})
 _COUNT = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
