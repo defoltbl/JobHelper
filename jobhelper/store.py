@@ -37,6 +37,7 @@ def application_rank(job: dict[str, Any]) -> int:
     return APPLICATION_ORDER.index(status) if status in APPLICATION_ORDER else len(APPLICATION_ORDER)
 
 APPLICATION_STATUSES = {"waiting", "interview", "offer", "rejected", "on_hold"}
+OPEN_STATUSES = LEAD_STATUSES | {"waiting", "interview", "on_hold"}      # a job you may still fill in a form for
 
 
 def applied_on_import(job: dict[str, Any]) -> bool:

@@ -449,7 +449,7 @@ Table 6.3 groups the other modules by what they are for.
 | Rules without a model call | `filters`, `prefilter`, `language`, `places`, `keywords`, `salary`, `merge`, `followup`, `planner` | Level, years, language, location, profession, pay, duplicates, reminders. `places.RemoteReach` decides which remote jobs fit, for the search and for Options. `filters.Placement`, made once per search, says whether a posting is in the right place and why not. Its `home` is the country of the search |
 | Writing | `word_document`, `about_you`, `claims`, `cv_tailor`, `cover_letter`, `letters`, `form_answers`, `interview_prep`, `prep_doc`, `pdf` | The adapted CV, the letter, form answers, the interview documents (one for HR, one technical). `WordDocument` opens a .docx and saves it with only the text changed; every other part stays byte for byte. `claims.ClaimCheck` checks that a text in your voice claims nothing more than the CV. The letter, the form answers and the interview preparation all use it. `about_you.AboutYou` holds the facts of the About you window; `WorkNotes` makes the notes for each job into the one text that the app reads |
 | Mail | `email_client`, `mailhosts` | Reading mailboxes read-only; which server a mailbox is read from. A fetch gives `Fetched`: the messages, and a warning for each folder or mailbox it could not read |
-| The assistant | `assistant`, `assistant_brain`, `assistant_notes`, `details`, `chrome`, `form_fill`, `form_choices`, `answer_memory` | The fixed requests and the facts about the app. What Claude makes of a free request, checked before anything happens. The details of the person. The link to the browser. Reading a form, deciding what each field is, and filling it in. Choosing from lists and menus. The wording of the person, remembered |
+| The assistant | `assistant`, `assistant_brain`, `assistant_notes`, `details`, `chrome`, `form_fill`, `form_run`, `form_choices`, `answer_memory` | The fixed requests and the facts about the app. What Claude makes of a free request, checked before anything happens. The details of the person. The link to the browser. Reading a form, deciding what each field is, and filling it in. Choosing from lists and menus. The wording of the person, remembered |
 | Claude | `llm`, `usage` | The one place that asks Claude; counting usage and knowing the limits. `usage.UsageLog` keeps the saved sums and the sums of this run; the window asks it for `totals` and `by_tag` |
 | Storage and safety | `store`, `db`, `vault`, `integrity`, `housekeeping`, `health`, `trouble` | The job list, the reply database, encryption, signed rule files, backups, the start-up check, the log of errors |
 | The window's back end | `ui_api`, `api_core`, `api_system`, `api_options`, `api_jobs`, `api_documents`, `api_replies`, `api_insights`, `api_interview`, `api_letters`, `api_assistant`, `api_talk`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` is a facade: it hands each call to one of ten services. `Bridge` gives `Api` to QML and runs long work in threads |
@@ -556,7 +556,9 @@ No message of the check tells the person to type a command. A test reads the str
 ### How the assistant fills in a form
 
 The assistant works on the tab in front in the browser of the person (Figure 6.5). It works in
-small steps that are easy to check, all in `form_fill`:
+small steps that are easy to check. `form_fill` holds the scripts and the rules. One fill is one
+`form_run.FormFillRun`, with one method for each step. A step that cannot go on raises `Stop`
+with the message for the person, and the steps after it do not run:
 
 ![How the assistant fills in a form](img/code_fill.png)
 
