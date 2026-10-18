@@ -32,9 +32,8 @@ Dialog {
     property string query: ""
     property string area: ""
     property string err: ""
-    readonly property var shown: all.filter(function (c) {
-        var q = query.trim().toLowerCase();
-        return c.key !== home && (area === "" || c.area === area) && (q === "" || c.name.toLowerCase().indexOf(q) >= 0);
+    readonly property var shown: all.filter(function (c) {          // by the start of a word of its name, or of another name it has
+        return c.key !== home && (area === "" || c.area === area) && win.matchesStart([c.name].concat(c.names || []), query);
     })
 
     function show(keys, homeKey) {

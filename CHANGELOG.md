@@ -5,6 +5,11 @@ Format: a `## ` heading, then one `- ` line per change; `**words**` are shown in
 in a version go under `## Unreleased`; a released version's heading is `## 1.1.0 – 18 October 2026`
 (its tag is `v1.1.0` on GitHub). Version 1.0.0 is everything up to 17 October 2026, listed by date.
 
+## Unreleased
+
+- In the **country picker for remote jobs**, what you type must start the country's name or one of its words: "Ge" now finds Georgia and Germany, not also Algeria, Argentina, Niger and Nigeria. Other names work too: "usa", "england". The suggestions under **Search roles** follow the same rule.
+- The **City** box in Options had a blue frame inside its orange one while you typed. It now has one frame, like every other field.
+
 ## 1.1.0 – 18 October 2026
 
 - When the assistant fills in a form whose **phone code menu** is drawn by the page itself, a number such as +1 now gets the country in My details (Canada, not the United States). Lists of the normal kind already worked this way.

@@ -328,9 +328,11 @@ class RemoteReach:
                 "most": cls.MAX_COUNTRIES}
 
 
-def all_countries() -> list[dict[str, str]]:
-    """Every country the app knows, by name, for the window's country picker: [{key, name, area}]."""
-    return sorted(({"key": c, "name": shown(c), "area": AREA_OF.get(c, "")} for c in COUNTRIES), key=lambda c: c["name"])
+def all_countries() -> list[dict[str, Any]]:
+    """Every country the app knows, by name, for the window's country picker: [{key, name, area, names}]. `names` are
+    the other ways the app recognises it ("usa", "england", "czech"), so typing one of them finds the country too."""
+    return sorted(({"key": c, "name": shown(c), "area": AREA_OF.get(c, ""),
+                    "names": [n for n in dict.fromkeys(COUNTRIES[c][0]) if n != c]} for c in COUNTRIES), key=lambda c: c["name"])
 
 
 def fits(location: str, where: str, country: str = "", reach: RemoteReach | None = None, remote: bool = False) -> bool:

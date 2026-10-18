@@ -212,7 +212,8 @@ def test_the_remote_choice_is_saved_and_checked(isolate_data):
 
 def test_the_window_gets_every_country_by_name():
     every = ui_api.Api().countries()
-    assert {"key": "south korea", "name": "South Korea", "area": "asia"} in every
+    korea = next(c for c in every if c["key"] == "south korea")
+    assert (korea["name"], korea["area"]) == ("South Korea", "asia") and isinstance(korea["names"], list)
     assert ui_api.Api().country_of("Sarajevo") == "Bosnia and Herzegovina"
 
 
@@ -234,3 +235,10 @@ def test_a_source_knows_whether_it_lists_remote_jobs_only():
     remote_only = {s.name for s in job_sources.all_sources() if s.remote_only}
     assert remote_only == {"remoteok", "weworkremotely"}
     assert job_sources.is_remote_board("remoteok") and not job_sources.is_remote_board("linkedin")
+
+
+def test_the_picker_gets_every_other_name_of_a_country():
+    by_key = {c["key"]: c for c in places.all_countries()}
+    assert "usa" in by_key["united states"]["names"] and "england" in by_key["united kingdom"]["names"]
+    assert by_key["germany"]["key"] not in by_key["germany"]["names"]                # the key itself is not repeated
+    assert all(isinstance(c["names"], list) for c in by_key.values())
