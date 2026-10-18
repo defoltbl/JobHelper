@@ -266,13 +266,17 @@ def _seed(tmp_path):
     assert sqlite3 is not None
 
 
-def test_restore_test_proves_a_backup_matches_the_live_data(isolate_data):
+def test_restore_test_proves_a_backup_matches_the_live_data(isolate_data, monkeypatch):
     import tempfile
     from pathlib import Path
 
     from jobhelper import config, vault
     _seed(isolate_data)
+    scratch = isolate_data / "tmp"                 # its own temp folder: with the tests on many cores, another test's
+    scratch.mkdir()                                # restore copy in the shared one looked like a copy left behind
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
     before = set(Path(tempfile.gettempdir()).glob("jobhelper-restore-*"))
+    assert before == set()
     report = vault.restore_test()
     assert report["ok"] is True and report["backup"].startswith("restore_test_")
     names = {f["name"]: f for f in report["files"]}
