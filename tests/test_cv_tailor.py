@@ -6,6 +6,7 @@ import docx
 import pytest
 
 from jobhelper import word_document, config, cv_tailor, llm, store
+from jobhelper.word_document import text_of
 
 ROOT = Path(__file__).resolve().parent.parent
 # A frozen copy of the master CV the approved examples were made from, so these
@@ -142,14 +143,14 @@ def _body(path):
 
 def test_another_cv_layout_keeps_its_experience_section(tmp_path):
     master = _cv_docx(tmp_path / "AlexNovak_CV.docx", OTHER_LAYOUT)
-    sec = cv_tailor._sections(_body(master))
-    assert cv_tailor._text(sec["profile"]).startswith("Accountant with three years")
-    assert [cv_tailor._text(p) for p in sec["rows"]] == OTHER_LAYOUT[5:8]                 # the three skill rows, and not one line more
+    sec = cv_tailor.sections(_body(master))
+    assert text_of(sec["profile"]).startswith("Accountant with three years")
+    assert [text_of(p) for p in sec["rows"]] == OTHER_LAYOUT[5:8]                 # the three skill rows, and not one line more
     assert cv_tailor.adaptable(master) is True and cv_tailor.master_rows(master) == OTHER_LAYOUT[5:8]
     out = tmp_path / "adapted.docx"
     cv_tailor.build_docx(master, out, "Accountant who closes the books on time.",
                          [{"label": "Accounting", "items": "IFRS, VAT"}, {"label": "Tools", "items": "SAP, Excel"}])
-    text = [cv_tailor._text(p) for p in cv_tailor._sections(_body(out))["paras"]]
+    text = [text_of(p) for p in cv_tailor.sections(_body(out))["paras"]]
     for line in OTHER_LAYOUT[8:]:                                                           # everything after the skills is still there
         assert line in text, line
     assert "Accountant who closes the books on time." in text and "Accounting: IFRS, VAT" in text and OTHER_LAYOUT[7] not in text
@@ -178,10 +179,10 @@ def test_a_cv_without_a_profile_or_with_endless_rows_is_left_alone(tmp_path):
     (tmp_path / "not_word.docx").write_bytes(b"plain text")
     assert cv_tailor.adaptable(tmp_path / "not_word.docx") is False
     endless = _cv_docx(tmp_path / "b.docx", ["Alex Novak", "PROFILE", "A developer.", "KEY SKILLS"] + [f"Row {n}: thing" for n in range(20)])
-    sec = cv_tailor._sections(_body(endless))
+    sec = cv_tailor.sections(_body(endless))
     assert sec["rows"] == [] and sec["rows_unclear"] is True and sec["profile"] is not None     # the profile is still adapted
     heading_after = _cv_docx(tmp_path / "c.docx", ["Alex Novak", "PROFILE", "KEY SKILLS", "Tools: Excel"])
-    assert cv_tailor._sections(_body(heading_after))["profile"] is None                         # an empty profile section is not a profile
+    assert cv_tailor.sections(_body(heading_after))["profile"] is None                         # an empty profile section is not a profile
 
 
 def test_a_word_cv_without_a_profile_section_still_gets_a_profile_note(isolate_data, tmp_path, monkeypatch):

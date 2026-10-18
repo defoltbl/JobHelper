@@ -161,3 +161,13 @@ def test_a_lead_that_already_has_a_letter_keeps_it(tmp_path):
                           cover_letter_file="Alex_Novak_CoverLetter_Acme_Data_Engineer.docx")]
     letters.import_letters(jobs, tmp_path)
     assert jobs[0]["cover_letter_file"] == "Alex_Novak_CoverLetter_Acme_Data_Engineer.docx" and len(jobs) == 2
+
+
+def test_scan_keeps_the_word_letter_even_when_the_pdf_sorts_first(tmp_path):
+    """"CoverLetter_Acme_2.pdf" sorts before "CoverLetter_Acme_M.docx" ("2" < "M"): both are Acme, and the
+    Word file must win, as for "CoverLetter_Acme.docx" and "CoverLetter_Acme.pdf"."""
+    from jobhelper import letters
+    for name in ("CoverLetter_Acme_2.pdf", "CoverLetter_Acme_M.docx", "CoverLetter_Beta.pdf", "CoverLetter_Gamma.docx", "CoverLetter_Gamma.pdf"):
+        (tmp_path / name).write_bytes(b"x")
+    found = {r["company"]: r["file_name"] for r in letters.scan(tmp_path)}
+    assert found == {"Acme": "CoverLetter_Acme_M.docx", "Beta": "CoverLetter_Beta.pdf", "Gamma": "CoverLetter_Gamma.docx"}

@@ -320,14 +320,26 @@ def text_scale() -> float:
     return size / 100 if not isinstance(size, bool) and size in TEXT_SIZES else 1.0
 
 
+def ui_settings_file() -> Path:
+    """Where the Options are kept (read at call time: the data home can be moved, and tests move it)."""
+    return DATA_DIR / "ui_settings.json"
+
+
 def ui_settings() -> dict:
     """Options saved from the desktop app (data/ui_settings.json), or {}."""
     import json
     try:
-        data = json.loads(vault.read_text(DATA_DIR / "ui_settings.json"))
+        data = json.loads(vault.read_text(ui_settings_file()))
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError, vault.VaultError):
         return {}
+
+
+def save_ui_settings(data: dict) -> None:
+    """Write the whole Options file (encrypted like the rest of the data). The one writer: Options and the chosen master CV."""
+    import json
+    ensure_dirs()
+    vault.write_text(ui_settings_file(), json.dumps(data, ensure_ascii=False, indent=2))
 
 
 def candidate_facts(cv_text: str = "") -> dict[str, str]:

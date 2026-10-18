@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-AUDIENCES = ("hr", "technical")
+from .interview_prep import AUDIENCES, audience_of
 TITLES = {"hr": "HR", "technical": "Technical"}
 COMPANY_NOTE = ("This is only what the posting and the emails say. Before the call, read the company website: "
                 "what they make, how big they are, and recent news.")
@@ -41,11 +41,6 @@ def file_name(prefix: str, company: str, audience: str = "hr") -> str:
     import re
     short = re.sub(r"[^A-Za-z0-9]+", "", (company or "Company").split(",")[0].title().replace(" ", ""))[:40] or "Company"
     return f"{prefix or 'Candidate'}_{short}_Prep_{TITLES.get(audience, 'HR')}.docx"
-
-
-def _audience(q: dict[str, Any]) -> str:
-    """Older saved preparations have no audience: questions about the work itself go to the specialist."""
-    return q.get("audience") or ("technical" if q.get("kind") in ("technical", "your projects") else "hr")
 
 
 def build(job: dict[str, Any], prep: dict[str, Any], out_path: Path, contact: str = "", audience: str = "hr") -> Path:
@@ -195,7 +190,7 @@ def build(job: dict[str, Any], prep: dict[str, Any], out_path: Path, contact: st
                 p.paragraph_format.space_after = Pt(3)
 
     # 4. what they may ask
-    asked = [q for q in prep.get("questions") or [] if _audience(q) == audience]
+    asked = [q for q in prep.get("questions") or [] if audience_of(q) == audience]
     if asked:
         heading("4. Questions " + ("HR may ask you" if hr else "a specialist may ask you"))
         para(NOTES[audience], size=9.5, italic=True, after=3)

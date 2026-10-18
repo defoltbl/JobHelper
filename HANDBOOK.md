@@ -201,7 +201,7 @@ data/                your data; only the *.example.* files are in git
   by "any shared word": "Accenture Czech Republic" and "PwC Czech Republic" share one.
 - **Every call to Claude goes through `llm.ask`,** which refuses while `ANTHROPIC_API_KEY` is set.
   Do not add a second way to ask.
-- **A CV's sections are found by their headings, whatever they are called** (`cv_tailor._sections`):
+- **A CV's sections are found by their headings, whatever they are called** (`cv_tailor.sections`):
   never by a fixed list of names, or another person's CV loses a section.
 - **Caches that outlive one search** are wrong in an app that stays open for days: each
   `job_sources.JobSource` forgets what it read in `reset()`, which `agent2_search.search` calls first.
@@ -286,6 +286,10 @@ data/                your data; only the *.example.* files are in git
   that shows or tests the limit goes through it.
 - **The window is taken down before the bridge** when the app closes (`app_qt.shut_down`), or every binding
   that calls the bridge prints an error on the way out.
+- **One claim check for every text in the person's voice** (`claims.ClaimCheck`): the letter, the form answers and
+  the interview preparation ask it; only the interview allows the honest bridge ("I have not used X"). In the
+  preparation, `Preparation.voice()` is the one list that is both sent back to the model and marked for the user:
+  a part added to the sheet goes into that list, or it is checked in one place only.
 - **A sentence of a letter is a claim only where the candidate is the one doing it** (`cover_letter.borrowed_claims`):
   "the role caught my attention because it covers X" describes the role. Measure a change to these checks on the
   letters and CVs already written before it ships.

@@ -296,7 +296,7 @@ def test_a_pitch_that_claims_too_much_is_sent_back_and_then_flagged(monkeypatch)
     bad = dict(FULL, pitch="I have three years of production experience with Kubernetes.")
     monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(bad))
     prep = interview_prep.generate({"title": "ML Engineer", "company": "BRIGHTLINE"}, CV)
-    assert len(prompts) == 2 and "the opening pitch" in prompts[1] and "Kubernetes" in prompts[1]
+    assert len(prompts) == 2 and "The opening pitch" in prompts[1] and "Kubernetes" in prompts[1]
     assert prep["checks"] == ["The opening pitch mentions Kubernetes as experience, which is not in your CV."]
 
 
@@ -330,8 +330,8 @@ def test_two_documents_one_for_hr_one_for_a_specialist_in_the_order_asked(tmp_pa
     assert [hr.index(h) for h in order_hr] == sorted(hr.index(h) for h in order_hr)
     assert [tech.index(h) for h in order_tech] == sorted(tech.index(h) for h in order_tech)
     # each file has its own questions, and its own way of telling the projects
-    hr_qs = {q["question"] for q in prep["questions"] if prep_doc._audience(q) == "hr"}
-    tech_qs = {q["question"] for q in prep["questions"] if prep_doc._audience(q) == "technical"}
+    hr_qs = {q["question"] for q in prep["questions"] if prep_doc.audience_of(q) == "hr"}
+    tech_qs = {q["question"] for q in prep["questions"] if prep_doc.audience_of(q) == "technical"}
     assert hr_qs <= set(hr) and not (tech_qs - hr_qs) & set(hr)
     assert tech_qs <= set(tech) and not (hr_qs - tech_qs) & set(tech)
     assert "“I built a program that learns to play a game.”" in hr and "Tools: Python, PyTorch" not in hr
@@ -426,7 +426,7 @@ def test_what_you_wrote_about_your_work_counts_like_the_cv(monkeypatch):
     prompts = []
     monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(FULL, experience=[story]))
     without = interview_prep.generate({"title": "T", "company": "C"}, CV)
-    assert len(prompts) == 2 and "the story about Software Developer Intern" in prompts[1]      # not in the CV: sent back, then flagged
+    assert len(prompts) == 2 and "The story about Software Developer Intern" in prompts[1]      # not in the CV: sent back, then flagged
     assert without["checks"] == ["The story about Software Developer Intern, Acme, Feb-Aug 2026 mentions Kubernetes as experience, which is not in your CV."]
     prompts.clear()
     notes = "At Acme I deployed our services to Kubernetes and wrote the deployment scripts."
@@ -517,7 +517,7 @@ def test_a_plain_story_is_held_to_the_cv_too(monkeypatch):
     prompts = []
     monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or dict(bad))
     interview_prep.generate({"title": "T", "company": "C"}, CV)
-    assert len(prompts) == 2 and "the plain story about Software Developer Intern" in prompts[1]
+    assert len(prompts) == 2 and "The plain story about Software Developer Intern" in prompts[1]
 
 
 # ── what you can ask them, per listener ─────────────────────────────────────
@@ -681,7 +681,10 @@ def test_one_sentence_where_a_list_was_asked_is_one_item_not_one_per_letter():
     assert prep["experience"][0]["gained"] == ["Care with numbers."] and prep["experience"][0]["typical"] == [] and prep["experience"][0]["if_true"] == ["Did you test it?"]
     assert interview_prep._clean({"questions": "Why us?", "experience": "long ago"})["questions"] == []
     old = {"questions": [{"audience": "panel", "kind": "about you", "question": "Q?", "answer": "A."}]}
-    assert "PANEL" in interview_prep.as_text({"title": "Dev", "company": "Acme"}, old), "a saved preparation with an audience nobody knows still prints"
+    text = interview_prep.as_text({"title": "Dev", "company": "Acme"}, old)
+    assert "IF YOU SPEAK WITH HR" in text and "Q?" in text, "a saved preparation with an audience nobody knows still prints, under HR"
+    from jobhelper import prep_doc
+    assert prep_doc.audience_of(old["questions"][0]) == "hr", "and the HR document has it (before, it was in neither document)"
 
 
 def test_a_cv_or_template_paragraph_that_cannot_be_rewritten_is_said_in_words(tmp_path):

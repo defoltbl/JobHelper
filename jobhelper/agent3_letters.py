@@ -142,7 +142,7 @@ def _clean_role(title: str) -> str:
 def _save_letter(job: dict[str, Any], letter: str, cv_text: str = "") -> str:
     """Save the cover letter as a properly formatted business letter (.docx) plus
     a plain .md. Header = name / role / contact; body from the model; signature."""
-    letter = _sanitize(_strip_fence(letter))
+    letter = cv_tailor.en_dashes(_strip_fence(letter))
     config.ensure_dirs()
     base = f"{store.slugify(job['company'])}-{store.slugify(job['title'])}-{job['id']}"
     name, email, phone = _extract_contact(cv_text)
@@ -194,16 +194,10 @@ def _strip_fence(text: str) -> str:
     return m.group(1).strip() if m else text.strip()
 
 
-def _sanitize(text: str) -> str:
-    """Remove em dashes (the user's master CV never uses them) and tidy spacing."""
-    text = text.replace(" — ", ", ").replace("—", "-")   # em dash → comma / hyphen
-    return text
-
-
 def _save_tailored_cv(job: dict[str, Any], new_profile: str, template_path=None) -> str:
     """Fallback for a non-.docx master: save a Markdown note with the tailored
     profile (a .docx master is adapted by cv_tailor instead)."""
-    new_profile = _sanitize(_strip_fence(new_profile))
+    new_profile = cv_tailor.en_dashes(_strip_fence(new_profile))
     config.ensure_dirs()
     base = f"CV-{store.slugify(job['company'])}-{store.slugify(job['title'])}-{job['id']}"
     md_path = config.TAILORED_CV_DIR / f"{base}.md"

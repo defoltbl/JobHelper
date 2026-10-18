@@ -90,8 +90,7 @@ def remember_cv(name: str) -> None:
     """Note which file in data/cv/ is the master CV (kept with the Options)."""
     data = config.ui_settings()
     data["master_cv"] = Path(str(name)).name
-    config.ensure_dirs()
-    vault.write_text(config.DATA_DIR / "ui_settings.json", json.dumps(data, ensure_ascii=False, indent=2))
+    config.save_ui_settings(data)
 
 
 def analyze(cv_path: Path | None = None) -> dict[str, Any]:
