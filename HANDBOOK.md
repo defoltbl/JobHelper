@@ -212,7 +212,9 @@ data/                your data; only the *.example.* files are in git
   `followup.saved_days()`.
 - **About you is its own window and `about_you.AboutYou` owns it**: the start-date preview (the form filler's
   `start_day`), the right-to-work choices, the salary estimate (`salary.estimate_available`) and `WorkNotes`, the
-  notes per job. Everything that reads the notes calls `config.experience_notes()`, which asks `WorkNotes.text()`.
+  notes per job. Everything that reads the notes calls `config.experience_notes()`, which asks `WorkNotes.text()`;
+  `WorkNotes.size()` measures that same text, so nothing is ever cut. One line of "A different figure for" is checked
+  only by `OptionsService.pay_problem`, on Add and on save; the CV's level is read only by `agent1_cv.seniority()`.
 - **Find-as-you-type matches the start of a word** (`win.matchesStart` in Main.qml): the country picker and the
   suggestion fields use it. Do not filter a list with `indexOf` on its own.
 - **Two company names are one company only through `email_client.same_company`.** Never compare

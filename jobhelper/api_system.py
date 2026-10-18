@@ -180,6 +180,7 @@ class SystemService:
                 "experience_notes": config.MAX_EXPERIENCE_NOTES, "letter_hint": cover_letter.MAX_HINT,
                 "list_word": app.MAX_WORD, "options": dict(app.OPTION_TEXTS),
                 "company_name": app.MAX_COMPANY_NAME, "pay_role": app.MAX_PAY_ROLE,
+                "salary_max": app.MAX_SALARY, "pay_rows": app.MAX_PAY_ROWS,
                 "mail_server": mailhosts.MAX_HOST}
 
     def changelog(self):

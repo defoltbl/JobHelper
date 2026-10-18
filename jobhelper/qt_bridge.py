@@ -162,6 +162,16 @@ class Bridge(RunSlots, JobSlots, QObject):
     def startPreview(self, text):
         return self._api.start_preview(text)
 
+    @Slot(str, int, "QVariantList", result=str)
+    def payProblem(self, role, amount, others):
+        """'' or what is wrong with a line of "A different figure for" (OptionsService.pay_problem)."""
+        return self._api.pay_problem(role, int(amount), list(others or []))
+
+    @Slot("QVariantList", str, result=int)
+    def workNotesSize(self, jobs, general):
+        """How long the notes are as the app reads them (WorkNotes.size)."""
+        return self._api.work_notes_size([dict(j) for j in (jobs or []) if isinstance(j, dict)], general)
+
     @Slot("QVariantMap", result="QVariantMap")
     def saveOptions(self, opts):
         result = self._api.save_options(dict(opts or {}))

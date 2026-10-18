@@ -139,12 +139,14 @@ Inside the window:
   (or *Same scan via API*): the estimated price of the last run alone with pay-per-use API billing.
 - **Last run card, Emails read** – how many messages the last scan went through and how many were
   sent to Claude. **Options → Email scan → Look further back once** runs one longer scan.
-- **More about your work** (Options → About you) – what you really did in each job beyond the
-  CV: tasks, tools, team, results (up to 4,000 characters, in English). Interview preparation
+- **More about your work** (About you, its own window under Options) – what you really did in
+  each job beyond the CV, in one box per job of My details and one for other work: tasks, tools,
+  team, results (up to 4,000 characters together, in English). Interview preparation
   and form answers treat it like the CV, so the work-experience part of the interview sheet
   gets as detailed as what you write here. Nothing is invented for you.
-- **About you** (Options) – *Right to work* and *You can start*: the only personal facts,
-  besides your CV, that letters and interview answers may state. Left empty, they are not mentioned.
+- **About you** (its own window under Options) – *Right to work* (with the usual answers to pick)
+  and *You can start* (it shows the date forms will get): the only personal facts, besides your
+  CV, that letters and interview answers may state. Left empty, they are not mentioned.
 - **Show in folder** (job window) – selects the CV, the letter or the single PDF in Finder (the
   PDF copy when there is one), so you can drag it into an application form.
 - **Notifications come from "JobHelper"**, with its icon. macOS asks once whether JobHelper may
@@ -182,7 +184,7 @@ Inside the window:
 - **What the postings pay** (Insights) – every posting in your lists that states pay,
   converted to gross pay per month in your currency (yearly ÷ 12, other currencies at rough
   fixed rates), next to what you ask for, with the middle value.
-- **Salary you ask for** (Options → About you) – your own figure and currency, and under **A
+- **Salary you ask for** (About you) – your own figure and currency, and under **A
   different figure for** another figure for a kind of role ("support"). With none given the app
   uses its own estimate, which exists only for software roles in Czechia.
 - **Country** (Options → Search) – which postings of company career sites and which remote jobs
@@ -266,7 +268,7 @@ Inside the window:
   filled form, lets you practise an interview, and tells you what needs attention when the app opens.
 - **Form answers** (job window, and the last step of **Before you apply**) – paste the questions
   of that job's application form, one per line, and Claude drafts the answers in one call from
-  your master CV, the posting and *About you* in Options. They are kept with the job and can be
+  your master CV, the posting and *About you*. They are kept with the job and can be
   edited and copied. What the app cannot know (a notice period, a reference) is written in
   square brackets and marked **Check**; a claim your CV does not back is marked too.
 - **The last 7 days** (top of Analytics) – new jobs, ready to send, applications sent, replies,

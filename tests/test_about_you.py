@@ -16,7 +16,7 @@ def test_work_notes_get_a_box_for_each_job_and_keep_a_note_whose_job_is_gone():
 
 
 def test_work_notes_are_checked_together():
-    assert WorkNotes([{"job": "A, B", "notes": "x" * 3000}], "y" * 1001).problem().startswith("The notes about your work are 4001")
+    assert WorkNotes([{"job": "A, B", "notes": "x" * 3000}], "y" * 1001).problem().startswith("The notes about your work are 4012")
     assert WorkNotes([{"job": "", "notes": "text"}]).problem() == "A note on a job needs the job's name."
     assert WorkNotes([{"job": "A, B", "notes": "ok"}], "fine").problem() == ""
     assert WorkNotes([{"job": "A, B", "notes": ""}]).as_options()["about_jobs"] == []           # an empty box is not saved
@@ -24,11 +24,25 @@ def test_work_notes_are_checked_together():
 
 def test_the_notes_everyone_reads_include_each_job(isolate_data):
     api = ui_api.Api()
-    assert api.save_about_you({"about_jobs": [{"job": "Intern, Acme", "notes": "Wrote the importer."}],
+    assert api.save_about_you({"about_jobs": [{"job": "Intern, Acme", "notes": "I deployed it with Kafka."}],
                                "about_experience": "Built a game."})["ok"] is True
-    assert config.experience_notes() == "At Intern, Acme: Wrote the importer.\n\nBuilt a game."
-    # the claim checks read it too: a tool named only in a note is backed
-    assert "Kafka" not in form_answers.cover_letter.unverified_terms("Python\n" + "At Intern, Acme: I used Kafka.")
+    assert config.experience_notes() == "At Intern, Acme: I deployed it with Kafka.\n\nBuilt a game."
+    # the claim check of a form answer: a tool the CV lacks but a job's note names is backed, through experience_notes
+    cv = "Alex Novak\nPython developer. Python, SQL."
+    unverified = form_answers.cover_letter.unverified_terms(cv + "\n" + config.experience_notes())
+    assert "Kafka" not in unverified and "Kafka" in form_answers.cover_letter.unverified_terms(cv)
+
+
+def test_the_size_counts_what_everyone_reads_so_nothing_is_cut():
+    """The window counted only the notes; the job names and gaps were added after, and the end was cut without a word."""
+    notes = WorkNotes([{"job": "Junior analyst, Northwind", "notes": "x" * 3990}])
+    assert notes.size() == len(notes.text()) == len("At Junior analyst, Northwind: ") + 3990
+    assert notes.problem().startswith("The notes about your work are") and notes.text().endswith("x" * 10)
+
+
+def test_a_job_name_may_be_as_long_as_my_details_allows():
+    longest = "T" * 100 + ", " + "E" * 100                    # a title and an employer, each at My details' limit
+    assert WorkNotes([{"job": longest, "notes": "ok"}]).problem() == "" and WorkNotes.MAX_JOB_NAME == 202
 
 
 def test_save_about_you_stores_only_its_own_facts(isolate_data):

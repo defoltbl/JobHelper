@@ -42,12 +42,13 @@ class OptionsService:
         """What the About you window shows: the saved values, and what the app says about them (about_you.AboutYou)."""
         from . import about_you, details
         o = self.options()
-        try:
-            seniority = (agent1_cv.load_profile() or {}).get("seniority", "junior")
-        except Exception:  # noqa: BLE001 - without a CV analysis the level is junior, as in Options
-            seniority = "junior"
-        page = about_you.AboutYou(o).page(details.load(), list(o.get("wanted_roles") or o.get("queries") or []), seniority)
+        page = about_you.AboutYou(o).page(details.load(), agent1_cv.seniority())
         return {**{k: o.get(k) for k in about_you.KEYS}, **page, "currencies": list(salary.CURRENCIES)}
+
+    def work_notes_size(self, jobs, general):
+        """How long the notes are as the app reads them (WorkNotes.size), for the window's live count."""
+        from . import about_you
+        return about_you.WorkNotes([j for j in (jobs or []) if isinstance(j, dict)], str(general or "")).size()
 
     def save_about_you(self, data):
         """Save only the About you facts; the other Options stay as they are."""
@@ -126,7 +127,8 @@ class OptionsService:
         defaults.update(places.RemoteReach.from_options(defaults).as_options())       # which remote jobs fit
         return defaults
 
-    OPTION_NUMBERS = {"salary_target": (0, 100_000_000), "threshold": (0, 100), "min_lead_score": (0, 100), "max_age_days": (0, 3650), "per_query": (1, 100),
+    MAX_SALARY, MAX_PAY_ROWS = 100_000_000, 20     # the highest figure; how many kinds of role may have a figure of their own
+    OPTION_NUMBERS = {"salary_target": (0, MAX_SALARY), "threshold": (0, 100), "min_lead_score": (0, 100), "max_age_days": (0, 3650), "per_query": (1, 100),
                       "max_years": (0, 60), "keep_backups": (0, 1000), "followup_days": (0, 365), "scan_days": (1, 3650)}
     OPTION_LISTS = ("queries", "skip_words", "keep_words", "level_words", "wanted_roles", "unwanted_roles", "my_fields")
     OPTION_TEXTS = {"where": 80, "country": 60, "about_right_to_work": 300, "about_start": 300, "about_experience": config.MAX_EXPERIENCE_NOTES}
@@ -176,20 +178,16 @@ class OptionsService:
                     return {}, f"“{key.replace('_', ' ')}” is {len(text)} characters long; the most is {limit}. Shorten it."
                 clean[key] = text
         if "salary_by_role" in clean:
-            entries, seen = clean["salary_by_role"], set()
-            if not isinstance(entries, (list, tuple)) or len(entries) > 20:
-                return {}, "“salary by role” takes up to 20 lines."
+            entries = clean["salary_by_role"]
+            if not isinstance(entries, (list, tuple)) or len(entries) > self.MAX_PAY_ROWS:
+                return {}, f"“salary by role” takes up to {self.MAX_PAY_ROWS} lines."
             tidy = []
             for entry in entries:
                 role = str((entry or {}).get("role") or "").strip() if isinstance(entry, dict) else ""
                 amount = (entry or {}).get("amount") if isinstance(entry, dict) else None
-                if not 2 <= len(role) <= self.MAX_PAY_ROLE or not re.search(r"[^\W\d_]{2}", role):
-                    return {}, "Each line of “salary by role” needs a kind of role in words, for example support."
-                if isinstance(amount, bool) or not isinstance(amount, (int, float)) or amount != int(amount) or not 1 <= amount <= 100_000_000:
-                    return {}, f"The salary for “{role}” must be a whole number above 0."
-                if role.lower() in seen:
-                    return {}, f"“{role}” is in the salary list twice."
-                seen.add(role.lower())
+                problem = self.pay_problem(role, amount, [t["role"] for t in tidy])
+                if problem:
+                    return {}, problem
                 tidy.append({"role": role, "amount": int(amount)})
             clean["salary_by_role"] = tidy
         if "about_jobs" in clean:                  # the work notes per job: WorkNotes owns their rules
@@ -226,6 +224,22 @@ class OptionsService:
             if key in clean and not isinstance(clean[key], bool):
                 return {}, f"“{key.replace('_', ' ')}” must be on or off."
         return clean, ""
+
+    def pay_problem(self, role, amount, others=()):
+        """'' or what is wrong with one line of "A different figure for": the words the window shows when you press Add, and
+        the save check of every line (one rule for both)."""
+        role = " ".join(str(role or "").split())
+        if not role:
+            return "Enter a kind of role in words, for example support."
+        if not role.isascii() and re.search(r"[^\x00-\x7F\u00C0-\u024F\u2013]", role):
+            return "Write the kind of role in English (Latin letters), as it stands in job titles."
+        if not 2 <= len(role) <= self.MAX_PAY_ROLE or not re.search(r"[^\W\d_]{2}", role):
+            return "Enter a kind of role in words, for example support."
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)) or amount != int(amount) or not 1 <= amount <= self.MAX_SALARY:
+            return f"Enter the salary for “{role}”: a whole number above 0."
+        if role.lower() in [str(o).strip().lower() for o in others]:
+            return f"“{role}” is already in the list: change its figure there."
+        return ""
 
     def save_options(self, opts):
         """Save the Options. What the window does not send (the chosen master CV) is kept."""

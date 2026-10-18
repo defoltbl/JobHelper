@@ -123,6 +123,14 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def seniority() -> str:
+    """The person's level as the CV analysis found it ("junior" without one): Options, About you and Insights ask here."""
+    try:
+        return str((load_profile() or {}).get("seniority") or "junior")
+    except Exception:  # noqa: BLE001 - an unreadable analysis counts as none
+        return "junior"
+
+
 def load_profile(current_only: bool = False) -> dict[str, Any] | None:
     """The saved CV analysis. With current_only, None is returned when it was
     made from a different CV than the one in data/cv now, so an edited CV

@@ -21,8 +21,9 @@ class WorkNotes:
     """What the person wrote about their work: a note for each job of My details ({job, notes}) and a general one.
     A note keeps its job's name, so it is not lost when the job is renamed or removed in My details."""
 
-    MAX_TOTAL = config.MAX_EXPERIENCE_NOTES          # all notes together: the room they get in a request to Claude
-    MAX_JOB_NAME = 160
+    MAX_TOTAL = config.MAX_EXPERIENCE_NOTES          # all notes together, as text() gives them: the room they get in a request
+    # a box is named "title, employer" from My details, so its name can be as long as those two fields together
+    MAX_JOB_NAME = sum(most for key, _label, most in details.ROWS["experience"] if key in ("title", "employer")) + 2
 
     def __init__(self, per_job: list[dict[str, str]] | None = None, general: str = "") -> None:
         self.per_job = [{"job": str(n.get("job") or "").strip(), "notes": str(n.get("notes") or "").strip()}
@@ -49,7 +50,8 @@ class WorkNotes:
         return out
 
     def size(self) -> int:
-        return len(self.general) + sum(len(n["notes"]) for n in self.per_job)
+        """How long the notes are as everything reads them (text()): each job's name and the gaps between them count too."""
+        return len(self._joined())
 
     def problem(self) -> str:
         """'' or why these notes cannot be saved."""
@@ -65,12 +67,16 @@ class WorkNotes:
     def as_options(self) -> dict[str, Any]:
         return {"about_jobs": [n for n in self.per_job if n["job"] and n["notes"]], "about_experience": self.general}
 
-    def text(self) -> str:
-        """The notes as one text, each job's under its name: what interviews, form answers and the claim checks read."""
+    def _joined(self) -> str:
         parts = [f"At {n['job']}: {n['notes']}" for n in self.per_job if n["job"] and n["notes"]]
         if self.general:
             parts.append(self.general)
-        return "\n\n".join(parts)[:self.MAX_TOTAL]
+        return "\n\n".join(parts)
+
+    def text(self) -> str:
+        """The notes as one text, each job's under its name: what interviews, form answers and the claim checks read.
+        Never cut: notes longer than MAX_TOTAL are refused when they are saved (problem)."""
+        return self._joined()
 
 
 class AboutYou:
@@ -105,6 +111,10 @@ class AboutYou:
         when = f"{day.day} {day:%B %Y}"
         return {"ok": True, "text": f"Forms get: {when}" + (" (worked out from your words: check it in each form)" if worked else "")}
 
+    def roles(self) -> list[str]:
+        """The kinds of role an estimate is shown for: the roles you want, else the ones you search for (Options)."""
+        return [str(r) for r in (self._o.get("wanted_roles") or self._o.get("queries") or [])]
+
     def salary_estimates(self, roles: list[str], seniority: str = "junior") -> dict[str, Any]:
         """The app's own monthly estimate for each kind of role ({available, note, rows: [{role, amount, text}]}), used when
         you give no figure. It exists only for software roles while the search is in Czechia (salary.estimate_available)."""
@@ -120,10 +130,10 @@ class AboutYou:
                 "The app has an estimate only for software roles, and none of your roles is one. With 0, forms leave it to you.")
         return {"available": True, "rows": rows[:6], "note": note}
 
-    def page(self, my_details: dict[str, Any], roles: list[str], seniority: str = "junior") -> dict[str, Any]:
+    def page(self, my_details: dict[str, Any], seniority: str = "junior") -> dict[str, Any]:
         """Everything the window needs besides the plain values."""
         return {"right_choices": self.right_to_work_choices(), "start": self.start_preview(str(self._o.get("about_start") or "")),
-                "estimates": self.salary_estimates(roles, seniority),
+                "estimates": self.salary_estimates(self.roles(), seniority),
                 "boxes": self.notes.boxes(details.jobs(my_details)), "general": self.notes.general,
                 "max_notes": WorkNotes.MAX_TOTAL}
 

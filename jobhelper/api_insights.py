@@ -64,7 +64,7 @@ class InsightsService:
         job["brought_back"] = row.get("reason", "")       # why it was filtered, for the record
         job["prefilter_override"] = True                  # you chose it: the free pre-filter must not skip it
         if not job.get("desired_monthly_czk"):
-            level = (agent1_cv.load_profile() or {}).get("seniority", "junior")
+            level = agent1_cv.seniority()
             monthly, annual = salary.estimate(job.get("title", ""), level)
             job["desired_monthly_czk"], job["desired_annual_czk"] = monthly or "", annual or ""
         store.upsert(jobs, [job])
