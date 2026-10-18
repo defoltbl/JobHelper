@@ -336,6 +336,77 @@ def scoring_rules(profile: dict[str, Any]) -> str:
     return _SCORE_RULES + direction_rules(profile.get("target_roles") if wanted is None else wanted, saved.get("unwanted_roles"))
 
 
+NO_DESCRIPTION = ("(No description was available for this listing – assess the fit from the title, company and "
+                  "location, and keep the cover letter's specific claims about the role modest.)")
+
+
+class Scorer:
+    """Scores postings against one person's profile: several postings in one request (each request has a fixed cost),
+    the "J1, J2 …" answers matched back to their postings, and a request of its own for any posting the batch missed.
+    When Claude's limit is used up it waits through `on_limit` (or stops). What happens with a score is the caller's:
+    `record(job, result)` keeps it and says whether it was usable."""
+
+    BATCH_TEXT, ONE_TEXT = 3000, 4000                # how much of a posting's text one request carries
+
+    def __init__(self, profile: dict[str, Any], on_limit=None, rules: str | None = None) -> None:
+        self.blurb = json.dumps({k: profile.get(k) for k in ("summary", "seniority", "years_experience", "internships", "key_skills", "strengths")},
+                                ensure_ascii=False)
+        self.rules = scoring_rules(profile) if rules is None else rules
+        self._on_limit = on_limit
+
+    def ask(self, call):
+        """Run one model step; on a hit limit wait (if the caller can) and try again."""
+        while True:
+            try:
+                return call()
+            except llm.LimitReached as e:
+                if self._on_limit is None:
+                    raise
+                self._on_limit(e)                    # returns when the run may continue; raises to stop
+
+    def fields(self, job: dict[str, Any], limit: int = ONE_TEXT) -> dict[str, str]:
+        """A posting as the prompts take it."""
+        return dict(profile=self.blurb, title=job.get("title", ""), company=job.get("company", ""), location=job.get("location", ""),
+                    description=(job.get("description") or "").strip()[:limit] or NO_DESCRIPTION)
+
+    def score(self, chunk: list[dict[str, Any]], record) -> list[dict[str, Any]]:
+        """Score these postings; returns the ones that got no usable score."""
+        done: set[str] = set()
+        if len(chunk) > 1:
+            postings = "\n\n".join(
+                "### J{n}\n- Title: {title}\n- Company: {company}\n- Location: {location}\n- Description: {description}".format(
+                    n=n, **self.fields(job, self.BATCH_TEXT)) for n, job in enumerate(chunk, 1))
+            try:
+                data = self.ask(lambda: llm.ask_json(SCORE_BATCH_PROMPT.format(profile=self.blurb, postings=postings, rules=self.rules, n=len(chunk)),
+                                                     system=SYSTEM, tag="agent3_letters"))
+            except llm.LimitReached:
+                raise
+            except Exception as e:  # noqa: BLE001 - the ones it missed are asked alone below
+                print(f"  ! Scoring {len(chunk)} postings together failed ({e}); asking one by one")
+                data = None
+            items = data.get("scores") if isinstance(data, dict) else data
+            for item in items if isinstance(items, list) else []:
+                m = re.fullmatch(r"J(\d+)", str(item.get("id", "")).strip()) if isinstance(item, dict) else None
+                if m and 1 <= int(m.group(1)) <= len(chunk):
+                    job = chunk[int(m.group(1)) - 1]
+                    if job["id"] not in done and record(job, item):
+                        done.add(job["id"])
+        missed = []
+        for job in chunk:
+            if job["id"] in done:
+                continue
+            try:
+                result = self.ask(lambda: llm.ask_json(SCORE_PROMPT.format(rules=self.rules, **self.fields(job)), system=SYSTEM, tag="agent3_letters"))
+            except llm.LimitReached:
+                raise
+            except Exception as e:  # noqa: BLE001 - one posting that cannot be scored must not stop the others
+                print(f"  ! Could not score '{job.get('title', '')}' @ {job.get('company', '')}: {e}")
+                result = None
+            if not record(job, result):
+                missed.append(job)
+        return missed
+
+
 def rescore(jobs: list[dict[str, Any]], ids: list[str], profile: dict[str, Any], cv_text: str = "",
             progress=None, on_limit=None, status=None) -> dict[str, Any]:
     """Score the given jobs again with the rules as they are now (your direction, the
@@ -343,25 +414,10 @@ def rescore(jobs: list[dict[str, Any]], ids: list[str], profile: dict[str, Any],
     or removed here. The earlier score is kept as `score_before` so the change shows.
     {scored, changed: [{id, title, company, before, after}], failed}"""
     wanted = [j for j in jobs if j.get("id") in set(ids)]
-    profile_blurb = json.dumps({k: profile.get(k) for k in ("summary", "seniority", "years_experience", "internships", "key_skills", "strengths")},
-                               ensure_ascii=False)
-    rules = scoring_rules(profile)
+    scorer = Scorer(profile, on_limit)
     stats: dict[str, Any] = {"scored": 0, "changed": [], "failed": 0}
 
-    def ask(prompt):
-        while True:
-            try:
-                return llm.ask_json(prompt, system=SYSTEM, tag="agent3_letters")
-            except llm.LimitReached as e:
-                if on_limit is None:
-                    raise
-                on_limit(e)
-
-    def fields(job, limit):
-        description = (job.get("description") or "").strip()[:limit] or "(No description was available: judge from the title alone.)"
-        return dict(title=job.get("title", ""), company=job.get("company", ""), location=job.get("location", ""), description=description)
-
-    def store(job, result) -> bool:
+    def record(job, result) -> bool:
         before = job.get("match_score")
         if not apply_score(job, result, cv_text):
             return False
@@ -381,35 +437,7 @@ def rescore(jobs: list[dict[str, Any]], ids: list[str], profile: dict[str, Any],
             progress(start, len(wanted))
         if status:
             status(f"Scoring again {start + 1}–{start + len(chunk)} of {len(wanted)}…")
-        done: set[str] = set()
-        if len(chunk) > 1:
-            postings = "\n\n".join(
-                "### J{n}\n- Title: {title}\n- Company: {company}\n- Location: {location}\n- Description: {description}".format(
-                    n=n, **fields(job, 3000)) for n, job in enumerate(chunk, 1))
-            try:
-                data = ask(SCORE_BATCH_PROMPT.format(profile=profile_blurb, postings=postings, rules=rules, n=len(chunk)))
-            except llm.LimitReached:
-                raise
-            except Exception:  # noqa: BLE001 - the ones it missed are asked alone below
-                data = None
-            items = data.get("scores") if isinstance(data, dict) else data
-            for item in items if isinstance(items, list) else []:
-                m = re.fullmatch(r"J(\d+)", str(item.get("id", "")).strip()) if isinstance(item, dict) else None
-                if m and 1 <= int(m.group(1)) <= len(chunk):
-                    job = chunk[int(m.group(1)) - 1]
-                    if job["id"] not in done and store(job, item):
-                        done.add(job["id"])
-        for job in chunk:
-            if job["id"] in done:
-                continue
-            try:
-                result = ask(SCORE_PROMPT.format(profile=profile_blurb, rules=rules, **fields(job, 4000)))
-            except llm.LimitReached:
-                raise
-            except Exception:  # noqa: BLE001
-                result = None
-            if not store(job, result):
-                stats["failed"] += 1
+        stats["failed"] += len(scorer.score(chunk, record))
     if progress:
         progress(len(wanted), len(wanted))
     return stats
@@ -439,6 +467,16 @@ def _flag_moderate(job: dict[str, Any]) -> None:
                 "your CV does not show. Read \"Why this score\" before you apply.")
         if "Stretch match" not in job.get("notes", ""):
             job["notes"] = (note + "\n" + job.get("notes", "")).strip()
+
+
+def mark_ready(job: dict[str, Any]) -> None:
+    """A job that now has its documents: a found lead becomes letter-ready, and its tier and review note follow its score.
+    The search and a request for one job's documents both end this way."""
+    if job.get("status") == "found":
+        job["status"] = "letter_ready"
+    if isinstance(job.get("match_score"), int):
+        job["match_tier"] = _tier(job["match_score"])
+        _flag_moderate(job)
 
 
 def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
@@ -480,11 +518,7 @@ def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
             print(f"  ! letter failed for {job['company']}: {e}")
 
     if done["letter"] or done["cv"]:
-        if job.get("status") == "found":
-            job["status"] = "letter_ready"
-        if isinstance(job.get("match_score"), int):
-            job["match_tier"] = _tier(job["match_score"])
-            _flag_moderate(job)
+        mark_ready(job)
         job["last_update"] = _date.today().isoformat()
     return done
 
@@ -516,16 +550,8 @@ def process(
     If cv_text (the master CV) is provided, a keyword-tailored CV is generated
     for each strong match alongside the cover letter.
     """
-    profile_blurb = json.dumps(
-        {
-            k: profile.get(k)
-            for k in ("summary", "seniority", "years_experience", "internships", "key_skills", "strengths")
-        },
-        ensure_ascii=False,
-    )
-
+    scorer = Scorer(profile, on_limit)
     stats = {"scored": 0, "letters": 0, "tailored_cvs": 0, "skipped": 0, "prefiltered": 0}
-    rules = scoring_rules(profile)
 
     # Free first look: postings that are plainly another profession are marked
     # and never sent to the model (see prefilter.py).
@@ -553,71 +579,17 @@ def process(
             return bool(job.get("prefilter"))
         return score < threshold or bool(job.get("cover_letter_file")) or job.get("doc_attempts", 0) >= MAX_DOC_ATTEMPTS
 
-    def _ask(call):
-        """Run one model step; on a hit limit wait (if the caller can) and try again."""
-        while True:
-            try:
-                return call()
-            except llm.LimitReached as e:
-                if on_limit is None:
-                    raise
-                on_limit(e)                      # returns when the run may continue; raises to stop
-
-    def _fields(job, limit=4000):
-        description = (job.get("description") or "").strip()[:limit] or (
-            "(No description was available for this listing — assess the fit from "
-            "the title, company and location, and keep the cover letter's specific "
-            "claims about the role modest.)"
-        )
-        return dict(profile=profile_blurb, title=job["title"], company=job["company"],
-                    location=job["location"], description=description)
-
     def _say(text):
         if status:
             status(text)
 
-    def _store_score(job, result) -> bool:
+    def _record(job, result) -> bool:
         if not apply_score(job, result, cv_text):
             return False
         if job.get("score_capped"):
             stats["capped"] = stats.get("capped", 0) + 1
         stats["scored"] += 1
         return True
-
-    def _score_one(job):
-        try:
-            result = _ask(lambda: llm.ask_json(SCORE_PROMPT.format(rules=rules, **_fields(job)), system=SYSTEM, tag="agent3_letters"))
-        except llm.LimitReached:
-            raise
-        except Exception as e:
-            print(f"  ! Could not score '{job['title']}' @ {job['company']}: {e}")
-            return
-        if not _store_score(job, result):
-            print(f"  ! Could not score '{job['title']}' @ {job['company']}: unusable reply")
-
-    def _score_chunk(chunk):
-        """One model call for several postings; any posting it leaves out is asked alone."""
-        if len(chunk) > 1:
-            postings = "\n\n".join(
-                "### J{n}\n- Title: {title}\n- Company: {company}\n- Location: {location}\n- Description: {description}".format(
-                    n=n, **_fields(job, limit=3000)) for n, job in enumerate(chunk, 1))
-            try:
-                data = _ask(lambda: llm.ask_json(
-                    SCORE_BATCH_PROMPT.format(profile=profile_blurb, postings=postings, rules=rules, n=len(chunk)),
-                    system=SYSTEM, tag="agent3_letters"))
-            except llm.LimitReached:
-                raise
-            except Exception as e:
-                print(f"  ! Scoring {len(chunk)} postings together failed ({e}); asking one by one")
-                data = None
-            items = data.get("scores") if isinstance(data, dict) else data
-            for item in items if isinstance(items, list) else []:
-                m = re.fullmatch(r"J(\d+)", str(item.get("id", "")).strip()) if isinstance(item, dict) else None
-                if m and 1 <= int(m.group(1)) <= len(chunk) and chunk[int(m.group(1)) - 1].get("match_score") is None:
-                    _store_score(chunk[int(m.group(1)) - 1], item)
-        for job in chunk:
-            if job.get("match_score") is None:
-                _score_one(job)
 
     work = [job for job in jobs if not _skip(job)]
     stats["skipped"] = len(jobs) - len(work)
@@ -632,7 +604,8 @@ def process(
         if progress:
             progress(done, units)
         _say(f"Scoring jobs {start + 1}–{start + len(chunk)} of {len(to_score)}…")
-        _score_chunk(chunk)
+        for job in scorer.score(chunk, _record):
+            print(f"  ! Could not score '{job.get('title', '')}' @ {job.get('company', '')}: unusable reply")
         done += len(chunk)
 
     # Steps 2 and 3: documents for the ones that scored high enough.
@@ -661,12 +634,12 @@ def process(
             continue
         job.pop("hold", None)
         _say(f"Writing CV and letter {writing.index(job) + 1} of {len(writing)}: {job['company'] or job['title']}…")
-        fields = _fields(job)
+        fields = scorer.fields(job)
         job["doc_attempts"] = job.get("doc_attempts", 0) + 1
         # Step 2: adapt the CV (PROFILE + KEY SKILLS); the letter is written to match it.
         if cv_text.strip() and not job.get("tailored_cv_file"):
             try:
-                name = _ask(lambda: _make_tailored_cv(job, cv_text, cv_path, fields))
+                name = scorer.ask(lambda: _make_tailored_cv(job, cv_text, cv_path, fields))
             except llm.LimitReached:
                 job["doc_attempts"] -= 1
                 raise
@@ -679,7 +652,7 @@ def process(
 
         # Step 3: write the cover letter.
         try:
-            letter_file = _ask(lambda: _make_letter(job, cv_text, cv_path, fields))
+            letter_file = scorer.ask(lambda: _make_letter(job, cv_text, cv_path, fields))
         except llm.LimitReached:
             job["doc_attempts"] -= 1
             raise
@@ -688,11 +661,9 @@ def process(
             letter_file = ""
         if letter_file:
             job["cover_letter_file"] = letter_file
-            job["status"] = "letter_ready"
-            job["match_tier"] = _tier(job["match_score"])
-            _flag_moderate(job)
+            mark_ready(job)
             stats["letters"] += 1
-            tag = "" if job["match_tier"] == "strong" else f"  ({job['match_tier']} — review)"
+            tag = "" if job["match_tier"] == "strong" else f"  ({job['match_tier']} – review)"
             cv_note = " + adapted CV" if job.get("tailored_cv_file") else ""
             print(f"  ✓ {job['match_score']:>3}  {job['title']} @ {job['company']}  → letter{cv_note} saved{tag}")
         else:
