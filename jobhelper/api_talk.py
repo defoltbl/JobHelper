@@ -16,8 +16,12 @@ _PLAIN = re.compile(r"\b(?:but|skip|except|without|only|not|don't|do not|leave|a
 NO_JOB = "That job is not in the list any more."
 
 
+class _Said(Exception):
+    """A request that cannot go on: its message is what the person is told."""
+
+
 class TalkService:
-    """"""
+    """The assistant's talk: free requests, what Claude makes of them, the actions it may take, and the briefing."""
 
     def __init__(self, app, editor, cv, desktop) -> None:
         """`app` is the facade (`ui_api.Api`): what this service needs from the others is asked through it."""
@@ -64,45 +68,71 @@ class TalkService:
         job_id = context_job or chosen_job
         what = assistant.intent(words)
         if what in ("fill", "details", "help") and len(words.split()) <= 6 and not _PLAIN.search(words.lower()):
-            if what == "fill":
-                tell("Reading the form in the browser…")
-            out = self._app.assistant_ask(words, job_id)
-            self._turn("you", words)
-            self._turn("bot", out.get("say") or out.get("msg") or "")
-            return out
+            return self._fixed_request(words, what, job_id, tell)
         if what == "unknown":
             return {"ok": True, "action": "help", "say": assistant.UNKNOWN}
-        tell("Looking at your jobs…")
         jobs = store.load_jobs()
+        decided, failed = self._ask_claude(words, jobs, job_id, tell)
+        if failed:
+            return failed
+        tell("Checking the answer…")
+        self._turn("you", words)
+        rows = self._rows(jobs, decided["show"])
+        dropped = " (One thing I could not carry out as an action: say which job you mean, or use the job's own window.)" if decided["dropped"] else ""
+        if not decided["actions"]:
+            say = decided["say"] + dropped
+            self._turn("bot", say)
+            return {"ok": True, "action": "say", "say": say, "rows": rows}
+        done, asked = self._carry_out(decided, jobs, job_id, tell)
+        answer = self._one_answer(done, asked, rows, dropped)
+        self._turn("bot", " ".join(answer["also"] + [answer.get("say") or answer.get("ask") or answer.get("msg") or ""]))
+        return answer
+
+    def _fixed_request(self, words: str, what: str, job_id: str, tell) -> dict:
+        """A request the app knows without Claude: fill in the form, my details, help."""
+        if what == "fill":
+            tell("Reading the form in the browser…")
+        out = self._app.assistant_ask(words, job_id)
+        self._turn("you", words)
+        self._turn("bot", out.get("say") or out.get("msg") or "")
+        return out
+
+    def _ask_claude(self, words: str, jobs: list[dict], job_id: str, tell) -> tuple[dict | None, dict | None]:
+        """(what Claude makes of a free request (`assistant_brain.decide`), None), or (None, the answer when it could not be asked)."""
+        tell("Looking at your jobs…")
         try:
             kept = [n["text"] for n in assistant_notes.notes()]
         except Exception:  # noqa: BLE001 - no notes is not a reason to refuse an answer
             kept = []
         tell("Asking Claude…")
         try:
-            decided = assistant_brain.decide(words, jobs, db.all_responses(), self._talk(), assistant.ABOUT, self._numbers(),
-                                             store.find(jobs, job_id) if job_id else None, notes=kept)
+            return assistant_brain.decide(words, jobs, db.all_responses(), self._talk(), assistant.ABOUT, self._numbers(),
+                                          store.find(jobs, job_id) if job_id else None, notes=kept), None
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
-            return {"ok": False, "action": "say", "msg": f"I could not ask Claude: {str(e) or type(e).__name__}"}
-        tell("Checking the answer…")
-        self._turn("you", words)
-        rows = [{"id": j["id"], "label": f"{j.get('company', '')} · {j.get('title', '')}",
+            return None, {"ok": False, "action": "say", "msg": f"I could not ask Claude: {str(e) or type(e).__name__}"}
+
+    @staticmethod
+    def _rows(jobs: list[dict], shown: list[str]) -> list[dict]:
+        """The jobs an answer shows, as rows of the assistant's list."""
+        return [{"id": j["id"], "label": f"{j.get('company', '')} · {j.get('title', '')}",
                  "sub": str(j.get("status", "")).replace("_", " ") + (f" · score {j['match_score']}" if j.get("match_score") is not None else "")}
-                for j in (store.find(jobs, i) for i in decided["show"]) if j]
-        dropped = " (One thing I could not carry out as an action: say which job you mean, or use the job's own window.)" if decided["dropped"] else ""
-        if not decided["actions"]:
-            say = decided["say"] + dropped
-            self._turn("bot", say)
-            return {"ok": True, "action": "say", "say": say, "rows": rows}
+                for j in (store.find(jobs, i) for i in shown) if j]
+
+    def _carry_out(self, decided: dict, jobs: list[dict], job_id: str, tell) -> tuple[list[dict], dict | None]:
+        """Do what only shows or drafts something, at once and in order; ask before what changes something.
+        Returns (what was done, the question about the changes or None)."""
         now = [a for a in decided["actions"] if not assistant_brain.changes(a["name"])]
         later = [a for a in decided["actions"] if assistant_brain.changes(a["name"])]
         done = []
-        for action in now:                              # what only shows or drafts something is done at once, in order
+        for action in now:
             tell({"company_brief": "Writing the brief…", "advice": "Reading your results…", "draft_reply": "Drafting the reply…",
                   "judge_page": "Reading the page…", "fill_form": "Reading the form in the browser…", "review_form": "Reading the form back…"}.get(action["name"], "Working…"))
             done.append(self._act(action, decided["say"] if len(decided["actions"]) == 1 else "", jobs, job_id))
-        asked = self._ask(later, jobs) if later else None
-        # one answer goes back to the window: the one that needs it to do something, with the others' words before it
+        return done, (self._ask(later, jobs) if later else None)
+
+    @staticmethod
+    def _one_answer(done: list[dict], asked: dict | None, rows: list[dict], dropped: str) -> dict:
+        """One answer goes back to the window: the one that needs it to do something, with the others' words before it."""
         results = done + ([asked] if asked else [])
         chosen = asked if asked and asked.get("action") == "confirm" else next((r for r in results if r.get("action") not in ("say", None)), results[-1])
         special = dict(chosen)
@@ -112,8 +142,8 @@ class TalkService:
         if dropped:
             special["also"].append(dropped.strip(" ()"))
         special.setdefault("rows", rows)
-        self._turn("bot", " ".join(special["also"] + [special.get("say") or special.get("ask") or special.get("msg") or ""]))
         return special
+
 
     def _ready(self, action: dict[str, Any], job) -> str:
         """'' or why this change cannot be made, said before you are asked about it."""
@@ -204,53 +234,70 @@ class TalkService:
         """Read the job posting that is open in the browser, score it with the app's own scorer, and offer to add it.
         One call to Claude (the scoring) when the page states its job in the form search engines read, as most
         job pages do; one more to read the title and the employer off the page when it does not."""
-        def no(msg):
-            return {"ok": False, "action": "say", "msg": msg}
         self.browser()
         try:
-            tab = chrome.active_tab()
-            address = form_fill.PageAddress(tab["url"])
-            host = address.host
-            if not address.is_web:
-                return no("The tab in front is not a web page. Bring the job posting to the front and ask me again.")
-            if address.refused:
-                return no(address.refusal("read this site"))
-            page = form_fill.page_answer(chrome.run(form_fill.PAGE))
-        except (chrome.ChromeError, ValueError) as e:
-            return no(str(e))
-        jobs = store.load_jobs()
-        known = store.find(jobs, form_fill.match_job([j for j in jobs if assistant_brain.may_be_shown(j)], page["url"], ""))
-        if known:
-            score = f"it scored {known['match_score']}" if known.get("match_score") is not None else "it has no score yet"
-            return {"ok": True, "action": "say", "rows": [{"id": known["id"], "label": f"{known.get('company', '')} · {known.get('title', '')}",
-                                                          "sub": str(known.get("status", "")).replace("_", " ")}],
-                    "say": f"This posting is in your list already: {known.get('title', '')} at {known.get('company', '')}, {score}. {str(known.get('match_reason') or '')[:400]}".strip()}
-        if len(page["text"].split()) < 60:
-            return no("There is too little text on this page to judge a job from. Open the posting itself and ask me again.")
-        cv_text = self._cv.text()
-        if not cv_text.strip():
-            return no("Your master CV could not be read, so I cannot compare the posting with it.")
-        try:
-            if page["stated"]["title"]:          # the page states the job for search engines: no call is needed to read it
-                facts = {"is_posting": True, **page["stated"]}
-            else:
-                facts = assistant_brain.posting(page["title"], page["url"], page["text"])
-            if not facts["is_posting"]:
-                return no("This page does not read like one job posting. Open the posting itself and ask me again.")
-            job = store.new_job(id="assistant-" + store.url_id(page["url"]), title=facts["title"], company=facts["company"] or host,
-                                location=facts["location"], source="assistant", url=page["url"], description=page["text"])
-            stats = agent3_letters.rescore([job], [job["id"]], agent1_cv.load_profile() or {}, cv_text)
-        except Exception as e:  # noqa: BLE001 - said to the person as the reason
-            return no(f"I could not ask Claude: {str(e) or type(e).__name__}")
-        if not stats["scored"]:
-            return no("Claude gave no usable score for this posting. Try again in a moment.")
-        job.pop("score_before", None)
+            host, page = self._front_posting()
+            jobs = store.load_jobs()
+            known = store.find(jobs, form_fill.match_job([j for j in jobs if assistant_brain.may_be_shown(j)], page["url"], ""))
+            if known:
+                return self._known_posting(known)
+            job = self._scored_posting(page, host)
+        except _Said as said:
+            return {"ok": False, "action": "say", "msg": str(said)}
         limit = self._app.threshold()
         verdict = "above" if job["match_score"] >= limit else "below"
         return {"ok": True, "action": "confirm", "say": "",
                 "ask": f"{job['title']} at {job['company']} scores {job['match_score']}, {verdict} your limit of {limit}. {str(job.get('match_reason') or '')[:500]} "
                        "Add it to New Jobs? The next search then writes its documents if it is above the limit.",
                 "pending": {"name": "add_job", "args": {"job": job["id"], "record": job}}}
+
+    @staticmethod
+    def _front_posting() -> tuple[str, dict]:
+        """(host, page) of the web page in front of the browser, read as text."""
+        try:
+            tab = chrome.active_tab()
+            address = form_fill.PageAddress(tab["url"])
+            if not address.is_web:
+                raise _Said("The tab in front is not a web page. Bring the job posting to the front and ask me again.")
+            if address.refused:
+                raise _Said(address.refusal("read this site"))
+            return address.host, form_fill.page_answer(chrome.run(form_fill.PAGE))
+        except (chrome.ChromeError, ValueError) as e:
+            raise _Said(str(e)) from e
+
+    @staticmethod
+    def _known_posting(known: dict) -> dict:
+        """The answer for a posting that is in your list already: its score, nothing is asked of Claude."""
+        score = f"it scored {known['match_score']}" if known.get("match_score") is not None else "it has no score yet"
+        return {"ok": True, "action": "say", "rows": [{"id": known["id"], "label": f"{known.get('company', '')} · {known.get('title', '')}",
+                                                      "sub": str(known.get("status", "")).replace("_", " ")}],
+                "say": f"This posting is in your list already: {known.get('title', '')} at {known.get('company', '')}, {score}. {str(known.get('match_reason') or '')[:400]}".strip()}
+
+    def _scored_posting(self, page: dict, host: str) -> dict:
+        """A new job made from the page and scored like any other (not saved yet)."""
+        if len(page["text"].split()) < 60:
+            raise _Said("There is too little text on this page to judge a job from. Open the posting itself and ask me again.")
+        cv_text = self._cv.text()
+        if not cv_text.strip():
+            raise _Said("Your master CV could not be read, so I cannot compare the posting with it.")
+        try:
+            if page["stated"]["title"]:          # the page states the job for search engines: no call is needed to read it
+                facts = {"is_posting": True, **page["stated"]}
+            else:
+                facts = assistant_brain.posting(page["title"], page["url"], page["text"])
+            if not facts["is_posting"]:
+                raise _Said("This page does not read like one job posting. Open the posting itself and ask me again.")
+            job = store.new_job(id="assistant-" + store.url_id(page["url"]), title=facts["title"], company=facts["company"] or host,
+                                location=facts["location"], source="assistant", url=page["url"], description=page["text"])
+            stats = agent3_letters.rescore([job], [job["id"]], agent1_cv.load_profile() or {}, cv_text)
+        except _Said:
+            raise
+        except Exception as e:  # noqa: BLE001 - said to the person as the reason
+            raise _Said(f"I could not ask Claude: {str(e) or type(e).__name__}") from e
+        if not stats["scored"]:
+            raise _Said("Claude gave no usable score for this posting. Try again in a moment.")
+        job.pop("score_before", None)
+        return job
 
     def _said(self, make) -> dict[str, Any]:
         try:
@@ -339,46 +386,74 @@ class TalkService:
         job = store.find(jobs, str(args.get("job") or ""))
         if not job:
             return False, NO_JOB, None
-        what = f"{job.get('title', '')} at {job.get('company', '')}"
+        handler = {"mark_applied": self._yes_mark_applied, "set_status": self._yes_set_status, "set_date": self._yes_set_date,
+                   "not_interested": self._yes_not_interested, "save_letter": self._yes_save_letter,
+                   "save_answer": self._yes_save_answer}.get(name)
+        if handler is None:
+            return False, "That is not something I can do on a yes.", None
+        return handler(job, args, f"{job.get('title', '')} at {job.get('company', '')}", jobs)
+
+    @staticmethod
+    def _undo_job(job: dict, what: str, jobs: list[dict]):
+        """How to take back a change to a job: the job as it was, and any lead that marking it applied folded away."""
         before = {j["id"]: copy.deepcopy(j) for j in jobs}
 
-        def back() -> dict[str, Any]:           # the job as it was, and any lead that marking it applied folded away
+        def back() -> dict[str, Any]:
             now = {j["id"] for j in store.load_jobs()}
             return {"kind": "job", "job": copy.deepcopy(before[job["id"]]), "gone": [before[i] for i in before if i not in now], "what": what}
-        if name == "mark_applied":
-            done, said = self._app.apply_job(job["id"]), f"Moved {what} to Applications, as waiting."
-        elif name == "set_status" and args.get("status") in assistant_brain.STATUSES:
-            done, said = self._app.set_status(job["id"], args["status"]), f"{what} is now “{args['status'].replace('_', ' ')}”."
-        elif name == "set_date":
-            done = self._app.set_event(job["id"], str(args.get("day") or ""), str(args.get("time") or ""), str(args.get("kind") or "interview"), str(args.get("note") or ""))
-            said = f"The date is set for {what}: {args.get('kind', 'interview')} on {args.get('day', '')}" + (f" at {args['time']}." if args.get("time") else ".")
-        elif name == "not_interested":
-            done, said = self._app.dismiss_job(job["id"]), f"Removed {what} from New Jobs. Its documents are in the backup."
-            return (True, said, {"kind": "dismissed", "id": job["id"], "what": what}) if done.get("ok") else (False, done.get("msg") or "That did not work.", None)
-        elif name == "save_letter" and isinstance(args.get("paragraphs"), list):
-            old = self._app.letter_for_edit(job["id"])
-            done, said = self._app.save_letter(job["id"], [str(p) for p in args["paragraphs"]]), f"The letter for {job.get('company', '')} is changed."
-            if done.get("ok") and done.get("warnings"):
-                said += " Look at it once: " + "; ".join(str(w) for w in done["warnings"][:3])
-            return (True, said, {"kind": "letter", "id": job["id"], "paragraphs": list(old.get("paragraphs") or []), "what": what} if old.get("ok") else None) \
-                if done.get("ok") else (False, done.get("msg") or "That did not work.", None)
-        elif name == "save_answer" and str(args.get("answer") or "").strip():
-            question, answer = str(args.get("question") or ""), str(args["answer"]).strip()
+        return back
 
-            def keep(current, j):       # may run twice (the running search's copy): the result is the same
-                items = form_answers.tidy((j.get("form_answers") or {}).get("items"))
-                for it in items:
-                    if it["question"].lower() == question.lower():
-                        it["answer"], it["check"] = answer, ""
-                j["form_answers"] = {"made": (j.get("form_answers") or {}).get("made") or form_answers.stamp(), "items": items}
-            done, said = self._editor.change(job["id"], keep, render=False), "The answer is changed and kept with the job."
-            if done.get("ok"):
-                answer_memory.remember(question, answer, job.get("company", ""))
-        else:
-            return False, "That is not something I can do on a yes.", None
+    def _job_changed(self, done: dict, said: str, back) -> tuple[bool, str, dict[str, Any] | None]:
         if not done.get("ok"):
             return False, done.get("msg") or "That did not work. The job may have changed in the meantime.", None
         return True, said, back()
+
+    def _yes_mark_applied(self, job, args, what, jobs):
+        back = self._undo_job(job, what, jobs)
+        return self._job_changed(self._app.apply_job(job["id"]), f"Moved {what} to Applications, as waiting.", back)
+
+    def _yes_set_status(self, job, args, what, jobs):
+        if args.get("status") not in assistant_brain.STATUSES:
+            return False, "That is not something I can do on a yes.", None
+        back = self._undo_job(job, what, jobs)
+        return self._job_changed(self._app.set_status(job["id"], args["status"]), f"{what} is now “{args['status'].replace('_', ' ')}”.", back)
+
+    def _yes_set_date(self, job, args, what, jobs):
+        back = self._undo_job(job, what, jobs)
+        done = self._app.set_event(job["id"], str(args.get("day") or ""), str(args.get("time") or ""), str(args.get("kind") or "interview"), str(args.get("note") or ""))
+        said = f"The date is set for {what}: {args.get('kind', 'interview')} on {args.get('day', '')}" + (f" at {args['time']}." if args.get("time") else ".")
+        return self._job_changed(done, said, back)
+
+    def _yes_not_interested(self, job, args, what, jobs):
+        done, said = self._app.dismiss_job(job["id"]), f"Removed {what} from New Jobs. Its documents are in the backup."
+        return (True, said, {"kind": "dismissed", "id": job["id"], "what": what}) if done.get("ok") else (False, done.get("msg") or "That did not work.", None)
+
+    def _yes_save_letter(self, job, args, what, jobs):
+        if not isinstance(args.get("paragraphs"), list):
+            return False, "That is not something I can do on a yes.", None
+        old = self._app.letter_for_edit(job["id"])
+        done, said = self._app.save_letter(job["id"], [str(p) for p in args["paragraphs"]]), f"The letter for {job.get('company', '')} is changed."
+        if done.get("ok") and done.get("warnings"):
+            said += " Look at it once: " + "; ".join(str(w) for w in done["warnings"][:3])
+        return (True, said, {"kind": "letter", "id": job["id"], "paragraphs": list(old.get("paragraphs") or []), "what": what} if old.get("ok") else None) \
+            if done.get("ok") else (False, done.get("msg") or "That did not work.", None)
+
+    def _yes_save_answer(self, job, args, what, jobs):
+        if not str(args.get("answer") or "").strip():
+            return False, "That is not something I can do on a yes.", None
+        back = self._undo_job(job, what, jobs)
+        question, answer = str(args.get("question") or ""), str(args["answer"]).strip()
+
+        def keep(current, j):       # may run twice (the running search's copy): the result is the same
+            items = form_answers.tidy((j.get("form_answers") or {}).get("items"))
+            for it in items:
+                if it["question"].lower() == question.lower():
+                    it["answer"], it["check"] = answer, ""
+            j["form_answers"] = {"made": (j.get("form_answers") or {}).get("made") or form_answers.stamp(), "items": items}
+        done = self._editor.change(job["id"], keep, render=False)
+        if done.get("ok"):
+            answer_memory.remember(question, answer, job.get("company", ""))
+        return self._job_changed(done, "The answer is changed and kept with the job.", back)
 
     def _add_job(self, record) -> tuple[bool, str, dict[str, Any] | None]:
         """Put a posting that was read from the browser into New Jobs, as the lead the app scored."""
@@ -507,41 +582,8 @@ class TalkService:
         except Exception:  # noqa: BLE001 - locked data: nothing to say yet
             return {"headline": "", "lines": [], "nudges": []}
         now = date.today()
-        week = summary.week(jobs, responses, int(self._app.options().get("followup_days") or 0), now)
-        lines = []
-        if week["ready_total"]:
-            lines.append(f"{week['ready_total']} {'job is' if week['ready_total'] == 1 else 'jobs are'} ready to send" + (f" ({week['new_ready']} new this week)" if week["new_ready"] else ""))
-        if week["invites"]:
-            lines.append(f"{week['invites']} {'reply' if week['invites'] == 1 else 'replies'} this week that {'looks' if week['invites'] == 1 else 'look'} like an invitation")
-        if week["followups"]:
-            lines.append(f"{week['followups']} follow-up{'' if week['followups'] == 1 else 's'} due")
-        lines += [c["text"] for c in week["coming"][:3]]
-        nudges = []
-        last: dict[str, dict[str, Any]] = {}
-        for r in responses:
-            if r.get("job_id") and r["job_id"] not in last:
-                last[r["job_id"]] = r
-        for j in jobs:
-            what, done = f"{j.get('title', '')} at {j.get('company', '')}", set(j.get("nudged") or [])
-            filled = str(j.get("form_filled") or "")
-            if j.get("status") in store.LEAD_STATUSES and filled and filled < now.isoformat() and "apply" not in done:
-                nudges.append({"kind": "apply", "job_id": j["id"], "text": f"You filled in the form for {what} on {filled} but did not mark it applied."})
-            event = j.get("event") or {}
-            if event.get("kind") == "interview" and event.get("date") and "prep" not in done and not (j.get("interview_prep") or {}).get("questions"):
-                try:
-                    away = (date.fromisoformat(event["date"]) - now).days
-                except ValueError:
-                    away = -1
-                if 0 <= away <= 2:
-                    when = ("today", "tomorrow", "in two days")[away]
-                    nudges.append({"kind": "prep", "job_id": j["id"], "text": f"The interview for {what} is {when} and there is no preparation yet."})
-            reply = last.get(j["id"])
-            if reply and reply.get("stage") in ("interview", "assessment") and j.get("status") in store.APPLICATION_STATUSES - {"rejected"} \
-                    and not event.get("date") and "date" not in done:
-                when = db.received_at(reply.get("received_date", "")).date()
-                if 0 <= (now - when).days <= 14:
-                    nudges.append({"kind": "date", "job_id": j["id"], "text": f"{j.get('company', '')} invited you on {when.isoformat()} and no date is set for it."})
-        nudges = nudges[:6]
+        lines = summary.briefing_lines(summary.week(jobs, responses, self._app.followup_days(), now))
+        nudges = summary.nudges(jobs, responses, now)
         headline = nudges[0]["text"] if nudges else ("; ".join(lines[:3]) + "." if lines else "")
         return {"headline": headline[:220], "lines": lines, "nudges": nudges}
 

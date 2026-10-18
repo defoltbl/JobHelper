@@ -557,7 +557,9 @@ No message of the check tells the person to type a command. A test reads the str
 
 The assistant works on the tab in front in the browser of the person (Figure 6.5). It works in
 small steps that are easy to check. `form_fill` holds the scripts and the rules. One fill is one
-`form_run.FormFillRun`, with one method for each step. A step that cannot go on raises `Stop`
+`form_run.FormFillRun`, with one method for each step. `FormChoices` makes the choices of a form,
+and `FormFiles` gives its file fields their files. `form_fill.PageAddress` says if the assistant may
+work on a page at all. A step that cannot go on raises `Stop`
 with the message for the person, and the steps after it do not run:
 
 ![How the assistant fills in a form](img/code_fill.png)

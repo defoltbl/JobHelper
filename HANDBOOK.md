@@ -212,6 +212,12 @@ data/                your data; only the *.example.* files are in git
   draft answers, choose, tick, write and type again what the page threw away, attach, report). `api_assistant` only
   starts it and keeps `learned()` for "Learn my corrections". A new step is a method there, and a step that must
   stop raises `Stop(message)`.
+- **Which pages the assistant works on is `form_fill.PageAddress`** (`is_web`: http or https with a host; `refused`: a
+  Russian service; `refusal(doing)` says so in one sentence). Filling in, reading back, opening a framed form, judging a
+  posting and noticing a form all ask it. The choices of a form are `form_run.FormChoices`, its file fields
+  `form_run.FormFiles`; the plain checks of a form read back are `form_fill.plain_problems`.
+- **The briefing's rules are `summary.briefing_lines` and `summary.nudges`** (worked out from the data, no Claude);
+  `api_talk` only reads the data and asks them. The follow-up days come from `followup_days()`, as everywhere.
 - **The window keeps no copy of a limit.** How long a typed text may be comes from the module that checks it,
   through `Api.limits()` (`win.limits` in QML) or with the data of a dialog (`columns` of My details, `max_part`
   of a preparation). A new limit goes into the owner and into that map; `tests/test_window_limits.py` keeps
