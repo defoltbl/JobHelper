@@ -16,7 +16,13 @@ from typing import Any
 
 from . import claims, config, cover_letter, interview_prep, llm, salary
 
-MAX_QUESTIONS, MAX_QUESTION, MAX_ANSWER = 15, 300, 3000
+MAX_QUESTIONS, MAX_QUESTION, MAX_ANSWER = 15, 300, 3000     # the limits of a form's questions and answers, for every part of the app
+_TO_FILL = re.compile(r"\[[^\]]+\]")
+
+
+def unfilled(answer: str) -> bool:
+    """Whether an answer still has a part in [square brackets] for the person to fill in (a figure, a date, a name)."""
+    return bool(_TO_FILL.search(str(answer or "")))
 
 SYSTEM = (
     "You fill in one job application form for one candidate. You only use facts from the "
@@ -167,7 +173,7 @@ def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str
             item["check"] = unbacked
         elif not item["answer"]:
             item["check"] = "No answer was drafted. Write this one yourself."
-        elif "[" in item["answer"] and "]" in item["answer"] and not item["check"]:
+        elif unfilled(item["answer"]) and not item["check"]:
             item["check"] = "Fill in the part in square brackets."
     return items
 

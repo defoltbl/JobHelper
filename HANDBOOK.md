@@ -200,6 +200,9 @@ data/                your data; only the *.example.* files are in git
 - **An event's day and start are read only by `planner.Event`**: "Coming up", the reminders, the calendar file
   and the thank-you note ask it. A dated line in a job's notes is `store.add_note`; a title the app gives a job it
   knows only by its company is one of `store.PLACEHOLDER_TITLES` (`store.has_real_title`).
+- **A form's limits and its "[to fill in]" rule are `form_answers`'s** (`MAX_QUESTION`, `MAX_ANSWER`, `unfilled`): the
+  assistant and the answer memory ask it. A phone code is chosen only by `form_fill.code_option`, and a date of
+  My details ("03/2023") is read only by `form_fill.RowDate`, whatever kind of field or menu the page has.
 - **Two company names are one company only through `email_client.same_company`.** Never compare
   by "any shared word": "Accenture Czech Republic" and "PwC Czech Republic" share one. A legal form
   ("spol. s r.o.", "Corp", "LLC", "Limited") is never a word of the name: `email_client.LEGAL_WORDS`
