@@ -572,6 +572,8 @@ small steps that are easy to check, all in `form_fill`:
    `details`. Open questions go to `form_answers` in one call. The other fields stay empty, with
    the reason.
 3. A second script writes the values into fields that are still empty and outlines them.
+   Every script gets its values through `with_values`, as JSON data, so a value never becomes code.
+   Every answer of a page goes through `page_reply`, because a page may answer anything.
 4. Lists, radio buttons and menus that the page draws itself are choices. `form_choices` decides
    them. A third script opens a menu, reads its entries, and presses the chosen entry.
 5. A file field can ask for the CV, the letter or other attachments (`file_kind`). It gets the

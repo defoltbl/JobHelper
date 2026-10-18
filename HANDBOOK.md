@@ -205,6 +205,9 @@ data/                your data; only the *.example.* files are in git
   a save never treats it as empty, or it would write over it (`CompanyNotes` shows no notes, and the save gives
   `CompanyNotes.UNREADABLE`). `usage.UsageLog` owns usage.json (not
   encrypted) and the counts of this run; `api_system` asks `usage.totals()` / `usage.by_tag()`.
+- **A script for the page gets its values only through `form_fill.with_values`** (each `__NAME__` as JSON data, never
+  code), and every answer of a page is read through `form_fill.page_reply` (refused with a message, or None). A new
+  script and its reader use both; `tests/test_page_scripts.py` checks that no builder leaves a `__NAME__` unfilled.
 - **The window keeps no copy of a limit.** How long a typed text may be comes from the module that checks it,
   through `Api.limits()` (`win.limits` in QML) or with the data of a dialog (`columns` of My details, `max_part`
   of a preparation). A new limit goes into the owner and into that map; `tests/test_window_limits.py` keeps
