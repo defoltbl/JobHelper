@@ -492,8 +492,9 @@ Table 6.4 lists the programs from outside that the app uses, and what it does wi
 ### The check before a push
 
 `scripts/push_check.py` examines what a `git push` would publish. Without arguments, it examines
-the whole history. As git's pre-push hook, it examines only the commits that the remote does not
-have yet. To install the hook, use `python scripts/push_check.py --install-hook`. The hook stops the
+the whole history. As git's pre-push hook, it examines only the commits that no remote branch has
+yet. A commit on GitHub is public already, also the commit that GitHub makes when it squashes a pull
+request. To install the hook, use `python scripts/push_check.py --install-hook`. The hook stops the
 push when it finds one of these problems:
 
 - A personal detail of the owner: the name, an email address, a phone number or a profile address.
