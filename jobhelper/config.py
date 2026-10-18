@@ -356,6 +356,16 @@ def candidate_facts(cv_text: str = "") -> dict[str, str]:
             "start": str(o.get("about_start") or "").strip()}
 
 
+def scan_days() -> int:
+    """How far back the email scan looks: "Scan emails from the last … days" in Options, or IMAP_LOOKBACK_DAYS when
+    that was never saved. The window, the command line and the weekly run all ask here."""
+    try:
+        saved = int(ui_settings().get("scan_days") or 0)
+    except (TypeError, ValueError):
+        saved = 0
+    return saved if saved > 0 else IMAP_LOOKBACK_DAYS
+
+
 def search_country() -> str:
     """The country typed in Options for the search ('' = the country of the city)."""
     return str(ui_settings().get("country") or "").strip()

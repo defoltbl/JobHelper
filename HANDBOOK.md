@@ -207,6 +207,9 @@ data/                your data; only the *.example.* files are in git
 - **A form's limits and its "[to fill in]" rule are `form_answers`'s** (`MAX_QUESTION`, `MAX_ANSWER`, `unfilled`): the
   assistant and the answer memory ask it. A phone code is chosen only by `form_fill.code_option`, and a date of
   My details ("03/2023") is read only by `form_fill.RowDate`, whatever kind of field or menu the page has.
+- **Every email scan ends with `agent5_responses.after_scan` and says so with `scan_notice`**, in the window,
+  `status.py sync` and the weekly run. How far back it reads is `config.scan_days()`; when a follow-up is due is
+  `followup.saved_days()`.
 - **Two company names are one company only through `email_client.same_company`.** Never compare
   by "any shared word": "Accenture Czech Republic" and "PwC Czech Republic" share one. A legal form
   ("spol. s r.o.", "Corp", "LLC", "Limited") is never a word of the name: `email_client.LEGAL_WORDS`

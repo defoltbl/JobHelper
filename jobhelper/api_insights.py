@@ -28,7 +28,7 @@ class InsightsService:
     # ── the last seven days ─────────────────────────────────────
     @_guarded(dict)
     def week_summary(self):
-        w = summary.week(store.load_jobs(), db.all_responses(), int(self._app.options().get("followup_days") or 0))
+        w = summary.week(store.load_jobs(), db.all_responses(), self._app.followup_days())
         return {"from": w["from"], "to": w["to"], "lines": summary.lines(w), "headline": summary.headline(w)}
 
     # ── what the last search filtered out ───────────────────────

@@ -20,10 +20,7 @@ class OptionsService:
 
     # ── one job in full ─────────────────────────────────────────
     def followup_days(self) -> int:
-        try:
-            return max(0, int(config.ui_settings().get("followup_days", followup.DEFAULT_DAYS)))
-        except (TypeError, ValueError):
-            return followup.DEFAULT_DAYS
+        return followup.saved_days()
 
     def profession_fields(self, wanted=None):
         """Which professions the free first look treats as yours, for the roles given (the ones

@@ -1,6 +1,6 @@
 """Agent 4 — the tracking table.
 
-render_excel(): (re)build data/applications.xlsx from the job store, one row per
+render_all(): (re)build data/applications.xlsx from the job store, one row per
 job, with the cover-letter filename and current status.
 
 Email reading now lives in `email_client`; response analysis + status updates
@@ -159,8 +159,5 @@ def render_all(jobs: list[dict[str, Any]]) -> None:
     render_applications(jobs)
     render_new_jobs(jobs)
 
-
-# Backwards-compatible alias.
-render_excel = render_all
 
 

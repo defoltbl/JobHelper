@@ -380,15 +380,13 @@ class RunSlots:
             self.agentChanged.emit("a5", "running", "")
             self.logChanged.emit("Reading inbox (read-only)…")
             jobs = store.load_jobs()
-            days = int(days or self._api.options().get("scan_days") or config.IMAP_LOOKBACK_DAYS)
+            days = int(days or config.scan_days())
             self.logChanged.emit("Reading inbox (read-only), last %d days…" % days)
             self._partial = self._api.live = jobs
             stats = agent5_responses.process_inbox(jobs, lookback_days=days,
                                                    progress=lambda d, t: self._tick("a5", d, t),
                                                    on_limit=self._on_limit)
-            agent5_responses.backfill_roles(jobs)
-            agent5_responses.annotate_progress(jobs)
-            agent2_search.prune_applied_leads(jobs)
+            agent5_responses.after_scan(jobs)
             store.save_jobs(jobs)
             agent4_tracker.render_all(jobs)
             agent5_responses.build_report(jobs)
@@ -398,11 +396,11 @@ class RunSlots:
             from . import email_client
             warning = (" " + " ".join(email_client.last_warnings)) if email_client.last_warnings else ""
             self.runFinished.emit("scan", agent5_responses.scan_summary(stats) + warning)
-            invites = notify.invites_text(stats.get("invites") or [])
-            if invites:
-                notify.send(invites + ". Open JobHelper to prepare for it.", "Interview invitation")   # worth an alert even with the app in front
+            text, title, urgent = agent5_responses.scan_notice(stats)
+            if urgent:
+                notify.send(text, title)                         # worth an alert even with the app in front
             else:
-                self._notify(agent5_responses.replies_text(stats), "Email scan finished")
+                self._notify(text, title)
         except RunCancelled:
             self._save_partial(jobs)
             self.runFinished.emit("scan", "Stopped. Emails read before that are saved.")

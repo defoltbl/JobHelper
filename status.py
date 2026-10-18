@@ -128,16 +128,6 @@ def cmd_retailor(args) -> int:
     return 0
 
 
-def scan_days() -> int:
-    """How far back the email scan looks: "Scan emails from the last … days" in the app's
-    Options, or IMAP_LOOKBACK_DAYS when that was never saved."""
-    try:
-        saved = int(config.ui_settings().get("scan_days") or 0)
-    except (TypeError, ValueError):
-        saved = 0
-    return saved if saved > 0 else config.IMAP_LOOKBACK_DAYS
-
-
 def mail_problem(error: Exception) -> str:
     """Why the mailbox could not be read, in a sentence (the password is never part of it)."""
     import imaplib
@@ -153,13 +143,13 @@ def cmd_sync(args) -> int:
     if not jobs:
         print("No jobs tracked yet. Run: python run.py")
         return 0
-    days = args.days or scan_days()
+    days = args.days or config.scan_days()
     print(f"Reading inbox ({config.IMAP_USER}), last {days} days — read-only, nothing is sent or deleted …")
     try:
         stats = agent5_responses.process_inbox(jobs, lookback_days=days)
     except llm.LimitReached as e:
         store.save_jobs(jobs)                    # the replies read so far have already changed these jobs
-        agent4_tracker.render_excel(jobs)
+        agent4_tracker.render_all(jobs)
         print(f"⏸  {e}\n   What was read is saved. Run it again after the reset: nothing is read twice.")
         return 3
     except RuntimeError as e:
@@ -168,20 +158,15 @@ def cmd_sync(args) -> int:
     except Exception as e:  # noqa: BLE001 - the weekly run's log gets a sentence, not a traceback
         print(f"✗ {mail_problem(e)}")
         return 1
-    agent5_responses.backfill_roles(jobs)
-    agent5_responses.annotate_progress(jobs)
-    pruned = agent2_search.prune_applied_leads(jobs)   # drop leads now applied to
+    pruned = agent5_responses.after_scan(jobs)         # leads now applied to are dropped
     if pruned:
         print(f"  · removed {len(pruned)} lead(s) from new_jobs you've applied to")
     store.save_jobs(jobs)
-    agent4_tracker.render_excel(jobs)
+    agent4_tracker.render_all(jobs)
     agent5_responses.build_report(jobs)
     from jobhelper import notify
-    invited = notify.invites_text(stats.get("invites") or [])
-    if invited:
-        notify.send(invited + ". Open JobHelper to prepare for it.", "Interview invitation")
-    else:
-        notify.send(agent5_responses.replies_text(stats), "Email scan finished")
+    text, title, _urgent = agent5_responses.scan_notice(stats)
+    notify.send(text, title)
     print(f"\nScanned {stats['scanned']} emails ({stats.get('skipped_unrelated', 0)} unrelated skipped) "
           f"→ {stats['new_responses']} new responses ({stats['rejections']} rejections), "
           f"{stats['status_updates']} status updates.")
@@ -190,8 +175,8 @@ def cmd_sync(args) -> int:
     agent5_responses.print_report(jobs)
     print(f"\n{usage.format_report()}")
     if getattr(args, "summary", False):
-        from jobhelper import db, summary
-        week = summary.week(jobs, db.all_responses(), int(config.ui_settings().get("followup_days", 10) or 0))
+        from jobhelper import db, followup, summary
+        week = summary.week(jobs, db.all_responses(), followup.saved_days())
         print("\n── The last 7 days ──")
         for row in summary.lines(week):
             print(f"  {row['label']}: {row['value']}  {row['note']}".rstrip())
@@ -204,10 +189,10 @@ def cmd_responses(args) -> int:
     if args.scan:
         print(f"Reading inbox ({config.IMAP_USER}) — read-only …")
         try:
-            stats = agent5_responses.process_inbox(jobs, lookback_days=args.days or scan_days())
+            stats = agent5_responses.process_inbox(jobs, lookback_days=args.days or config.scan_days())
         except llm.LimitReached as e:
             store.save_jobs(jobs)                    # the replies read so far have already changed these jobs
-            agent4_tracker.render_excel(jobs)
+            agent4_tracker.render_all(jobs)
             print(f"⏸  {e}\n   What was read is saved. Run it again after the reset: nothing is read twice.")
             return 3
         except RuntimeError as e:
@@ -218,7 +203,7 @@ def cmd_responses(args) -> int:
             return 1
         agent5_responses.annotate_progress(jobs)
         store.save_jobs(jobs)
-        agent4_tracker.render_excel(jobs)
+        agent4_tracker.render_all(jobs)
         print(f"Scanned {stats['scanned']} emails → {stats['new_responses']} new responses.\n")
     agent5_responses.print_report(jobs)
     agent5_responses.build_report(jobs)
@@ -230,7 +215,7 @@ def cmd_letters(_args) -> int:
     jobs = store.load_jobs()
     stats = letters.import_letters(jobs)
     store.save_jobs(jobs)
-    agent4_tracker.render_excel(jobs)
+    agent4_tracker.render_all(jobs)
     print(f"Cover letters in {config.COVER_LETTERS_DIR}:")
     print(f"  scanned {stats['scanned']}, linked {stats['linked']} to jobs, "
           f"seeded {stats['seeded']} past applications.")
@@ -270,7 +255,7 @@ def cmd_prune(_args) -> int:
 def cmd_rebuild(_args) -> int:
     jobs = store.load_jobs()
     agent5_responses.annotate_progress(jobs)
-    agent4_tracker.render_excel(jobs)
+    agent4_tracker.render_all(jobs)
     print(f"✓ Rebuilt {config.EXCEL_PATH} ({len(jobs)} jobs)")
     return 0
 
@@ -346,7 +331,7 @@ def cmd_repair_emails(args) -> int:
 def cmd_followups(args) -> int:
     """List applications that have had no reply for a while."""
     from jobhelper import db, followup
-    days = args.days if args.days is not None else int(config.ui_settings().get("followup_days", followup.DEFAULT_DAYS))
+    days = args.days if args.days is not None else followup.saved_days()
     jobs = store.load_jobs()
     replies = followup.last_reply_by_job(db.all_responses())
     due = followup.due_jobs(jobs, db.all_responses(), days)
