@@ -84,7 +84,7 @@ Dialog {
         var tok = (token || "").trim();
         coErr = "";
         if (win.hasNonLatin(name)) { coErr = "Write the company name in Latin letters."; return false; }
-        if ((name || "").trim().length > 60) { coErr = "The company name is " + (name || "").trim().length + " characters long; the most is 60."; return false; }
+        if ((name || "").trim().length > win.limits.company_name) { coErr = "The company name is " + (name || "").trim().length + " characters long; the most is " + win.limits.company_name + "."; return false; }
         if (!tok) { coErr = "Enter the company's token (the slug in its career-site URL)."; return false; }
         if (!win.isSlug(tok)) { coErr = "Token looks wrong – use the URL slug only (letters, digits, - or _), no spaces or https://."; return false; }
         for (var i = 0; i < companiesModel.count; i++)
@@ -101,7 +101,7 @@ Dialog {
         return m[(c || "").toLowerCase()] || c || "";
     }
     property var myLetters: ({})          // where your own letters are, and how many
-    readonly property int expMax: 4000    // the same limit the app applies when it reads the text
+    readonly property int expMax: win.limits.experience_notes    // the limit the app applies when it reads the text
     property string loaded: ""            // everything in the window as it was when it opened, to tell if it changed
     property bool confirmClose: false
     function collect() {                  // what Save would store, as plain values
@@ -353,7 +353,7 @@ Dialog {
                                 readonly property string guessed: bridge.countryOf(cityCombo.editText)
                                 placeholderText: guessed !== "" ? guessed + " (from the city)" : "not known for this city: type it"
                                 placeholderTextColor: guessed !== "" ? theme.faint : theme.warn
-                                color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 60
+                                color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.options.country
                                 onTextEdited: optDialog.optErr = optDialog.countryProblem(text)
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
                                     border.color: countryField.activeFocus ? theme.accent
@@ -548,7 +548,7 @@ Dialog {
                         // add form
                         RowLayout { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; spacing: 6
                             TextField { id: coName; objectName: "coName"; Layout.fillWidth: true; placeholderText: "Company name"
-                                color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 60
+                                color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.company_name
                                 onTextEdited: optDialog.coErr = text.length >= maximumLength ? "The company name takes up to " + maximumLength + " characters." : ""
                                 background: Rectangle { radius: 7; color: theme.surface; border.color: parent.activeFocus ? theme.accent : theme.line; border.width: 1 } }
                             ThemedCombo { id: coAts; implicitWidth: 128; plainText: true
@@ -607,7 +607,7 @@ Dialog {
                         // another figure for some kinds of role: a support job and a developer job rarely pay the same
                         SRow { label: "A different figure for"; hint: "a kind of role, as in job titles · used instead of the one above"
                             RowLayout { spacing: 6
-                                TextField { id: payRole; objectName: "payRole"; implicitWidth: 120; implicitHeight: 30; maximumLength: 60
+                                TextField { id: payRole; objectName: "payRole"; implicitWidth: 120; implicitHeight: 30; maximumLength: win.limits.pay_role
                                     placeholderText: "e.g. support"; placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                                     background: Rectangle { radius: 8; color: theme.surface; border.width: 1
                                         border.color: payRole.activeFocus ? theme.accent : optDialog.payErr !== "" ? theme.crit : theme.line }
@@ -629,7 +629,7 @@ Dialog {
                         SRow { label: "Right to work"; hint: "as letters should say it · empty = not mentioned"
                             TextField { id: rightField; objectName: "rightField"; implicitWidth: 250; implicitHeight: 30
                                 placeholderText: "e.g. EU citizen, no permit needed"; placeholderTextColor: theme.faint
-                                color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 90
+                                color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.options.about_right_to_work
                                 onTextEdited: optDialog.optErr = text.length >= maximumLength ? "“Right to work” takes up to " + maximumLength + " characters." : ""
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
                                     border.color: rightField.activeFocus ? theme.accent : theme.line } } }
@@ -637,7 +637,7 @@ Dialog {
                         SRow { label: "You can start"; hint: "also filled into forms · empty = not mentioned"
                             TextField { id: startField; objectName: "startField"; implicitWidth: 250; implicitHeight: 30
                                 placeholderText: "e.g. within two weeks"; placeholderTextColor: theme.faint
-                                color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 60
+                                color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.options.about_start
                                 onTextEdited: optDialog.optErr = text.length >= maximumLength ? "“You can start” takes up to " + maximumLength + " characters." : ""
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
                                     border.color: startField.activeFocus ? theme.accent : theme.line } } }

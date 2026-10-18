@@ -32,6 +32,8 @@ class AssistantService:
         return {"details": {key: kept[key] or offered.get(key, "") for key in details.KEYS}, "from_cv": from_cv,
                 "saved": details.any_given(kept),
                 "fields": [{"key": key, "label": label, "most": most} for key, label, most in details.FIELDS],
+                "columns": {name: [{"key": key, "label": label, "most": most, "long": key in details.LONG} for key, label, most in cols]
+                            for name, cols in details.ROWS.items()},
                 "experience": kept["experience"], "education": kept["education"], "languages": kept["languages"],
                 "levels": list(details.LEVELS),
                 "files": [{**f, "name": os.path.basename(f["path"])} for f in kept["files"]],

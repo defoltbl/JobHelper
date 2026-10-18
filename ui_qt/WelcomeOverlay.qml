@@ -310,7 +310,7 @@ Item {
                         TextField { id: serverRow; objectName: "mailServerField"; Layout.fillWidth: true; Layout.leftMargin: 38
                             visible: welcome.needsServer
                             placeholderText: "IMAP server, e.g. imap." + (welcome.emailDraft.trim().split("@").pop() || "example.com")
-                            text: welcome.hostDraft; color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: 253
+                            text: welcome.hostDraft; color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.mail_server
                             placeholderTextColor: theme.faint
                             background: Rectangle { radius: 8; color: theme.inset; border.width: 1
                                 border.color: serverRow.activeFocus ? theme.accent : theme.line }

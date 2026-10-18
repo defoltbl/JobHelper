@@ -507,6 +507,11 @@ class JobSlots:
         return self._api.changelog()
 
     @Slot(result="QVariantMap")
+    def limits(self):
+        """How long what you type may be (SystemService.limits): the window reads these, it keeps no copy."""
+        return self._api.limits()
+
+    @Slot(result="QVariantMap")
     def filteredOut(self):
         return self._api.filtered_out()
 
