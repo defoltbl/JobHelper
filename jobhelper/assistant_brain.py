@@ -19,7 +19,7 @@ from typing import Any
 from . import db, llm, planner, store
 
 MAX_TURNS, MAX_TURN, MAX_JOBS, MAX_SHOWN, MAX_ACTIONS = 6, 400, 70, 30, 3
-STATUSES = ("waiting", "interview", "offer", "rejected", "on_hold")
+STATUSES = tuple(sorted(store.APPLICATION_STATUSES))       # what set_status may set: the statuses of an application
 
 # name -> (what it needs, does it change your data)
 ACTIONS = {

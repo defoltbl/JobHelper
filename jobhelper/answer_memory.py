@@ -14,8 +14,9 @@ from datetime import date
 from typing import Any
 
 from . import config, vault
+from .form_answers import MAX_ANSWER, MAX_QUESTION, unfilled
 
-MAX_ENTRIES, MAX_ANSWER = 300, 3000
+MAX_ENTRIES = 300
 CHECK = "Your own earlier answer: check that it fits this job."
 _SLOT = "{company}"
 
@@ -57,11 +58,11 @@ def remember(question: str, answer: str, company: str = "") -> bool:
     (no answer, a part still in [square brackets], no real question)."""
     answer = str(answer or "").strip()
     k = key(question, company)
-    if not answer or len(answer) > MAX_ANSWER or re.search(r"\[[^\]]+\]", answer) or len(k) < 4:
+    if not answer or len(answer) > MAX_ANSWER or unfilled(answer) or len(k) < 4:
         return False
     data = _load()
     data.pop(k, None)                               # the newest wording goes to the end
-    data[k] = {"question": " ".join(str(question).split())[:300], "answer": answer,
+    data[k] = {"question": " ".join(str(question).split())[:MAX_QUESTION], "answer": answer,
                "company": " ".join(str(company or "").split()), "when": date.today().isoformat()}
     while len(data) > MAX_ENTRIES:
         data.pop(next(iter(data)))                  # the oldest one makes room

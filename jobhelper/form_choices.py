@@ -92,10 +92,8 @@ def settle(choice: dict[str, Any], mine: dict[str, str], job: dict[str, Any] | N
         home = [o for o in city if mine.get("country")
                 and form_fill.country_option([part for part in re.split(r"[,(/)]", o) if named not in _norm(part)], mine["country"])]
         return (home or city)[0] if len(home) == 1 or len(city) == 1 or home else ""
-    if what == "phone" and mine.get("phone", "").startswith("+"):          # the list of country codes next to a phone field
-        digits = re.sub(r"\D", "", mine["phone"])
-        codes = sorted(((re.sub(r"\D", "", o), o) for o in options if re.search(r"\+\d", o)), key=lambda pair: -len(pair[0]))
-        return next((o for code, o in codes if code and digits.startswith(code)), "")
+    if what == "phone":                             # the list of country codes next to a phone field
+        return form_fill.code_option(options, mine.get("phone", ""), mine.get("country", ""))[0]
     if choice.get("value"):
         found = match_option(options, choice["value"])
         if found:
@@ -149,12 +147,13 @@ def decide(choices: list[dict[str, Any]], cv_text: str, mine: dict[str, str], jo
             lines.append(f"{c['n']}. {c['label']}\n   (a few words, copied from the CV or the facts)")
         else:
             lines.append(f"{c['n']}. {c['label']}\n   options: " + " | ".join(str(o) for o in c["options"][:60] if str(o).strip()))
-    data = llm.ask_json(PROMPT.format(cv_text=cv_text[:12000], facts=facts_block(cv_text, mine, job),
+    facts = facts_block(cv_text, mine, job)
+    data = llm.ask_json(PROMPT.format(cv_text=cv_text[:12000], facts=facts,
                                       title=(job or {}).get("title", "not stated"), company=(job or {}).get("company", "not stated"),
                                       location=(job or {}).get("location", "not stated"), fields="\n".join(lines)),
                         system=SYSTEM, tag="form_answers")
     by_n = {c["n"]: c for c in todo}
-    backing = _norm(cv_text + "\n" + facts_block(cv_text, mine, job))
+    backing = _norm(cv_text + "\n" + facts)
     out: dict[int, str] = {}
     for item in (data.get("choices") if isinstance(data, dict) else None) or []:
         if not isinstance(item, dict) or not isinstance(item.get("n"), int) or item["n"] not in by_n \

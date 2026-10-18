@@ -2119,3 +2119,22 @@ def test_one_saved_value_that_no_longer_passes_does_not_blank_my_details(isolate
     vault.write_text(details.path(), "[1, 2]")
     assert details.load() == details.empty(), "a file that is not details at all is still read as none"
     assert details.save(FULL)["ok"] and details.load()["email"] == MINE["email"]
+
+
+def test_a_phone_code_menu_uses_the_one_code_rule_and_your_country():
+    """The menus a page draws itself had their own copy of the rule and took the first "+1" for a Canadian number."""
+    from jobhelper import form_choices
+    menu = {"what": "phone", "options": ["United States (+1)", "Canada (+1)", "Czechia (+420)"]}
+    assert form_choices.settle(menu, {"phone": "+1 416 555 0100", "country": "Canada"}, None) == "Canada (+1)"
+    assert form_choices.settle(menu, {"phone": "+420 601 234 567", "country": "Czechia"}, None) == "Czechia (+420)"
+    assert form_choices.settle(menu, {"phone": "601 234 567"}, None) == ""                     # no code in the number: nothing chosen
+
+
+def test_the_form_limits_and_the_unfilled_rule_live_in_one_place():
+    from jobhelper import answer_memory, assistant, form_answers, form_fill
+    assert assistant.MAX_ANSWER is form_answers.MAX_ANSWER and answer_memory.MAX_ANSWER is form_answers.MAX_ANSWER
+    assert assistant.MAX_QUESTION is form_answers.MAX_QUESTION
+    assert form_answers.unfilled("I can start on [date].") and not form_answers.unfilled("I can start [soon")
+    assert assistant.check_answer("When can you start?", "On [date].")["field"] == "answer"
+    assert form_fill.RowDate("3/2023").mm == "03" and form_fill.RowDate("2023").month == 0 and not form_fill.RowDate("")
+    assert form_fill.RowDate("13/2023").month == 0                                      # not a month: only the year is known
