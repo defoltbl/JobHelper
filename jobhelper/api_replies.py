@@ -99,18 +99,19 @@ class RepliesService:
         named = reply.get("company", "")
         fix = None if named and email_client.same_company(named, target.get("company", "")) else target.get("company", "")
         db.set_response_job(msg_id, job_id, fix)
-        new_status = email_client.STAGE_TO_STATUS.get(reply.get("stage", ""))
         moved = {}
 
         def go(all_jobs, j):
             current = j.get("status", "")
-            if new_status and new_status != current and (new_status == "rejected" or email_client.RANK.get(new_status, 0) > email_client.RANK.get(current, 0)):
-                moved["from"], j["status"], j["last_update"] = current, new_status, date.today().isoformat()
+            new_status = email_client.status_after(current, reply.get("stage", ""))
+            if new_status and new_status != current:
+                moved["from"], moved["to"] = current, new_status
+                j["status"], j["last_update"] = new_status, date.today().isoformat()
             agent5_responses.annotate_progress(all_jobs)
         self._editor.change(job_id, go)
         text = f"Filed under {target.get('company', '')} · {target.get('title', '')}."
         if moved:
-            text += f" Its status changed from {moved['from']} to {new_status}."
+            text += f" Its status changed from {moved['from']} to {moved['to']}."
         if old and old["id"] != job_id:
             text += f" {old.get('company', '')} keeps its status ({old.get('status', '')}): change it there if this reply had set it."
         return {"ok": True, "msg": text}

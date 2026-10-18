@@ -13,10 +13,10 @@ from datetime import date
 from typing import Any
 
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Font
 
 from . import config, db, email_client, llm, store
-from .agent4_tracker import put
+from .agent4_tracker import header_row, put
 
 SYSTEM = (
     "You analyze emails a job applicant received in reply to their applications. "
@@ -90,7 +90,7 @@ def set_by_hand_since(job: dict[str, Any], email_date: str) -> bool:
     except ValueError:
         return False
     mine = mine if mine.tzinfo else mine.astimezone()
-    return _parse_date(email_date) <= mine
+    return db.received_at(email_date) <= mine
 
 
 def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, Any] | None, stats: dict[str, Any]) -> str:
@@ -132,14 +132,13 @@ def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, An
 
     # Update the matched job's status (forward-only; rejection from anywhere).
     if guess:
-        new_status = email_client.STAGE_TO_STATUS.get(stage)
         cur = guess.get("status", "found")
-        if new_status and not set_by_hand_since(guess, msg["date"]) and (
-                new_status == "rejected" or email_client.RANK.get(new_status, 0) > email_client.RANK.get(cur, 0)):
+        new_status = email_client.status_after(cur, stage)
+        if new_status and not set_by_hand_since(guess, msg["date"]):
             if cur in store.LEAD_STATUSES and not guess.get("date_applied"):
                 # the company wrote back, so you applied: the reply's day is the best date known
-                guess["date_applied"] = db.received_at(msg["date"]).date().isoformat() \
-                    if db.received_at(msg["date"]).year > 1 else date.today().isoformat()
+                arrived = db.received_at(msg["date"])
+                guess["date_applied"] = arrived.date().isoformat() if arrived.year > 1 else date.today().isoformat()
                 guess["date_applied_source"] = "first email"
             guess["status"] = new_status
             guess["last_update"] = date.today().isoformat()
@@ -323,8 +322,9 @@ def process_inbox(jobs: list[dict[str, Any]], lookback_days: int | None = None,
             ))
         except llm.LimitReached:
             raise                      # not this email's fault: pause or end the scan, it stays unread
-        except Exception as e:
-            print(f"  ! Could not analyze email from {msg['sender']}: {e}")
+        except Exception as e:  # noqa: BLE001 - one answer that cannot be read: this email is asked again next scan
+            from . import trouble
+            trouble.note("reading one email with Claude", RuntimeError(type(e).__name__))
             continue
 
         db.mark_seen(msg["msg_id"])  # spent the call — don't reclassify next time
@@ -380,10 +380,6 @@ def repair_unread_bodies(jobs: list[dict[str, Any]], emails: list[dict[str, Any]
     return stats
 
 
-_RESULT_TO_STATUS = {"rejection": "rejected", "interview": "interview",
-                     "assessment": "interview", "offer": "offer", "acknowledged": "waiting"}
-
-
 def reconcile_jobs(jobs: list[dict[str, Any]]) -> int:
     """Ensure every company that sent a response exists as a tracked job.
 
@@ -420,7 +416,7 @@ def reconcile_jobs(jobs: list[dict[str, Any]]) -> int:
             title=role or "(from email response)",
             company=company,
             source="email",
-            status=_RESULT_TO_STATUS.get(result, "waiting"),     # they wrote back, so it is an application
+            status=email_client.STAGE_TO_STATUS.get(result, "waiting"),     # they wrote back, so it is an application
             notes="Created from an email response.",
         ))
         existing_ids.add(new_id)
@@ -513,21 +509,6 @@ _STAGE_ORDER = {"acknowledged": 0, "assessment": 1, "interview": 2, "offer": 3,
                 "rejection": 3, "other": -1}
 
 
-def _parse_date(raw: str):
-    """Parse a date to a sortable UTC datetime. Handles RFC 2822 email Date
-    headers and ISO dates; falls back to epoch."""
-    from datetime import datetime, timezone
-    from email.utils import parsedate_to_datetime
-    raw = (raw or "").strip()
-    for parse in (parsedate_to_datetime, datetime.fromisoformat):
-        try:
-            dt = parse(raw)
-            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-        except (TypeError, ValueError):
-            continue
-    return datetime(1970, 1, 1, tzinfo=timezone.utc)
-
-
 def progress_rows(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """One row per application (company + role): the stage path + final result.
 
@@ -536,7 +517,7 @@ def progress_rows(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     reflects the real progression, not email volume.
     """
     groups: dict[str, dict[str, Any]] = {}
-    for r in sorted(db.all_responses(), key=lambda x: _parse_date(x.get("received_date", ""))):
+    for r in sorted(db.all_responses(), key=lambda x: db.received_at(x.get("received_date", ""))):
         company = (r.get("company") or "").strip()
         role = (r.get("role") or "").strip()
         # Group all emails linked to the same application together; otherwise fall
@@ -559,10 +540,7 @@ def progress_rows(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     jobs_by_id = {j["id"]: j for j in jobs}
     rows = []
     for g in groups.values():
-        job = jobs_by_id.get(g["job_id"])
-        if job is None and g["company"]:
-            if email_client.company_tokens(g["company"]):
-                job = next((j for j in jobs if email_client.same_company(g["company"], j.get("company", ""))), None)
+        job = jobs_by_id.get(g["job_id"]) or email_client.job_of_company(g["company"], jobs)
         result = g["stages"][-1] if g["stages"] else ""  # most recent stage = current outcome
         rows.append({
             "job_id": job["id"] if job else "",
@@ -576,7 +554,7 @@ def progress_rows(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "last_update": g["last"],
         })
     # by the day itself: these are dates as emails write them ("Fri, 9 Oct 2026 …"), which as text sort by the weekday's name
-    return sorted(rows, key=lambda x: _parse_date(x["last_update"]), reverse=True)
+    return sorted(rows, key=lambda x: db.received_at(x["last_update"]), reverse=True)
 
 
 def _numbered_path(stages: list[str]) -> str:
@@ -621,7 +599,7 @@ def backfill_apply_dates(jobs: list[dict[str, Any]]) -> int:
     for job in jobs:
         if job.get("status") not in store.APPLICATION_STATUSES or job["id"] not in first:
             continue
-        imported = job.get("source") == "manual" and job.get("date_applied") == job.get("date_found")
+        imported = store.applied_on_import(job)
         from_email = job.get("date_applied_source") == "first email"
         if job.get("date_applied") and not imported and not from_email:
             continue                                   # a real date: leave it
@@ -640,10 +618,7 @@ def annotate_progress(jobs: list[dict[str, Any]]) -> None:
     backfill_apply_dates(jobs)
     jobs_by_id = {j["id"]: j for j in jobs}
     for row in progress_rows(jobs):
-        target = jobs_by_id.get(row["job_id"]) if row["job_id"] else None
-        if target is None and row["company"]:
-            if email_client.company_tokens(row["company"]):
-                target = next((j for j in jobs if email_client.same_company(row["company"], j.get("company", ""))), None)
+        target = jobs_by_id.get(row["job_id"]) or email_client.job_of_company(row["company"], jobs)
         if target is not None:
             target["stages_path"] = row["path"]
             target["result"] = row["result"]
@@ -651,11 +626,9 @@ def annotate_progress(jobs: list[dict[str, Any]]) -> None:
             # Keep the job's status in sync with the latest response stage
             # (forward-only; rejection can apply from anywhere). This is the
             # safety net that moves an applied lead into applications.
-            new_status = email_client.STAGE_TO_STATUS.get(row["result"])
+            new_status = email_client.status_after(target.get("status", "found"), row["result"])
             if new_status and not set_by_hand_since(target, row["last_update"]):
-                cur = target.get("status", "found")
-                if new_status == "rejected" or email_client.RANK.get(new_status, 0) > email_client.RANK.get(cur, 0):
-                    target["status"] = new_status
+                target["status"] = new_status
 
 
 def build_report(jobs: list[dict[str, Any]]) -> None:
@@ -692,11 +665,7 @@ def build_report(jobs: list[dict[str, Any]]) -> None:
     wsp = wb.create_sheet("Progress")
     p_headers = ["company", "role", "status", "path", "result", "next_step",
                  "first_contact", "last_update"]
-    for c, h in enumerate(p_headers, start=1):
-        cell = wsp.cell(row=1, column=c, value=h)
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="4472C4")
-        wsp.column_dimensions[chr(64 + c)].width = 26 if h in ("path", "next_step") else 18
+    header_row(wsp, [(h, 26 if h in ("path", "next_step") else 18) for h in p_headers])
     for r, row in enumerate(progress_rows(jobs), start=2):
         for c, h in enumerate(p_headers, start=1):
             put(wsp, r, c, row.get(h, ""))
@@ -704,11 +673,7 @@ def build_report(jobs: list[dict[str, Any]]) -> None:
     ws2 = wb.create_sheet("Responses")
     headers = ["received_date", "company", "role", "stage", "rejection_category",
                "rejection_reason", "sentiment", "next_step", "summary", "from_addr", "job_id"]
-    for c, h in enumerate(headers, start=1):
-        cell = ws2.cell(row=1, column=c, value=h)
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="4472C4")
-        ws2.column_dimensions[chr(64 + c)].width = 22
+    header_row(ws2, [(h, 22) for h in headers])
     for r, resp in enumerate(db.all_responses(), start=2):
         for c, h in enumerate(headers, start=1):
             put(ws2, r, c, resp.get(h, ""))
