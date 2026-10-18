@@ -93,3 +93,16 @@ def tidy_lines(text) -> str:
     while "\n\n\n" in out:
         out = out.replace("\n\n\n", "\n\n")
     return out
+
+
+# Scripts that are not Latin letters: Japanese kana, Chinese characters, Hangul, Cyrillic, Greek, Arabic, Hebrew, Thai,
+# Devanagari. The window's own `hasNonLatin` (Main.qml) lists the same ranges; a test keeps the two lists equal.
+NON_LATIN_RANGES = ("\u3040-\u30ff", "\u3400-\u9fff", "\uac00-\ud7af", "\u0400-\u04ff", "\u0370-\u03ff",
+                    "\u0600-\u06ff", "\u0590-\u05ff", "\u0e00-\u0e7f", "\u0900-\u097f")
+_NON_LATIN = re.compile("[" + "".join(NON_LATIN_RANGES) + "]")
+
+
+def has_non_latin(text) -> bool:
+    """Whether a text has letters of another script than Latin (punctuation such as ’ or – is fine)."""
+    return bool(_NON_LATIN.search(str(text or "")))
+

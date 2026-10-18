@@ -302,7 +302,7 @@ class RunSlots:
             profile = agent1_cv.load_profile(current_only=True)     # re-read after the CV was changed
             if profile is None:
                 profile = self._with_limit(agent1_cv.analyze)
-            seniority = profile.get("seniority", "junior")
+            seniority = agent1_cv.level_of(profile)
             self.agentChanged.emit("a1", "done", seniority)
 
             jobs = self._partial = self._api.live = store.load_jobs()

@@ -89,8 +89,6 @@ Dialog {
     function addPay() {                   // the back end's rule for one line (OptionsService.pay_problem), with its words
         var role = payRole.text.trim();
         payErr = bridge.payProblem(role, payAmount.value, payRoles(payModel.count));
-        if (payErr === "" && payModel.count >= win.limits.pay_rows)
-            payErr = "The list takes up to " + win.limits.pay_rows + " kinds of role. Remove one first.";
         if (payErr !== "") return;
         payModel.append({ role: role, amount: payAmount.value });
         payRole.text = ""; payAmount.value = 0;

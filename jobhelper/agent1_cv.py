@@ -1,4 +1,4 @@
-"""Agent 1 — analyze the CV.
+"""Agent 1 – analyze the CV.
 
 Reads the CV (PDF, DOCX or TXT) from data/cv/, then asks the model to produce
 a structured "target profile": which job types fit this person's experience,
@@ -123,10 +123,15 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def level_of(profile: dict[str, Any] | None) -> str:
+    """The person's level in a CV analysis already read ("junior" when it has none): the one reading of it."""
+    return str((profile or {}).get("seniority") or "junior")
+
+
 def seniority() -> str:
-    """The person's level as the CV analysis found it ("junior" without one): Options, About you and Insights ask here."""
+    """The person's level from the saved CV analysis (level_of); "junior" without one or when it cannot be read."""
     try:
-        return str((load_profile() or {}).get("seniority") or "junior")
+        return level_of(load_profile())
     except Exception:  # noqa: BLE001 - an unreadable analysis counts as none
         return "junior"
 

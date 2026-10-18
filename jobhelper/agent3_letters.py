@@ -532,7 +532,8 @@ def process(
     if only_new and cv_text.strip():
         level_words = config.ui_settings().get("level_words")
         if level_words is None:
-            level_words = filters.default_level_words(profile.get("seniority", "junior"))
+            from . import agent1_cv
+            level_words = filters.default_level_words(agent1_cv.level_of(profile))
         saved = config.ui_settings()
         wanted = saved.get("wanted_roles") or profile.get("target_roles") or []
         stats["prefiltered"] = prefilter.apply(

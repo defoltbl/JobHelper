@@ -8,7 +8,7 @@ import re
 
 from . import trouble
 from . import chrome
-from . import agent1_cv, filters, scrapers_ats, config, followup, housekeeping, integrity, places, salary, vault
+from . import agent1_cv, details, filters, scrapers_ats, config, followup, housekeeping, integrity, places, salary, textfmt, vault
 
 
 class OptionsService:
@@ -100,7 +100,7 @@ class OptionsService:
         try:
             profile = agent1_cv.load_profile() or {}
             seed_queries = profile.get("search_queries") or profile.get("target_roles") or []
-            level = profile.get("seniority", "junior")
+            level = agent1_cv.level_of(profile)
             target_roles = [str(r) for r in (profile.get("target_roles") or [])]
         except Exception:
             seed_queries, level, target_roles = [], "junior", []
@@ -127,7 +127,7 @@ class OptionsService:
         defaults.update(places.RemoteReach.from_options(defaults).as_options())       # which remote jobs fit
         return defaults
 
-    MAX_SALARY, MAX_PAY_ROWS = 100_000_000, 20     # the highest figure; how many kinds of role may have a figure of their own
+    MAX_SALARY, MAX_PAY_ROWS = details.MAX_SALARY, 20   # the highest figure (My details' own); kinds of role with a figure of their own
     OPTION_NUMBERS = {"salary_target": (0, MAX_SALARY), "threshold": (0, 100), "min_lead_score": (0, 100), "max_age_days": (0, 3650), "per_query": (1, 100),
                       "max_years": (0, 60), "keep_backups": (0, 1000), "followup_days": (0, 365), "scan_days": (1, 3650)}
     OPTION_LISTS = ("queries", "skip_words", "keep_words", "level_words", "wanted_roles", "unwanted_roles", "my_fields")
@@ -179,8 +179,8 @@ class OptionsService:
                 clean[key] = text
         if "salary_by_role" in clean:
             entries = clean["salary_by_role"]
-            if not isinstance(entries, (list, tuple)) or len(entries) > self.MAX_PAY_ROWS:
-                return {}, f"“salary by role” takes up to {self.MAX_PAY_ROWS} lines."
+            if not isinstance(entries, (list, tuple)):
+                return {}, "“salary by role” must be a list."
             tidy = []
             for entry in entries:
                 role = str((entry or {}).get("role") or "").strip() if isinstance(entry, dict) else ""
@@ -231,7 +231,7 @@ class OptionsService:
         role = " ".join(str(role or "").split())
         if not role:
             return "Enter a kind of role in words, for example support."
-        if not role.isascii() and re.search(r"[^\x00-\x7F\u00C0-\u024F\u2013]", role):
+        if textfmt.has_non_latin(role):
             return "Write the kind of role in English (Latin letters), as it stands in job titles."
         if not 2 <= len(role) <= self.MAX_PAY_ROLE or not re.search(r"[^\W\d_]{2}", role):
             return "Enter a kind of role in words, for example support."
@@ -239,6 +239,8 @@ class OptionsService:
             return f"Enter the salary for “{role}”: a whole number above 0."
         if role.lower() in [str(o).strip().lower() for o in others]:
             return f"“{role}” is already in the list: change its figure there."
+        if len(others) >= self.MAX_PAY_ROWS:
+            return f"The list takes up to {self.MAX_PAY_ROWS} kinds of role. Remove one first."
         return ""
 
     def save_options(self, opts):
