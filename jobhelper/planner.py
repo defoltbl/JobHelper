@@ -14,14 +14,14 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from . import config, email_client, vault
+from . import config, email_client, store, vault
 
 KINDS = ["interview", "deadline", "test task", "call", "other"]
 NOTE_FIELDS = ["contact", "salary", "asked", "notes"]
 NOTE_LIMITS = {"contact": 200, "salary": 200, "asked": 400, "notes": 2000}
 NOTE_LABELS = {"contact": "Who you spoke to", "salary": "Salary mentioned", "asked": "What they asked", "notes": "Notes"}
 MAX_EVENT_NOTE = 200
-_OVER = {"rejected", "not_interested"}
+_OVER = {"rejected", store.NOT_INTERESTED}
 
 
 # ── events ──────────────────────────────────────────────────────────────────
@@ -54,9 +54,8 @@ def set_event(job: dict[str, Any], day_text: str, time_text: str = "", kind: str
     note = (note or "").strip()
     if len(note) > MAX_EVENT_NOTE:
         return f"The note is {len(note)} characters long; the most is {MAX_EVENT_NOTE}. Shorten it."
+    clear_event(job)                                # a new date: its reminders start again
     job["event"] = {"date": day, "time": (time_text or "").strip(), "kind": kind, "note": note}
-    job.pop("event_notified", None)
-    job.pop("event_marks", None)
     return ""
 
 
@@ -64,6 +63,36 @@ def clear_event(job: dict[str, Any]) -> None:
     job.pop("event", None)
     job.pop("event_notified", None)
     job.pop("event_marks", None)
+
+
+class Event:
+    """One dated event of a job as it is saved ({date, time, kind, note}): its day, and its start when it has a time.
+    The one place that reads them, for "Coming up", the reminders, the calendar file and the thank-you note."""
+
+    def __init__(self, saved: dict[str, Any] | None) -> None:
+        saved = saved or {}
+        try:
+            self.day: date | None = date.fromisoformat(str(saved.get("date") or ""))
+        except ValueError:
+            self.day = None
+        try:
+            clock = datetime.strptime(str(saved.get("time") or ""), "%H:%M").time()
+        except ValueError:
+            clock = None
+        self.start: datetime | None = datetime.combine(self.day, clock) if self.day and clock else None
+
+    def leaves_at(self) -> datetime | None:
+        """When it leaves "Coming up": PASSED_AFTER after its start, or at the end of its day without a time (None: no date)."""
+        if self.day is None:
+            return None
+        return self.start + PASSED_AFTER if self.start else datetime.combine(self.day + timedelta(days=1), datetime.min.time())
+
+    def minutes_left(self, now: datetime) -> int | None:
+        """Minutes until it starts; None without a time."""
+        return int((self.start - now).total_seconds() // 60) if self.start else None
+
+    def started(self, now: datetime) -> bool:
+        return self.start is not None and now >= self.start
 
 
 def _when(job: dict[str, Any]) -> tuple[str, str]:
@@ -77,26 +106,14 @@ PASSED_AFTER = timedelta(hours=1)    # an event with a time stays for its first 
 def leaves_at(event: dict[str, Any]) -> datetime | None:
     """When an event leaves "Coming up": PASSED_AFTER after its time, or at the end of its day when it has
     no time. The window, the reminders and the widget all use this moment (None: no date)."""
-    try:
-        day = date.fromisoformat(event.get("date", ""))
-    except ValueError:
-        return None
-    try:
-        start = datetime.combine(day, datetime.strptime(event.get("time", ""), "%H:%M").time())
-    except ValueError:
-        return datetime.combine(day + timedelta(days=1), datetime.min.time())
-    return start + PASSED_AFTER
+    return Event(event).leaves_at()
 
 
 def has_passed(event: dict[str, Any], now: datetime) -> bool:
     """True when an event with a time started more than PASSED_AFTER ago. An event without a time
     lasts the whole day (the date check covers it)."""
-    try:
-        datetime.strptime(event.get("time", ""), "%H:%M")
-    except ValueError:
-        return False
-    leaves = leaves_at(event)
-    return leaves is not None and now >= leaves
+    e = Event(event)
+    return e.start is not None and now >= e.leaves_at()
 
 
 def upcoming(jobs: list[dict[str, Any]], today: date | None = None, limit: int = 0,
@@ -130,11 +147,7 @@ HOUR_STEPS = (180, 60)       # with a time set: also about three hours and one h
 
 def _minutes_left(item: dict[str, Any], now: datetime) -> int | None:
     """Minutes until an event that has a time; None without one."""
-    try:
-        at = datetime.combine(date.fromisoformat(item["date"]), datetime.strptime(item.get("time", ""), "%H:%M").time())
-    except ValueError:
-        return None
-    return int((at - now).total_seconds() // 60)
+    return Event(item).minutes_left(now)
 
 
 def due_reminders(jobs: list[dict[str, Any]], today: date | None = None, now: datetime | None = None) -> list[dict[str, Any]]:
@@ -245,9 +258,9 @@ def ics(job: dict[str, Any], now: datetime | None = None) -> str:
     With a time: one hour, reminders a day and an hour before. Without: an all-day
     event, reminders at 9:00 the day before and at 9:00 on the day. '' if there is no date."""
     e = job.get("event") or {}
-    try:
-        day = date.fromisoformat(e.get("date", ""))
-    except ValueError:
+    event = Event(e)
+    day = event.day
+    if day is None:
         return ""
     title = f"{(e.get('kind') or 'other').capitalize()}: {job.get('company') or job.get('title') or 'JobHelper'}"
     details = "\n".join(x for x in (job.get("title", ""), e.get("note", ""), job.get("url", "")) if x)
@@ -255,11 +268,11 @@ def ics(job: dict[str, Any], now: datetime | None = None) -> str:
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//JobHelper//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
              "BEGIN:VEVENT", f"UID:jobhelper-{job.get('id', '')}@jobhelper.local", f"DTSTAMP:{stamp}",
              f"SUMMARY:{_ics_text(title)}", f"DESCRIPTION:{_ics_text(details)}"]
-    try:
-        start = datetime.combine(day, datetime.strptime(e.get("time", ""), "%H:%M").time())
+    if event.start:
+        start = event.start
         lines += [f"DTSTART:{start:%Y%m%dT%H%M%S}", f"DTEND:{start + timedelta(hours=1):%Y%m%dT%H%M%S}"]
         alarms = ["-P1D", "-PT1H"]
-    except ValueError:                                  # no time: an all-day event
+    else:                                               # no time: an all-day event
         lines += [f"DTSTART;VALUE=DATE:{day:%Y%m%d}", f"DTEND;VALUE=DATE:{day + timedelta(days=1):%Y%m%d}"]
         alarms = ["-PT15H", "PT9H"]
     for trigger in alarms:
@@ -275,18 +288,14 @@ def thanks_due(job: dict[str, Any], today: date | None = None, now: datetime | N
     e = job.get("event") or {}
     if e.get("kind") not in ("interview", "call") or job.get("status") in _OVER:
         return False
-    try:
-        day = date.fromisoformat(e.get("date", ""))
-    except ValueError:
+    event = Event(e)
+    if event.day is None:
         return False
     today = today or date.today()
-    if day > today or job.get("thanked_for") == e.get("date"):
+    if event.day > today or job.get("thanked_for") == e.get("date"):
         return False
-    if day == today and e.get("time"):
-        try:                                            # today, with a time: only once it has started
-            return (now or datetime.now()).time() >= datetime.strptime(e["time"], "%H:%M").time()
-        except ValueError:
-            return True
+    if event.day == today and event.start:              # today, with a time: only once it has started
+        return event.started(datetime.combine(today, (now or datetime.now()).time()))
     return True
 
 
@@ -313,4 +322,4 @@ def mark_thanked(job: dict[str, Any], today: date | None = None) -> None:
     day = (today or date.today()).isoformat()
     job["thanked_for"] = (job.get("event") or {}).get("date", day)
     job["last_update"] = day
-    job["notes"] = (f"[{day}] Sent a thank-you note.\n" + (job.get("notes") or "")).strip()
+    store.add_note(job, "Sent a thank-you note.", day)

@@ -8,8 +8,8 @@ from . import agent1_cv
 import os
 from datetime import date, datetime, timedelta
 
-from . import agent2_search, agent3_letters, config, housekeeping, store, vault
-from .api_base import _guarded, textfmt_clean
+from . import agent2_search, agent3_letters, config, housekeeping, store, textfmt, vault
+from .api_base import _guarded
 
 
 class DocumentsService:
@@ -155,7 +155,7 @@ class DocumentsService:
 
     def set_description(self, job_id, text):
         """Keep the posting's text you pasted for a job the app could not read. Score it again afterwards."""
-        text = textfmt_clean(text)
+        text = textfmt.tidy_lines(text)
         if len(text) < self.MIN_PASTED:
             return {"ok": False, "msg": f"That is only {len(text)} characters. Paste the whole posting (at least {self.MIN_PASTED})."}
         if len(text) > self.MAX_PASTED:

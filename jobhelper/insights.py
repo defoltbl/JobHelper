@@ -39,7 +39,7 @@ ROLE_UNKNOWN = "Role not recorded"
 
 
 def role_type(title: str) -> str:
-    if not (title or "").strip() or (title or "").strip().lower() in ("(existing application)", "(from email response)", "(unknown role)"):
+    if not store.has_real_title({"title": title}):
         return ROLE_UNKNOWN                # an application the app knows only by its company
     for name, pattern in _ROLE_RE:
         if pattern.search(title or ""):

@@ -83,3 +83,13 @@ def readable(text: str) -> str:
     out = re.sub(r"([^\n])\n(?=[A-ZÁ-Ž0-9 '’&/-]{3,}\n)", r"\1\n\n", out)     # an empty line before a heading
     out = re.sub(r"\n{2,}(?=• )", "\n", out)       # list items sit right under their heading
     return re.sub(r"\n{3,}", "\n\n", out).strip()
+
+
+def tidy_lines(text) -> str:
+    """Pasted text with its line ends tidied: one kind of line end, no spaces at line ends, at most one empty line
+    in a row (the words are left as they are)."""
+    lines = [ln.rstrip() for ln in str(text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    out = "\n".join(lines).strip()
+    while "\n\n\n" in out:
+        out = out.replace("\n\n\n", "\n\n")
+    return out

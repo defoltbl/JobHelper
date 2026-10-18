@@ -197,6 +197,9 @@ data/                your data; only the *.example.* files are in git
   measured on the real postings before a change ships: nothing that scored 30 or more may be
   skipped. A word that an ordinary posting uses ("research", "architect", "compliance") does
   not belong in them.
+- **An event's day and start are read only by `planner.Event`**: "Coming up", the reminders, the calendar file
+  and the thank-you note ask it. A dated line in a job's notes is `store.add_note`; a title the app gives a job it
+  knows only by its company is one of `store.PLACEHOLDER_TITLES` (`store.has_real_title`).
 - **Two company names are one company only through `email_client.same_company`.** Never compare
   by "any shared word": "Accenture Czech Republic" and "PwC Czech Republic" share one. A legal form
   ("spol. s r.o.", "Corp", "LLC", "Limited") is never a word of the name: `email_client.LEGAL_WORDS`

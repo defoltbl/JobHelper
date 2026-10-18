@@ -25,11 +25,3 @@ def _stem(name: str) -> str:
     """A stored document name without its extension."""
     return os.path.splitext(os.path.basename(name))[0]
 
-
-def textfmt_clean(text) -> str:
-    """Pasted text with its line ends tidied (the words are left as they are)."""
-    lines = [ln.rstrip() for ln in str(text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")]
-    out = "\n".join(lines).strip()
-    while "\n\n\n" in out:
-        out = out.replace("\n\n\n", "\n\n")
-    return out

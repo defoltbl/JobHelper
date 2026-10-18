@@ -106,7 +106,7 @@ def mark_sent(job: dict[str, Any], today: date | None = None) -> None:
     day = (today or date.today()).isoformat()
     job["followup_date"] = day
     job["last_update"] = day
-    job["notes"] = (f"[{day}] Followed up by email.\n" + (job.get("notes") or "")).strip()
+    store.add_note(job, "Followed up by email.", day)
 
 
 def timestamp() -> str:
