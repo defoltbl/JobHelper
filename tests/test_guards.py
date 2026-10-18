@@ -359,7 +359,7 @@ def test_usage_is_written_whole(isolate_data, monkeypatch):
     monkeypatch.setattr(usage.os, "replace", fail)
     with pytest.raises(OSError):
         usage.record({"input_tokens": 5}, tag="t")
-    assert config.USAGE_JSON.read_text(encoding="utf-8") == before and usage._load()["totals"]["calls"] == 1
+    assert config.USAGE_JSON.read_text(encoding="utf-8") == before and usage.totals()["calls"] == 1
 
 
 @pytest.mark.parametrize("weekday, hour, minute", [(8, 9, 0), (1, 24, 0), (1, 9, 60), (-1, 9, 0), ("Mon", 9, 0), (1, None, 0)])

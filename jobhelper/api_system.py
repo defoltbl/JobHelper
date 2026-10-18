@@ -77,10 +77,9 @@ class SystemService:
 
     def usage_info(self):
         """The usage card: how much of each limit is used now, and when a used one frees."""
-        st = usage._load()
-        totals = st.get("totals", {})
+        totals = usage.totals()
         now = datetime.now()
-        out = {"model": config.MODEL, "calls": totals.get("calls", 0), "cost": round(totals.get("cost_usd", 0.0), 2)}
+        out = {"model": config.MODEL, "calls": totals["calls"], "cost": round(totals["cost_usd"], 2)}
         for name, w in usage.windows(now.timestamp()).items():
             out[name + "_used"] = None if w["used"] is None else min(100, max(0, round(w["used"] * 100)))
             resets = ""
@@ -207,18 +206,17 @@ class SystemService:
     def usage_overview(self):
         """Everything the app has asked Claude so far: {calls, cost, kinds: [{name, calls, cost}]}, most used first.
         The cost is what the same work would have cost through the paid API; nothing was billed."""
-        state = usage._load()
-        totals = state.get("totals", {})
+        totals = usage.totals()
         kinds: dict[str, dict] = {}
-        for tag, d in (state.get("by_tag") or {}).items():
+        for tag, d in usage.by_tag().items():
             name = self.USAGE_NAMES.get(tag, "Trials and other work" if tag.endswith("_trial") else tag.replace("_", " ").capitalize())
             row = kinds.setdefault(name, {"name": name, "calls": 0, "cost": 0.0})
-            row["calls"] += int(d.get("calls", 0) or 0)
-            row["cost"] += float(d.get("cost_usd", 0.0) or 0.0)
+            row["calls"] += int(d["calls"])
+            row["cost"] += float(d["cost_usd"])
         rows = sorted(kinds.values(), key=lambda r: -r["cost"])
         for row in rows:
             row["cost"] = round(row["cost"], 2)
-        return {"calls": int(totals.get("calls", 0) or 0), "cost": round(float(totals.get("cost_usd", 0.0) or 0.0), 2), "kinds": rows}
+        return {"calls": int(totals["calls"]), "cost": round(float(totals["cost_usd"]), 2), "kinds": rows}
 
     def trouble_log(self, most=25):
         """The last lines of the log of errors the app carried on after, newest first: {lines, total, file}."""

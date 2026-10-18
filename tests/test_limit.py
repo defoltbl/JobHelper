@@ -15,12 +15,19 @@ pytest.importorskip("PySide6")
 NOON = datetime(2026, 10, 7, 12, 0).timestamp()
 
 
+def _saved_usage(change):
+    """Change usage.json as an older run of the app could have left it."""
+    path = config.USAGE_JSON
+    state = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    change(state)
+    config.ensure_dirs()
+    path.write_text(json.dumps(state), encoding="utf-8")
+
+
 def _windows(five=0.2, seven=0.2, five_reset=None, seven_reset=None):
-    state = usage._load()
-    state["last_rate_limit"] = {"at": "now", "info": {"unifiedWindows": {
+    _saved_usage(lambda state: state.update(last_rate_limit={"at": "now", "info": {"unifiedWindows": {
         "five_hour": {"utilization": five, "resetsAt": five_reset or time.time() + 3600},
-        "seven_day": {"utilization": seven, "resetsAt": seven_reset or time.time() + 86400}}}}
-    usage._save(state)
+        "seven_day": {"utilization": seven, "resetsAt": seven_reset or time.time() + 86400}}}}))
 
 
 # ── knowing the limit is used up ────────────────────────────────────────────
@@ -130,9 +137,8 @@ def test_a_window_whose_reset_time_passed_is_empty_again(isolate_data):
 
 def test_windows_never_reported_stay_unknown(isolate_data):
     assert usage.windows() == {"five_hour": {"used": None, "resets_at": 0.0}, "seven_day": {"used": None, "resets_at": 0.0}}
-    state = usage._load()
-    state["last_rate_limit"] = {"at": "now", "info": {"unifiedWindows": {"five_hour": {"utilization": "a lot"}, "seven_day": "?"}}}
-    usage._save(state)
+    _saved_usage(lambda state: state.update(last_rate_limit={"at": "now", "info": {"unifiedWindows": {
+        "five_hour": {"utilization": "a lot"}, "seven_day": "?"}}}))
     assert usage.windows()["five_hour"]["used"] is None and usage.windows()["seven_day"]["used"] is None
 
 
@@ -140,7 +146,7 @@ def test_an_answer_from_claude_ends_a_remembered_refusal(isolate_data):
     usage.note_limit(time.time() + 3600, SESSION_REFUSAL)
     assert usage.limit_status()["blocked"] is True
     usage.record({"input_tokens": 3, "output_tokens": 1, "cost_usd": 0.01}, tag="usage_ping")
-    assert usage.limit_status()["blocked"] is False and "limit_block" not in usage._load()
+    assert usage.limit_status()["blocked"] is False and "limit_block" not in json.loads(config.USAGE_JSON.read_text(encoding="utf-8"))
 
 
 def test_the_usage_card_says_nothing_is_left_while_claude_refuses(isolate_data):
@@ -163,7 +169,7 @@ def test_the_usage_card_knows_when_the_next_limit_comes_back(isolate_data):
     usage.note_limit(time.time() + 120, SESSION_REFUSAL)
     assert 115 <= ui_api.Api().usage_info()["next_reset_in"] <= 122
     _windows(five=0.5, seven=0.2, five_reset=time.time() - 5, seven_reset=time.time() + 86400)
-    state = usage._load(); state.pop("limit_block", None); usage._save(state)
+    _saved_usage(lambda state: state.pop("limit_block", None))
     assert 86000 < ui_api.Api().usage_info()["next_reset_in"] <= 86402        # the short one has reset: the weekly one is next
 
 

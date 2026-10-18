@@ -8,7 +8,7 @@ import time
 from datetime import date, datetime
 
 from .api_base import _guarded, _stem
-from . import (agent2_search, agent3_letters, textfmt, config, db, followup, keywords, merge, pdf, planner, salary, store)
+from . import (agent2_search, agent3_letters, textfmt, config, db, followup, keywords, merge, pdf, planner, salary, store, vault)
 
 
 class JobsService:
@@ -208,7 +208,10 @@ class JobsService:
         problem = planner.check_company_notes(dict(fields or {}))
         if problem:
             return {"ok": False, "msg": problem}
-        ok = planner.save_company_notes(company, dict(fields or {}))
+        try:
+            ok = planner.save_company_notes(company, dict(fields or {}))
+        except vault.VaultError:
+            return {"ok": False, "msg": planner.CompanyNotes.UNREADABLE}
         return {"ok": ok} if ok else {"ok": False, "msg": "Notes need a company name."}
 
     @staticmethod

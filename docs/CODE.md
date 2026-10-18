@@ -449,7 +449,7 @@ Table 6.3 groups the other modules by what they are for.
 | Writing | `word_document`, `about_you`, `claims`, `cv_tailor`, `cover_letter`, `letters`, `form_answers`, `interview_prep`, `prep_doc`, `pdf` | The adapted CV, the letter, form answers, the interview documents (one for HR, one technical). `WordDocument` opens a .docx and saves it with only the text changed; every other part stays byte for byte. `claims.ClaimCheck` checks that a text in your voice claims nothing more than the CV. The letter, the form answers and the interview preparation all use it. `about_you.AboutYou` holds the facts of the About you window; `WorkNotes` makes the notes for each job into the one text that the app reads |
 | Mail | `email_client`, `mailhosts` | Reading mailboxes read-only; which server a mailbox is read from |
 | The assistant | `assistant`, `assistant_brain`, `assistant_notes`, `details`, `chrome`, `form_fill`, `form_choices`, `answer_memory` | The fixed requests and the facts about the app. What Claude makes of a free request, checked before anything happens. The details of the person. The link to the browser. Reading a form, deciding what each field is, and filling it in. Choosing from lists and menus. The wording of the person, remembered |
-| Claude | `llm`, `usage` | The one place that asks Claude; counting usage and knowing the limits |
+| Claude | `llm`, `usage` | The one place that asks Claude; counting usage and knowing the limits. `usage.UsageLog` keeps the saved sums and the sums of this run; the window asks it for `totals` and `by_tag` |
 | Storage and safety | `store`, `db`, `vault`, `integrity`, `housekeeping`, `health`, `trouble` | The job list, the reply database, encryption, signed rule files, backups, the start-up check, the log of errors |
 | The window's back end | `ui_api`, `api_core`, `api_system`, `api_options`, `api_jobs`, `api_documents`, `api_replies`, `api_insights`, `api_interview`, `api_letters`, `api_assistant`, `api_talk`, `qt_bridge`, `bridge_runs`, `bridge_jobs` | What the window calls. `Api` is a facade: it hands each call to one of ten services. `Bridge` gives `Api` to QML and runs long work in threads |
 
@@ -746,6 +746,10 @@ Follow these rules when code changes data:
 
 1. Read and write the job list only through `store`, and the replies only through `db`. Read
    and write any encrypted file only through `vault`.
+   A small store is one class over one `vault.JsonFile`. Examples: the assistant notes, the
+   remembered answers, the notes per company. The file gives the saved value, or nothing when the
+   file is not there or is damaged. If the key cannot open the file, it stops with an error. Thus
+   a save never writes an empty store over the data.
 2. Call `vault.make_backup(label)` before a change that touches many jobs.
 3. Move a document to the encrypted backup instead of deleting it; put old copies in the Trash.
 4. Do not change the data while the window is running.
