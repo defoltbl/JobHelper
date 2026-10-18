@@ -22,7 +22,7 @@ Dialog {
     padding: 0
     property string jobId: ""
     property var info: ({})
-    property int maxPart: 3000
+    property int maxPart: 0
     property bool dirty: false
     property bool confirmClose: false
     property string err: ""
@@ -31,7 +31,7 @@ Dialog {
     function show(job) {
         var d = bridge.prepParts(job);
         if (!d || !d.ok) { ticker.text = (d && d.msg) ? d.msg : "This preparation cannot be edited."; return; }
-        jobId = job; info = d; maxPart = d.max_part || 3000; err = ""; note = ""; dirty = false; confirmClose = false;
+        jobId = job; info = d; maxPart = d.max_part; maxLines = d.max_items; maxLine = d.max_item; err = ""; note = ""; dirty = false; confirmClose = false;
         peModel.clear();
         for (var i = 0; i < d.parts.length; i++) peModel.append({ key: d.parts[i].key, label: d.parts[i].label, text: d.parts[i].text, kind: d.parts[i].kind });
         peFlick.contentY = 0; open();
@@ -46,8 +46,8 @@ Dialog {
             if (peModel.get(i).kind !== "list" && peModel.get(i).text.length > maxPart) return peModel.get(i).label;
         return "";
     }
-    readonly property int maxLines: 12
-    readonly property int maxLine: 400
+    property int maxLines: 0              // these three come with the preparation (interview_prep: MAX_PART, MAX_ITEMS, MAX_ITEM)
+    property int maxLine: 0
     function listProblem(text) {    // what is wrong with a list, while it is typed ("" if nothing)
         var lines = ("" + text).split("\n").filter(function (l) { return l.trim() !== ""; });
         if (lines.length > maxLines) return lines.length + " lines; the most is " + maxLines + ". Remove some.";

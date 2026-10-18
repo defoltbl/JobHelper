@@ -4466,3 +4466,22 @@ def test_the_preparation_window_shows_projects_and_skills(ui):
         ui.js("prepDialog.close()"); ui.wait(350)
         ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
     assert ui.warnings == []
+
+
+def test_my_details_columns_come_from_the_back_end_with_the_same_words(ui):
+    """The columns of the job, degree and language rows were a copy of details.ROWS in the window; now the back end sends
+    them and the window adds only its examples. What the page shows did not change."""
+    from jobhelper import details
+    ui.js("assistantDialog.show()")
+    _until_open(ui, "assistantDialog")
+    ui.js('assistantDialog.page = "details"')
+    _until_true(ui, lambda: ui.js("assistantDialog.jobCols.length") == len(details.ROWS["experience"]))
+    import json
+    read = lambda name: json.loads(ui.js(f"JSON.stringify(assistantDialog.{name})"))      # noqa: E731
+    cols = {c["key"]: c for c in read("jobCols")}
+    assert cols["description"]["label"] == "What you did there (as your CV says it; forms ask for it inside each job)"
+    assert cols["description"]["area"] is True and cols["description"]["most"] == 2000 and cols["start"]["hint"] == "03/2023"
+    langs = {c["key"]: c for c in read("langCols")}
+    assert langs["level"]["hint"] == "Native, Fluent, Advanced, Intermediate or Basic" and langs["language"]["most"] == 40
+    assert [c["key"] for c in read("schoolCols")] == [k for k, _l, _m in details.ROWS["education"]]
+    assert ui.js("win.limits.answer") == 3000 and ui.js("assistantDialog.maxRequest") == 300

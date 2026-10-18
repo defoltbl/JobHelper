@@ -110,14 +110,16 @@ class PushCheck:
 
     # ── what a push sends ────────────────────────────────────────────────────
     def commits(self, ranges: list[tuple[str, str]] | None = None) -> list[str]:
-        """The commits to check: for each (local, remote) pair those the remote does not have; without pairs, all."""
+        """The commits to check: for each (local, remote) pair those the remote does not have; without pairs, all.
+        A commit that any remote branch already has is public already and is not checked again: GitHub's own commit
+        of a squashed pull request (committer noreply@github.com) is on main, and every later branch contains it."""
         if not ranges:
             return self._git("rev-list", "--all").split()
         out: list[str] = []
         for local, remote in ranges:
             if local == ZERO:                               # a branch is deleted: nothing is sent
                 continue
-            spec = [local] if remote == ZERO else [local, f"^{remote}"]
+            spec = ([local] if remote == ZERO else [local, f"^{remote}"]) + ["--not", "--remotes"]
             out += self._git("rev-list", *spec).split()
         return list(dict.fromkeys(out))
 

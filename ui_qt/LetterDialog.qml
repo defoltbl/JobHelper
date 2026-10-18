@@ -40,7 +40,7 @@ Dialog {
         open();
     }
     property bool confirmClose: false     // Close was pressed once with changes that are not saved
-    readonly property int hintMax: 300
+    readonly property int hintMax: win.limits.letter_hint
     function setText(i, t) { var c = texts.slice(); c[i] = t; texts = c; confirmClose = false; }
     function emptyOnes() {                // which paragraphs are empty, as "2 and 4"
         var out = [];

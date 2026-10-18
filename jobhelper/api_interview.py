@@ -170,7 +170,7 @@ class InterviewService:
             return {"ok": False, "msg": "Prepare the interview first, then it can be edited."}
         return {"ok": True, "id": j["id"], "company": j.get("company", ""), "title": j.get("title", ""),
                 "parts": interview_prep.parts(prep), "edited": str(prep.get("edited", "")),
-                "max_part": interview_prep.MAX_PART}
+                "max_part": interview_prep.MAX_PART, "max_items": interview_prep.MAX_ITEMS, "max_item": interview_prep.MAX_ITEM}
 
     def save_prep_parts(self, job_id, edited):
         """Put the user's edits into the saved preparation. Refused with the reason when a part is empty or too long."""

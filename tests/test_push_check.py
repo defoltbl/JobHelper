@@ -181,3 +181,15 @@ def test_the_licence_as_markdown_keeps_the_same_rule(repo):
     assert _check(repo) == ["a personal detail: LICENSE.md:3"]
     _commit(repo, {"NOTICE.md": "Required Notice: Copyright 2026 Jordan Weber\n"})       # only the licence has this exception
     assert "a personal detail: NOTICE.md:1" in _check(repo)
+
+
+def test_what_a_remote_already_has_is_not_checked_again(repo):
+    """GitHub squashes a pull request into a commit of its own (committer noreply@github.com): it is public on main
+    already, and every branch made after it contains it, so a push of a new branch must not stop on it."""
+    merged = _commit(repo, {"d.py": "w = 4\n"}, message="Squashed pull request", email="noreply@github.com")
+    assert any(f.startswith("the committer email is not a GitHub noreply address") for f in _check(repo))      # the whole history
+    _git(repo, "update-ref", "refs/remotes/origin/main", merged)                  # main on GitHub has it
+    new = _commit(repo, {"e.py": "v = 5\n"})
+    assert _check(repo, [(new, push_check.ZERO)]) == []                           # a new branch: only what no remote has
+    bad = _commit(repo, {"f.py": "u = 6\n"}, email="jordan.weber@private-mail.example")
+    assert any(f.startswith("the author email") for f in _check(repo, [(bad, push_check.ZERO)]))   # a new commit is still checked
