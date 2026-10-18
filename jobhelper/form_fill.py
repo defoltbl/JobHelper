@@ -902,16 +902,35 @@ NO_MONTH = "My details has only the year for this. Add the month there, or pick 
 CHECK_DAY = "The day is not known, so the first of the month was used: check the date."
 SKIPPED = "You asked me to leave it out."
 THROWN = "The page threw the value away twice. Type this one yourself."
-MONTHS = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
+MONTHS = tuple(name.lower() for name in calendar.month_name[1:])
+
+
+class RowDate:
+    """A job's or a degree's date as My details keeps it: "03/2023" (a month and a year) or "2023" (a year only).
+    The one reader of that shape for every kind of date field a form has."""
+
+    def __init__(self, when: str) -> None:
+        self.text = str(when or "")
+        parts = re.split(r"[./\-]", self.text)
+        self.year = parts[-1] if self.text else ""
+        self.month = int(parts[0]) if len(parts) == 2 and parts[0].isdigit() and 1 <= int(parts[0]) <= 12 else 0
+
+    def __bool__(self) -> bool:
+        return bool(self.text)
+
+    @property
+    def mm(self) -> str:
+        """The month as two digits ('' when only the year is known)."""
+        return f"{self.month:02d}" if self.month else ""
 
 
 def date_option(options: list[str], when: str) -> tuple[str, str]:
     """The entry of a month list or a year list that is this date ("03/2023"): (entry, '') or ('', why not).
     Which of the two the list is shows in its entries: years are four digits."""
-    parts = re.split(r"[./-]", str(when or ""))
-    if not when:
+    day = RowDate(when)
+    if not day:
         return "", ""
-    year, month = parts[-1], (int(parts[0]) if len(parts) == 2 else 0)
+    year, month = day.year, day.month
     plain = [" ".join(str(o).lower().split()) for o in options]
     if sum(1 for o in plain if re.fullmatch(r"(?:19|20)\d{2}", o)) >= 3:
         return next((o for o, p in zip(options, plain) if p == year), ""), ""
@@ -1139,23 +1158,23 @@ def classify(field: dict[str, Any]) -> tuple[str, str]:
 
 def part_for(part: str, when: str) -> tuple[str, str]:
     """One box of a date that a form splits into a month and a year: (value, '') or ('', why it is left)."""
-    parts = re.split(r"[./\-]", str(when or ""))
-    if not when:
+    day = RowDate(when)
+    if not day:
         return "", ""
     if part == "year":
-        return parts[-1], ""
+        return day.year, ""
     if part == "month":
-        return (parts[0].zfill(2), "") if len(parts) == 2 else ("", NO_MONTH)
+        return (day.mm, "") if day.month else ("", NO_MONTH)
     return "", DATE                                 # the day is not known
 
 
 def when_for(kind: str, when: str) -> tuple[str, str]:
     """A job's or a degree's date ("03/2023", "2023") in the form a field of this kind takes:
     (value, what to check) or ('', why it is left)."""
-    parts = re.split(r"[./\-]", str(when or ""))
-    if not when:
+    day = RowDate(when)
+    if not day:
         return "", ""
-    year, month = parts[-1], (parts[0].zfill(2) if len(parts) == 2 else "")
+    year, month = day.year, day.mm
     if kind == "month":
         return (f"{year}-{month}", "") if month else ("", NO_MONTH)
     if kind == "date":

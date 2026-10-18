@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .form_answers import MAX_ANSWER, MAX_QUESTION, unfilled
+
 MAX_REQUEST = 300
 EMPTY = "Write what you need, or press one of the buttons."
 TOO_LONG = f"That is longer than {MAX_REQUEST} characters. Say it in a sentence, for example: fill in the form."
@@ -44,7 +46,6 @@ _HELP = re.compile(r"\b(?:hi|hello|hey|help|how|what can you|who are you)\b")
 STARTERS = ("When can you start?", "What are your salary expectations?", "Do you need a work permit or visa sponsorship?",
             "Tell us about yourself.", "What are your strengths?", "Why are you looking for a new job?",
             "Describe a project you are proud of.", "Are you willing to relocate?")
-MAX_QUESTION, MAX_ANSWER = 300, 3000
 ABOUT_ONE_COMPANY = ("This question is about one company, so one answer cannot serve them all. "
                      "I draft it for each job when I fill in that job's form.")
 _ONE_COMPANY = re.compile(r"\b(?:work|working|join|apply\w*) (?:here|with us|for us|at (?:our|this)|to (?:our|this))|\b(?:our|this) (?:company|team|role|position|job)\b|\bwhy us\b|about us\b")
@@ -65,7 +66,7 @@ def check_answer(question: Any, answer: Any) -> dict[str, str]:
         return {"field": "answer", "msg": "The answer is empty. Write it, or let Claude draft it first."}
     if len(a) > MAX_ANSWER:
         return {"field": "answer", "msg": f"The answer is {len(a)} characters long; the most is {MAX_ANSWER}."}
-    if re.search(r"\[[^\]]+\]", a):
+    if unfilled(a):
         return {"field": "answer", "msg": "The answer still has a part in [square brackets]. Replace it with your own words."}
     return {}
 
