@@ -603,7 +603,7 @@ class TalkService:
         seen = self._noticed
         if not url.lower().startswith(("http://", "https://")) or url in seen or mailhosts.never_used(form_fill.host_of(url)):
             return {"ok": False}
-        jobs = [j for j in store.load_jobs() if j.get("status") in store.LEAD_STATUSES | {"waiting", "interview", "on_hold"}]
+        jobs = [j for j in store.load_jobs() if j.get("status") in store.OPEN_STATUSES]
         job = store.find(jobs, form_fill.match_job(jobs, url, tab["title"]))
         if not job:
             return {"ok": False}

@@ -208,6 +208,10 @@ data/                your data; only the *.example.* files are in git
 - **A script for the page gets its values only through `form_fill.with_values`** (each `__NAME__` as JSON data, never
   code), and every answer of a page is read through `form_fill.page_reply` (refused with a message, or None). A new
   script and its reader use both; `tests/test_page_scripts.py` checks that no builder leaves a `__NAME__` unfilled.
+- **One fill of a form is one `form_run.FormFillRun`** (read the page, find the job, plan, leave out what you named,
+  draft answers, choose, tick, write and type again what the page threw away, attach, report). `api_assistant` only
+  starts it and keeps `learned()` for "Learn my corrections". A new step is a method there, and a step that must
+  stop raises `Stop(message)`.
 - **The window keeps no copy of a limit.** How long a typed text may be comes from the module that checks it,
   through `Api.limits()` (`win.limits` in QML) or with the data of a dialog (`columns` of My details, `max_part`
   of a preparation). A new limit goes into the owner and into that map; `tests/test_window_limits.py` keeps
