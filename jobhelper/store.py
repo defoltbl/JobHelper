@@ -39,6 +39,11 @@ def application_rank(job: dict[str, Any]) -> int:
 APPLICATION_STATUSES = {"waiting", "interview", "offer", "rejected", "on_hold"}
 
 
+def applied_on_import(job: dict[str, Any]) -> bool:
+    """Whether a job's apply date is only the day it was imported from your letters folder, not a day you applied."""
+    return job.get("source") == "manual" and bool(job.get("date_applied")) and job.get("date_applied") == job.get("date_found")
+
+
 def load_jobs() -> list[dict[str, Any]]:
     if not config.JOBS_JSON.exists():
         return []

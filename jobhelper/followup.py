@@ -15,6 +15,8 @@ from datetime import date, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
 
+from . import store
+
 DEFAULT_DAYS = 10
 STALE_DAYS = 45          # longer silence than this: a follow-up no longer makes sense
 
@@ -51,7 +53,7 @@ def info(job: dict[str, Any], days: int = DEFAULT_DAYS, last_reply: date | None 
     # Only real events count. "date_found" / "last_update" are when the app saw
     # the record (for imported applications: the import day), not when you applied.
     applied = _day(job.get("date_applied", ""))
-    if job.get("source") == "manual" and job.get("date_applied") == job.get("date_found"):
+    if store.applied_on_import(job):
         applied = None          # imported from your letters folder: that date is the import day
     marks = [d for d in (applied, last_reply, _day(job.get("followup_date", ""))) if d]
     since = max(marks) if marks else None

@@ -90,19 +90,24 @@ def put(ws, row: int, column: int, value):
         cell.data_type = "s"
     return cell
 
+
+def header_row(ws, columns: list[tuple[str, float]]) -> None:
+    """The first row of a sheet in the app's style (white bold words on blue), and each column's width."""
+    for c, (label, width) in enumerate(columns, start=1):
+        cell = ws.cell(row=1, column=c, value=label)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="4472C4")
+        cell.alignment = Alignment(vertical="center")
+        ws.column_dimensions[get_column_letter(c)].width = width
+
+
 def _render_sheet(rows: list[dict[str, Any]], columns, path, title: str) -> None:
     config.ensure_dirs()
     wb = Workbook()
     ws = wb.active
     ws.title = title
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill("solid", fgColor="4472C4")
-    for c, (label, _key, width) in enumerate(columns, start=1):
-        cell = ws.cell(row=1, column=c, value=label.replace("(CZK)", "(%s)" % salary.asked({"desired_monthly_czk": 1})[1]))
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(vertical="center")
-        ws.column_dimensions[get_column_letter(c)].width = width
+    currency = salary.asked({"desired_monthly_czk": 1})[1]
+    header_row(ws, [(label.replace("(CZK)", f"({currency})"), width) for label, _key, width in columns])
 
     status_col = next((i for i, (_l, k, _w) in enumerate(columns, start=1) if k == "status"), None)
     for r, job in enumerate(rows, start=2):

@@ -28,6 +28,13 @@ STAGE_TO_STATUS = {
 RANK = {s: i for i, s in enumerate(store.STATUSES)}
 
 
+def status_after(current: str, stage: str) -> str:
+    """The status a reply of this stage moves an application to, or '' when it leaves it as it is.
+    Forward only ("interview" never goes back to "waiting"); a rejection applies from any status."""
+    new = STAGE_TO_STATUS.get(stage, "")
+    return new if new and (new == "rejected" or RANK.get(new, 0) > RANK.get(current, 0)) else ""
+
+
 def _decode(value: str | None) -> str:
     if not value:
         return ""
@@ -337,10 +344,17 @@ def fetch_recent(lookback_days: int | None = None, all_folders: bool | None = No
     return out
 
 
+# The legal form of a company and words around it ("Acme Corp", "Alfa spol. s r.o.", "Beta LLC"): never part of
+# what tells two companies apart. One list for the key and for the name words: when they differed, "Alfa spol.
+# s r.o." and "Beta spol. s r.o." shared the word "spol" and counted as one company, and so did two "… Corp"s.
+LEGAL_WORDS = {"the", "group", "ltd", "limited", "inc", "incorporated", "corp", "corporation", "llc", "plc", "gmbh", "mbh",
+               "sro", "spol", "sa", "se", "ag", "co", "bv", "nv", "oy", "srl", "spa", "sarl", "pte", "pty", "kft", "zrt"}
+
+
 def company_tokens(company: str) -> set[str]:
+    """The words of a company's name that can tell it apart from another (three letters or more, no legal form)."""
     tokens = re.findall(r"[a-z0-9]{3,}", (company or "").lower())
-    stop = {"the", "group", "ltd", "inc", "sro", "and", "gmbh", "czech", "com"}
-    return {t for t in tokens if t not in stop}
+    return {t for t in tokens if t not in LEGAL_WORDS and t not in {"and", "czech", "com"}}
 
 
 # Words many company names share. Two names that have only such words in common are two companies
@@ -385,9 +399,20 @@ def norm_company(company: str) -> str:
     text = re.sub(r"\bs\.\s*r\.\s*o\.?", " sro ", text)
     text = re.sub(r"(?<=\S)[\s,]+a\.\s*s\.?(?=[\s,]|$)", " ", text)   # trailing "a.s." only
     words = re.findall(r"[a-z0-9]+", text)
-    stop = {"the", "group", "ltd", "inc", "sro", "gmbh", "sa", "se", "ag", "llc", "co"}
-    kept = [w for w in words if w not in stop]
+    kept = [w for w in words if w not in LEGAL_WORDS]
     return "".join(kept or words)
+
+
+def job_of_company(company: str, jobs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The first tracked job at this company (None when the name has no word to match by, or none is at it)."""
+    if not company_tokens(company):
+        return None
+    return next((j for j in jobs if same_company(company, j.get("company", ""))), None)
+
+
+def sender_domain(sender: str) -> str:
+    """The domain of a From line ("Anna <anna@hr.acme.com>" -> "hr.acme.com"), lower case."""
+    return re.sub(r"[^a-z0-9.]", "", (sender or "").lower().split("@")[-1].split(">")[0])
 
 
 # Signals that an email is about a job application (EN + CZ), and ATS/recruiting
@@ -436,8 +461,7 @@ def names_tracked_company(sender: str, subject: str, jobs: list[dict[str, Any]])
     international conference is not from International SOS. A name made only of such words counts
     when all of it is there. A name too short to be a word ("HP") counts when it is the sender's domain."""
     words = set(re.findall(r"[a-z0-9]{3,}", f"{sender} {subject}".lower()))
-    domain = re.sub(r"[^a-z0-9.]", "", (sender or "").lower().split("@")[-1].split(">")[0])
-    labels = set(domain.split(".")[:-1])
+    labels = set(sender_domain(sender).split(".")[:-1])
     for job in jobs:
         tokens = company_tokens(job.get("company", ""))
         own = tokens - GENERIC_COMPANY_WORDS
@@ -486,7 +510,7 @@ _ROLE_STOP = {
     "and", "the", "for", "with", "our", "you", "your", "are", "per", "job", "jobs",
     "role", "roles", "position", "positions", "team", "new", "work", "remote", "hybrid",
     "praha", "prague", "czech", "republic", "application", "received", "thank", "thanks",
-    "applying", "apply", "re", "fwd", "your", "has", "been", "update", "status",
+    "applying", "apply", "re", "fwd", "has", "been", "update", "status",
 }
 
 
@@ -519,7 +543,7 @@ def match_job(sender: str, subject: str, body: str, jobs: list[dict[str, Any]]) 
     weak = set(re.findall(r"[a-z0-9]{3,}", (body or "")[:1500].lower()))
     # words of the company's own name are not role words: "Interview with Brightline Robotics" must not
     # pick the company's "Robotics Software Engineer" posting. The sender's address shows the name.
-    domain = re.sub(r"[^a-z0-9]", "", (sender or "").lower().split("@")[-1].split(">")[0].rsplit(".", 1)[0])
+    domain = sender_domain(sender).rsplit(".", 1)[0].replace(".", "")
     subj_role = {t for t in _role_tokens(subject) if t not in domain}
     best, best_key = None, (0, 0, 0, (0, 0, ""))
     for job in jobs:
