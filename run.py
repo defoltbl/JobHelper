@@ -16,9 +16,6 @@ import sys
 from jobhelper import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, config, integrity, job_sources, letters, llm, notify, store, usage, vault)
 
 
-DEFAULT_SKIP = ["intern", "internship"]      # same default as the app's Options
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the JobHelper pipeline.")
     parser.add_argument("--where", default="", help="City to search in (default: the city saved in the app's Options)")
@@ -96,32 +93,26 @@ def main() -> int:
         else:
             choice = job_sources.SourceChoice.from_options(saved)
         print(f"\n② Agent 2: searching {args.where} ({', '.join(choice.names())}) for {len(queries)} queries …")
+        # the same settings as the window's Run search (the Options with their defaults), with what was typed here
+        from jobhelper import ui_api
+        options = {**ui_api.Api().options(), "where": args.where, "per_query": args.per_query,
+                   "all_languages": args.all_languages, "max_age_days": args.max_age_days}
+        settings = agent2_search.SearchSettings.from_options(options, profile.get("seniority", "junior"))
+        filtered = []
         try:
-            seniority = profile.get("seniority", "junior")
-            filtered = []
-            new_jobs = agent2_search.search(queries, where=args.where, per_query=args.per_query,
-                                            source=choice, english_only=not args.all_languages,
-                                            candidate_seniority=seniority, max_age_days=args.max_age_days,
-                                            full_time_only=saved.get("full_time_only", True) is not False,
-                                            skip_words=saved.get("skip_words", DEFAULT_SKIP), keep_words=saved.get("keep_words", []),
-                                            dropped=filtered,
-                                            level_words=saved.get("level_words"), max_years=saved.get("max_years"))
+            new_jobs = settings.run(queries, choice, dropped=filtered)
         except RuntimeError as e:
             print(f"   ✗ {e}")
             return 1
         # Skip only the SAME role at a company you've already applied to /
         # been rejected by. Different roles at the same company are kept.
-        new_jobs, dropped_known = agent2_search.drop_known_applications(new_jobs, jobs, dropped=filtered)
-        added, skipped = store.upsert(jobs, new_jobs)
-        added -= len(agent2_search.prune_duplicate_leads(jobs))
-        added -= agent2_search.reread_missing(jobs, english_only=not args.all_languages, dropped=filtered)["removed"]
-        closed = agent2_search.check_closed(jobs, dropped=filtered)
-        agent2_search.save_dropped(filtered)
-        msg = f"   found {len(new_jobs)} listings — {added} new, {skipped} already tracked"
-        if closed["removed"] or closed["marked"]:
-            msg += f"; {closed['removed'] + closed['marked']} earlier ones no longer accept applications"
-        if dropped_known:
-            msg += f"; skipped {dropped_known} you've already applied to (same role & company)"
+        took = agent2_search.take_in(jobs, new_jobs, english_only=settings.english_only, dropped=filtered)
+        added = took["added"]
+        msg = f"   found {took['found']} listings — {added} new, {took['skipped']} already tracked"
+        if took["closed"]:
+            msg += f"; {took['closed']} earlier ones no longer accept applications"
+        if took["known"]:
+            msg += f"; skipped {took['known']} you've already applied to (same role & company)"
         print(msg)
         store.save_jobs(jobs)
     else:

@@ -291,7 +291,8 @@ Some important points:
 ### Run a search without the window
 
 A search can also be run from the command line. It does the same work as **Run search** and
-writes to the same files.
+writes to the same files. Both make one `agent2_search.SearchSettings` from the Options, and both add
+what the search found with `agent2_search.take_in`.
 
 ```bash
 python run.py

@@ -314,25 +314,11 @@ class RunSlots:
             # User-defined keywords (from Options) take priority over the CV-derived ones.
             queries = (o.get("queries") or profile.get("search_queries")
                        or profile.get("target_roles") or [])
-            kw = dict(where=o["where"], per_query=int(o["per_query"]),
-                      english_only=not o["all_languages"], candidate_seniority=seniority,
-                      max_age_days=int(o["max_age_days"]),
-                      full_time_only=o.get("full_time_only", True) is not False,
-                      skip_words=list(o.get("skip_words") or []), keep_words=list(o.get("keep_words") or []),
-                      level_words=list(o.get("level_words") or []), max_years=int(o.get("max_years") or 0))
+            settings = agent2_search.SearchSettings.from_options(o, seniority)
             dropped = []                                     # what the filters remove, with the reason
-            kw["dropped"] = dropped
-            found = agent2_search.search(                    # every kind of source ticked in Options, in one pass
-                queries, source=job_sources.SourceChoice.from_options(o),
-                progress=lambda d, t: self._tick("a2", int(d * 100), max(1, t * 100)), **kw)
-            found, _ = agent2_search.drop_known_applications(found, jobs, dropped=dropped)
-            added, _ = store.upsert(jobs, found)
-            added -= len(agent2_search.prune_duplicate_leads(jobs))     # same role already listed from another board
-            # a posting whose text could not be read gets one more try before it is scored from its title
-            added -= agent2_search.reread_missing(jobs, english_only=not o["all_languages"], dropped=dropped)["removed"]
-            # postings that stopped accepting applications since they were found
-            agent2_search.check_closed(jobs, dropped=dropped)
-            agent2_search.save_dropped(dropped)
+            found = settings.run(queries, job_sources.SourceChoice.from_options(o), dropped=dropped,    # every kind ticked, in one pass
+                                 progress=lambda d, t: self._tick("a2", int(d * 100), max(1, t * 100)))
+            added = agent2_search.take_in(jobs, found, english_only=settings.english_only, dropped=dropped)["added"]
             store.save_jobs(jobs)
             self.agentChanged.emit("a2", "done", "+%d new" % added)
 
