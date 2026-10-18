@@ -87,12 +87,19 @@ BROWSERS: dict[str, Browser] = {b.key: b for b in (
             "Developer > Allow JavaScript from Apple Events (the Developer menu is turned on under View > Show Developer Menu)"),
     Browser("safari", "Safari", "Safari", "safari",
             "Develop > Allow JavaScript from Apple Events (turn on the Develop menu first, under Settings > Advanced)"))}
-# Browsers people ask for that cannot be reached this way, with the reason: said plainly, not left out without a word.
-NOT_POSSIBLE = {"opera_gx": ("Opera GX", "Opera GX tells another app which page is open, but it has switched off the part that lets one fill a page in "
-                                         "(tried on 10 October 2026: the request is refused before it is even sent). Open the application form in "
-                                         "Google Chrome or Safari; your Opera GX stays as it is."),
-                "firefox": ("Firefox", "Firefox does not let another app read or fill in its pages (it has no such switch), so I cannot work in it. "
-                                       "Open the application form in one of the other browsers; your Firefox stays as it is.")}
+@dataclass(frozen=True)
+class Unsupported:
+    """A browser people ask for that cannot be reached this way, with the reason: said plainly, not left out without a word."""
+    name: str
+    reason: str
+
+
+NOT_POSSIBLE: dict[str, Unsupported] = {
+    "opera_gx": Unsupported("Opera GX", "Opera GX tells another app which page is open, but it has switched off the part that lets one fill a page in "
+                                        "(tried on 10 October 2026: the request is refused before it is even sent). Open the application form in "
+                                        "Google Chrome or Safari; your Opera GX stays as it is."),
+    "firefox": Unsupported("Firefox", "Firefox does not let another app read or fill in its pages (it has no such switch), so I cannot work in it. "
+                                      "Open the application form in one of the other browsers; your Firefox stays as it is.")}
 DEFAULT = "chrome"
 TIMEOUT = 20
 
