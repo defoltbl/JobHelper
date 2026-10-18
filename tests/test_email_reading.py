@@ -89,22 +89,22 @@ def _mail(msg_id, body, subject="An update on your application", html_only=True)
 
 def test_scan_overrides_a_vague_reading_when_the_text_is_a_rejection(isolate_data, monkeypatch):
     jobs = [store.new_job(id="acme", title="QA Engineer", company="Acme", status="waiting")]
-    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: [
-        _mail("<1@x>", "Hello, we are moving forward with other candidates at this time.")])
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: email_client.Fetched([
+        _mail("<1@x>", "Hello, we are moving forward with other candidates at this time.")]))
     monkeypatch.setattr(email_client, "looks_like_application", lambda *a, **k: True)
     monkeypatch.setattr(email_client, "match_job", lambda *a, **k: jobs[0])
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"is_response": True, "stage": "other", "company": "Acme",
                                                           "summary": "A status update."})
     stats = agent5_responses.process_inbox(jobs)
-    assert stats["rejections"] == 1 and jobs[0]["status"] == "rejected"
+    assert stats.rejections == 1 and jobs[0]["status"] == "rejected"
     rec = db.all_responses()[0]
     assert (rec["stage"], rec["rejection_category"]) == ("rejection", "went_with_other_candidate")
 
 
 def test_scan_keeps_the_models_reading_for_a_real_confirmation(isolate_data, monkeypatch):
     jobs = [store.new_job(id="acme", title="QA Engineer", company="Acme", status="waiting")]
-    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: [
-        _mail("<1@x>", "Thank you for applying. Unfortunately we cannot reply to everyone.")])
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: email_client.Fetched([
+        _mail("<1@x>", "Thank you for applying. Unfortunately we cannot reply to everyone.")]))
     monkeypatch.setattr(email_client, "looks_like_application", lambda *a, **k: True)
     monkeypatch.setattr(email_client, "match_job", lambda *a, **k: jobs[0])
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"is_response": True, "stage": "acknowledged", "company": "Acme"})
@@ -174,20 +174,20 @@ def test_a_czech_confirmation_moves_the_lead_to_applications_with_a_date(isolate
     mail = {"msg_id": "<cz@x>", "date": "Wed, 7 Oct 2026 12:46:00 +0200", "sender": "noreply@jobs.cz",
             "subject": "Zařadili jsme Vás do výběrového řízení na pozici IT Application Support Specialist",
             "body": "Dobrý den, děkujeme za Váš zájem. Zařadili jsme Vás do výběrového řízení.", "was_html_only": False}
-    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: [mail])
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: email_client.Fetched([mail]))
     monkeypatch.setattr(email_client, "match_job", lambda *a, **k: jobs[0])
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"is_response": True, "stage": "acknowledged",
                                                           "company": "REED SPECIALIST RECRUITMENT", "summary": "Application received."})
     assert email_client.looks_like_application(mail["sender"], mail["subject"], mail["body"], []) is True   # Czech keywords
     stats = agent5_responses.process_inbox(jobs)
-    assert stats["status_updates"] == 1
+    assert stats.status_updates == 1
     assert jobs[0]["status"] == "waiting" and jobs[0]["date_applied"] == "2026-10-07"
     assert jobs[0]["status"] in store.APPLICATION_STATUSES
 
 
 def test_an_apply_date_you_already_have_is_kept(isolate_data, monkeypatch):
     jobs = [store.new_job(id="a", title="Dev", company="Acme", status="letter_ready", date_applied="2026-10-01")]
-    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: [_mail("<1@x>", "We received your application.", html_only=False)])
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: email_client.Fetched([_mail("<1@x>", "We received your application.", html_only=False)]))
     monkeypatch.setattr(email_client, "looks_like_application", lambda *a, **k: True)
     monkeypatch.setattr(email_client, "match_job", lambda *a, **k: jobs[0])
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"is_response": True, "stage": "acknowledged", "company": "Acme"})
@@ -268,3 +268,28 @@ def test_the_import_day_is_not_an_apply_date_for_any_rule():
     assert store.applied_on_import(imported)
     assert not store.applied_on_import({**imported, "date_applied": "2026-09-20"}) and not store.applied_on_import({**imported, "source": "linkedin"})
     assert not store.applied_on_import({"source": "manual"})
+
+
+def test_a_scan_counts_into_its_own_stats_and_keeps_its_warnings(isolate_data, monkeypatch):
+    from jobhelper import agent5_responses, email_client, llm
+    mail = {"msg_id": "<1@x>", "date": "Mon, 5 Oct 2026 10:00:00 +0200", "sender": "hr@acme.com", "subject": "Your application",
+            "body": "We would like to invite you to an interview.", "was_html_only": False}
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: email_client.Fetched([mail], ("The archive folder of a@example.com could not be read.",)))
+    monkeypatch.setattr(email_client, "looks_like_application", lambda *a, **k: True)
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"is_response": True, "stage": "interview", "company": "Acme"})
+    stats = agent5_responses.process_inbox([])
+    assert (stats.scanned, stats.asked, stats.new_responses, stats.invites) == (1, 1, 1, ["Acme"])
+    assert stats.warnings == ("The archive folder of a@example.com could not be read.",)
+    assert stats.closing_line().endswith("1 new: 1 invitation. The archive folder of a@example.com could not be read.")
+    assert not hasattr(email_client, "last_warnings"), "no warnings kept between scans in the module"
+
+
+def test_scan_stats_count_each_reply_once_by_its_kind():
+    from jobhelper.agent5_responses import ScanStats
+    stats = ScanStats()
+    for stage, company in (("interview", "Acme"), ("offer", "Borg"), ("rejection", "Cyan"), ("acknowledged", "Dune")):
+        stats.filed(stage, company)
+    assert (stats.new_responses, stats.rejections, stats.invites) == (4, 1, ["Acme", "Borg"])
+    assert ScanStats(asked=None, scanned=1).summary() == "Scanned 1 email · 0 new."            # a pasted reply: no "sent to Claude"
+    assert ScanStats(scanned=45, asked=None).detail() == "45 · 0 asked"
+    assert ScanStats().invites is not ScanStats().invites                                        # each scan its own list

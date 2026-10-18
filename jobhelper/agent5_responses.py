@@ -9,6 +9,7 @@ rejection-reason breakdown — as a console report and an Excel file.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
@@ -93,7 +94,90 @@ def set_by_hand_since(job: dict[str, Any], email_date: str) -> bool:
     return db.received_at(email_date) <= mine
 
 
-def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, Any] | None, stats: dict[str, Any]) -> str:
+def _plural(k: int, one: str, many: str) -> str:
+    return f"{k} {one if k == 1 else many}"
+
+
+@dataclass
+class ScanStats:
+    """What one email scan (or one reply pasted by hand) found, and how the app tells it: the line at the
+    end of the scan, the Last run card and the notification. `asked` is None when nothing went to Claude
+    as part of a scan (a pasted reply)."""
+    scanned: int = 0
+    new_responses: int = 0
+    status_updates: int = 0
+    rejections: int = 0
+    invites: list[str] = field(default_factory=list)
+    dates: list[str] = field(default_factory=list)
+    skipped_unrelated: int = 0
+    already_read: int = 0
+    asked: int | None = None
+    jobs_created: int = 0
+    warnings: tuple[str, ...] = ()
+
+    def filed(self, stage: str, company: str) -> None:
+        """Count one reply filed under `stage`; an invitation keeps the company's name."""
+        self.new_responses += 1
+        if stage in ("interview", "assessment", "offer"):
+            self.invites.append(company)
+        if stage == "rejection":
+            self.rejections += 1
+
+    def dated(self, saved: str) -> None:
+        """Note a date a reply put on its job ("13 Oct 11:30 · Company")."""
+        self.dates.append(saved)
+
+    def status_changed(self) -> None:
+        self.status_updates += 1
+
+    def _news(self) -> str:
+        """What arrived, after the count of new replies: ": 2 invitations, 1 rejection. Date saved: …" or "."."""
+        invites, rejections = len(self.invites), self.rejections
+        parts = []
+        if invites:
+            parts.append(_plural(invites, "invitation", "invitations"))
+        if rejections:
+            parts.append(_plural(rejections, "rejection", "rejections"))
+        other = self.new_responses - invites - rejections
+        if other > 0 and parts:
+            parts.append(f"{other} other")
+        text = ((": " + ", ".join(parts)) if parts else "") + "."
+        if self.dates:
+            text += " Date saved: " + "; ".join(self.dates) + "."
+        return text
+
+    def summary(self) -> str:
+        """One line about a finished scan: what arrived, invitations first."""
+        text = f"Scanned {_plural(self.scanned, 'email', 'emails')}"
+        if self.asked is not None:      # why "0 new" is right: most were read before, and few were worth a question
+            text += f" ({self.already_read} read before, {self.asked} sent to Claude)"
+        return text + f" · {self.new_responses} new" + self._news()
+
+    def closing_line(self) -> str:
+        """The summary and what could not be read (a folder, the second mailbox), for the end of a scan."""
+        return " ".join([self.summary(), *self.warnings])
+
+    def detail(self) -> str:
+        """How much mail a scan went through and how much of it Claude was asked about, for the Last run card: "45 · 5 asked"."""
+        return f"{self.scanned} · {self.asked or 0} asked"
+
+    def replies(self) -> str:
+        """The same news as `summary`, as a notification: only what arrived."""
+        if self.new_responses <= 0:
+            return "No new replies."
+        return _plural(self.new_responses, "new reply", "new replies") + self._news()
+
+    def notice(self) -> tuple[str, str, bool]:
+        """The notification after a scan: (text, title, urgent). An invitation is urgent, worth showing even while
+        the app is in front; otherwise the news of the replies."""
+        from . import notify
+        invited = notify.invites_text(self.invites)
+        if invited:
+            return invited + ". Open JobHelper to prepare for it.", "Interview invitation", True
+        return self.replies(), "Email scan finished", False
+
+
+def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, Any] | None, stats: ScanStats) -> str:
     """Store one classified reply and move its application along. Returns the stage."""
     tidy(result)
     stage = result["stage"]
@@ -120,15 +204,11 @@ def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, An
         "next_step": result.get("next_step", ""),
         "summary": result.get("summary", ""),
     })
-    stats["new_responses"] += 1
-    if stage in ("interview", "assessment", "offer"):
-        stats["invites"].append(str(result.get("company") or (guess["company"] if guess else "") or "a company"))
-    if stage == "rejection":
-        stats["rejections"] += 1
+    stats.filed(stage, str(result.get("company") or (guess["company"] if guess else "") or "a company"))
     if guess and stage in ("interview", "assessment"):
         saved = _save_date(guess, result, "interview" if stage == "interview" else "test task")
         if saved:
-            stats.setdefault("dates", []).append(saved)
+            stats.dated(saved)
 
     # Update the matched job's status (forward-only; rejection from anywhere).
     if guess:
@@ -145,7 +225,7 @@ def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, An
             note = result["summary"]
             if note:
                 store.add_note(guess, note)
-            stats["status_updates"] += 1
+            stats.status_changed()
     return stage
 
 
@@ -175,34 +255,6 @@ def _save_date(job: dict[str, Any], result: dict[str, Any], kind: str) -> str:
     return f"{when.day} {when:%b}" + (f" {clock}" if clock else "") + f" · {job.get('company') or job.get('title', '')}"
 
 
-def scan_summary(stats: dict[str, Any]) -> str:
-    """One line about a finished scan: what arrived, invitations first."""
-    n, invites, rejections = stats.get("new_responses", 0), len(stats.get("invites") or []), stats.get("rejections", 0)
-    plural = lambda k, one, many: f"{k} {one if k == 1 else many}"                       # noqa: E731
-    text = f"Scanned {plural(stats.get('scanned', 0), 'email', 'emails')}"
-    if "asked" in stats:            # why "0 new" is right: most were read before, and few were worth a question
-        text += f" ({stats.get('already_read', 0)} read before, {stats['asked']} sent to Claude)"
-    text += f" · {n} new"
-    parts = []
-    if invites:
-        parts.append(plural(invites, "invitation", "invitations"))
-    if rejections:
-        parts.append(plural(rejections, "rejection", "rejections"))
-    other = n - invites - rejections
-    if other > 0 and parts:
-        parts.append(f"{other} other")
-    text += (": " + ", ".join(parts)) if parts else ""
-    text += "."
-    if stats.get("dates"):
-        text += " Date saved: " + "; ".join(stats["dates"]) + "."
-    return text
-
-
-def scan_detail(stats: dict[str, Any]) -> str:
-    """How much mail a scan went through and how much of it Claude was asked about, for the Last run card: "45 · 5 asked"."""
-    return f"{stats.get('scanned', 0)} · {stats.get('asked', 0)} asked"
-
-
 def after_scan(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """What every scan does with the replies it read, in the window, on the command line and in the weekly run: real
     role titles for applications known only by their company, the steps of each application, and leads you have
@@ -211,25 +263,6 @@ def after_scan(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     backfill_roles(jobs)
     annotate_progress(jobs)
     return agent2_search.prune_applied_leads(jobs)
-
-
-def scan_notice(stats: dict[str, Any]) -> tuple[str, str, bool]:
-    """The notification after a scan: (text, title, urgent). An invitation is urgent, worth showing even while the app
-    is in front; otherwise the news of the replies."""
-    from . import notify
-    invited = notify.invites_text(stats.get("invites") or [])
-    if invited:
-        return invited + ". Open JobHelper to prepare for it.", "Interview invitation", True
-    return replies_text(stats), "Email scan finished", False
-
-
-def replies_text(stats: dict[str, Any]) -> str:
-    """The same news as scan_summary, as a notification: only what arrived."""
-    n = stats.get("new_responses", 0)
-    if n <= 0:
-        return "No new replies."
-    tail = scan_summary(stats).split(" new", 1)[1]              # ": 2 invitations, 1 rejection. Date saved: …" or "."
-    return ("1 new reply" if n == 1 else f"{n} new replies") + tail
 
 
 _RULE_STAGES = [
@@ -301,35 +334,33 @@ def add_pasted_reply(jobs: list[dict[str, Any]], job_id: str, text: str, use_mod
     result["is_response"] = True                    # you pasted it under this application: it is a reply
     result.setdefault("company", job.get("company", ""))
     result.setdefault("role", job.get("title", ""))
-    stats = {"new_responses": 0, "status_updates": 0, "rejections": 0, "invites": []}
-    stage = _file_reply(msg, result, job, stats)
+    stage = _file_reply(msg, result, job, ScanStats())
     db.mark_seen(msg_id)
     return {"ok": True, "stage": stage, "by_rules": by_rules, "status": job.get("status", ""),
             "summary": str(result.get("summary", ""))}
 
 
 def process_inbox(jobs: list[dict[str, Any]], lookback_days: int | None = None,
-                  progress=None, on_limit=None) -> dict[str, int]:
+                  progress=None, on_limit=None) -> ScanStats:
     """Scan inbox, store responses in the DB, and update job statuses.
 
     progress(done, total), if given, is called before each email."""
-    emails = email_client.fetch_recent(lookback_days)
-    stats = {"scanned": len(emails), "new_responses": 0, "status_updates": 0, "rejections": 0, "invites": []}
-
-    stats.update(skipped_unrelated=0, already_read=0, asked=0)
+    fetched = email_client.fetch_recent(lookback_days)
+    emails = fetched.messages
+    stats = ScanStats(scanned=len(emails), asked=0, warnings=fetched.warnings)
     for n, msg in enumerate(emails):
         if progress:
             progress(n, len(emails))
         if db.is_seen(msg["msg_id"]):
-            stats["already_read"] += 1
+            stats.already_read += 1
             continue  # already processed (response or not) — don't re-spend usage
         # Cheap pre-filter: skip obvious non-application mail without an LLM call.
         if not email_client.looks_like_application(msg["sender"], msg["subject"], msg["body"], jobs):
             db.mark_seen(msg["msg_id"])
-            stats["skipped_unrelated"] += 1
+            stats.skipped_unrelated += 1
             continue
         guess = email_client.match_job(msg["sender"], msg["subject"], msg["body"], jobs)
-        stats["asked"] += 1
+        stats.asked += 1
         try:
             result = _ask_waiting(on_limit, lambda: llm.ask_json(
                 PROMPT.format(
@@ -356,7 +387,7 @@ def process_inbox(jobs: list[dict[str, Any]], lookback_days: int | None = None,
 
         _file_reply(msg, result, guess, stats)
 
-    stats["jobs_created"] = reconcile_jobs(jobs)
+    stats.jobs_created = reconcile_jobs(jobs)
     return stats
 
 

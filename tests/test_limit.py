@@ -271,7 +271,7 @@ def test_a_limit_while_writing_does_not_use_up_an_attempt(isolate_data, monkeypa
 def test_inbox_scan_leaves_the_email_unread_when_the_limit_hits(isolate_data, monkeypatch):
     mail = {"msg_id": "<1@x>", "date": "Mon, 5 Oct 2026 10:00:00 +0200", "sender": "hr@acme.com",
             "subject": "Your application", "body": "About your application", "was_html_only": False}
-    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: [mail])
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: email_client.Fetched([mail]))
     monkeypatch.setattr(email_client, "looks_like_application", lambda *a, **k: True)
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("limit")))
     with pytest.raises(llm.LimitReached):
@@ -448,8 +448,8 @@ def test_stop_pressed_while_a_run_waits_on_the_limit_ends_it_and_costs_no_job_a_
         agent3_letters.process(jobs, {"summary": "x"}, threshold=50, cv_text="Alex Novak\nPython, SQL.", on_limit=stop)
     assert len(asked) == 1, "the run ended at the step it was on, not after trying every job"
     assert [j.get("doc_attempts", 0) for j in jobs] == [1, 0, 0] or [j.get("doc_attempts", 0) for j in jobs] == [0, 0, 0]
-    monkeypatch.setattr(email_client, "fetch_recent", lambda *a, **k: [
-        {"msg_id": f"<m{i}@acme>", "date": "Mon, 05 Oct 2026 10:00:00 +0200", "sender": "hr@acme.com", "subject": "Your application", "body": "About your application."} for i in range(3)])
+    monkeypatch.setattr(email_client, "fetch_recent", lambda *a, **k: email_client.Fetched([
+        {"msg_id": f"<m{i}@acme>", "date": "Mon, 05 Oct 2026 10:00:00 +0200", "sender": "hr@acme.com", "subject": "Your application", "body": "About your application."} for i in range(3)]))
     monkeypatch.setattr(llm, "ask_json", limit)
     asked.clear()
     with pytest.raises(bridge_runs.RunCancelled):

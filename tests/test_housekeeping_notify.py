@@ -52,12 +52,12 @@ def test_inbox_scan_reports_who_invited_you(isolate_data, monkeypatch):
     replies = iter([{"is_response": True, "stage": "interview", "company": "SAP"},
                     {"is_response": True, "stage": "rejection", "company": "EY"},
                     {"is_response": True, "stage": "assessment", "company": "PwC"}])
-    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: mails)
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: email_client.Fetched(mails))
     monkeypatch.setattr(email_client, "looks_like_application", lambda *a, **k: True)
     monkeypatch.setattr(email_client, "match_job", lambda *a, **k: None)
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: next(replies))
     stats = agent5_responses.process_inbox([])
-    assert stats["invites"] == ["SAP", "PwC"] and stats["rejections"] == 1
+    assert stats.invites == ["SAP", "PwC"] and stats.rejections == 1
 
 
 # ── clean-up ────────────────────────────────────────────────────────────────

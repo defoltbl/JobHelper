@@ -421,10 +421,10 @@ def test_a_reply_that_is_not_an_object_does_not_end_the_scan(isolate_data, monke
     mails = [{"msg_id": f"<{n}@x>", "date": "Mon, 5 Oct 2026 10:00:00 +0200", "sender": "hr@acme.com", "subject": "Your application", "body": "b",
               "was_html_only": False} for n in range(3)]
     answers = iter([["not", "an", "object"], "text", {"is_response": True, "stage": "interview", "company": "Acme"}])
-    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: mails)
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: email_client.Fetched(mails))
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: next(answers))
     stats = agent5_responses.process_inbox([store.new_job(id="a", title="Dev", company="Acme", status="waiting")])
-    assert stats["new_responses"] == 1 and stats["invites"] == ["Acme"]
+    assert stats.new_responses == 1 and stats.invites == ["Acme"]
 
 
 def test_a_company_known_only_from_an_unclear_email_becomes_a_real_application(isolate_data):
