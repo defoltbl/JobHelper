@@ -1,4 +1,4 @@
-"""Agent 3 — score each job, write cover letters, and tailor the CV.
+"""Agent 3 – score each job, write cover letters, and tailor the CV.
 
 For a strong match we (1) write a cover letter and (2) adapt the master CV to
 the posting (cv_tailor: PROFILE + KEY SKILLS only, never inventing anything).
@@ -19,7 +19,7 @@ SYSTEM = (
     "not have. Output only valid JSON."
 )
 
-# Step 1 — scoring only (short JSON, never truncates).
+# Step 1 – scoring only (short JSON, never truncates).
 _SCORE_RULES = """Rate how well this candidate fits, judging ELIGIBILITY strictly. Give a LOW
 score (under 40) if the posting lists hard requirements the candidate clearly
 does NOT have, for example: a required certification they lack (e.g. CompTIA A+,
@@ -74,7 +74,7 @@ Return a JSON object only, with one entry per posting and no others:
   ]
 }}"""
 
-# Step 2 — cover letter (plain text, only for strong matches).
+# Step 2 – cover letter (plain text, only for strong matches).
 LETTER_SYSTEM = (
     "You write concise, specific, non-generic cover letters in English. You never "
     "invent experience the candidate does not have. Output ONLY the letter body: "
@@ -97,7 +97,7 @@ them to the candidate's real experience. Begin with 'Dear Hiring Team,' and end
 with 'Yours sincerely,' on its own final line. Do NOT add the candidate's name
 after it. Plain English, no em dashes. Output only the letter body."""
 
-# CV tailoring — re-emphasise real experience to match the posting's keywords.
+# CV tailoring – re-emphasise real experience to match the posting's keywords.
 TAILOR_PROFILE_SYSTEM = (
     "You tailor the PROFILE / summary paragraph of a CV to a specific job for "
     "ATS/HR keyword matching. STRICT RULES: use ONLY facts and skills already in "
@@ -340,11 +340,29 @@ NO_DESCRIPTION = ("(No description was available for this listing – assess the
                   "location, and keep the cover letter's specific claims about the role modest.)")
 
 
+class LimitWait:
+    """Runs one model step; when Claude's limit is used up it waits through `on_limit` (which returns when the run may
+    go on, or raises to stop) and tries again. Without `on_limit` the LimitReached error ends the run at once.
+    Scoring and the writing of documents both run their steps through it."""
+
+    def __init__(self, on_limit=None) -> None:
+        self._on_limit = on_limit
+
+    def __call__(self, call):
+        while True:
+            try:
+                return call()
+            except llm.LimitReached as e:
+                if self._on_limit is None:
+                    raise
+                self._on_limit(e)
+
+
 class Scorer:
     """Scores postings against one person's profile: several postings in one request (each request has a fixed cost),
     the "J1, J2 …" answers matched back to their postings, and a request of its own for any posting the batch missed.
-    When Claude's limit is used up it waits through `on_limit` (or stops). What happens with a score is the caller's:
-    `record(job, result)` keeps it and says whether it was usable."""
+    Its requests run through a LimitWait. What happens with a score is the caller's: `record(job, result)` keeps it and says
+    whether it was usable."""
 
     BATCH_TEXT, ONE_TEXT = 3000, 4000                # how much of a posting's text one request carries
 
@@ -352,17 +370,7 @@ class Scorer:
         self.blurb = json.dumps({k: profile.get(k) for k in ("summary", "seniority", "years_experience", "internships", "key_skills", "strengths")},
                                 ensure_ascii=False)
         self.rules = scoring_rules(profile) if rules is None else rules
-        self._on_limit = on_limit
-
-    def ask(self, call):
-        """Run one model step; on a hit limit wait (if the caller can) and try again."""
-        while True:
-            try:
-                return call()
-            except llm.LimitReached as e:
-                if self._on_limit is None:
-                    raise
-                self._on_limit(e)                    # returns when the run may continue; raises to stop
+        self.ask = on_limit if isinstance(on_limit, LimitWait) else LimitWait(on_limit)
 
     def fields(self, job: dict[str, Any], limit: int = ONE_TEXT) -> dict[str, str]:
         """A posting as the prompts take it."""
@@ -401,8 +409,10 @@ class Scorer:
                 raise
             except Exception as e:  # noqa: BLE001 - one posting that cannot be scored must not stop the others
                 print(f"  ! Could not score '{job.get('title', '')}' @ {job.get('company', '')}: {e}")
-                result = None
+                missed.append(job)
+                continue
             if not record(job, result):
+                print(f"  ! Could not score '{job.get('title', '')}' @ {job.get('company', '')}: unusable reply")
                 missed.append(job)
         return missed
 
@@ -484,8 +494,8 @@ def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
     """Generate a cover letter and/or tailored CV for ONE job on demand
     (ignores scoring/skip rules). Used by `status.py retailor`."""
     from datetime import date as _date
-    description = (job.get("description") or "").strip()[:4000] or (
-        "(No description was available for this listing.)")
+    description = (job.get("description") or "").strip()[:Scorer.ONE_TEXT] or NO_DESCRIPTION
+    # the profile here is the start of the CV itself (a single job's documents need no CV analysis)
     fields = dict(title=job["title"], company=job["company"],
                   location=job.get("location", ""), description=description,
                   profile=(cv_text[:1500] if cv_text else "(see attached CV)"))
@@ -604,8 +614,7 @@ def process(
         if progress:
             progress(done, units)
         _say(f"Scoring jobs {start + 1}–{start + len(chunk)} of {len(to_score)}…")
-        for job in scorer.score(chunk, _record):
-            print(f"  ! Could not score '{job.get('title', '')}' @ {job.get('company', '')}: unusable reply")
+        scorer.score(chunk, _record)                   # each posting it could not score is in the log, once
         done += len(chunk)
 
     # Steps 2 and 3: documents for the ones that scored high enough.
