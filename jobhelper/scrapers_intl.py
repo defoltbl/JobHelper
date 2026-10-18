@@ -18,15 +18,9 @@ from typing import Any
 import requests
 from bs4 import BeautifulSoup
 
-from . import store
+from . import filters, store, web
 
-_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-    ),
-    "Accept-Language": "en;q=0.9",
-}
+_HEADERS = web.headers()
 _SEARCH = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
 _DETAIL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{id}"
 _TIMEOUT = 20
@@ -76,15 +70,6 @@ def parse_linkedin(html_text: str, where: str, limit: int = 1000) -> list[dict[s
     return out
 
 
-# Text LinkedIn shows when a posting is closed / expired.
-_CLOSED_MARKERS = (
-    "no longer accepting applications",
-    "no longer available",
-    "this job is no longer",
-    "not currently accepting applications",
-)
-
-
 _RELATIVE = re.compile(r"(\d+)\s+(hour|day|week|month|year)s?\s+ago", re.IGNORECASE)
 
 
@@ -111,8 +96,7 @@ def _fetch_detail(job_id: str) -> tuple[str, bool, str]:
         r = requests.get(_DETAIL.format(id=job_id), headers=_HEADERS, timeout=_TIMEOUT)
         if r.status_code != 200:
             return "", r.status_code in (404, 410), ""
-        low = r.text.lower()
-        closed = any(m in low for m in _CLOSED_MARKERS)
+        closed = filters.is_closed(r.text)          # the same words that mark a closed posting everywhere
         soup = BeautifulSoup(r.text, "lxml")
         el = soup.select_one(".show-more-less-html__markup, .description__text")
         desc = re.sub(r"\s+", " ", el.get_text(" ", strip=True))[:6000] if el else ""
@@ -130,8 +114,24 @@ def _fetch_detail(job_id: str) -> tuple[str, bool, str]:
         return "", False, ""
 
 
-def _fetch_description(job_id: str) -> str:  # back-compat
-    return _fetch_detail(job_id)[0]
+def is_linkedin(job: dict[str, Any]) -> bool:
+    """Whether a job record comes from LinkedIn (its id, its source or its link says so)."""
+    return (str(job.get("id") or "").startswith("linkedin-") or (job.get("source") or "") == "linkedin"
+            or "linkedin.com" in (job.get("url") or ""))
+
+
+def posting_number(job: dict[str, Any]) -> str:
+    """The number LinkedIn gives a posting ('' when the job is not one of LinkedIn's or has none)."""
+    if not is_linkedin(job):
+        return ""
+    found = re.search(r"(\d{6,})", f"{job.get('id') or ''} {job.get('url') or ''}")
+    return found.group(1) if found else ""
+
+
+def read_posting(job: dict[str, Any]) -> tuple[str, bool, str]:
+    """(text, closed, posted date) of a LinkedIn job, read from its page; ('', False, '') when it has no number."""
+    number = posting_number(job)
+    return _fetch_detail(number) if number else ("", False, "")
 
 
 def linkedin(keyword: str, where: str, limit: int, with_description: bool = True,

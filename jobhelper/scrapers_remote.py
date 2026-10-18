@@ -12,15 +12,9 @@ from typing import Any
 
 import requests
 
-from . import store, textfmt
+from . import store, textfmt, web
 
-_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-    ),
-    "Accept-Language": "en;q=0.9",
-}
+_HEADERS = web.headers()
 _TIMEOUT = 25
 _WWR = "https://weworkremotely.com/categories/"
 _WWR_FEEDS = [_WWR + "remote-programming-jobs.rss", _WWR + "remote-devops-sysadmin-jobs.rss"]      # software and IT

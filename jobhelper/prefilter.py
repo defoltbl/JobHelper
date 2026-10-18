@@ -75,7 +75,8 @@ def chosen_fields(names) -> list[str]:
     return [name for name in FIELDS if name in picked]
 
 
-def _phrase(text: str) -> re.Pattern | None:
+def role_phrase(text: str) -> re.Pattern | None:
+    """A role's words as one phrase to find in a title ("support" in "IT Support Specialist"); None for no words."""
     words = [re.escape(w) for w in re.findall(r"[^\W_]+(?:[+#.][^\W_]*)*", str(text or ""))]
     return re.compile(r"(?<![^\W_])" + r"[\s\-/]+".join(words) + r"(?![^\W_])", re.IGNORECASE) if words else None
 
@@ -119,9 +120,9 @@ def reason_to_skip(job: dict[str, Any], cv_keywords: set[str], check_level: bool
     if high and check_level:
         return f"The title is a senior level ({high.group(0)})."
     # a kind of role you said you do not want, unless the title is also one you named as wanted
-    if not any(p and p.search(title) for p in map(_phrase, wanted or [])):
+    if not any(p and p.search(title) for p in map(role_phrase, wanted or [])):
         for role in unwanted or []:
-            pattern = _phrase(role)
+            pattern = role_phrase(role)
             if pattern and pattern.search(title):
                 return f"You listed this kind of role as not wanted ({str(role).strip()})."
     if mine and not on_profile:

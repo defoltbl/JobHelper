@@ -8,6 +8,8 @@ or other countries, and says nothing there. Deterministic (no API cost).
 """
 from __future__ import annotations
 
+import re
+
 # Junior monthly gross (CZK), matched by the FIRST keyword found in the title.
 # Order matters — more specific / higher-paid roles first.
 _JUNIOR_MONTHLY: list[tuple[str, int]] = [
@@ -31,7 +33,7 @@ _JUNIOR_MONTHLY: list[tuple[str, int]] = [
 # As whole words: "ios" is not in "kiosk", "ai" not in "Thai", "qa" not in "Qatar", "sre" not in "pressroom".
 # ("java" still finds "javascript", and "data scien" finds "scientist" and "science": those are meant.)
 _OPEN_END = ("data scien", "java")
-_WORD = {kw: __import__("re").compile(r"(?<![a-z0-9])" + __import__("re").escape(kw) + ("" if kw in _OPEN_END or not kw[-1].isalnum() else r"(?![a-z0-9])"))
+_WORD = {kw: re.compile(r"(?<![a-z0-9])" + re.escape(kw) + ("" if kw in _OPEN_END or not kw[-1].isalnum() else r"(?![a-z0-9])"))
          for kw, _pay in _JUNIOR_MONTHLY}
 
 _LEVEL_MULT = {"junior": 1.0, "entry": 1.0, "graduate": 1.0, "mid": 1.3,
@@ -51,8 +53,6 @@ def estimate(title: str, seniority: str = "junior") -> tuple[int, int]:
 
 
 # ── what a posting itself says about pay ────────────────────────────────────
-import re  # noqa: E402
-
 # How many crowns one unit is worth, roughly: enough to compare a posting's pay with what you ask.
 CURRENCIES = {"CZK": 1.0, "EUR": 25.0, "USD": 23.0, "GBP": 29.0, "CHF": 26.0, "PLN": 5.8, "HUF": 0.063, "RON": 5.0,
               "SEK": 2.2, "NOK": 2.1, "DKK": 3.35, "CAD": 17.0, "AUD": 15.0}
@@ -124,7 +124,7 @@ def asked(job: dict, options: dict | None = None) -> tuple[int, str, bool]:
         except (AttributeError, TypeError, ValueError):
             continue
         from . import prefilter
-        phrase = prefilter._phrase(role)
+        phrase = prefilter.role_phrase(role)
         if amount > 0 and phrase is not None and phrase.search(str(job.get("title") or "")):
             return amount, currency, True
     if own > 0:

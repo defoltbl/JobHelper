@@ -18,7 +18,6 @@ reads the replies into your tracker.
 """
 from __future__ import annotations
 
-import html
 import json
 import re
 import time
@@ -26,11 +25,9 @@ from typing import Any
 
 import requests
 
-from . import config, filters, store
+from . import config, filters, store, textfmt, web
 
-_H = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/122.0 Safari/537.36",
-      "Accept": "application/json"}
+_H = web.headers(language=None, accept="application/json")
 _T = 15
 _DELAY = 0.3
 
@@ -39,7 +36,7 @@ _cache: dict[tuple[str, str], list[dict[str, Any]]] = {}
 
 
 def _strip_html(raw: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html.unescape(raw or ""))).strip()[:6000]
+    return textfmt.strip_tags(raw)[:6000]
 
 
 # ── per-ATS fetchers: return a company's open roles as normalized records ──
