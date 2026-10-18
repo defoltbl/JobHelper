@@ -14,26 +14,7 @@ from __future__ import annotations
 
 import subprocess
 import time
-
-# key -> (the app's name for macOS, how it is spoken to, where its switch is)
-BROWSERS = {
-    "chrome": ("Google Chrome", "chromium", "View > Developer > Allow JavaScript from Apple Events"),
-    "brave": ("Brave Browser", "chromium", "View > Developer > Allow JavaScript from Apple Events"),
-    "edge": ("Microsoft Edge", "chromium", "Tools > Developer > Allow JavaScript from Apple Events"),
-    "opera": ("Opera", "chromium", "Developer > Allow JavaScript from Apple Events (the Developer menu is turned on under View > Show Developer Menu)"),
-    "safari": ("Safari", "safari", "Develop > Allow JavaScript from Apple Events (turn on the Develop menu first, under Settings > Advanced)"),
-}
-SHORT = {"chrome": "Chrome", "brave": "Brave", "edge": "Edge", "opera": "Opera", "safari": "Safari"}
-# Browsers people ask for that cannot be reached this way, with the reason: said plainly, not left out without a word.
-NOT_POSSIBLE = {"opera_gx": ("Opera GX", "Opera GX tells another app which page is open, but it has switched off the part that lets one fill a page in "
-                                         "(tried on 10 October 2026: the request is refused before it is even sent). Open the application form in "
-                                         "Google Chrome or Safari; your Opera GX stays as it is."),
-                "firefox": ("Firefox", "Firefox does not let another app read or fill in its pages (it has no such switch), so I cannot work in it. "
-                                       "Open the application form in one of the other browsers; your Firefox stays as it is.")}
-DEFAULT = "chrome"
-TIMEOUT = 20
-_NOT_RUNNING, _NO_WINDOW = "JOBHELPER_NOT_RUNNING", "JOBHELPER_NO_WINDOW"
-_current = [DEFAULT]
+from dataclasses import dataclass
 
 _SAID = {
     "not_running": "{app} is not open. Open the application form in {short}, then ask me again.",
@@ -47,31 +28,111 @@ _SAID = {
     "cannot": ("{short} does not let another app fill in its pages: it has switched that part off, and there is no setting for it. "
                "Choose another browser on the My details page (Google Chrome and Safari work), and open the form there."),
 }
+_NOT_RUNNING, _NO_WINDOW = "JOBHELPER_NOT_RUNNING", "JOBHELPER_NO_WINDOW"
+
+
+@dataclass(frozen=True)
+class Browser:
+    """One browser the assistant can work in: its name for macOS, the word used in a sentence, how it is spoken to
+    (Chromium's AppleScript or Safari's) and where its "Allow JavaScript from Apple Events" switch is. It words its
+    own messages and builds its own AppleScript."""
+    key: str
+    app: str
+    short: str
+    kind: str                                     # "chromium" or "safari"
+    switch: str
+
+    @property
+    def safari(self) -> bool:
+        return self.kind == "safari"
+
+    @property
+    def tab(self) -> str:
+        """How this browser calls the tab in front."""
+        return "current tab of front window" if self.safari else "active tab of front window"
+
+    def said(self, kind: str) -> str:
+        return _SAID[kind].format(app=self.app, short=self.short, switch=self.switch)
+
+    def wrap(self, action: str) -> list[str]:
+        """An AppleScript that first makes sure the browser runs and has a window; values travel as arguments."""
+        return ["on run argv",
+                f'if application "{self.app}" is not running then return "{_NOT_RUNNING}"',
+                f'tell application "{self.app}"',
+                f'if (count of windows) is 0 then return "{_NO_WINDOW}"',
+                action,
+                "end tell",
+                "end run"]
+
+    def front_tab_action(self) -> str:
+        return f"return (URL of {self.tab}) & linefeed & ({'name' if self.safari else 'title'} of {self.tab})"
+
+    def run_action(self) -> str:
+        if self.safari:
+            return f"return (do JavaScript (item 1 of argv) in {self.tab}) as text"
+        return f"return (execute {self.tab} javascript (item 1 of argv)) as text"
+
+    def open_tab_action(self) -> str:
+        if self.safari:
+            return "tell front window to set current tab to (make new tab with properties {URL:(item 1 of argv)})"
+        return "make new tab at end of tabs of front window with properties {URL:(item 1 of argv)}"
+
+
+_DEVELOP = "View > Developer > Allow JavaScript from Apple Events"
+BROWSERS: dict[str, Browser] = {b.key: b for b in (
+    Browser("chrome", "Google Chrome", "Chrome", "chromium", _DEVELOP),
+    Browser("brave", "Brave Browser", "Brave", "chromium", _DEVELOP),
+    Browser("edge", "Microsoft Edge", "Edge", "chromium", "Tools > Developer > Allow JavaScript from Apple Events"),
+    Browser("opera", "Opera", "Opera", "chromium",
+            "Developer > Allow JavaScript from Apple Events (the Developer menu is turned on under View > Show Developer Menu)"),
+    Browser("safari", "Safari", "Safari", "safari",
+            "Develop > Allow JavaScript from Apple Events (turn on the Develop menu first, under Settings > Advanced)"))}
+# Browsers people ask for that cannot be reached this way, with the reason: said plainly, not left out without a word.
+NOT_POSSIBLE = {"opera_gx": ("Opera GX", "Opera GX tells another app which page is open, but it has switched off the part that lets one fill a page in "
+                                         "(tried on 10 October 2026: the request is refused before it is even sent). Open the application form in "
+                                         "Google Chrome or Safari; your Opera GX stays as it is."),
+                "firefox": ("Firefox", "Firefox does not let another app read or fill in its pages (it has no such switch), so I cannot work in it. "
+                                       "Open the application form in one of the other browsers; your Firefox stays as it is.")}
+DEFAULT = "chrome"
+TIMEOUT = 20
+
+
+class _Choice:
+    """The browser the assistant works in now (one for the app; My details sets it)."""
+    def __init__(self) -> None:
+        self.browser = BROWSERS[DEFAULT]
+
+
+_chosen = _Choice()
+
+
+def browser(key: str | None = None) -> Browser:
+    """That browser, or the one in use."""
+    return BROWSERS[key] if key in BROWSERS else _chosen.browser
 
 
 def use(key: str | None) -> str:
     """Choose the browser the assistant works in ("chrome", "brave", "edge", "safari"). Anything else means Chrome."""
-    _current[0] = key if key in BROWSERS else DEFAULT
-    return _current[0]
+    _chosen.browser = BROWSERS[key if key in BROWSERS else DEFAULT]
+    return _chosen.browser.key
 
 
 def current() -> str:
-    return _current[0]
+    return _chosen.browser.key
 
 
 def name(key: str | None = None) -> str:
     """"Google Chrome", "Safari" ..."""
-    return BROWSERS[key if key in BROWSERS else _current[0]][0]
+    return browser(key).app
 
 
 def short(key: str | None = None) -> str:
     """"Chrome", "Brave", "Edge", "Safari": the word used in a sentence."""
-    return SHORT[key if key in BROWSERS else _current[0]]
+    return browser(key).short
 
 
 def said(kind: str, key: str | None = None) -> str:
-    key = key if key in BROWSERS else _current[0]
-    return _SAID[kind].format(app=BROWSERS[key][0], short=SHORT[key], switch=BROWSERS[key][2])
+    return browser(key).said(kind)
 
 
 # the messages for Chrome, the browser the assistant uses unless another one is chosen
@@ -84,7 +145,7 @@ class ChromeError(Exception):
 
     def __init__(self, text: str, kind: str = ""):
         super().__init__(text)
-        self.kind = kind or next((k for k in _SAID if text in (said(k, b) for b in BROWSERS)), "refused")
+        self.kind = kind or next((k for k in _SAID if text in (b.said(k) for b in BROWSERS.values())), "refused")
 
 
 def _fail(kind: str) -> ChromeError:
@@ -134,50 +195,25 @@ def _checked(answer: str) -> str:
     return answer
 
 
-def _wrap(action: str) -> list[str]:
-    app = name()
-    return ["on run argv",
-            f'if application "{app}" is not running then return "{_NOT_RUNNING}"',
-            f'tell application "{app}"',
-            f'if (count of windows) is 0 then return "{_NO_WINDOW}"',
-            action,
-            "end tell",
-            "end run"]
-
-
-def _safari() -> bool:
-    return BROWSERS[_current[0]][1] == "safari"
-
-
-def _tab() -> str:
-    """How this browser calls the tab in front."""
-    return "current tab of front window" if _safari() else "active tab of front window"
-
-
 def active_tab() -> dict[str, str]:
     """{"url", "title"} of the tab in front. Raises ChromeError with the reason."""
-    answer = _checked(_osascript(_wrap(f"return (URL of {_tab()}) & linefeed & ({'name' if _safari() else 'title'} of {_tab()})")))
+    b = browser()
+    answer = _checked(_osascript(b.wrap(b.front_tab_action())))
     url, _sep, words = answer.partition("\n")
     return {"url": url.strip(), "title": words.strip()}
 
 
 def run(script: str) -> str:
     """Run a script in the tab in front and return what it gives back as text ('' for nothing)."""
-    if _safari():
-        action = f"return (do JavaScript (item 1 of argv) in {_tab()}) as text"
-    else:
-        action = f"return (execute {_tab()} javascript (item 1 of argv)) as text"
-    answer = _checked(_osascript(_wrap(action), script))
+    b = browser()
+    answer = _checked(_osascript(b.wrap(b.run_action()), script))
     return "" if answer == "missing value" else answer
 
 
 def open_tab(url: str) -> None:
     """Open an address in a new tab of the window in front (the person asked for it by a button)."""
-    if _safari():
-        action = "tell front window to set current tab to (make new tab with properties {URL:(item 1 of argv)})"
-    else:
-        action = "make new tab at end of tabs of front window with properties {URL:(item 1 of argv)}"
-    _checked(_osascript(_wrap(action), url))
+    b = browser()
+    _checked(_osascript(b.wrap(b.open_tab_action()), url))
 
 
 def pause(seconds: float) -> None:

@@ -220,6 +220,8 @@ data/                your data; only the *.example.* files are in git
 - **Postings are scored only through `agent3_letters.Scorer`** (the batch prompt, the J-id answers, the one-by-one
   retry, the limit wait). A caller says only what it keeps (`record`). A job that got its documents ends with
   `mark_ready`, in a search and in `generate_for`.
+- **A browser is a `chrome.Browser`**: its names, its switch, its messages and its AppleScript. A new browser is one
+  more entry in `chrome.BROWSERS`; code that needs a browser's field asks the object, never a position in a tuple.
 - **Two company names are one company only through `email_client.same_company`.** Never compare
   by "any shared word": "Accenture Czech Republic" and "PwC Czech Republic" share one. A legal form
   ("spol. s r.o.", "Corp", "LLC", "Limited") is never a word of the name: `email_client.LEGAL_WORDS`
