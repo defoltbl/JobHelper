@@ -365,8 +365,6 @@ def test_guide_shots(ui, monkeypatch):
         ui.wait(350)
         scroll("optDialog", "fieldsNote", 260)
         shot("20_options_roles")
-        scroll("optDialog", "rightField", 200)
-        shot("32_options_about_you")
         scroll("optDialog", "shelfNote", 320)
         shot("21_options_storage")
         scroll("optDialog", "foldersSw", 420)
@@ -389,6 +387,26 @@ def test_guide_shots(ui, monkeypatch):
         ui.js("win.dark = false")
         shot("24_light_theme")
         ui.js("win.dark = true")
+
+    def about_you():
+        from jobhelper import details
+        details.save({**details.empty(), "first_name": "Alex", "last_name": "Novak", "email": "alex.novak@example.com",
+                      "experience": [{"employer": "Riverside Labs", "title": "Junior developer", "start": "03/2024", "end": "", "current": True},
+                                     {"employer": "Evening Code School", "title": "Tutor", "start": "2023", "end": "", "current": True}]})
+        api.save_about_you({"salary_target": 0, "salary_currency": "CZK",
+                            "salary_by_role": [{"role": "support", "amount": 42000}],
+                            "about_right_to_work": "Full right to work in Czechia", "about_start": "within two weeks",
+                            "about_jobs": [{"job": "Junior developer, Riverside Labs",
+                                            "notes": "I wrote the import service in Python with FastAPI, added its tests, and fixed about thirty tickets."},
+                                           {"job": "Tutor, Evening Code School", "notes": "I teach Python basics to two groups of ten adults each week."}],
+                            "about_experience": "A chess club website in Django, for a club of forty members."})
+        ui.js("aboutDialog.show()")
+        ui.wait(600)
+        shot("32_about_you")
+        scroll("aboutDialog", "noJobs", 110)
+        shot("35_about_you_work")
+        ui.js("aboutDialog.close()")
+        ui.wait(350)
 
     def assistant():
         from jobhelper import details
@@ -489,7 +507,7 @@ def test_guide_shots(ui, monkeypatch):
     try:
         for name, fn in (("welcome", welcome_card), ("main", main_screen), ("new jobs", new_jobs), ("job window", job_window), ("compare", compare),
                          ("letter editor", letter_editor), ("form answers", form_answers), ("applications", applications), ("interview", interview), ("replies", replies),
-                         ("filtered and insights", filtered_and_insights), ("options", options), ("assistant", assistant), ("others", others)):
+                         ("filtered and insights", filtered_and_insights), ("options", options), ("assistant", assistant), ("about you", about_you), ("others", others)):
             step(name, fn)
     finally:
         ui.bridge._set_running(False)

@@ -968,7 +968,7 @@ Dialog {
                     text: bad ? assistantDialog.problem.msg
                         : assistantDialog.detailsNote !== "" ? assistantDialog.detailsNote
                         : assistantDialog.dirty ? "Changed, not saved yet."
-                        : assistantDialog.detailsSaved ? "Saved. The right to work and your start date are under Options > About you."
+                        : assistantDialog.detailsSaved ? "Saved. The right to work and your start date are in About you, under Options."
                         : "Nothing is saved yet." }
                 SmallButton { objectName: "asClose"; text: "Close"; onClicked: assistantDialog.tryClose() }
                 PillButton { objectName: "asSave"; primaryStyle: true; text: "Save"; onClicked: assistantDialog.saveDetails() }

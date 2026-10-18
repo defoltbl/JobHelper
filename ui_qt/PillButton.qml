@@ -29,7 +29,7 @@ Button {
         border.width: pb.tinted ? 1.5 : 1
         opacity: pb.enabled ? 1 : 0.5
     }
-    property string glyph: ""            // "mail" draws an envelope before the label
+    property string glyph: ""            // "mail" draws an envelope before the label; also "help", "gear", "person"
     readonly property color fg: primaryStyle ? theme.accentInk : (tinted ? tint : theme.ink)
     contentItem: Item {
         implicitWidth: btnRow.implicitWidth; implicitHeight: btnRow.implicitHeight
@@ -62,6 +62,16 @@ Button {
                 Rectangle { x: 2.5; y: 2.5; width: 11; height: 11; radius: 5.5; color: pb.fg }
                 Rectangle { x: 5.5; y: 5.5; width: 5; height: 5; radius: 2.5
                     color: pb.hovered ? theme.surface2 : pb.bg }
+            }
+            Item {                           // person icon: a head over the shoulders, for About you
+                visible: pb.glyph === "person"; width: 16; height: 16
+                anchors.verticalCenter: parent.verticalCenter
+                Rectangle { x: 4.5; y: 0.5; width: 7; height: 7; radius: 3.5; color: "transparent"; border.color: pb.fg; border.width: 1.6
+                    antialiasing: true }
+                Shape { anchors.fill: parent
+                    ShapePath { strokeColor: pb.fg; strokeWidth: 1.6; fillColor: "transparent"; capStyle: ShapePath.RoundCap
+                        startX: 1.5; startY: 15.2
+                        PathQuad { x: 14.5; y: 15.2; controlX: 8; controlY: 5.5 } } }
             }
             Text { text: pb.text; font: pb.font; color: pb.fg; anchors.verticalCenter: parent.verticalCenter }
         }

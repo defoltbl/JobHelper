@@ -353,7 +353,7 @@ The window has three columns and a strip at the bottom (Table 3.1).
 |---|---|---|
 | Lists and account | Left | Your lists, the Account chip, the settings of the next search |
 | Assembly line | Middle | The five robots, the assistant (section 9), the two run buttons, the status line |
-| Where you stand | Right | Claude usage, the last run, the next date, the weekly run, Options, Help |
+| Where you stand | Right | Claude usage, the last run, the next date, the weekly run, Options, About you, Help |
 | Pipeline strip | Bottom | The five agents by name, lit while they work |
 
 ### The left column
@@ -447,6 +447,7 @@ Table 3.4 lists the cards in the right column.
 | **Coming up** | The next dated event, such as an interview |
 | **Weekly run** | Whether a weekly run is scheduled. Select it to change the schedule (section 17) |
 | **Options** | Opens the settings (section 16) |
+| **About you** | Opens your salary, right to work, start date and the notes about your work (section 16) |
 | **Help** | A short version of this guide, and the list of changes |
 
 The rows of the **Last run** card (Table 3.5):
@@ -742,7 +743,7 @@ Figure 6.2 shows the score and the keywords.
 
 > **Note**
 > The app never adds a **Not in your CV** word to an adapted CV. If you really have that
-> skill, add it to your master CV, or describe it under **More about your work** in Options.
+> skill, add it to your master CV, or describe it under **More about your work** in **About you**.
 
 ### The buttons at the bottom
 
@@ -801,7 +802,7 @@ mention them. In a letter, the line marks only a sentence that says you did it, 
 about the role. The app already asked Claude once to remove these terms. A term that is left
 can still be a fair word for work that you did. So you decide. Keep the term only if it is
 true. If it is not true, edit the Word file. You can also add what you really did under **More
-about your work** in Options.
+about your work** in **About you**.
 
 ### The cover letter
 
@@ -856,7 +857,7 @@ the text of the posting is missing, the app first asks you to read the posting a
 
 A letter that **you** wrote is never touched.
 
-1. Open Options and find **Your own letters**. Select **Open folder**.
+1. Open **About you** and find **Your own letters**. Select **Open folder**.
 2. Put your letter in that folder, named after the company.
 3. At the next search the app uses your letter for that company instead of writing one.
 
@@ -878,7 +879,7 @@ Figure 7.3 shows answers for one job's form.
 
 *Figure 7.3 – Answers for one job's form*
 
-The answers come from your CV, the posting, and the facts under **About you** in Options. Some
+The answers come from your CV, the posting, and the facts in **About you**. Some
 answers need a fact that the app does not know, such as a salary figure, a date or a
 reference. The app then puts the missing part in square brackets and adds a **Check** note.
 The answers stay with the job (Table 7.2).
@@ -1024,8 +1025,8 @@ A field you leave empty is left empty in the form too. When something is wrong, 
 turns red and the line under it says what to change; nothing is saved until it is right.
 
 > **Note**
-> Your right to work and your start date are not on this page. They are under **Options** >
-> **About you** (section 16), because letters and answers use them as well. The assistant
+> Your right to work and your start date are not on this page. They are in **About you**
+> (section 16), because letters and answers use them as well. The assistant
 > takes your start date from there when a form asks for it.
 
 ### List your jobs and your degrees
@@ -1265,7 +1266,7 @@ Table 9.4 shows what happens to each kind of field.
 | A block for each language | Chooses the language, then its level in each list (comprehension, reading, speaking and so on), from your list of languages. Ticks **I am fluent in this language** for *Native* and *Fluent*. Levels are marked for checking |
 | A field that throws away what was written | Written a second time, the way typing arrives. If the page throws that away too, the field is left to you and the assistant says so |
 | A short field the app does not recognise | Asks Claude, with the lists and numbers, to copy the words from your CV or your details. Words that are not there are not written |
-| When you can start ("Earliest start date", "Available from", "When can you start?") | Writes what you entered under **Options** > **About you** > **You can start**. For a date picker it works out the day: *1 November 2026* as written, *immediately* as today, *one month* as a month from today. A worked-out day is marked for checking. Words it cannot turn into a day, and a day that has passed, leave the picker to you |
+| When you can start ("Earliest start date", "Available from", "When can you start?") | Writes what you entered in **About you** > **You can start**. For a date picker it works out the day: *1 November 2026* as written, *immediately* as today, *one month* as a month from today. A worked-out day is marked for checking. Words it cannot turn into a day, and a day that has passed, leave the picker to you |
 | Other dates | Leaves them to you |
 | Every other tick box, such as agreeing to a privacy notice | Leaves it to you |
 | **Add another job**, **Add education** | Pressed once for each job or degree that has no row yet |
@@ -1961,24 +1962,35 @@ Table 16.2 lists the Matching and Follow-up settings.
 
 ### About you
 
-Figure 16.4 shows the About you settings.
+**About you** is a window of its own. It holds the only facts about you that the app states
+besides your CV. To open it, select **About you** under **Options** on the right side of the main
+window. Figure 16.4 shows the top of the window.
 
-![Options: about you](img/32_options_about_you.png)
+![The About you window](img/32_about_you.png)
 
-*Figure 16.4 – Options: about you*
+*Figure 16.4 – The About you window*
 
-Table 16.3 lists the About you settings.
+Table 16.3 lists what you can enter.
 
-*Table 16.3 – The About you settings*
+*Table 16.3 – The parts of About you*
 
-| Setting | What it does |
+| Part | What it does |
 |---|---|
-| **Salary you ask for** | Your expected pay, gross per month, with its currency. Form answers give it as your expectation. The job window and the lists show it. Insights compares what postings pay with it. 0 = none given. The app then uses its own estimate, which it has only for software roles in Czechia. In other cases, you fill in the figure yourself |
-| **A different figure for** | A salary for one type of role. The app uses it instead of the general figure when the words are in the job's title (*support* for "IT Support Specialist"). Enter the type of role and the figure, then select **+ Add** |
-| **Right to work** | How letters and answers should say it. Empty = not mentioned |
-| **You can start** | When you can start, for example *immediately*, *one month* or *1 November 2026*. Letters and answers say it this way, and the assistant fills it into forms. Empty = not mentioned |
-| **More about your work** | What you really did in each job beyond what the CV says, in your own words. The app may use it like the CV |
+| **Salary you ask for** | Your expected pay, gross per month, with its currency. Form answers give it as your expectation. The job window and the lists show it. Insights compares what postings pay with it. 0 = none given. Then the window shows the app's own estimate for your types of role. The app has an estimate only for software roles in Czechia. In other cases, you fill in the figure yourself |
+| **A different figure for** | A salary for one type of role. The app uses it instead of the general figure when the words are in the job's title (*support* for "IT Support Specialist"). Enter the type of role and the figure, then select **+ Add**. To change a figure, change it in the list. To delete it, select **Remove** |
+| **Right to work** | How letters and answers should say it. Select one of the usual answers to fill in the field, and then change the words if necessary. Empty = not mentioned |
+| **You can start** | When you can start, for example *immediately*, *one month* or *2026-11-01*. Letters say it as you write it. Under the field, the window shows the date that forms get. A red line tells you when the app cannot find a date in your words. Empty = not mentioned |
+| **More about your work** | What you really did in each job beyond what the CV says. There is one box for each job in **My details**, and a box for other work. The app may use the text like the CV. All boxes together can have 4,000 characters |
 | **Your own letters** | The folder for letters you wrote yourself (section 7) |
+
+Figure 16.5 shows the boxes for your work.
+
+![More about your work, one box for each job](img/35_about_you_work.png)
+
+*Figure 16.5 – More about your work, one box for each job*
+
+A note stays when you rename or delete its job in **My details**. The window marks it as no
+longer in My details. Select **Remove** to delete the note.
 
 > **Important**
 > Write only true facts here. The app treats them as true and uses them in letters, form
@@ -1986,11 +1998,11 @@ Table 16.3 lists the About you settings.
 
 ### Notifications and storage
 
-Figure 16.5 shows the Notifications and storage settings.
+Figure 16.6 shows the Notifications and storage settings.
 
 ![Options: notifications and storage](img/21_options_storage.png)
 
-*Figure 16.5 – Options: notifications and storage*
+*Figure 16.6 – Options: notifications and storage*
 
 Table 16.4 lists the Notifications and storage settings.
 
@@ -2006,11 +2018,11 @@ Table 16.4 lists the Notifications and storage settings.
 
 ### Email scan
 
-Figure 16.6 shows the Email scan and Model settings.
+Figure 16.7 shows the Email scan and Model settings.
 
 ![Options: email and the model](img/33_options_email.png)
 
-*Figure 16.6 – Options: email and the model*
+*Figure 16.7 – Options: email and the model*
 
 Table 16.5 lists the Email scan settings.
 

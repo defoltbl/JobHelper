@@ -160,7 +160,7 @@ Dialog {
                             // what the text holds, as you type: a problem in red, otherwise the count
                             color: fmQuestions.text.trim() !== "" && formDialog.checked.problem !== "" ? theme.crit : theme.faint
                             font.bold: fmQuestions.text.trim() !== "" && formDialog.checked.problem !== ""
-                            text: fmQuestions.text.trim() === "" ? "Claude drafts the answers in one call, from your CV, this posting and About you in Options. Nothing outside your CV is claimed."
+                            text: fmQuestions.text.trim() === "" ? "Claude drafts the answers in one call, from your CV, this posting and About you. Nothing outside your CV is claimed."
                                 : formDialog.checked.problem !== "" ? formDialog.checked.problem
                                 : formDialog.checked.count + (formDialog.checked.count === 1 ? " question" : " questions") + " found"
                                   + (formDialog.checked.note !== "" ? " · " + formDialog.checked.note : "") + " · one Claude call" }

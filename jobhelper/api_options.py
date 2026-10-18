@@ -38,12 +38,29 @@ class OptionsService:
     def currencies(self):
         return list(salary.CURRENCIES)
 
-    def salary_hint(self, where, country):
-        """What the app does when no figure is given, for the line under the field in Options."""
-        home = places.country_of(str(country or "")) or places.country_of(str(where or ""))
-        if home == "czechia" or not (str(where or "").strip() or str(country or "").strip()):
-            return "With 0 the app uses its own estimate, which it has for software roles in Czechia only."
-        return "With 0 no figure is given: the app has no estimate for this country. Answers then leave the salary for you to fill in."
+    def about_you(self):
+        """What the About you window shows: the saved values, and what the app says about them (about_you.AboutYou)."""
+        from . import about_you, details
+        o = self.options()
+        try:
+            seniority = (agent1_cv.load_profile() or {}).get("seniority", "junior")
+        except Exception:  # noqa: BLE001 - without a CV analysis the level is junior, as in Options
+            seniority = "junior"
+        page = about_you.AboutYou(o).page(details.load(), list(o.get("wanted_roles") or o.get("queries") or []), seniority)
+        return {**{k: o.get(k) for k in about_you.KEYS}, **page, "currencies": list(salary.CURRENCIES)}
+
+    def save_about_you(self, data):
+        """Save only the About you facts; the other Options stay as they are."""
+        from . import about_you
+        sent = {k: v for k, v in (data or {}).items() if k in about_you.KEYS} if isinstance(data, dict) else {}
+        if not sent:
+            return {"ok": False, "msg": "Nothing to save."}
+        return self.save_options(sent)
+
+    def start_preview(self, text):
+        """The date forms will get for "You can start" (about_you.AboutYou.start_preview)."""
+        from . import about_you
+        return about_you.AboutYou.start_preview(text)
 
     def country_of(self, city):
         """The country the app takes a city to be in ("Czechia"), or '' when it does not know the city."""
@@ -175,6 +192,15 @@ class OptionsService:
                 seen.add(role.lower())
                 tidy.append({"role": role, "amount": int(amount)})
             clean["salary_by_role"] = tidy
+        if "about_jobs" in clean:                  # the work notes per job: WorkNotes owns their rules
+            from . import about_you
+            if not isinstance(clean["about_jobs"], (list, tuple)) or not all(isinstance(n, dict) for n in clean["about_jobs"]):
+                return {}, "“about jobs” must be a list of notes."
+            general = clean.get("about_experience", config.ui_settings().get("about_experience", ""))
+            notes = about_you.WorkNotes(list(clean["about_jobs"]), str(general or ""))
+            if notes.problem():
+                return {}, notes.problem()
+            clean["about_jobs"] = notes.as_options()["about_jobs"]
         if "salary_currency" in clean:
             code = str(clean["salary_currency"] or "").strip().upper()
             if code not in salary.CURRENCIES:

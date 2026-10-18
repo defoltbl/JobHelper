@@ -104,6 +104,14 @@ def currency_of(options: dict | None = None) -> str:
     return code if code in CURRENCIES else "CZK"
 
 
+def estimate_available(options: dict) -> bool:
+    """Whether the app's own estimate counts for this search: it exists only for Czechia, so only while the search is
+    there (or no city or country is set yet). The salary of a job, the line in About you and its estimates ask here."""
+    from . import filters
+    where, country = str(options.get("where") or ""), str(options.get("country") or "")
+    return not (where.strip() or country.strip()) or filters.Placement(where, country).home == "czechia"
+
+
 def asked(job: dict, options: dict | None = None) -> tuple[int, str, bool]:
     """What to ask for in this job: (gross per month, currency, True when it is your own figure).
 
@@ -111,7 +119,7 @@ def asked(job: dict, options: dict | None = None) -> tuple[int, str, bool]:
     in the title ("support" for "IT Support Specialist"), else the general one. Otherwise the app's estimate for the job, which
     exists only for software roles and only while the search is in Czechia (or no city is set
     yet). (0, currency, False) when there is nothing to say."""
-    from . import config, places
+    from . import config
     opts = config.ui_settings() if options is None else options
     currency = currency_of(opts)
     try:
@@ -129,9 +137,7 @@ def asked(job: dict, options: dict | None = None) -> tuple[int, str, bool]:
             return amount, currency, True
     if own > 0:
         return own, currency, True
-    home = places.country_of(str(opts.get("country") or "")) or places.country_of(str(opts.get("where") or ""))
-    placed = bool(str(opts.get("where") or "").strip() or str(opts.get("country") or "").strip())
-    if placed and home != "czechia":
+    if not estimate_available(opts):
         return 0, currency, False
     try:
         estimate_czk = int(job.get("desired_monthly_czk") or 0)

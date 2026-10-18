@@ -1,4 +1,4 @@
-// StatusPanel: the right column: Claude usage, the last run, dates coming up, the weekly run, Options and Help.
+// StatusPanel: the right column: Claude usage, the last run, dates coming up, the weekly run, Options, About you and Help.
 // A part of the main window, created once in Main.qml. It uses names from Main.qml (theme, win, bridge,
 // the dialogs) through the QML context.
 import QtQuick
@@ -13,8 +13,17 @@ Rectangle {
     Layout.preferredWidth: 236; Layout.fillHeight: true
     color: theme.surface
     Rectangle { anchors.left: parent.left; height: parent.height; width: 1; color: theme.line }
+    // In a short window the column scrolls, so no button at its foot is ever cut off; when it fits, nothing moves.
+    Flickable {
+        id: statusScroll; objectName: "statusScroll"
+        anchors.fill: parent; clip: true; boundsBehavior: Flickable.StopAtBounds
+        contentWidth: width; contentHeight: statusCol.height + 32
+        interactive: contentHeight > height + 1
+        ScrollBar.vertical: ScrollBar { policy: statusScroll.interactive ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
     ColumnLayout {
-        anchors.fill: parent; anchors.margins: 16; spacing: 16
+        id: statusCol
+        x: 16; y: 16; width: statusScroll.width - 32
+        height: Math.max(statusScroll.height - 32, implicitHeight); spacing: 12
         RowLayout { spacing: 9
             Rectangle { implicitWidth: 34; implicitHeight: 34; radius: 9; color: theme.infobg
                 Text { anchors.centerIn: parent; text: "✶"; color: theme.a1; font.pixelSize: 16 } }
@@ -135,6 +144,8 @@ Rectangle {
         }
         Item { Layout.fillHeight: true }
         PillButton { Layout.fillWidth: true; text: "Options"; glyph: "gear"; onClicked: optDialog.open() }
+        PillButton { objectName: "aboutButton"; Layout.fillWidth: true; text: "About you"; glyph: "person"; onClicked: aboutDialog.show() }
         PillButton { objectName: "helpButton"; Layout.fillWidth: true; text: "Help"; glyph: "help"; onClicked: helpDialog.open() }
+    }
     }
 }

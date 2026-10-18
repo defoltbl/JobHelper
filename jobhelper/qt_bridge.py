@@ -146,6 +146,22 @@ class Bridge(RunSlots, JobSlots, QObject):
         from . import prefilter
         return bool(prefilter.fields_of([str(text or "")]))
 
+    @Slot(result="QVariantMap")
+    def aboutYou(self):
+        """The About you window's values and what the app says about them (OptionsService.about_you)."""
+        return self._api.about_you()
+
+    @Slot("QVariantMap", result="QVariantMap")
+    def saveAboutYou(self, data):
+        result = self._api.save_about_you(dict(data or {}))
+        if result.get("ok"):
+            config.apply_ui_settings()
+        return result
+
+    @Slot(str, result="QVariantMap")
+    def startPreview(self, text):
+        return self._api.start_preview(text)
+
     @Slot("QVariantMap", result="QVariantMap")
     def saveOptions(self, opts):
         result = self._api.save_options(dict(opts or {}))

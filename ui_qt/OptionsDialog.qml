@@ -24,20 +24,6 @@ Dialog {
     padding: 0
     ListModel { id: rolesModel }
     ListModel { id: companiesModel }
-    ListModel { id: payModel }            // a salary of its own for some kinds of role: { role, amount }
-    property string payErr: ""
-    function addPay() {
-        var role = payRole.text.trim();
-        payErr = "";
-        if (win.hasNonLatin(role)) { payErr = "Write the kind of role in English (Latin letters), as it stands in job titles."; return; }
-        if (role.length < 2 || !/[A-Za-z\u00C0-\u024F]{2}/.test(role)) { payErr = "Enter a kind of role in words, for example support."; return; }
-        if (payAmount.value <= 0) { payErr = "Enter the salary for “" + role + "”: a number above 0."; return; }
-        if (payModel.count >= 20) { payErr = "The list takes up to 20 kinds of role. Remove one first."; return; }
-        for (var i = 0; i < payModel.count; i++)
-            if (payModel.get(i).role.toLowerCase() === role.toLowerCase()) { payErr = "“" + role + "” is already in the list. Remove it first to change its figure."; return; }
-        payModel.append({ role: role, amount: payAmount.value });
-        payRole.text = ""; payAmount.value = 0;
-    }
     property string roleErr: ""
     property string pendingRole: ""       // a role the app did not know, waiting for a second press on Add
     // "software engineering intern" as a search role while "intern" is skipped would
@@ -100,8 +86,6 @@ Dialog {
                   "köln": "Cologne", "warszawa": "Warsaw", "kraków": "Kraków" };
         return m[(c || "").toLowerCase()] || c || "";
     }
-    property var myLetters: ({})          // where your own letters are, and how many
-    readonly property int expMax: win.limits.experience_notes    // the limit the app applies when it reads the text
     property string loaded: ""            // everything in the window as it was when it opened, to tell if it changed
     property bool confirmClose: false
     function collect() {                  // what Save would store, as plain values
@@ -112,8 +96,6 @@ Dialog {
             var c = companiesModel.get(k);
             cs.push({ name: "" + c.name, ats: "" + c.ats, token: "" + c.token });
         }
-        var pays = [];
-        for (var p = 0; p < payModel.count; p++) pays.push({ role: "" + payModel.get(p).role, amount: payModel.get(p).amount });
         return { options: { where: cityCombo.editText, country: countryField.text.trim(), sources: pickedSources.slice(),
                             remote_where: remoteWhere, remote_countries: pickedRemote.slice(), all_languages: !engSw.checked,
                             full_time_only: fullSw.checked,
@@ -123,9 +105,6 @@ Dialog {
                             max_age_days: ageSpin.value, per_query: pqSpin.value,
                             threshold: thrSpin.value, min_lead_score: minSpin.value,
                             followup_days: fuSpin.value, scan_days: scanSpin.value,
-                            salary_target: salarySpin.value, salary_currency: currencyCombo.currentText, salary_by_role: pays,
-                            about_right_to_work: rightField.text.trim(), about_start: startField.text.trim(),
-                            about_experience: expField.text.trim(),
                             notifications: notifySw.checked, keep_backups: keepSpin.value,
                             text_size: optDialog.sizes[Math.max(0, sizeCombo.currentIndex)],
                             scan_all_folders: foldersSw.checked,
@@ -238,7 +217,7 @@ Dialog {
     function notAdded() {
         var boxes = [[roleField.text, "Search roles"], [skipTags.typed, skipTags.label], [keepTags.typed, keepTags.label],
                      [wantedTags.typed, wantedTags.label], [unwantedTags.typed, unwantedTags.label], [levelTags.typed, levelTags.label],
-                     [coToken.text || coName.text, "Company career sites"], [payRole.text, "A different figure for"]];
+                     [coToken.text || coName.text, "Company career sites"]];
         for (var i = 0; i < boxes.length; i++) {
             var t = ("" + (boxes[i][0] || "")).trim();
             if (t !== "") return "“" + t.substring(0, 40) + "” is typed under “" + boxes[i][1].replace(/^…/, "") + "” but not added. Press Add next to it, or empty the box, then save.";
@@ -255,7 +234,6 @@ Dialog {
     }
     onClosed: { confirmClose = false; loaded = ""; confirmTidy = false; }
     function load() {
-        myLetters = bridge.myLetters();
         var o = win.optsData;
         cityCombo.editText = cityDisplay(o.where);
         countryField.text = o.country || "";
@@ -278,13 +256,6 @@ Dialog {
         minSpin.value = o.min_lead_score || 0;
         fuSpin.value = o.followup_days !== undefined ? o.followup_days : 10;
         scanSpin.value = o.scan_days !== undefined ? o.scan_days : 30;
-        salarySpin.value = o.salary_target || 0;
-        payModel.clear(); payErr = ""; payRole.text = ""; payAmount.value = 0;
-        var byRole = o.salary_by_role || [];
-        for (var q = 0; q < byRole.length; q++) payModel.append({ role: byRole[q].role, amount: byRole[q].amount });
-        currencyCombo.currentIndex = Math.max(0, currencyCombo.find(o.salary_currency || "CZK"));
-        rightField.text = o.about_right_to_work || ""; startField.text = o.about_start || "";
-        expField.text = o.about_experience || "";
         notifySw.checked = o.notifications !== false;
         sizeCombo.currentIndex = Math.max(0, sizes.indexOf(o.text_size || 100)); sizeAtOpen = sizes[sizeCombo.currentIndex];
         foldersSw.checked = o.scan_all_folders === true;
@@ -589,87 +560,14 @@ Dialog {
                     }
                 }
 
-                // ── ABOUT YOU (the only personal facts the app states besides your CV) ──
+                // ── ABOUT YOU: its own window now; a line here leads there ──
                 ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; spacing: 6
                     GroupTitle { text: "About you" }
                     Card {
-                        // the figure form answers give as your expectation; yours, in your currency
-                        SRow { label: "Salary you ask for"; hint: "gross per month · 0 = none given"
-                            RowLayout { spacing: 8
-                                ThemedSpin { id: salarySpin; objectName: "salarySpin"; from: 0; to: 100000000; stepSize: 1000; value: 0 }
-                                ThemedCombo { id: currencyCombo; objectName: "currencyCombo"; implicitWidth: 84; plainText: true
-                                    model: bridge.currencies() } } }
-                        Text { objectName: "salaryNote"; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 10
-                            wrapMode: Text.WordWrap; font.pixelSize: 11; color: theme.faint
-                            text: salarySpin.value > 0
-                                  ? "Form answers give this as your expectation, and Insights compares what postings pay with it."
-                                  : bridge.salaryHint(cityCombo.editText, countryField.text) }
-                        // another figure for some kinds of role: a support job and a developer job rarely pay the same
-                        SRow { label: "A different figure for"; hint: "a kind of role, as in job titles · used instead of the one above"
-                            RowLayout { spacing: 6
-                                TextField { id: payRole; objectName: "payRole"; implicitWidth: 120; implicitHeight: 30; maximumLength: win.limits.pay_role
-                                    placeholderText: "e.g. support"; placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true
-                                    background: Rectangle { radius: 8; color: theme.surface; border.width: 1
-                                        border.color: payRole.activeFocus ? theme.accent : optDialog.payErr !== "" ? theme.crit : theme.line }
-                                    onTextEdited: optDialog.payErr = ""; onAccepted: optDialog.addPay() }
-                                ThemedSpin { id: payAmount; objectName: "payAmount"; from: 0; to: 100000000; stepSize: 1000; value: 0 }
-                                SmallButton { objectName: "payAdd"; text: "+ Add"; onClicked: optDialog.addPay() } } }
-                        Text { objectName: "payErr"; visible: optDialog.payErr !== ""; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12
-                            wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true; text: optDialog.payErr }
-                        Flow { objectName: "payChips"; visible: payModel.count > 0; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 10; spacing: 6
-                            Repeater { model: payModel
-                                Rectangle { radius: 999; color: theme.inset; border.width: 1; border.color: theme.line
-                                    implicitHeight: 24; implicitWidth: payChip.implicitWidth + 20
-                                    Row { id: payChip; anchors.centerIn: parent; spacing: 6
-                                        Text { text: model.role + " · " + Number(model.amount).toLocaleString(Qt.locale("en_US"), "f", 0).replace(/,/g, " ") + " " + currencyCombo.currentText
-                                            color: theme.ink; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                                        Text { text: "×"; color: theme.soft; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter
-                                            MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: payModel.remove(index) } } } } } }
-                        Sep {}
-                        SRow { label: "Right to work"; hint: "as letters should say it · empty = not mentioned"
-                            TextField { id: rightField; objectName: "rightField"; implicitWidth: 250; implicitHeight: 30
-                                placeholderText: "e.g. EU citizen, no permit needed"; placeholderTextColor: theme.faint
-                                color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.options.about_right_to_work
-                                onTextEdited: optDialog.optErr = text.length >= maximumLength ? "“Right to work” takes up to " + maximumLength + " characters." : ""
-                                background: Rectangle { radius: 8; color: theme.surface; border.width: 1
-                                    border.color: rightField.activeFocus ? theme.accent : theme.line } } }
-                        Sep {}
-                        SRow { label: "You can start"; hint: "also filled into forms · empty = not mentioned"
-                            TextField { id: startField; objectName: "startField"; implicitWidth: 250; implicitHeight: 30
-                                placeholderText: "e.g. within two weeks"; placeholderTextColor: theme.faint
-                                color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.options.about_start
-                                onTextEdited: optDialog.optErr = text.length >= maximumLength ? "“You can start” takes up to " + maximumLength + " characters." : ""
-                                background: Rectangle { radius: 8; color: theme.surface; border.width: 1
-                                    border.color: startField.activeFocus ? theme.accent : theme.line } } }
-                        Sep {}
-                        // what you really did in each job beyond the CV: used for interview preparation and form answers
-                        ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 10; Layout.bottomMargin: 10; spacing: 5
-                            Text { text: "More about your work"; color: theme.ink; font.pixelSize: 13 }
-                            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
-                                text: "What you really did in each job beyond what the CV says: tasks, tools, team, results. In English. Interview preparation and form answers use it like your CV, so write only what is true." }
-                            Rectangle { Layout.fillWidth: true; radius: 8; color: theme.surface; border.width: 1
-                                border.color: expField.text.length > optDialog.expMax ? theme.crit : (expField.activeFocus ? theme.accent : theme.line)
-                                implicitHeight: Math.max(96, expField.implicitHeight + 16)
-                                TextEdit { id: expField; objectName: "expField"; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap
-                                    selectByMouse: true; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
-                                    onTextChanged: if (activeFocus) optDialog.optErr = ""
-                                    Text { visible: expField.text === ""; width: parent.width; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 12
-                                        text: "e.g. At Acme (Feb–Aug 2026) I was in a team of four. I wrote the import service in Python, added its tests, and fixed about thirty tickets." } } }
-                            Text { objectName: "expCount"; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; font.pixelSize: 11
-                                color: expField.text.length > optDialog.expMax ? theme.crit : theme.faint
-                                font.bold: expField.text.length > optDialog.expMax
-                                text: expField.text.length > optDialog.expMax
-                                      ? (expField.text.length - optDialog.expMax) + " characters too long (the limit is " + optDialog.expMax + ")"
-                                      : expField.text.length + " of " + optDialog.expMax + " characters" }
-                        }
-                        Sep {}
-                        SRow { label: "Your own letters"
-                            hint: (optDialog.myLetters.count || 0) + " in the " + (optDialog.myLetters.name || "my_letters")
-                                  + " folder · never changed by the app"
-                            SmallButton { objectName: "myLettersOpen"; text: "Open folder"
-                                onClicked: { var r = bridge.openMyLetters();
-                                    ticker.text = (r && r.ok) ? "Put letters you wrote yourself there, named like Name_CoverLetter_Company.docx."
-                                                              : "Couldn't open the folder."; } } }
+                        SRow { label: "Salary, right to work, start, your work"; hint: "in its own window, under Options"
+                            SmallButton { objectName: "openAbout"; text: "Open About you"
+                                onClicked: { if (optDialog.changed()) { optDialog.optErr = "Save or cancel the Options first, then open About you."; return; }
+                                             optDialog.close(); aboutDialog.show(); } } }
                     }
                 }
 
@@ -794,15 +692,6 @@ Dialog {
                     if (optDialog.pickedSources.length === 0) { optDialog.optErr = "Choose at least one job source."; return; }
                     var qs = [];
                     for (var i = 0; i < rolesModel.count; i++) qs.push("" + rolesModel.get(i).text);
-                    if (expField.text.length > optDialog.expMax) {
-                        optDialog.optErr = "“More about your work” is " + (expField.text.length - optDialog.expMax) + " characters too long. Shorten it, then save."; return;
-                    }
-                    if (win.hasNonLatin(expField.text)) {
-                        optDialog.optErr = "Write “More about your work” in English (Latin letters): it is used for English interviews and forms."; return;
-                    }
-                    if (win.hasNonLatin(rightField.text) || win.hasNonLatin(startField.text)) {
-                        optDialog.optErr = "Write “About you” in English (Latin letters): it goes into English letters."; return;
-                    }
                     var both = wantedTags.all().filter(function (w) { return unwantedTags.all().indexOf(w) >= 0; });
                     if (both.length > 0) {
                         optDialog.optErr = "“" + both[0] + "” is under both the roles you want and the roles you do not want. Remove it from one."; return;

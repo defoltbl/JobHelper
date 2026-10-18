@@ -123,7 +123,7 @@ def build(job: dict[str, Any], prep: dict[str, Any], out_path: Path, contact: st
         bullets(prep["fit"])
     if prep.get("experience"):
         subheading("Your work experience" + (", in plain words" if hr else ", told for this role"))
-        para("These stories use only your CV and your text in Options under “More about your work”.", size=9.5, italic=True, after=4)
+        para("These stories use only your CV and your text in About you under “More about your work”.", size=9.5, italic=True, after=4)
         for e in prep["experience"]:
             para(e["job"], 11, bold=True, after=2, before=6).paragraph_format.keep_with_next = True
             if hr:
@@ -141,7 +141,7 @@ def build(job: dict[str, Any], prep: dict[str, Any], out_path: Path, contact: st
                 para("Ask yourself these questions. Add a point only if it is true:", bold=True, after=1, before=3)
                 bullets(e["if_true"])
             if e.get("thin"):
-                para(f"Your CV says little here: {e['thin']} Write the real details in Options > About you > More about your work. "
+                para(f"Your CV says little here: {e['thin']} Write the real details in About you > More about your work. "
                      "Then make the preparation again.", size=9.5, italic=True, before=2)
     key = prep.get("key_question") or {}
     if key.get("question") and key.get("answer"):

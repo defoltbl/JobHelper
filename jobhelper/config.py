@@ -345,7 +345,7 @@ def save_ui_settings(data: dict) -> None:
 def candidate_facts(cv_text: str = "") -> dict[str, str]:
     """What the app may say about the person besides the CV: name (first line of
     the CV), where they are based (the search city), and - only if entered in
-    Options, "About you" - the right to work and when they can start."""
+    the About you window - the right to work and when they can start."""
     o = ui_settings()
     lines = [ln.strip() for ln in (cv_text or "").splitlines() if ln.strip()]
     name = lines[0] if lines and len(lines[0]) <= 60 else ""
@@ -375,9 +375,10 @@ MAX_EXPERIENCE_NOTES = 4000
 
 
 def experience_notes() -> str:
-    """What the person wrote in Options about their real work beyond the CV (tasks, tools,
-    team, results). It is theirs and true, so it may be used like the CV itself."""
-    return str(ui_settings().get("about_experience") or "").strip()[:MAX_EXPERIENCE_NOTES]
+    """What the person wrote in About you about their real work beyond the CV (tasks, tools,
+    team, results), for each job and in general. It is theirs and true, so it may be used like the CV itself."""
+    from . import about_you                          # the notes per job and the general one, as one text
+    return about_you.work_notes_text(ui_settings())
 
 
 def facts_block(cv_text: str = "") -> str:
