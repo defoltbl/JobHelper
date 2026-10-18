@@ -860,6 +860,8 @@ A letter that **you** wrote is never touched.
 2. Put your letter in that folder, named after the company.
 3. At the next search the app uses your letter for that company instead of writing one.
 
+If the folder has a Word file and a PDF for the same company, the app uses the Word file.
+
 ### Form answers
 
 Application forms ask their own questions, and every form asks different ones.

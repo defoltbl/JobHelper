@@ -18,28 +18,18 @@ from typing import Any
 
 from lxml import etree
 
-from . import config, cv_tailor, llm, store
-from .cv_tailor import _mentions, clean
+from . import claims, config, cv_tailor, llm, store
+from .claims import ClaimCheck
+from .cv_tailor import clean
 from .word_document import P as _P, T as _T, XML_SPACE, Paragraph, WordDocument, text_of as _text
 
 BODY_PARAGRAPHS = 5
 MIN_WORDS, MAX_WORDS = 320, 410        # instruction: about 330-400 words
 MAX_CHARS = 2550                       # keeps the letter on one page (example: 2240)
 
-# Check 3 of the instruction: phrases that admit a gap.
-_GAP = re.compile(
-    r"\b(not yet|have not|haven't|do not have|don't have|lack(s|ing)?|gaps?|honest(ly)?|limited|"
-    r"unfamiliar|despite|although|no experience|little experience|never (used|worked))\b", re.IGNORECASE)
-# A forward-looking wish (rule 1, option 2).
-_WISH = re.compile(r"\b(would like|would love|keen|look(ing)? forward|want to|eager|hope to|"
-                   r"excited to|wish to|aim to|motivated to)\b", re.IGNORECASE)
-# Wording that claims hands-on experience.
-_CLAIM = re.compile(
-    r"\b(I|I've|we)\s+(have\s+|also\s+|regularly\s+|currently\s+)*(work(ed)?|use[ds]?|built|build|"
-    r"deploy(ed)?|ran|run|administer(ed)?|manage[ds]?|configure[ds]?|operate[ds]?|maintain(ed)?|"
-    r"wrote|written|set up|automate[ds]?|implemented?|develop(ed)?)\b|"
-    r"\b(experience(d)? (with|in)|hands-on|proficient|skilled|familiar with|expertise|background in|"
-    r"knowledge of|my work with)\b", re.IGNORECASE)
+# Check 3 of the instruction (a gap admitted), the forward-looking wish (rule 1, option 2) and wording that claims
+# hands-on experience: one set of rules for every text in the person's voice (claims.py).
+_GAP, _WISH = claims.GAP, claims.WISH
 
 SYSTEM = (
     "You write one candidate's cover letter for a job posting. You sell strengths "
@@ -95,12 +85,13 @@ def load_rules(cv_text: str = "") -> str:
     """Sections 1, 4, 5 and 7 of the instruction (content rules + worked example).
     Without a file the built-in general rules are used. {{placeholders}} in the
     file are filled with the person's own facts (see config.fill_placeholders)."""
-    path = config.LETTER_INSTRUCTION
-    if not path.exists():
-        return GENERIC_RULES
-    parts = re.split(r"(?m)^## ", config.fill_placeholders(path.read_text(encoding="utf-8"), cv_text))
-    keep = [p for p in parts if re.match(r"(1|4|5|7)\.", p)]
-    return ("## " + "\n## ".join(k.strip() for k in keep)) if keep else GENERIC_RULES
+    return cv_tailor.instruction_sections(config.LETTER_INSTRUCTION, ("1", "4", "5", "7"), cv_text, GENERIC_RULES)
+
+
+def rules_with_facts(cv_text: str = "") -> str:
+    """The rules, and the only facts about the person a letter may state (location, right to work, start date)."""
+    return (load_rules(cv_text) + "\n\nFacts about the candidate (use only these for location, right to work and start date):\n"
+            + config.facts_block(cv_text))
 
 
 def unverified_terms(master_text: str) -> list[str]:
@@ -118,11 +109,7 @@ def unverified_terms(master_text: str) -> list[str]:
     return terms
 
 
-def _sentences(text: str) -> list[str]:
-    return [s for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-
-
-_FIRST_PERSON = re.compile(r"\b(?:I|my|me|I'm|I've)\b")
+_sentences = claims.sentences
 
 
 def candidate_first_name(cv_text: str) -> str:
@@ -137,9 +124,22 @@ def candidate_first_name(cv_text: str) -> str:
 def third_person(paragraphs: list[str], first_name: str = "") -> bool:
     """True if the letter talks about the candidate instead of as the candidate."""
     text = " ".join(paragraphs)
-    if first_name and re.search(rf"\b{re.escape(first_name)}\b", text):
+    if claims.names_candidate(text, first_name):
         return True
-    return bool(text.strip()) and not _FIRST_PERSON.search(text)
+    return bool(text.strip()) and not claims.FIRST_PERSON.search(text)
+
+
+def _issues(paragraph: str, check: ClaimCheck) -> list[tuple[str, str, str]]:
+    """What breaks the letter rules in one paragraph: ("gap", the words, the sentence) and ("claim", the term, the sentence)."""
+    out = []
+    for s in claims.sentences(paragraph):
+        gap = claims.GAP.search(s)
+        if gap:
+            out.append(("gap", gap.group(0), s))
+        term = check.claimed_in(s)
+        if term:
+            out.append(("claim", term, s))
+    return out
 
 
 def content_problems(paragraphs: list[str], unverified: list[str], first_name: str = "") -> list[str]:
@@ -156,17 +156,13 @@ def content_problems(paragraphs: list[str], unverified: list[str], first_name: s
         problems.append(f"Too short: {words} words; write {MIN_WORDS}-{MAX_WORDS}.")
     if words > MAX_WORDS or chars > MAX_CHARS:
         problems.append(f"Too long for one page: {words} words; write {MIN_WORDS}-{MAX_WORDS}.")
+    check = ClaimCheck(unverified)
     for n, para in enumerate(paragraphs, 1):
-        for s in _sentences(para):
-            gap = _GAP.search(s)
-            if gap:
-                problems.append(f"Paragraph {n} admits a gap (\"{gap.group(0)}\"): \"{s[:90]}\". "
-                                "Remove it or state a forward-looking wish instead.")
-            for term in unverified:
-                if _mentions(s, term) and _CLAIM.search(s) and not _WISH.search(s):
-                    problems.append(f"Paragraph {n} presents '{term}' as experience, but it is not in the "
-                                    "master CV. Name it only as something the candidate wants to work with.")
-                    break
+        for kind, what, s in _issues(para, check):
+            problems.append(f"Paragraph {n} admits a gap (\"{what}\"): \"{s[:90]}\". Remove it or state a forward-looking wish instead."
+                            if kind == "gap" else
+                            f"Paragraph {n} presents '{what}' as experience, but it is not in the "
+                            "master CV. Name it only as something the candidate wants to work with.")
     return problems
 
 
@@ -187,7 +183,7 @@ def borrowed_claims(paragraphs: list[str], description: str, backed: str) -> lis
     found: list[str] = []
     for para in paragraphs:
         for sentence in _sentences(para):
-            if not _FIRST_PERSON.search(sentence) or _WISH.search(sentence):
+            if not claims.FIRST_PERSON.search(sentence) or claims.WISH.search(sentence):
                 continue
             start = _I_DID.search(sentence)                 # "I process …", "I've built …": the candidate as the one who did it
             if not start:
@@ -205,17 +201,9 @@ def borrowed_claims(paragraphs: list[str], description: str, backed: str) -> lis
 
 def enforce(paragraphs: list[str], unverified: list[str]) -> list[str]:
     """Last line of defence: drop sentences that admit a gap or claim unbacked experience."""
-    out = []
-    for para in paragraphs:
-        kept = []
-        for s in _sentences(para):
-            if _GAP.search(s):
-                continue
-            if any(_mentions(s, t) for t in unverified) and _CLAIM.search(s) and not _WISH.search(s):
-                continue
-            kept.append(s)
-        out.append(" ".join(kept))
-    return out
+    check = ClaimCheck(unverified)
+    return [" ".join(s for s in claims.sentences(para) if not claims.GAP.search(s) and not check.claimed_in(s))
+            for para in paragraphs]
 
 
 # ── docx ─────────────────────────────────────────────────────────────────────
@@ -328,7 +316,7 @@ def rewrite_paragraph(job: dict[str, Any], cv_text: str, paragraphs: list[str], 
     feedback, text = "", ""
     for _attempt in range(2):
         data = llm.ask_json(REWRITE_PROMPT.format(
-            rules=load_rules(cv_text) + "\n\nFacts about the candidate (use only these for location, right to work and start date):\n" + config.facts_block(cv_text), cv_text=cv_text[:12000], title=job.get("title", ""), company=job.get("company", ""),
+            rules=rules_with_facts(cv_text), cv_text=cv_text[:12000], title=job.get("title", ""), company=job.get("company", ""),
             description=(job.get("description") or "").strip()[:3000] or "(No description was available.)",
             letter=letter, number=index + 1, words=words, max_words=max(words + 25, 60),
             hint=hint_line, feedback=feedback), system=SYSTEM, tag="agent3_letters")
@@ -336,7 +324,7 @@ def rewrite_paragraph(job: dict[str, Any], cv_text: str, paragraphs: list[str], 
         problems = paragraph_problems(text, unverified, first_name)
         if not problems:
             return text
-        feedback = "\nYour previous version was rejected. Fix this:\n" + "\n".join(f"- {p}" for p in problems) + "\n"
+        feedback = claims.rejected(problems)
     raise ValueError(problems[0] if text else "The model returned no paragraph.")
 
 
@@ -345,16 +333,11 @@ def paragraph_problems(text: str, unverified: list[str], first_name: str = "") -
     if not text.strip():
         return ["The paragraph is empty."]
     problems = []
-    if first_name and re.search(rf"\b{re.escape(first_name)}\b", text):
+    if claims.names_candidate(text, first_name):
         problems.append("Write in the first person (I, my); never use the candidate's name.")
-    for s in _sentences(text):
-        gap = _GAP.search(s)
-        if gap:
-            problems.append(f"It admits a gap (\"{gap.group(0)}\"). Remove it or state a forward-looking wish instead.")
-        for term in unverified:
-            if _mentions(s, term) and _CLAIM.search(s) and not _WISH.search(s):
-                problems.append(f"It presents '{term}' as experience, but it is not in the master CV.")
-                break
+    for kind, what, _s in _issues(text, ClaimCheck(unverified)):
+        problems.append(f"It admits a gap (\"{what}\"). Remove it or state a forward-looking wish instead." if kind == "gap"
+                        else f"It presents '{what}' as experience, but it is not in the master CV.")
     return problems
 
 
@@ -394,7 +377,7 @@ def verify(template_path, out_path, unverified: list[str] | None = None) -> list
     full = "\n".join(_text(p) for p in body if p.tag == _P)
     if "—" in full:
         problems.append("The letter contains an em dash.")
-    if cv_tailor._EMOJI.search(full):
+    if cv_tailor.EMOJI.search(full):
         problems.append("The letter contains an emoji.")
     for para in paragraphs:
         gap = _GAP.search(para)
@@ -418,7 +401,7 @@ def _adapted_cv_text(job: dict[str, Any]) -> str:
     path = config.TAILORED_CV_DIR / name if name else None
     if not path or path.suffix.lower() != ".docx" or not path.exists():
         return ""
-    sec = cv_tailor._sections(WordDocument(path).body)
+    sec = cv_tailor.sections(WordDocument(path).body)
     lines = ([_text(sec["profile"])] if sec["profile"] is not None else []) + [_text(p) for p in sec["rows"]]
     return "\n".join(lines)
 
@@ -438,7 +421,7 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
     title_line, paragraphs, role_short, feedback = "", [], "", ""
     for _attempt in range(2):
         data = llm.ask_json(PROMPT.format(
-            rules=load_rules(cv_text) + "\n\nFacts about the candidate (use only these for location, right to work and start date):\n" + config.facts_block(cv_text), cv_text=cv_text[:12000], adapted=adapted_block,
+            rules=rules_with_facts(cv_text), cv_text=cv_text[:12000], adapted=adapted_block,
             title=job["title"], company=job["company"], location=job.get("location", ""),
             description=description, feedback=feedback, n=BODY_PARAGRAPHS,
             min_words=MIN_WORDS + 10, max_words=MAX_WORDS - 10,
@@ -454,8 +437,7 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
                      "the candidate wants to work with." for phrase in borrowed_claims(paragraphs, description, backed)]
         if not problems:
             break
-        feedback = "\nYour previous draft was rejected. Fix these problems:\n" + \
-                   "\n".join(f"- {p}" for p in problems) + "\n"
+        feedback = claims.rejected(problems, "draft")
 
     if len(paragraphs) != BODY_PARAGRAPHS:
         raise ValueError(f"The model returned {len(paragraphs)} paragraphs instead of {BODY_PARAGRAPHS}.")

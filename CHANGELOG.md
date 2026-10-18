@@ -8,6 +8,8 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 ## Unreleased
 
 - When the assistant fills in a form whose **phone code menu** is drawn by the page itself, a number such as +1 now gets the country in My details (Canada, not the United States). Lists of the normal kind already worked this way.
+- The **interview preparation** now checks every part said in your voice the same way: the plain stories for HR and what you can say about the company are now marked when they claim something your CV does not show, and the model is asked to fix a skill's proof or a tool's use before you see them. A saved question that names no known interviewer now goes into the HR document; before, it was in neither document.
+- When **Your own letters** has a Word file and a PDF for the same company, the app now always uses the Word file. Before, it sometimes took the PDF, depending on the file names.
 - Changing your **mailbox address** without typing the password again no longer makes the email scan act as if no mailbox were set up until the app restarts.
 - **Notifications now reach you.** macOS had kept every JobHelper notification without showing it. The app now shows them itself, so macOS asks once and lists JobHelper in System Settings → Notifications. **Options → Notifications** has a **Test** button and says in red when macOS has them turned off.
 - In the **country picker for remote jobs**, the **job table** and the **filing list for a reply**, a click on the list now ends typing in the search box. Before, its outline and cursor stayed.

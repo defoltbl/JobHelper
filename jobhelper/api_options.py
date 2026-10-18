@@ -79,7 +79,7 @@ class OptionsService:
 
     # ── read / write: options ───────────────────────────────────
     def options(self):
-        p = config.DATA_DIR / "ui_settings.json"
+        p = config.ui_settings_file()
         # Seed the search keywords from the CV profile so the user sees (and can
         # edit) what's actually being searched.
         try:
@@ -209,9 +209,7 @@ class OptionsService:
         if problem:
             return {"ok": False, "msg": problem}
         kept = {k: v for k, v in config.ui_settings().items() if k not in clean}
-        config.ensure_dirs()
-        vault.write_text(config.DATA_DIR / "ui_settings.json",
-                         json.dumps({**kept, **clean}, ensure_ascii=False, indent=2))
+        config.save_ui_settings({**kept, **clean})
         return {"ok": True}
 
     # ── career-site companies (data/companies.json) ─────────────
