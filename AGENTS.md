@@ -16,7 +16,7 @@ Claude Code program on a Claude subscription. The widget is Swift (WidgetKit).
 pip install --require-hashes -r requirements.lock                 # packages, pinned by SHA-256
 python app_qt.py                                                   # the window
 python -m pyflakes jobhelper tests scripts app_qt.py run.py status.py
-python -m pytest                                                   # about 2,100 tests on every core, offline, about 3 minutes
+python -m pytest                                                   # about 2,100 tests on every core, offline, about 1 minute
 python scripts/build_app.py                                        # dist/JobHelper.app, then its checks
 python -m pytest tests/guide_shots.py -q -o addopts=""             # the user guide's pictures
 python scripts/guide_pdf.py                                        # docs/GUIDE.pdf and docs/CODE.pdf

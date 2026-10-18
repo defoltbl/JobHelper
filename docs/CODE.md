@@ -147,7 +147,7 @@ Table 2.6 lists what keeps the code correct.
 | Technology | Used for | Why it was chosen |
 |---|---|---|
 | `pytest` | More than 2,000 tests | Every change comes with tests. The suite needs no network and never touches real data, so it can be run at any time |
-| `pytest-xdist` | Running the tests on every core | The suite takes about three minutes instead of six. The window tests share one window and follow on from each other, so they stay on one worker in their order (`xdist_group`) |
+| `pytest-xdist` | Running the tests on every core | The suite takes about one minute instead of six. The tests of one window file share one window and follow on from each other. So each window file stays on one worker in its order (`xdist_group`). The four files run side by side |
 | The window loaded without a screen | Tests of the window | The real QML is loaded and driven, so a broken binding or a missing name fails a test instead of reaching the person |
 | `pyflakes` | Unused and undefined names | It finds a whole kind of mistake in a second, before a test has to |
 | Git and GitHub | The history of changes, and the public copy of the project | Every finished step is a commit that can be gone back to. Each change is a branch and a pull request. The `main` branch takes a change only after the tests pass on GitHub Actions. `scripts/push_check.py` runs before every push and stops one that would publish a personal detail, a secret or the data folder |
@@ -763,7 +763,7 @@ Follow these rules when code changes data:
 
 ### Run the tests
 
-1. Run the whole suite. It uses every core of the computer, takes about three minutes and needs no
+1. Run the whole suite. It uses every core of the computer, takes about one minute and needs no
    network:
 
    ```bash
@@ -796,7 +796,8 @@ what stands in for it.
 
 ### Test the window
 
-The tests in `tests/test_ui_qml.py` load the window without a screen and drive it. Use the
+The tests in `tests/test_window_*.py` load the window without a screen and drive it. Each of these
+files gets its own window, so the four files run at the same time. Use the
 helpers of their `ui` fixture. `ui.js(code)` runs JavaScript in the window. `ui.find(name)`
 finds an item by its `objectName`. `ui.wait(ms)` lets the window run.
 
