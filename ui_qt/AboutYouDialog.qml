@@ -33,11 +33,10 @@ Dialog {
     property string loaded: ""            // what was there when the window opened, to know whether anything changed
     property var start: ({ ok: true, text: "" })
     readonly property int notesMax: info.max_notes || win.limits.experience_notes
-    readonly property int notesSize: {
-        var n = generalField.text.trim().length;
-        for (var i = 0; i < boxModel.count; i++) n += String(boxModel.get(i).notes || "").trim().length;
-        return n;
-    }
+    property int notesTick: 0             // a box's text changed: count again
+    // how long the notes are as the app reads them, job names included: the back end counts (WorkNotes.size), so the
+    // count here and the check when saving always agree
+    readonly property int notesSize: { notesTick; boxModel.count; return bridge.workNotesSize(collect().about_jobs, generalField.text.trim()); }
     ListModel { id: payModel }            // a figure of its own for some kinds of role: { role, amount }
     ListModel { id: boxModel }            // a note for each job: { job, notes, earlier }
 
@@ -86,27 +85,21 @@ Dialog {
         }
         close();
     }
-    function addPay() {
+    function payRoles(upTo) { var out = []; for (var i = 0; i < upTo; i++) out.push(payModel.get(i).role); return out; }
+    function addPay() {                   // the back end's rule for one line (OptionsService.pay_problem), with its words
         var role = payRole.text.trim();
-        payErr = "";
-        if (win.hasNonLatin(role)) { payErr = "Write the kind of role in English (Latin letters), as it stands in job titles."; return; }
-        if (role.length < 2 || !/[A-Za-zÀ-ɏ]{2}/.test(role)) { payErr = "Enter a kind of role in words, for example support."; return; }
-        if (payAmount.value <= 0) { payErr = "Enter the salary for “" + role + "”: a number above 0."; return; }
-        if (payModel.count >= 20) { payErr = "The list takes up to 20 kinds of role. Remove one first."; return; }
-        for (var i = 0; i < payModel.count; i++)
-            if (payModel.get(i).role.toLowerCase() === role.toLowerCase()) { payErr = "“" + role + "” is already in the list: change its figure there."; return; }
+        payErr = bridge.payProblem(role, payAmount.value, payRoles(payModel.count));
+        if (payErr === "" && payModel.count >= win.limits.pay_rows)
+            payErr = "The list takes up to " + win.limits.pay_rows + " kinds of role. Remove one first.";
+        if (payErr !== "") return;
         payModel.append({ role: role, amount: payAmount.value });
         payRole.text = ""; payAmount.value = 0;
     }
     function problem() {                  // '' or what must be put right before saving, in the window's own words
         if (payRole.text.trim() !== "") return "“" + payRole.text.trim().substring(0, 40) + "” is typed under “A different figure for” but not added. Press Add, or empty the box.";
-        for (var i = 0; i < payModel.count; i++) {
-            var p = payModel.get(i);
-            if (p.role.trim().length < 2) return "A line under “A different figure for” has no kind of role. Write one, or remove the line.";
-            if (win.hasNonLatin(p.role)) return "Write “" + p.role + "” in English (Latin letters).";
-            if (p.amount <= 0) return "The figure for “" + p.role + "” must be above 0. Change it, or remove the line.";
-            for (var k = 0; k < i; k++) if (payModel.get(k).role.trim().toLowerCase() === p.role.trim().toLowerCase())
-                return "“" + p.role + "” is in the list twice. Remove one.";
+        for (var i = 0; i < payModel.count; i++) {      // each line by the same rule as Add
+            var line = bridge.payProblem(payModel.get(i).role.trim(), payModel.get(i).amount, payRoles(i));
+            if (line !== "") return "A different figure for: " + line;
         }
         if (win.hasNonLatin(rightField.text) || win.hasNonLatin(startField.text))
             return "Write the right to work and the start in English (Latin letters): they go into English letters and forms.";
@@ -168,7 +161,7 @@ Dialog {
                     Card {
                         SRow { label: "Salary you ask for"; hint: "gross per month · 0 = none given"
                             RowLayout { spacing: 8
-                                ThemedSpin { id: salarySpin; objectName: "salarySpin"; from: 0; to: 100000000; stepSize: 1000; value: 0 }
+                                ThemedSpin { id: salarySpin; objectName: "salarySpin"; from: 0; to: win.limits.salary_max; stepSize: 1000; value: 0 }
                                 ThemedCombo { id: currencyCombo; objectName: "currencyCombo"; implicitWidth: 84; plainText: true } } }
                         // with 0: what forms give instead, the app's own estimate for your kinds of role (or why there is none)
                         ColumnLayout { objectName: "salaryEstimates"; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12
@@ -190,7 +183,7 @@ Dialog {
                                     background: Rectangle { radius: 8; color: theme.surface; border.width: 1
                                         border.color: payRole.activeFocus ? theme.accent : aboutDialog.payErr !== "" ? theme.crit : theme.line }
                                     onTextEdited: aboutDialog.payErr = ""; onAccepted: aboutDialog.addPay() }
-                                ThemedSpin { id: payAmount; objectName: "payAmount"; from: 0; to: 100000000; stepSize: 1000; value: 0 }
+                                ThemedSpin { id: payAmount; objectName: "payAmount"; from: 0; to: win.limits.salary_max; stepSize: 1000; value: 0 }
                                 SmallButton { objectName: "payAdd"; text: "+ Add"; onClicked: aboutDialog.addPay() } } }
                         Text { objectName: "payErr"; visible: aboutDialog.payErr !== ""; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12
                             wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true; text: aboutDialog.payErr }
@@ -204,7 +197,7 @@ Dialog {
                                         background: Rectangle { radius: 8; color: theme.surface; border.width: 1
                                             border.color: parent.activeFocus ? theme.accent : theme.line }
                                         onTextEdited: payModel.setProperty(index, "role", text) }
-                                    ThemedSpin { objectName: "payRowAmount_" + index; from: 0; to: 100000000; stepSize: 1000; value: model.amount
+                                    ThemedSpin { objectName: "payRowAmount_" + index; from: 0; to: win.limits.salary_max; stepSize: 1000; value: model.amount
                                         onValueChanged: if (value !== model.amount) payModel.setProperty(index, "amount", value) }
                                     Text { text: currencyCombo.currentText; color: theme.faint; font.pixelSize: 11 }
                                     SmallButton { objectName: "payRowRemove_" + index; text: "Remove"; onClicked: payModel.remove(index) } } }
@@ -277,7 +270,7 @@ Dialog {
                                     implicitHeight: Math.max(70, boxEdit.implicitHeight + 16)
                                     TextEdit { id: boxEdit; objectName: "boxNotes_" + index; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap
                                         selectByMouse: true; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent; text: model.notes
-                                        onTextChanged: if (text !== model.notes) { boxModel.setProperty(index, "notes", text); aboutDialog.err = ""; }
+                                        onTextChanged: if (text !== model.notes) { boxModel.setProperty(index, "notes", text); aboutDialog.err = ""; aboutDialog.notesTick++; }
                                         Text { visible: boxEdit.text === ""; width: parent.width; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 12
                                             text: "e.g. I was in a team of four. I wrote the import service in Python, added its tests, and fixed about thirty tickets." } } }
                             } }
@@ -290,7 +283,7 @@ Dialog {
                                 implicitHeight: Math.max(70, generalField.implicitHeight + 16)
                                 TextEdit { id: generalField; objectName: "generalField"; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap
                                     selectByMouse: true; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
-                                    onTextChanged: if (activeFocus) aboutDialog.err = "" } }
+                                    onTextChanged: { if (activeFocus) aboutDialog.err = ""; aboutDialog.notesTick++; } } }
                             Text { objectName: "notesCount"; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; font.pixelSize: 11
                                 color: aboutDialog.notesSize > aboutDialog.notesMax ? theme.crit : theme.faint
                                 font.bold: aboutDialog.notesSize > aboutDialog.notesMax

@@ -1063,6 +1063,10 @@ def test_about_you_takes_your_own_salary_figure_and_currency(ui):
     detail = ui.bridge.jobDetail("lead")
     assert detail["desired_text"] == "58 000 CZK/mo target" and detail["pay_text"] == "posting says 70–80k CZK/mo"
     ui.bridge.saveOptions(start)
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(salary="", desired_monthly_czk=""), render=False)
+    ui.js("optsData = bridge.options()")
+    assert "CZK/mo" not in (ROOT / "ui_qt" / "DetailDialog.qml").read_text(encoding="utf-8") and "CZK/mo" not in (ROOT / "ui_qt" / "views.js").read_text(encoding="utf-8")
+    assert ui.warnings == []
 
 
 def test_options_has_a_country_for_any_city(ui):
@@ -3257,7 +3261,7 @@ def test_about_you_takes_a_salary_of_its_own_for_a_kind_of_role(ui):
     _until_open(ui, "aboutDialog")
     role, amount, err = ui.find("payRole"), ui.find("payAmount"), ui.find("payErr")
     for typed, value, part in (("", 40000, "kind of role in words"), ("7", 40000, "kind of role in words"), ("поддержка", 40000, "in English"),
-                               ("support", 0, "a number above 0")):
+                               ("support", 0, "a whole number above 0")):
         role.setProperty("text", typed); amount.setProperty("value", value)
         ui.js("aboutDialog.addPay()", dialog)
         assert part in err.property("text") and ui.js("payModel.count", dialog) == 0, typed
@@ -3281,7 +3285,7 @@ def test_about_you_takes_a_salary_of_its_own_for_a_kind_of_role(ui):
     assert ui.drawn("payRowAmount_0", root="payRows").property("value") == 45000
     ui.js("payModel.setProperty(0, 'amount', 0)", dialog)
     ui.js("aboutDialog.save()", dialog)
-    assert "must be above 0" in ui.find("aboutErr").property("text")                  # a line with 0 is refused, not saved
+    assert "a whole number above 0" in ui.find("aboutErr").property("text")          # a line with 0 is refused, not saved
     ui.js("payModel.remove(0); confirmClose = true; close()", dialog)
     _until_closed(ui, "aboutDialog")
     assert ui.bridge.saveOptions({**ui.bridge.options(), "salary_by_role": start.get("salary_by_role", [])})["ok"] is True
@@ -4563,6 +4567,11 @@ def test_options_lead_to_about_you(ui):
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
     _open(ui, dialog, 450)
+    ui.js('countryField.text = "Germany"', dialog)                                     # a change not saved yet
+    ui.js("clicked()", ui.find("openAbout"))
+    assert dialog.property("visible") is True and "Save or cancel the Options first" in ui.js("optDialog.optErr")
+    assert ui.find("aboutDialog").property("visible") is False
+    ui.js('countryField.text = ""; optDialog.optErr = ""', dialog)
     ui.js("clicked()", ui.find("openAbout"))
     _until_closed(ui, "optDialog")
     _until_open(ui, "aboutDialog")

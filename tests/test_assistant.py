@@ -1819,7 +1819,7 @@ def test_area_lists_drawn_around_a_text_box_on_a_browser_that_is_not_in_front():
     assert out["left"] == {} and out["state"]["fn"] == "Alex"
 
 
-# ── when you can start: said once under Options, About you ──────────────────
+# ── when you can start: said once in About you ──────────────────────────────
 @pytest.mark.parametrize("said, day, worked", [
     ("2026-11-01", date(2026, 11, 1), False), ("1.11.2026", date(2026, 11, 1), False), ("01/11/2026", date(2026, 11, 1), False),
     ("1 November 2026", date(2026, 11, 1), False), ("from 1st of Nov 2026", date(2026, 11, 1), False), ("November 1, 2026", date(2026, 11, 1), False),

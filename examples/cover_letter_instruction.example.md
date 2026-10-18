@@ -3,7 +3,7 @@
 Copy this file to `cover_letter_instruction.md` in the same folder and edit it. Without that
 file the app uses its built-in general rules. Words in double braces are filled in by the app:
 `{{name}}`, `{{first_name}}`, `{{location}}`, `{{right_to_work}}`, `{{start}}`.
-The last three come from Options, "About you"; leave them empty there and the letter will not
+The last three come from the About you window (under Options); leave them empty there and the letter will not
 mention them.
 
 ## 1. Sell strengths only
