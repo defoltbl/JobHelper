@@ -10,21 +10,15 @@ import re
 
 from . import config, places
 
-# Title markers that indicate a role above junior/mid level.
-_SENIOR_PATTERNS = [
-    r"\bsenior\b", r"\bsr\.?\b", r"\blead\b", r"\bteam\s*lead\b", r"\bprincipal\b",
-    r"\bhead\s+of\b", r"\bchief\b", r"\barchitects?\b", r"\bmanagers?\b",
-    r"\bstaff\b", r"\bexpert\b", r"\bdirectors?\b", r"\bvedoucí\b", r"\bhead\b",
-]
-_SENIOR_RE = re.compile("|".join(_SENIOR_PATTERNS), re.IGNORECASE)
-# "management" is not in the list: it names a field ("Risk Management", "Repository Management"), not a level
+# "management" is not in the level words below: it names a field ("Risk Management", "Repository Management"), not a level
 _JUNIOR_RE = re.compile(r"\b(junior|jr\.?|entry[- ]level|graduate|absolvent)\b", re.IGNORECASE)
 
 # Levels for which we filter out senior titles.
 _FILTERS_SENIOR = {"junior", "mid", "medior", "entry", "graduate"}
 
 
-# The words shown in Options ("Skip levels above yours") for a junior or mid candidate.
+# The title words that put a role above junior/mid level: shown in Options ("Skip levels above yours") for a
+# junior or mid candidate, and used as they are when Options has no list of its own.
 LEVEL_WORDS = ["senior", "sr", "lead", "team lead", "principal", "head of", "head", "chief", "architect",
                "manager", "staff", "expert", "director", "vedoucí"]
 
@@ -48,10 +42,7 @@ def level_word(title: str, candidate_seniority: str, words=None) -> str:
     if _JUNIOR_RE.search(title or ""):
         return ""  # "Junior Project Manager", "Analyst (Junior+)": the title itself says the level
     if words is None:
-        if (candidate_seniority or "junior").strip().lower() not in _FILTERS_SENIOR:
-            return ""  # senior/lead candidates: don't filter anything out
-        m = _SENIOR_RE.search(title or "")
-        return m.group(0).lower() if m else ""
+        words = default_level_words(candidate_seniority)        # senior/lead candidates: none, nothing is filtered out
     return next((str(w) for w in words if _word_in(title or "", str(w))), "")
 
 

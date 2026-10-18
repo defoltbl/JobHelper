@@ -12,12 +12,6 @@ import re
 # Characters that essentially only appear in Czech/Slovak text.
 _CZECH_CHARS = set("ěščřžýáíéúůňťďĚŠČŘŽÝÁÍÉÚŮŇŤĎ")
 
-# Non-Latin scripts: Japanese (hiragana/katakana), CJK ideographs, Korean,
-# Cyrillic, Greek, Arabic, Hebrew, Thai, Devanagari. Text in these isn't English.
-_NON_LATIN = re.compile(
-    r"[぀-ヿ㐀-鿿가-힯Ѐ-ӿͰ-Ͽ"
-    r"؀-ۿ֐-׿฀-๿ऀ-ॿ＀-￯]"
-)
 
 # Common Czech function words (job-ad vocabulary included).
 _CZECH_WORDS = {
@@ -57,10 +51,12 @@ _OTHER_WORDS = {
     "Slovak": {"sme", "ste", "ponúkame", "hľadáme", "požadujeme", "práca", "skúsenosti", "znalosť", "alebo", "pre", "pri",
                "ktorý", "ktorá", "ako", "aj", "náplň", "výhody", "mzda", "pracovné"},
 }
-_SCRIPTS = [("Ukrainian", re.compile(r"[іїєґІЇЄҐ]")), ("Russian", re.compile(r"[Ѐ-ӿ]")), ("Japanese", re.compile(r"[぀-ヿ]")),
-            ("Korean", re.compile(r"[가-힯]")), ("Chinese", re.compile(r"[㐀-鿿]")), ("Greek", re.compile(r"[Ͱ-Ͽ]")),
-            ("Arabic", re.compile(r"[؀-ۿ]")), ("Hebrew", re.compile(r"[֐-׿]")), ("Thai", re.compile(r"[฀-๿]")),
-            ("Hindi", re.compile(r"[ऀ-ॿ]"))]
+# Non-Latin scripts and the language each one names (Ukrainian first: its letters are Cyrillic too).
+_SCRIPT_LETTERS = [("Ukrainian", "іїєґІЇЄҐ"), ("Russian", "Ѐ-ӿ"), ("Japanese", "぀-ヿ"), ("Korean", "가-힯"), ("Chinese", "㐀-鿿"),
+                   ("Greek", "Ͱ-Ͽ"), ("Arabic", "؀-ۿ"), ("Hebrew", "֐-׿"), ("Thai", "฀-๿"), ("Hindi", "ऀ-ॿ")]
+_SCRIPTS = [(name, re.compile(f"[{letters}]")) for name, letters in _SCRIPT_LETTERS]
+# Any of them (and full-width forms): text in these isn't English.
+_NON_LATIN = re.compile("[" + "".join(letters for _name, letters in _SCRIPT_LETTERS) + "＀-￯]")
 _SLOVAK_CHARS = set("ľĺŕôĽĹŔÔ")
 # Letters of Czech and Slovak that French, Spanish, Portuguese, German and Polish do not have
 # ("é", "á", "í" are shared with them and say nothing).

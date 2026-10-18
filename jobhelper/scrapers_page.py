@@ -16,14 +16,9 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
-_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml",
-    "Accept-Language": "en;q=0.9",
-}
+from . import web
+
+_HEADERS = web.headers(accept="text/html,application/xhtml+xml")
 _TIMEOUT = 20
 _MAX_PAGE = 3_000_000      # bytes of a page that are looked at
 _MAX_TEXT = 6000           # like the other boards

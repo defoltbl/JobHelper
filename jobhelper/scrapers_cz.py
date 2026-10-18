@@ -14,21 +14,15 @@ import json
 import re
 import time
 import unicodedata
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
-from . import store
+from . import store, web
 
-_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-    ),
-    "Accept-Language": "cs,en;q=0.9",
-}
+_HEADERS = web.headers("cs,en;q=0.9")
 _TIMEOUT = 25
 _DETAIL_DELAY = 0.3  # seconds between detail-page fetches (politeness)
 
@@ -195,11 +189,6 @@ def _fetch_detail(url: str) -> tuple[str, str]:
     return description, company
 
 
-def _fetch_description(url: str) -> str:
-    """Pull the plain-text job description from an LMC detail page."""
-    return _fetch_detail(url)[0]
-
-
 def _add_details(jobs: list[dict[str, Any]]) -> None:
     """Fetch each posting's page: its text, and the company when the list did not give one."""
     for job in jobs:
@@ -238,30 +227,7 @@ def parse_jobs_cz(html_text: str, where: str, limit: int = 1000) -> list[dict[st
 
 
 def jobs_cz(keyword: str, where: str, limit: int, with_description: bool = True) -> list[dict[str, Any]]:
-    url = f"https://www.jobs.cz/prace/{_slug(where)}/"
-    jobs: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for page in range(1, 6):   # paginate until we reach `limit` (≈30 cards/page)
-        if len(jobs) >= limit:
-            break
-        params = {"q[]": keyword} if page == 1 else {"q[]": keyword, "page": page}
-        try:
-            page_jobs = parse_jobs_cz(_get(url, params=params).text, where, 1000)
-        except requests.RequestException:
-            if page == 1:
-                raise                       # the board cannot be reached at all: the search says so
-            break                           # a later page failed: what the earlier pages gave is kept
-        new = [j for j in page_jobs if j["id"] not in seen]
-        if not new:
-            break   # no more results
-        for j in new:
-            seen.add(j["id"])
-        jobs.extend(new)
-        time.sleep(_DETAIL_DELAY)
-    jobs = jobs[:limit]
-    if with_description:
-        _add_details(jobs)
-    return jobs
+    return JOBS_CZ.search(keyword, where, limit, with_description)
 
 
 # ── prace.cz ────────────────────────────────────────────────────────────────
@@ -293,27 +259,45 @@ def parse_prace_cz(html_text: str, where: str, limit: int = 1000) -> list[dict[s
 
 
 def prace_cz(keyword: str, where: str, limit: int, with_description: bool = True) -> list[dict[str, Any]]:
-    url = f"https://www.prace.cz/nabidky/{_slug(where)}/"
-    jobs: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for page in range(1, 6):
-        if len(jobs) >= limit:
-            break
-        params = {"q": keyword} if page == 1 else {"q": keyword, "page": page}
-        try:
-            page_jobs = parse_prace_cz(_get(url, params=params).text, where, 1000)
-        except requests.RequestException:
-            if page == 1:
-                raise                       # the board cannot be reached at all: the search says so
-            break                           # a later page failed: what the earlier pages gave is kept
-        new = [j for j in page_jobs if j["id"] not in seen]
-        if not new:
-            break
-        for j in new:
-            seen.add(j["id"])
-        jobs.extend(new)
-        time.sleep(_DETAIL_DELAY)
-    jobs = jobs[:limit]
-    if with_description:
-        _add_details(jobs)
-    return jobs
+    return PRACE_CZ.search(keyword, where, limit, with_description)
+
+
+# ── the search pages of both: one loop ─────────────────────────────────────
+class LmcBoard:
+    """A board of LMC's platform (jobs.cz, prace.cz): its search pages for a city, read page by page until
+    `limit` postings are found, then each posting's own page. The boards differ only in their address, the name
+    of the search field and how a result card looks."""
+
+    PAGES = 5               # about 30 cards a page
+
+    def __init__(self, address: str, field: str, parse: Callable[[str, str, int], list[dict[str, Any]]]) -> None:
+        self._address, self._field, self._parse = address, field, parse
+
+    def search(self, keyword: str, where: str, limit: int, with_description: bool = True) -> list[dict[str, Any]]:
+        url = self._address.format(city=_slug(where))
+        jobs: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for page in range(1, self.PAGES + 1):
+            if len(jobs) >= limit:
+                break
+            params = {self._field: keyword} if page == 1 else {self._field: keyword, "page": page}
+            try:
+                page_jobs = self._parse(_get(url, params=params).text, where, 1000)
+            except requests.RequestException:
+                if page == 1:
+                    raise                       # the board cannot be reached at all: the search says so
+                break                           # a later page failed: what the earlier pages gave is kept
+            new = [j for j in page_jobs if j["id"] not in seen]
+            if not new:
+                break                           # no more results
+            seen.update(j["id"] for j in new)
+            jobs.extend(new)
+            time.sleep(_DETAIL_DELAY)
+        jobs = jobs[:limit]
+        if with_description:
+            _add_details(jobs)
+        return jobs
+
+
+JOBS_CZ = LmcBoard("https://www.jobs.cz/prace/{city}/", "q[]", lambda html, where, limit: parse_jobs_cz(html, where, limit))
+PRACE_CZ = LmcBoard("https://www.prace.cz/nabidky/{city}/", "q", lambda html, where, limit: parse_prace_cz(html, where, limit))

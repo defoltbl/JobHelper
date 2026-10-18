@@ -34,7 +34,6 @@ _ROLE_NOISE = {
 
 def role_key(title: str) -> frozenset[str]:
     """Normalise a job title to its core role tokens (drops seniority/gender/noise)."""
-    import re
     tokens = re.findall(r"[a-z0-9+#]{2,}", (title or "").lower())
     return frozenset(t for t in tokens if t not in _ROLE_NOISE)
 
@@ -48,6 +47,21 @@ def _same_role(a: frozenset[str], b: frozenset[str]) -> bool:
     return len(a & b) / len(a | b) >= 0.5
 
 
+class AppliedRoles:
+    """The roles you already applied for (or marked "not interested"), company by company. A lead for one of
+    them is not shown again; a different role at the same company is (you can apply there more than once)."""
+
+    def __init__(self, jobs: list[dict[str, Any]], statuses: set[str]) -> None:
+        self._known = [(j["company"], role_key(j.get("title", ""))) for j in jobs if j.get("status") in statuses and j.get("company")]
+
+    def covers(self, job: dict[str, Any]) -> bool:
+        """The same role at the same company: not merely a name that shares a word ("Good Data" is not "NTT DATA")."""
+        company = job.get("company", "")
+        role = role_key(job.get("title", ""))
+        return bool(company) and any(_same_role(role, known_role) and email_client.same_company(company, known_company)
+                                     for known_company, known_role in self._known)
+
+
 def drop_known_applications(
     new_jobs: list[dict[str, Any]],
     existing_jobs: list[dict[str, Any]],
@@ -55,31 +69,16 @@ def drop_known_applications(
     dropped: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     """Remove a new lead only if you've already applied to the SAME role at the
-    SAME company (any application status, incl. rejected).
-
-    Different roles at the same company are kept — you can apply to a company
-    multiple times for different positions.
-    """
-    # ... and a role you marked "not interested" does not come back as a repost either
-    exclude = exclude_statuses or (store.APPLICATION_STATUSES | {store.NOT_INTERESTED})
-    known = [(j["company"], role_key(j.get("title", "")))
-             for j in existing_jobs if j.get("status") in exclude and j.get("company")]
-
+    SAME company (any application status, incl. rejected), or marked it "not interested"."""
+    applied = AppliedRoles(existing_jobs, exclude_statuses or (store.APPLICATION_STATUSES | {store.NOT_INTERESTED}))
     kept, n_dropped = [], 0
     for nj in new_jobs:
-        company = nj.get("company", "")
-        nrole = role_key(nj.get("title", ""))
-        # the same company, not merely a name that shares a word with it ("Good Data" is not "NTT DATA")
-        if company and any(_same_role(nrole, kr) and email_client.same_company(company, kc) for kc, kr in known):
+        if applied.covers(nj):
             n_dropped += 1
             note_dropped(dropped, nj, "already applied", "You already applied for this role at this company.")
             continue
         kept.append(nj)
     return kept, n_dropped
-
-
-# Backwards-compatible alias (now role-aware).
-drop_known_companies = drop_known_applications
 
 
 def _lead_key(job: dict[str, Any]) -> tuple[str, str]:
@@ -142,17 +141,12 @@ def prune_applied_leads(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     Different roles at an applied company are kept (multi-role applications).
     """
-    apps = [(j["company"], role_key(j.get("title", "")))
-            for j in jobs if j.get("status") in store.APPLICATION_STATUSES and j.get("company")]
-
+    applied = AppliedRoles(jobs, store.APPLICATION_STATUSES)
     removed, kept = [], []
     for j in jobs:
-        if j.get("status") in store.LEAD_STATUSES:
-            company = j.get("company", "")
-            rk = role_key(j.get("title", ""))
-            if company and any(_same_role(rk, ar) and email_client.same_company(company, ac) for ac, ar in apps):
-                removed.append(j)
-                continue
+        if j.get("status") in store.LEAD_STATUSES and applied.covers(j):
+            removed.append(j)
+            continue
         kept.append(j)
     jobs[:] = kept
     return removed
@@ -165,19 +159,16 @@ CLOSED_REASON = "The posting no longer accepts applications."
 
 def can_ask_if_closed(job: dict[str, Any]) -> bool:
     """Whether this posting's board is one whose page says if it still accepts applications (LinkedIn)."""
-    return str(job.get("id") or "").startswith("linkedin-") or "linkedin.com" in (job.get("url") or "")
+    return scrapers_intl.is_linkedin(job)
 
 
 def posting_closed(job: dict[str, Any]) -> bool | None:
     """Ask a posting's own page whether it still accepts applications.
     True / False, or None when the board gives no clear answer (or is not one the app can ask)."""
-    if not can_ask_if_closed(job):
-        return None
-    number = re.search(r"(\d{6,})", job.get("id", "") + " " + (job.get("url") or ""))
-    if not number:
+    if not scrapers_intl.posting_number(job):
         return None
     try:
-        text, closed, _posted = scrapers_intl._fetch_detail(number.group(1))
+        text, closed, _posted = scrapers_intl.read_posting(job)
     except Exception:  # noqa: BLE001 - no answer is not "closed"
         return None
     return True if closed else (False if text else None)
@@ -286,9 +277,7 @@ def refetch_description(job: dict[str, Any]) -> str:
     url, source = job.get("url") or "", (job.get("source") or "").split("/")[0]
     try:
         if source == "linkedin" or "linkedin.com" in url:
-            from . import scrapers_intl
-            digits = re.search(r"(\d{6,})", job.get("id", "") + " " + url)
-            return scrapers_intl._fetch_detail(digits.group(1))[0] if digits else ""
+            return scrapers_intl.read_posting(job)[0]
         if "jobs.cz" in url or "prace.cz" in url:
             from . import scrapers_cz
             return scrapers_cz._fetch_detail(url)[0]
@@ -500,7 +489,7 @@ def search(
         if n:
             print(f"  · filtered out {n} {label}")
 
-    sift("closed", lambda j: "No longer accepts applications."
+    sift("closed", lambda j: CLOSED_REASON
          if filters.is_closed(f"{j.get('title','')} {j.get('description','')}") else "",
          "closed / no-longer-accepting postings")
     # Where this search is and which remote jobs fit it: read from Options once (filters.Placement).

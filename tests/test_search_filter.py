@@ -161,3 +161,75 @@ def test_the_country_in_options_decides_for_a_town_the_app_does_not_know(monkeyp
     assert _search_in(monkeypatch, "Kladno") == ["jobs.cz", "prace.cz", "linkedin"]               # may be Czech
     assert _search_in(monkeypatch, "Kladno", country_option="Czechia") == ["jobs.cz", "prace.cz", "linkedin"]
     assert _search_in(monkeypatch, "Freiburg", country_option="Germany") == ["linkedin"]
+
+
+# ── one rule each (code review, 18 October 2026) ───────────────────────────
+def test_both_czech_boards_page_through_results_with_one_loop(monkeypatch):
+    import requests
+    from jobhelper import scrapers_cz
+    pages = {1: ["a", "b"], 2: ["b", "c"], 3: ["c"]}            # page 3 brings nothing new: the loop stops there
+    asked = []
+
+    class Page:
+        def __init__(self, n): self.text = str(n)
+
+    def fake_get(url, params=None):
+        asked.append((url, dict(params or {})))
+        return Page(params.get("page", 1))
+    monkeypatch.setattr(scrapers_cz, "_get", fake_get)
+    monkeypatch.setattr(scrapers_cz.time, "sleep", lambda s: None)
+    parse = lambda html, where, limit: [{"id": i} for i in pages[int(html)]]     # noqa: E731
+    board = scrapers_cz.LmcBoard("https://board.example/{city}/", "q", parse)
+    assert [j["id"] for j in board.search("python", "Praha", 10, with_description=False)] == ["a", "b", "c"]
+    assert asked[0] == ("https://board.example/praha/", {"q": "python"}) and asked[1][1] == {"q": "python", "page": 2}
+    assert [j["id"] for j in board.search("python", "Praha", 2, with_description=False)] == ["a", "b"]      # the limit
+    # a later page that fails keeps what the earlier pages gave; a first page that fails is the search's error
+    monkeypatch.setattr(scrapers_cz, "_get", lambda url, params=None: Page(1) if "page" not in params else (_ for _ in ()).throw(requests.ConnectionError()))
+    assert [j["id"] for j in board.search("python", "Praha", 10, with_description=False)] == ["a", "b"]
+    monkeypatch.setattr(scrapers_cz, "_get", lambda url, params=None: (_ for _ in ()).throw(requests.ConnectionError()))
+    import pytest
+    with pytest.raises(requests.ConnectionError):
+        board.search("python", "Praha", 10, with_description=False)
+    assert scrapers_cz.JOBS_CZ._field == "q[]" and scrapers_cz.PRACE_CZ._field == "q"
+
+
+def test_a_linkedin_posting_is_named_by_one_rule():
+    from jobhelper import scrapers_intl
+    assert scrapers_intl.posting_number({"id": "linkedin-4479884427"}) == "4479884427"
+    assert scrapers_intl.posting_number({"id": "x", "url": "https://cz.linkedin.com/jobs/view/dev-at-acme-4468142745"}) == "4468142745"
+    assert scrapers_intl.posting_number({"id": "jobscz-2001470061", "url": "https://www.jobs.cz/rpd/2001470061/"}) == ""
+    assert scrapers_intl.read_posting({"id": "jobscz-1"}) == ("", False, "")
+    assert not hasattr(scrapers_intl, "_CLOSED_MARKERS") and not hasattr(scrapers_intl, "_fetch_description")
+
+
+def test_a_role_you_applied_for_is_one_rule_for_the_search_and_the_list():
+    applied = agent2_search.AppliedRoles([store.new_job(id="a", title="Junior Python Developer", company="Acme s.r.o.", status="waiting"),
+                                          store.new_job(id="n", title="QA Engineer", company="Beta", status="not_interested")],
+                                         store.APPLICATION_STATUSES)
+    assert applied.covers({"title": "Python Developer (m/f)", "company": "ACME"})        # same role, same company
+    assert not applied.covers({"title": "Data Analyst", "company": "Acme"})              # another role there: kept
+    assert not applied.covers({"title": "QA Engineer", "company": "Beta"})               # only the statuses asked for
+    assert not applied.covers({"title": "Junior Python Developer", "company": ""})
+    assert not hasattr(agent2_search, "drop_known_companies")
+
+
+def test_a_closed_posting_has_one_reason_wherever_it_is_found(monkeypatch):
+    found = [store.new_job(id="c", title="Developer", company="Acme", location="Prague", url="https://example.com/c",
+                           description="We are hiring a developer. This job is no longer accepting applications.")]
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for",
+                        lambda source, max_age_days=0, country="": [job_sources.Board("fake", lambda q, w, n: [dict(j) for j in found])])
+    monkeypatch.setattr(agent2_search.config, "ui_settings", lambda: {})
+    dropped = []
+    agent2_search.search(["developer"], where="Prague", dropped=dropped)
+    assert [d["reason"] for d in dropped] == [agent2_search.CLOSED_REASON]
+
+
+def test_the_level_words_are_one_list_for_options_and_the_search():
+    from jobhelper import filters
+    assert not hasattr(filters, "_SENIOR_RE")
+    assert filters.level_word("Sr. Python Developer", "junior") == "sr"
+    assert filters.level_word("Engineering Managers", "junior") == "manager"
+    assert filters.level_word("Head of Data", "junior") == "head of"
+    assert filters.level_word("Junior Project Manager", "junior") == ""           # the title says its level
+    assert filters.level_word("Senior Developer", "senior") == ""                   # a senior candidate keeps them
+    assert filters.level_word("Vedoucí týmu", "junior") == "vedoucí"
