@@ -114,6 +114,7 @@ class OptionsService:
     OPTION_LISTS = ("queries", "skip_words", "keep_words", "level_words", "wanted_roles", "unwanted_roles", "my_fields")
     OPTION_TEXTS = {"where": 80, "country": 60, "about_right_to_work": 300, "about_start": 300, "about_experience": config.MAX_EXPERIENCE_NOTES}
     MAX_LIST, MAX_WORD = 60, 100
+    MAX_COMPANY_NAME, MAX_PAY_ROLE = 60, 60          # a career site's name; a kind of role under "salary by role"
     MODELS = ("sonnet", "opus", "haiku")
     SOURCES = ("czech", "linkedin", "remote", "careers", "adzuna", "jooble", "all")
 
@@ -165,7 +166,7 @@ class OptionsService:
             for entry in entries:
                 role = str((entry or {}).get("role") or "").strip() if isinstance(entry, dict) else ""
                 amount = (entry or {}).get("amount") if isinstance(entry, dict) else None
-                if not 2 <= len(role) <= 60 or not re.search(r"[^\W\d_]{2}", role):
+                if not 2 <= len(role) <= self.MAX_PAY_ROLE or not re.search(r"[^\W\d_]{2}", role):
                     return {}, "Each line of “salary by role” needs a kind of role in words, for example support."
                 if isinstance(amount, bool) or not isinstance(amount, (int, float)) or amount != int(amount) or not 1 <= amount <= 100_000_000:
                     return {}, f"The salary for “{role}” must be a whole number above 0."
@@ -225,7 +226,7 @@ class OptionsService:
         config.ensure_dirs()
         # The token becomes part of an address the app asks (https://<token>.recruitee.com …): only a plain slug is kept,
         # so nothing typed or pasted here can send a request anywhere else. The window checks the same as you type.
-        clean = [{"name": " ".join(str(c.get("name") or c["token"]).split())[:60], "ats": c["ats"], "token": c["token"]}
+        clean = [{"name": " ".join(str(c.get("name") or c["token"]).split())[:self.MAX_COMPANY_NAME], "ats": c["ats"], "token": c["token"]}
                  for c in (companies if isinstance(companies, (list, tuple)) else [])
                  if isinstance(c, dict) and isinstance(c.get("ats"), str) and c["ats"] in scrapers_ats._FETCHERS
                  and isinstance(c.get("token"), str) and scrapers_ats.is_token(c["token"])][:200]

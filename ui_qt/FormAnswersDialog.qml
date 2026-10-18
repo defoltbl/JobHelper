@@ -27,7 +27,7 @@ Dialog {
     property string err: ""
     property string note: ""
     property var checked: ({ count: 0, problem: "", note: "" })     // what the pasted text holds, judged as you type
-    readonly property int maxAnswer: 3000
+    readonly property int maxAnswer: win.limits.answer
     function tooLong() {            // the first answer over the limit, to say it before anything is sent
         for (var i = 0; i < fmModel.count; i++) if (fmModel.get(i).answer.length > maxAnswer) return fmModel.get(i).question;
         return "";

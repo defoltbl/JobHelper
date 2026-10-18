@@ -26,6 +26,7 @@ from .word_document import P as _P, T as _T, XML_SPACE, Paragraph, WordDocument,
 BODY_PARAGRAPHS = 5
 MIN_WORDS, MAX_WORDS = 320, 410        # instruction: about 330-400 words
 MAX_CHARS = 2550                       # keeps the letter on one page (example: 2240)
+MAX_HINT = 300                         # what you ask to change in one paragraph
 
 # Check 3 of the instruction (a gap admitted), the forward-looking wish (rule 1, option 2) and wording that claims
 # hands-on experience: one set of rules for every text in the person's voice (claims.py).
@@ -312,7 +313,7 @@ def rewrite_paragraph(job: dict[str, Any], cv_text: str, paragraphs: list[str], 
     unverified, first_name = unverified_terms(cv_text), candidate_first_name(cv_text)
     letter = "\n".join(f"{n}. {p}" for n, p in enumerate(paragraphs, 1))
     words = len(paragraphs[index].split())
-    hint_line = f"What the candidate wants changed: {hint.strip()[:300]}\n" if hint.strip() else ""
+    hint_line = f"What the candidate wants changed: {hint.strip()[:MAX_HINT]}\n" if hint.strip() else ""
     feedback, text = "", ""
     for _attempt in range(2):
         data = llm.ask_json(REWRITE_PROMPT.format(

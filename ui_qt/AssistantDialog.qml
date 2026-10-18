@@ -53,7 +53,7 @@ Dialog {
         for (var i = 0; i < jobs.length; i++) if (jobs[i].id === id) { jobBox.currentIndex = i; jobId = id; return true; }
         return false;
     }
-    readonly property int maxRequest: 300
+    readonly property int maxRequest: win.limits.request
     // My details
     property bool dirty: false            // a detail was changed and not saved
     property bool confirmClose: false
@@ -200,16 +200,29 @@ Dialog {
     property var starters: []             // questions most forms ask, not answered yet
     property string answersNote: ""
     property string answersErr: ""
-    readonly property var jobCols: [{ key: "employer", label: "Employer", most: 100 }, { key: "title", label: "Job title", most: 100 },
-                                    { key: "start", label: "From", most: 10, hint: "03/2023" }, { key: "end", label: "To", most: 10, hint: "2024" },
-                                    { key: "location", label: "Where it was", most: 80, hint: "Brno, Czechia" },
-                                    { key: "description", label: "What you did there (as your CV says it; forms ask for it inside each job)", most: 2000, area: true,
-                                      hint: "One line per point, in your own words" }]
-    readonly property var langCols: [{ key: "language", label: "Language", most: 40, hint: "English" },
-                                     { key: "level", label: "Level", most: 20, hint: "Native, Fluent, Advanced, Intermediate or Basic" }]
-    readonly property var schoolCols: [{ key: "school", label: "University or school", most: 120 }, { key: "degree", label: "Degree", most: 120 },
-                                       { key: "field", label: "Field of study", most: 120 }, { key: "start", label: "From", most: 10, hint: "2019" },
-                                       { key: "end", label: "To", most: 10, hint: "2023" }]
+    // the columns of each list come from the back end (details.ROWS: key, label, most, long); the window adds only examples
+    property var columns: ({})
+    property var levels: []
+    readonly property var colHints: ({
+        experience: { start: { hint: "03/2023" }, end: { hint: "2024" }, location: { hint: "Brno, Czechia" },
+                      description: { note: "as your CV says it; forms ask for it inside each job", hint: "One line per point, in your own words" } },
+        education: { start: { hint: "2019" }, end: { hint: "2023" } },
+        languages: { language: { hint: "English" } } })
+    function colsFor(name) {
+        var base = columns[name] || [], extra = colHints[name] || {}, out = [];
+        for (var i = 0; i < base.length; i++) {
+            var c = base[i], more = extra[c.key] || {};
+            var col = { key: c.key, label: more.note ? c.label + " (" + more.note + ")" : c.label, most: c.most, area: c.long === true };
+            if (more.hint) col.hint = more.hint;
+            if (name === "languages" && c.key === "level" && levels.length)
+                col.hint = levels.slice(0, -1).join(", ") + " or " + levels[levels.length - 1];
+            out.push(col);
+        }
+        return out;
+    }
+    readonly property var jobCols: colsFor("experience")
+    readonly property var langCols: colsFor("languages")
+    readonly property var schoolCols: colsFor("education")
 
     function say(who, text, bad) {
         talk.append({ who: who, text: text, bad: bad === true });
@@ -317,6 +330,7 @@ Dialog {
         for (var i = 0; i < fields.length; i++)
             fieldModel.append({ key: fields[i].key, label: fields[i].label, most: fields[i].most,
                                 value: shown[fields[i].key] || "", fromCv: fromCv.indexOf(fields[i].key) >= 0 });
+        columns = (d && d.columns) || ({}); levels = (d && d.levels) || [];
         fillRows(jobModel, (d && d.experience) || [], jobCols, true);
         fillRows(schoolModel, (d && d.education) || [], schoolCols, false);
         fillRows(langModel, (d && d.languages) || [], langCols, false);
@@ -769,7 +783,7 @@ Dialog {
                                     background: Rectangle { radius: 7; color: theme.surface; border.width: 1; border.color: qBox.activeFocus ? theme.accent : theme.line }
                                     onTextEdited: assistantDialog.setAnswer(index, "question", text) }
                                 Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
-                                    border.color: aBox.text.length > 3000 ? theme.crit : (aBox.activeFocus ? theme.accent : theme.line)
+                                    border.color: aBox.text.length > win.limits.answer ? theme.crit : (aBox.activeFocus ? theme.accent : theme.line)
                                     implicitHeight: Math.max(64, aBox.implicitHeight + 16)
                                     TextEdit { id: aBox; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap; selectByMouse: true
                                         color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
