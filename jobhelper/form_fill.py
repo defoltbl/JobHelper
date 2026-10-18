@@ -31,6 +31,33 @@ from urllib.parse import urlsplit
 from . import details, email_client, form_answers, places
 
 MAX_FIELDS = 200
+_MARK = re.compile(r"__([A-Z]+)__")          # where a script takes a value
+
+
+def with_values(script: str, **values: Any) -> str:
+    """The script with each `__NAME__` in it replaced by that value, written as JSON: data from a page or from a
+    person goes in as data and never becomes code."""
+    # one pass over the script as written: a value that holds a mark such as "__URL__" is never filled in again
+    return _MARK.sub(lambda m: json.dumps(values[m.group(1).lower()]) if m.group(1).lower() in values else m.group(0), script)
+
+
+
+FORM_REFUSED = "The page did not answer the way a page with a form does. Reload it and ask me again."
+
+
+def page_reply(text: str, refused: str = "") -> dict[str, Any] | None:
+    """What a script gave back, as an object. A page may answer anything: an answer that is not a JSON object
+    raises ValueError(refused) when a message is given, else it is None."""
+    try:
+        data = json.loads(text or "")
+    except ValueError:
+        data = None
+    if isinstance(data, dict):
+        return data
+    if refused:
+        raise ValueError(refused)
+    return None
+
 
 # A list counts as chosen when what it shows is a real entry: not its first line, not a "Select..." line without a value, not a greyed-out one.
 _CHOSEN = ("function chosen(el) { var o = el.options[el.selectedIndex]; "
@@ -461,16 +488,12 @@ def choose_script(action: str, n: int, arg: Any, url: str) -> str:
     "options", "pick" (arg: the entry's number), "close" (arg: true to clear typed text), "radio" (arg: the button's number), "add" (arg: the number of a button
     that adds a row for another job or degree; n is not used)."""
     assert action in ("open", "key", "options", "pick", "close", "radio", "add", "tick")
-    return (CHOOSE.replace("__ACTION__", json.dumps(action)).replace("__N__", json.dumps(int(n)))
-            .replace("__ARG__", json.dumps(arg)).replace("__URL__", json.dumps(str(url))))
+    return with_values(CHOOSE, action=action, n=int(n), arg=arg, url=str(url))
 
 
 def choose_answer(text: str) -> dict[str, Any]:
-    try:
-        data = json.loads(text or "")
-    except ValueError:
-        data = None
-    if not isinstance(data, dict):
+    data = page_reply(text)
+    if data is None:
         return {"ok": False, "moved": False, "options": []}
     options = data.get("options") if isinstance(data.get("options"), list) else []
     return {"ok": bool(data.get("ok")), "moved": bool(data.get("moved")), "options": [" ".join(str(o).split())[:80] for o in options[:300]]}
@@ -579,12 +602,9 @@ REVIEW = r"""
 def review_answer(text: str) -> dict[str, Any]:
     """What the REVIEW script gave back, checked. A field whose name marks it as personal or as payment keeps
     only whether it is filled in: its value goes no further."""
-    try:
-        data = json.loads(text or "")
-    except ValueError:
-        data = None
-    if not isinstance(data, dict) or not isinstance(data.get("fields"), list):
-        raise ValueError("The page did not answer the way a page with a form does. Reload it and ask me again.")
+    data = page_reply(text, FORM_REFUSED)
+    if not isinstance(data.get("fields"), list):
+        raise ValueError(FORM_REFUSED)
     fields = []
     for raw in data["fields"][:120]:
         if not isinstance(raw, dict):
@@ -626,12 +646,7 @@ PAGE = r"""
 
 def page_answer(text: str) -> dict[str, str]:
     """What the PAGE script gave back: the address, the title and the words of the page, as plain text."""
-    try:
-        data = json.loads(text or "")
-    except ValueError:
-        data = None
-    if not isinstance(data, dict):
-        raise ValueError("The page did not answer. Reload it and ask me again.")
+    data = page_reply(text, "The page did not answer. Reload it and ask me again.")
     stated = data.get("stated") if isinstance(data.get("stated"), dict) else {}
     return {"url": str(data.get("url") or "")[:2000], "title": " ".join(str(data.get("title") or "").split())[:300],
             "text": str(data.get("text") or "")[:12000],
@@ -640,25 +655,19 @@ def page_answer(text: str) -> dict[str, str]:
 
 def values_script(numbers: list[int], url: str) -> str:
     """The VALUES script: what the fields with these numbers hold now. Asked only for fields the assistant itself filled in."""
-    return VALUES.replace("__WANTED__", json.dumps([int(n) for n in numbers])).replace("__URL__", json.dumps(str(url)))
+    return with_values(VALUES, wanted=[int(n) for n in numbers], url=str(url))
 
 
 def values_answer(text: str) -> dict[int, str]:
-    try:
-        data = json.loads(text or "")
-    except ValueError:
-        return {}
-    values = data.get("values") if isinstance(data, dict) else None
+    data = page_reply(text) or {}
+    values = data.get("values")
     return {int(k): str(v)[:3000] for k, v in values.items() if str(k).isdigit()} if isinstance(values, dict) else {}
 
 
 def watch_answer(text: str) -> dict[str, Any]:
     """Where the form stands: {url, sign, empty}. `sign` changes when the page shows other fields."""
-    try:
-        data = json.loads(text or "")
-    except ValueError:
-        data = None
-    if not isinstance(data, dict):
+    data = page_reply(text)
+    if data is None:
         return {"url": "", "sign": "", "empty": 0}
     count = data.get("fields") if isinstance(data.get("fields"), int) else 0
     return {"url": str(data.get("url") or "")[:500], "sign": f"{count}:{str(data.get('first') or '')[:400]}",
@@ -669,7 +678,7 @@ def fill_script(items: list[dict[str, Any]], url: str, typed: bool = False) -> s
     """The FILL script for these values. They travel as data (JSON), never as code. `typed` writes them the
     way typing arrives, for a page that threw away what was written the plain way."""
     data = [{"n": int(i["n"]), "value": str(i["value"]), "check": bool(i.get("check"))} for i in items]
-    return FILL.replace("__ITEMS__", json.dumps(data)).replace("__URL__", json.dumps(str(url))).replace("__TYPED__", "true" if typed else "false")
+    return with_values(FILL, items=data, url=str(url), typed=bool(typed))
 
 
 PIECE = 150_000                 # characters of a file sent to the page in one request
@@ -682,22 +691,18 @@ def put_scripts(key: str, content: bytes) -> list[str]:
     """The PUT scripts that carry a file to the page, piece by piece (as text; it is data, never code)."""
     import base64
     text = base64.b64encode(content).decode("ascii")
-    return [PUT.replace("__KEY__", json.dumps(str(key))).replace("__PART__", json.dumps(text[i:i + PIECE])) for i in range(0, len(text), PIECE)]
+    return [with_values(PUT, key=str(key), part=text[i:i + PIECE]) for i in range(0, len(text), PIECE)]
 
 
 def attach_script(n: int, key: str, name: str, url: str) -> str:
     """The ATTACH script: give the file field with this number the file that was carried over under `key`."""
     kind = FILE_TYPES.get(os.path.splitext(str(name))[1].lower(), "application/octet-stream")
-    return (ATTACH.replace("__N__", str(int(n))).replace("__KEY__", json.dumps(str(key))).replace("__NAME__", json.dumps(str(name)))
-            .replace("__KIND__", json.dumps(kind)).replace("__URL__", json.dumps(str(url))))
+    return with_values(ATTACH, n=int(n), key=str(key), name=str(name), kind=kind, url=str(url))
 
 
 def attach_answer(text: str) -> dict[str, Any]:
-    try:
-        data = json.loads(text or "")
-    except ValueError:
-        data = None
-    if not isinstance(data, dict):
+    data = page_reply(text)
+    if data is None:
         return {"ok": False, "moved": False, "why": "refused", "size": -1}
     return {"ok": data.get("ok") is True, "moved": data.get("moved") is True, "why": str(data.get("why") or ""),
             "size": data.get("size") if isinstance(data.get("size"), int) else -1}
@@ -735,15 +740,12 @@ def file_kind(field: dict[str, Any]) -> str:
 
 def empty_script(numbers: list[int], url: str) -> str:
     """The EMPTY script: which of these fields hold nothing now. It says only that, never what a field holds."""
-    return EMPTY.replace("__WANTED__", json.dumps([int(n) for n in numbers])).replace("__URL__", json.dumps(str(url)))
+    return with_values(EMPTY, wanted=[int(n) for n in numbers], url=str(url))
 
 
 def empty_answer(text: str) -> list[int]:
-    try:
-        data = json.loads(text or "")
-    except ValueError:
-        return []
-    return [n for n in data.get("empty") or [] if isinstance(n, int)] if isinstance(data, dict) and isinstance(data.get("empty"), list) else []
+    empty = (page_reply(text) or {}).get("empty")
+    return [n for n in empty if isinstance(n, int)] if isinstance(empty, list) else []
 
 
 # ── what a field is ─────────────────────────────────────────────────────────
@@ -1553,12 +1555,9 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
 
 def read_answer(text: str) -> dict[str, Any]:
     """What the READ script gave back, checked: a page may answer anything."""
-    try:
-        data = json.loads(text or "")
-    except ValueError:
-        data = None
-    if not isinstance(data, dict) or not isinstance(data.get("fields"), list):
-        raise ValueError("The page did not answer the way a page with a form does. Reload it and ask me again.")
+    data = page_reply(text, FORM_REFUSED)
+    if not isinstance(data.get("fields"), list):
+        raise ValueError(FORM_REFUSED)
     fields = []
     for raw in data["fields"][:MAX_FIELDS]:
         if not isinstance(raw, dict) or not isinstance(raw.get("n"), int):
@@ -1588,12 +1587,7 @@ def add_kind(words: str) -> str:
 
 
 def fill_answer(text: str) -> dict[str, Any]:
-    try:
-        data = json.loads(text or "")
-    except ValueError:
-        data = None
-    if not isinstance(data, dict):
-        raise ValueError("The page did not say what was filled in. Look at the form: outlined fields were filled.")
+    data = page_reply(text, "The page did not say what was filled in. Look at the form: outlined fields were filled.")
     numbers = lambda key: [n for n in (data.get(key) or []) if isinstance(n, int)] if isinstance(data.get(key), list) else []   # noqa: E731
     return {"moved": bool(data.get("moved")), "done": numbers("done"), "skipped": numbers("skipped")}
 
