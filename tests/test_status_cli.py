@@ -66,6 +66,22 @@ def test_apply_is_for_a_new_job_and_does_not_reopen_an_application(isolate_data,
     assert "update adzuna-123 applied" not in status.__doc__ and "waiting" in status.__doc__, "the file's own examples are commands that work"
 
 
+def test_sync_names_what_it_could_not_read(isolate_data, monkeypatch, capsys):
+    from jobhelper import agent4_tracker, agent5_responses, notify
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="waiting", date_applied="2026-09-01")])
+    warning = "Couldn't sign in to second@example.com: check its password in the Account card."
+    monkeypatch.setattr(agent5_responses, "process_inbox", lambda jobs, lookback_days=None, **kw:
+                        agent5_responses.ScanStats(scanned=2, asked=0, warnings=(warning,)))
+    for name in ("backfill_roles", "annotate_progress", "build_report", "print_report"):
+        monkeypatch.setattr(agent5_responses, name, lambda jobs: None)
+    monkeypatch.setattr(agent4_tracker, "render_all", lambda jobs: None)
+    sent = []
+    monkeypatch.setattr(notify, "send", lambda text, title: sent.append((text, title)))
+    assert _run(monkeypatch, "sync") == 0
+    assert "! " + warning in capsys.readouterr().out and sent == [("No new replies.", "Email scan finished")]
+
+
 def test_responses_scan_keeps_what_was_read_when_the_limit_is_reached(isolate_data, monkeypatch, capsys):
     from jobhelper import agent5_responses, llm
     config.ensure_dirs()
@@ -82,6 +98,13 @@ def test_responses_scan_keeps_what_was_read_when_the_limit_is_reached(isolate_da
     assert asked == [config.scan_days()], "without --days it looks as far back as the app's Options say, not nowhere"
     monkeypatch.setattr(agent5_responses, "process_inbox", lambda jobs, lookback_days=None, **kw: (_ for _ in ()).throw(RuntimeError("No mailbox is connected.")))
     assert _run(monkeypatch, "responses", "--scan") == 1 and "No mailbox is connected." in capsys.readouterr().out
+    warning = "The spam folder of jordan@example.com could not be read."
+    monkeypatch.setattr(agent5_responses, "process_inbox", lambda jobs, lookback_days=None, **kw:
+                        agent5_responses.ScanStats(scanned=4, asked=0, warnings=(warning,)))
+    monkeypatch.setattr(agent5_responses, "build_report", lambda jobs: None)
+    assert _run(monkeypatch, "responses", "--scan") == 0
+    out = capsys.readouterr().out
+    assert "Scanned 4 emails → 0 new responses." in out and "! " + warning in out
 
 
 def test_repair_emails_says_why_it_cannot_read_the_mailbox(isolate_data, monkeypatch, capsys):
@@ -134,6 +157,6 @@ def test_the_mail_server_gets_a_time_limit_and_an_empty_answer_is_no_mail(monkey
         def search(self, *args): return "OK", [None]
         def logout(self): made["out"] = True
     monkeypatch.setattr(email_client.imaplib, "IMAP4_SSL", Server)
-    assert email_client.read_mailbox("me@example.com", "pw", "01-Oct-2026", host="imap.example.com") == []
+    assert email_client.read_mailbox("me@example.com", "pw", "01-Oct-2026", host="imap.example.com") == email_client.Fetched([])
     assert made == {"host": "imap.example.com", "timeout": email_client.SERVER_TIMEOUT, "readonly": True, "out": True}
     assert email_client._numbers([b"1 2 3"]) == [b"1", b"2", b"3"] and email_client._numbers([]) == [] and email_client._numbers(None) == []

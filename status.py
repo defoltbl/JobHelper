@@ -165,11 +165,13 @@ def cmd_sync(args) -> int:
     agent4_tracker.render_all(jobs)
     agent5_responses.build_report(jobs)
     from jobhelper import notify
-    text, title, _urgent = agent5_responses.scan_notice(stats)
+    text, title, _urgent = stats.notice()
     notify.send(text, title)
-    print(f"\nScanned {stats['scanned']} emails ({stats.get('skipped_unrelated', 0)} unrelated skipped) "
-          f"→ {stats['new_responses']} new responses ({stats['rejections']} rejections), "
-          f"{stats['status_updates']} status updates.")
+    print(f"\nScanned {stats.scanned} emails ({stats.skipped_unrelated} unrelated skipped) "
+          f"→ {stats.new_responses} new responses ({stats.rejections} rejections), "
+          f"{stats.status_updates} status updates.")
+    for warning in stats.warnings:
+        print(f"  ! {warning}")
     print(f"→ {config.EXCEL_PATH}")
     print(f"→ {config.RESPONSES_REPORT}\n")
     agent5_responses.print_report(jobs)
@@ -204,7 +206,9 @@ def cmd_responses(args) -> int:
         agent5_responses.annotate_progress(jobs)
         store.save_jobs(jobs)
         agent4_tracker.render_all(jobs)
-        print(f"Scanned {stats['scanned']} emails → {stats['new_responses']} new responses.\n")
+        print(f"Scanned {stats.scanned} emails → {stats.new_responses} new responses.\n")
+        for warning in stats.warnings:
+            print(f"  ! {warning}")
     agent5_responses.print_report(jobs)
     agent5_responses.build_report(jobs)
     print(f"\n→ {config.RESPONSES_REPORT}")
@@ -307,7 +311,7 @@ def cmd_repair_emails(args) -> int:
     from jobhelper import agent5_responses, email_client, vault
     print("Reading the inbox (read-only) …")
     try:
-        emails = email_client.fetch_recent(args.days)
+        emails = email_client.fetch_recent(args.days).messages
     except RuntimeError as e:                        # no mailbox connected: said, nothing changed
         print(f"✗ {e}")
         return 1

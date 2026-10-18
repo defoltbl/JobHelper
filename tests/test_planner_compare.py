@@ -243,18 +243,17 @@ def imap(monkeypatch):
         "[Gmail]/Spam": [_raw("<spam>")],
     }
     monkeypatch.setattr(imaplib, "IMAP4_SSL", FakeImap)
-    email_client.last_warnings.clear()
     return FakeImap
 
 
 def test_inbox_only_by_default(imap):
-    got = email_client.read_mailbox("me@example.com", "pw", "07-Sep-2026")
+    got = email_client.read_mailbox("me@example.com", "pw", "07-Sep-2026").messages
     assert [(m["msg_id"], m["folder"]) for m in got] == [("<self>", "inbox"), ("<1>", "inbox")]
     assert [e[1] for e in imap.log if e[0] == "select"] == ["INBOX"]
 
 
 def test_all_folders_adds_archive_and_spam_read_only(imap):
-    got = email_client.read_mailbox("me@example.com", "pw", "07-Sep-2026", all_folders=True)
+    got = email_client.read_mailbox("me@example.com", "pw", "07-Sep-2026", all_folders=True).messages
     assert [(m["msg_id"], m["folder"]) for m in got] == [("<self>", "inbox"), ("<1>", "inbox"), ("<arch>", "archive"), ("<spam>", "spam")]
     selects = [e for e in imap.log if e[0] == "select"]
     assert [s[1].strip('"') for s in selects] == ["INBOX", "[Gmail]/All Mail", "[Gmail]/Spam"] and all(s[2] is True for s in selects)
@@ -266,7 +265,7 @@ def test_all_folders_adds_archive_and_spam_read_only(imap):
 
 def test_other_providers_fall_back_to_a_plain_date_search(imap):
     imap.gm_raw = False
-    got = email_client.read_mailbox("me@example.com", "pw", "07-Sep-2026", all_folders=True)
+    got = email_client.read_mailbox("me@example.com", "pw", "07-Sep-2026", all_folders=True).messages
     assert "<arch>" in [m["msg_id"] for m in got]
     assert ("search", "[Gmail]/All Mail", '(SINCE "07-Sep-2026")') in imap.log
 
@@ -274,8 +273,10 @@ def test_other_providers_fall_back_to_a_plain_date_search(imap):
 def test_a_folder_that_cannot_be_opened_is_a_warning_not_an_error(imap):
     imap.broken = ("[Gmail]/Spam",)
     got = email_client.read_mailbox("me@example.com", "pw", "07-Sep-2026", all_folders=True)
-    assert "<arch>" in [m["msg_id"] for m in got] and "<spam>" not in [m["msg_id"] for m in got]
-    assert email_client.last_warnings == ["The spam folder of me@example.com could not be read."]
+    assert "<arch>" in [m["msg_id"] for m in got.messages] and "<spam>" not in [m["msg_id"] for m in got.messages]
+    assert got.warnings == ("The spam folder of me@example.com could not be read.",)
+    assert email_client.read_mailbox("me@example.com", "pw", "07-Sep-2026", all_folders=True).warnings == got.warnings, \
+        "each read has its own warnings: they do not pile up from one scan to the next"
 
 
 def test_folders_are_found_by_flag_in_any_language(imap):
@@ -313,10 +314,10 @@ def test_the_mailbox_only_ever_reads_and_always_signs_out(imap):
 def test_the_option_decides_whether_other_folders_are_read(imap, monkeypatch):
     monkeypatch.setattr(config, "mailboxes", lambda: [{"user": "me@example.com", "password": "pw"}])
     monkeypatch.setattr(config, "ui_settings", lambda: {"scan_all_folders": True})
-    assert len(email_client.fetch_recent(30)) == 4
+    assert len(email_client.fetch_recent(30).messages) == 4
     monkeypatch.setattr(config, "ui_settings", lambda: {})
-    assert len(email_client.fetch_recent(30)) == 2
-    assert len(email_client.fetch_recent(30, all_folders=True)) == 4
+    assert len(email_client.fetch_recent(30).messages) == 2
+    assert len(email_client.fetch_recent(30, all_folders=True).messages) == 4
 
 
 # ── a reply pasted in by hand ───────────────────────────────────────────────

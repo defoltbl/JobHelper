@@ -26,12 +26,12 @@ def test_db_counts_by(isolate_data):
 def test_process_inbox_stores_and_updates_status(isolate_data, monkeypatch):
     jobs = [store.new_job(id="jobscz-1", company="Acme", title="Python Dev", status="waiting")]
 
-    monkeypatch.setattr(email_client, "fetch_recent", lambda *a, **k: [
+    monkeypatch.setattr(email_client, "fetch_recent", lambda *a, **k: email_client.Fetched([
         {"msg_id": "<r1@acme>", "date": "Mon, 01 Sep 2026", "sender": "hr@acme.com",
          "subject": "Your application", "body": "Unfortunately we chose another candidate."},
         {"msg_id": "<n1@news>", "date": "Mon, 01 Sep 2026", "sender": "news@promo.com",
          "subject": "Weekly deals", "body": "Buy now"},
-    ])
+    ]))
 
     def fake_llm(prompt, *a, **k):
         if "another candidate" in prompt:
@@ -44,9 +44,9 @@ def test_process_inbox_stores_and_updates_status(isolate_data, monkeypatch):
     monkeypatch.setattr(llm, "ask_json", fake_llm)
 
     stats = agent5_responses.process_inbox(jobs)
-    assert stats["scanned"] == 2
-    assert stats["new_responses"] == 1   # newsletter ignored
-    assert stats["rejections"] == 1
+    assert stats.scanned == 2
+    assert stats.new_responses == 1   # newsletter ignored
+    assert stats.rejections == 1
     assert jobs[0]["status"] == "rejected"
     assert db.total() == 1
 
@@ -114,15 +114,15 @@ def test_annotate_progress_sets_columns(isolate_data):
 
 def test_prefilter_skips_unrelated(isolate_data, monkeypatch):
     from jobhelper import email_client, llm
-    monkeypatch.setattr(email_client, "fetch_recent", lambda *a, **k: [
+    monkeypatch.setattr(email_client, "fetch_recent", lambda *a, **k: email_client.Fetched([
         {"msg_id": "<n@promo>", "date": "", "sender": "news@promo.com",
          "subject": "Weekly deals", "body": "Buy shoes now"},
-    ])
+    ]))
     # LLM should never be called for unrelated mail.
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: (_ for _ in ()).throw(AssertionError("LLM called")))
     stats = agent5_responses.process_inbox([])
-    assert stats["skipped_unrelated"] == 1
-    assert stats["new_responses"] == 0
+    assert stats.skipped_unrelated == 1
+    assert stats.new_responses == 0
 
 
 def test_backfill_roles(isolate_data):
@@ -206,12 +206,12 @@ def test_inbox_scan_reports_progress_per_email(isolate_data, monkeypatch):
     from jobhelper import agent5_responses, email_client
     emails = [{"msg_id": f"<{n}@x>", "date": "Mon, 5 Oct 2026 10:00:00 +0200", "sender": "news@shop.com",
                "subject": "Sale", "body": "Buy now"} for n in range(3)]
-    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: emails)
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: email_client.Fetched(emails))
     monkeypatch.setattr(email_client, "looks_like_application", lambda *a, **k: False)
     seen = []
     stats = agent5_responses.process_inbox([], progress=lambda done, total: seen.append((done, total)))
     assert seen == [(0, 3), (1, 3), (2, 3)]
-    assert stats["scanned"] == 3 and stats["skipped_unrelated"] == 3
+    assert stats.scanned == 3 and stats.skipped_unrelated == 3
 
 
 # ── found on a real interview invitation ────────────────────────────────────
@@ -237,14 +237,14 @@ def test_an_email_without_a_role_goes_to_the_open_application_furthest_along():
 
 def test_scan_summary_names_invitations_first():
     from jobhelper import agent5_responses as a5
-    assert a5.scan_summary({"scanned": 12, "new_responses": 3, "rejections": 1, "invites": ["Brightline", "Brightline"]}) == \
+    assert a5.ScanStats(scanned=12, new_responses=3, rejections=1, invites=["Brightline", "Brightline"]).summary() == \
         "Scanned 12 emails · 3 new: 2 invitations, 1 rejection."
-    assert a5.scan_summary({"scanned": 1, "new_responses": 1, "rejections": 1, "invites": []}) == "Scanned 1 email · 1 new: 1 rejection."
-    assert a5.scan_summary({"scanned": 9, "new_responses": 4, "rejections": 1, "invites": ["A"]}) == \
+    assert a5.ScanStats(scanned=1, new_responses=1, rejections=1).summary() == "Scanned 1 email · 1 new: 1 rejection."
+    assert a5.ScanStats(scanned=9, new_responses=4, rejections=1, invites=["A"]).summary() == \
         "Scanned 9 emails · 4 new: 1 invitation, 1 rejection, 2 other."
-    assert a5.scan_summary({"scanned": 5, "new_responses": 2, "rejections": 0, "invites": []}) == "Scanned 5 emails · 2 new."
-    assert a5.scan_summary({"scanned": 0, "new_responses": 0, "rejections": 0, "invites": []}) == "Scanned 0 emails · 0 new."
-    assert a5.scan_summary({"scanned": 3, "new_responses": 1, "rejections": 0, "invites": ["Brightline"], "dates": ["13 Oct 11:30 · BRIGHTLINE"]}) == \
+    assert a5.ScanStats(scanned=5, new_responses=2).summary() == "Scanned 5 emails · 2 new."
+    assert a5.ScanStats().summary() == "Scanned 0 emails · 0 new."
+    assert a5.ScanStats(scanned=3, new_responses=1, invites=["Brightline"], dates=["13 Oct 11:30 · BRIGHTLINE"]).summary() == \
         "Scanned 3 emails · 1 new: 1 invitation. Date saved: 13 Oct 11:30 · BRIGHTLINE."
 
 
@@ -289,7 +289,7 @@ def test_a_scan_files_both_emails_under_one_application_and_saves_the_date(isola
     replies = [{"is_response": True, "stage": "interview", "company": "Brightline Robotics", "role": "Junior Machine Learning Engineer", "summary": "Invited.", "when": ""},
                {"is_response": True, "stage": "interview", "company": "Brightline Robotics", "role": "", "summary": "Scheduled.", "when": f"{day} 11:30",
                 "next_step": "Attend on Google Meet."}]
-    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: mails)
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: email_client.Fetched(mails))
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: replies.pop(0))
     jobs = _brightline()
     jobs[1]["status"] = "found"                                        # the ML job was still a lead when the first email came
@@ -297,8 +297,8 @@ def test_a_scan_files_both_emails_under_one_application_and_saves_the_date(isola
     by = {j["id"]: j for j in jobs}
     assert by["ml"]["status"] == "interview" and by["ros"]["status"] == "waiting"       # the other application is left alone
     assert by["ml"]["event"]["date"] == day and by["ml"]["event"]["time"] == "11:30" and "event" not in by["ros"]
-    assert len(stats["invites"]) == 2 and len(stats["dates"]) == 1
-    assert a5.scan_summary(stats).startswith("Scanned 2 emails (0 read before, 2 sent to Claude) · 2 new: 2 invitations. Date saved: ")
+    assert len(stats.invites) == 2 and len(stats.dates) == 1
+    assert stats.summary().startswith("Scanned 2 emails (0 read before, 2 sent to Claude) · 2 new: 2 invitations. Date saved: ")
 
 
 def test_an_interview_that_is_put_off_gets_its_new_date(isolate_data, monkeypatch):
@@ -313,24 +313,24 @@ def test_an_interview_that_is_put_off_gets_its_new_date(isolate_data, monkeypatc
     replies = [{"is_response": True, "stage": "other", "company": "Brightline Robotics", "role": "", "summary": "The interview was canceled.", "when": ""},
                {"is_response": True, "stage": "interview", "company": "Brightline Robotics", "role": "", "summary": "Scheduled.", "when": f"{later} 13:30",
                 "next_step": "Attend the Google Meet interview."}]
-    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: mails)
+    monkeypatch.setattr(email_client, "fetch_recent", lambda days=None: email_client.Fetched(mails))
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: replies.pop(0))
     jobs = _brightline()
     by = {j["id"]: j for j in jobs}
     by["ml"]["status"] = "interview"
     assert a5._save_date(by["ml"], {"when": f"{first} 11:30"}, "interview") != ""          # the first invitation's date, from an email
     stats = a5.process_inbox(jobs)
-    assert by["ml"]["status"] == "interview" and stats.get("rejections", 0) == 0
+    assert by["ml"]["status"] == "interview" and stats.rejections == 0
     assert by["ml"]["event"]["date"] == later and by["ml"]["event"]["time"] == "13:30"
-    assert len(stats["dates"]) == 1
+    assert len(stats.dates) == 1
 
 
 def test_reply_notification_wording():
     from jobhelper import agent5_responses as a5
-    assert a5.replies_text({"new_responses": 0}) == "No new replies."
-    assert a5.replies_text({"scanned": 12, "new_responses": 3, "rejections": 1, "invites": ["A", "A"]}) == "3 new replies: 2 invitations, 1 rejection."
-    assert a5.replies_text({"scanned": 4, "new_responses": 1, "rejections": 1, "invites": []}) == "1 new reply: 1 rejection."
-    assert a5.replies_text({"scanned": 4, "new_responses": 2, "rejections": 0, "invites": []}) == "2 new replies."
+    assert a5.ScanStats().replies() == "No new replies."
+    assert a5.ScanStats(scanned=12, new_responses=3, rejections=1, invites=["A", "A"]).replies() == "3 new replies: 2 invitations, 1 rejection."
+    assert a5.ScanStats(scanned=4, new_responses=1, rejections=1).replies() == "1 new reply: 1 rejection."
+    assert a5.ScanStats(scanned=4, new_responses=2).replies() == "2 new replies."
 
 
 def test_trying_a_mailbox_tells_refused_from_unreachable(monkeypatch):
@@ -413,11 +413,11 @@ def test_an_answer_of_the_wrong_shape_is_still_filed(isolate_data, monkeypatch):
                         ("reinterview", "other")):
         assert agent5_responses.tidy({"stage": said})["stage"] == stage
     jobs = [store.new_job(id="a", company="Acme", title="Dev", status="waiting")]
-    monkeypatch.setattr(email_client, "fetch_recent", lambda *a, **k: [
-        {"msg_id": "<odd@acme>", "date": "Mon, 05 Oct 2026 10:00:00 +0200", "sender": "hr@acme.com", "subject": "Your application", "body": "About your application."}])
+    monkeypatch.setattr(email_client, "fetch_recent", lambda *a, **k: email_client.Fetched([
+        {"msg_id": "<odd@acme>", "date": "Mon, 05 Oct 2026 10:00:00 +0200", "sender": "hr@acme.com", "subject": "Your application", "body": "About your application."}]))
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: dict(odd))
     stats = agent5_responses.process_inbox(jobs)
-    assert stats["new_responses"] == 1 and stats["rejections"] == 1 and jobs[0]["status"] == "rejected"
+    assert stats.new_responses == 1 and stats.rejections == 1 and jobs[0]["status"] == "rejected"
     assert db.all_responses()[0]["stage"] == "rejection" and db.all_responses()[0]["summary"] == ""
 
 
@@ -434,10 +434,10 @@ def test_a_status_you_set_yourself_is_not_undone_by_an_older_email(isolate_data)
     assert agent5_responses.set_by_hand_since(job, "Mon, 05 Oct 2026 10:00:00 +0200") and not agent5_responses.set_by_hand_since(job, "Fri, 09 Oct 2026 08:00:00 +0200")
     assert not agent5_responses.set_by_hand_since({"status_by_hand": "soon"}, "Mon, 05 Oct 2026 10:00:00 +0200") and not agent5_responses.set_by_hand_since({}, "")
     # news that is newer than your change counts, like any news
-    stats = {"new_responses": 0, "status_updates": 0, "rejections": 0, "invites": []}
+    stats = agent5_responses.ScanStats()
     late = {"msg_id": "<r2@acme>", "date": "Fri, 09 Oct 2026 08:00:00 +0200", "sender": "hr@acme.com", "subject": "Your application", "body": "We chose another candidate."}
     agent5_responses._file_reply(late, {"is_response": True, "stage": "rejection", "company": "Acme"}, job, stats)
-    assert job["status"] == "rejected" and stats["status_updates"] == 1
+    assert job["status"] == "rejected" and stats.status_updates == 1
     # an old email read only now (a first scan that looks months back) does not change what you set since
     held = store.new_job(id="b", company="Borg", title="QA", status="offer")
     held["status_by_hand"] = datetime.now().isoformat(timespec="seconds")
@@ -535,7 +535,7 @@ def test_only_a_known_column_can_be_counted(isolate_data):
 
 def test_every_scan_ends_the_same_way_and_says_it_the_same_way(monkeypatch):
     """The window, `status.py sync` and the weekly run each repeated the steps after reading mail and the choice of
-    notification; now agent5_responses.after_scan and scan_notice own them."""
+    notification; now agent5_responses.after_scan and ScanStats.notice own them."""
     from pathlib import Path
     from jobhelper import agent2_search, agent5_responses as a5
     done = []
@@ -543,12 +543,12 @@ def test_every_scan_ends_the_same_way_and_says_it_the_same_way(monkeypatch):
     monkeypatch.setattr(a5, "annotate_progress", lambda jobs: done.append("steps"))
     monkeypatch.setattr(agent2_search, "prune_applied_leads", lambda jobs: done.append("leads") or ["x"])
     assert a5.after_scan([]) == ["x"] and done == ["roles", "steps", "leads"]
-    assert a5.scan_notice({"invites": ["Acme"], "new_responses": 1})[1:] == ("Interview invitation", True)
-    assert a5.scan_notice({"new_responses": 0}) == ("No new replies.", "Email scan finished", False)
+    assert a5.ScanStats(invites=["Acme"], new_responses=1).notice()[1:] == ("Interview invitation", True)
+    assert a5.ScanStats().notice() == ("No new replies.", "Email scan finished", False)
     root = Path(a5.__file__).resolve().parent.parent
     for path in (root / "status.py", root / "jobhelper" / "bridge_runs.py"):
         text = path.read_text(encoding="utf-8")
-        assert "after_scan(jobs)" in text and "scan_notice(stats)" in text and "backfill_roles" not in text, path.name
+        assert "after_scan(jobs)" in text and "stats.notice()" in text and "backfill_roles" not in text, path.name
 
 
 def test_the_days_of_a_scan_and_of_a_follow_up_are_read_in_one_place(isolate_data):
