@@ -197,6 +197,9 @@ data/                your data; only the *.example.* files are in git
   measured on the real postings before a change ships: nothing that scored 30 or more may be
   skipped. A word that an ordinary posting uses ("research", "architect", "compliance") does
   not belong in them.
+- **A form's limits and its "[to fill in]" rule are `form_answers`'s** (`MAX_QUESTION`, `MAX_ANSWER`, `unfilled`): the
+  assistant and the answer memory ask it. A phone code is chosen only by `form_fill.code_option`, and a date of
+  My details ("03/2023") is read only by `form_fill.RowDate`, whatever kind of field or menu the page has.
 - **Two company names are one company only through `email_client.same_company`.** Never compare
   by "any shared word": "Accenture Czech Republic" and "PwC Czech Republic" share one. A legal form
   ("spol. s r.o.", "Corp", "LLC", "Limited") is never a word of the name: `email_client.LEGAL_WORDS`

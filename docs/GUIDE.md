@@ -1241,7 +1241,7 @@ Table 9.4 shows what happens to each kind of field.
 | Kind of field | What the assistant does |
 |---|---|
 | Name, email, phone, address, links | Writes them from **My details**. A phone field too short for the spaces gets the number without them |
-| A phone number with a list of country codes beside it | Chooses the code of your number in the list and writes the number without the code. When the list already shows another country, it leaves the list as it is, writes the whole number and marks both for checking |
+| A phone number with a list of country codes beside it | Chooses the code of your number in the list and writes the number without the code. When two countries have the same code, such as +1, it chooses the country in **My details**. When the list already shows another country, it leaves the list as it is, writes the whole number and marks both for checking |
 | File fields the page keeps behind its own **Select file** buttons | Cannot be reached. The assistant says so once; press the page's button and choose each file yourself |
 | Employer, job title, school, degree, field of study | Writes them from your lists of jobs and degrees, row by row |
 | A salary question | Writes the figure with its currency from **My details** |
