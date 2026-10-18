@@ -170,6 +170,24 @@ def isolate_data(tmp_path, monkeypatch):
     return tmp_path
 
 
+@pytest.fixture(scope="module")
+def ui(qapp, tmp_path_factory):
+    """The real window, loaded offscreen on a temporary data folder: one for each test file that asks for it, so the
+    window test files can run side by side (see tests/window_harness.py)."""
+    from tests.window_harness import loaded_window
+    with loaded_window(tmp_path_factory) as handle:
+        yield handle
+
+
+@pytest.fixture(autouse=True)
+def _windows_closed_after(request):
+    """A window test leaves no window open, no review queue and no pretend run for the next one."""
+    yield
+    if "ui" in request.fixturenames:
+        from tests.window_harness import close_left_windows
+        close_left_windows(request.getfixturevalue("ui"))
+
+
 @pytest.fixture(scope="session")
 def qapp():
     """One offscreen Qt application for the whole test session (UI tests)."""

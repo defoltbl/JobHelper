@@ -16,9 +16,6 @@ from PySide6.QtQuick import QQuickWindow
 
 from jobhelper import api_core, agent1_cv, agent2_search, config, db, llm, store, ui_api
 from tests.conftest import ROOT
-from tests import test_ui_qml
-
-ui = test_ui_qml.ui            # the fixture that loads the window on a temporary data folder
 
 OUT = ROOT / "docs" / "img"
 TODAY = date.today()

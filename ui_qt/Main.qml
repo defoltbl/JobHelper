@@ -300,7 +300,7 @@ ApplicationWindow {
 
     // ── palette ──
     // Both sets of values are chosen so that small text reads against its surfaces (contrast 4.5:1 or more
-    // for ink, soft, faint, good, warn and crit, and for a label on the accent); see tests/test_ui_qml.py.
+    // for ink, soft, faint, good, warn and crit, and for a label on the accent); see tests/test_window_scores.py.
     QtObject {
         id: theme
         property color winbg: win.dark ? "#121922" : "#f3f6f9"
