@@ -562,8 +562,8 @@ class TalkService:
 
     def assistant_browser(self):
         key = self.browser()
-        return {"key": key, "name": chrome.name(key), "short": chrome.short(key), "switch": chrome.BROWSERS[key][2],
-                "all": [{"key": k, "name": v[0]} for k, v in chrome.BROWSERS.items()]
+        return {"key": key, "name": chrome.name(key), "short": chrome.short(key), "switch": chrome.browser(key).switch,
+                "all": [{"key": b.key, "name": b.app} for b in chrome.BROWSERS.values()]
                        + [{"key": k, "name": f"{v[0]} (not possible)"} for k, v in chrome.NOT_POSSIBLE.items()]}
 
     def assistant_set_browser(self, key):
@@ -571,7 +571,7 @@ class TalkService:
         if key in chrome.NOT_POSSIBLE:
             return {"ok": False, "msg": chrome.NOT_POSSIBLE[key][1], **self.assistant_browser()}
         if key not in chrome.BROWSERS:
-            return {"ok": False, "msg": "Choose one of: " + ", ".join(v[0] for v in chrome.BROWSERS.values()) + "."}
+            return {"ok": False, "msg": "Choose one of: " + ", ".join(b.app for b in chrome.BROWSERS.values()) + "."}
         saved = self._app.save_options({"assistant_browser": key})
         self._noticed = set()
         return {"ok": bool(saved.get("ok")), "msg": saved.get("msg", ""), **self.assistant_browser()}
