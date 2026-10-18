@@ -101,7 +101,7 @@ def test_the_search_the_weekly_run_the_options_and_the_window_use_one_choice(iso
     from pathlib import Path
     from jobhelper import ui_api, vault
     root = Path(__file__).resolve().parent.parent
-    assert "source=job_sources.SourceChoice.from_options(o)" in (root / "jobhelper" / "bridge_runs.py").read_text(encoding="utf-8")
+    assert "settings.run(queries, job_sources.SourceChoice.from_options(o)" in (root / "jobhelper" / "bridge_runs.py").read_text(encoding="utf-8")
     assert "job_sources.SourceChoice.from_options(" in (root / "run.py").read_text(encoding="utf-8")
     assert "optsData.source_names" in (root / "ui_qt" / "NavPanel.qml").read_text(encoding="utf-8")
     assert "bridge.sourceKinds()" in (root / "ui_qt" / "OptionsDialog.qml").read_text(encoding="utf-8")

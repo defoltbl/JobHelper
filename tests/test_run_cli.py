@@ -113,3 +113,33 @@ def test_a_command_line_run_updates_the_last_run_card(cli):
 def test_typed_sources_are_read_as_before(cli, typed, kinds):
     seen = cli(*typed, settings={"where": "Brno", "sources": ["linkedin"]})
     assert [s["source"].kinds for s in seen["searches"]] == [kinds]
+
+
+def test_the_weekly_run_searches_with_the_same_settings_as_the_window(cli):
+    """run.py read the raw saved Options and the window the Options with their defaults: now both make one
+    agent2_search.SearchSettings from the Options, so a skip word or a level left at its default counts alike."""
+    from jobhelper import filters, ui_api
+    seen = cli("--where", "Brno")
+    [first] = seen["searches"]
+    expected = agent2_search.SearchSettings.from_options({**ui_api.Api().options(), "where": "Brno"}, "junior")
+    assert first["skip_words"] == list(expected.skip_words) == ["intern", "internship"]
+    assert first["level_words"] == filters.default_level_words("junior") and first["max_years"] == filters.default_max_years("junior")
+
+
+def test_search_settings_read_the_options_once_and_keep_none_as_decide_from_the_cv():
+    s = agent2_search.SearchSettings.from_options({"where": "Prague", "all_languages": True, "skip_words": ["intern"],
+                                                    "max_years": 0, "per_query": "7"}, "mid")
+    assert (s.where, s.english_only, s.skip_words, s.max_years, s.per_query, s.seniority) == ("Prague", False, ("intern",), 0, 7, "mid")
+    assert s.level_words is None and agent2_search.SearchSettings.from_options({}).max_years is None
+
+
+def test_take_in_adds_a_search_the_same_way_every_time(isolate_data, monkeypatch):
+    monkeypatch.setattr(agent2_search, "reread_missing", lambda jobs, **k: {"removed": 0})
+    monkeypatch.setattr(agent2_search, "check_closed", lambda jobs, **k: {"removed": 1, "marked": 0})
+    jobs = [store.new_job(id="old", title="Data Analyst", company="Kestrel", status="waiting")]
+    found = [store.new_job(id="again", title="Data Analyst", company="Kestrel"), store.new_job(id="new", title="QA Tester", company="Orbis")]
+    dropped: list = []
+    took = agent2_search.take_in(jobs, found, dropped=dropped)
+    assert took == {"found": 1, "added": 1, "skipped": 0, "known": 1, "closed": 1}
+    assert [j["id"] for j in jobs] == ["old", "new"] and dropped[0]["group"] == "already applied"
+    assert agent2_search.load_dropped()["total"] == 1                                         # the Filtered out list is saved

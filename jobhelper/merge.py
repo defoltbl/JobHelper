@@ -99,8 +99,7 @@ def merge(jobs: list[dict[str, Any]], keep_id: str, drop_id: str) -> bool:
     if drop.get("tailored_cv_file") and not keep.get("tailored_cv_file"):
         keep["tailored_cv_file"] = drop["tailored_cv_file"]
     # the earliest real apply date
-    dates = [j["date_applied"] for j in (keep, drop) if j.get("date_applied")
-             and not (j.get("source") == "manual" and j["date_applied"] == j.get("date_found"))]
+    dates = [j["date_applied"] for j in (keep, drop) if j.get("date_applied") and not store.applied_on_import(j)]
     if dates:
         if min(dates) != keep.get("date_applied"):
             keep["date_applied"] = min(dates)

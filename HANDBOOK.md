@@ -201,7 +201,11 @@ data/                your data; only the *.example.* files are in git
   assistant and the answer memory ask it. A phone code is chosen only by `form_fill.code_option`, and a date of
   My details ("03/2023") is read only by `form_fill.RowDate`, whatever kind of field or menu the page has.
 - **Two company names are one company only through `email_client.same_company`.** Never compare
-  by "any shared word": "Accenture Czech Republic" and "PwC Czech Republic" share one.
+  by "any shared word": "Accenture Czech Republic" and "PwC Czech Republic" share one. A legal form
+  ("spol. s r.o.", "Corp", "LLC", "Limited") is never a word of the name: `email_client.LEGAL_WORDS`
+  is the one list, for the company key and for the name words.
+- **A reply moves an application only through `email_client.status_after`**: forward only, a rejection
+  from any status. The scan, the progress check and filing a reply by hand all ask it.
 - **Every call to Claude goes through `llm.ask`,** which refuses while `ANTHROPIC_API_KEY` is set.
   Do not add a second way to ask.
 - **A CV's sections are found by their headings, whatever they are called** (`cv_tailor.sections`):
@@ -209,6 +213,11 @@ data/                your data; only the *.example.* files are in git
 - **Caches that outlive one search** are wrong in an app that stays open for days: each
   `job_sources.JobSource` forgets what it read in `reset()`, which `agent2_search.search` calls first.
   A new board is a new `JobSource` in `job_sources.all_sources()`; the search itself does not change.
+- **A new search filter is one `Sift` in `agent2_search.SearchFilters.sifts()`**, in its place in the order. The
+  duplicate check stays last (`apply`): it keeps one copy only after every filter that can drop a copy has run.
+  The country of a search is `filters.Placement.home`: never work it out again from the city or Options.
+  The window and `run.py` (the weekly run) make the search with `SearchSettings.from_options` and add its
+  postings with `take_in`: a new setting or step goes there once, not into each of them.
 - **The folder `backups/below_your_limit`** holds documents that can be put back. The automatic
   clean-up of old backups must never count it as a backup.
 

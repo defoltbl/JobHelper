@@ -233,3 +233,29 @@ def test_the_level_words_are_one_list_for_options_and_the_search():
     assert filters.level_word("Junior Project Manager", "junior") == ""           # the title says its level
     assert filters.level_word("Senior Developer", "senior") == ""                   # a senior candidate keeps them
     assert filters.level_word("Vedoucí týmu", "junior") == "vedoucí"
+
+
+def test_the_search_filters_are_one_object_with_its_rules_in_order(isolate_data):
+    """agent2_search.SearchFilters: the rules a search uses follow its settings, and each drop is noted once."""
+    from jobhelper import agent2_search, filters
+    place = filters.Placement("Prague", "")
+    plain = agent2_search.SearchFilters(place, "junior", english_only=False, full_time_only=False)
+    assert [s.group for s in plain.sifts()] == ["closed", "other country", "other country", "too many years", "level"]
+    every = agent2_search.SearchFilters(place, "junior", skip_words=["intern"], max_age_days=7)
+    assert [s.group for s in every.sifts()][-4:] == ["part-time", "level", agent2_search.LANGUAGE_GROUP, "too old"]
+    jobs = [{"id": "a", "title": "Python Developer", "company": "Kestrel", "location": "Prague", "description": "We build tools.", "source": "linkedin"},
+            {"id": "b", "title": "Python Intern", "company": "Kestrel", "location": "Prague", "description": "We build tools.", "source": "linkedin"},
+            {"id": "c", "title": "Senior Python Developer", "company": "Orbis", "location": "Prague", "description": "We build tools.", "source": "linkedin"}]
+    dropped: list = []
+    kept = every.apply(jobs, dropped)
+    assert [j["id"] for j in kept] == ["a"]
+    assert [(d["job"]["id"], d["group"]) for d in dropped] == [("b", "skip word"), ("c", "level")]
+
+
+def test_the_country_of_a_search_is_one_rule():
+    """Options' Country when the app knows it, else the city's: the sources, the place checks and the assistant ask Placement."""
+    from jobhelper import filters
+    assert filters.Placement("Prague", "").home == "czechia"
+    assert filters.Placement("Prague", "Germany").home == "germany"
+    assert filters.Placement("Prague", "Atlantis").home == "czechia"        # a Country the app does not know: the city's
+    assert filters.Placement("Nowhere", "").home == ""

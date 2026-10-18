@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from . import config, details, form_fill, llm, places
+from . import config, details, filters, form_fill, llm, places
 
 MAX_CHOICES = 12
 CHECK = "Chosen for you: check it."
@@ -127,8 +127,8 @@ def another_country(label: str, mine: dict[str, Any]) -> str:
     another one, so such a question is never answered for you. (A form for a job in Prague asked about the United Kingdom.)"""
     if not _PERMIT.search(str(label or "")):
         return ""
-    home = places.country_of(str(mine.get("country") or "")) or places.country_of(config.search_country()) \
-        or places.country_of(str(config.ui_settings().get("where") or ""))
+    home = places.country_of(str(mine.get("country") or "")) \
+        or filters.Placement(str(config.ui_settings().get("where") or ""), config.search_country()).home
     named = places.named_countries(str(label))
     return sorted(named)[0].title() if home and named and home not in named else ""
 

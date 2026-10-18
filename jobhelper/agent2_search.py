@@ -15,11 +15,12 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Callable
 
 import requests
 
-from . import config, email_client, filters, job_sources, language, places, salary, scrapers_intl, store, textfmt
+from . import config, email_client, filters, job_sources, language, salary, scrapers_intl, store, textfmt
 
 _clean = textfmt.strip_tags          # text from a board, without its HTML
 
@@ -399,6 +400,185 @@ def load_dropped() -> dict[str, Any]:
 
 
 
+def _collect(sources: list, queries: list[str], where: str, per_query: int, progress=None) -> list[dict[str, Any]]:
+    """Every posting the sources find for the queries, once each (the first source to find it keeps it).
+    A source that fails is noted and the others go on."""
+    found: dict[str, dict[str, Any]] = {}
+    steps, step = len(sources) * len(queries), 0
+    for src in sources:
+        name, got = src.name, 0
+        for q in queries:
+            if progress:
+                progress(step, steps)
+            step += 1
+            try:
+                for job in src.find(q, where, per_query):
+                    if job["id"] and job["id"] not in found:
+                        job["query"] = q            # which keyword found it (for the Insights view)
+                        found[job["id"]] = job
+                        got += 1
+            except requests.HTTPError as e:
+                print(f"  ! {name} error for '{q}': {safe_error(e)}")
+            except requests.RequestException as e:
+                print(f"  ! {name} network error for '{q}': {safe_error(e)}")
+            except Exception as e:  # noqa: BLE001 - a board that changed its pages must not end the whole search
+                from . import trouble
+                trouble.note(f"reading {name} for a search", RuntimeError(safe_error(f"{type(e).__name__}: {e}")))
+                print(f"  ! {name} could not be read for '{q}' ({type(e).__name__}); the other sources go on")
+        print(f"  · {name}: +{got} new listings")
+    return list(found.values())
+
+
+@dataclass(frozen=True)
+class Sift:
+    """One rule a posting must pass: its group in the Filtered out list, the words for the run's log, and
+    `reason`, which says why a posting fails ('' = it passes)."""
+    group: str
+    label: str
+    reason: Callable[[dict[str, Any]], str]
+
+
+class SearchFilters:
+    """The rules one search's postings pass, made once from its settings and applied in order. Each posting that a
+    rule drops is noted with its reason. The duplicate check comes last, so that a copy is dropped as a duplicate
+    only when another copy is kept: the copies of one role can differ in language or date, and a filter must not
+    remove the one that was kept and hide the other."""
+
+    def __init__(self, placement: filters.Placement, candidate_seniority: str = "junior", english_only: bool = True,
+                 max_age_days: int = 0, full_time_only: bool = True, skip_words=(), keep_words=(),
+                 level_words=None, max_years: int | None = None) -> None:
+        self.placement = placement
+        self.seniority = candidate_seniority
+        self.english_only, self.full_time_only = english_only, full_time_only
+        self.max_age_days = max_age_days if max_age_days and max_age_days > 0 else 0
+        self.skip_words, self.keep_words = list(skip_words or ()), list(keep_words or ())
+        self.level_words, self.max_years = level_words, max_years
+
+    def sifts(self) -> list[Sift]:
+        """The rules this search uses, in the order they run."""
+        out = [Sift("closed", "closed / no-longer-accepting postings", self._closed),
+               Sift("other country", "jobs located in the United States", self._in_the_us),
+               Sift("other country", "jobs in other countries, and remote jobs not open to yours", self._elsewhere),
+               Sift("too many years", "roles asking for many years of experience", self._years)]
+        if self.skip_words:
+            out.append(Sift("skip word", f"roles with a word you skip ({', '.join(self.skip_words)})", self._skip_word))
+        if self.full_time_only:
+            out.append(Sift("part-time", "part-time roles", self._part_time))
+        out.append(Sift("level", f"roles above your level (candidate: {self.seniority})", self._level))
+        # With "English only" on: roles that need another language, and ads not written in English.
+        # (Someone who speaks Czech turns "English only" off and keeps them.)
+        if self.english_only:
+            out.append(Sift(LANGUAGE_GROUP, "roles that need another language, and ads not written in English", language_reason))
+        if self.max_age_days:
+            out.append(Sift("too old", f"jobs older than {self.max_age_days} days", self._too_old))
+        return out
+
+    def apply(self, jobs: list[dict[str, Any]], dropped: list | None = None) -> list[dict[str, Any]]:
+        """The postings every rule keeps, without duplicates; each one dropped goes to `dropped` with its reason."""
+        for sift in self.sifts():
+            kept = []
+            for job in jobs:
+                reason = sift.reason(job)
+                if reason:
+                    note_dropped(dropped, job, sift.group, reason)
+                else:
+                    kept.append(job)
+            if len(kept) < len(jobs):
+                print(f"  · filtered out {len(jobs) - len(kept)} {sift.label}")
+            jobs = kept
+        removed = prune_duplicate_leads(jobs)       # the same role posted twice (jobs.cz + prace.cz, or a LinkedIn repost)
+        for job in removed:
+            note_dropped(dropped, job, "duplicate", "The same role is already listed from another board.")
+        if removed:
+            print(f"  · filtered out {len(removed)} duplicate postings")
+        return jobs
+
+    # ── the reasons ─────────────────────────────────────────────────────────
+    @staticmethod
+    def _closed(job: dict[str, Any]) -> str:
+        return CLOSED_REASON if filters.is_closed(f"{job.get('title', '')} {job.get('description', '')}") else ""
+
+    def _in_the_us(self, job: dict[str, Any]) -> str:
+        return self.placement.us_reason(job.get("location", ""), job_sources.is_remote_board(job.get("source", "")))
+
+    def _elsewhere(self, job: dict[str, Any]) -> str:
+        return self.placement.place_reason(job.get("location", ""), job.get("source", ""),
+                                           job_sources.is_remote_board(job.get("source", "")))
+
+    def _years(self, job: dict[str, Any]) -> str:
+        if not filters.needs_too_many_years(job.get("description", ""), self.seniority, self.max_years):
+            return ""
+        return f"Asks for {filters.years_required(job.get('description', ''))}+ years of experience."
+
+    def _skip_word(self, job: dict[str, Any]) -> str:
+        word = filters.skipped_word(job["title"], self.skip_words, self.keep_words)
+        return f'The title has a word you skip ("{word}").' if word else ""
+
+    @staticmethod
+    def _part_time(job: dict[str, Any]) -> str:
+        return "Part-time, and you search for full-time only." if filters.is_part_time(job["title"], job.get("description", "")) else ""
+
+    def _level(self, job: dict[str, Any]) -> str:
+        word = filters.level_word(job["title"], self.seniority, self.level_words)
+        return f'The title has a level you skip ("{word}").' if word else ""
+
+    def _too_old(self, job: dict[str, Any]) -> str:
+        return "" if _is_recent(job, self.max_age_days) else f"Posted more than {self.max_age_days} days ago."
+
+
+@dataclass(frozen=True)
+class SearchSettings:
+    """How one search is run, from the Options: the city, how many results per keyword, and what the filters skip.
+    The window and the command line (the weekly run) make it the same way, so both search alike."""
+    where: str
+    per_query: int = 15
+    english_only: bool = True
+    seniority: str = "junior"
+    max_age_days: int = 0
+    full_time_only: bool = True
+    skip_words: tuple[str, ...] = ()
+    keep_words: tuple[str, ...] = ()
+    level_words: tuple[str, ...] | None = None      # None: decide from the level in the CV
+    max_years: int | None = None                    # None: the usual limit for that level; 0: never
+
+    @classmethod
+    def from_options(cls, options: dict[str, Any], seniority: str = "junior") -> "SearchSettings":
+        """From the Options as `ui_api.Api().options()` gives them (saved values over the defaults)."""
+        o = options or {}
+        level = o.get("level_words")
+        return cls(where=str(o.get("where") or ""), per_query=int(o.get("per_query") or 15),
+                   english_only=not o.get("all_languages"), seniority=seniority or "junior",
+                   max_age_days=int(o.get("max_age_days") or 0), full_time_only=o.get("full_time_only", True) is not False,
+                   skip_words=tuple(o.get("skip_words") or ()), keep_words=tuple(o.get("keep_words") or ()),
+                   level_words=tuple(level) if isinstance(level, (list, tuple)) else None,
+                   max_years=None if o.get("max_years") is None else int(o["max_years"]))
+
+    def run(self, queries: list[str], source, dropped: list | None = None, progress=None) -> list[dict[str, Any]]:
+        """The search itself (see `search`)."""
+        return search(queries, where=self.where, per_query=self.per_query, source=source, english_only=self.english_only,
+                      candidate_seniority=self.seniority, max_age_days=self.max_age_days, progress=progress,
+                      full_time_only=self.full_time_only, skip_words=list(self.skip_words), keep_words=list(self.keep_words),
+                      dropped=dropped, level_words=None if self.level_words is None else list(self.level_words),
+                      max_years=self.max_years)
+
+
+def take_in(jobs: list[dict[str, Any]], found: list[dict[str, Any]], english_only: bool = True,
+            dropped: list | None = None) -> dict[str, int]:
+    """Add what a search found to the job list, the same way after every search: roles you already applied to are
+    left out, a role already listed from another board is kept once, an empty posting is read once more, and
+    postings that stopped taking applications are noted. The Filtered out list is saved. Mutates `jobs`.
+    Returns {found, added, skipped, known, closed}."""
+    dropped = dropped if dropped is not None else []
+    found, known = drop_known_applications(found, jobs, dropped=dropped)
+    added, skipped = store.upsert(jobs, found)
+    added -= len(prune_duplicate_leads(jobs))                       # same role already listed from another board
+    added -= reread_missing(jobs, english_only=english_only, dropped=dropped)["removed"]
+    closed = check_closed(jobs, dropped=dropped)                    # postings that stopped accepting applications
+    save_dropped(dropped)
+    return {"found": len(found), "added": added, "skipped": skipped, "known": known,
+            "closed": closed["removed"] + closed["marked"]}
+
+
 def search(
     queries: list[str],
     where: str = "",
@@ -430,9 +610,9 @@ def search(
     """
     if not str(where or "").strip():
         raise RuntimeError("No city to search in. Choose one in the app's Options.")
-    country = places.country_of(config.search_country() or where)       # Options' Country, else the city's
-    sources = job_sources.sources_for(source, max_age_days=max_age_days, country=country)
-    for names, served in job_sources.left_out(source, country):
+    placement = filters.Placement.for_search(where)                  # where this search is, read from Options once
+    sources = job_sources.sources_for(source, max_age_days=max_age_days, country=placement.home)
+    for names, served in job_sources.left_out(source, placement.home):
         print(f"  · {' and '.join(names)}: only for places in {' and '.join(c.title() for c in served)}, so not used for {where}")
     # What a source read is remembered while one search asks its roles, not from one search to the next:
     # the app can stay open for days.
@@ -446,94 +626,12 @@ def search(
             "  • jooble → set JOOBLE_API_KEY"
         )
 
-    found: dict[str, dict[str, Any]] = {}
-    steps, step = len(sources) * len(queries), 0
-    for src in sources:
-        name, got = src.name, 0
-        for q in queries:
-            if progress:
-                progress(step, steps)
-            step += 1
-            try:
-                for job in src.find(q, where, per_query):
-                    if job["id"] and job["id"] not in found:
-                        job["query"] = q            # which keyword found it (for the Insights view)
-                        found[job["id"]] = job
-                        got += 1
-            except requests.HTTPError as e:
-                print(f"  ! {name} error for '{q}': {safe_error(e)}")
-            except requests.RequestException as e:
-                print(f"  ! {name} network error for '{q}': {safe_error(e)}")
-            except Exception as e:  # noqa: BLE001 - a board that changed its pages must not end the whole search
-                from . import trouble
-                trouble.note(f"reading {name} for a search", RuntimeError(safe_error(f"{type(e).__name__}: {e}")))
-                print(f"  ! {name} could not be read for '{q}' ({type(e).__name__}); the other sources go on")
-        print(f"  · {name}: +{got} new listings")
-
-    results = list(found.values())
+    results = _collect(sources, queries, where, per_query, progress)
     for job in results:
         fill_company(job)
-
-    def sift(group: str, why, label: str) -> None:
-        """Keep the postings `why` has nothing against; note the others with the reason."""
-        nonlocal results
-        kept, n = [], 0
-        for job in results:
-            reason = why(job)
-            if reason:
-                n += 1
-                note_dropped(dropped, job, group, reason)
-            else:
-                kept.append(job)
-        results = kept
-        if n:
-            print(f"  · filtered out {n} {label}")
-
-    sift("closed", lambda j: CLOSED_REASON
-         if filters.is_closed(f"{j.get('title','')} {j.get('description','')}") else "",
-         "closed / no-longer-accepting postings")
-    # Where this search is and which remote jobs fit it: read from Options once (filters.Placement).
-    placement = filters.Placement.for_search(where)
-
-    def remote_board(j) -> bool:
-        return job_sources.is_remote_board(j.get("source", ""))
-
-    sift("other country", lambda j: placement.us_reason(j.get("location", ""), remote_board(j)), "jobs located in the United States")
-    sift("other country", lambda j: placement.place_reason(j.get("location", ""), j.get("source", ""), remote_board(j)),
-         "jobs in other countries, and remote jobs not open to yours")
-    sift("too many years", lambda j: f"Asks for {filters.years_required(j.get('description', ''))}+ years of experience."
-         if filters.needs_too_many_years(j.get("description", ""), candidate_seniority, max_years) else "",
-         "roles asking for many years of experience")
-    if skip_words:
-        def skip_reason(j):
-            word = filters.skipped_word(j["title"], skip_words, keep_words)
-            return f'The title has a word you skip ("{word}").' if word else ""
-        sift("skip word", skip_reason, f"roles with a word you skip ({', '.join(skip_words)})")
-    if full_time_only:
-        sift("part-time", lambda j: "Part-time, and you search for full-time only."
-             if filters.is_part_time(j["title"], j.get("description", "")) else "", "part-time roles")
-
-    # Roles above the candidate's level (junior/mid only).
-    def level_reason(j):
-        word = filters.level_word(j["title"], candidate_seniority, level_words)
-        return f'The title has a level you skip ("{word}").' if word else ""
-    sift("level", level_reason, f"roles above your level (candidate: {candidate_seniority})")
-    # With "English only" on: roles that need another language, and ads not written in English.
-    # (Someone who speaks Czech turns "English only" off and keeps them.)
-    if english_only:
-        sift(LANGUAGE_GROUP, language_reason, "roles that need another language, and ads not written in English")
-    if max_age_days and max_age_days > 0:
-        sift("too old", lambda j: "" if _is_recent(j, max_age_days) else f"Posted more than {max_age_days} days ago.",
-             f"jobs older than {max_age_days} days")
-
-    # The same role posted twice (jobs.cz + prace.cz, or a LinkedIn repost). Last, so that a copy is
-    # dropped as a duplicate only when another copy is kept: the copies of one role can differ in
-    # language or date, and a filter must not remove the one that was kept and hide the other.
-    removed = prune_duplicate_leads(results)
-    for job in removed:
-        note_dropped(dropped, job, "duplicate", "The same role is already listed from another board.")
-    if removed:
-        print(f"  · filtered out {len(removed)} duplicate postings")
+    results = SearchFilters(placement, candidate_seniority, english_only=english_only, max_age_days=max_age_days,
+                            full_time_only=full_time_only, skip_words=skip_words, keep_words=keep_words,
+                            level_words=level_words, max_years=max_years).apply(results, dropped)
 
     # Add a Prague market-rate desired-salary estimate to each listing.
     for job in results:

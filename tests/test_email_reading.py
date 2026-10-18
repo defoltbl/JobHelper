@@ -238,3 +238,33 @@ def test_marking_applied_in_the_app_is_a_real_date(isolate_data):
     assert job["date_applied"] and "date_applied_source" not in job
     _reply("<1@x>", "x", "Thu, 9 Jul 2026 08:00:00 +0000")
     assert agent5_responses.backfill_apply_dates([job]) == 0                  # never overwritten by an email
+
+
+def test_a_legal_form_never_makes_two_companies_one():
+    """"Alfa spol. s r.o." and "Beta spol. s r.o." shared the word "spol", two "… Corp"s shared "corp": a reply
+    could be filed under the other company's job, and a search could skip a job as already applied for."""
+    from jobhelper.email_client import job_of_company, match_job, norm_company, same_company
+    for a, b in [("Alfa spol. s r.o.", "Beta spol. s r.o."), ("Acme LLC", "Globex LLC"), ("Acme Corp", "Globex Corp"),
+                 ("Acme Corporation", "Globex Corporation"), ("Acme Limited", "Globex Limited"), ("Acme plc", "Globex plc")]:
+        assert not same_company(a, b), (a, b)
+    assert same_company("Alfa spol. s r.o.", "ALFA") and same_company("Acme Corp", "Acme Corporation")
+    assert norm_company("Acme Corp") == norm_company("ACME") == "acme" and norm_company("Limited") == "limited"
+    jobs = [{"id": "1", "company": "Globex Limited", "title": "Analyst", "status": "waiting"}]
+    assert job_of_company("Acme Limited", jobs) is None and job_of_company("GLOBEX", jobs) is jobs[0]
+    # "limited" in the text of an unrelated mail no longer points at "Globex Limited"
+    assert match_job("news@acme.example", "Offer for a limited time", "Only a limited number left.", jobs) is None
+
+
+def test_a_reply_moves_an_application_forward_only_and_a_rejection_from_anywhere():
+    from jobhelper.email_client import status_after
+    assert status_after("waiting", "interview") == "interview" and status_after("found", "acknowledged") == "waiting"
+    assert status_after("interview", "acknowledged") == "" and status_after("interview", "interview") == ""
+    assert status_after("offer", "rejection") == "rejected" and status_after("waiting", "other") == ""
+
+
+def test_the_import_day_is_not_an_apply_date_for_any_rule():
+    from jobhelper import store
+    imported = {"source": "manual", "date_applied": "2026-10-01", "date_found": "2026-10-01"}
+    assert store.applied_on_import(imported)
+    assert not store.applied_on_import({**imported, "date_applied": "2026-09-20"}) and not store.applied_on_import({**imported, "source": "linkedin"})
+    assert not store.applied_on_import({"source": "manual"})
