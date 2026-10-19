@@ -1890,7 +1890,7 @@ Table 16.1 lists the Search settings.
 | **Kinds of role you want** | Tells the scorer your direction | Roles | Without it, a role in another field that merely accepts your degree could score high |
 | **Kinds of role you do not want** | Skipped when the title names one, scored low otherwise | Roles | To keep a neighbouring field out |
 | **Skip levels above yours** | Level words that drop a posting | Words such as senior, lead | A senior candidate empties this list |
-| **Skip jobs asking for** | Drops postings that ask for this many years or more | 0 to 30; 0 = never | To keep out postings you are not yet eligible for |
+| **Skip jobs asking for** | Drops postings that ask for this many years or more | 0 to 60; 0 = never | To keep out postings you are not yet eligible for |
 | **Full-time only** | Hides part-time roles | On or off | Turn off if part-time suits you |
 | **English only** | Hides postings written in another language, and roles that require another language at a working level | On or off | Turn off if you also work in the local language. A posting that requires a language your CV does not show is then scored low instead |
 | **Max job age** | Drops postings older than this | Days; 0 = any date | Old postings are often already filled |
@@ -1960,7 +1960,7 @@ Table 16.2 lists the Matching and Follow-up settings.
 |---|---|---|
 | **Write letters above** | The score from which a CV and a letter are written | 0 to 100 |
 | **Hide leads below** | Hides jobs below this score from New Jobs | 0 to 100; 0 = show all |
-| **Remind me after** | Days without a reply before a follow-up is suggested | 0 to 90; 0 = never |
+| **Remind me after** | Days without a reply before a follow-up is suggested | 0 to 365; 0 = never |
 
 > **Tip**
 > Raise **Write letters above** to apply to fewer, better matches. It also uses less of your
@@ -2018,9 +2018,9 @@ Table 16.4 lists the Notifications and storage settings.
 |---|---|---|
 | **Size of text and controls** | Draws everything in the window larger, for a large or very sharp screen. It is used the next time you open the app | 100%, 110%, 125% or 150% |
 | **Notifications** | A macOS notification when a run finishes, pauses on the limit, or an interview invitation arrives. **Test** sends one now and says what macOS did. When macOS has JobHelper's notifications turned off, a red line says so, with **Open System Settings** | On or off |
-| **Keep backups** | How many automatic backups are kept; older ones are removed | 0 to 200; 0 = keep all |
+| **Keep backups** | How many automatic backups are kept; older ones are removed | 0 to 1000; 0 = keep all |
 | **Back up everything** | **Back up now** makes one encrypted backup of everything. **Check backups** proves that a backup can be restored. **Save a readable copy…** puts the newest full backup, not encrypted, into an empty folder you choose | Three buttons |
-| **Moved documents older than** | Moves old copies in the backup to the Trash, after asking | 7 days or more |
+| **Moved documents older than** | Moves old copies in the backup to the Trash, after asking | 7 to 3650 days |
 
 ### Email scan
 
@@ -2036,9 +2036,9 @@ Table 16.5 lists the Email scan settings.
 
 | Setting | What it does | Values |
 |---|---|---|
-| **Scan emails from the last** | How far back an email scan looks. Messages already read are skipped | 1 to 365 days |
+| **Scan emails from the last** | How far back an email scan looks. Messages already read are skipped | 1 to 3650 days |
 | **Also archived mail and spam** | Reads those folders too, not only the Inbox. Never Sent or Drafts | On or off |
-| **Look further back once** | Starts one scan over a longer period now. The setting above stays | 2 to 365 days, then **Scan now** |
+| **Look further back once** | Starts one scan over a longer period now. The setting above stays | 1 to 365 days, then **Scan now** |
 
 ### Model
 

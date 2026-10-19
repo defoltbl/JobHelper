@@ -2,7 +2,7 @@
 import re
 from pathlib import Path
 
-from jobhelper import assistant, config, cover_letter, details, form_answers, mailhosts, planner
+from jobhelper import assistant, config, cover_letter, details, form_answers, housekeeping, mailhosts, planner
 from jobhelper.api_options import OptionsService
 from jobhelper.ui_api import Api
 
@@ -16,6 +16,8 @@ def test_the_limits_come_from_the_module_that_checks_them():
     assert limits["experience_notes"] == config.MAX_EXPERIENCE_NOTES and limits["letter_hint"] == cover_letter.MAX_HINT
     assert limits["options"] == OptionsService.OPTION_TEXTS and limits["list_word"] == OptionsService.MAX_WORD
     assert (limits["company_name"], limits["pay_role"], limits["mail_server"]) == (OptionsService.MAX_COMPANY_NAME, OptionsService.MAX_PAY_ROLE, mailhosts.MAX_HOST)
+    assert limits["numbers"] == {key: list(span) for key, span in OptionsService.OPTION_NUMBERS.items()}
+    assert limits["shelf_days"] == [housekeeping.SHELF_MIN_DAYS, Api().SHELF_MAX_DAYS] and limits["look_back"] == list(config.LOOK_BACK_ONCE)
 
 
 def test_the_rows_of_my_details_come_with_their_data(isolate_data):
@@ -33,3 +35,15 @@ def test_no_dialog_keeps_its_own_copy_of_a_checked_limit():
                        ("DetailDialog.qml", "notesMax: 2000"), ("OptionsDialog.qml", "expMax: 4000"), ("LetterDialog.qml", "hintMax: 300"),
                        ("PrepEditDialog.qml", "maxLines: 12"), ("TagEditor.qml", "length > 40"), ("AssistantDialog.qml", "most: 2000")):
         assert word not in (UI / name).read_text(encoding="utf-8"), (name, word)
+
+
+def test_no_number_box_keeps_its_own_range_and_every_limited_box_says_when_it_is_over():
+    """A saved value above a box's own range was cut to fit when Options opened, and saved lower (max age 120 → 90)."""
+    options = (UI / "OptionsDialog.qml").read_text(encoding="utf-8")
+    spins = re.findall(r"ThemedSpin \{[^\n]*", options)
+    assert len(spins) >= 10 and not [line for line in spins if re.search(r"from: \d+; to: \d+", line)], spins
+    rows = (UI / "RowsEditor.qml").read_text(encoding="utf-8")
+    assert rows.count("TooLong {") == 2, "a single-line cell says it is over, like the text area"
+    assistant_qml = (UI / "AssistantDialog.qml").read_text(encoding="utf-8")
+    assert assistant_qml.count("TooLong {") == 3 and "most: win.limits.question" in assistant_qml
+    assert "characters; the most is" not in rows + assistant_qml, "the sentence is TooLong's alone"

@@ -466,7 +466,7 @@ Dialog {
                             placeholder: "e.g. senior" }
                         Sep {}
                         SRow { label: "Skip jobs asking for"; hint: "years of experience or more · 0 = never"
-                            ThemedSpin { id: yearsSpin; objectName: "yearsSpin"; from: 0; to: 30; value: 4 } }
+                            ThemedSpin { id: yearsSpin; objectName: "yearsSpin"; from: win.limits.numbers.max_years[0]; to: win.limits.numbers.max_years[1]; value: 4 } }
                         Sep {}
                         SRow { label: "Full-time only"; hint: "hide part-time roles"
                             ThemedSwitch { id: fullSw; objectName: "fullSw" } }
@@ -475,10 +475,10 @@ Dialog {
                             ThemedSwitch { id: engSw; objectName: "engSw" } }
                         Sep {}
                         SRow { label: "Max job age"; hint: "in days · 0 = any date"
-                            ThemedSpin { id: ageSpin; from: 0; to: 90; value: 10 } }
+                            ThemedSpin { id: ageSpin; from: win.limits.numbers.max_age_days[0]; to: win.limits.numbers.max_age_days[1]; value: 10 } }
                         Sep {}
                         SRow { label: "Results per query"
-                            ThemedSpin { id: pqSpin; from: 1; to: 100; value: 15 } }
+                            ThemedSpin { id: pqSpin; from: win.limits.numbers.per_query[0]; to: win.limits.numbers.per_query[1]; value: 15 } }
                     }
                 }
 
@@ -544,10 +544,10 @@ Dialog {
                     GroupTitle { text: "Matching" }
                     Card {
                         SRow { label: "Write letters above"; hint: "match score 0–100"
-                            ThemedSpin { id: thrSpin; from: 0; to: 100; value: 50 } }
+                            ThemedSpin { id: thrSpin; from: win.limits.numbers.threshold[0]; to: win.limits.numbers.threshold[1]; value: 50 } }
                         Sep {}
                         SRow { label: "Hide leads below"; hint: "0 = show all leads"
-                            ThemedSpin { id: minSpin; from: 0; to: 100; value: 0 } }
+                            ThemedSpin { id: minSpin; from: win.limits.numbers.min_lead_score[0]; to: win.limits.numbers.min_lead_score[1]; value: 0 } }
                     }
                 }
 
@@ -556,7 +556,7 @@ Dialog {
                     GroupTitle { text: "Follow-up" }
                     Card {
                         SRow { label: "Remind me after"; hint: "days without a reply · 0 = never"
-                            ThemedSpin { id: fuSpin; objectName: "fuSpin"; from: 0; to: 90; value: 10 } }
+                            ThemedSpin { id: fuSpin; objectName: "fuSpin"; from: win.limits.numbers.followup_days[0]; to: win.limits.numbers.followup_days[1]; value: 10 } }
                     }
                 }
 
@@ -602,12 +602,12 @@ Dialog {
                                 onClicked: bridge.openNotificationSettings() } }
                         Sep {}
                         SRow { label: "Keep backups"; hint: "newest ones kept, older deleted · 0 = keep all"
-                            ThemedSpin { id: keepSpin; objectName: "keepSpin"; from: 0; to: 200; value: 10 } }
+                            ThemedSpin { id: keepSpin; objectName: "keepSpin"; from: win.limits.numbers.keep_backups[0]; to: win.limits.numbers.keep_backups[1]; value: 10 } }
                         Sep {}
                         // letters and CVs moved out of the way because their job fell below your limit: only you remove them
                         SRow { label: "Moved documents older than"; hint: "days · moves those copies to the Trash"
                             RowLayout { spacing: 8
-                                ThemedSpin { id: shelfSpin; objectName: "shelfSpin"; from: 7; to: 3650; value: 30
+                                ThemedSpin { id: shelfSpin; objectName: "shelfSpin"; from: win.limits.shelf_days[0]; to: win.limits.shelf_days[1]; value: 30
                                     onValueChanged: { optDialog.confirmTidy = false; optDialog.shelfNote = ""; optDialog.readShelf(); } }
                                 SmallButton { objectName: "tidyShelf"; primaryStyle: optDialog.confirmTidy
                                     enabled: (optDialog.shelf.old || 0) > 0 || optDialog.confirmTidy
@@ -641,7 +641,7 @@ Dialog {
                     GroupTitle { text: "Email scan" }
                     Card {
                         SRow { label: "Scan emails from the last"; hint: "days · emails already read are skipped"
-                            ThemedSpin { id: scanSpin; objectName: "scanSpin"; from: 1; to: 365; value: 30 } }
+                            ThemedSpin { id: scanSpin; objectName: "scanSpin"; from: win.limits.numbers.scan_days[0]; to: win.limits.numbers.scan_days[1]; value: 30 } }
                         Sep {}
                         SRow { label: "Also archived mail and spam"; hint: "not only the Inbox · never Sent or Drafts"
                             ThemedSwitch { id: foldersSw; objectName: "foldersSw" } }
@@ -649,7 +649,7 @@ Dialog {
                         // for once: after adding a mailbox, or when an old reply is missing. The setting above stays.
                         SRow { label: "Look further back once"; hint: "days · one scan now, the setting above stays"
                             RowLayout { spacing: 8
-                                ThemedSpin { id: backSpin; objectName: "backSpin"; from: 2; to: 365; value: 90
+                                ThemedSpin { id: backSpin; objectName: "backSpin"; from: win.limits.look_back[0]; to: win.limits.look_back[1]; value: 90
                                     onValueChanged: optDialog.backNote = "" }
                                 SmallButton { objectName: "backScan"; text: "Scan now"; onClicked: optDialog.scanBack() } } }
                         Text { objectName: "backNote"; visible: text !== ""

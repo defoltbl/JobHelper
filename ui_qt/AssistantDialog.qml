@@ -791,8 +791,10 @@ Dialog {
                                 TextField { id: qBox; Layout.fillWidth: true; implicitHeight: 32; color: theme.ink; font.pixelSize: 13; font.bold: true; selectByMouse: true
                                     placeholderText: "The question, as a form asks it"; placeholderTextColor: theme.faint
                                     Component.onCompleted: text = model.question
-                                    background: Rectangle { radius: 7; color: theme.surface; border.width: 1; border.color: qBox.activeFocus ? theme.accent : theme.line }
+                                    background: Rectangle { radius: 7; color: theme.surface; border.width: 1
+                                        border.color: qBox.text.length > win.limits.question ? theme.crit : (qBox.activeFocus ? theme.accent : theme.line) }
                                     onTextEdited: assistantDialog.setAnswer(index, "question", text) }
+                                TooLong { Layout.fillWidth: true; length: qBox.text.length; most: win.limits.question }
                                 Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
                                     border.color: aBox.text.length > win.limits.answer ? theme.crit : (aBox.activeFocus ? theme.accent : theme.line)
                                     implicitHeight: Math.max(64, aBox.implicitHeight + 16)
@@ -801,6 +803,7 @@ Dialog {
                                         text: model.answer
                                         onTextChanged: if (activeFocus) assistantDialog.setAnswer(index, "answer", text)
                                         Text { visible: aBox.text === ""; text: "Your answer"; color: theme.faint; font.pixelSize: 12 } } }
+                                TooLong { Layout.fillWidth: true; length: aBox.text.length; most: win.limits.answer }
                                 Text { visible: model.err !== "" || (model.check !== "" && model.check !== "replace" && model.check !== "remove"); Layout.fillWidth: true; wrapMode: Text.WordWrap
                                     color: model.err !== "" ? theme.crit : theme.warn; font.pixelSize: 11; font.bold: true
                                     text: model.err !== "" ? model.err : "Check: " + model.check }
@@ -887,6 +890,7 @@ Dialog {
                                     background: Rectangle { radius: 7; color: theme.surface; border.width: 1
                                         border.color: cell.wrong || box.text.length > model.most ? theme.crit : (box.activeFocus ? theme.accent : theme.line) }
                                     onTextEdited: assistantDialog.setField(model.key, text) }
+                                TooLong { Layout.fillWidth: true; length: cell.wrong ? 0 : box.text.length; most: model.most }
                                 Text { visible: cell.wrong; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true
                                     text: assistantDialog.problem.msg || "" }
                             }

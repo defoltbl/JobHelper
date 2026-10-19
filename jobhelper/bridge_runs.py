@@ -60,8 +60,9 @@ class RunSlots:
     @Slot(int, result="QVariantMap")
     def scanEmailBack(self, days):
         """One scan over a longer period than Options says; the saved setting stays as it is."""
-        if isinstance(days, bool) or not isinstance(days, int) or not 1 <= days <= 365:
-            return {"ok": False, "msg": "Choose between 1 and 365 days to look back."}
+        low, high = config.LOOK_BACK_ONCE
+        if isinstance(days, bool) or not isinstance(days, int) or not low <= days <= high:
+            return {"ok": False, "msg": f"Choose between {low} and {high} days to look back."}
         return self._start_scan(days)
 
     def _start_scan(self, days):
