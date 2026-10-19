@@ -10,7 +10,6 @@ from pathlib import Path
 
 from . import trouble
 from .claude_cli import ClaudeCli
-from .api_base import _guarded
 from . import agent1_cv, agent4_tracker, health, config, integrity, pdf, store, usage, vault
 
 
@@ -169,9 +168,10 @@ class SystemService:
         return {"ok": True}
 
     # ── what changed (CHANGELOG.md, shown in Help) ──────────────
-    @_guarded(list)
     def limits(self):
-        """How long what you type may be, from the module that checks it, so the window says it before the check refuses."""
+        """How long what you type may be, and the ranges of the number boxes, from the module that checks each one, so the
+        window says it before the check refuses. Only constants: it works while the data is locked too (the window's
+        bindings read it at once, and a missing key would break them)."""
         from . import assistant, config, cover_letter, form_answers, housekeeping, mailhosts, planner
         app = self._app                             # the Options' own limits: asked through the facade, like any other service
         return {"request": assistant.MAX_REQUEST, "question": form_answers.MAX_QUESTION, "answer": form_answers.MAX_ANSWER,

@@ -794,7 +794,7 @@ Dialog {
                                     background: Rectangle { radius: 7; color: theme.surface; border.width: 1
                                         border.color: qBox.text.length > win.limits.question ? theme.crit : (qBox.activeFocus ? theme.accent : theme.line) }
                                     onTextEdited: assistantDialog.setAnswer(index, "question", text) }
-                                TooLong { Layout.fillWidth: true; length: qBox.text.length; most: win.limits.question }
+                                TooLong { Layout.fillWidth: true; length: model.err !== "" ? 0 : qBox.text.length; most: win.limits.question }
                                 Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
                                     border.color: aBox.text.length > win.limits.answer ? theme.crit : (aBox.activeFocus ? theme.accent : theme.line)
                                     implicitHeight: Math.max(64, aBox.implicitHeight + 16)
@@ -803,7 +803,7 @@ Dialog {
                                         text: model.answer
                                         onTextChanged: if (activeFocus) assistantDialog.setAnswer(index, "answer", text)
                                         Text { visible: aBox.text === ""; text: "Your answer"; color: theme.faint; font.pixelSize: 12 } } }
-                                TooLong { Layout.fillWidth: true; length: aBox.text.length; most: win.limits.answer }
+                                TooLong { Layout.fillWidth: true; length: model.err !== "" ? 0 : aBox.text.length; most: win.limits.answer }   // Save's refusal says it then
                                 Text { visible: model.err !== "" || (model.check !== "" && model.check !== "replace" && model.check !== "remove"); Layout.fillWidth: true; wrapMode: Text.WordWrap
                                     color: model.err !== "" ? theme.crit : theme.warn; font.pixelSize: 11; font.bold: true
                                     text: model.err !== "" ? model.err : "Check: " + model.check }

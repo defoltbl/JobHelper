@@ -994,16 +994,17 @@ def test_number_fields_say_what_they_accept_instead_of_going_silent(ui):
     dialog = ui.find("optDialog")
     ui.js("optsData = bridge.options()")
     _open(ui, dialog, 450)
-    spin = ui.find("scanSpin")                                                   # 1 to 365
+    spin = ui.find("scanSpin")
+    low, high = ui.bridge._api.OPTION_NUMBERS["scan_days"]                      # the range the back end checks
     start = spin.property("value")
-    ui.js('scanSpin.contentItem.text = "999"; scanSpin.contentItem.textEdited()')
-    assert ui.js("scanSpin.note") == "Between 1 and 365" and ui.js("scanSpin.noteBad") is True
+    ui.js(f'scanSpin.contentItem.text = "{high + 1}"; scanSpin.contentItem.textEdited()')
+    assert ui.js("scanSpin.note") == f"Between {low} and {high}" and ui.js("scanSpin.noteBad") is True
     assert spin.property("value") == start                                        # a wrong number is not taken
     ui.js("scanSpin.contentItem.editingFinished()")
-    assert spin.property("value") == 365 and ui.js("scanSpin.note") == "Changed to 365, the highest allowed"
-    assert ui.js("scanSpin.contentItem.text") == "365"
+    assert spin.property("value") == high and ui.js("scanSpin.note") == f"Changed to {high}, the highest allowed"
+    assert int("".join(ch for ch in ui.js("scanSpin.contentItem.text") if ch.isdigit())) == high     # shown grouped, like "3 650"
     ui.js('scanSpin.contentItem.text = "0"; scanSpin.contentItem.textEdited(); scanSpin.contentItem.editingFinished()')
-    assert spin.property("value") == 1 and ui.js("scanSpin.note") == "Changed to 1, the lowest allowed"
+    assert spin.property("value") == low and ui.js("scanSpin.note") == f"Changed to {low}, the lowest allowed"
     ui.js('scanSpin.contentItem.text = "45"; scanSpin.contentItem.textEdited()')
     assert spin.property("value") == 45 and ui.js("scanSpin.note") == ""           # a good number: taken at once, nothing said
     ui.js('scanSpin.contentItem.text = ""; scanSpin.contentItem.textEdited(); scanSpin.contentItem.editingFinished()')
