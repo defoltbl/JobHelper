@@ -463,6 +463,27 @@ def test_typed_number_is_saved_without_pressing_enter(ui):
     _until_closed(ui, dialog)
 
 
+def test_a_saved_number_above_the_old_box_range_is_shown_and_saved_as_it_is(ui):
+    """The boxes had their own ranges (max age 0-90, years 0-30, follow-up 0-90 …) while the back end takes more, so a value
+    saved from the command line was cut to fit when Options opened, and Save wrote the smaller number with no word."""
+    dialog = ui.find("optDialog")
+    numbers = ui.bridge._api.OPTION_NUMBERS
+    wide = {"max_age_days": 120, "max_years": 45, "followup_days": 200, "keep_backups": 500, "scan_days": 1000}
+    for key, value in wide.items():
+        low, high = numbers[key]
+        assert low <= value <= high, key
+    ui.bridge.saveOptions({**ui.bridge.options(), **wide, "where": "Prague"})
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    shown = {"max_age_days": "ageSpin", "max_years": "yearsSpin", "followup_days": "fuSpin", "keep_backups": "keepSpin", "scan_days": "scanSpin"}
+    for key, spin in shown.items():
+        assert ui.js(spin + ".value") == wide[key], key
+        assert ui.js(spin + ".to") == numbers[key][1], f"{spin} reaches what the back end allows"
+    ui.js("optSaveBtn.clicked()")                                              # the real Save button: it saves and closes
+    _until_closed(ui, dialog)
+    assert ui.js("optDialog.optErr") == "" and {key: ui.bridge.options()[key] for key in wide} == wide, "nothing was cut on the way back"
+
+
 def test_last_run_card_survives_a_restart(ui):
     ui.bridge._api.note_run(when="07 Oct 14:20", found="+12 new", letters=20, cvs=19)
     ui.bridge._api.note_run(scan="07 Oct · 2 new")

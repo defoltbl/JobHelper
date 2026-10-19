@@ -112,6 +112,7 @@ IMAP_USER = os.getenv("IMAP_USER", "").strip()
 # The app password lives in the macOS Keychain; .env is only read for old setups.
 IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "").strip() or vault.get_secret(vault.IMAP_ACCOUNT)
 IMAP_LOOKBACK_DAYS = _int_env("IMAP_LOOKBACK_DAYS", 30, 1)
+LOOK_BACK_ONCE = (1, 365)          # days one extra scan may look back (Options > Look further back once)
 # Optional second mailbox (same mail provider): replies that go to another address.
 IMAP_USER_2 = os.getenv("IMAP_USER_2", "").strip()
 IMAP_PASSWORD_2 = os.getenv("IMAP_PASSWORD_2", "").strip() or vault.get_secret(vault.IMAP_ACCOUNT_2)

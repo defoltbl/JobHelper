@@ -49,6 +49,7 @@ ColumnLayout {
                                                 : (cellBox.activeFocus ? theme.accent : theme.line) }
                                 onTextEdited: { ed.store.setProperty(card.row, modelData.key, text); ed.changed(); }
                             }
+                            TooLong { Layout.fillWidth: true; length: cellBox.text.length; most: modelData.most }
                         }
                     }
                 }
@@ -69,8 +70,7 @@ ColumnLayout {
                                             : (areaBox.activeFocus ? theme.accent : theme.line) }
                             onTextChanged: if (activeFocus) { ed.store.setProperty(card.row, modelData.key, text); ed.changed(); }
                         }
-                        Text { visible: areaBox.text.length > modelData.most; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11
-                            text: "That is " + areaBox.text.length + " characters; the most is " + modelData.most + "." }
+                        TooLong { Layout.fillWidth: true; length: areaBox.text.length; most: modelData.most }
                     }
                 }
                 RowLayout { Layout.fillWidth: true; spacing: 8
