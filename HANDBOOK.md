@@ -393,7 +393,8 @@ After every batch of changes, without being asked:
    - The PDFs are laid out like a thesis: contents with dotted lines to the page numbers, the page number at
      the top right, no lists of figures and tables, a long table continued under "Continuation of Table N".
    - Take the guide's pictures again when a pictured window changed
-     (`pytest tests/guide_shots.py -q -o addopts=""`) and look at them.
+     (`pytest tests/guide_shots.py -q -o addopts=""`) and look at them. The script draws the window at twice
+     its size (`QT_SCALE_FACTOR=2`), so the pictures are sharp; the parts that `shot()` cuts stay in window points.
    - Make the PDFs again: `python scripts/guide_pdf.py`. They are laid out like a thesis (title page,
      contents, lists of figures and tables, page numbers) and keep the page rules: a figure is never split,
      a table stays on one page, a longer one continues between rows with its heading row repeated, a

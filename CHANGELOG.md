@@ -19,7 +19,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 - The right column of the main window **scrolls when the window is short**, so no button at its foot is cut off.
 - In the **country picker for remote jobs**, what you type must start the country's name or one of its words: "Ge" now finds Georgia and Germany, not also Algeria, Argentina, Niger and Nigeria. Other names work too: "usa", "england". The suggestions under **Search roles** follow the same rule.
 - The **City** box in Options had a blue frame inside its orange one while you typed. It now has one frame, like every other field.
-- The pictures in the **user guide** are now sharp on large and Retina screens.
+- The pictures in the **user guide** are now sharp, also on large screens.
 
 ## 1.1.0 – 18 October 2026
 
