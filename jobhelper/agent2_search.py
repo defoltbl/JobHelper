@@ -373,24 +373,25 @@ def _dropped_path():
 NO_BRING_BACK = {"duplicate", "already applied", "closed"}
 
 
+def _dropped_file():
+    from . import vault
+    return vault.JsonFile("filtered_out.json", where=_dropped_path)
+
+
 def save_dropped(rows: list[dict[str, Any]], when: str = "") -> None:
     """Keep what the latest search filtered out (replaces the previous search's list)."""
-    import json
     from datetime import datetime
-    from . import vault
-    config.ensure_dirs()
-    vault.write_text(_dropped_path(), json.dumps(
-        {"when": when or datetime.now().strftime("%d %b %H:%M"), "total": len(rows), "rows": rows[:MAX_DROPPED]},
-        ensure_ascii=False, indent=1))
+    _dropped_file().write({"when": when or datetime.now().strftime("%d %b %H:%M"), "total": len(rows), "rows": rows[:MAX_DROPPED]},
+                          indent=1)
 
 
 def load_dropped() -> dict[str, Any]:
-    import json
+    """What the latest search filtered out; nothing when it cannot be read (it is only shown, never saved back)."""
     from . import vault
     try:
-        data = json.loads(vault.read_text(_dropped_path()))
-    except (OSError, ValueError, vault.VaultError):
-        return {"when": "", "total": 0, "rows": []}
+        data = _dropped_file().read()
+    except vault.VaultError:
+        data = None
     if not isinstance(data, dict):
         return {"when": "", "total": 0, "rows": []}
     rows = [r for r in data["rows"] if isinstance(r, dict)] if isinstance(data.get("rows"), list) else []

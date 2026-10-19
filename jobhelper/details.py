@@ -11,13 +11,12 @@ the page. What a form gets is exactly what is written here.
 """
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import config, llm, salary, vault
+from . import llm, salary, vault
 
 # (key, what the window calls it, the most characters)
 FIELDS = (("first_name", "First name", 60), ("last_name", "Last name", 60), ("email", "Email", 120),
@@ -50,8 +49,11 @@ _WORDS = re.compile(r"[^\W\d_]+(?:[ '.\-]+[^\W\d_]+)*\.?")
 _WHEN = re.compile(r"(?:(?:0?[1-9]|1[0-2])[./\-])?(?:19|20)\d{2}")
 
 
+FILE = vault.JsonFile("my_details.json")
+
+
 def path():
-    return config.DATA_DIR / "my_details.json"
+    return FILE.path
 
 
 def empty() -> dict[str, Any]:
@@ -64,7 +66,7 @@ def load() -> dict[str, Any]:
     out = empty()
     try:
         if path().exists():
-            kept = json.loads(vault.read_text(path()))
+            kept = FILE.load()
             clean, problem = check(kept)
             if not problem:
                 out = clean
@@ -336,8 +338,7 @@ def save(values: Any) -> dict[str, Any]:
     clean, problem = check(values)
     if problem:
         return {"ok": False, **problem}
-    config.ensure_dirs()
-    vault.write_text(path(), json.dumps(clean, ensure_ascii=False, indent=2))
+    FILE.write(clean)
     return {"ok": True, "details": clean}
 
 

@@ -325,21 +325,22 @@ def ui_settings_file() -> Path:
     return DATA_DIR / "ui_settings.json"
 
 
+UI_SETTINGS = vault.JsonFile("ui_settings.json", where=lambda: ui_settings_file())     # the Options file
+
+
 def ui_settings() -> dict:
-    """Options saved from the desktop app (data/ui_settings.json), or {}."""
-    import json
+    """Options saved from the desktop app (data/ui_settings.json), or {}: also when the key cannot open them
+    (Options then shows the defaults, and the start-up check says why)."""
     try:
-        data = json.loads(vault.read_text(ui_settings_file()))
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError, vault.VaultError):
+        data = UI_SETTINGS.read()
+    except vault.VaultError:
         return {}
+    return data if isinstance(data, dict) else {}
 
 
 def save_ui_settings(data: dict) -> None:
     """Write the whole Options file (encrypted like the rest of the data). The one writer: Options and the chosen master CV."""
-    import json
-    ensure_dirs()
-    vault.write_text(ui_settings_file(), json.dumps(data, ensure_ascii=False, indent=2))
+    UI_SETTINGS.write(data)
 
 
 def candidate_facts(cv_text: str = "") -> dict[str, str]:
