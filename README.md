@@ -7,6 +7,7 @@ browser and does things in the app after your yes. It runs on **your Claude subs
 API key, no per-token bill – and your data stays on your Mac, encrypted.
 
 ![Tests](https://github.com/defoltbl/JobHelper/actions/workflows/tests.yml/badge.svg)
+[![Release](https://img.shields.io/github/v/release/defoltbl/JobHelper)](https://github.com/defoltbl/JobHelper/releases)
 ![Platform](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)
 ![UI](https://img.shields.io/badge/UI-Qt%20Quick%20(PySide6)-41CD52?logo=qt&logoColor=white)
@@ -65,7 +66,7 @@ mailbox or a browser. GitHub Actions runs the same two commands on a Mac after e
 | [Command reference](COMMANDS.md) | Every command-line command and option |
 | [Handbook](HANDBOOK.md) | The rules the app is built by and what is left to do |
 | [AGENTS.md](AGENTS.md) | Instructions for AI coding agents: commands and the rules they must keep |
-| [Changelog](CHANGELOG.md) | What changed, day by day |
+| [Changelog](CHANGELOG.md) | What changed in each version ([releases](https://github.com/defoltbl/JobHelper/releases)); before 1.1.0, day by day |
 
 Before you publish a fork, run `python scripts/push_check.py --install-hook` once: it stops a push
 that would publish a personal detail, a secret or the data folder
