@@ -11,10 +11,17 @@ import QtQuick.Effects
 Dialog {
     id: assistantDialog; objectName: "assistantDialog"
     modal: true; anchors.centerIn: parent
-    closePolicy: (dirty || busy) ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits
-    // ... but it must not do nothing either: with changes (or while working) it asks once, or says why it waits
-    Shortcut { sequence: "Escape"; enabled: assistantDialog.visible && (assistantDialog.dirty || assistantDialog.busy)
-                   && !(detailDialog.visible || formDialog.visible || prepDialog.visible || prepEditDialog.visible || letterDialog.visible || compareDialog.visible || responseDialog.visible)
+    property int answersRevision: 0                        // goes up with every change to the answers, so `unsaved` follows them
+    Connections { target: answerModel
+        function onDataChanged() { assistantDialog.answersRevision++ }
+        function onRowsInserted() { assistantDialog.answersRevision++ }
+        function onRowsRemoved() { assistantDialog.answersRevision++ }
+        function onModelReset() { assistantDialog.answersRevision++ } }
+    readonly property int unsaved: answersRevision >= 0 ? unsavedAnswers() : 0
+    readonly property bool holdsWork: dirty || busy || unsaved > 0      // unsaved details or answers, or Claude still working
+    closePolicy: holdsWork ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits ...
+    // ... but it must not do nothing either: it asks once, or says why it waits (only when it is the window in front)
+    Shortcut { sequence: "Escape"; enabled: assistantDialog.holdsWork && win.onTop(assistantDialog)
                onActivated: assistantDialog.tryClose() }
     enter: Transition { ParallelAnimation {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }

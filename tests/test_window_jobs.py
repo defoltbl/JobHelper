@@ -1080,15 +1080,120 @@ def test_esc_asks_once_before_unsaved_answers_are_thrown_away(ui):
 
 
 def test_a_button_that_cannot_be_pressed_looks_it_and_an_error_shows_red_even_with_focus(ui):
-    button = ui.find("fmDraft")
-    button.setProperty("enabled", False)
-    assert button.property("opacity") == 0.5
-    button.setProperty("enabled", True)
-    assert button.property("opacity") == 1
+    button = ui.find("fmDraft")                                           # enabled: !formDialog.busy
+    ui.js('formDialog.show("app")')
+    _until_open(ui, "formDialog")
+    ui.js("formDialog.busy = true")
+    assert button.property("enabled") is False and button.property("opacity") == ui.js("theme.disabledOpacity") == 0.5
+    ui.js("formDialog.busy = false")
+    assert button.property("enabled") is True and button.property("opacity") == 1
+    ui.js("formDialog.close()")
+    _until_closed(ui, "formDialog")
     source = qml_source()
     assert "activeFocus ? theme.accent : (" not in source, "a field's red error border must not hide behind its focus colour"
+    for name in ("SmallButton", "PillButton"):
+        text = (ROOT / "ui_qt" / f"{name}.qml").read_text(encoding="utf-8")
+        assert "theme.disabledOpacity" in text and "visualFocus ? (" in text and "primaryStyle ? theme.ink : theme.accent" in text, \
+            f"{name}: one paleness, and an outline for Tab that shows on an accent-filled button too"
     letter = (ROOT / "ui_qt" / "LetterDialog.qml").read_text(encoding="utf-8")
     assert 'objectName: "letterX"' in letter and "onClicked: letterDialog.tryClose() }" in letter, "the letter window has a ✕ too"
-    for name in ("LetterDialog", "AssistantDialog", "FormAnswersDialog", "PrepEditDialog", "OptionsDialog", "AboutYouDialog"):
-        text = (ROOT / "ui_qt" / f"{name}.qml").read_text(encoding="utf-8")
-        assert 'Shortcut { sequence: "Escape"' in text and "tryClose()" in text, f"{name}: Esc asks or closes, never nothing"
+
+
+def _esc(ui):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    ui.win.requestActivate()
+    QTest.keyClick(ui.win, Qt.Key_Escape)
+
+
+def test_esc_in_the_letter_and_the_preparation_asks_once_and_closes_a_clean_window(ui, monkeypatch):
+    from jobhelper import cover_letter
+    paras = ["First paragraph of the letter.", "Second one.", "Third one.", "Fourth one.", "Fifth one."]
+    monkeypatch.setattr(ui_api.Api, "letter_for_edit", lambda self, job_id: {"ok": True, "id": "lead", "company": "Acme", "title": "Dev",
+                        "title_line": "Dev", "date_text": "", "paragraphs": list(paras), "min_words": cover_letter.MIN_WORDS, "max_words": cover_letter.MAX_WORDS})
+    letter = ui.find("letterDialog")
+    ui.js('letterDialog.show("lead")')
+    _until_open(ui, "letterDialog")
+    _esc(ui)                                                               # clean: Esc closes (it used to do nothing here)
+    _until_closed(ui, "letterDialog")
+    ui.js('letterDialog.show("lead")')
+    _until_open(ui, "letterDialog")
+    ui.js('letterDialog.setText(1, "Second one, changed.")')
+    _esc(ui)
+    assert _until(lambda: "did not save" in ui.find("letterErr").property("text")) and letter.property("visible") is True
+    ui.js("letterDialog.busyIndex = 2")
+    _esc(ui)                                                               # Claude rewriting: it says to wait, and stays
+    assert _until(lambda: "still rewriting" in ui.find("letterErr").property("text")) and letter.property("visible") is True
+    ui.js("letterDialog.busyIndex = -1")
+    _esc(ui)                                                               # asked once already: now it closes
+    _until_closed(ui, "letterDialog")
+    prep = {"made": "2026-10-08", "summary": "They will ask about Python.", "pitch": "I am a junior developer.", "fit": ["Python", "Docker"],
+            "questions": [{"audience": "hr", "kind": "about you", "question": "Tell me about yourself.", "why": "", "answer": "I am a junior developer.", "check": ""}],
+            "ask_hr": ["What are the next steps?"], "ask_technical": [], "ask_them": [], "checks": []}
+    ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep=dict(prep)), render=False)
+    ui.js('prepEditDialog.show("app")')
+    _until_open(ui, "prepEditDialog")
+    ui.js("prepEditDialog.dirty = true")
+    _esc(ui)
+    assert _until(lambda: "did not save" in ui.js("prepEditDialog.err")) and ui.find("prepEditDialog").property("visible") is True
+    _esc(ui)
+    _until_closed(ui, "prepEditDialog")
+
+
+def test_esc_belongs_to_the_window_in_front_whatever_is_open_behind_it(ui):
+    """The four stacks the window checker tried with a real Esc: before, the assistant and the job window each stood
+    aside while the other was shown, so Esc did nothing in any of them."""
+    assistant, job = ui.find("assistantDialog"), ui.find("detailDialog")
+    # A: the assistant over the job window, with unsaved details: the assistant asks, the job window stays
+    _open_job(ui)
+    ui.js("assistantDialog.show()")
+    _until_open(ui, "assistantDialog")
+    ui.js("assistantDialog.dirty = true")
+    _esc(ui)
+    assert _until(lambda: "did not save" in (ui.js("assistantDialog.problem.msg") or "")) and assistant.property("visible") and job.property("visible")
+    ui.js("assistantDialog.busy = true; assistantDialog.dirty = false; assistantDialog.confirmClose = false")
+    _esc(ui)                                                               # B: working: it says so
+    assert _until(lambda: "still working" in ui.js("assistantDialog.askErr")) and assistant.property("visible")
+    ui.js("assistantDialog.busy = false")
+    # an answer typed and not saved holds the window too (it used to close and lose it)
+    ui.js('assistantDialog.page = "answers"; assistantDialog.addAnswer("Why do you want this job?")')
+    assert ui.js("assistantDialog.unsaved") == 1 and ui.js("assistantDialog.holdsWork") is True
+    _esc(ui)
+    assert _until(lambda: "not saved" in ui.js("assistantDialog.answersErr")) and assistant.property("visible")
+    _esc(ui)                                                               # asked once: now it closes, the job window stays
+    _until_closed(ui, "assistantDialog")
+    assert job.property("visible") is True
+    ui.js("detailDialog.close()")
+    _until_closed(ui, "detailDialog")
+    # D: the job window opened over a clean assistant, holding a pasted reply: the job window asks, the assistant stays
+    ui.js("assistantDialog.show()")
+    _until_open(ui, "assistantDialog")
+    _open_job(ui)
+    ui.js('replyText.text = "Thank you for applying, we would like to meet you."')
+    assert ui.js("detailDialog.pending.length") == 1
+    _esc(ui)
+    assert _until(lambda: ui.js("detailDialog.confirmClose") is True) and job.property("visible") and assistant.property("visible")
+    ui.js('replyText.text = ""')
+    _esc(ui)                                                               # nothing held now: its own Esc closes it
+    _until_closed(ui, "detailDialog")
+    assert assistant.property("visible") is True
+    ui.js("assistantDialog.close()")
+    _until_closed(ui, "assistantDialog")
+
+
+def test_esc_in_the_assistant_asks_once_and_never_also_closes_the_job_window(ui):
+    assistant, job = ui.find("assistantDialog"), ui.find("detailDialog")
+    _open_job(ui)
+    ui.js("assistantDialog.show()")
+    _until_open(ui, "assistantDialog")
+    ui.js("assistantDialog.busy = true")
+    assert ui.js("detailDialog.pending.length >= 0")
+    _esc(ui)                                                               # working: it says so and stays; the job window behind stays too
+    assert _until(lambda: "still working" in ui.js("assistantDialog.askErr")) and assistant.property("visible") is True
+    assert job.property("visible") is True
+    ui.js("assistantDialog.busy = false")
+    _esc(ui)                                                               # nothing held: Esc closes the assistant only
+    _until_closed(ui, "assistantDialog")
+    assert job.property("visible") is True
+    ui.js("detailDialog.close()")
+    _until_closed(ui, "detailDialog")

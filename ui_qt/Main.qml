@@ -303,6 +303,7 @@ ApplicationWindow {
     // for ink, soft, faint, good, warn and crit, and for a label on the accent); see tests/test_window_scores.py.
     QtObject {
         id: theme
+        readonly property real disabledOpacity: 0.5     // a control that cannot be used now: one paleness for every button
         property color winbg: win.dark ? "#121922" : "#f3f6f9"
         property color surface: win.dark ? "#19222d" : "#ffffff"
         property color surface2: win.dark ? "#1f2a37" : "#f5f8fb"
@@ -388,6 +389,26 @@ ApplicationWindow {
     }
     property string lastView: ""
     function refreshOpenView() { if (tableDialog.visible && lastView !== "") openView(lastView); }
+
+    // ── which window is on top: the Esc key belongs to it alone ──
+    // Each window is numbered when it opens; of the windows still shown, the one opened last is on top. A window
+    // asks onTop(itself) before it takes Esc, so two windows never both take it, and the one in front always does.
+    property int openSeq: 0
+    property var openedAt: ({})
+    readonly property var windows: [tableDialog, detailDialog, compareDialog, formDialog, assistantDialog, prepEditDialog, helpDialog, prepDialog, letterDialog, responseDialog, limitDialog, optDialog, aboutDialog, remoteDialog, schedDialog]
+    Component.onCompleted: {
+        for (var i = 0; i < windows.length; i++) {
+            (function (w) { w.aboutToShow.connect(function () { win.openedAt[w.objectName] = ++win.openSeq; }); })(windows[i]);
+        }
+    }
+    function onTop(w) {
+        var mine = win.openSeq >= 0 ? (win.openedAt[w.objectName] || 0) : 0;      // reading openSeq keeps a binding up to date
+        for (var i = 0; i < windows.length; i++) {
+            var other = windows[i];
+            if (other !== w && other.visible && (win.openedAt[other.objectName] || 0) > mine) return false;
+        }
+        return w.visible;
+    }
     function openView(k) { Views.open(k); }       // the lists themselves are in views.js
 
     TableDialog { id: tableDialog }

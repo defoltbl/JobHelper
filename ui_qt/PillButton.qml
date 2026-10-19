@@ -17,14 +17,14 @@ Button {
     font.pixelSize: 13; font.bold: true
     HoverHandler { cursorShape: Qt.PointingHandCursor; enabled: pb.enabled }
     scale: pb.down ? 0.96 : 1
-    opacity: pb.enabled ? 1 : 0.55          // the label dims with the background, not only the background
+    opacity: pb.enabled ? 1 : theme.disabledOpacity          // the label dims with the background, not only the background
     Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
     background: Rectangle {
         radius: 10
         color: pb.primaryStyle ? (pb.hovered ? Qt.lighter(theme.accent, 1.08) : theme.accent)
              : pb.tinted ? Qt.rgba(pb.tint.r, pb.tint.g, pb.tint.b, pb.hovered ? 0.28 : 0.16)
              : (pb.hovered ? theme.surface2 : pb.bg)
-        border.color: pb.visualFocus ? theme.accent : pb.primaryStyle ? "transparent"
+        border.color: pb.visualFocus ? (pb.primaryStyle ? theme.ink : theme.accent) : pb.primaryStyle ? "transparent"
                     : pb.tinted ? Qt.rgba(pb.tint.r, pb.tint.g, pb.tint.b, 0.55)
                     : (pb.hovered ? theme.steel : theme.line)
         border.width: pb.visualFocus ? 2 : pb.tinted ? 1.5 : 1

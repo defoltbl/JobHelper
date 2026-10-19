@@ -90,8 +90,7 @@ Dialog {
     }
     onClosed: { confirmClose = false; confirmAction = ""; closeNote = ""; reviewQueue = []; reviewNote = ""; }
     Shortcut { sequence: "Escape"
-        enabled: detailDialog.visible && detailDialog.pending.length > 0 && !(formDialog.visible || prepDialog.visible || prepEditDialog.visible
-                 || compareDialog.visible || letterDialog.visible || responseDialog.visible || assistantDialog.visible)
+        enabled: detailDialog.pending.length > 0 && win.onTop(detailDialog)      // only the window in front takes Esc
         onActivated: detailDialog.tryClose() }
     enter: Transition { ParallelAnimation {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }

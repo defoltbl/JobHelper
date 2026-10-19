@@ -139,8 +139,8 @@ The figures show the real window of the app, filled with **invented** people and
 
 > **Note**
 > A window that holds text you did not save never closes without a question. The ✕ and the Esc
-> key ask once. Press them again to discard the changes. A button that you cannot use at the
-> moment is pale.
+> key ask once. Press them again to discard the changes. While Claude is still working in a
+> window, it waits until the work is done. A button that you cannot use at the moment is pale.
 
 This guide is for people who use the app. The technical documentation, [CODE.md](CODE.md),
 is for people who work with the code. It covers the installation, the command line, the
@@ -839,6 +839,7 @@ Table 7.1 lists the controls of the letter editor.
 | **Open in Word** | Opens the file in Word instead |
 | **Undo my changes** | Puts back the text as it was when you opened the editor |
 | **Save** | Writes the paragraphs into the letter. The head, date, greeting, signature, fonts and layout stay as they are |
+| **Close**, the **✕** or the Esc key | Closes the editor. With unsaved changes they ask once |
 
 > **Note**
 > Closing the editor with unsaved changes asks once. The previous version of a saved letter is

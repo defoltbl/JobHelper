@@ -7,8 +7,8 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
-- **Esc** now asks once in the **Cover letter**, **Answers for this form**, preparation and assistant windows when they hold unsaved changes, instead of doing nothing; the cover letter window also has a **✕**.
-- Small buttons that cannot be used at the moment are now pale, like the large ones, and a button reached with the Tab key shows an outline.
+- **Esc** now asks once in the **Cover letter**, **Answers for this form**, preparation and assistant windows when they hold unsaved changes, instead of doing nothing, and always goes to the window in front. A clean **Cover letter** window now closes with Esc, and it has a **✕**. An unsaved answer in the assistant is no longer lost on Esc.
+- Buttons that cannot be used at the moment are now pale, small and large alike, and a button reached with the Tab key shows an outline.
 - A field with an error stays **red** while you type in it; before, the focus colour hid the red border.
 - **Open posting** no longer opens a job's link when it points to a Russian site, the same rule the assistant follows for every page.
 - When the file with your **notes per company** is damaged, saving a note no longer replaces it with that one note. Now the app shows a red line that it cannot read the notes, and leaves the file as it is.
