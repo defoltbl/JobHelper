@@ -46,4 +46,16 @@ def test_no_number_box_keeps_its_own_range_and_every_limited_box_says_when_it_is
     assert rows.count("TooLong {") == 2, "a single-line cell says it is over, like the text area"
     assistant_qml = (UI / "AssistantDialog.qml").read_text(encoding="utf-8")
     assert assistant_qml.count("TooLong {") == 3 and "most: win.limits.question" in assistant_qml
-    assert "characters; the most is" not in rows + assistant_qml, "the sentence is TooLong's alone"
+    assert "characters; the most is" not in rows + assistant_qml, "in these two windows the sentence is TooLong's alone"
+
+
+def test_the_limits_never_depend_on_the_data(isolate_data, monkeypatch):
+    """The window binds to them at once; while the data was locked they came back as [] and every box threw."""
+    from jobhelper import vault
+
+    def locked(*a, **k):
+        raise vault.VaultError("The key in the Keychain does not match this data.")
+    monkeypatch.setattr(vault, "read_text", locked)
+    monkeypatch.setattr(vault, "data_key", locked)
+    limits = Api().limits()
+    assert isinstance(limits, dict) and limits["numbers"]["scan_days"] and limits["look_back"]

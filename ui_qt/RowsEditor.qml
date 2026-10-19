@@ -49,7 +49,8 @@ ColumnLayout {
                                                 : (cellBox.activeFocus ? theme.accent : theme.line) }
                                 onTextEdited: { ed.store.setProperty(card.row, modelData.key, text); ed.changed(); }
                             }
-                            TooLong { Layout.fillWidth: true; length: cellBox.text.length; most: modelData.most }
+                            TooLong { Layout.fillWidth: true; most: modelData.most
+                                      length: ed.problem.field === card.where + "." + modelData.key ? 0 : cellBox.text.length }
                         }
                     }
                 }
@@ -70,7 +71,8 @@ ColumnLayout {
                                             : (areaBox.activeFocus ? theme.accent : theme.line) }
                             onTextChanged: if (activeFocus) { ed.store.setProperty(card.row, modelData.key, text); ed.changed(); }
                         }
-                        TooLong { Layout.fillWidth: true; length: areaBox.text.length; most: modelData.most }
+                        TooLong { Layout.fillWidth: true; most: modelData.most          // the card says it itself once checked
+                                  length: ed.problem.field === card.where + "." + modelData.key ? 0 : areaBox.text.length }
                     }
                 }
                 RowLayout { Layout.fillWidth: true; spacing: 8

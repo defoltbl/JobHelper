@@ -7,7 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
-- The number boxes in **Options** now take every value the app accepts (for example **Max job age** up to 3650 days, **Keep backups** up to 1000). Before, a larger value saved from the command line was cut to the box's own maximum when Options opened, and **Save** then wrote the smaller number.
+- The number boxes in **Options** now take every value the app accepts (for example **Max job age** up to 3650 days, **Keep backups** up to 1000). Before, a larger saved value was cut to the box's own maximum when **Options** opened. **Save** then wrote the smaller number.
 - A single-line field in **My details** and the assistant's question box now say how long the text is and the most it may be, as soon as it is too long, not only on **Save**.
 - **Esc** now asks once in the **Cover letter**, **Answers for this form**, preparation and assistant windows when they hold unsaved changes, instead of doing nothing, and always goes to the window in front. A clean **Cover letter** window now closes with Esc, and it has a **✕**. An unsaved answer in the assistant is no longer lost on Esc.
 - Buttons that cannot be used at the moment are now pale, small and large alike, and a button reached with the Tab key shows an outline.

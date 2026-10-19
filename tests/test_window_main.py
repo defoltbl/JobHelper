@@ -472,7 +472,8 @@ def test_a_saved_number_above_the_old_box_range_is_shown_and_saved_as_it_is(ui):
     for key, value in wide.items():
         low, high = numbers[key]
         assert low <= value <= high, key
-    ui.bridge.saveOptions({**ui.bridge.options(), **wide, "where": "Prague"})
+    before = ui.bridge.options()                                                # put back at the end: one window for the whole file
+    ui.bridge.saveOptions({**before, **wide, "where": "Prague"})
     ui.js("optsData = bridge.options()")
     _open(ui, dialog, 450)
     shown = {"max_age_days": "ageSpin", "max_years": "yearsSpin", "followup_days": "fuSpin", "keep_backups": "keepSpin", "scan_days": "scanSpin"}
@@ -482,6 +483,8 @@ def test_a_saved_number_above_the_old_box_range_is_shown_and_saved_as_it_is(ui):
     ui.js("optSaveBtn.clicked()")                                              # the real Save button: it saves and closes
     _until_closed(ui, dialog)
     assert ui.js("optDialog.optErr") == "" and {key: ui.bridge.options()[key] for key in wide} == wide, "nothing was cut on the way back"
+    ui.bridge.saveOptions(before)
+    ui.js("optsData = bridge.options()")
 
 
 def test_last_run_card_survives_a_restart(ui):

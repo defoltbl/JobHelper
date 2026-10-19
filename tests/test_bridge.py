@@ -149,7 +149,7 @@ def test_a_longer_scan_can_be_asked_for_once(bridge, monkeypatch):
     monkeypatch.setattr(config, "IMAP_USER", "jobs@example.com")
     monkeypatch.setattr(config, "IMAP_PASSWORD", "abcdabcdabcdabcd")
     for wrong in (0, -5, 366, 100000):
-        assert bridge.scanEmailBack(wrong)["ok"] is False and "between 1 and 365" in bridge.scanEmailBack(wrong)["msg"]
+        assert bridge.scanEmailBack(wrong)["ok"] is False and "between {} and {}".format(*config.LOOK_BACK_ONCE) in bridge.scanEmailBack(wrong)["msg"]
     assert started == []
     assert bridge.scanEmailBack(90) == {"ok": True} and started == ["_scan"]
     assert "running" in bridge.scanEmailBack(90)["msg"] and started == ["_scan"]

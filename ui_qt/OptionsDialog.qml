@@ -543,7 +543,7 @@ Dialog {
                 ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; spacing: 6
                     GroupTitle { text: "Matching" }
                     Card {
-                        SRow { label: "Write letters above"; hint: "match score 0–100"
+                        SRow { label: "Write letters above"; hint: "match score " + win.limits.numbers.threshold.join("–")
                             ThemedSpin { id: thrSpin; from: win.limits.numbers.threshold[0]; to: win.limits.numbers.threshold[1]; value: 50 } }
                         Sep {}
                         SRow { label: "Hide leads below"; hint: "0 = show all leads"
