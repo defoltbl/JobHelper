@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import llm, salary, vault
+from . import config, llm, salary, vault
 
 # (key, what the window calls it, the most characters)
 FIELDS = (("first_name", "First name", 60), ("last_name", "Last name", 60), ("email", "Email", 120),
@@ -49,11 +49,8 @@ _WORDS = re.compile(r"[^\W\d_]+(?:[ '.\-]+[^\W\d_]+)*\.?")
 _WHEN = re.compile(r"(?:(?:0?[1-9]|1[0-2])[./\-])?(?:19|20)\d{2}")
 
 
-FILE = vault.JsonFile("my_details.json")
-
-
 def path():
-    return FILE.path
+    return config.MY_DETAILS.path
 
 
 def empty() -> dict[str, Any]:
@@ -65,8 +62,8 @@ def load() -> dict[str, Any]:
     """What was saved, with every key there ('' or an empty list = not given)."""
     out = empty()
     try:
-        if path().exists():
-            kept = FILE.load()
+        kept = config.MY_DETAILS.load()                 # None when nothing was saved yet
+        if kept is not None:
             clean, problem = check(kept)
             if not problem:
                 out = clean
@@ -338,7 +335,7 @@ def save(values: Any) -> dict[str, Any]:
     clean, problem = check(values)
     if problem:
         return {"ok": False, **problem}
-    FILE.write(clean)
+    config.MY_DETAILS.write(clean)
     return {"ok": True, "details": clean}
 
 

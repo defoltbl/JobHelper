@@ -77,12 +77,10 @@ class OptionsService:
         return places.RemoteReach.offered()
 
     # ── the last run (shown on the Last run card, also after a restart) ──
-    LAST_RUN = vault.JsonFile("last_run.json")
-
     def last_run(self):
         """The Last run card: {} when there is none, or it cannot be read (the card is only a summary)."""
         try:
-            data = self.LAST_RUN.read()
+            data = config.LAST_RUN.read()
         except vault.VaultError:
             data = None
         return data if isinstance(data, dict) else {}
@@ -91,7 +89,7 @@ class OptionsService:
         """Merge the given facts into the saved last-run summary."""
         data = self.last_run()
         data.update({k: v for k, v in fields.items() if v is not None})
-        self.LAST_RUN.write(data)
+        config.LAST_RUN.write(data)
         return data
 
     # ── read / write: options ───────────────────────────────────
@@ -118,9 +116,8 @@ class OptionsService:
                     "about_right_to_work": "", "about_start": "", "about_experience": "", "notifications": True, "scan_all_folders": False, "assistant_watch": False, "assistant_browser": "chrome", "text_size": 100,
                     "keep_backups": housekeeping.DEFAULT_KEEP}
         try:
-            saved = config.UI_SETTINGS.load()
-            if saved is not None:
-                defaults.update(saved)
+            if config.UI_SETTINGS.exists():                   # a file that holds no settings (null, a list) is noted below
+                defaults.update(config.UI_SETTINGS.load())
         except Exception as e:  # noqa: BLE001 - the defaults are used; the start-up check tells the user
             trouble.note("reading the saved Options", e)
         from . import job_sources

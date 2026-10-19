@@ -66,8 +66,8 @@ def test_what_a_search_filtered_out_is_only_shown(isolate_data, monkeypatch):
 
 def test_a_damaged_cv_analysis_is_made_again_but_a_locked_one_is_not_thrown_away(isolate_data, monkeypatch):
     assert agent1_cv.load_profile() is None
-    agent1_cv.PROFILE.write({"seniority": "junior"})
-    assert agent1_cv.load_profile() == {"seniority": "junior"} and agent1_cv.PROFILE.path == config.PROFILE_JSON
+    config.PROFILE.write({"seniority": "junior"})
+    assert agent1_cv.load_profile() == {"seniority": "junior"} and config.PROFILE.path == config.PROFILE_JSON
     _key_cannot_open(monkeypatch)
     with pytest.raises(vault.VaultError):
         agent1_cv.load_profile()
@@ -78,10 +78,35 @@ def test_a_damaged_cv_analysis_is_made_again_but_a_locked_one_is_not_thrown_away
 
 def test_my_details_read_empty_when_damaged_and_refuse_when_locked(isolate_data, monkeypatch):
     assert details.save({**details.empty(), "first_name": "Jordan", "last_name": "Weber"})["ok"]
-    assert details.load()["first_name"] == "Jordan" and details.path() == details.FILE.path
+    assert details.load()["first_name"] == "Jordan" and details.path() == config.MY_DETAILS.path
     _key_cannot_open(monkeypatch)
     with pytest.raises(vault.VaultError):
         details.load()
     monkeypatch.undo()
     _damage(details.path())
     assert details.load() == details.empty()
+
+
+def test_each_file_is_named_once_and_follows_a_moved_path(isolate_data, monkeypatch):
+    moved = isolate_data / "moved" / "profile.json"
+    monkeypatch.setattr(config, "PROFILE_JSON", moved)
+    agent1_cv_profile = {"seniority": "senior"}
+    config.PROFILE.write(agent1_cv_profile)
+    assert moved.is_file() and agent1_cv.load_profile() == agent1_cv_profile, "a setting that moves the file is followed"
+    stores = [config.UI_SETTINGS, config.LAST_RUN, config.FILTERED_OUT, config.PROFILE, config.MY_DETAILS]
+    assert {s.path for s in stores} <= set(vault.data_files()), "every one of them is kept encrypted and backed up"
+
+
+def test_a_missing_file_is_simply_nothing_yet(isolate_data):
+    assert agent1_cv.load_profile() is None and agent2_search.load_dropped() == {"when": "", "total": 0, "rows": []}
+    assert config.ui_settings() == {} and ui_api.Api().last_run() == {} and details.load() == details.empty()
+
+
+def test_an_options_file_that_holds_no_settings_is_noted(isolate_data, monkeypatch):
+    noted = []
+    from jobhelper import api_options
+    monkeypatch.setattr(api_options.trouble, "note", lambda where, error: noted.append(where))
+    for empty in (None, [1, 2]):
+        config.UI_SETTINGS.write(empty)
+        assert ui_api.Api().options()["where"] == ""
+    assert noted == ["reading the saved Options"] * 2, "null and a list are noted like a damaged file, as before"

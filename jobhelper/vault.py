@@ -351,9 +351,9 @@ def file_is_encrypted(path: Path) -> bool:
 def data_files() -> list[Path]:
     """The files that are kept encrypted."""
     from . import answer_memory, assistant_notes, config, planner     # each small store names its own file
-    return [config.JOBS_JSON, config.PROFILE_JSON, config.ui_settings_file(), config.RESPONSES_DB,
-            config.DATA_DIR / "last_run.json", planner.COMPANY_NOTES.path, config.DATA_DIR / "filtered_out.json",
-            config.DATA_DIR / "my_details.json", answer_memory.MEMORY.path, assistant_notes.NOTES.path]
+    return [config.JOBS_JSON, config.RESPONSES_DB, config.PROFILE.path, config.UI_SETTINGS.path, config.LAST_RUN.path,
+            config.FILTERED_OUT.path, config.MY_DETAILS.path, planner.COMPANY_NOTES.path, answer_memory.MEMORY.path,
+            assistant_notes.NOTES.path]
 
 
 def encrypt_file(path: Path) -> bool:

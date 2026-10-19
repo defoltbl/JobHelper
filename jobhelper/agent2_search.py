@@ -365,23 +365,14 @@ def note_dropped(dropped: list | None, job: dict[str, Any], group: str, reason: 
                         "job": dict(job)})          # the whole posting, so it can be brought back
 
 
-def _dropped_path():
-    return config.DATA_DIR / "filtered_out.json"
-
-
 # Reasons a later run would apply again at once, so bringing the posting back would not last.
 NO_BRING_BACK = {"duplicate", "already applied", "closed"}
-
-
-def _dropped_file():
-    from . import vault
-    return vault.JsonFile("filtered_out.json", where=_dropped_path)
 
 
 def save_dropped(rows: list[dict[str, Any]], when: str = "") -> None:
     """Keep what the latest search filtered out (replaces the previous search's list)."""
     from datetime import datetime
-    _dropped_file().write({"when": when or datetime.now().strftime("%d %b %H:%M"), "total": len(rows), "rows": rows[:MAX_DROPPED]},
+    config.FILTERED_OUT.write({"when": when or datetime.now().strftime("%d %b %H:%M"), "total": len(rows), "rows": rows[:MAX_DROPPED]},
                           indent=1)
 
 
@@ -389,7 +380,7 @@ def load_dropped() -> dict[str, Any]:
     """What the latest search filtered out; nothing when it cannot be read (it is only shown, never saved back)."""
     from . import vault
     try:
-        data = _dropped_file().read()
+        data = config.FILTERED_OUT.read()
     except vault.VaultError:
         data = None
     if not isinstance(data, dict):

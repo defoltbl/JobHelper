@@ -325,7 +325,12 @@ def ui_settings_file() -> Path:
     return DATA_DIR / "ui_settings.json"
 
 
-UI_SETTINGS = vault.JsonFile("ui_settings.json", where=lambda: ui_settings_file())     # the Options file
+# Where each small JSON file of the data lives (read and written only through these, see vault.JsonFile).
+UI_SETTINGS = vault.JsonFile("ui_settings.json", where=lambda: ui_settings_file())      # the Options
+LAST_RUN = vault.JsonFile("last_run.json")                                              # the Last run card
+FILTERED_OUT = vault.JsonFile("filtered_out.json")                                      # what the latest search left out
+PROFILE = vault.JsonFile("profile.json", where=lambda: PROFILE_JSON)                    # what Claude read from the CV
+MY_DETAILS = vault.JsonFile("my_details.json")                                          # My details, for forms
 
 
 def ui_settings() -> dict:
