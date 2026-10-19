@@ -24,7 +24,7 @@ import sys
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 SERVICE = os.getenv("JOBHELPER_VAULT_SERVICE", "JobHelper")
 MAGIC = b"JHENC1\n"                 # start of every encrypted file
@@ -298,23 +298,34 @@ def write_text(path: Path, text: str) -> None:
 
 
 class JsonFile:
-    """One small JSON store in the data folder, kept encrypted.
+    """One small JSON store, kept encrypted: `name` in the data folder, or the path `where()` gives (read at each use,
+    so a setting that moves the file is followed).
 
-    `read` gives the saved value, or None when there is no file or it cannot be parsed. A file that
-    the data key cannot open raises VaultError: the store must not read as empty, or its next save
-    writes an empty store over what is kept."""
+    `load` is strict: None when there is no file, ValueError when it is damaged. `read` is lenient: None when there is
+    no file or it cannot be parsed. Both raise VaultError for a file the data key cannot open: a store must not read
+    it as empty, or its next save writes an empty store over what is kept. A store that may show nothing in that case
+    catches VaultError itself."""
 
-    def __init__(self, name: str) -> None:
-        self._name = name
+    def __init__(self, name: str, where: Callable[[], Path] | None = None) -> None:
+        self._name, self._where = name, where
 
     @property
     def path(self) -> Path:
+        if self._where is not None:
+            return Path(self._where())
         from . import config
         return config.DATA_DIR / self._name
 
+    def load(self) -> Any:
+        try:
+            text = read_text(self.path)
+        except FileNotFoundError:
+            return None
+        return json.loads(text)
+
     def read(self) -> Any:
         try:
-            return json.loads(read_text(self.path))
+            return self.load()
         except VaultError:
             raise
         except (OSError, ValueError):
@@ -323,10 +334,10 @@ class JsonFile:
     def exists(self) -> bool:
         return self.path.exists()
 
-    def write(self, value: Any) -> None:
+    def write(self, value: Any, indent: int = 2) -> None:
         from . import config
         config.ensure_dirs()
-        write_text(self.path, json.dumps(value, ensure_ascii=False, indent=2))
+        write_text(self.path, json.dumps(value, ensure_ascii=False, indent=indent))
 
 
 def file_is_encrypted(path: Path) -> bool:

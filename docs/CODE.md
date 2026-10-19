@@ -753,10 +753,12 @@ Follow these rules when code changes data:
 
 1. Read and write the job list only through `store`, and the replies only through `db`. Read
    and write any encrypted file only through `vault`.
-   A small store is one class over one `vault.JsonFile`. Examples: the assistant notes, the
-   remembered answers, the notes per company. The file gives the saved value, or nothing when the
-   file is not there or is damaged. If the key cannot open the file, it stops with an error. Thus
-   a save never writes an empty store over the data.
+   Every small JSON file goes through one `vault.JsonFile`. Examples: the assistant notes, the
+   remembered answers and the notes per company. The Options, the last run, the filtered-out jobs,
+   the CV analysis and My details use it too. `read` gives the saved value, or nothing when the file is not
+   there or is damaged. `load` stops with an error for a damaged file. If the key cannot open the
+   file, both stop with an error. Thus a save never writes an empty store over the data. A store
+   that may show nothing in that case catches the error itself.
 2. Call `vault.make_backup(label)` before a change that touches many jobs.
 3. Move a document to the encrypted backup instead of deleting it; put old copies in the Trash.
 4. Do not change the data while the window is running.

@@ -203,7 +203,10 @@ data/                your data; only the *.example.* files are in git
 - **Each small store is one object over one `vault.JsonFile`**: `assistant_notes.AssistantNotes`,
   `answer_memory.AnswerMemory`, `planner.CompanyNotes`. A file the data key cannot open raises `VaultError`;
   a save never treats it as empty, or it would write over it (`CompanyNotes` shows no notes, and the save gives
-  `CompanyNotes.UNREADABLE`). `usage.UsageLog` owns usage.json (not
+  `CompanyNotes.UNREADABLE`). The other JSON files use it too: `config.UI_SETTINGS` (Options), `api_options` `LAST_RUN`,
+  the filtered-out list (`agent2_search`), `agent1_cv.PROFILE`, `details.FILE`. `load` raises for a damaged file (Options
+  notes it, the CV analysis is made again), `read` gives None; each store keeps its own answer to a locked file (the
+  last run, the filtered-out list and Options show nothing; the CV analysis and My details refuse). `usage.UsageLog` owns usage.json (not
   encrypted) and the counts of this run; `api_system` asks `usage.totals()` / `usage.by_tag()`.
 - **A script for the page gets its values only through `form_fill.with_values`** (each `__NAME__` as JSON data, never
   code), and every answer of a page is read through `form_fill.page_reply` (refused with a message, or None). A new

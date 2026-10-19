@@ -7,7 +7,6 @@ seniority, skills, and a set of concrete search queries for Agent 2.
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +40,8 @@ CV TEXT:
 ---
 Return only the JSON object."""
 
+
+PROFILE = vault.JsonFile("profile.json", where=lambda: config.PROFILE_JSON)      # what Claude read from the CV
 
 def read_cv_text(path: Path) -> str:
     suffix = path.suffix.lower()
@@ -115,7 +116,7 @@ def analyze(cv_path: Path | None = None) -> dict[str, Any]:
         raise ValueError("Claude's answer about your CV could not be read. Run the search again.")
     profile["_cv_file"] = cv_path.name
     profile["_cv_sha"] = _sha(cv_path)
-    vault.write_text(config.PROFILE_JSON, json.dumps(profile, ensure_ascii=False, indent=2))
+    PROFILE.write(profile)
     return profile
 
 
@@ -143,7 +144,7 @@ def load_profile(current_only: bool = False) -> dict[str, Any] | None:
     if not config.PROFILE_JSON.exists():
         return None
     try:
-        profile = json.loads(vault.read_text(config.PROFILE_JSON))
+        profile = PROFILE.load()
     except ValueError:
         return None                                  # a damaged file: the CV is analysed again
     if not isinstance(profile, dict):
