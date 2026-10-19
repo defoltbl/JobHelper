@@ -10,7 +10,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from . import config, llm, vault
+from . import config, llm
 
 SYSTEM = (
     "You are a senior career coach and technical recruiter. You read a person's "
@@ -40,8 +40,6 @@ CV TEXT:
 ---
 Return only the JSON object."""
 
-
-PROFILE = vault.JsonFile("profile.json", where=lambda: config.PROFILE_JSON)      # what Claude read from the CV
 
 def read_cv_text(path: Path) -> str:
     suffix = path.suffix.lower()
@@ -116,7 +114,7 @@ def analyze(cv_path: Path | None = None) -> dict[str, Any]:
         raise ValueError("Claude's answer about your CV could not be read. Run the search again.")
     profile["_cv_file"] = cv_path.name
     profile["_cv_sha"] = _sha(cv_path)
-    PROFILE.write(profile)
+    config.PROFILE.write(profile)
     return profile
 
 
@@ -141,10 +139,8 @@ def load_profile(current_only: bool = False) -> dict[str, Any] | None:
     """The saved CV analysis. With current_only, None is returned when it was
     made from a different CV than the one in data/cv now, so an edited CV
     (new dates, new titles) is analysed again instead of scored from old facts."""
-    if not config.PROFILE_JSON.exists():
-        return None
     try:
-        profile = PROFILE.load()
+        profile = config.PROFILE.load()                 # None when there is none yet
     except ValueError:
         return None                                  # a damaged file: the CV is analysed again
     if not isinstance(profile, dict):

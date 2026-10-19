@@ -61,12 +61,10 @@ def _responses() -> str:
 
 
 def _settings() -> str:
-    path = config.ui_settings_file()
-    if not path.is_file():
+    if not config.UI_SETTINGS.path.is_file():
         return ""
     try:
-        import json
-        if not isinstance(json.loads(vault.read_text(path)), dict):
+        if not isinstance(config.UI_SETTINGS.load(), dict):
             raise ValueError
     except vault.VaultError:
         return "Your Options cannot be decrypted, so the defaults are used. Paste your recovery key in the Account card."
