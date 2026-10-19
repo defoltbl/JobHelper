@@ -1161,20 +1161,20 @@ switch is (section 10).
    from the app. If none of these is clear, it takes no job.
 4. Select **Fill in the form**, or type the request, for example *fill in the
    form*, and press Return.
-5. Read the answer (Figure 9.6). **Filled in** lists what was written and chosen; **Left for
-   you** lists what was not, each with the reason.
+5. Read the answer (Figure 9.6). **Filled in** lists what was written and chosen. Under it,
+   **Left for you** lists what was not, each with the reason (Figure 9.7).
 6. Go to the browser and read the form. Filled fields have a green outline. An answer that needs
    your attention, and everything that was chosen for you, has an amber one.
 7. Complete what was left for you, then send the form yourself.
 8. Back in the app, use the buttons under the answer (Figure 9.7). Table 9.3 describes them.
 
-![What the assistant filled in and what it left](img/38_assistant_fill.png)
+![What the assistant filled in](img/38_assistant_fill.png)
 
-*Figure 9.6 – What the assistant filled in and what it left*
+*Figure 9.6 – What the assistant filled in*
 
-![The buttons under the assistant's answer](img/40_assistant_next.png)
+![What the assistant left for you, and the buttons under the answer](img/40_assistant_next.png)
 
-*Figure 9.7 – The buttons under the assistant's answer*
+*Figure 9.7 – What the assistant left for you, and the buttons under the answer*
 
 *Table 9.3 – What the assistant offers after it filled in a form*
 
