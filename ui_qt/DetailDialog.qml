@@ -91,7 +91,7 @@ Dialog {
     onClosed: { confirmClose = false; confirmAction = ""; closeNote = ""; reviewQueue = []; reviewNote = ""; }
     Shortcut { sequence: "Escape"
         enabled: detailDialog.visible && detailDialog.pending.length > 0 && !(formDialog.visible || prepDialog.visible || prepEditDialog.visible
-                 || compareDialog.visible || letterDialog.visible || responseDialog.visible)
+                 || compareDialog.visible || letterDialog.visible || responseDialog.visible || assistantDialog.visible)
         onActivated: detailDialog.tryClose() }
     enter: Transition { ParallelAnimation {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
@@ -621,7 +621,7 @@ Dialog {
                             color: theme.ink; font.pixelSize: 12; selectByMouse: true
                             inputMethodHints: Qt.ImhDate
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1
-                                border.color: dateField.activeFocus ? theme.accent : (detailDialog.dateErr !== "" ? theme.crit : theme.line) }
+                                border.color: (detailDialog.dateErr !== "") ? theme.crit : (dateField.activeFocus ? theme.accent : theme.line) }
                             onTextEdited: detailDialog.dateErr = ""
                             onAccepted: detailDialog.saveDate() }
                         SmallButton { objectName: "dateSave"; text: "Save date"; onClicked: detailDialog.saveDate() }
@@ -650,7 +650,7 @@ Dialog {
                         TextField { id: evDate; objectName: "evDate"; implicitWidth: 118; implicitHeight: 28; placeholderText: "YYYY-MM-DD"
                             placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1
-                                border.color: evDate.activeFocus ? theme.accent : (detailDialog.eventErr !== "" ? theme.crit : theme.line) }
+                                border.color: (detailDialog.eventErr !== "") ? theme.crit : (evDate.activeFocus ? theme.accent : theme.line) }
                             onTextEdited: detailDialog.eventErr = "" }
                         TextField { id: evTime; objectName: "evTime"; implicitWidth: 70; implicitHeight: 28; placeholderText: "HH:MM"
                             placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true

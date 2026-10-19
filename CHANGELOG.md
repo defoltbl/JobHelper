@@ -7,6 +7,9 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Esc** now asks once in the **Cover letter**, **Answers for this form**, preparation and assistant windows when they hold unsaved changes, instead of doing nothing; the cover letter window also has a **✕**.
+- Small buttons that cannot be used at the moment are now pale, like the large ones, and a button reached with the Tab key shows an outline.
+- A field with an error stays **red** while you type in it; before, the focus colour hid the red border.
 - **Open posting** no longer opens a job's link when it points to a Russian site, the same rule the assistant follows for every page.
 - When the file with your **notes per company** is damaged, saving a note no longer replaces it with that one note. Now the app shows a red line that it cannot read the notes, and leaves the file as it is.
 - `python status.py sync` and `responses --scan` now also say when a mail folder or the second mailbox could not be read, as the window already did.

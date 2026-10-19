@@ -527,7 +527,7 @@ Dialog {
                             TextField { id: coToken; Layout.preferredWidth: 110; placeholderText: "token"
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true
                                 background: Rectangle { radius: 7; color: theme.surface; border.width: 1
-                                    border.color: coToken.activeFocus ? theme.accent : (optDialog.coErr ? theme.crit : theme.line) }
+                                    border.color: (optDialog.coErr) ? theme.crit : (coToken.activeFocus ? theme.accent : theme.line) }
                                 onTextChanged: optDialog.coErr = ""
                                 onAccepted: { if (optDialog.addCompany(coName.text, coAts.currentText, coToken.text)) { coName.text = ""; coToken.text = ""; } } }
                             SmallButton { text: "+ Add"; primaryStyle: true

@@ -12,6 +12,10 @@ Dialog {
     id: assistantDialog; objectName: "assistantDialog"
     modal: true; anchors.centerIn: parent
     closePolicy: (dirty || busy) ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits
+    // ... but it must not do nothing either: with changes (or while working) it asks once, or says why it waits
+    Shortcut { sequence: "Escape"; enabled: assistantDialog.visible && (assistantDialog.dirty || assistantDialog.busy)
+                   && !(detailDialog.visible || formDialog.visible || prepDialog.visible || prepEditDialog.visible || letterDialog.visible || compareDialog.visible || responseDialog.visible)
+               onActivated: assistantDialog.tryClose() }
     enter: Transition { ParallelAnimation {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
         NumberAnimation { property: "scale"; from: 0.92; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 0.7 } } }

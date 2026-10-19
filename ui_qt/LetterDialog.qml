@@ -9,7 +9,10 @@ import QtQuick.Effects
 
 Dialog {
     id: letterDialog; objectName: "letterDialog"
-    modal: true; anchors.centerIn: parent; closePolicy: Popup.NoAutoClose
+    modal: true; anchors.centerIn: parent
+    closePolicy: (dirty || busyIndex >= 0) ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits ...
+    Shortcut { sequence: "Escape"; enabled: letterDialog.visible && (letterDialog.dirty || letterDialog.busyIndex >= 0)   // ... nor do nothing
+               onActivated: letterDialog.tryClose() }
     enter: Transition { ParallelAnimation {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
         NumberAnimation { property: "scale"; from: 0.92; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 0.7 } } }
@@ -93,6 +96,10 @@ Dialog {
             Text { objectName: "letterWords"; font.pixelSize: 12; font.bold: true
                 color: (letterDialog.words < (letterDialog.meta.min_words || 0) || letterDialog.words > (letterDialog.meta.max_words || 9999)) ? theme.warn : theme.soft
                 text: letterDialog.words + " words" }
+            Rectangle { objectName: "letterX"; implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
+                Layout.alignment: Qt.AlignTop
+                Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
+                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: letterDialog.tryClose() } }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         Flickable {
