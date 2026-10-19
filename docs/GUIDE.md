@@ -137,6 +137,11 @@ Four kinds of box mark what deserves attention (Table 1.4).
 
 The figures show the real window of the app, filled with **invented** people and companies.
 
+> **Note**
+> A window that holds text you did not save never closes without a question. The ✕ and the Esc
+> key ask once. Press them again to discard the changes. A button that you cannot use at the
+> moment is pale.
+
 This guide is for people who use the app. The technical documentation, [CODE.md](CODE.md),
 is for people who work with the code. It covers the installation, the command line, the
 structure of the code and the tests.

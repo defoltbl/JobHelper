@@ -36,7 +36,7 @@ ColumnLayout {
             TextField { id: teField; implicitWidth: 180; implicitHeight: 30; placeholderText: te.placeholder
                 placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
-                    border.color: teField.activeFocus ? theme.accent : (te.err !== "" ? theme.crit : theme.line) }
+                    border.color: (te.err !== "") ? theme.crit : (teField.activeFocus ? theme.accent : theme.line) }
                 onTextEdited: te.err = ""
                 onAccepted: if (te.add(text)) text = "" }
             SmallButton { text: "+ Add"; primaryStyle: true; onClicked: { if (te.add(teField.text)) teField.text = ""; } } } }

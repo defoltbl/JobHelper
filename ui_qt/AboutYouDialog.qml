@@ -240,7 +240,7 @@ Dialog {
                                     aboutDialog.start = bridge.startPreview(text);
                                 }
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
-                                    border.color: startField.activeFocus ? theme.accent : (aboutDialog.start.ok === false ? theme.crit : theme.line) } }
+                                    border.color: (aboutDialog.start.ok === false) ? theme.crit : (startField.activeFocus ? theme.accent : theme.line) } }
                             Text { objectName: "startPreview"; visible: (aboutDialog.start.text || "") !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
                                 font.pixelSize: 11; font.bold: aboutDialog.start.ok === false
                                 color: aboutDialog.start.ok === false ? theme.crit : theme.good; text: aboutDialog.start.text || "" }

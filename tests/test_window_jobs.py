@@ -1058,3 +1058,37 @@ def test_letter_editor_explains_wrong_steps(ui, monkeypatch):
     ui.wait(450)
     assert dialog.property("visible") is False                                                           # saved: closes at once
     assert ui.warnings == []
+
+
+def test_esc_asks_once_before_unsaved_answers_are_thrown_away(ui):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    dialog = ui.find("formDialog")
+    ui.js('formDialog.show("app")')
+    _until_open(ui, "formDialog")
+    ui.win.requestActivate()
+    QTest.keyClick(ui.win, Qt.Key_Escape)                                 # nothing changed: Esc closes, as before
+    _until_closed(ui, "formDialog")
+    ui.js('formDialog.show("app")')
+    _until_open(ui, "formDialog")
+    ui.js("formDialog.dirty = true")
+    ui.win.requestActivate()
+    QTest.keyClick(ui.win, Qt.Key_Escape)                                 # changed: Esc used to do nothing at all
+    assert _until(lambda: "did not save" in ui.js("formDialog.err")) and dialog.property("visible") is True
+    QTest.keyClick(ui.win, Qt.Key_Escape)                                 # asked once: the second Esc closes
+    _until_closed(ui, "formDialog")
+
+
+def test_a_button_that_cannot_be_pressed_looks_it_and_an_error_shows_red_even_with_focus(ui):
+    button = ui.find("fmDraft")
+    button.setProperty("enabled", False)
+    assert button.property("opacity") == 0.5
+    button.setProperty("enabled", True)
+    assert button.property("opacity") == 1
+    source = qml_source()
+    assert "activeFocus ? theme.accent : (" not in source, "a field's red error border must not hide behind its focus colour"
+    letter = (ROOT / "ui_qt" / "LetterDialog.qml").read_text(encoding="utf-8")
+    assert 'objectName: "letterX"' in letter and "onClicked: letterDialog.tryClose() }" in letter, "the letter window has a ✕ too"
+    for name in ("LetterDialog", "AssistantDialog", "FormAnswersDialog", "PrepEditDialog", "OptionsDialog", "AboutYouDialog"):
+        text = (ROOT / "ui_qt" / f"{name}.qml").read_text(encoding="utf-8")
+        assert 'Shortcut { sequence: "Escape"' in text and "tryClose()" in text, f"{name}: Esc asks or closes, never nothing"

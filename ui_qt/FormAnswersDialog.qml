@@ -10,7 +10,9 @@ import QtQuick.Effects
 Dialog {
     id: formDialog; objectName: "formDialog"
     modal: true; anchors.centerIn: parent
-    closePolicy: dirty ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits
+    closePolicy: (dirty || busy) ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits ...
+    Shortcut { sequence: "Escape"; enabled: formDialog.visible && (formDialog.dirty || formDialog.busy)   // ... nor do nothing
+               onActivated: formDialog.tryClose() }
     enter: Transition { ParallelAnimation {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
         NumberAnimation { property: "scale"; from: 0.92; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 0.7 } } }
