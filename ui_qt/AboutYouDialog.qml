@@ -13,7 +13,7 @@ Dialog {
     id: aboutDialog; objectName: "aboutDialog"
     modal: true; anchors.centerIn: parent
     closePolicy: Popup.NoAutoClose        // Esc goes through tryClose, so changes are never thrown away unasked
-    Shortcut { sequence: "Escape"; enabled: aboutDialog.visible; onActivated: aboutDialog.tryClose() }
+    Shortcut { sequence: "Escape"; enabled: win.onTop(aboutDialog); onActivated: aboutDialog.tryClose() }
     enter: Transition { ParallelAnimation {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
         NumberAnimation { property: "scale"; from: 0.92; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 0.7 } } }

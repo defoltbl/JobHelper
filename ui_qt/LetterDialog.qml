@@ -10,8 +10,9 @@ import QtQuick.Effects
 Dialog {
     id: letterDialog; objectName: "letterDialog"
     modal: true; anchors.centerIn: parent
-    closePolicy: (dirty || busyIndex >= 0) ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits ...
-    Shortcut { sequence: "Escape"; enabled: letterDialog.visible && (letterDialog.dirty || letterDialog.busyIndex >= 0)   // ... nor do nothing
+    readonly property bool holdsWork: dirty || busyIndex >= 0      // unsaved changes, or Claude rewriting a paragraph
+    closePolicy: holdsWork ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits ...
+    Shortcut { sequence: "Escape"; enabled: letterDialog.holdsWork && win.onTop(letterDialog)   // ... nor do nothing
                onActivated: letterDialog.tryClose() }
     enter: Transition { ParallelAnimation {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
