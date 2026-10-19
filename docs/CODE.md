@@ -823,6 +823,9 @@ them:
 python -m pytest tests/guide_shots.py -q -o addopts=""
 ```
 
+The script draws the window at twice its size, as on a Retina screen. Thus the pictures are sharp
+on large screens and in the PDF.
+
 ### Keep the numbers of figures and tables in order
 
 Figures and tables are numbered inside their chapter, as in a thesis. For example, the second
