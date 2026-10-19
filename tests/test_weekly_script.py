@@ -8,15 +8,27 @@ from jobhelper import config, weekly
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def _tracked_text_files():
+def _tracked_text_files(root=ROOT):
     skip = {".venv", ".git", "data", "__pycache__", ".pytest_cache", "build", "dist"}     # build/, dist/: the built app
-    for path in ROOT.rglob("*"):
-        parts = path.relative_to(ROOT).parts
+    for path in root.rglob("*"):
+        parts = path.relative_to(root).parts
         if any(part.startswith("data_moved_to_Library") for part in parts):
             continue                                           # your old data folder, kept after the move
+        if parts[:2] == (".claude", "worktrees"):
+            continue                                           # other checkouts of this repository, with their own copies
         if path.is_file() and not (set(parts) & skip) \
                 and path.suffix in {".py", ".sh", ".md", ".qml", ".json", ".txt", ".ini", ".example"}:
             yield path
+
+
+def test_the_scan_reads_this_checkout_and_not_the_worktrees_inside_it(tmp_path):
+    """A session in its own worktree keeps it in .claude/worktrees: its copy of this file is not a file of this folder."""
+    (tmp_path / ".claude" / "agents").mkdir(parents=True)
+    (tmp_path / ".claude" / "agents" / "helper.md").write_text("an agent")
+    copy = tmp_path / ".claude" / "worktrees" / "other" / "tests"
+    copy.mkdir(parents=True)
+    (copy / "test_weekly_script.py").write_text("a copy")
+    assert [p.relative_to(tmp_path).as_posix() for p in _tracked_text_files(tmp_path)] == [".claude/agents/helper.md"]
 
 
 def test_no_file_names_one_persons_computer():
