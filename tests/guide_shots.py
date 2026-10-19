@@ -8,11 +8,15 @@ It loads the real window offscreen on a made-up data set (invented people and co
 temporary folder), walks through the screens and saves one picture per screen to docs/img/.
 Nothing of yours is read, and Claude is never asked.
 """
+import os
 from datetime import date, timedelta
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt
-from PySide6.QtQuick import QQuickWindow
+# The window is drawn at twice its size, as on a Retina or 4K screen, so every picture is sharp; set before Qt starts.
+os.environ["QT_SCALE_FACTOR"] = "2"
+
+from PySide6.QtCore import QObject, Qt  # noqa: E402
+from PySide6.QtQuick import QQuickWindow  # noqa: E402
 
 from jobhelper import api_core, agent1_cv, agent2_search, config, db, llm, store, ui_api
 from tests.conftest import ROOT
@@ -176,13 +180,18 @@ def test_guide_shots(ui, monkeypatch):
     api.set_event("app1", (TODAY + timedelta(days=2)).isoformat(), "11:30", "interview", "Video call with the team lead")
 
     def shot(name, part=None, zoom=2):
-        """The whole window, or one part of it (x, y, width, height) enlarged so its small text can be read."""
+        """The whole window, or one part of it (x, y, width, height) shown `zoom` times larger so its small text can be read.
+        The window is drawn at twice its size, so a part keeps its own sharp pixels; it is enlarged only beyond that."""
         ui.wait(450)
         path = OUT / f"{name}.png"
         picture = QQuickWindow.grabWindow(ui.win)
+        ratio = picture.width() / ui.win.width()            # 2: the grab does not always report it itself
         if part:
             x, y, w, h = part
-            picture = picture.copy(x, y, w, h).scaled(w * zoom, h * zoom, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            picture = picture.copy(round(x * ratio), round(y * ratio), round(w * ratio), round(h * ratio))
+            if zoom != ratio:
+                picture = picture.scaled(round(w * zoom), round(h * zoom), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        picture.setDevicePixelRatio(1)
         picture.save(str(path))
         done.append(name)
 
