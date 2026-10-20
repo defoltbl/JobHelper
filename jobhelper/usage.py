@@ -53,6 +53,7 @@ _FIELDS = ("input_tokens", "output_tokens", "cache_read_input_tokens",
 _WINDOW_WORDS = (("seven_day", re.compile(r"week|7[- ]?day|seven[- ]day", re.IGNORECASE)),
                  ("five_hour", re.compile(r"session|5[- ]?hour|five[- ]hour", re.IGNORECASE)))
 WINDOWS = ("five_hour", "seven_day")
+STALE_AFTER = 3600      # seconds: Claude reports the limits only with an answer, so an older number is shown with its time
 
 
 def _blank() -> dict[str, Any]:
@@ -69,6 +70,19 @@ def _fmt(d: dict[str, Any]) -> str:
     return (f"{d['calls']} calls | in {d['input_tokens']:,} + out {d['output_tokens']:,} tok "
             f"| cache read {d.get('cache_read_input_tokens', 0):,} "
             f"| ~${d['cost_usd']:.4f} (API-equiv.)")
+
+
+def _moment(text: Any) -> float:
+    """The epoch of a saved local time ("2026-10-18T09:22:53"), 0 when it is not one."""
+    try:
+        return datetime.fromisoformat(str(text)).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def _window(used: float | None, resets_at: float, as_of: float, now: float) -> dict[str, Any]:
+    return {"used": used, "resets_at": resets_at, "as_of": as_of,
+            "stale": used is not None and as_of > 0 and now - as_of > STALE_AFTER}
 
 
 def window_named(message: str) -> str:
@@ -150,7 +164,8 @@ class UsageLog:
             self._write(state)
 
     def windows(self, now: float | None = None) -> dict[str, dict[str, Any]]:
-        """Each limit as it stands now: {window: {used (0..1 or None = never reported), resets_at (epoch, 0 = unknown)}}.
+        """Each limit as it stands now: {window: {used (0..1 or None = never reported), resets_at (epoch, 0 = unknown),
+        as_of (epoch the number was true, 0 = unknown), stale (it is older than STALE_AFTER)}}.
 
         The numbers Claude last reported, corrected by what is known since: a window
         whose reset time has passed is empty again, and a window Claude refused a call
@@ -160,22 +175,23 @@ class UsageLog:
         state = self._read()
         info = (state.get("last_rate_limit") or {}).get("info")
         reported = info.get("unifiedWindows") if isinstance(info, dict) else None
+        read_at = _moment((state.get("last_rate_limit") or {}).get("at"))
         out: dict[str, dict[str, Any]] = {}
         for name in WINDOWS:
             w = (reported or {}).get(name)
-            used, resets = (w.get("utilization"), float(w.get("resetsAt") or 0)) if isinstance(w, dict) else (None, 0.0)
+            used, resets, as_of = (w.get("utilization"), float(w.get("resetsAt") or 0), read_at) if isinstance(w, dict) else (None, 0.0, 0.0)
             if not isinstance(used, (int, float)) or isinstance(used, bool):
-                used, resets = None, 0.0
+                used, resets, as_of = None, 0.0, 0.0
             elif resets and resets <= now:
-                used, resets = 0.0, 0.0
-            out[name] = {"used": None if used is None else float(used), "resets_at": resets}
+                used, resets, as_of = 0.0, 0.0, now
+            out[name] = _window(None if used is None else float(used), resets, as_of, now)
         block = state.get("limit_block") or {}
         until = float(_number(block.get("until")))
         if until > now:
             name = block.get("window") if block.get("window") in WINDOWS else ""
             if not name:            # the refusal did not say which: the fuller one, the short window when neither is known
                 name = max(WINDOWS, key=lambda k: out[k]["used"] or 0.0) if any(out[k]["used"] for k in WINDOWS) else "five_hour"
-            out[name] = {"used": 1.0, "resets_at": until}
+            out[name] = _window(1.0, until, now, now)
         return out
 
     def limit_status(self, threshold: float = 0.99, now: float | None = None) -> dict[str, Any]:

@@ -45,8 +45,8 @@ Rectangle {
         }
         Repeater {
             model: [
-                { key: "five_hour", label: "5-hour", used: usageData.five_hour_used, resets: usageData.five_hour_resets, c1: theme.a2, c2: theme.accent },
-                { key: "seven_day", label: "7-day", used: usageData.seven_day_used, resets: usageData.seven_day_resets, c1: theme.a1, c2: theme.a3 }
+                { key: "five_hour", label: "5-hour", used: usageData.five_hour_used, resets: usageData.five_hour_resets, asOf: usageData.five_hour_as_of, c1: theme.a2, c2: theme.accent },
+                { key: "seven_day", label: "7-day", used: usageData.seven_day_used, resets: usageData.seven_day_resets, asOf: usageData.seven_day_as_of, c1: theme.a1, c2: theme.a3 }
             ]
             ColumnLayout { Layout.fillWidth: true; spacing: 5
                 RowLayout { Layout.fillWidth: true
@@ -60,11 +60,13 @@ Rectangle {
                         width: parent.width * Math.max(0, Math.min(1, (modelData.used === undefined || modelData.used === null ? 0 : modelData.used) / 100))
                         gradient: Gradient { orientation: Gradient.Horizontal
                             GradientStop { position: 0; color: modelData.c1 } GradientStop { position: 1; color: modelData.c2 } } } }
-                // when little is left: the time it comes back, on its own line so the card keeps its width
+                // when little is left: the time it comes back, on its own line so the card keeps its width;
+                // else, for a number Claude reported long ago, when that was (it reports only with an answer)
                 Text { objectName: "usageResets_" + modelData.key; visible: text !== ""
+                    readonly property bool resetLine: !!modelData.resets && modelData.used >= 80
                     Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; wrapMode: Text.Wrap
-                    color: modelData.used >= 100 ? theme.crit : theme.soft; font.pixelSize: 10
-                    text: modelData.resets && modelData.used >= 80 ? "resets " + modelData.resets : "" }
+                    color: resetLine && modelData.used >= 100 ? theme.crit : theme.soft; font.pixelSize: 10
+                    text: resetLine ? "resets " + modelData.resets : (modelData.asOf ? "as of " + modelData.asOf : "") }
             }
         }
         // last run card

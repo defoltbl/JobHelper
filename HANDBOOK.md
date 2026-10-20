@@ -351,7 +351,8 @@ data/                your data; only the *.example.* files are in git
 - **Rows made by a `Repeater` are not found by `findChild`.** Use `ui.seen(part)` / `ui.drawn(name)`.
 - **The usage numbers are a snapshot from Claude's last answer.** `usage.windows()` corrects them: a
   refusal fills the window it names until its reset, a window past its reset time is empty. Everything
-  that shows or tests the limit goes through it.
+  that shows or tests the limit goes through it. A number older than `usage.STALE_AFTER` (one hour) is `stale`:
+  the card shows "as of" and its time, and the widget shows "–" (while Claude refuses, nothing new comes).
 - **A message over an open window (the toast) ends when the last window closes** (`Main.qml`
   `onDialogOpenChanged`); the status line keeps the words. Before, it came back on the next window.
 - **The window is taken down before the bridge** when the app closes (`app_qt.shut_down`), or every binding

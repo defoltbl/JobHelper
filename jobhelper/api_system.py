@@ -79,13 +79,14 @@ class SystemService:
         totals = usage.totals()
         now = datetime.now()
         out = {"model": config.MODEL, "calls": totals["calls"], "cost": round(totals["cost_usd"], 2)}
+        def moment(epoch):                    # today's time alone, another day's with its date
+            when = datetime.fromtimestamp(epoch)
+            return when.strftime("%H:%M") if when.date() == now.date() else when.strftime("%d %b %H:%M")
         for name, w in usage.windows(now.timestamp()).items():
             out[name + "_used"] = None if w["used"] is None else min(100, max(0, round(w["used"] * 100)))
-            resets = ""
-            if w["resets_at"]:
-                when = datetime.fromtimestamp(w["resets_at"])
-                resets = when.strftime("%H:%M") if when.date() == now.date() else when.strftime("%d %b %H:%M")
-            out[name + "_resets"] = resets
+            out[name + "_resets"] = moment(w["resets_at"]) if w["resets_at"] else ""
+            out[name + "_stale"] = w["stale"]                                   # an old number (usage.STALE_AFTER) ...
+            out[name + "_as_of"] = moment(w["as_of"]) if w["stale"] else ""     # ... and when Claude last said it
         # seconds until the next limit comes back, so the card can correct itself then (0 = none is counting down)
         coming = [w["resets_at"] - now.timestamp() for w in usage.windows(now.timestamp()).values() if w["resets_at"] and w["used"]]
         out["next_reset_in"] = int(min(coming)) + 1 if coming else 0
