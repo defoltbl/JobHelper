@@ -583,7 +583,7 @@ def test_status_buttons_and_apply_date_in_the_job_view(ui):
 def test_second_mailbox_row_follows_the_connection(ui):
     welcome = ui.find("welcome")
     ui.js("welcome.openCard()")
-    ui.wait(300)
+    _until_shown(ui, "welcome")
     ui.win.setProperty("connData", {**READY, "email2": False, "email2_addr": ""})
     assert ui.find("secondMailAdd").property("text") == "Add"
     ui.js("welcome.editBox = 2; welcome.editEmail = true")

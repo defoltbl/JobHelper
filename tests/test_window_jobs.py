@@ -947,6 +947,7 @@ def test_the_preparation_can_be_edited_and_wrong_steps_are_explained(ui, monkeyp
     ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
     ui.js('prepEditDialog.show("app")')                                          # nothing to edit: said, no empty window
     _until_true(ui, lambda: "Prepare the interview first" in ui.js("ticker.text"))
+    ui.wait(250)                                                       # nothing may open: only time can show that
     assert dialog.property("visible") is False and "Prepare the interview first" in ui.js("ticker.text")
     assert ui.warnings == []
 
