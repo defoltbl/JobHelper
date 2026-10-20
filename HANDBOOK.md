@@ -352,6 +352,8 @@ data/                your data; only the *.example.* files are in git
 - **The usage numbers are a snapshot from Claude's last answer.** `usage.windows()` corrects them: a
   refusal fills the window it names until its reset, a window past its reset time is empty. Everything
   that shows or tests the limit goes through it.
+- **A message over an open window (the toast) ends when the last window closes** (`Main.qml`
+  `onDialogOpenChanged`); the status line keeps the words. Before, it came back on the next window.
 - **The window is taken down before the bridge** when the app closes (`app_qt.shut_down`), or every binding
   that calls the bridge prints an error on the way out.
 - **One claim check for every text in the person's voice** (`claims.ClaimCheck`): the letter, the form answers and

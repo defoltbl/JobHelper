@@ -14,7 +14,7 @@ from PySide6.QtCore import QMetaObject, QObject  # noqa: E402
 
 from jobhelper import api_core, config, store, ui_api  # noqa: E402
 from tests.conftest import ROOT  # noqa: E402
-from tests.window_harness import (Ui, _border_with_focus, _open, _open_job, _until, _until_closed, _until_open, qml_source)  # noqa: E402
+from tests.window_harness import (Ui, _border_with_focus, _open, _open_job, _until, _until_closed, _until_open, _until_true, qml_source)  # noqa: E402
 
 
 # ── dates, company notes, pasted replies, CV comparison, pay ────────────────
@@ -1257,4 +1257,29 @@ def test_a_field_with_an_error_is_red_even_with_the_focus(ui):
     assert shown == red and ui.js("String(evTime.background.border.color)", ui.find("detailDialog")) != red
     ui.js('evDate.text = ""; evTime.text = ""; detailDialog.eventProblem(""); detailDialog.close()')
     _until_closed(ui, "detailDialog")
+    assert ui.warnings == []
+
+
+def test_a_message_over_a_window_does_not_come_back_when_a_window_opens_again(ui):
+    """"Options saved." was only hidden when Options closed; opened again within four seconds, Options showed it again."""
+    dialog, toast = ui.find("optDialog"), ui.find("toast")
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    ui.js('ticker.text = "✓ Options saved."')
+    assert _until_true(ui, lambda: toast.property("visible") is True)               # over the open window, as before
+    ui.js("close()", dialog)
+    _until_closed(ui, dialog)
+    assert ui.js("toastText") == "" and ui.js("ticker.text") == "✓ Options saved."   # the status line still says it
+    _open(ui, dialog, 450)
+    assert toast.property("visible") is False, "an old message does not show over a window opened later"
+    ui.js("aboutDialog.show()")                                                      # two windows: the message stays ...
+    _until_open(ui, "aboutDialog")
+    ui.js('ticker.text = "✓ About you saved."')
+    ui.js("close()", ui.find("aboutDialog"))
+    _until_closed(ui, "aboutDialog")
+    assert ui.js("toastText") == "✓ About you saved."                                # ... while one of them is still open
+    ui.js("close()", dialog)
+    _until_closed(ui, dialog)
+    assert ui.js("toastText") == ""
+    ui.js('ticker.text = ""')
     assert ui.warnings == []
