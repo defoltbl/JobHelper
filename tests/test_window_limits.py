@@ -20,7 +20,6 @@ def test_the_limits_come_from_the_module_that_checks_them():
     assert limits["shelf_days"] == [housekeeping.SHELF_MIN_DAYS, Api().SHELF_MAX_DAYS] and limits["look_back"] == list(config.LOOK_BACK_ONCE)
 
 
-
 def test_the_choices_a_list_offers_are_the_ones_the_check_accepts():
     choices = Api().limits()["choices"]
     assert choices == {"event_kinds": list(planner.KINDS), "ats": list(scrapers_ats.ATS_NAMES),
@@ -33,6 +32,7 @@ def test_no_dialog_keeps_its_own_copy_of_a_list_the_back_end_checks():
         text = (UI / name).read_text(encoding="utf-8")
         for word in (words if isinstance(words, tuple) else (words,)):
             assert word not in text, (name, word)
+
 
 def test_the_rows_of_my_details_come_with_their_data(isolate_data):
     columns = Api().my_details()["columns"]

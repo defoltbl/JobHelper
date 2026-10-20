@@ -56,7 +56,7 @@ What the app can do (up to three actions, only when the person asked for each of
 - open {{"job": id, "what": "job" | "posting" | "cv" | "letter"}}
 - mark_applied {{"job": id}} - move a lead to Applications
 - set_status {{"job": id, "status": "waiting" | "interview" | "offer" | "rejected" | "on_hold"}}
-- set_date {{"job": id, "day": "YYYY-MM-DD", "time": "HH:MM" or "", "kind": "interview" | "deadline" | "test task" | "call" | "other", "note": ""}}
+- set_date {{"job": id, "day": "YYYY-MM-DD", "time": "HH:MM" or "", "kind": {kinds}, "note": ""}}
 - not_interested {{"job": id}} - remove a lead for good
 - rewrite_letter {{"job": id, "paragraph": 1-based number, "how": "what to change"}}
 - rewrite_answer {{"job": id, "question": "the form question", "how": "what to change"}}
@@ -173,6 +173,7 @@ def decide(request: str, jobs: list[dict[str, Any]], responses: list[dict[str, A
                    f"Why this score: {str(context_job.get('match_reason') or 'no reason stored')[:600]}")
     kept = "\n".join(f"{n}. {text}" for n, text in enumerate(notes or [], 1)) or "(nothing yet)"
     data = llm.ask_json(PROMPT.format(today=f"{today.isoformat()}, a {today.strftime('%A')}", about=about, numbers=numbers, context=context,
+                                      kinds=" | ".join(f'"{kind}"' for kind in planner.KINDS),      # the kinds planner accepts
                                       notes=kept, totals=totals(jobs, len(ids)), jobs=lines, turns=turns_text(turns),
                                       request=" ".join(str(request).split())),
                         system=SYSTEM, tag="assistant")
