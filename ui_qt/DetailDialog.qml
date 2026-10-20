@@ -376,10 +376,7 @@ Dialog {
                     Layout.fillWidth: true; wrapMode: Text.Wrap }
                 Text { color: theme.soft; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.Wrap
                     text: (detailDialog.job.company || "") + (detailDialog.job.location ? "  ·  " + detailDialog.job.location : "") } }
-            Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
-                Layout.alignment: Qt.AlignTop
-                Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: detailDialog.tryClose() } }
+            CloseButton { Layout.alignment: Qt.AlignTop; onClicked: detailDialog.tryClose() }
         }
         // going through a list: where you are, and the way to the next one
         Rectangle { objectName: "reviewBar"; visible: detailDialog.reviewing; Layout.fillWidth: true; color: theme.infobg

@@ -58,10 +58,7 @@ Dialog {
                 Layout.alignment: Qt.AlignTop; color: win.badgeBg(responseDialog.r.stage || "")
                 Text { id: rsT; anchors.centerIn: parent; text: responseDialog.r.stage || ""; font.pixelSize: 11; font.bold: true
                     color: win.badgeColor(responseDialog.r.stage || "") } }
-            Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
-                Layout.alignment: Qt.AlignTop
-                Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: responseDialog.close() } }
+            CloseButton { Layout.alignment: Qt.AlignTop; onClicked: responseDialog.close() }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         // what the email says can be long: it scrolls, so the buttons and the list under it are never pushed out of the window

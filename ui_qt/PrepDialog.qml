@@ -39,10 +39,7 @@ Dialog {
                 Text { text: "Interview preparation"; color: theme.ink; font.pixelSize: 17; font.bold: true }
                 Text { objectName: "prepFor"; Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 12
                     text: (prepDialog.prep.company || "") + "  ·  " + (prepDialog.prep.title || "") } }
-            Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
-                Layout.alignment: Qt.AlignTop
-                Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: prepDialog.close() } }
+            CloseButton { Layout.alignment: Qt.AlignTop; onClicked: prepDialog.close() }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         Flickable {

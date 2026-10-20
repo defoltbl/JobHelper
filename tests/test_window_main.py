@@ -9,6 +9,8 @@ pytest.importorskip("PySide6")
 pytestmark = pytest.mark.xdist_group("test_window_main")
 
 
+from PySide6.QtCore import QObject, Qt  # noqa: E402
+
 from jobhelper import api_core, config, qt_bridge, ui_api  # noqa: E402
 from tests.conftest import ROOT  # noqa: E402
 from tests.window_harness import (READY, _begin_search, _border_with_focus, _card_values, _email_answer, _open, _titles, _until_closed, _until_open, _until_shown, _until_true, qml_source)  # noqa: E402
@@ -1255,3 +1257,30 @@ def test_help_marks_key_words(ui):
     assert text.count("<b>") == text.count("</b>") and "<b><b>" not in text
     source = qml_source()
     assert "textFormat: Text.StyledText" in source
+
+
+def test_every_dialog_closes_with_one_shared_button(ui):
+    """The ✕ of every dialog is CloseButton: Tab reaches it, it has a name for VoiceOver, and it closes its window."""
+    ui_dir = ROOT / "ui_qt"
+    for path in ui_dir.glob("*Dialog.qml"):
+        if path.name != "LimitDialog.qml":                           # the limit notice has one big Close button and Esc
+            assert path.read_text(encoding="utf-8").count("CloseButton {") == 1, path.name
+    shell = (ui_dir / "CloseButton.qml").read_text(encoding="utf-8")
+    assert 'Accessible.name: "Close"' in shell and "visualFocus" in shell
+    dialog = ui.find("helpDialog")
+    ui.js("helpDialog.open()")
+    _until_open(ui, "helpDialog")
+    buttons = [o for o in dialog.findChildren(QObject) if o.metaObject().className().startswith("CloseButton")]
+    assert len(buttons) == 1 and buttons[0].property("focusPolicy") != Qt.NoFocus
+    buttons[0].clicked.emit()
+    _until_closed(ui, dialog)
+    assert dialog.property("visible") is False
+    from PySide6.QtTest import QTest                                  # Space on the ✕ of a window that asks first: clean, so it closes
+    options = ui.find("optDialog")
+    _open(ui, options)
+    close = next(o for o in options.findChildren(QObject) if o.metaObject().className().startswith("CloseButton"))
+    ui.win.requestActivate()
+    close.forceActiveFocus()
+    QTest.keyClick(ui.win, Qt.Key_Space)
+    _until_closed(ui, options)
+    assert options.property("visible") is False and ui.warnings == []

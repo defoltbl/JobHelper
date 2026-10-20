@@ -45,9 +45,7 @@ Dialog {
         spacing: 0
         RowLayout { Layout.fillWidth: true; Layout.margins: 16
             Text { text: "🗓️  Weekly run"; color: theme.ink; font.pixelSize: 16; font.bold: true; Layout.fillWidth: true }
-            Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
-                Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: schedDialog.close() } } }
+            CloseButton { onClicked: schedDialog.close() } }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         ColumnLayout {
             Layout.fillWidth: true; Layout.margins: 18; spacing: 14

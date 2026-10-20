@@ -141,6 +141,7 @@ The figures show the real window of the app, filled with **invented** people and
 > A window that holds text you did not save never closes without a question. The ✕ and the Esc
 > key ask once. Press them again to discard the changes. While Claude is still working in a
 > window, it waits until the work is done. A button that you cannot use at the moment is pale.
+> The Tab key also reaches the ✕ of each window. Press Space to close the window.
 
 This guide is for people who use the app. The technical documentation, [CODE.md](CODE.md),
 is for people who work with the code. It covers the installation, the command line, the

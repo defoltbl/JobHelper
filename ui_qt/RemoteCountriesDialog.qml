@@ -66,9 +66,7 @@ Dialog {
                 Text { objectName: "remoteHomeNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 11
                     text: (remoteDialog.home !== "" ? remoteDialog.nameOf(remoteDialog.home) + " is always included. " : "")
                           + "A search also keeps remote jobs open to the countries you tick." } }
-            Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
-                Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: remoteDialog.close() } } }
+            CloseButton { onClicked: remoteDialog.close() } }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
 
         ColumnLayout { Layout.fillWidth: true; Layout.fillHeight: true; Layout.margins: 14; spacing: 10

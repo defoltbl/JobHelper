@@ -595,10 +595,7 @@ Dialog {
                 Text { text: "Assistant"; color: theme.ink; font.pixelSize: 17; font.bold: true }
                 Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
                     text: "Fills in application forms in your browser, answers questions about your search, and does things in the app after your yes." } }
-            Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
-                Layout.alignment: Qt.AlignTop
-                Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: assistantDialog.tryClose() } }
+            CloseButton { Layout.alignment: Qt.AlignTop; onClicked: assistantDialog.tryClose() }
         }
         RowLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.bottomMargin: 10; spacing: 6
             SmallButton { objectName: "asPageAsk"; text: "Ask"; primaryStyle: assistantDialog.page === "ask"; onClicked: assistantDialog.page = "ask" }
