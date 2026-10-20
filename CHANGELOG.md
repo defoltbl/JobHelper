@@ -5,6 +5,11 @@ Format: a `## ` heading, then one `- ` line per change; `**words**` are shown in
 in a version go under `## Unreleased`; a released version's heading is `## 1.1.0 – 18 October 2026`
 (its tag is `v1.1.0` on GitHub). Version 1.0.0 is everything up to 17 October 2026, listed by date.
 
+## Unreleased
+
+- In the **light theme**, links, the assistant's words and small grey text are a little darker. They are now easier to read on every surface.
+- The number on the **Applications** gate is now dark. White was hard to read on its orange.
+
 ## 1.1.1 – 19 October 2026
 
 - The number boxes in **Options** now take every value the app accepts (for example **Max job age** up to 3650 days, **Keep backups** up to 1000). Before, a larger saved value was cut to the box's own maximum when **Options** opened. **Save** then wrote the smaller number.
