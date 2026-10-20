@@ -191,6 +191,10 @@ data/                your data; only the *.example.* files are in git
 - **Colours fade to `win.clearOf(colour)`**, not to plain transparent, or a dark shadow flashes.
 - **A label on the orange or the green** takes `theme.accentInk`, which is white in the light
   theme and dark in the dark one.
+- **Every colour is named in the theme** (`Main.qml`): also the robots' screens (`night`), the
+  Resume blue (`resume`) and the sheets on the belt (`paper`, `paperLine`). A number on a coloured
+  badge takes `theme.labelOn(colour)`. `Robot` and `AssistantBot` have a required `theme`, so no
+  stale fallback colour can show; `tests/test_window_scores.py` checks both.
 - **A part of the main window cannot see names inside another part.** What everyone needs (the
   status line `ticker`, the robots `a1`…`a5`) is handed up as a property of the window in
   `Main.qml`. In a part, `Robot { theme: theme }` binds the robot's theme to itself.

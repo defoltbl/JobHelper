@@ -19,14 +19,14 @@ Item {
     property bool done: false
     property bool showInfo: false
     property bool interactive: true     // false: no hover tooltip (used as the app logo)
-    property var theme
+    required property var theme
 
     readonly property color agLight: Qt.lighter(ag, 1.22)
     readonly property color agDark: Qt.darker(ag, 1.28)
-    readonly property color steelC: theme ? theme.steel : "#6b7787"
-    readonly property color frameC: theme ? theme.beltDark : "#aeb9c6"
-    readonly property color goodC: theme ? theme.good : "#15944b"
-    readonly property color screenC: "#0d141c"
+    readonly property color steelC: theme.steel
+    readonly property color frameC: theme.beltDark
+    readonly property color goodC: theme.good
+    readonly property color screenC: theme.night
     readonly property string stateText: active ? "Working…" : (done ? "Done" : "Idle")
     readonly property color stateColor: active ? ag : (done ? goodC : steelC)
 
@@ -331,17 +331,17 @@ Item {
         y: -height - 20 + (root.showInfo ? 0 : 4)
         Behavior on y { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
         radius: 10
-        color: root.theme ? root.theme.surface2 : "#1f2a37"
+        color: root.theme.surface2
         border.color: root.ag; border.width: 1
         Column {
             id: tcol
             anchors.centerIn: parent; spacing: 2
             Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.title
-                color: root.theme ? root.theme.ink : "#e7eef5"; font.bold: true; font.pixelSize: 15 }
+                color: root.theme.ink; font.bold: true; font.pixelSize: 15 }
             Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.role
-                color: root.theme ? root.theme.soft : "#9fb0c1"; font.pixelSize: 13 }
+                color: root.theme.soft; font.pixelSize: 13 }
             Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.agent
-                color: root.theme ? root.theme.faint : "#6f7f90"; font.pixelSize: 10; font.letterSpacing: 1.2 }
+                color: root.theme.faint; font.pixelSize: 10; font.letterSpacing: 1.2 }
             Row { anchors.horizontalCenter: parent.horizontalCenter; spacing: 5; topPadding: 2
                 Rectangle { width: 7; height: 7; radius: 3.5; color: root.stateColor; anchors.verticalCenter: parent.verticalCenter }
                 Text { text: root.stateText + (root.count !== "" ? " · " + root.count : "")

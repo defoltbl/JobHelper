@@ -222,7 +222,6 @@ ApplicationWindow {
         if (r && r.fix === "city") { optsData = bridge.options(); optDialog.open(); }     // straight to where the city is set
         if (r && r.fix) welcome.openCard();   // jump to the fix
     }
-    readonly property color resumeBlue: "#2563eb"
     function noScore(v) { return v === null || v === undefined; }
     // The status line is behind any open window, so a message written there while a window is
     // open is also shown on top of it for a few seconds: red when it says something went wrong.
@@ -330,12 +329,16 @@ ApplicationWindow {
         property color a1: "#3b82f6"; property color a2: "#10b981"
         property color a3: "#8b5cf6"; property color a4: "#fb923c"; property color a5: "#f43f5e"
         property color a6: win.dark ? "#22d3ee" : "#067590"       // the assistant
+        property color night: "#0d141c"                             // the robots' face screens, and the dark label on a bright badge
+        property color resume: "#2563eb"                            // Resume: a darker blue than the robots', so its white label reads
+        property color paper: win.dark ? "#eef2f7" : "#ffffff"      // the sheets that travel on the belt
+        property color paperLine: "#8b97a5"                         // the lines of writing on a sheet
         // the label on a coloured badge: white or near-black, whichever reads better on that colour
         function labelOn(c) {
             if (typeof c === "string") c = Qt.color(c);        // a colour given as "#rrggbb" text, too
             function lin(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
             function lum(k) { return 0.2126 * lin(k.r) + 0.7152 * lin(k.g) + 0.0722 * lin(k.b); }
-            var dark = Qt.color("#0d141c"), l = lum(c);
+            var dark = night, l = lum(c);
             return (1.05 / (l + 0.05)) >= ((l + 0.05) / (lum(dark) + 0.05)) ? "#ffffff" : "" + dark;
         }
     }

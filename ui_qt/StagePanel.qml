@@ -58,7 +58,7 @@ Rectangle {
                 visible: win.paused
                 implicitHeight: 34; implicitWidth: resumeRow.implicitWidth + 28; radius: 10
                 // a darker blue than the robots' own: the white label needs it to read
-                color: win.canResume ? (resumeMa.containsMouse ? Qt.lighter(win.resumeBlue, 1.12) : win.resumeBlue) : theme.inset
+                color: win.canResume ? (resumeMa.containsMouse ? Qt.lighter(theme.resume, 1.12) : theme.resume) : theme.inset
                 border.width: 1; border.color: win.canResume ? win.clearOf(theme.line) : theme.line
                 scale: resumeMa.pressed && win.canResume ? 0.96 : 1
                 Behavior on color { ColorAnimation { duration: win.motion } }
@@ -140,7 +140,7 @@ Rectangle {
                             : p > 0.352 ? theme.a3 : p > 0.227 ? theme.a2 : p > 0.10 ? theme.a1 : theme.accent
                         visible: win.appRunning; width: 20; height: 22; radius: 4
                         opacity: Math.max(0, Math.min(1, p * 28, (1 - p) * 28))
-                        color: win.dark ? "#eef2f7" : "#ffffff"
+                        color: theme.paper
                         border.color: tone; border.width: 1.6
                         x: modelData.x - 10; y: modelData.y - 11
                         Behavior on border.color { ColorAnimation { duration: 220 } }
@@ -148,7 +148,7 @@ Rectangle {
                             Behavior on color { ColorAnimation { duration: 220 } } }
                         Column { x: 4; y: 8; spacing: 2.5
                             Repeater { model: [12, 8, 11]
-                                Rectangle { width: modelData; height: 1.8; radius: 0.9; color: "#8b97a5" } } }
+                                Rectangle { width: modelData; height: 1.8; radius: 0.9; color: theme.paperLine } } }
                     }
                 }
 
