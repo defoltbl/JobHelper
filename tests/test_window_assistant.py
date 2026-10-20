@@ -15,7 +15,7 @@ from PySide6.QtTest import QTest  # noqa: E402
 
 from jobhelper import config, qt_bridge, store, ui_api  # noqa: E402
 from tests.conftest import ROOT  # noqa: E402
-from tests.window_harness import (_listed, _open, _open_job, _until_closed, _until_open, _until_settled, _until_true, _wait_idle)  # noqa: E402
+from tests.window_harness import (_listed, _open, _open_job, _until_closed, _until_open, _until_settled, _until_shown, _until_true, _wait_idle)  # noqa: E402
 
 
 # ── the assistant ───────────────────────────────────────────────────────────
@@ -52,7 +52,8 @@ def test_the_assistant_stands_on_the_line_blinks_and_waves(ui):
             other = ui.find(name)
             assert top >= other.property("y") + 100, "and never over a robot"
     ui.js("stagePanel.assistant.greet()")
-    _until_true(ui, lambda: ui.js("stagePanel.assistant.parent.scale") > 0 and bubble.property("opacity") == 1)
+    _until_true(ui, lambda: ui.js("stagePanel.assistant.parent.scale") > 0 and bubble.property("opacity") == 1
+                and bot.property("shown").startswith("Hi!"))
     _until_settled(ui, lambda: bubble.property("width"))                     # the bubble grows to its words after it shows
     assert floor.property("height") == 560 and ui.js("stagePanel.assistant.parent.scale") > 0
     wide = bubble.property("width")
@@ -65,7 +66,7 @@ def test_the_assistant_stands_on_the_line_blinks_and_waves(ui):
     _until_true(ui, lambda: arm.property("rotation") > -40 and bubble.property("opacity") == 0)
     assert arm.property("rotation") > -40 and bubble.property("opacity") == 0
     bot.setProperty("hovered", True)
-    _until_true(ui, lambda: bubble.property("opacity") == 1)
+    _until_true(ui, lambda: bubble.property("opacity") == 1 and bot.property("shown") == "Assistant · tap to ask")
     assert bot.property("shown") == "Assistant · tap to ask" and bubble.property("opacity") == 1
     bot.setProperty("hovered", False)
     _until_true(ui, lambda: bubble.property("opacity") == 0)
@@ -584,7 +585,7 @@ def test_the_assistant_speaks_first_reviews_a_form_and_notices_one_only_when_tol
     monkeypatch.setattr(ui_api.Api, "assistant_nudge_done", lambda self, job_id, kind: did.append(("done", job_id, kind)) or {"ok": True})
     # the bubble carries the briefing when the app opens
     ui.js("welcome.shown = true")
-    ui.wait(200)
+    _until_shown(ui, "welcome")
     ui.js("welcome.finish()")
     _until_true(ui, lambda: bot.property("note").startswith("You filled in the form"), most_ms=6000)
     assert bot.property("note").startswith("You filled in the form for QA Engineer at Beta") and bot.property("greeting") and bot.property("shown") == bot.property("note")
@@ -917,7 +918,7 @@ def test_a_refused_mark_applied_is_not_reported_as_done(ui, monkeypatch):
     """When the back end refuses (the job is already an application, or gone), the status line must not say it moved."""
     monkeypatch.setattr(qt_bridge.Bridge, "applyJob", qt_bridge.Slot(str, result=bool)(lambda self, job_id: False))
     ui.js('detailDialog.show("lead")'); _until_open(ui, "detailDialog")
-    ui.js("detailDialog.markApplied()"); ui.wait(350)
+    ui.js("detailDialog.markApplied()")                                          # it answers at once
     said = ui.js("ticker.text")
     assert "was not moved" in said and "Moved to Applications" not in said
     assert ui.find("detailDialog").property("opened") is False
@@ -942,7 +943,7 @@ def test_the_reply_emails_in_analytics_add_up(ui):
     db.upsert_response({"msg_id": "<offer-mail>", "received_date": "Tue, 18 Aug 2026 10:00:00 +0200", "from_addr": "hr@beta.example", "subject": "Offer",
                         "job_id": "", "company": "Beta", "role": "QA Engineer", "stage": "offer", "summary": "They offer you the job."})
     try:
-        ui.js('win.openView("ana")'); ui.wait(400)
+        ui.js('win.openView("ana")'); _until_open(ui, "tableDialog")
         rows = ui.js("(function () { var m = listView.model, o = []; for (var i = 0; i < m.length; i++) o.push(m[i].primary + '=' + m[i].value); return o.join('|'); })()",
                      ui.find("tableDialog")).split("|")
         value = lambda label: int(next(r for r in rows if r.startswith(label + "=")).split("=")[1])      # noqa: E731
@@ -961,16 +962,18 @@ def test_the_account_card_stays_inside_the_smallest_window(ui):
     size = (ui.win.width(), ui.win.height())
     ui.win.setWidth(940); ui.win.setHeight(620); ui.wait(80)
     try:
-        ui.js("welcome.openCard()"); ui.wait(700)
-        ui.js("welcome.editBox = 1; welcome.editEmail = true"); ui.wait(500)
+        ui.js("welcome.openCard()"); _until_shown(ui, "welcome")
+        ui.js("welcome.editBox = 1; welcome.editEmail = true")
         done = ui.drawn("welcomeStart", "welcome")
+        _until_settled(ui, lambda: done.mapToScene(QPointF(0, done.height())).y())   # the card grows to the mailbox editor
         if os.environ.get("JH_SHOT"):
             ui.win.grabWindow().save(os.environ["JH_SHOT"] + "/card_small.png")
         bottom = done.mapToScene(QPointF(0, done.height())).y()
         assert bottom <= 620, f"the Done button ends at {bottom} in a window 620 high"
         assert done.mapToScene(QPointF(0, 0)).y() > 0
     finally:
-        ui.js("welcome.editEmail = false; welcome.finish()"); ui.wait(600)
+        ui.js("welcome.editEmail = false; welcome.finish()")
+        _until_true(ui, lambda: ui.find("welcome").property("visible") is False)
         ui.win.setWidth(size[0]); ui.win.setHeight(size[1]); ui.wait(80)
 
 
@@ -1002,7 +1005,7 @@ def test_saving_one_part_of_the_job_window_keeps_what_was_typed_in_the_others(ui
 def test_options_says_when_something_was_typed_but_not_added(ui):
     """A role or a word typed into a box with its own Add button is not saved: Save says so instead of dropping it."""
     start = ui.bridge.options()
-    ui.js("optsData = bridge.options(); optDialog.open()"); ui.wait(450)
+    ui.js("optsData = bridge.options(); optDialog.open()"); _until_open(ui, "optDialog")
     try:
         assert ui.js("optDialog.notAdded()") == ""
         ui.js('roleField.text = "junior qa tester"')
