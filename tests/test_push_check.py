@@ -193,3 +193,15 @@ def test_what_a_remote_already_has_is_not_checked_again(repo):
     assert _check(repo, [(new, push_check.ZERO)]) == []                           # a new branch: only what no remote has
     bad = _commit(repo, {"f.py": "u = 6\n"}, email="jordan.weber@private-mail.example")
     assert any(f.startswith("the author email") for f in _check(repo, [(bad, push_check.ZERO)]))   # a new commit is still checked
+
+
+def test_a_check_without_a_push_skips_what_a_remote_has_too(repo):
+    """Run by hand (no refs from git), the check reads every commit no remote has: the whole history before the first
+    push, later only the new work – never GitHub's own squash commits on main."""
+    _commit(repo, {"old.txt": "phone 777888999\n"})
+    assert "a personal detail: old.txt:1" in _check(repo)                       # never pushed: everything is checked
+    merged = _commit(repo, {"d.py": "w = 4\n"}, message="Squashed pull request", email="noreply@github.com")
+    _git(repo, "update-ref", "refs/remotes/origin/main", merged)                  # all of it is on GitHub now
+    assert _check(repo) == []
+    _commit(repo, {"new.txt": "call 777888999\n"})
+    assert _check(repo) == ["a personal detail: new.txt:1"]                       # new local work is still checked
