@@ -64,7 +64,7 @@ Dialog {
     }
     property string coErr: ""
     property string optErr: ""
-    readonly property var sizes: [100, 110, 125, 150]      // per cent: the whole window larger
+    readonly property var sizes: win.limits.choices.text_sizes      // per cent: the whole window larger
     property int sizeAtOpen: 100
     function addCompany(name, ats, token) {
         var tok = (token || "").trim();
@@ -523,7 +523,7 @@ Dialog {
                                 onTextEdited: optDialog.coErr = text.length >= maximumLength ? "The company name takes up to " + maximumLength + " characters." : ""
                                 background: Rectangle { radius: 7; color: theme.surface; border.color: parent.activeFocus ? theme.accent : theme.line; border.width: 1 } }
                             ThemedCombo { id: coAts; implicitWidth: 128; plainText: true
-                                model: ["greenhouse", "lever", "smartrecruiters", "recruitee"] }
+                                model: win.limits.choices.ats }
                             TextField { id: coToken; Layout.preferredWidth: 110; placeholderText: "token"
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true
                                 background: Rectangle { radius: 7; color: theme.surface; border.width: 1
@@ -580,7 +580,7 @@ Dialog {
                             hint: sizeCombo.currentIndex >= 0 && optDialog.sizes[sizeCombo.currentIndex] !== optDialog.sizeAtOpen
                                   ? "saved with Save · used the next time you open the app" : "for a large screen · used the next time you open the app"
                             ThemedCombo { id: sizeCombo; objectName: "sizeCombo"; plainText: true; implicitWidth: 110
-                                model: ["100%", "110%", "125%", "150%"] } }
+                                model: optDialog.sizes.map(function (n) { return n + "%"; }) } }
                         Sep {}
                         SRow { label: "Notifications"; hint: "run finished, paused on the limit, interview invitation"
                             RowLayout { spacing: 8
@@ -664,7 +664,7 @@ Dialog {
                     GroupTitle { text: "Model" }
                     Card {
                         SRow { label: "Claude model"; hint: "uses your subscription"
-                            ThemedCombo { id: modelCombo; implicitWidth: 140; plainText: true; model: ["sonnet", "opus", "haiku"] } }
+                            ThemedCombo { id: modelCombo; implicitWidth: 140; plainText: true; model: win.limits.choices.models } }
                     }
                 }
                 Item { Layout.preferredHeight: 4 }

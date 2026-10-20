@@ -2,7 +2,7 @@
 import re
 from pathlib import Path
 
-from jobhelper import assistant, config, cover_letter, details, form_answers, housekeeping, mailhosts, planner
+from jobhelper import assistant, config, cover_letter, details, form_answers, housekeeping, mailhosts, planner, scrapers_ats
 from jobhelper.api_options import OptionsService
 from jobhelper.ui_api import Api
 
@@ -19,6 +19,20 @@ def test_the_limits_come_from_the_module_that_checks_them():
     assert limits["numbers"] == {key: list(span) for key, span in OptionsService.OPTION_NUMBERS.items()}
     assert limits["shelf_days"] == [housekeeping.SHELF_MIN_DAYS, Api().SHELF_MAX_DAYS] and limits["look_back"] == list(config.LOOK_BACK_ONCE)
 
+
+
+def test_the_choices_a_list_offers_are_the_ones_the_check_accepts():
+    choices = Api().limits()["choices"]
+    assert choices == {"event_kinds": list(planner.KINDS), "ats": list(scrapers_ats.ATS_NAMES),
+                       "models": list(OptionsService.MODELS), "text_sizes": list(config.TEXT_SIZES)}
+
+
+def test_no_dialog_keeps_its_own_copy_of_a_list_the_back_end_checks():
+    copies = {"DetailDialog.qml": '"test task"', "OptionsDialog.qml": ('"smartrecruiters"', '"opus"', '"125%"', "[100, 110")}
+    for name, words in copies.items():
+        text = (UI / name).read_text(encoding="utf-8")
+        for word in (words if isinstance(words, tuple) else (words,)):
+            assert word not in text, (name, word)
 
 def test_the_rows_of_my_details_come_with_their_data(isolate_data):
     columns = Api().my_details()["columns"]

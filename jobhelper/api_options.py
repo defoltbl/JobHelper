@@ -269,7 +269,7 @@ class OptionsService:
         # so nothing typed or pasted here can send a request anywhere else. The window checks the same as you type.
         clean = [{"name": " ".join(str(c.get("name") or c["token"]).split())[:self.MAX_COMPANY_NAME], "ats": c["ats"], "token": c["token"]}
                  for c in (companies if isinstance(companies, (list, tuple)) else [])
-                 if isinstance(c, dict) and isinstance(c.get("ats"), str) and c["ats"] in scrapers_ats._FETCHERS
+                 if isinstance(c, dict) and isinstance(c.get("ats"), str) and c["ats"] in scrapers_ats.ATS_NAMES
                  and isinstance(c.get("token"), str) and scrapers_ats.is_token(c["token"])][:200]
         (config.DATA_DIR / "companies.json").write_text(
             json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")

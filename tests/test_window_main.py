@@ -392,6 +392,21 @@ def test_follow_up_days_option_is_loaded_and_saved(ui):
     _until_closed(ui, dialog)
 
 
+
+def test_the_options_lists_offer_what_the_back_end_accepts(ui):
+    """The model, career-site system and text-size lists are filled from `limits().choices`: a new choice there shows
+    here without a change to the window."""
+    from jobhelper import scrapers_ats
+    from jobhelper.api_options import OptionsService
+    dialog = ui.find("optDialog")
+    _open(ui, dialog, 450)
+    assert ui.js("modelCombo.count") == len(OptionsService.MODELS)
+    assert ui.js("coAts.count") == len(scrapers_ats.ATS_NAMES)
+    assert ui.js("sizeCombo.count") == len(config.TEXT_SIZES)
+    assert ui.js("sizeCombo.textAt(sizeCombo.count - 1)") == f"{config.TEXT_SIZES[-1]}%"
+    ui.js("close()", dialog)
+    _until_closed(ui, dialog)
+
 def test_scan_period_option_is_loaded_and_saved(ui):
     dialog = ui.find("optDialog")
     ui.bridge.saveOptions({**ui.bridge.options(), "scan_days": 45})

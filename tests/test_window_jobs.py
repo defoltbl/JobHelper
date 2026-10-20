@@ -23,6 +23,8 @@ def test_a_date_on_a_job_shows_on_the_main_screen_and_is_announced(ui):
     card = ui.find("upcomingCard")
     assert card.property("visible") is False                                       # nothing planned: no empty card
     _open_job(ui)
+    from jobhelper import planner
+    assert ui.find("eventKinds").property("count") == len(planner.KINDS)   # the kinds the check accepts, from the back end
     ui.js('evDate.text = "next week"; detailDialog.saveEvent()')
     assert "YYYY-MM-DD" in ui.find("eventErr").property("text") and ui.find("eventErr").property("visible") is True
     assert ui.find("detailDialog").property("opened") is True and ui.js("upcomingData.length") == 0

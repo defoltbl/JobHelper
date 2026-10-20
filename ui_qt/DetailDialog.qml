@@ -635,7 +635,7 @@ Dialog {
                     visible: detailDialog.job.is_application === true
                     border.color: (detailDialog.job.event && detailDialog.job.event.date) ? theme.a2 : theme.line
                     Flow { Layout.fillWidth: true; spacing: 6
-                        Repeater { model: ["interview", "deadline", "test task", "call", "other"]
+                        Repeater { objectName: "eventKinds"; model: win.limits.choices.event_kinds
                             Rectangle {
                                 readonly property bool on: detailDialog.eventKind === modelData
                                 height: 24; radius: 12; width: ekT.implicitWidth + 18
