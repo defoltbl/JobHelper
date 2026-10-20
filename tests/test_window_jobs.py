@@ -3,6 +3,7 @@
 Its tests share one window and follow on from each other, so they run on one worker in this order (see
 tests/window_harness.py). The other window test files run beside it, each with a window of its own."""
 from datetime import date, timedelta
+import re
 
 import pytest
 
@@ -13,7 +14,7 @@ from PySide6.QtCore import QMetaObject, QObject  # noqa: E402
 
 from jobhelper import api_core, config, store, ui_api  # noqa: E402
 from tests.conftest import ROOT  # noqa: E402
-from tests.window_harness import (Ui, _open, _open_job, _until, _until_closed, _until_open, qml_source)  # noqa: E402
+from tests.window_harness import (Ui, _border_with_focus, _open, _open_job, _until, _until_closed, _until_open, qml_source)  # noqa: E402
 
 
 # ── dates, company notes, pasted replies, CV comparison, pay ────────────────
@@ -961,9 +962,9 @@ def test_text_fields_in_the_job_window_explain_their_limits(ui):
     assert planner.company_notes("Beta")["updated"] == ""                                                    # and not saved cut
     ui.js('cnNotes.text = "Short note."; detailDialog.saveNotes()')
     assert line.property("text") == "Saved for Beta." and ui.js("detailDialog.notesBad") is False
-    ui.js('evNote.text = "' + "e" * 200 + '"; detailDialog.eventErr = detailDialog.full(evNote, "The note")')
+    ui.js('evNote.text = "' + "e" * 200 + '"; detailDialog.eventProblem(detailDialog.full(evNote, "The note"), "note")')
     assert ui.find("eventErr").property("text") == "The note takes up to 200 characters."
-    ui.js('detailDialog.eventErr = ""; detailDialog.replyOpen = true; replyText.text = "' + "r" * 8005 + '"')
+    ui.js('detailDialog.eventProblem(""); detailDialog.replyOpen = true; replyText.text = "' + "r" * 8005 + '"')
     assert ui.find("replyHint").property("text").startswith("5 characters too long: paste only the message itself")
     ui.js("detailDialog.fileReply()")
     assert "Paste only the message itself" in ui.js("detailDialog.replyErr") and ui.js("detailDialog.replyBusy") is False
@@ -1093,7 +1094,8 @@ def test_a_button_that_cannot_be_pressed_looks_it_and_an_error_shows_red_even_wi
     ui.js("formDialog.close()")
     _until_closed(ui, "formDialog")
     source = qml_source()
-    assert "activeFocus ? theme.accent : (" not in source, "a field's red error border must not hide behind its focus colour"
+    hidden = re.findall(r"border\.color:\s*\(?\s*[\w.]+\.activeFocus \? theme\.accent\s*:[^}]*theme\.crit", source)
+    assert hidden == [], "a field's red error border must not hide behind its focus colour (red first, then the focus colour)"
     for name in ("SmallButton", "PillButton"):
         text = (ROOT / "ui_qt" / f"{name}.qml").read_text(encoding="utf-8")
         assert "theme.disabledOpacity" in text and "visualFocus ? (" in text and "primaryStyle ? theme.ink : theme.accent" in text, \
@@ -1200,3 +1202,59 @@ def test_esc_in_the_assistant_asks_once_and_never_also_closes_the_job_window(ui)
     assert job.property("visible") is True
     ui.js("detailDialog.close()")
     _until_closed(ui, "detailDialog")
+
+
+def test_esc_keeps_unsaved_answers_when_the_details_are_unsaved_too(ui):
+    """One flag stood for both: the first Esc warned about the details, and the second closed and lost the answers."""
+    assistant = ui.find("assistantDialog")
+    ui.js("assistantDialog.show()")
+    _until_open(ui, "assistantDialog")
+    ui.js('assistantDialog.dirty = true; assistantDialog.addAnswer("Why do you want this job?")')
+    assert ui.js("assistantDialog.unsaved") == 1
+    _esc(ui)                                                               # the details first, on their own page
+    assert _until(lambda: "did not save" in (ui.js("assistantDialog.problem.msg") or "")) and assistant.property("visible") is True
+    assert ui.js("assistantDialog.page") == "details"
+    _esc(ui)                                                               # the answers are still held: they are named too
+    assert _until(lambda: "not saved" in ui.js("assistantDialog.answersErr")) and assistant.property("visible") is True
+    assert ui.js("assistantDialog.page") == "answers" and ui.js("assistantDialog.unsaved") == 1
+    ui.js('assistantDialog.setAnswer(0, "answer", "I like the product.")')   # a new change asks again
+    _esc(ui)
+    assert _until(lambda: "not saved" in ui.js("assistantDialog.answersErr")) and assistant.property("visible") is True
+    _esc(ui)                                                               # both asked: now it closes
+    _until_closed(ui, "assistantDialog")
+    assert ui.warnings == []
+
+
+def test_a_field_with_an_error_is_red_even_with_the_focus(ui):
+    """PR #36 put the red before the focus colour in five fields; five more still hid it, and the time of a date had no red at all."""
+    # About you: a pay line that cannot be added
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    ui.js('aboutDialog.payErr = "Write what kind of role this figure is for."')
+    shown, red = _border_with_focus(ui, "aboutDialog", "payRole")
+    assert shown == red, "payRole"
+    ui.js('aboutDialog.payErr = ""; payRole.text = ""; close()', ui.find("aboutDialog"))
+    _until_closed(ui, "aboutDialog")
+    # Options: a country with digits in it
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    ui.js('countryField.text = "Germany 2"', dialog)
+    shown, red = _border_with_focus(ui, "optDialog", "countryField")
+    assert shown == red, "countryField"
+    ui.js('countryField.text = ""; confirmClose = true; close()', dialog)
+    _until_closed(ui, dialog)
+    # the job window: a wrong time is red in the time box, and the date, which is right, is not
+    _open_job(ui)
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    ui.js(f'evDate.text = "{tomorrow}"; evTime.text = "25:99"; detailDialog.saveEvent()')
+    assert "HH:MM" in ui.js("detailDialog.eventErr")
+    shown, red = _border_with_focus(ui, "detailDialog", "evTime")
+    assert shown == red, "evTime"
+    assert ui.js("String(evDate.background.border.color)", ui.find("detailDialog")) != red, "the date is right: no red on it"
+    ui.js('evDate.text = "next week"; detailDialog.saveEvent()')            # a wrong date: the date is red, the time is not
+    shown, red = _border_with_focus(ui, "detailDialog", "evDate")
+    assert shown == red and ui.js("String(evTime.background.border.color)", ui.find("detailDialog")) != red
+    ui.js('evDate.text = ""; evTime.text = ""; detailDialog.eventProblem(""); detailDialog.close()')
+    _until_closed(ui, "detailDialog")
+    assert ui.warnings == []

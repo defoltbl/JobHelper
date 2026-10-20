@@ -105,7 +105,10 @@ These came from decisions made while building it. A change that breaks one is a 
 - Every place where text can be typed or pasted checks it and says what is wrong in red, next to
   where the user is looking: empty, wrong shape, too long (the limit is shown while typing;
   nothing is cut silently). The backend refuses the same things with the same reason.
-- An action that replaces or throws away work asks once. Esc and ✕ never lose edits unasked.
+- An action that replaces or throws away work asks once. Esc and ✕ never lose edits unasked. A window
+  that holds two kinds of unsaved work (the assistant: My details and My answers) asks once for each.
+- A field with an error is red even while it has the focus: the red comes first in `border.color`,
+  then the focus colour (a test greps for the other order). Only the field the error is about is red.
 - An action that must not run during a search or scan says so instead of doing nothing.
 - Text wraps. It is not cut off.
 - Both themes keep small text at a contrast of 4.5:1 or more (there is a test).
@@ -197,6 +200,8 @@ data/                your data; only the *.example.* files are in git
   measured on the real postings before a change ships: nothing that scored 30 or more may be
   skipped. A word that an ordinary posting uses ("research", "architect", "compliance") does
   not belong in them.
+- **What you type for an event is checked only by `planner.EventCheck`**: the job window, the assistant and
+  the replies ask it. A refusal names its field (date, time, kind, note), so the window marks only that box.
 - **An event's day and start are read only by `planner.Event`**: "Coming up", the reminders, the calendar file
   and the thank-you note ask it. A dated line in a job's notes is `store.add_note`; a title the app gives a job it
   knows only by its company is one of `store.PLACEHOLDER_TITLES` (`store.has_real_title`).

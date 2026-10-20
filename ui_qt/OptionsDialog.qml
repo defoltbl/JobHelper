@@ -327,8 +327,8 @@ Dialog {
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.options.country
                                 onTextEdited: optDialog.optErr = optDialog.countryProblem(text)
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
-                                    border.color: countryField.activeFocus ? theme.accent
-                                                  : optDialog.countryProblem(countryField.text) !== "" ? theme.crit : theme.line } } }
+                                    border.color: optDialog.countryProblem(countryField.text) !== "" ? theme.crit
+                                                  : (countryField.activeFocus ? theme.accent : theme.line) } } }
                         Sep {}
                         // which remote jobs a search keeps, from any source (places.RemoteReach)
                         SRow { label: "Remote jobs"; hint: "from any source · which places they must be open to" }
