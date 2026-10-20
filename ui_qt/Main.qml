@@ -437,6 +437,9 @@ ApplicationWindow {
     Connections { target: ticker
         function onTextChanged() { if (win.dialogOpen && !win.quietTicker && ticker.text !== "") win.showToast(ticker.text); } }
     Timer { id: toastTimer; interval: 4200; onTriggered: win.toastText = "" }
+    // it belongs to the windows it was shown over: when the last one closes it ends, so it never comes back on the next
+    // window (the status line keeps the words)
+    onDialogOpenChanged: if (!dialogOpen) { toastTimer.stop(); toastText = ""; }
     Rectangle {
         id: toast; objectName: "toast"
         parent: Overlay.overlay; z: 10000
