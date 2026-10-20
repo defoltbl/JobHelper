@@ -466,7 +466,7 @@ def test_a_badge_label_is_the_one_that_reads_better_on_its_colour(ui):
     white on the orange Tracker read at 2.3:1. Both a real colour and "#rrggbb" text are understood."""
     import re
     main = (ROOT / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
-    labels = ("#ffffff", re.search(r'var dark = Qt\.color\("(#[0-9a-f]{6})"\)', main).group(1))
+    labels = ("#ffffff", re.search(r'property color night: "(#[0-9a-f]{6})"', main).group(1))
     colours = dict(re.findall(r'property color (a[1-5]): "(#[0-9a-fA-F]{6})"', main))
     colours["light assistant"] = re.search(r'property color a6: win\.dark \? "#[0-9a-fA-F]{6}" : "(#[0-9a-fA-F]{6})"', main).group(1)
     for name, colour in colours.items():
@@ -479,7 +479,25 @@ def test_a_badge_label_is_the_one_that_reads_better_on_its_colour(ui):
 
 
 def test_the_resume_button_s_white_label_reads_on_its_blue(ui):
-    assert _contrast("#ffffff", ui.js('"" + win.resumeBlue')) >= 4.5 and "win.resumeBlue" in qml_source()
+    assert _contrast("#ffffff", ui.js('"" + theme.resume')) >= 4.5 and "theme.resume" in qml_source()
+
+
+def test_every_colour_of_the_window_lives_in_the_theme():
+    """The robots' screens, the Resume blue and the sheets on the belt are named in the theme, and the robots take their
+    theme as a required property: no stale fallback colour can show (the old steel #6b7787 lingered there)."""
+    import re
+    main = (ROOT / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
+    for name in ("night", "resume", "paper", "paperLine"):
+        assert re.search(rf"property color {name}: ", main), name
+    for path in (ROOT / "ui_qt").glob("*.qml"):
+        if path.name == "Main.qml":
+            continue
+        text = path.read_text(encoding="utf-8")
+        for literal in ("#0d141c", "#2563eb", "#8b97a5", "#eef2f7", "#6b7787"):
+            assert literal not in text, (path.name, literal)
+        assert not re.search(r'theme \? (root\.)?theme\.\w+ : "#', text), path.name
+    for robot in ("Robot.qml", "AssistantBot.qml"):
+        assert "required property var theme" in (ROOT / "ui_qt" / robot).read_text(encoding="utf-8")
 
 
 def test_no_label_on_the_accent_is_fixed_white():

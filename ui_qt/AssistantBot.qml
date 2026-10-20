@@ -10,8 +10,8 @@ import QtQuick.Effects
 Item {
     id: root
     width: 84; height: 104
-    property var theme
-    property color ag: theme ? theme.a6 : "#06b6d4"
+    required property var theme
+    property color ag: theme.a6
     property bool busy: false           // it is working on a request
     property bool greeting: false       // waving hello, with the bubble shown
     property bool hovered: false
@@ -27,8 +27,8 @@ Item {
     onSaysChanged: if (talking) shown = says
     readonly property color agLight: Qt.lighter(ag, 1.25)
     readonly property color agDark: Qt.darker(ag, 1.3)
-    readonly property color steelC: theme ? theme.steel : "#6b7787"
-    readonly property color screenC: "#0d141c"
+    readonly property color steelC: theme.steel
+    readonly property color screenC: theme.night
     property real lookX: 0              // where it looks: -1 (left) to 1 (right)
     property real lookY: 0              // -1 (up) to 1 (down)
     property real nodBy: 0              // the head going down and up: "done"
@@ -133,9 +133,9 @@ Item {
         Behavior on width { enabled: bubble.opacity === 1; NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
         // beside it and never higher than its own head: the line and the robots above stay in view
         x: -width - 2; y: Math.max(16, Math.min(40, root.height - height - 2)); radius: 10; z: 5
-        color: root.theme ? root.theme.surface2 : "#1f2a37"; border.color: root.ag; border.width: 1
+        color: root.theme.surface2; border.color: root.ag; border.width: 1
         Text { id: bubbleText; x: 12; y: 8; width: (root.note !== "" && root.greeting ? 420 : 250) - 24; wrapMode: Text.WordWrap; text: root.shown
-            color: root.theme ? root.theme.ink : "#e7eef5"; font.pixelSize: 13; font.bold: true }
+            color: root.theme.ink; font.pixelSize: 13; font.bold: true }
         Rectangle { width: 9; height: 9; rotation: 45; color: parent.color; border.color: root.ag; border.width: 1; x: parent.width - 5; y: parent.height / 2 - 4.5 }
         Rectangle { width: 6; height: 14; color: parent.color; x: parent.width - 7; y: parent.height / 2 - 7 }
     }

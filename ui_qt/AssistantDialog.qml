@@ -588,7 +588,7 @@ Dialog {
         spacing: 0
         RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
             Rectangle { implicitWidth: 38; implicitHeight: 38; radius: 19; color: Qt.rgba(theme.a6.r, theme.a6.g, theme.a6.b, 0.18); border.color: theme.a6; border.width: 1
-                Rectangle { anchors.centerIn: parent; width: 24; height: 14; radius: 7; color: "#0d141c"
+                Rectangle { anchors.centerIn: parent; width: 24; height: 14; radius: 7; color: theme.night
                     Row { anchors.centerIn: parent; spacing: 5
                         Repeater { model: 2; Rectangle { width: 5; height: 6; radius: 2.5; color: "#ffffff" } } } } }
             ColumnLayout { Layout.fillWidth: true; spacing: 2
