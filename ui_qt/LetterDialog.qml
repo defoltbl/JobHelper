@@ -97,10 +97,7 @@ Dialog {
             Text { objectName: "letterWords"; font.pixelSize: 12; font.bold: true
                 color: (letterDialog.words < (letterDialog.meta.min_words || 0) || letterDialog.words > (letterDialog.meta.max_words || 9999)) ? theme.warn : theme.soft
                 text: letterDialog.words + " words" }
-            Rectangle { objectName: "letterX"; implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
-                Layout.alignment: Qt.AlignTop
-                Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: letterDialog.tryClose() } }
+            CloseButton { objectName: "letterX"; Layout.alignment: Qt.AlignTop; onClicked: letterDialog.tryClose() }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         Flickable {

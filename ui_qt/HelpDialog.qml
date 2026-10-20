@@ -109,9 +109,7 @@ Dialog {
                         MouseArea { id: htMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                             onClicked: helpDialog.tab = modelData[0] } } } }
             Item { Layout.fillWidth: true }
-            Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
-                Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: helpDialog.close() } }
+            CloseButton { onClicked: helpDialog.close() }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         Flickable {

@@ -156,9 +156,7 @@ Dialog {
                     if (win.startRescore()) tableDialog.close();
                 } }
             SmallButton { text: "open Excel"; visible: tableDialog.excelKey !== ""; onClicked: bridge.openExcel(tableDialog.excelKey) }
-            Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
-                Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: tableDialog.close() } }
+            CloseButton { onClicked: tableDialog.close() }
         }
         // search · filter · sort
         ColumnLayout {

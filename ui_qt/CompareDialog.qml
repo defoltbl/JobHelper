@@ -36,10 +36,7 @@ Dialog {
                           + ((compareDialog.data.added || 0) > 0 ? ", " + compareDialog.data.added + " added" : "")
                           + ((compareDialog.data.removed || 0) > 0 ? ", " + compareDialog.data.removed + " removed" : "")
                           + "  ·  " + (compareDialog.data.same || 0) + " identical (not shown)" } }
-            Rectangle { implicitWidth: 28; implicitHeight: 28; radius: 8; color: theme.surface2; border.color: theme.line; border.width: 1
-                Layout.alignment: Qt.AlignTop
-                Text { anchors.centerIn: parent; text: "✕"; color: theme.soft; font.pixelSize: 13 }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: compareDialog.close() } }
+            CloseButton { Layout.alignment: Qt.AlignTop; onClicked: compareDialog.close() }
         }
         RowLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.bottomMargin: 8; spacing: 12
             Text { Layout.fillWidth: true; Layout.preferredWidth: 1; text: "MASTER CV"; color: theme.faint; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.4 }

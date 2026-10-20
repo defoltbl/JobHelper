@@ -14,6 +14,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 - A message shown over a window, such as "Options saved.", no longer comes back when you open a window again within a few seconds.
 - In the **light theme**, links, the assistant's words and small grey text are a little darker. They are now easier to read on every surface.
 - The number on the **Applications** gate is now dark. White was hard to read on its orange.
+- The **✕** of every window can now be reached with the Tab key and pressed with Space. It shows an outline then, and VoiceOver reads it as Close.
 
 ## 1.1.1 – 19 October 2026
 
