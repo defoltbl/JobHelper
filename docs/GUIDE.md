@@ -1133,6 +1133,9 @@ company, for example "Why do you want to work here?". These cannot have one answ
 companies. The assistant writes them for each job when it fills in the form of that job (the
 next tasks).
 
+If you close the assistant before you save an answer, it asks once. If **My details** also has
+unsaved changes, it asks once for each page.
+
 ### Let your browser be filled in
 
 A browser does not let another app write into a page until you allow it. Do this once. The
@@ -1500,9 +1503,12 @@ Table 11.1 lists the fields of an application.
 ### Set a date and get reminded
 
 1. In the application's window, choose the kind of date, the day and, if you know it, the time.
-2. Select **Save date**.
+2. Select **Save**.
 3. Optional: select **Add to calendar** to put it in Calendar, so that your phone reminds you
    too.
+
+If the app cannot use the day, the time or the note, only that box is red. The line under the
+boxes tells you what to correct.
 
 The date then shows on the **Coming up** card of the main window. You get a notification the
 day before and on the day. With a time, you also get one about three hours and one hour before (Figure 11.3).

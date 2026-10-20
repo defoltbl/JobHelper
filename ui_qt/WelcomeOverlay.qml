@@ -292,8 +292,8 @@ Item {
                             text: welcome.emailDraft; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                             placeholderTextColor: theme.faint
                             background: Rectangle { radius: 8; color: theme.inset; border.width: 1
-                                border.color: wEmail.activeFocus ? theme.accent
-                                    : (welcome.emailErr !== "" && !win.isEmail(welcome.emailDraft) ? theme.crit : theme.line) }
+                                border.color: welcome.emailErr !== "" && !win.isEmail(welcome.emailDraft) ? theme.crit
+                                    : (wEmail.activeFocus ? theme.accent : theme.line) }
                             onTextEdited: { welcome.emailDraft = text; welcome.emailErr = ""; }
                             onAccepted: wPw.forceActiveFocus() }
                         TextField { id: wPw; Layout.fillWidth: true; Layout.leftMargin: 38; echoMode: TextInput.Password
@@ -302,8 +302,8 @@ Item {
                             text: welcome.pwDraft; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                             placeholderTextColor: theme.faint
                             background: Rectangle { radius: 8; color: theme.inset; border.width: 1
-                                border.color: wPw.activeFocus ? theme.accent
-                                    : (welcome.emailErr !== "" && win.isEmail(welcome.emailDraft) ? theme.crit : theme.line) }
+                                border.color: welcome.emailErr !== "" && win.isEmail(welcome.emailDraft) ? theme.crit
+                                    : (wPw.activeFocus ? theme.accent : theme.line) }
                             onTextEdited: { welcome.pwDraft = text; welcome.emailErr = ""; }
                             onAccepted: welcome.saveEmail() }
                         // the server: asked for only when the address does not tell it
@@ -404,7 +404,7 @@ Item {
                             placeholderText: "Your recovery key"; placeholderTextColor: theme.faint; maximumLength: 200
                             color: theme.ink; font.pixelSize: 12; selectByMouse: true
                             background: Rectangle { radius: 8; color: theme.inset; border.width: 1
-                                border.color: restoreField.activeFocus ? theme.accent : welcome.restoreErr !== "" ? theme.crit : theme.line }
+                                border.color: welcome.restoreErr !== "" ? theme.crit : (restoreField.activeFocus ? theme.accent : theme.line) }
                             onTextEdited: welcome.restoreErr = ""
                             onAccepted: welcome.restoreKey() }
                         SmallButton { objectName: "restoreGo"; primaryStyle: true; text: "Open my data"; onClicked: welcome.restoreKey() } }

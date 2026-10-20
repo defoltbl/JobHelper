@@ -17,6 +17,7 @@ Dialog {
         function onRowsInserted() { assistantDialog.answersRevision++ }
         function onRowsRemoved() { assistantDialog.answersRevision++ }
         function onModelReset() { assistantDialog.answersRevision++ } }
+    onAnswersRevisionChanged: confirmAnswers = false                       // a changed answer is asked about again
     readonly property int unsaved: answersRevision >= 0 ? unsavedAnswers() : 0
     readonly property bool holdsWork: dirty || busy || unsaved > 0      // unsaved details or answers, or Claude still working
     closePolicy: holdsWork ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits ...
@@ -67,7 +68,8 @@ Dialog {
     readonly property int maxRequest: win.limits.request
     // My details
     property bool dirty: false            // a detail was changed and not saved
-    property bool confirmClose: false
+    property bool confirmClose: false     // Close was pressed once with unsaved details
+    property bool confirmAnswers: false   // ... and once with unsaved answers: each kind is asked about on its own page
     property bool detailsSaved: false     // something is saved already
     property var problem: ({})            // {field, msg} of the first thing wrong, as you type
     property string detailsNote: ""
@@ -240,7 +242,7 @@ Dialog {
         Qt.callLater(function () { talkFlick.contentY = Math.max(0, talkFlick.contentHeight - talkFlick.height); });
     }
     function show() {
-        askErr = ""; confirmClose = false; busy = false;
+        askErr = ""; confirmClose = false; confirmAnswers = false; busy = false;
         allJobs = [{ id: "", label: "Find the job from the page" }].concat(bridge.assistantJobs());
         jobs = allJobs; jobFind.text = ""; jobFindErr = "";
         jobBox.currentIndex = 0; jobId = "";
@@ -326,8 +328,8 @@ Dialog {
             problem = { field: "", msg: "You changed your details and did not save them. Press Save, or Close once more to discard the change." };
             return;
         }
-        if (unsavedAnswers() > 0 && !confirmClose) {
-            confirmClose = true; page = "answers"; answersNote = "";
+        if (unsavedAnswers() > 0 && !confirmAnswers) {
+            confirmAnswers = true; page = "answers"; answersNote = "";
             answersErr = unsavedAnswers() + (unsavedAnswers() === 1 ? " answer is" : " answers are") + " not saved. Press Save on each, or Close once more to discard the changes.";
             return;
         }

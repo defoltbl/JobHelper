@@ -179,7 +179,7 @@ Dialog {
                                 TextField { id: payRole; objectName: "payRole"; implicitWidth: 120; implicitHeight: 30; maximumLength: win.limits.pay_role
                                     placeholderText: "e.g. support"; placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                                     background: Rectangle { radius: 8; color: theme.surface; border.width: 1
-                                        border.color: payRole.activeFocus ? theme.accent : aboutDialog.payErr !== "" ? theme.crit : theme.line }
+                                        border.color: aboutDialog.payErr !== "" ? theme.crit : (payRole.activeFocus ? theme.accent : theme.line) }
                                     onTextEdited: aboutDialog.payErr = ""; onAccepted: aboutDialog.addPay() }
                                 ThemedSpin { id: payAmount; objectName: "payAmount"; from: 0; to: win.limits.salary_max; stepSize: 1000; value: 0 }
                                 SmallButton { objectName: "payAdd"; text: "+ Add"; onClicked: aboutDialog.addPay() } } }

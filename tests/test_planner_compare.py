@@ -38,6 +38,20 @@ def test_check_event(day, time, kind, problem):
         assert iso == day and said == ""
 
 
+@pytest.mark.parametrize("day, time, kind, note, field", [
+    ("15.10.2026", "", "interview", "", "date"), ("2026-09-01", "", "interview", "", "date"), ("2030-01-01", "", "interview", "", "date"),
+    ("2026-10-15", "25:00", "interview", "", "time"), ("2026-10-15", "", "party", "", "kind"), ("2026-10-15", "", "call", "x" * 201, "note"),
+    ("2026-10-15", "14:30", "call", "x" * 200, ""),
+])
+def test_an_event_refusal_names_the_field_it_is_about(day, time, kind, note, field):
+    """The window marks only that field red: a wrong time once made the date red and left the time box plain."""
+    check = planner.EventCheck(day, time, kind, note, today=TODAY)
+    assert check.field == field and check.ok is (field == "")
+    assert check.answer() == ({"ok": True} if field == "" else {"ok": False, "msg": check.problem, "field": field})
+    job = {}
+    assert check.put_on(job) is check and ("event" in job) is check.ok, "a refused date is never saved"
+
+
 def test_set_and_clear_event():
     job = _job(event_notified="2026-10-01:1")
     day = (date.today() + timedelta(days=3)).isoformat()
@@ -380,6 +394,7 @@ def test_api_events_show_up_and_are_announced_once(api):
     tomorrow = (date.today() + timedelta(days=1)).isoformat()
     store.save_jobs([_job("a"), _job("b", company="Beta")])
     assert api.set_event("a", "nonsense")["ok"] is False and api.upcoming() == []
+    assert api.set_event("a", tomorrow, "9.30")["field"] == "time" and api.upcoming() == []
     assert api.set_event("a", tomorrow, "10:00", "interview", "Teams")["ok"] is True
     assert api.set_event("zzz", tomorrow)["ok"] is False
     assert [(u["id"], u["label"], u["time"]) for u in api.upcoming(4)] == [("a", "tomorrow", "10:00")]

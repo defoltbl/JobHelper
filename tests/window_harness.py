@@ -192,6 +192,15 @@ def _until(done, seconds=2.0):
     return done()
 
 
+def _border_with_focus(ui, window, field):
+    """The colour of a field's border while the field has the keyboard focus, and the theme's red."""
+    scope = ui.find(window)
+    ui.win.requestActivate()
+    ui.js(f"{field}.forceActiveFocus()", scope)
+    assert _until(lambda: ui.js(f"{field}.activeFocus", scope) is True), f"{field} has the focus"
+    return ui.js(f"String({field}.background.border.color)", scope), ui.js("String(theme.crit)")
+
+
 def _wait_scored(ui):
     import time
     for _ in range(300):

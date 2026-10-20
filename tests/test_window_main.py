@@ -11,7 +11,7 @@ pytestmark = pytest.mark.xdist_group("test_window_main")
 
 from jobhelper import api_core, config, qt_bridge, ui_api  # noqa: E402
 from tests.conftest import ROOT  # noqa: E402
-from tests.window_harness import (READY, _begin_search, _card_values, _email_answer, _open, _titles, _until_closed, _until_open, _until_shown, _until_true, qml_source)  # noqa: E402
+from tests.window_harness import (READY, _begin_search, _border_with_focus, _card_values, _email_answer, _open, _titles, _until_closed, _until_open, _until_shown, _until_true, qml_source)  # noqa: E402
 
 
 def test_window_loads_without_qml_warnings(ui):
@@ -184,6 +184,32 @@ def test_a_refused_app_password_is_not_saved(ui, monkeypatch):
     assert note.property("visible") is True and "not tried" in note.property("text")
     ui.js('welcome.emailNote = ""; welcome.finish()')
     ui.wait(700)
+    assert ui.warnings == []
+
+
+def test_a_welcome_field_with_an_error_is_red_even_with_the_focus(ui):
+    """The email, its password and the recovery key showed the focus colour over their red error."""
+    welcome = ui.find("welcome")
+    ui.js("welcome.openCard(); welcome.editBox = 1")
+    welcome.setProperty("editEmail", True)
+    _until_shown(ui, "welcome")
+    welcome.setProperty("emailDraft", "not-an-email")
+    welcome.setProperty("emailErr", "Write the whole address, e.g. you@gmail.com.")
+    shown, red = _border_with_focus(ui, "welcome", "wEmail")
+    assert shown == red, "the address is wrong: the address box is red"
+    welcome.setProperty("emailDraft", "jobs@gmail.com")
+    welcome.setProperty("emailErr", "An App Password has 16 letters.")
+    shown, red = _border_with_focus(ui, "welcome", "wPw")
+    assert shown == red, "the address is right: the password box is red"
+    ui.js('welcome.emailErr = ""; welcome.emailDraft = ""; welcome.editEmail = false')
+    ui.win.setProperty("connData", {**READY, "vault": "locked", "changed_files": []})
+    welcome.setProperty("restoreErr", "That is not a recovery key.")
+    shown, red = _border_with_focus(ui, "welcome", "restoreField")
+    assert shown == red, "restoreField"
+    welcome.setProperty("restoreErr", "")
+    ui.win.setProperty("connData", dict(READY))
+    ui.js("welcome.finish()")
+    assert _until_true(ui, lambda: welcome.property("visible") is False)
     assert ui.warnings == []
 
 

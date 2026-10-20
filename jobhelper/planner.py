@@ -24,38 +24,69 @@ _OVER = {"rejected", store.NOT_INTERESTED}
 
 
 # ── events ──────────────────────────────────────────────────────────────────
+class EventCheck:
+    """What the user typed for a dated event, checked: its ISO day, or the reason it is refused and the field that
+    reason is about ("date", "time", "kind" or "note"), so the window marks that field and no other."""
+
+    def __init__(self, day_text: str, time_text: str = "", kind: str = "interview", note: str = "", today: date | None = None) -> None:
+        self.day, self.problem, self.field = "", "", ""
+        self.time, self.kind, self.note = (time_text or "").strip(), kind, (note or "").strip()
+        today = today or date.today()
+        try:
+            day = date.fromisoformat((day_text or "").strip())
+        except ValueError:
+            self._refuse("date", "Write the date as YYYY-MM-DD, for example 2026-10-15.")
+            return
+        if day < today:
+            self._refuse("date", "That date has already passed.")
+        elif day > today + timedelta(days=730):
+            self._refuse("date", "That date is more than two years away. Check the year.")
+        elif self.time and not self._is_time(self.time):
+            self._refuse("time", "Write the time as HH:MM, for example 14:30, or leave it empty.")
+        elif kind not in KINDS:
+            self._refuse("kind", "Choose what kind of date this is.")
+        elif len(self.note) > MAX_EVENT_NOTE:
+            self._refuse("note", f"The note is {len(self.note)} characters long; the most is {MAX_EVENT_NOTE}. Shorten it.")
+        else:
+            self.day = day.isoformat()
+
+    @staticmethod
+    def _is_time(text: str) -> bool:
+        try:
+            datetime.strptime(text, "%H:%M")
+        except ValueError:
+            return False
+        return True
+
+    def _refuse(self, field: str, problem: str) -> None:
+        self.field, self.problem = field, problem
+
+    @property
+    def ok(self) -> bool:
+        return self.problem == ""
+
+    def put_on(self, job: dict[str, Any]) -> "EventCheck":
+        """Save it as the job's date when it is ok (its reminders start again); a refused one changes nothing."""
+        if not self.ok:
+            return self
+        clear_event(job)
+        job["event"] = {"date": self.day, "time": self.time, "kind": self.kind, "note": self.note}
+        return self
+
+    def answer(self) -> dict[str, Any]:
+        """What the window is told: {ok} or {ok, msg, field}."""
+        return {"ok": True} if self.ok else {"ok": False, "msg": self.problem, "field": self.field}
+
+
 def check_event(day_text: str, time_text: str = "", kind: str = "interview", today: date | None = None) -> tuple[str, str]:
     """('', problem) or (ISO day, '') for what the user typed. The time is optional (HH:MM)."""
-    try:
-        day = date.fromisoformat((day_text or "").strip())
-    except ValueError:
-        return "", "Write the date as YYYY-MM-DD, for example 2026-10-15."
-    if day < (today or date.today()):
-        return "", "That date has already passed."
-    if day > (today or date.today()) + timedelta(days=730):
-        return "", "That date is more than two years away. Check the year."
-    t = (time_text or "").strip()
-    if t:
-        try:
-            datetime.strptime(t, "%H:%M")
-        except ValueError:
-            return "", "Write the time as HH:MM, for example 14:30, or leave it empty."
-    if kind not in KINDS:
-        return "", "Choose what kind of date this is."
-    return day.isoformat(), ""
+    check = EventCheck(day_text, time_text, kind, today=today)
+    return check.day, check.problem
 
 
 def set_event(job: dict[str, Any], day_text: str, time_text: str = "", kind: str = "interview", note: str = "") -> str:
     """Put a date on a job. Returns '' or the reason it was refused."""
-    day, problem = check_event(day_text, time_text, kind)
-    if problem:
-        return problem
-    note = (note or "").strip()
-    if len(note) > MAX_EVENT_NOTE:
-        return f"The note is {len(note)} characters long; the most is {MAX_EVENT_NOTE}. Shorten it."
-    clear_event(job)                                # a new date: its reminders start again
-    job["event"] = {"date": day, "time": (time_text or "").strip(), "kind": kind, "note": note}
-    return ""
+    return EventCheck(day_text, time_text, kind, note).put_on(job).problem
 
 
 def clear_event(job: dict[str, Any]) -> None:

@@ -7,6 +7,9 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- When the assistant holds unsaved changes on **My details** and on **My answers**, Esc and **Close** now ask once for each page. Before, the second Esc closed the window and lost the answers.
+- Five more fields now show their **red** error also when the cursor is in them: the email address and its password on the welcome card, the recovery key, **Country** in **Options** and **A different figure for** in **About you**. Before, the focus colour hid the red.
+- In a job's **date to remember**, a wrong time now makes the time box red. Before, the day box turned red, and the time box did not change.
 - In the **light theme**, links, the assistant's words and small grey text are a little darker. They are now easier to read on every surface.
 - The number on the **Applications** gate is now dark. White was hard to read on its orange.
 

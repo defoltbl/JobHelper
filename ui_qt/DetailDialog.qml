@@ -109,6 +109,9 @@ Dialog {
     property string prepErr: ""
     property string prepJob: ""
     property string eventErr: ""
+    property string eventField: ""       // the box the date's error is about (date, time, note), as the back end names it
+    function eventProblem(msg, field) { eventField = msg !== "" ? (field || "") : ""; eventErr = msg; }
+    function eventMarks(field) { return eventErr !== "" && eventField === field; }     // that box is red, no other
     property string eventKind: "interview"
     property string notesInfo: ""
     property bool replyOpen: false
@@ -256,10 +259,10 @@ Dialog {
     property var thanks: ({})
     property string thanksNote: ""
     function saveEvent() {
-        eventErr = "";
+        eventProblem("");
         var r = bridge.setEvent(job.id, evDate.text, evTime.text, eventKind, evNote.text);
         if (r && r.ok) { refresh("event"); win.upcomingData = bridge.upcoming(); ticker.text = "Date saved. You will be reminded the day before."; }
-        else eventErr = (r && r.msg) ? r.msg : "Couldn't save that date.";
+        else eventProblem((r && r.msg) ? r.msg : "Couldn't save that date.", r && r.field);
     }
     function saveNotes() {
         if (cnNotes.text.length > notesMax) {
@@ -332,7 +335,7 @@ Dialog {
         confirmClose = false; confirmAction = ""; closeNote = ""; replyText.text = ""; docsNote = ""; docsBad = false;
         pasteOpen = false; pasteErr = ""; pastedText.text = ""; confirmShelve = false; shelveNote = ""; shelveBad = false;
         job = d; draft = ({}); note = ""; dateErr = ""; if (!prepBusy) prepErr = "";
-        eventErr = ""; notesInfo = ""; notesBad = false; replyErr = ""; replyInfo = ""; replyOpen = false; thanks = ({}); thanksNote = "";
+        eventProblem(""); notesInfo = ""; notesBad = false; replyErr = ""; replyInfo = ""; replyOpen = false; thanks = ({}); thanksNote = "";
         detailFlick.contentY = 0;
         open();
     }
@@ -649,24 +652,24 @@ Dialog {
                         TextField { id: evDate; objectName: "evDate"; implicitWidth: 118; implicitHeight: 28; placeholderText: "YYYY-MM-DD"
                             placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1
-                                border.color: (detailDialog.eventErr !== "") ? theme.crit : (evDate.activeFocus ? theme.accent : theme.line) }
-                            onTextEdited: detailDialog.eventErr = "" }
+                                border.color: detailDialog.eventMarks("date") ? theme.crit : (evDate.activeFocus ? theme.accent : theme.line) }
+                            onTextEdited: detailDialog.eventProblem("") }
                         TextField { id: evTime; objectName: "evTime"; implicitWidth: 70; implicitHeight: 28; placeholderText: "HH:MM"
                             placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1
-                                border.color: evTime.activeFocus ? theme.accent : theme.line }
-                            onTextEdited: detailDialog.eventErr = "" }
+                                border.color: detailDialog.eventMarks("time") ? theme.crit : (evTime.activeFocus ? theme.accent : theme.line) }
+                            onTextEdited: detailDialog.eventProblem("") }
                         TextField { id: evNote; objectName: "evNote"; Layout.fillWidth: true; implicitHeight: 28; placeholderText: "note, e.g. Teams call with the team lead"
                             placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.event_note
                             background: Rectangle { radius: 7; color: theme.inset; border.width: 1
-                                border.color: evNote.activeFocus ? theme.accent : theme.line }
-                            onTextEdited: detailDialog.eventErr = detailDialog.full(evNote, "The note") }
+                                border.color: detailDialog.eventMarks("note") ? theme.crit : (evNote.activeFocus ? theme.accent : theme.line) }
+                            onTextEdited: detailDialog.eventProblem(detailDialog.full(evNote, "The note"), "note") }
                         SmallButton { objectName: "evSave"; primaryStyle: true; text: "Save"; onClicked: detailDialog.saveEvent() }
                         SmallButton { objectName: "evCalendar"; visible: !!(detailDialog.job.event && detailDialog.job.event.date)
                             text: "Add to calendar"
                             onClicked: { var c = bridge.exportEvent(detailDialog.job.id);
                                 if (c && c.ok) ticker.text = "Opened a calendar file. Confirm it in Calendar and it syncs to your phone.";
-                                else detailDialog.eventErr = (c && c.msg) || "Couldn't make the calendar file."; } }
+                                else detailDialog.eventProblem((c && c.msg) || "Couldn't make the calendar file."); } }
                         SmallButton { visible: !!(detailDialog.job.event && detailDialog.job.event.date); text: "Clear"
                             onClicked: { bridge.clearEvent(detailDialog.job.id); detailDialog.refresh("event"); win.upcomingData = bridge.upcoming(); } }
                     }

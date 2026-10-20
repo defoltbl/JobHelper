@@ -18,9 +18,9 @@ class InterviewService:
 
     # ── dates to remember ───────────────────────────────────────
     def set_event(self, job_id, day, time_text="", kind="interview", note=""):
+        """{ok} or {ok, msg, field}: `field` names the box the refusal is about, so the window marks that box."""
         def go(jobs, j):
-            problem = planner.set_event(j, day, time_text, kind, note)
-            return {"ok": False, "msg": problem} if problem else {"ok": True}
+            return planner.EventCheck(day, time_text, kind, note).put_on(j).answer()
         return self._editor.change(job_id, go, render=False)
 
     def clear_event(self, job_id):
