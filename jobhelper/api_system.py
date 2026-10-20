@@ -172,7 +172,7 @@ class SystemService:
         """How long what you type may be, and the ranges of the number boxes, from the module that checks each one, so the
         window says it before the check refuses. Only constants: it works while the data is locked too (the window's
         bindings read it at once, and a missing key would break them)."""
-        from . import assistant, config, cover_letter, form_answers, housekeeping, mailhosts, planner
+        from . import assistant, config, cover_letter, form_answers, housekeeping, mailhosts, planner, scrapers_ats
         app = self._app                             # the Options' own limits: asked through the facade, like any other service
         return {"request": assistant.MAX_REQUEST, "question": form_answers.MAX_QUESTION, "answer": form_answers.MAX_ANSWER,
                 "event_note": planner.MAX_EVENT_NOTE, "company_notes": dict(planner.NOTE_LIMITS),
@@ -183,7 +183,10 @@ class SystemService:
                 "mail_server": mailhosts.MAX_HOST,
                 # the ranges of the Options' numbers: a saved value is never cut to fit a box that allows less
                 "numbers": {key: list(span) for key, span in app.OPTION_NUMBERS.items()},
-                "shelf_days": [housekeeping.SHELF_MIN_DAYS, app.SHELF_MAX_DAYS], "look_back": list(config.LOOK_BACK_ONCE)}
+                "shelf_days": [housekeeping.SHELF_MIN_DAYS, app.SHELF_MAX_DAYS], "look_back": list(config.LOOK_BACK_ONCE),
+                # the choices a list offers: the same ones the check accepts
+                "choices": {"event_kinds": list(planner.KINDS), "ats": list(scrapers_ats.ATS_NAMES),
+                            "models": list(app.MODELS), "text_sizes": list(config.TEXT_SIZES)}}
 
     def changelog(self):
         """[{date, items}] from CHANGELOG.md, newest first; **words** become <b>words</b>."""

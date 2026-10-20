@@ -99,6 +99,7 @@ def _recruitee(name: str, token: str) -> list[dict[str, Any]]:
 
 _FETCHERS = {"greenhouse": _greenhouse, "lever": _lever,
              "smartrecruiters": _smartrecruiters, "recruitee": _recruitee}
+ATS_NAMES = tuple(_FETCHERS)          # the career-site systems a company can use: the Options list offers these
 
 
 def _norm(jid: str, title: str, company: str, location: str, url: str,
