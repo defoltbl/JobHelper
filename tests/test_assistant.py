@@ -2148,3 +2148,12 @@ def test_the_assistant_writes_en_dashes_by_the_one_rule():
     from jobhelper import assistant_brain, cv_tailor
     assert assistant_brain.en_dashes is cv_tailor.en_dashes
     assert assistant_brain.check({"say": "Yes — it is open.", "actions": []}, set())["say"] == "Yes – it is open."
+
+
+def test_the_assistant_is_told_the_date_kinds_the_planner_accepts(monkeypatch):
+    """One list of kinds: the prompt names planner.KINDS, so a kind Claude picks is one set_date can save."""
+    from jobhelper import assistant_brain, planner
+    seen = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: seen.append(prompt) or {"say": "ok", "actions": []})
+    assistant_brain.decide("hello", [], [], [], "", "")
+    assert '"kind": ' + " | ".join(f'"{kind}"' for kind in planner.KINDS) in seen[0]

@@ -260,7 +260,7 @@ Dialog {
         sizeCombo.currentIndex = Math.max(0, sizes.indexOf(o.text_size || 100)); sizeAtOpen = sizes[sizeCombo.currentIndex];
         foldersSw.checked = o.scan_all_folders === true;
         keepSpin.value = o.keep_backups !== undefined ? o.keep_backups : 10;
-        modelCombo.currentIndex = Math.max(0, modelCombo.find(o.model || "sonnet"));
+        modelCombo.currentIndex = Math.max(0, modelCombo.find(o.model));
         rolesModel.clear();
         var qs = o.queries || [];
         for (var i = 0; i < qs.length; i++) rolesModel.append({ text: qs[i] });

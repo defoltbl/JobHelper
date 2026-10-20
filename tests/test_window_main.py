@@ -404,8 +404,10 @@ def test_the_options_lists_offer_what_the_back_end_accepts(ui):
     assert ui.js("coAts.count") == len(scrapers_ats.ATS_NAMES)
     assert ui.js("sizeCombo.count") == len(config.TEXT_SIZES)
     assert ui.js("sizeCombo.textAt(sizeCombo.count - 1)") == f"{config.TEXT_SIZES[-1]}%"
+    assert ui.js("modelCombo.currentText") == ui.bridge.options()["model"]          # the saved model is chosen on open
     ui.js("close()", dialog)
     _until_closed(ui, dialog)
+
 
 def test_scan_period_option_is_loaded_and_saved(ui):
     dialog = ui.find("optDialog")
