@@ -441,9 +441,9 @@ def test_light_theme_text_colours_read_on_light_surfaces():
     import re
     main = (ROOT / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
     light = {name: value for name, value in re.findall(r'property color (\w+): win\.dark \? "#[0-9a-fA-F]{6}" : "(#[0-9a-fA-F]{6})"', main)}
-    assert {"winbg", "surface", "surface2", "ink", "soft", "faint", "accent", "good", "warn", "crit"} <= set(light)
-    for text in ("ink", "soft", "faint", "good", "warn", "crit"):
-        for ground in ("winbg", "surface", "surface2"):
+    assert {"winbg", "surface", "surface2", "inset", "ink", "soft", "faint", "steel", "accent", "good", "warn", "crit", "a6"} <= set(light)
+    for text in ("ink", "soft", "faint", "steel", "accent", "good", "warn", "crit", "a6"):   # accent: links; a6: the assistant's words
+        for ground in ("winbg", "surface", "surface2", "inset"):
             assert _contrast(light[text], light[ground]) >= 4.5, (text, ground, round(_contrast(light[text], light[ground]), 2))
     assert _contrast(light["accentInk"], light["accent"]) >= 4.5 and _contrast(light["accentInk"], light["good"]) >= 4.5   # the label on a main button, the tick
     assert _contrast(light["warn"], light["warnbg"]) >= 4.5 and _contrast(light["good"], light["goodbg"]) >= 4.5 and _contrast(light["crit"], light["critbg"]) >= 4.5
@@ -459,6 +459,23 @@ def test_dark_theme_text_colours_read_on_dark_surfaces():
             assert _contrast(dark[text], dark[ground]) >= 4.5, (text, ground, round(_contrast(dark[text], dark[ground]), 2))
     assert _contrast(dark["accentInk"], dark["accent"]) >= 4.5 and _contrast(dark["accentInk"], dark["good"]) >= 4.5   # the label on a main button, the tick
     assert _contrast(dark["warn"], dark["warnbg"]) >= 4.5 and _contrast(dark["good"], dark["goodbg"]) >= 4.5 and _contrast(dark["crit"], dark["critbg"]) >= 4.5
+
+
+def test_a_badge_label_is_the_one_that_reads_better_on_its_colour(ui):
+    """The counter on a gate takes white or near-black from the theme, whichever reads better on that robot's colour:
+    white on the orange Tracker read at 2.3:1. Both a real colour and "#rrggbb" text are understood."""
+    import re
+    main = (ROOT / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
+    labels = ("#ffffff", re.search(r'var dark = Qt\.color\("(#[0-9a-f]{6})"\)', main).group(1))
+    colours = dict(re.findall(r'property color (a[1-5]): "(#[0-9a-fA-F]{6})"', main))
+    colours["light assistant"] = re.search(r'property color a6: win\.dark \? "#[0-9a-fA-F]{6}" : "(#[0-9a-fA-F]{6})"', main).group(1)
+    for name, colour in colours.items():
+        best = max(labels, key=lambda label: _contrast(label, colour))
+        assert ui.js(f'"" + theme.labelOn(Qt.color("{colour}"))') == best, name
+        assert ui.js(f'"" + theme.labelOn("{colour}")') == best, name               # the same answer for colour text
+    assert {ui.js(f'"" + theme.labelOn("{c}")') for c in colours.values()} == set(labels)   # both labels are really used
+    assert _contrast(ui.js(f'"" + theme.labelOn("{colours["a4"]}")'), colours["a4"]) >= 4.5
+    assert "theme.labelOn(g.ag)" in (ROOT / "ui_qt" / "Gate.qml").read_text(encoding="utf-8")
 
 
 def test_the_resume_button_s_white_label_reads_on_its_blue(ui):

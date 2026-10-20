@@ -300,7 +300,8 @@ ApplicationWindow {
 
     // ── palette ──
     // Both sets of values are chosen so that small text reads against its surfaces (contrast 4.5:1 or more
-    // for ink, soft, faint, good, warn and crit, and for a label on the accent); see tests/test_window_scores.py.
+    // for ink, soft, faint, steel, accent, good, warn, crit and the assistant's a6, on every surface and the inset,
+    // and for a label on the accent); see tests/test_window_scores.py.
     QtObject {
         id: theme
         readonly property real disabledOpacity: 0.5     // a control that cannot be used now: one paleness for every button
@@ -310,15 +311,15 @@ ApplicationWindow {
         property color inset: win.dark ? "#141c25" : "#eceff3"
         property color ink: win.dark ? "#e7eef5" : "#182230"
         property color soft: win.dark ? "#9fb0c1" : "#5a6675"
-        property color faint: win.dark ? "#8493a3" : "#657181"
+        property color faint: win.dark ? "#8493a3" : "#606c7b"
         property color line: win.dark ? "#2a3644" : "#d6dde5"
-        property color accent: win.dark ? "#f0a84a" : "#b45f06"
+        property color accent: win.dark ? "#f0a84a" : "#a35605"
         // a label on the accent (a main button, a picked chip) or on the green tick: the dark theme's
         // orange and green are light colours, so the label on them is dark there
         property color accentInk: win.dark ? "#1b1305" : "#ffffff"
         property color belt: win.dark ? "#2a3643" : "#c6cfd9"
         property color beltDark: win.dark ? "#1d2731" : "#aeb9c6"
-        property color steel: win.dark ? "#8695a6" : "#6b7787"
+        property color steel: win.dark ? "#8695a6" : "#616c7a"
         property color good: win.dark ? "#4ade80" : "#0f7a3d"
         property color goodbg: win.dark ? "#12301f" : "#e4f4ea"
         property color warnbg: win.dark ? "#2e2410" : "#f8eed8"
@@ -328,7 +329,15 @@ ApplicationWindow {
         property color infobg: win.dark ? "#142338" : "#e5eefc"
         property color a1: "#3b82f6"; property color a2: "#10b981"
         property color a3: "#8b5cf6"; property color a4: "#fb923c"; property color a5: "#f43f5e"
-        property color a6: win.dark ? "#22d3ee" : "#0891b2"       // the assistant
+        property color a6: win.dark ? "#22d3ee" : "#067590"       // the assistant
+        // the label on a coloured badge: white or near-black, whichever reads better on that colour
+        function labelOn(c) {
+            if (typeof c === "string") c = Qt.color(c);        // a colour given as "#rrggbb" text, too
+            function lin(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+            function lum(k) { return 0.2126 * lin(k.r) + 0.7152 * lin(k.g) + 0.0722 * lin(k.b); }
+            var dark = Qt.color("#0d141c"), l = lum(c);
+            return (1.05 / (l + 0.05)) >= ((l + 0.05) / (lum(dark) + 0.05)) ? "#ffffff" : "" + dark;
+        }
     }
 
     // ── reusable buttons ──
