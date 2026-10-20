@@ -15,7 +15,7 @@ from PySide6.QtTest import QTest  # noqa: E402
 
 from jobhelper import config, qt_bridge, store, ui_api  # noqa: E402
 from tests.conftest import ROOT  # noqa: E402
-from tests.window_harness import (_listed, _open, _open_job, _until_closed, _until_open, _until_true, _wait_idle)  # noqa: E402
+from tests.window_harness import (_listed, _open, _open_job, _until_closed, _until_open, _until_settled, _until_true, _wait_idle)  # noqa: E402
 
 
 # ── the assistant ───────────────────────────────────────────────────────────
@@ -34,10 +34,10 @@ def test_the_assistant_stands_on_the_line_blinks_and_waves(ui):
     assert max(lids) > 0.6 and lids[-1] < 0.2, "it blinked"
     arm, bubble = ui.drawn("assistantArm", "stagePanel"), ui.drawn("assistantBubble", "stagePanel")
     bot.setProperty("greeting", False)                          # it may still be telling the morning's briefing
-    ui.wait(500)
+    _until_true(ui, lambda: arm.property("rotation") > -40 and bubble.property("opacity") == 0)
     assert arm.property("rotation") > -40 and bubble.property("opacity") == 0
     ui.js("stagePanel.assistant.greet()")
-    ui.wait(500)
+    _until_true(ui, lambda: arm.property("rotation") < -100 and bubble.property("opacity") == 1)
     assert bot.property("greeting") and arm.property("rotation") < -100, "the arm is up, waving"
     assert bubble.property("opacity") == 1 and bot.property("says").startswith("Hi!")
     assert bubble.mapToItem(bot.parentItem(), 0, 0).x() >= 0, "the bubble stays on the floor"
@@ -52,7 +52,8 @@ def test_the_assistant_stands_on_the_line_blinks_and_waves(ui):
             other = ui.find(name)
             assert top >= other.property("y") + 100, "and never over a robot"
     ui.js("stagePanel.assistant.greet()")
-    ui.wait(300)
+    _until_true(ui, lambda: ui.js("stagePanel.assistant.parent.scale") > 0 and bubble.property("opacity") == 1)
+    _until_settled(ui, lambda: bubble.property("width"))                     # the bubble grows to its words after it shows
     assert floor.property("height") == 560 and ui.js("stagePanel.assistant.parent.scale") > 0
     wide = bubble.property("width")
     bot.setProperty("greeting", False)
@@ -61,13 +62,13 @@ def test_the_assistant_stands_on_the_line_blinks_and_waves(ui):
         sizes.append((bot.property("shown"), bubble.property("width")))
         ui.wait(20)
     assert set(sizes) == {("Hi! Tap me to fill in a form.", wide)}, "it used to switch to the other text and jump while fading"
-    ui.wait(400)
+    _until_true(ui, lambda: arm.property("rotation") > -40 and bubble.property("opacity") == 0)
     assert arm.property("rotation") > -40 and bubble.property("opacity") == 0
     bot.setProperty("hovered", True)
-    ui.wait(400)
+    _until_true(ui, lambda: bubble.property("opacity") == 1)
     assert bot.property("shown") == "Assistant · tap to ask" and bubble.property("opacity") == 1
     bot.setProperty("hovered", False)
-    ui.wait(400)
+    _until_true(ui, lambda: bubble.property("opacity") == 0)
     assert ui.warnings == []
 
 
@@ -75,7 +76,7 @@ def test_the_assistant_asks_for_your_details_first_and_checks_them(ui):
     from jobhelper import details
     dialog = ui.find("assistantDialog")
     ui.js('stagePanel.assistant.tapped()')
-    ui.wait(500)
+    _until_open(ui, "assistantDialog")
     assert dialog.property("opened") and dialog.property("page") == "details", "nothing is saved yet: the details come first"
     assert ui.js("fieldModel.count") == len(details.KEYS) and ui.js("talk.count") == 1
     ui.js("assistantDialog.saveDetails()")
@@ -93,7 +94,7 @@ def test_the_assistant_asks_for_your_details_first_and_checks_them(ui):
     assert details.load()["email"] == "alex@example.com" and details.load()["linkedin"] == "https://linkedin.com/in/alexnovak"
     assert not dialog.property("dirty") and dialog.property("detailsSaved") and "Saved" in ui.find("asDetailsNote").property("text")
     ui.js("assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, dialog)
     assert dialog.property("visible") is False and ui.warnings == []
 
 
@@ -143,7 +144,7 @@ def test_the_assistant_takes_a_request_and_shows_what_it_filled(ui, monkeypatch)
     assert ui.js("talk.get(talk.count - 1).bad") is True and ui.js("talk.get(talk.count - 1).text") == "Google Chrome is not open."
     assert ui.js("filledModel.count") == 0, "an old report does not stay under a new answer"
     ui.js("assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, dialog)
     assert dialog.property("visible") is False and ui.warnings == []
 
 
@@ -152,13 +153,13 @@ def test_the_assistant_looks_at_the_pointer_nods_and_shakes_its_head(ui):
     eyes, head = ui.drawn("assistantEyes", "stagePanel"), ui.drawn("assistantHead", "stagePanel")
     rest_x, rest_y = eyes.property("x"), head.property("y")
     ui.js("stagePanel.assistant.lookAt(100, 100)")                # far to the left and above
-    ui.wait(300)
+    _until_true(ui, lambda: bot.property("lookX") == -1 and bot.property("lookY") == -1 and eyes.property("x") < rest_x - 3)
     assert bot.property("lookX") == -1 and bot.property("lookY") == -1 and eyes.property("x") < rest_x - 3
     ui.js("stagePanel.assistant.lookAt(stagePanel.assistant.x + 60, stagePanel.assistant.y + 36)")
-    ui.wait(300)
+    _until_true(ui, lambda: 0 < bot.property("lookX") < 0.3)
     assert 0 < bot.property("lookX") < 0.3, "a pointer close by moves the eyes a little"
     ui.js("stagePanel.assistant.lookAhead()")
-    ui.wait(300)
+    _until_true(ui, lambda: bot.property("lookX") == 0 and abs(eyes.property("x") - rest_x) < 0.01)
     assert bot.property("lookX") == 0 and abs(eyes.property("x") - rest_x) < 0.01
     for move, part, name in (("nod", "y", "nodBy"), ("shake", "x", "shakeBy")):
         start = head.property(part)
@@ -214,7 +215,7 @@ def test_after_a_fill_the_assistant_offers_what_applies(ui, monkeypatch):
     # mark applied, from here
     assert store.find(store.load_jobs(), "lead")["status"] in store.LEAD_STATUSES
     ui.js("assistantDialog.markApplied()")
-    ui.wait(200)
+    _until_true(ui, lambda: store.find(store.load_jobs(), "lead")["status"] == "waiting")
     assert store.find(store.load_jobs(), "lead")["status"] == "waiting" and not dialog.property("canApply")
     assert "Moved Junior Python Developer at Acme to Applications" in ui.js("talk.get(talk.count - 1).text")
     # the memory can be emptied, after asking once
@@ -249,7 +250,7 @@ def test_after_a_fill_the_assistant_offers_what_applies(ui, monkeypatch):
     assert not dialog.property("canOpenForm") and ui.js("filledModel.count") == 1, "one press: the form is open and what was filled is listed"
     assert "in a tab of its own" in ui.js("talk.get(talk.count - 1).text") or ui.js("assistantDialog.typingIndex") >= 0
     ui.js("assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, "assistantDialog")
     store.save_jobs([dict(j, status="letter_ready") if j["id"] == "lead" else j for j in store.load_jobs()])      # as the other tests expect it
     ui.js("win.reloadAll()")
     assert dialog.property("visible") is False and ui.warnings == []
@@ -286,7 +287,7 @@ def test_a_press_on_empty_space_ends_the_editing_of_a_field(ui):
     ui.wait(150)
     assert box.property("activeFocus") is False
     ui.js("assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, "assistantDialog")
     assert ui.warnings == []
 
 
@@ -401,7 +402,7 @@ def test_my_details_takes_several_jobs_degrees_a_salary_with_its_currency_and_fi
     ui.js(f'assistantDialog.addFile("{paper.as_uri()}")')
     assert ui.js("fileModel.count") == 1 and ui.js("fileModel.get(0).label") == "AWS certificate" and "already" in ui.js("assistantDialog.problem.msg")
     ui.js("assistantDialog.touched()")
-    ui.wait(300)
+    _until_true(ui, lambda: ui.find("asJobs").property("visible") and ui.find("asSchools").property("visible"))
     assert ui.find("asJobs").property("visible") and ui.find("asSchools").property("visible") and ui.warnings == []
     ui.js("assistantDialog.saveDetails()")
     kept = details.load()
@@ -423,7 +424,7 @@ def test_my_details_takes_several_jobs_degrees_a_salary_with_its_currency_and_fi
     ui.js("assistantDialog.tryClose()")
     assert dialog.property("opened"), "unsaved rows: asked once"
     ui.js("assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, "assistantDialog")
     details.path().unlink(missing_ok=True)
     assert dialog.property("visible") is False and ui.warnings == []
 
@@ -479,7 +480,7 @@ def test_my_answers_are_written_drafted_saved_and_removed(ui, monkeypatch):
     ui.js("assistantDialog.removeAnswer(0)")
     assert answer_memory.count() == 0 and dialog.property("remembered") == 0 and ui.js("answerModel.count") == 0
     ui.js("assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, dialog)
     assert dialog.property("visible") is False and ui.warnings == []
 
 
@@ -526,7 +527,7 @@ def test_the_assistant_asks_before_it_changes_anything_and_shows_what_it_found(u
     assert did[-1] == ("talk", "which application waits longest?", "", "app")
     assert ui.find("asRows").property("visible") and ui.js("rowModel.get(0).label") == "Beta · QA Engineer"
     ui.js("assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, "assistantDialog")
     ui.js('detailDialog.show("app")')
     _until_open(ui, "detailDialog")
     ui.js("assistantDialog.show()")
@@ -535,7 +536,7 @@ def test_the_assistant_asks_before_it_changes_anything_and_shows_what_it_found(u
     _wait_idle(ui, dialog)
     assert did[-1] == ("talk", "why did this score 64?", "app", ""), "the job whose window is open is “this job”"
     ui.js("assistantDialog.tryClose(); detailDialog.close()")
-    ui.wait(400)
+    _until_closed(ui, "assistantDialog"); _until_closed(ui, "detailDialog")
     assert ui.warnings == []
 
 
@@ -571,7 +572,7 @@ def test_practising_an_interview_goes_question_by_question(ui, monkeypatch):
     ui.js('assistantDialog.ask("stop")')
     assert not dialog.property("practising") and len(did) == 3 and "Practice ended" in ui.js("talk.get(talk.count - 1).text")
     ui.js("assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, "assistantDialog")
     assert ui.warnings == []
 
 
@@ -585,7 +586,7 @@ def test_the_assistant_speaks_first_reviews_a_form_and_notices_one_only_when_tol
     ui.js("welcome.shown = true")
     ui.wait(200)
     ui.js("welcome.finish()")
-    ui.wait(1200)
+    _until_true(ui, lambda: bot.property("note").startswith("You filled in the form"), most_ms=6000)
     assert bot.property("note").startswith("You filled in the form for QA Engineer at Beta") and bot.property("greeting") and bot.property("shown") == bot.property("note")
     bubble = ui.drawn("assistantBubble", "stagePanel")
     assert bubble.mapToItem(bot.parentItem(), 0, 0).x() >= 0, "the longer bubble still stays on the floor"
@@ -609,20 +610,20 @@ def test_the_assistant_speaks_first_reviews_a_form_and_notices_one_only_when_tol
     ui.js("assistantDialog.setWatch(true)")
     assert dialog.property("watching") is True and config.ui_settings().get("assistant_watch") is True
     ui.js("assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, "assistantDialog")
     ui.bridge.formNoticed.emit({"ok": False, "problem": "Chrome does not let other apps fill in pages yet."})
     assert dialog.property("watchProblem").startswith("Chrome does not let")
     ui.bridge.formNoticed.emit({"ok": True, "job_id": "app", "job": "QA Engineer at Beta", "say": "This looks like the form for QA Engineer at Beta. Tap me and I fill it in."})
-    ui.wait(300)
+    _until_true(ui, lambda: bot.property("note").startswith("This looks like the form"))
     assert bot.property("note").startswith("This looks like the form for QA Engineer at Beta") and bot.property("greeting") and dialog.property("watchProblem") == ""
     ui.js("stagePanel.assistant.tapped()")
-    ui.wait(450)
+    _until_open(ui, "assistantDialog")
     assert dialog.property("jobId") == "app", "the form it noticed is the job the answers are for"
     ui.js("assistantDialog.setWatch(false)")
     assert config.ui_settings().get("assistant_watch") is False
     bot.setProperty("greeting", False)
     ui.js("assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, "assistantDialog")
     assert ui.warnings == []
 
 
@@ -655,7 +656,7 @@ def test_the_assistant_at_pro_level_in_the_window(ui, monkeypatch):
     # several things at once: what only shows is done, the rest is one question; then it can be taken back
     ui.js('assistantDialog.ask("mark acme applied, set a date and open beta")')
     _wait_idle(ui, dialog)
-    ui.wait(500)
+    _until_true(ui, lambda: ui.find("detailDialog").property("visible"))
     assert ui.find("detailDialog").property("visible"), "what was to be opened is opened"
     assert ui.js("talk.get(talk.count - 2).text") == "Opening QA Engineer at Beta." and ui.find("asConfirm").property("visible")
     assert not ui.find("asStarters").property("visible"), "a question is open: nothing else is offered"
@@ -705,7 +706,7 @@ def test_the_assistant_at_pro_level_in_the_window(ui, monkeypatch):
     assert config.ui_settings().get("assistant_browser") == "safari" and "Opera GX tells another app which page is open" in ui.find("asDetailsNote").property("text")
     ui.js('assistantDialog.setBrowser("chrome")')
     ui.js("assistantDialog.dirty = false; assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, "assistantDialog")
     from jobhelper import chrome
     chrome.use("chrome")
     assert ui.warnings == []
@@ -751,7 +752,7 @@ def test_a_job_is_found_for_the_assistant_by_typing_part_of_its_name(ui, monkeyp
     ui.js("text = 'north'; assistantDialog.findJob(text)", find)
     assert dialog.property("jobId") == "" and combo.property("currentIndex") == 0, "the chosen job is not among these: none is chosen, and the list says so"
     ui.js("assistantDialog.forJob('bp')")               # opened from a job's window: the typed words are put away
-    ui.wait(300)
+    _until_true(ui, lambda: dialog.property("jobId") == "bp")
     assert find.property("text") == "" and combo.property("count") == 5 and dialog.property("jobId") == "bp"
     # the recurring bug: the box lets go of the cursor on a press beside it
     ui.js("forceActiveFocus()", find)
@@ -762,7 +763,7 @@ def test_a_job_is_found_for_the_assistant_by_typing_part_of_its_name(ui, monkeyp
     ui.wait(150)
     assert find.property("activeFocus") is False
     ui.js("assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, "assistantDialog")
     assert ui.warnings == []
 
 
@@ -824,7 +825,7 @@ def test_my_details_keeps_languages_and_what_you_did_in_each_job(ui):
     ui.js("assistantDialog.show()")
     _until_open(ui, "assistantDialog")
     ui.js('assistantDialog.page = "details"')
-    ui.wait(300)
+    _until_true(ui, lambda: ui.js("jobModel.count") > 0 and ui.js("jobModel.get(0).location") == "Brno, Czechia")
     assert ui.js("jobModel.get(0).location") == "Brno, Czechia" and ui.js("jobModel.get(0).description") == "Built SQL reports\nAutomated the monthly close"
     area = ui.drawn("rowArea_description", "asJobs")
     assert area is not None and area.property("text").startswith("Built SQL reports") and area.property("height") >= 60, "a box of several lines, not one cut line"
@@ -844,13 +845,13 @@ def test_my_details_keeps_languages_and_what_you_did_in_each_job(ui):
     assert kept["languages"] == [{"language": "English", "level": "Fluent"}, {"language": "Ukrainian", "level": "Native"}]
     assert kept["experience"][0]["description"] == "Built SQL reports for finance" and kept["experience"][0]["location"] == "Brno, Czechia"
     ui.js("assistantDialog.tryClose()")
-    ui.wait(400)
+    _until_closed(ui, dialog)
     assert dialog.property("visible") is False and ui.warnings == []
 
 
 def test_number_box_follows_its_buttons_after_typing(ui):
     """After a number was typed and the box left, + and - must still change the number that is shown."""
-    ui.js("optDialog.open()"); ui.wait(450)
+    ui.js("optDialog.open()"); _until_open(ui, "optDialog")
     spin = ui.find("yearsSpin")
     box = spin.property("contentItem")
     spin.setProperty("value", 4); ui.wait(30)
@@ -866,7 +867,7 @@ def test_number_box_follows_its_buttons_after_typing(ui):
 
 def test_a_suggestion_can_be_chosen_with_the_keyboard(ui):
     """Arrow down marks a suggested role and Return takes it; without the arrow Return takes what was typed."""
-    ui.js("optDialog.open()"); ui.wait(450)
+    ui.js("optDialog.open()"); _until_open(ui, "optDialog")
     ui.js("roleField.suggestions = ['junior python developer', 'junior data analyst']")
     roles = lambda: ui.js("(function () { var o = []; for (var i = 0; i < rolesModel.count; i++) o.push(rolesModel.get(i).text); return o.join('|'); })()")  # noqa: E731
     try:
@@ -1016,7 +1017,7 @@ def test_options_says_when_something_was_typed_but_not_added(ui):
         assert "“trainee”" in said and "Skip titles with" in said
         assert "Save" in ROOT.joinpath("ui_qt", "OptionsDialog.qml").read_text(encoding="utf-8").split("var left = optDialog.notAdded();")[0][-3000:]   # asked on Save
         ui.js("optDialog.close()"); _until_closed(ui, "optDialog")
-        ui.js("optDialog.open()"); ui.wait(450)                       # opened again: the half-typed word is gone
+        ui.js("optDialog.open()"); _until_open(ui, "optDialog")                       # opened again: the half-typed word is gone
         assert ui.js("optDialog.notAdded()") == "" and ui.js("skipTags.typed") == ""
     finally:
         ui.js("optDialog.close()"); _until_closed(ui, "optDialog")

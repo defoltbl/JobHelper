@@ -37,13 +37,13 @@ def test_start_enters_the_app_and_the_chip_reopens_the_card(ui):
     welcome = ui.find("welcome")
     ui.js("welcome.finish()")
     assert welcome.property("shown") is False
-    ui.wait(700)
+    _until_true(ui, lambda: ui.find("welcome").property("visible") is False)
     assert welcome.property("visible") is False        # fully animated away
     ui.js("welcome.openCard()")
     assert welcome.property("shown") is True and welcome.property("first") is False
     assert ui.find("welcomeStart").property("text") == "Done"
     ui.js("welcome.finish()")
-    ui.wait(700)
+    _until_true(ui, lambda: ui.find("welcome").property("visible") is False)
 
 
 def test_pdf_row_says_how_to_get_pdf_copies_and_is_never_required(ui):
@@ -119,7 +119,7 @@ def test_the_recovery_key_is_shown_and_restored_in_the_account_card(ui, monkeypa
     ui.js("welcome.toggleKey()")                                   # Hide
     assert welcome.property("keyText") == ""
     ui.js("welcome.toggleKey(); welcome.finish()")                 # closing the card puts it away too
-    ui.wait(700)
+    _until_true(ui, lambda: ui.find("welcome").property("visible") is False)
     assert welcome.property("keyText") == ""
     assert "interval: 60000; running: welcome.keyText" in qml_source(), "and it is put away by itself after a minute"
     # no key to show
@@ -148,7 +148,7 @@ def test_the_recovery_key_is_shown_and_restored_in_the_account_card(ui, monkeypa
     assert used == ["good-key"] and welcome.property("restoreErr") == ""
     ui.win.setProperty("connData", dict(READY))
     ui.js('welcome.keyErr = ""; welcome.finish()')
-    ui.wait(700)
+    _until_true(ui, lambda: ui.find("welcome").property("visible") is False)
     assert "python status.py" not in (ROOT / "ui_qt" / "WelcomeOverlay.qml").read_text(encoding="utf-8")
     assert ui.warnings == []
 
@@ -183,7 +183,7 @@ def test_a_refused_app_password_is_not_saved(ui, monkeypatch):
     note = _until_shown(ui, "emailNote")                           # the card may still be fading in on a slow machine
     assert note.property("visible") is True and "not tried" in note.property("text")
     ui.js('welcome.emailNote = ""; welcome.finish()')
-    ui.wait(700)
+    _until_true(ui, lambda: ui.find("welcome").property("visible") is False)
     assert ui.warnings == []
 
 
@@ -255,7 +255,7 @@ def test_welcome_rejects_a_bad_email_and_stays_open(ui, monkeypatch):
     assert saved == [("jobs@example.com", "abcd abcd abcd abcd")]
     assert welcome.property("emailErr") == "" and welcome.property("editEmail") is False
     ui.js("welcome.finish()")
-    ui.wait(700)
+    _until_true(ui, lambda: ui.find("welcome").property("visible") is False)
 
 
 # ── run progress ────────────────────────────────────────────────────────────
@@ -383,7 +383,7 @@ def test_detail_view_shows_score_keywords_and_follow_up(ui, monkeypatch):
 
 def test_detail_view_ignores_an_unknown_job(ui):
     ui.js('detailDialog.show("does-not-exist")')
-    ui.wait(150)
+    ui.wait(150)                                                       # nothing may open: only time can show that
     assert ui.find("detailDialog").property("visible") is False
 
 
@@ -597,7 +597,7 @@ def test_second_mailbox_row_follows_the_connection(ui):
     assert ui.find("secondMailAdd").property("text") == "Change"
     ui.win.setProperty("connData", dict(READY))
     ui.js("welcome.finish()")
-    ui.wait(600)
+    _until_true(ui, lambda: ui.find("welcome").property("visible") is False)
     assert ui.warnings == []
 
 
@@ -738,7 +738,7 @@ def test_not_interested_hides_the_lead_and_the_filter_restores_it(ui):
         assert _titles(ui) == ["Boring Role  ·  Nope Ltd"] and ui.js("listView.model[0].actions[0].kind") == "restore"
         assert ui.js('bridge.restoreJob("bye").ok') is True
         ui.js("refreshOpenView()")
-        ui.wait(300)
+        _until_true(ui, lambda: ui.js("groupFilter", ui.find("tableDialog")) == "")
         assert ui.js("groupFilter", ui.find("tableDialog")) == ""                # that group is empty again
         assert any(t.startswith("Boring Role") for t in _titles(ui))
     finally:
@@ -1133,13 +1133,13 @@ def test_closing_buttons_ask_once_before_they_discard_unsaved_text(ui, monkeypat
     ui.js("detailDialog.notInterested()")                       # another button: asked about again, by its own name
     assert done == [] and "press Not interested once more" in note.property("text")
     ui.js("detailDialog.notInterested()")                       # the second press of the same button goes ahead
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     assert done == [("dismiss", "lead")] and ui.find("detailDialog").property("opened") is False
     ui.js('detailDialog.show("lead")')
     _until_open(ui, "detailDialog")
     assert ui.js("detailDialog.confirmAction") == "" and note.property("visible") is False
     ui.js("detailDialog.markApplied()")                         # nothing typed: no question
-    ui.wait(350)
+    _until_closed(ui, "detailDialog")
     assert done[-1] == ("apply", "lead") and ui.find("detailDialog").property("opened") is False
     ui.js("tableDialog.close()")
     _until_closed(ui, "tableDialog")
@@ -1158,7 +1158,7 @@ def test_usage_card_corrects_itself_when_a_reset_time_passes(ui):
     ui.js('usageData = ({ model: "sonnet", seven_day_used: 100, next_reset_in: 590000 })')      # days away: still a valid timer
     assert 0 < timer.property("interval") <= 2147483647
     ui.js('usageData = ({ model: "sonnet", five_hour_used: 100, five_hour_resets: "14:00", next_reset_in: 1 })')
-    ui.wait(2900)                                               # the time passes: the card asks the app again
+    _until_true(ui, lambda: ui.js("usageData.five_hour_used") != 100, most_ms=8000)
     assert ui.js("usageData.five_hour_used") != 100
     ui.js("usageData = JSON.parse('%s')" % keep.replace("\\", "\\\\").replace("'", "\\'"))
     assert ui.warnings == []

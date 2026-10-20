@@ -108,7 +108,7 @@ def test_cv_comparison_window(ui, monkeypatch):
     _open_job(ui, "lead")
     assert ui.find("compareCv").property("visible") is False                       # no adapted CV yet
     ui.js("compareDialog.show(detailDialog.job.id)")
-    ui.wait(150)
+    ui.wait(150)                                                       # nothing may open: only time can show that
     assert ui.find("compareDialog").property("visible") is False                   # and nothing opens
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", salary="50 000 - 60 000 CZK"), render=False)
     ui.js("detailDialog.refresh()")
@@ -309,7 +309,7 @@ def test_bring_back_button_in_the_filtered_out_list(ui):
     assert ui.js("listView.model[1].actions.length") == 0                        # a duplicate would be removed again
     assert ui.js("bridge.bringBack(0).ok") is True
     ui.js("countsData = bridge.counts(); refreshOpenView()")
-    ui.wait(300)
+    _until_true(ui, lambda: ui.find("listView").property("count") == 1)
     assert ui.find("listView").property("count") == 1 and ui.js("countsData.leads") == before + 1
     ui.js("tableDialog.close()")
     _until_closed(ui, "tableDialog")
@@ -365,7 +365,8 @@ def test_start_up_check_shows_one_line_only_when_something_is_wrong(ui):
           '{ name: "Job list", ok: true, problem: "" }] }')
     assert banner.property("visible") is True and "No master CV yet" in ui.find("healthText").property("text")
     ui.js("showHealth()")
-    ui.wait(450)
+    _until_open(ui, "tableDialog")
+    _until_true(ui, lambda: ui.find("listView").property("count") == 3)
     assert ui.find("listView").property("count") == 3
     assert ui.js("listView.model[0].secondary") == "No master CV yet." and ui.js("listView.model[2].secondary") == "fine"
     ui.js("tableDialog.close()")
@@ -422,10 +423,12 @@ def test_a_split_file_never_hands_a_robot_its_own_empty_theme(ui):
 def test_every_window_opens_from_the_main_file_without_warnings(ui):
     for name in Ui.WINDOWS:
         assert ui.win.findChild(QObject, name) is not None, name
-    for code in ('openView("new")', "tableDialog.close()", "helpDialog.open()", "helpDialog.close()", "limitDialog.open()", "limitDialog.close()",
-                 "schedDialog.open()", "schedDialog.close()", 'formDialog.show("app")', "formDialog.close()"):
+    for code, name in (('openView("new")', "tableDialog"), ("helpDialog.open()", "helpDialog"), ("limitDialog.open()", "limitDialog"),
+                       ("schedDialog.open()", "schedDialog"), ('formDialog.show("app")', "formDialog")):
         ui.js(code)
-        ui.wait(380)
+        _until_open(ui, name)
+        ui.js(f"{name}.close()")
+        _until_closed(ui, name)
     assert ui.warnings == []
 
 
@@ -723,20 +726,20 @@ def test_form_answers_explain_every_wrong_step(ui, monkeypatch):
     assert note.property("text") == "Saved with this job. 1 answer is still empty. 1 answer still has a part in [square brackets] to fill in."
     # closing with an unsaved change: one warning, then it closes
     ui.js('fmModel.setProperty(0, "answer", "Changed and not saved."); formDialog.dirty = true; formDialog.tryClose()')
-    ui.wait(250)
+    _until_true(ui, lambda: "did not save" in note.property("text"))
     dialog = ui.find("formDialog")
     assert dialog.property("visible") is True and "did not save" in note.property("text")
     assert ui.js("formDialog.closePolicy === 0") is True                           # Esc cannot throw the change away either
     ui.js("formDialog.tryClose()")
-    ui.wait(450)
+    _until_closed(ui, dialog)
     assert dialog.property("visible") is False
     assert ui.bridge.formAnswers("app")["items"][0]["answer"] == "Because of your product."      # the discarded change was not saved
     # closing while Claude is working
     ui.js('formDialog.show("app"); formDialog.busy = true; formDialog.tryClose()')
-    ui.wait(300)
+    _until_true(ui, lambda: "still drafting" in note.property("text"))
     assert dialog.property("visible") is True and "still drafting" in note.property("text")
     ui.js("formDialog.busy = false; formDialog.tryClose()")
-    ui.wait(450)
+    _until_closed(ui, dialog)
     ui.bridge.saveFormAnswers("app", [])
     assert ui.warnings == []
 
@@ -749,17 +752,17 @@ def test_a_message_behind_an_open_window_is_shown_on_top_of_it(ui):
     assert toast.property("visible") is False                                      # the status line itself is in view
     _open_job(ui, "app")
     ui.js('ticker.text = "No link for this job."')
-    ui.wait(300)
+    _until_true(ui, lambda: toast.property("visible") is True)
     assert toast.property("visible") is True and ui.find("toastText").property("text") == "No link for this job."
     assert ui.js("toastBad") is True
     ui.js('ticker.text = "Opened the job posting in your browser."')
-    ui.wait(250)
+    _until_true(ui, lambda: ui.find("toastText").property("text").startswith("Opened"))
     assert ui.js("toastBad") is False and ui.find("toastText").property("text").startswith("Opened")
     ui.bridge.logChanged.emit("Scoring 3 of 14 jobs…")                             # a run's progress does not pop up
     ui.wait(250)
     assert ui.find("toastText").property("text").startswith("Opened")
     ui.js("toastTimer.interval = 150; toastTimer.restart()")
-    ui.wait(600)
+    _until_true(ui, lambda: toast.property("visible") is False)
     assert toast.property("visible") is False                                      # and it goes away by itself
     ui.js("toastTimer.interval = 4200; detailDialog.close()")
     _until_closed(ui, "detailDialog")
@@ -926,13 +929,13 @@ def test_the_preparation_can_be_edited_and_wrong_steps_are_explained(ui, monkeyp
     assert "longer than 3000 characters" in note.property("text")
     # closing with changes asks once
     ui.js('peModel.setProperty(2, "text", "My own pitch."); prepEditDialog.dirty = true; prepEditDialog.tryClose()')
-    ui.wait(200)
+    _until_true(ui, lambda: "did not save" in note.property("text"))
     assert dialog.property("visible") is True and "did not save" in note.property("text") and ui.js("prepEditDialog.closePolicy === 0") is True
     ui.js("prepEditDialog.save()")
     assert note.property("text") == "Saved." and ui.js("prepEditDialog.dirty") is False
     assert ui.bridge.interviewPrep("app")["pitch"] == "My own pitch."
     ui.js("prepEditDialog.tryClose()")
-    ui.wait(450)
+    _until_closed(ui, dialog)
     assert dialog.property("visible") is False
     # "Make again" would replace the edit: asked first
     _open_job(ui, "app")
@@ -943,7 +946,7 @@ def test_the_preparation_can_be_edited_and_wrong_steps_are_explained(ui, monkeyp
     _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("app", lambda jobs, j: j.update(interview_prep={}), render=False)
     ui.js('prepEditDialog.show("app")')                                          # nothing to edit: said, no empty window
-    ui.wait(250)
+    _until_true(ui, lambda: "Prepare the interview first" in ui.js("ticker.text"))
     assert dialog.property("visible") is False and "Prepare the interview first" in ui.js("ticker.text")
     assert ui.warnings == []
 
@@ -1049,7 +1052,7 @@ def test_letter_editor_explains_wrong_steps(ui, monkeypatch):
     ui.js("letterDialog.rewrite(1)")
     assert "Paragraph 2 is empty" in err.property("text") and ui.js("letterDialog.busyIndex") == -1      # nothing to rewrite: Claude is not asked
     ui.js('letterDialog.setText(1, "Second one, changed."); letterDialog.setText(3, "Fourth one."); letterDialog.tryClose()')
-    ui.wait(200)
+    _until_true(ui, lambda: "did not save" in err.property("text"))
     assert dialog.property("visible") is True and "did not save" in err.property("text")                 # changes are not thrown away on one click
     ui.js("letterDialog.busyIndex = 2; letterDialog.tryClose()")
     assert "still rewriting paragraph 3" in err.property("text") and dialog.property("visible") is True
@@ -1059,7 +1062,7 @@ def test_letter_editor_explains_wrong_steps(ui, monkeypatch):
     ui.js('hintField.text = "' + "h" * 300 + '"; hintField.textEdited()')
     assert err.property("text") == "The note for a rewrite takes up to 300 characters."
     ui.js('hintField.text = ""; letterDialog.err = ""; letterDialog.tryClose()')
-    ui.wait(450)
+    _until_closed(ui, dialog)
     assert dialog.property("visible") is False                                                           # saved: closes at once
     assert ui.warnings == []
 

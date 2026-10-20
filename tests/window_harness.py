@@ -168,6 +168,18 @@ def _until_true(ui, check, most_ms=4000):
     return check()
 
 
+
+def _until_settled(ui, read, most_ms=4000):
+    """Wait until an animated value stops changing (two readings 60 ms apart are equal): a bubble that grows to its words."""
+    waited, last = 0, read()
+    while waited < most_ms:
+        ui.wait(60); waited += 60
+        now = read()
+        if now == last:
+            return now
+        last = now
+    return last
+
 def _until_shown(ui, name, most_ms=4000):
     """Wait until an item is really on screen: a window that fades in (the welcome card) shows nothing before."""
     item, waited = ui.find(name), 0
