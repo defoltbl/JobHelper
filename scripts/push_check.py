@@ -110,11 +110,12 @@ class PushCheck:
 
     # ── what a push sends ────────────────────────────────────────────────────
     def commits(self, ranges: list[tuple[str, str]] | None = None) -> list[str]:
-        """The commits to check: for each (local, remote) pair those the remote does not have; without pairs, all.
-        A commit that any remote branch already has is public already and is not checked again: GitHub's own commit
-        of a squashed pull request (committer noreply@github.com) is on main, and every later branch contains it."""
+        """The commits to check: for each (local, remote) pair those the remote does not have; without pairs, every
+        commit no remote has (all of them in a repository that was never pushed). A commit that any remote branch
+        already has is public already and is not checked again: GitHub's own commit of a squashed pull request
+        (committer noreply@github.com) is on main, and every later branch contains it."""
         if not ranges:
-            return self._git("rev-list", "--all").split()
+            return self._git("rev-list", "--all", "--not", "--remotes").split()
         out: list[str] = []
         for local, remote in ranges:
             if local == ZERO:                               # a branch is deleted: nothing is sent
@@ -204,8 +205,8 @@ class PushCheck:
         for sha in commits:
             findings += self.check_commit(sha)
         if commits:
-            objects = self._git("rev-list", "--objects", *commits, "--not", *self._remote_tips(ranges)) if ranges else \
-                self._git("rev-list", "--objects", "--all")
+            public = self._remote_tips(ranges) if ranges else ["--remotes"]
+            objects = self._git("rev-list", "--objects", *commits, "--not", *public)
             paths: dict[str, str] = {}
             for line in objects.splitlines():
                 sha, _, path = line.partition(" ")
