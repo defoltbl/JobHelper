@@ -40,7 +40,8 @@ A few decisions worth highlighting, each with the problem that led to it.
   applies every edit to both, which is why an edit must give the same result when run twice.
 - **The limit is a state, not an error.** The numbers the usage card shows are a snapshot from
   Claude's last answer; a refusal fills the limit it names until its reset time, and a run
-  pauses and resumes instead of failing job after job.
+  pauses and resumes instead of failing job after job. Claude reports the numbers only with an
+  answer, so a number older than an hour shows "as of" and its time.
 - **Replies are matched by a company's own name words.** "Accenture Czech Republic" and "PwC
   Czech Republic" share a word, and so do "Reed Specialist Recruitment" and an "IT Support
   Specialist" role elsewhere. Words many names share do not count; measured on 150 days of real

@@ -213,6 +213,20 @@ def test_a_welcome_field_with_an_error_is_red_even_with_the_focus(ui):
     assert ui.warnings == []
 
 
+def test_an_old_usage_reading_says_when_it_was_taken(ui):
+    """While Claude refused every call, the 7-day line showed a reading from two days before as if it were now."""
+    start = ui.js("usageData")
+    try:
+        ui.win.setProperty("usageData", {**start, "five_hour_used": 100, "five_hour_resets": "03:40", "five_hour_as_of": "",
+                                         "seven_day_used": 0, "seven_day_resets": "22 Oct 02:00", "seven_day_as_of": "18 Oct 09:22"})
+        assert _until_true(ui, lambda: ui.drawn("usageResets_seven_day").property("text") == "as of 18 Oct 09:22")
+        assert ui.drawn("usageResets_five_hour").property("text") == "resets 03:40"     # a used-up window still says when it comes back
+        assert ui.drawn("usageLeft_seven_day").property("text") == "100% left"
+    finally:
+        ui.win.setProperty("usageData", start)
+    assert ui.warnings == []
+
+
 def test_welcome_rejects_a_bad_email_and_stays_open(ui, monkeypatch):
     saved = []
     monkeypatch.setattr(config, "set_imap", lambda user, pwd, lookback=None, host=None: saved.append((user, pwd)))

@@ -24,6 +24,11 @@ def _saved_usage(change):
     path.write_text(json.dumps(state), encoding="utf-8")
 
 
+def _kept(window):
+    """What a window says about the limit itself, without when it was read."""
+    return {key: window[key] for key in ("used", "resets_at")}
+
+
 def _windows(five=0.2, seven=0.2, five_reset=None, seven_reset=None):
     _saved_usage(lambda state: state.update(last_rate_limit={"at": "now", "info": {"unifiedWindows": {
         "five_hour": {"utilization": five, "resetsAt": five_reset or time.time() + 3600},
@@ -90,8 +95,8 @@ def test_a_refusal_fills_the_window_it_names_whatever_the_older_numbers_say(isol
     _windows(five=0.87, seven=0.34, five_reset=NOON + 600, seven_reset=NOON + 86400)
     usage.note_limit(NOON + 7200, SESSION_REFUSAL)
     now = usage.windows(NOON + 700)                     # the old reset time has passed, the refusal has not
-    assert now["five_hour"] == {"used": 1.0, "resets_at": NOON + 7200}
-    assert now["seven_day"] == {"used": 0.34, "resets_at": NOON + 86400}
+    assert _kept(now["five_hour"]) == {"used": 1.0, "resets_at": NOON + 7200} and now["five_hour"]["stale"] is False   # the refusal is news
+    assert _kept(now["seven_day"]) == {"used": 0.34, "resets_at": NOON + 86400}
     status = usage.limit_status(now=NOON + 700)
     assert status["blocked"] and status["window"] == "five_hour" and status["resets_at"] == NOON + 7200
     assert llm.limit_message(status).startswith("Claude's 5-hour limit is used up (100%)")
@@ -130,13 +135,14 @@ def test_when_both_limits_are_used_up_the_one_that_frees_later_is_named(isolate_
 
 def test_a_window_whose_reset_time_passed_is_empty_again(isolate_data):
     _windows(five=0.87, seven=0.34, five_reset=NOON + 600, seven_reset=NOON + 86400)
-    assert usage.windows(NOON)["five_hour"] == {"used": 0.87, "resets_at": NOON + 600}
-    assert usage.windows(NOON + 601)["five_hour"] == {"used": 0.0, "resets_at": 0.0}
+    assert _kept(usage.windows(NOON)["five_hour"]) == {"used": 0.87, "resets_at": NOON + 600}
+    assert _kept(usage.windows(NOON + 601)["five_hour"]) == {"used": 0.0, "resets_at": 0.0}
+    assert usage.windows(NOON + 601)["five_hour"]["stale"] is False, "a reset that passed is known now"
     assert usage.windows(NOON + 601)["seven_day"]["used"] == 0.34
 
 
 def test_windows_never_reported_stay_unknown(isolate_data):
-    assert usage.windows() == {"five_hour": {"used": None, "resets_at": 0.0}, "seven_day": {"used": None, "resets_at": 0.0}}
+    assert usage.windows() == {name: {"used": None, "resets_at": 0.0, "as_of": 0.0, "stale": False} for name in ("five_hour", "seven_day")}
     _saved_usage(lambda state: state.update(last_rate_limit={"at": "now", "info": {"unifiedWindows": {
         "five_hour": {"utilization": "a lot"}, "seven_day": "?"}}}))
     assert usage.windows()["five_hour"]["used"] is None and usage.windows()["seven_day"]["used"] is None
@@ -160,6 +166,23 @@ def test_the_usage_card_says_nothing_is_left_while_claude_refuses(isolate_data):
     when = datetime.fromtimestamp(in_an_hour)
     assert card["five_hour_resets"] in (when.strftime("%H:%M"), when.strftime("%d %b %H:%M"))
     assert len(card["seven_day_resets"]) > 5                              # another day: the date is part of it
+
+
+def test_an_old_reading_shows_when_it_was_taken(isolate_data):
+    """Claude reports the limits only with an answer. While it refused every call, the card showed a two-day-old
+    "100% left" for the week as if it were now."""
+    two_days_ago = datetime.fromtimestamp(time.time() - 2 * 86400).replace(microsecond=0)
+    _windows(five=0.01, seven=0.0, five_reset=time.time() - 60, seven_reset=time.time() + 3 * 86400)
+    _saved_usage(lambda state: state["last_rate_limit"].update(at=two_days_ago.isoformat()))
+    usage.note_limit(time.time() + 3600, SESSION_REFUSAL)
+    card = ui_api.Api().usage_info()
+    assert card["five_hour_used"] == 100 and card["five_hour_as_of"] == ""          # the refusal is news: no date
+    assert card["seven_day_used"] == 0 and card["seven_day_as_of"] == two_days_ago.strftime("%d %b %H:%M") and card["seven_day_stale"] is True
+    _saved_usage(lambda state: state["last_rate_limit"].update(at=datetime.now().isoformat(timespec="seconds")))
+    assert ui_api.Api().usage_info()["seven_day_as_of"] == "", "a fresh reading needs no date"
+    read_at = datetime.fromisoformat(json.loads(config.USAGE_JSON.read_text(encoding="utf-8"))["last_rate_limit"]["at"]).timestamp()
+    assert usage.windows(read_at + usage.STALE_AFTER)["seven_day"]["stale"] is False             # one hour old: still now
+    assert usage.windows(read_at + usage.STALE_AFTER + 1)["seven_day"]["stale"] is True
 
 
 def test_the_usage_card_knows_when_the_next_limit_comes_back(isolate_data):

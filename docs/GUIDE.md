@@ -512,7 +512,8 @@ Table 3.6 lists what each size shows.
 
 The widget gets new numbers every 15 minutes. The app writes them when it starts, after each
 change, every 5 minutes while it is open, and after the weekly run. When the numbers are older
-than a day, the widget tells you to open the app.
+than a day, the widget tells you to open the app. A Claude usage figure that is more than one
+hour old shows as "–", because the widget has no space for its time.
 
 To open the app, select **Open** on the medium or the large widget. You can also click anywhere
 on a widget of any size.
@@ -2128,6 +2129,7 @@ Table 18.2 explains what the card shows.
 |---|---|
 | A figure such as **66% left** | That much of the window remains |
 | **resets 14:00** under a bar | Shown when less than 20% is left: the time the window is empty again. A date is added when it is another day |
+| **as of 18 Oct 09:22** under a bar | The figure is more than one hour old. Claude gives new figures only when it answers, so they stop while Claude refuses calls. A date is added when it is another day. Select **refresh** |
 | **0% left** in red | Claude refused a call because this limit is used up. Nothing can be asked until the time shown |
 | **—** | Claude has not reported this window yet. Select **refresh** |
 

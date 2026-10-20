@@ -125,7 +125,9 @@ class WidgetFeed:
                      for e in self._app.upcoming(NEXT_DATES)],
             "last_run": {"when": str(run.get("when") or ""), "found": _number(run.get("found")),
                          "letters": _number(run.get("letters"))} if run else None,
-            "usage": {"five_hour_left": _left(usage.get("five_hour_used")), "week_left": _left(usage.get("seven_day_used"))},
+            # an old number (usage.STALE_AFTER) is not known now: the widget has no room for its date
+            "usage": {"five_hour_left": _left(None if usage.get("five_hour_stale") else usage.get("five_hour_used")),
+                      "week_left": _left(None if usage.get("seven_day_stale") else usage.get("seven_day_used"))},
             "weekly": str(schedule.read_schedule().get("label") or "Off"),
         }
 

@@ -55,6 +55,13 @@ def test_the_summary_holds_the_numbers_and_dates_and_nothing_private(jobs):
     assert set(s) == {"version", "updated", "counts", "next", "last_run", "usage", "weekly"}
 
 
+def test_an_old_usage_reading_is_not_shown_as_now(jobs):
+    """The widget has no room for a date: a number Claude reported long ago is shown as not known."""
+    app = FakeApp(usage_info={"five_hour_used": 100, "five_hour_stale": False, "seven_day_used": 0, "seven_day_stale": True})
+    s = widget_feed.WidgetFeed(app, jobs / "w").snapshot(now=datetime(2026, 10, 20, 6, 0))
+    assert s["usage"] == {"five_hour_left": 0, "week_left": None}
+
+
 def test_unknown_usage_and_no_run_yet(jobs):
     app = FakeApp(usage_info={"five_hour_used": None, "seven_day_used": None}, last_run={}, upcoming=[])
     s = widget_feed.WidgetFeed(app, jobs / "w").snapshot()
