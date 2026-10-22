@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Rewrite this paragraph** in the **Cover letter** window now keeps a paragraph near its length and the letter on one page. A rewrite that is too long is asked for again once, then refused with the reason.
 - A call to Claude that gets no answer now stops after 5 minutes with a clear message. Before, one stuck answer could hold a search or a scan for ever.
 - **Security:** the settings file beside your data is now private from the moment the app writes it. Before, other users of the same Mac could read it for a moment after each change.
 - **Security:** an email can no longer give Claude orders. The scan now sends each email to Claude as text to read, not as instructions. Before, a crafted email that named a company you applied to could try to mark your application as an offer.

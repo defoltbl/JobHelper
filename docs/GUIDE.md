@@ -837,7 +837,7 @@ Table 7.1 lists the controls of the letter editor.
 | Control | What it does |
 |---|---|
 | The word count, top right | Turns amber when the letter is shorter or longer than a letter should be |
-| **Rewrite this paragraph** | Asks Claude for a new version of that paragraph. Nothing is saved until you select **Save** |
+| **Rewrite this paragraph** | Asks Claude for a new version of that paragraph. The new version keeps about the same length, and the letter stays on one page. Nothing is saved until you select **Save** |
 | **For a rewrite** | An optional hint for the rewrite |
 | **Open in Word** | Opens the file in Word instead |
 | **Undo my changes** | Puts back the text as it was when you opened the editor |
