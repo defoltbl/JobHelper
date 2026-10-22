@@ -484,6 +484,18 @@ def test_a_folder_a_scan_could_not_read_is_named_at_its_end(bridge, monkeypatch)
     assert events[-1][2].endswith("· 0 new."), "the next scan does not repeat an old warning"
 
 
+
+def test_a_scan_refused_by_an_untrusted_certificate_says_so(bridge, monkeypatch):
+    import ssl
+    from jobhelper import email_client
+
+    def refused(jobs, **kw):
+        raise ssl.SSLCertVerificationError(1, "certificate verify failed: self-signed certificate")
+    monkeypatch.setattr(agent5_responses, "process_inbox", refused)
+    events = _record(bridge)
+    bridge._scan(30)
+    assert events[-1][1:] == ("scan", email_client.UNTRUSTED)
+
 def test_stop_during_email_scan_saves_progress(bridge, monkeypatch):
     def process_inbox(jobs, progress=None, **kw):
         progress(0, 5)

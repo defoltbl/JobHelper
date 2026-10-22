@@ -13,7 +13,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QMetaObject, Qt, Slot
 
-from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, config, job_sources, letters, notify, store, trouble, usage)
+from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, config, email_client, job_sources, letters, notify, store,
+               trouble, usage)
 
 
 class RunCancelled(BaseException):
@@ -404,12 +405,11 @@ class RunSlots:
             self._save_partial(jobs)
             self.runFinished.emit("scan", "Stopped. Emails read before that are saved.")
         except imaplib.IMAP4.error:
-            self.runFinished.emit("scan", "Couldn't sign in to your email — check its password in the Account card.")
+            self.runFinished.emit("scan", "Couldn't sign in to your email – check its password in the Account card.")
         except RuntimeError as e:
             self._save_partial(jobs)
             self.runFinished.emit("scan", str(e))
         except Exception as e:  # noqa: BLE001
-            from . import email_client
             self._save_partial(jobs)                             # statuses changed by the replies read so far are kept
             if email_client.untrusted(e):
                 self.runFinished.emit("scan", email_client.UNTRUSTED)
