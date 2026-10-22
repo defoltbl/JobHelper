@@ -478,3 +478,22 @@ def test_stop_pressed_while_a_run_waits_on_the_limit_ends_it_and_costs_no_job_a_
     with pytest.raises(bridge_runs.RunCancelled):
         agent5_responses.process_inbox([store.new_job(id="a", company="Acme", title="Dev", status="waiting")], on_limit=stop)
     assert len(asked) == 1
+
+
+def test_a_claude_call_that_never_answers_is_stopped(monkeypatch):
+    """One stuck answer held a whole run: every call now has a time limit, and a stopped call counts nothing."""
+    import asyncio
+    import time
+    recorded = []
+
+    async def never(prompt, system, model):
+        await asyncio.sleep(60)
+        return "late", {}
+    monkeypatch.setattr(llm, "_ask_async", never)
+    monkeypatch.setattr(llm, "CALL_TIMEOUT", 0.2)
+    monkeypatch.setattr(usage, "record", lambda rec, tag="": recorded.append(rec))
+    started = time.monotonic()
+    with pytest.raises(llm.CallTimedOut) as stopped:
+        llm.ask("hello", force=True)
+    assert time.monotonic() - started < 5 and recorded == []
+    assert "did not answer" in str(stopped.value) and isinstance(stopped.value, RuntimeError)   # the runs show its words

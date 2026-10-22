@@ -95,6 +95,17 @@ class PaidApiRefused(RuntimeError):
     """A call was not made because it would have gone to the paid API."""
 
 
+CALL_TIMEOUT = 300          # seconds: the longest answer (a letter, a preparation) comes well within this
+
+
+class CallTimedOut(RuntimeError):
+    """Claude did not answer within CALL_TIMEOUT: the call is stopped, so one stuck answer cannot hold a whole run."""
+
+    def __init__(self) -> None:
+        super().__init__(f"Claude did not answer within {CALL_TIMEOUT // 60} minutes, so the call was stopped. "
+                         "Try again later.")
+
+
 class LimitReached(RuntimeError):
     """The subscription limit is used up; nothing more can be asked until it resets."""
 
@@ -147,7 +158,9 @@ def ask(prompt: str, system: str | None = None, model: str | None = None, tag: s
         if status["blocked"]:
             raise LimitReached(limit_message(status), status["resets_at"], status["window"])
     try:
-        text, rec = asyncio.run(_ask_async(prompt, system, model or config.MODEL))
+        text, rec = asyncio.run(asyncio.wait_for(_ask_async(prompt, system, model or config.MODEL), CALL_TIMEOUT))
+    except TimeoutError as e:
+        raise CallTimedOut() from e
     except Exception as e:  # noqa: BLE001
         if _LIMIT_TEXT.search(str(e)):
             until = reset_time_from(str(e)) or (time.time() + 30 * 60)
