@@ -22,6 +22,13 @@ from claude_agent_sdk import ClaudeAgentOptions, query
 from . import config, usage
 
 
+def untrusted(label: str, text: str) -> str:
+    """Text someone else wrote (an email, a web page) put into a prompt as data: inside <label> tags the text cannot
+    close or open itself, so nothing in it can pass for the app's own instructions. The system prompt says the rest."""
+    clean = re.sub(rf"<\s*/?\s*{re.escape(label)}\b[^>]*>", "", str(text), flags=re.IGNORECASE)
+    return f"<{label}>\n{clean}\n</{label}>"
+
+
 def options_for(system: str | None, model: str) -> ClaudeAgentOptions:
     """How the Claude program is asked: no tools, and its own empty working folder."""
     return ClaudeAgentOptions(
