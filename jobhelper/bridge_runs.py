@@ -409,8 +409,12 @@ class RunSlots:
             self._save_partial(jobs)
             self.runFinished.emit("scan", str(e))
         except Exception as e:  # noqa: BLE001
+            from . import email_client
             self._save_partial(jobs)                             # statuses changed by the replies read so far are kept
-            trouble.note("the email scan", e)
-            self.runFinished.emit("scan", "Email scan failed — check your connection and try again.")
+            if email_client.untrusted(e):
+                self.runFinished.emit("scan", email_client.UNTRUSTED)
+            else:
+                trouble.note("the email scan", e)
+                self.runFinished.emit("scan", "Email scan failed – check your connection and try again.")
         finally:
             self._set_running(False)

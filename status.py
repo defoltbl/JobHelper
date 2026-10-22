@@ -133,6 +133,9 @@ def mail_problem(error: Exception) -> str:
     import imaplib
     if isinstance(error, imaplib.IMAP4.error):
         return "Couldn't sign in to your email. Check its password in the app's Account card."
+    from jobhelper import email_client
+    if email_client.untrusted(error):
+        return email_client.UNTRUSTED
     if isinstance(error, OSError):
         return "The mail server could not be reached. Check your connection and run this again."
     return f"The mailbox could not be read ({type(error).__name__})."
