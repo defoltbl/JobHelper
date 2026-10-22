@@ -143,6 +143,11 @@ def _issues(paragraph: str, check: ClaimCheck) -> list[tuple[str, str, str]]:
     return out
 
 
+def fits_one_page(paragraphs: list[str]) -> bool:
+    """Whether the letter's body stays on one page: at most MAX_WORDS words and MAX_CHARS characters."""
+    return sum(len(p.split()) for p in paragraphs) <= MAX_WORDS and sum(len(p) for p in paragraphs) <= MAX_CHARS
+
+
 def content_problems(paragraphs: list[str], unverified: list[str], first_name: str = "") -> list[str]:
     """Why this draft can't be used as is (empty list = fine)."""
     problems = []
@@ -152,10 +157,9 @@ def content_problems(paragraphs: list[str], unverified: list[str], first_name: s
     if len(paragraphs) != BODY_PARAGRAPHS:
         problems.append(f"The letter has {len(paragraphs)} paragraphs; it must have exactly {BODY_PARAGRAPHS}.")
     words = sum(len(p.split()) for p in paragraphs)
-    chars = sum(len(p) for p in paragraphs)
     if words < MIN_WORDS:
         problems.append(f"Too short: {words} words; write {MIN_WORDS}-{MAX_WORDS}.")
-    if words > MAX_WORDS or chars > MAX_CHARS:
+    if not fits_one_page(paragraphs):
         problems.append(f"Too long for one page: {words} words; write {MIN_WORDS}-{MAX_WORDS}.")
     check = ClaimCheck(unverified)
     for n, para in enumerate(paragraphs, 1):
@@ -313,20 +317,33 @@ def rewrite_paragraph(job: dict[str, Any], cv_text: str, paragraphs: list[str], 
     unverified, first_name = unverified_terms(cv_text), candidate_first_name(cv_text)
     letter = "\n".join(f"{n}. {p}" for n, p in enumerate(paragraphs, 1))
     words = len(paragraphs[index].split())
+    most = max(words + 25, 60)                 # roughly its length: what the prompt asks, and what is checked
     hint_line = f"What the candidate wants changed: {hint.strip()[:MAX_HINT]}\n" if hint.strip() else ""
     feedback, text = "", ""
     for _attempt in range(2):
         data = llm.ask_json(REWRITE_PROMPT.format(
             rules=rules_with_facts(cv_text), cv_text=cv_text[:12000], title=job.get("title", ""), company=job.get("company", ""),
             description=(job.get("description") or "").strip()[:3000] or "(No description was available.)",
-            letter=letter, number=index + 1, words=words, max_words=max(words + 25, 60),
+            letter=letter, number=index + 1, words=words, max_words=most,
             hint=hint_line, feedback=feedback), system=SYSTEM, tag="agent3_letters")
         text = clean(str((data or {}).get("paragraph", ""))).strip() if isinstance(data, dict) else ""
-        problems = paragraph_problems(text, unverified, first_name)
+        problems = paragraph_problems(text, unverified, first_name) + _rewrite_length(text, most, paragraphs, index)
         if not problems:
             return text
         feedback = claims.rejected(problems)
     raise ValueError(problems[0] if text else "The model returned no paragraph.")
+
+
+def _rewrite_length(text: str, most: int, paragraphs: list[str], index: int) -> list[str]:
+    """A rewritten paragraph keeps roughly its length and the letter on one page (a letter you made longer by hand
+    must at least not grow)."""
+    words = len(text.split())
+    if words > most:
+        return [f"Too long: {words} words; write at most {most}."]
+    after = paragraphs[:index] + [text] + paragraphs[index + 1:]
+    if not fits_one_page(after) and sum(map(len, after)) > sum(map(len, paragraphs)):
+        return ["With this paragraph the letter no longer fits on one page; write it shorter."]
+    return []
 
 
 def paragraph_problems(text: str, unverified: list[str], first_name: str = "") -> list[str]:

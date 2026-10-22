@@ -232,3 +232,25 @@ def test_rewrite_retries_once_then_reports_the_reason(api, monkeypatch):
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's 5-hour limit is used up (99%).")))
     assert "limit is used up" in api.rewrite_paragraph("lead", PARAS, 3)["msg"]
     assert api.rewrite_paragraph("lead", PARAS, 9)["ok"] is False
+
+
+def test_a_rewrite_keeps_roughly_its_length_and_the_letter_on_one_page(api, monkeypatch):
+    """The prompt asked for 'at most N words' but nothing measured the answer: a long rewrite pushed the letter off its
+    one page. Now a rewrite over the limit is sent back once with the reason, then refused."""
+    store.save_jobs([_lead_with_docs()])
+    calls = []
+    long = " ".join(["I built data pipelines in Python that my team used every day."] * 10)            # 120 words
+    replies = [{"paragraph": long}, {"paragraph": "I built data pipelines in Python that my team used every day."}]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: calls.append(prompt) or replies[len(calls) - 1])
+    assert api.rewrite_paragraph("lead", PARAS, 2)["paragraph"].startswith("I built data pipelines")
+    assert len(calls) == 2 and "Too long: 120 words; write at most" in calls[1]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"paragraph": long})
+    assert "Too long" in api.rewrite_paragraph("lead", PARAS, 2)["msg"]
+    # a letter you made longer than a page by hand may get shorter, never longer
+    over = [("I built data pipelines in Python that my team used every day. " * 8).strip() for _ in range(5)]   # 5 x 96 words
+    assert not cover_letter.fits_one_page(over)
+    grow = " ".join([over[0], "I also wrote the tests."])
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"paragraph": grow})
+    assert "no longer fits on one page" in api.rewrite_paragraph("lead", over, 0)["msg"]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"paragraph": "I built data pipelines in Python."})
+    assert api.rewrite_paragraph("lead", over, 0)["ok"] is True
