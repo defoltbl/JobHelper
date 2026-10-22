@@ -21,7 +21,7 @@ from . import config, store
 # Map an extracted stage → an application status. Never move a job backwards
 # (except "rejected", which can apply from any stage).
 STAGE_TO_STATUS = {
-    "acknowledged": "waiting",   # they confirmed receipt — still awaiting a decision
+    "acknowledged": "waiting",   # they confirmed receipt – still awaiting a decision
     "assessment": "interview",
     "interview": "interview",
     "offer": "offer",
@@ -153,14 +153,16 @@ class Fetched:
 SERVER_TIMEOUT = 60.0       # seconds a mail server gets for one answer
 
 
-UNTRUSTED = ("The mail server's certificate is not trusted, so the app did not send it your password. "
-             "Check the server name, or try again on another network.")
+UNTRUSTED = ("Couldn't connect safely: the mail server's certificate is not trusted, so the app did not send your "
+             "password. Check the server name, or try again on another network.")
 
 
 def tls_context() -> ssl.SSLContext:
     """The checks every mail connection makes: the server's certificate must be valid and must name that server.
-    Python's IMAP default checks neither, so anyone on the same network could pose as the server."""
-    return ssl.create_default_context()
+    Python's IMAP default checks neither, so anyone on the same network could pose as the server. The authorities
+    come from certifi, which the app carries: the built app's own OpenSSL looks for them in a folder only Homebrew makes."""
+    import certifi
+    return ssl.create_default_context(cafile=certifi.where())
 
 
 def untrusted(error: BaseException) -> bool:
@@ -462,7 +464,7 @@ _ATS_DOMAINS = [
 ]
 
 
-# Subjects/senders that look like alerts, digests, or confirmations — NOT replies
+# Subjects/senders that look like alerts, digests, or confirmations – NOT replies
 # to a specific application. Checked before the positive signals.
 _NEGATIVE = [
     "new jobs", "jobs posted", "new job opportunit", "job opportunities at",
@@ -535,7 +537,7 @@ def looks_like_application(sender: str, subject: str, body: str,
     return worded and not listed
 
 
-# Generic words that appear in many job titles — ignored when disambiguating
+# Generic words that appear in many job titles – ignored when disambiguating
 # which role at a company an email is about.
 _ROLE_STOP = {
     "and", "the", "for", "with", "our", "you", "your", "are", "per", "job", "jobs",
@@ -566,7 +568,7 @@ def match_job(sender: str, subject: str, body: str, jobs: list[dict[str, Any]]) 
     Word-level (not substring), and by words that are really the company's name. A company name found in the sender/subject counts
     far more than one found only deep in the body (so an Outlook/"Microsoft 365"
     footer in a Valeo email can't hijack the match). Among jobs at the same
-    company, the one whose title best matches the subject wins — so "Application
+    company, the one whose title best matches the subject wins – so "Application
     received for SW Tool Developer" links to that exact role, not a sibling
     posting at the same company.
     """

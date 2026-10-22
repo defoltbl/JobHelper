@@ -150,7 +150,7 @@ def test_the_mail_server_gets_a_time_limit_and_an_empty_answer_is_no_mail(monkey
 
     class Server:
         def __init__(self, host, port, timeout=None, ssl_context=None):
-            made.update(host=host, timeout=timeout, ssl_context=ssl_context)
+            made.update(host=host, timeout=timeout)
 
         def login(self, user, password): pass
         def select(self, folder, readonly=False): made["readonly"] = readonly

@@ -1,4 +1,7 @@
-"""Agent 5 (response analysis) + SQLite DB tests — mocked email + LLM."""
+"""Agent 5 (response analysis) + SQLite DB tests – mocked email + LLM."""
+import re
+from pathlib import Path
+
 import pytest
 
 from jobhelper import agent5_responses, db, email_client, llm, store
@@ -366,7 +369,6 @@ def test_trying_a_mailbox_tells_refused_from_unreachable(monkeypatch):
     assert lost["ok"] is None and "not tried" in lost["msg"]
 
 
-
 def _self_signed(folder):
     """A certificate no authority signed, for a pretend mail server on this computer."""
     from datetime import datetime, timedelta, timezone
@@ -445,6 +447,23 @@ def test_an_untrusted_certificate_is_said_plainly_everywhere():
     assert email_client.untrusted(error) and not email_client.untrusted(OSError("no route to host"))
     assert status.mail_problem(error) == email_client.UNTRUSTED
     assert "password" not in status.mail_problem(OSError("timed out"))
+    main = (Path(__file__).resolve().parent.parent / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
+    bad = re.search(r"var bad = /(.+?)/\.test\(summary\)", main).group(1)
+    assert re.match(bad, email_client.UNTRUSTED), "the window shows a refused scan in red, not as done"
+    assert len(email_client.tls_context().get_ca_certs()) > 100, "the authorities the app carries, on any Mac"
+
+
+def test_a_second_mailbox_with_an_untrusted_certificate_is_a_warning(monkeypatch):
+    import ssl
+    from jobhelper import config
+    monkeypatch.setattr(config, "mailboxes", lambda: [{"user": "me@example.com", "password": "x"}, {"user": "old@example.com", "password": "y"}])
+
+    def read(user, password, since, all_folders, host=""):
+        if user == "old@example.com":
+            raise ssl.SSLCertVerificationError(1, "certificate verify failed")
+        return email_client.Fetched([], ())
+    monkeypatch.setattr(email_client, "read_mailbox", read)
+    assert email_client.fetch_recent(7, False).warnings == ("old@example.com: " + email_client.UNTRUSTED,)
 
 def test_a_reply_is_not_filed_to_a_company_by_a_word_many_companies_share():
     jobs = [{"id": "a", "company": "International Rescue", "title": "Developer", "status": "waiting"},
