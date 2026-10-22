@@ -157,12 +157,15 @@ def ensure_dirs() -> None:
         d.mkdir(parents=True, exist_ok=True)
 
 
-def _private(path: Path) -> None:
-    """Readable by this user only."""
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
+def _write_private(path: Path, text: str) -> None:
+    """Write a file only this user can read, from its first byte: a chmod after writing left a moment in which any
+    user of the Mac could read it. Written beside the file and swapped in, so a half-written file is never left."""
+    part = path.with_name(path.name + ".part")
+    fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.fchmod(fd, 0o600)                       # a leftover part file may have had wider rights
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(part, path)
 
 
 def update_env(values: dict) -> None:
@@ -182,8 +185,7 @@ def update_env(values: dict) -> None:
     for k in keys:
         if k not in seen:
             out.append(f"{k}={values[k]}")
-    ENV_PATH.write_text("\n".join(out).rstrip("\n") + "\n", encoding="utf-8")
-    _private(ENV_PATH)
+    _write_private(ENV_PATH, "\n".join(out).rstrip("\n") + "\n")
     for k, v in values.items():
         os.environ[str(k)] = str(v)
 
@@ -195,8 +197,7 @@ def remove_env(keys) -> None:
         lines = ENV_PATH.read_text(encoding="utf-8").splitlines()
         kept = [ln for ln in lines if not ("=" in ln and ln.split("=", 1)[0].strip() in keys)]
         if kept != lines:
-            ENV_PATH.write_text("\n".join(kept).rstrip("\n") + "\n", encoding="utf-8")
-            _private(ENV_PATH)
+            _write_private(ENV_PATH, "\n".join(kept).rstrip("\n") + "\n")
     for k in keys:
         os.environ.pop(k, None)
 
