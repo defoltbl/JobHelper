@@ -9,6 +9,7 @@ from __future__ import annotations
 import email
 import imaplib
 import re
+import ssl
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -152,6 +153,26 @@ class Fetched:
 SERVER_TIMEOUT = 60.0       # seconds a mail server gets for one answer
 
 
+UNTRUSTED = ("The mail server's certificate is not trusted, so the app did not send it your password. "
+             "Check the server name, or try again on another network.")
+
+
+def tls_context() -> ssl.SSLContext:
+    """The checks every mail connection makes: the server's certificate must be valid and must name that server.
+    Python's IMAP default checks neither, so anyone on the same network could pose as the server."""
+    return ssl.create_default_context()
+
+
+def untrusted(error: BaseException) -> bool:
+    """True when a connection failed because the server's certificate did not pass `tls_context`'s checks."""
+    return isinstance(error, ssl.SSLCertVerificationError)
+
+
+def _open(host: str, timeout: float) -> imaplib.IMAP4_SSL:
+    """A connection to the mail server, made only after its certificate passed the checks."""
+    return imaplib.IMAP4_SSL(host or config.imap_host(1), config.IMAP_PORT, timeout=timeout, ssl_context=tls_context())
+
+
 class Mailbox:
     """One mailbox, opened read-only. Use it with `with`: it signs out at the end, also after an error.
 
@@ -163,7 +184,7 @@ class Mailbox:
                  connect: Callable[[], Any] | None = None) -> None:
         self.user = user
         self._password, self._host, self._timeout = password, host, timeout
-        self._connect = connect or (lambda: imaplib.IMAP4_SSL(self._host or config.imap_host(1), config.IMAP_PORT, timeout=self._timeout))
+        self._connect = connect or (lambda: _open(self._host, self._timeout))
         self._imap: Any = None
         self.warnings: list[str] = []      # folders `recent` could not read
 
@@ -296,7 +317,9 @@ def try_login(user: str, password: str, timeout: float = 8.0, host: str = "") ->
     when the server could not be reached, which says nothing about the password. Read-only:
     no folder is opened. The password is never part of a message."""
     try:
-        imap = imaplib.IMAP4_SSL(host or config.imap_host(1), config.IMAP_PORT, timeout=timeout)
+        imap = _open(host, timeout)
+    except ssl.SSLCertVerificationError:
+        return {"ok": False, "msg": UNTRUSTED}            # not saved: the server is not the one it claims to be
     except (OSError, imaplib.IMAP4.error):
         return {"ok": None, "msg": "The mail server could not be reached, so the password was not tried."}
     try:
@@ -344,7 +367,7 @@ def fetch_recent(lookback_days: int | None = None, all_folders: bool | None = No
             warnings.append(f"Couldn't sign in to {box['user']}: check its password in the Account card.")
             continue
         except OSError as e:
-            warnings.append(f"Couldn't reach {box['user']}: {e}")
+            warnings.append(f"{box['user']}: {UNTRUSTED}" if untrusted(e) else f"Couldn't reach {box['user']}: {e}")
             continue
         out += [m for m in extra.messages if m["msg_id"] not in seen]     # the same mail delivered to both
         seen.update(m["msg_id"] for m in extra.messages)

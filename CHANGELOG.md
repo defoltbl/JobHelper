@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Security:** the app now checks the mail server's certificate before it signs in. Before, a false server on the same network (for example public Wi-Fi) could get your mail password. When the check fails, the app says so and does not send or save the password.
 - When the assistant holds unsaved changes on **My details** and on **My answers**, Esc and **Close** now ask once for each page. Before, the second Esc closed the window and lost the answers.
 - Five more fields now show their **red** error also when the cursor is in them: the email address and its password on the welcome card, the recovery key, **Country** in **Options** and **A different figure for** in **About you**. Before, the focus colour hid the red.
 - In a job's **date to remember**, a wrong time now makes the time box red. Before, the day box turned red, and the time box did not change.

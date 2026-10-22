@@ -334,6 +334,7 @@ Table 2.3 lists problems while setting up, and what to do.
 | "The app does not know this provider" | The address is at a company or a small provider | Enter its IMAP server in the third field |
 | "Microsoft no longer lets a program read…" | Outlook.com and Hotmail cannot be read with a password | Forward your job mail to another mailbox and connect that one |
 | "Saved. The mail server could not be reached" | No internet connection at that moment | Nothing. The first email scan shows whether it works |
+| "The mail server's certificate is not trusted" | The server name is wrong, or a network (for example public Wi-Fi) shows a false server. The app did not send your password | Check the server name. Then try again on a network that you trust |
 | **Master CV** is red | No CV was chosen, or the file was moved | Select the **Change…** button and pick the file |
 
 ### Next steps

@@ -349,7 +349,7 @@ def test_trying_a_mailbox_tells_refused_from_unreachable(monkeypatch):
             self.calls.append("logout")
 
     box, hosts = Box(), []
-    monkeypatch.setattr(imaplib, "IMAP4_SSL", lambda host, port, timeout=None: hosts.append(host) or box)
+    monkeypatch.setattr(imaplib, "IMAP4_SSL", lambda host, port, timeout=None, ssl_context=None: hosts.append(host) or box)
     real = _REAL_TRY_LOGIN                    # conftest replaces the function for every test; this is the real one
     assert real("me@example.com", "abcdabcdabcdabcd", host="imap.example.com") == {"ok": True, "msg": ""}
     assert box.calls == ["login", "logout"] and hosts == ["imap.example.com"]     # nothing is opened or read
@@ -359,12 +359,92 @@ def test_trying_a_mailbox_tells_refused_from_unreachable(monkeypatch):
     box = Box(OSError("timed out"))
     assert real("me@example.com", "abcdabcdabcdabcd")["ok"] is None
 
-    def unreachable(host, port, timeout=None):
+    def unreachable(host, port, timeout=None, ssl_context=None):
         raise OSError("no route to host")
     monkeypatch.setattr(imaplib, "IMAP4_SSL", unreachable)
     lost = real("me@example.com", "abcdabcdabcdabcd")
     assert lost["ok"] is None and "not tried" in lost["msg"]
 
+
+
+def _self_signed(folder):
+    """A certificate no authority signed, for a pretend mail server on this computer."""
+    from datetime import datetime, timedelta, timezone
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "imap.example.com")])
+    now = datetime.now(timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+            .serial_number(x509.random_serial_number()).not_valid_before(now - timedelta(days=1))
+            .not_valid_after(now + timedelta(days=1)).sign(key, hashes.SHA256()))
+    (folder / "cert.pem").write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    (folder / "key.pem").write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                                       serialization.NoEncryption()))
+    return folder / "cert.pem", folder / "key.pem"
+
+
+def test_a_mail_server_with_an_untrusted_certificate_gets_no_password(monkeypatch, tmp_path):
+    """Python's IMAP default checks no certificate, so anyone on the network could pose as the mail server and get the
+    password. A real handshake with a server on this computer whose certificate nobody signed: refused, nothing sent."""
+    import socket
+    import ssl
+    import threading
+    from jobhelper import config
+    cert, key = _self_signed(tmp_path)
+    server_side = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server_side.load_cert_chain(cert, key)
+    listener = socket.create_server(("127.0.0.1", 0))
+    heard = []
+
+    def serve():
+        conn, _ = listener.accept()
+        try:
+            with server_side.wrap_socket(conn, server_side=True) as tls:
+                tls.sendall(b"* OK IMAP4rev1 ready\r\n")
+                heard.append(tls.recv(4096))                       # what the app sends next: it must never get here
+        except (ssl.SSLError, OSError):
+            pass
+    threading.Thread(target=serve, daemon=True).start()
+    monkeypatch.setattr(config, "IMAP_PORT", listener.getsockname()[1])
+    tried = _REAL_TRY_LOGIN("me@example.com", "abcdabcdabcdabcd", timeout=5, host="127.0.0.1")
+    listener.close()
+    assert tried == {"ok": False, "msg": email_client.UNTRUSTED} and heard == [], "no LOGIN, no password, not saved"
+
+
+def test_every_mail_connection_checks_the_server_certificate(monkeypatch):
+    import imaplib
+    import ssl
+    context = email_client.tls_context()
+    assert context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname is True
+    given = []
+
+    class Box:
+        def __init__(self, host, port, timeout=None, ssl_context=None):
+            given.append(ssl_context)
+
+        def login(self, user, password): pass
+
+        def logout(self): pass
+
+        def select(self, *a, **k): return "OK", [b"0"]
+
+    monkeypatch.setattr(imaplib, "IMAP4_SSL", Box)
+    _REAL_TRY_LOGIN("me@example.com", "abcdabcdabcdabcd", host="imap.example.com")      # the Account card's check
+    with email_client.Mailbox("me@example.com", "abcdabcdabcdabcd", "imap.example.com"):  # every scan
+        pass
+    assert len(given) == 2 and all(c is not None and c.verify_mode == ssl.CERT_REQUIRED and c.check_hostname for c in given)
+
+
+def test_an_untrusted_certificate_is_said_plainly_everywhere():
+    import ssl
+    import status
+    error = ssl.SSLCertVerificationError(1, "certificate verify failed: self-signed certificate")
+    assert email_client.untrusted(error) and not email_client.untrusted(OSError("no route to host"))
+    assert status.mail_problem(error) == email_client.UNTRUSTED
+    assert "password" not in status.mail_problem(OSError("timed out"))
 
 def test_a_reply_is_not_filed_to_a_company_by_a_word_many_companies_share():
     jobs = [{"id": "a", "company": "International Rescue", "title": "Developer", "status": "waiting"},

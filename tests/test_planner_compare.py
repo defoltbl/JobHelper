@@ -213,7 +213,7 @@ class FakeImap:
     broken = ()
     log = []
 
-    def __init__(self, *a, timeout=None):
+    def __init__(self, *a, timeout=None, ssl_context=None):
         self.folder = None
 
     def login(self, user, password):
