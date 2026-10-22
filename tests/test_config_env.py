@@ -170,3 +170,27 @@ def test_no_personal_name_in_code_or_docs():
     body = raw.split(b"\n", 2)[2]
     assert hashlib.sha256(body).hexdigest() == "c0ea4a896d2c8c394b29f9427589996db826cd501c512279ff0ed3ef48fabbe5", "the PolyForm Noncommercial 1.0.0 text was changed"
     assert licence[2] == "# PolyForm Noncommercial License 1.0.0"
+
+
+def test_the_env_file_is_private_from_its_first_byte(isolate_data, monkeypatch):
+    """A chmod after writing left a moment when any user of the Mac could read the file. Now it is private before it
+    holds anything, and an old readable file is replaced by a private one."""
+    import os
+    import stat
+    config.ENV_PATH.write_text("OLD=1\n", encoding="utf-8")
+    os.chmod(config.ENV_PATH, 0o644)
+    seen, real = [], os.replace
+
+    def replace(src, dst):
+        seen.append(stat.S_IMODE(os.stat(src).st_mode))            # the new file's rights, before it is put in place
+        return real(src, dst)
+    monkeypatch.setattr(config.os, "replace", replace)
+    old_mask = os.umask(0o000)                                       # even with no mask, nothing wider than 0600
+    try:
+        config.update_env({"IMAP_USER": "jordan@example.com"})
+        config.remove_env(["OLD"])
+    finally:
+        os.umask(old_mask)
+    assert seen == [0o600, 0o600] and stat.S_IMODE(os.stat(config.ENV_PATH).st_mode) == 0o600
+    assert config.ENV_PATH.read_text(encoding="utf-8") == "IMAP_USER=jordan@example.com\n"
+    assert not config.ENV_PATH.with_name(".env.part").exists()
