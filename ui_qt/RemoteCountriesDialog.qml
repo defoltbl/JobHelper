@@ -60,9 +60,9 @@ Dialog {
         FocusCatcher {} }
     contentItem: ColumnLayout {
         spacing: 0
-        RowLayout { Layout.fillWidth: true; Layout.margins: 16
+        DialogHeader {
             ColumnLayout { Layout.fillWidth: true; spacing: 2
-                Text { text: "Countries for remote jobs"; color: theme.ink; font.pixelSize: 16; font.bold: true }
+                DialogTitle { text: "Countries for remote jobs" }
                 Text { objectName: "remoteHomeNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 11
                     text: (remoteDialog.home !== "" ? remoteDialog.nameOf(remoteDialog.home) + " is always included. " : "")
                           + "A search also keeps remote jobs open to the countries you tick." } }
@@ -124,7 +124,7 @@ Dialog {
         }
 
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-        RowLayout { Layout.fillWidth: true; Layout.margins: 14; spacing: 8
+        DialogFooter {
             Text { objectName: "pickedCount"; Layout.fillWidth: true; color: theme.soft; font.pixelSize: 12
                 text: remoteDialog.picked.length === 0 ? "No country added"
                       : remoteDialog.picked.length === 1 ? "1 country added" : remoteDialog.picked.length + " countries added" }

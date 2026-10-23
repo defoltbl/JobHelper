@@ -132,9 +132,8 @@ Dialog {
         FocusCatcher {} }
     contentItem: ColumnLayout {
         spacing: 0
-        RowLayout {
-            Layout.fillWidth: true; Layout.margins: 16
-            Text { id: titleTxt; color: theme.ink; font.pixelSize: 16; font.bold: true; Layout.fillWidth: true; wrapMode: Text.Wrap }
+        DialogHeader {
+            DialogTitle { id: titleTxt }
             // New Jobs only: go through the jobs that are listed now (after the search box and the filter), one after another
             SmallButton { objectName: "reviewStart"; visible: tableDialog.excelKey === "leads" && tableDialog.reviewIds().length > 1
                 text: "Review these " + tableDialog.reviewIds().length + " one by one"

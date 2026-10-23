@@ -34,9 +34,9 @@ Dialog {
         FocusCatcher {} }
     contentItem: ColumnLayout {
         spacing: 0
-        RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
+        DialogHeader {
             ColumnLayout { Layout.fillWidth: true; spacing: 2
-                Text { text: "Interview preparation"; color: theme.ink; font.pixelSize: 17; font.bold: true }
+                DialogTitle { text: "Interview preparation" }
                 Text { objectName: "prepFor"; Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 12
                     text: (prepDialog.prep.company || "") + "  ·  " + (prepDialog.prep.title || "") } }
             CloseButton { Layout.alignment: Qt.AlignTop; onClicked: prepDialog.close() }
@@ -131,7 +131,7 @@ Dialog {
             }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-        RowLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 6
+        DialogFooter {
             Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
                 color: prepDialog.note !== "" ? theme.good : theme.faint
                 text: prepDialog.note !== "" ? prepDialog.note

@@ -371,6 +371,15 @@ data/                your data; only the *.example.* files are in git
   the card shows "as of" and its time, and the widget shows "–" (while Claude refuses, nothing new comes).
 - **A message over an open window (the toast) ends when the last window closes** (`Main.qml`
   `onDialogOpenChanged`); the status line keeps the words. Before, it came back on the next window.
+- **Every dialog is built from one shell:** `DialogHeader`, `DialogTitle` (17 px, plain text, wraps), `CloseButton` and
+  `DialogFooter`. A new dialog uses them, never its own margins or title size (tests/test_window_main.py checks it). The
+  toast keeps above the `DialogFooter` of the window in front when that window leaves no room below it
+  (`Main.qml` `toastBottom`); the limit notice is a warning card and keeps its own layout.
+- **A red line says which box it is about** (`Blame.qml`): the window sets the message with `say(text, box)`, and the
+  box with that name turns red (About you, the companies in Options, the company notes, the mail fields on the start
+  card). A message set any other way, or cleared, is about no box. Do not guess the box from the text in the field: the
+  code that finds the fault names the box (`mailhosts.server_for` gives `about`, `email_client.try_login` and the
+  bridge's mailbox save give `field`, About you's `problem()` gives `{text, box}`).
 - **The window is taken down before the bridge** when the app closes (`app_qt.shut_down`), or every binding
   that calls the bridge prints an error on the way out.
 - **One claim check for every text in the person's voice** (`claims.ClaimCheck`): the letter, the form answers and

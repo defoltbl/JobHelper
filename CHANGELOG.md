@@ -7,6 +7,8 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- Every dialog window now has the same title size, header and footer. The message that shows over a window no longer covers its buttons on a small screen.
+- The box that a red message names now turns red too: **Right to work** in About you, the company's name and token in Options, the full company note in the job window, and the mail server on the start card.
 - The **cover letter** and the **answers for a form** now check each figure, such as "40% faster". Your CV, your notes or your own words must give it. Claude is asked once to remove a figure that has no source. If it stays, the job window or the answer says which figure to check.
 - **Rewrite this paragraph** in the **Cover letter** window now keeps a paragraph near its length and the letter on one page. A rewrite that is too long is asked for again once, then refused with the reason.
 - A call to Claude that gets no answer now stops after 5 minutes with a clear message. It ends the search or the scan, and what was done is kept. A job whose documents time out twice is not tried again by itself. **Write CV and letter** (or **Write what is missing**) in the job window still writes them. Before, one stuck answer could hold a run for ever.

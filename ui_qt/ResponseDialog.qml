@@ -48,10 +48,9 @@ Dialog {
         FocusCatcher {} }
     contentItem: ColumnLayout {
         spacing: 0
-        RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
+        DialogHeader {
             ColumnLayout { Layout.fillWidth: true; spacing: 2
-                Text { textFormat: Text.PlainText; objectName: "responseTitle"; text: responseDialog.r.company || ""; color: theme.ink; font.pixelSize: 17; font.bold: true
-                    Layout.fillWidth: true; wrapMode: Text.Wrap }
+                DialogTitle { objectName: "responseTitle"; text: responseDialog.r.company || "" }
                 Text { textFormat: Text.PlainText; text: responseDialog.r.role || ""; visible: text !== ""; color: theme.soft; font.pixelSize: 12
                     Layout.fillWidth: true; wrapMode: Text.WordWrap } }
             Rectangle { visible: !!responseDialog.r.stage; radius: 999; implicitHeight: 22; implicitWidth: rsT.width + 18
@@ -84,7 +83,7 @@ Dialog {
         }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-        RowLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 6
+        DialogFooter {
             Text { textFormat: Text.PlainText; Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.faint; font.pixelSize: 11
                 text: responseDialog.r.job_id ? ("Belongs to: " + responseDialog.r.job_company + " · " + responseDialog.r.job_title
                                                  + " (" + responseDialog.r.job_status + ")")

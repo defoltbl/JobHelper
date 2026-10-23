@@ -28,9 +28,9 @@ Dialog {
     background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1 }
     contentItem: ColumnLayout {
         spacing: 0
-        RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
+        DialogHeader {
             ColumnLayout { Layout.fillWidth: true; spacing: 2
-                Text { text: "Your CV, before and after"; color: theme.ink; font.pixelSize: 17; font.bold: true }
+                DialogTitle { text: "Your CV, before and after" }
                 Text { objectName: "compareSummary"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
                     text: (compareDialog.data.company || "") + "  ·  " + (compareDialog.data.changed || 0) + (compareDialog.data.changed === 1 ? " paragraph changed" : " paragraphs changed")
                           + ((compareDialog.data.added || 0) > 0 ? ", " + compareDialog.data.added + " added" : "")
@@ -84,7 +84,7 @@ Dialog {
             }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-        RowLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 6
+        DialogFooter {
             Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                 text: "Left: words that were replaced are struck through. Right: new words are bold." }
             SmallButton { text: "Open the adapted CV"; onClicked: bridge.openDoc("cv", compareDialog.data.file || "") }

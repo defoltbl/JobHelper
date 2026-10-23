@@ -62,20 +62,21 @@ Dialog {
         rolesModel.append({ text: t });
         return true;
     }
-    property string coErr: ""
+    Blame { id: coBlame }
+    property alias coErr: coBlame.text    // the red line under the companies; coBlame.box is "name" or "token"
     property string optErr: ""
     readonly property var sizes: win.limits.choices.text_sizes      // per cent: the whole window larger
     property int sizeAtOpen: 100
     function addCompany(name, ats, token) {
         var tok = (token || "").trim();
         coErr = "";
-        if (win.hasNonLatin(name)) { coErr = "Write the company name in Latin letters."; return false; }
-        if ((name || "").trim().length > win.limits.company_name) { coErr = "The company name is " + (name || "").trim().length + " characters long; the most is " + win.limits.company_name + "."; return false; }
-        if (!tok) { coErr = "Enter the company's token (the slug in its career-site URL)."; return false; }
-        if (!win.isSlug(tok)) { coErr = "Token looks wrong – use the URL slug only (letters, digits, - or _), no spaces or https://."; return false; }
+        if (win.hasNonLatin(name)) { coBlame.say("Write the company name in Latin letters.", "name"); return false; }
+        if ((name || "").trim().length > win.limits.company_name) { coBlame.say("The company name is " + (name || "").trim().length + " characters long; the most is " + win.limits.company_name + ".", "name"); return false; }
+        if (!tok) { coBlame.say("Enter the company's token (the slug in its career-site URL).", "token"); return false; }
+        if (!win.isSlug(tok)) { coBlame.say("Token looks wrong – use the URL slug only (letters, digits, - or _), no spaces or https://.", "token"); return false; }
         for (var i = 0; i < companiesModel.count; i++)
             if (companiesModel.get(i).token.toLowerCase() === tok.toLowerCase()
-                && companiesModel.get(i).ats === ats) { coErr = "That company is already in the list."; return false; }
+                && companiesModel.get(i).ats === ats) { coBlame.say("That company is already in the list.", "token"); return false; }
         companiesModel.append({ name: (name || "").trim() || tok, ats: ats, token: tok });
         return true;
     }
@@ -285,8 +286,8 @@ Dialog {
     Item { id: optSink }
     contentItem: ColumnLayout {
         spacing: 0
-        RowLayout { Layout.fillWidth: true; Layout.margins: 16
-            Text { text: "Options"; color: theme.ink; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
+        DialogHeader {
+            DialogTitle { text: "Options" }
             CloseButton { onClicked: optDialog.tryClose() } }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
 
@@ -518,15 +519,19 @@ Dialog {
                         RowLayout { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; spacing: 6
                             TextField { id: coName; objectName: "coName"; Layout.fillWidth: true; placeholderText: "Company name"
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.company_name
-                                onTextEdited: optDialog.coErr = text.length >= maximumLength ? "The company name takes up to " + maximumLength + " characters." : ""
-                                background: Rectangle { radius: 7; color: theme.surface; border.color: parent.activeFocus ? theme.accent : theme.line; border.width: 1 } }
+                                onTextEdited: coBlame.say(text.length >= maximumLength ? "The company name takes up to " + maximumLength + " characters." : "", "name")
+                                readonly property bool wrong: coBlame.box === "name"
+                                background: Rectangle { radius: 7; color: theme.surface; border.width: 1
+                                    border.color: coName.wrong ? theme.crit : (coName.activeFocus ? theme.accent : theme.line) } }
                             ThemedCombo { id: coAts; implicitWidth: 128; plainText: true
-                                model: win.limits.choices.ats }
+                                model: win.limits.choices.ats
+                                onActivated: if (coBlame.box === "token") optDialog.coErr = "" }    // a token fault was about the other site
                             TextField { id: coToken; Layout.preferredWidth: 110; placeholderText: "token"
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true
                                 background: Rectangle { radius: 7; color: theme.surface; border.width: 1
-                                    border.color: (optDialog.coErr) ? theme.crit : (coToken.activeFocus ? theme.accent : theme.line) }
-                                onTextChanged: optDialog.coErr = ""
+                                    border.color: coToken.wrong ? theme.crit : (coToken.activeFocus ? theme.accent : theme.line) }
+                                readonly property bool wrong: coBlame.box === "token"     // a missing, wrong or listed token
+                                onTextChanged: if (coBlame.box === "token") optDialog.coErr = ""     // a fault in the name stays
                                 onAccepted: { if (optDialog.addCompany(coName.text, coAts.currentText, coToken.text)) { coName.text = ""; coToken.text = ""; } } }
                             SmallButton { text: "+ Add"; primaryStyle: true
                                 onClicked: { if (optDialog.addCompany(coName.text, coAts.currentText, coToken.text)) { coName.text = ""; coToken.text = ""; } } }
@@ -671,7 +676,7 @@ Dialog {
         }
 
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-        RowLayout { Layout.fillWidth: true; Layout.margins: 14
+        DialogFooter {
             Text { Layout.fillWidth: true; visible: optDialog.optErr !== ""; wrapMode: Text.WordWrap
                 color: theme.crit; font.pixelSize: 12; font.bold: true; text: optDialog.optErr }
             Item { Layout.fillWidth: optDialog.optErr === "" }

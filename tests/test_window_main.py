@@ -3,6 +3,8 @@
 Its tests share one window and follow on from each other, so they run on one worker in this order (see
 tests/window_harness.py). The other window test files run beside it, each with a window of its own."""
 
+import re
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -196,13 +198,16 @@ def test_a_welcome_field_with_an_error_is_red_even_with_the_focus(ui):
     welcome.setProperty("editEmail", True)
     _until_shown(ui, "welcome")
     welcome.setProperty("emailDraft", "not-an-email")
-    welcome.setProperty("emailErr", "Write the whole address, e.g. you@gmail.com.")
+    ui.js("welcome.saveEmail()")
     shown, red = _border_with_focus(ui, "welcome", "wEmail")
     assert shown == red, "the address is wrong: the address box is red"
     welcome.setProperty("emailDraft", "jobs@gmail.com")
-    welcome.setProperty("emailErr", "An App Password has 16 letters.")
+    welcome.setProperty("pwDraft", "abcd efgh ijkl mnop 2")
+    ui.js("welcome.saveEmail()")
+    assert "16 letters" in welcome.property("emailErr")
     shown, red = _border_with_focus(ui, "welcome", "wPw")
     assert shown == red, "the address is right: the password box is red"
+    welcome.setProperty("pwDraft", "")
     ui.js('welcome.emailErr = ""; welcome.emailDraft = ""; welcome.editEmail = false')
     ui.win.setProperty("connData", {**READY, "vault": "locked", "changed_files": []})
     welcome.setProperty("restoreErr", "That is not a recovery key.")
@@ -1284,3 +1289,26 @@ def test_every_dialog_closes_with_one_shared_button(ui):
     QTest.keyClick(ui.win, Qt.Key_Space)
     _until_closed(ui, options)
     assert options.property("visible") is False and ui.warnings == []
+
+
+def test_every_dialog_has_the_same_title_header_and_footer(ui):
+    """Titles were 16 or 17 pixels, footers had 12 or 14 pixels of margin: each dialog now uses the one shell."""
+    ui_dir = ROOT / "ui_qt"
+    for path in ui_dir.glob("*Dialog.qml"):
+        if path.name == "LimitDialog.qml":                                # the limit notice is a warning card, not a dialog shell
+            continue
+        text = path.read_text(encoding="utf-8")
+        assert text.count("DialogHeader {") == 1 and text.count("DialogTitle {") == 1, path.name
+        assert "DialogFooter {" in text or path.name == "TableDialog.qml", path.name        # the list has no footer row
+        assert not re.search(r"RowLayout \{[^}\n]*Layout\.margins: 1[246]\b", text), f"{path.name}: a copied header or footer row"
+    title = (ui_dir / "DialogTitle.qml").read_text(encoding="utf-8")
+    assert "Text.PlainText" in title and "Text.Wrap" in title                # a company's name is never markup, and it wraps
+    dialog = ui.find("optDialog")
+    _open(ui, dialog)
+    titles = [o for o in dialog.findChildren(QObject) if o.metaObject().className().startswith("DialogTitle")]
+    footers = [o for o in dialog.findChildren(QObject) if o.metaObject().className().startswith("DialogFooter")]
+    assert len(titles) == 1 and titles[0].property("font").pixelSize() == 17 and titles[0].property("text") == "Options"
+    assert len(footers) == 1 and footers[0].property("spacing") == 6
+    ui.js("close()", dialog)
+    _until_closed(ui, dialog)
+    assert ui.warnings == []

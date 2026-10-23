@@ -125,9 +125,9 @@ Dialog {
         FocusCatcher {} }
     contentItem: ColumnLayout {
         spacing: 0
-        RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
+        DialogHeader {
             ColumnLayout { Layout.fillWidth: true; spacing: 2
-                Text { text: "Answers for this form"; color: theme.ink; font.pixelSize: 17; font.bold: true }
+                DialogTitle { text: "Answers for this form" }
                 Text { objectName: "formFor"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
                     text: (formDialog.info.company || "") + "  ·  " + (formDialog.info.title || "") } }
             CloseButton { Layout.alignment: Qt.AlignTop; onClicked: formDialog.tryClose() }
@@ -208,7 +208,7 @@ Dialog {
             }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-        RowLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 6
+        DialogFooter {
             // always in view, wherever the list is scrolled: what went wrong (red) or what was done (green)
             Text { objectName: "fmNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap
                 font.pixelSize: formDialog.err !== "" ? 12 : 11; font.bold: formDialog.err !== ""

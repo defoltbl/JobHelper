@@ -43,8 +43,8 @@ Dialog {
     Item { id: schedSink }
     contentItem: ColumnLayout {
         spacing: 0
-        RowLayout { Layout.fillWidth: true; Layout.margins: 16
-            Text { text: "🗓️  Weekly run"; color: theme.ink; font.pixelSize: 16; font.bold: true; Layout.fillWidth: true }
+        DialogHeader {
+            DialogTitle { text: "🗓️  Weekly run" }
             CloseButton { onClicked: schedDialog.close() } }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         ColumnLayout {
@@ -66,7 +66,7 @@ Dialog {
                 TimeField { id: minField; objectName: "minField"; maxv: 59; onEdited: schedDialog.schedErr = "" } }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-        RowLayout { Layout.fillWidth: true; Layout.margins: 14
+        DialogFooter {
             Text { Layout.fillWidth: true; visible: (schedDialog.timeErr || schedDialog.schedErr) !== ""; wrapMode: Text.WordWrap
                 color: theme.crit; font.pixelSize: 12; font.bold: true; text: schedDialog.timeErr || schedDialog.schedErr }
             Item { Layout.fillWidth: (schedDialog.timeErr || schedDialog.schedErr) === "" }

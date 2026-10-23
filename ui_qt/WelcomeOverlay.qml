@@ -53,7 +53,8 @@ Item {
     property int editBox: 1               // which mailbox the editor is for: 1 main, 2 the optional second one
     property string emailDraft: ""
     property string pwDraft: ""
-    property string emailErr: ""
+    Blame { id: emailBlame }
+    property alias emailErr: emailBlame.text   // emailBlame.box: "address", "server" or "password"
     property string cvErr: ""
     property real cover: shown ? 1 : 0
     readonly property bool hasCv: (connData.cv || "") !== ""
@@ -80,18 +81,18 @@ Item {
     function finish() { shown = false; waitingLogin = false; editEmail = false; }
     function saveEmail() {
         emailErr = "";
-        if (!win.isEmail(emailDraft)) { emailErr = "Enter a valid email address (e.g. you@gmail.com)."; shake.restart(); return; }
+        if (!win.isEmail(emailDraft)) { emailBlame.say("Enter a valid email address (e.g. you@gmail.com).", "address"); shake.restart(); return; }
         if (editBox === 2 && emailDraft.trim().toLowerCase() === (connData.email_addr || "").toLowerCase()) {
-            emailErr = "That is already your main job email. Enter a different address."; shake.restart(); return; }
+            emailBlame.say("That is already your main job email. Enter a different address.", "address"); shake.restart(); return; }
         var server = bridge.mailServer(emailDraft, needsServer ? hostDraft : "");
-        if (server.problem) { emailErr = server.problem; shake.restart(); return; }
-        if (!server.host) { emailErr = "Enter this provider's IMAP server, for example imap." + emailDraft.trim().split("@").pop() + "."; shake.restart(); return; }
+        if (server.problem) { emailBlame.say(server.problem, server.about); shake.restart(); return; }
+        if (!server.host) { emailBlame.say("Enter this provider's IMAP server, for example imap." + emailDraft.trim().split("@").pop() + ".", "server"); shake.restart(); return; }
         if (pwDraft !== "" && server.gmail === true && !win.isAppPassword(pwDraft)) {
-            emailErr = "A Google App Password is 16 letters (no digits). Check for typos."; shake.restart(); return; }
+            emailBlame.say("A Google App Password is 16 letters (no digits). Check for typos.", "password"); shake.restart(); return; }
         if (pwDraft !== "" && win.hasNonLatin(pwDraft)) {
-            emailErr = "A mail server takes only English letters, digits and symbols in a password here."; shake.restart(); return; }
+            emailBlame.say("A mail server takes only English letters, digits and symbols in a password here.", "password"); shake.restart(); return; }
         var known = editBox === 2 ? connData.email2 === true : connData.email === true;
-        if (!known && pwDraft === "") { emailErr = "Enter the password for this mailbox."; shake.restart(); return; }
+        if (!known && pwDraft === "") { emailBlame.say("Enter the password for this mailbox.", "password"); shake.restart(); return; }
         if (emailBusy) return;
         emailBusy = true; emailNote = "";
         bridge.saveEmailChecked(editBox, emailDraft, pwDraft, needsServer ? hostDraft : "");       // tries the mailbox first; answers through onEmailSaved
@@ -108,7 +109,7 @@ Item {
         function onEmailSaved(r) {
             welcome.emailBusy = false; welcome.pwDraft = "";
             if (r && r.ok) { welcome.editEmail = false; welcome.emailNote = r.note || ""; bridge.checkConnections(); }
-            else { welcome.emailErr = (r && r.msg) ? r.msg : "Couldn't save the email."; shake.restart(); }
+            else { emailBlame.say((r && r.msg) ? r.msg : "Couldn't save the email.", (r && r.field) || ""); shake.restart(); }
         } }
     Timer { interval: 2500; repeat: true; running: welcome.shown && welcome.waitingLogin
         onTriggered: bridge.checkConnections() }
@@ -292,7 +293,7 @@ Item {
                             text: welcome.emailDraft; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                             placeholderTextColor: theme.faint
                             background: Rectangle { radius: 8; color: theme.inset; border.width: 1
-                                border.color: welcome.emailErr !== "" && !win.isEmail(welcome.emailDraft) ? theme.crit
+                                border.color: emailBlame.box === "address" ? theme.crit
                                     : (wEmail.activeFocus ? theme.accent : theme.line) }
                             onTextEdited: { welcome.emailDraft = text; welcome.emailErr = ""; }
                             onAccepted: wPw.forceActiveFocus() }
@@ -302,7 +303,7 @@ Item {
                             text: welcome.pwDraft; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                             placeholderTextColor: theme.faint
                             background: Rectangle { radius: 8; color: theme.inset; border.width: 1
-                                border.color: welcome.emailErr !== "" && win.isEmail(welcome.emailDraft) ? theme.crit
+                                border.color: emailBlame.box === "password" ? theme.crit
                                     : (wPw.activeFocus ? theme.accent : theme.line) }
                             onTextEdited: { welcome.pwDraft = text; welcome.emailErr = ""; }
                             onAccepted: welcome.saveEmail() }
@@ -313,7 +314,8 @@ Item {
                             text: welcome.hostDraft; color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.mail_server
                             placeholderTextColor: theme.faint
                             background: Rectangle { radius: 8; color: theme.inset; border.width: 1
-                                border.color: serverRow.activeFocus ? theme.accent : theme.line }
+                                border.color: serverRow.wrong ? theme.crit : (serverRow.activeFocus ? theme.accent : theme.line) }
+                            readonly property bool wrong: emailBlame.box === "server"
                             onTextEdited: { welcome.hostDraft = text; welcome.emailErr = ""; }
                             onAccepted: wPw.forceActiveFocus() }
                         Text { visible: welcome.emailErr !== ""; Layout.fillWidth: true; Layout.leftMargin: 38; wrapMode: Text.WordWrap

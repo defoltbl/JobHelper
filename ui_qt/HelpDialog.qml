@@ -94,8 +94,8 @@ Dialog {
     background: Rectangle { radius: 16; color: theme.winbg; border.color: theme.line; border.width: 1 }
     contentItem: ColumnLayout {
         spacing: 0
-        RowLayout { Layout.fillWidth: true; Layout.margins: 16
-            Text { text: "Help"; color: theme.ink; font.pixelSize: 17; font.bold: true }
+        DialogHeader {
+            DialogTitle { text: "Help"; Layout.fillWidth: false }
             Row { Layout.leftMargin: 14; spacing: 6
                 Repeater { model: [["how", "How it works"], ["new", "What changed"], ["use", "Usage and problems"]]
                     Rectangle {
@@ -165,7 +165,7 @@ Dialog {
             }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-        RowLayout { Layout.fillWidth: true; Layout.margins: 12
+        DialogFooter {
             Item { Layout.fillWidth: true }
             PillButton { primaryStyle: true; text: "Close"; implicitWidth: 120; onClicked: helpDialog.close() } }
     }
