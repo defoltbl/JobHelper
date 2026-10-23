@@ -343,25 +343,7 @@ ApplicationWindow {
         }
     }
 
-    // ── reusable buttons ──
-
-    // ── macOS-System-Settings-style building blocks ──
-    // dropdown (optionally type-to-complete via `editable`)
-    // free-text field with a case-insensitive suggestion dropdown; Enter / a click
-    // adds the value. Used for adding search roles.
-    // on/off switch that follows the theme: accent track when on, clear knob travel
-    // modern number stepper: rounded, −/+ with hover + pointer cursor, subtle
-    // accent focus (no harsh blue), editable text you can select and type into.
-    // zero-padded time field (HH / MM). Unlike a SpinBox it KEEPS an out-of-range
-    // value visible, turns the border red, and sets `valid=false` so Save can be
-    // blocked with an explicit error (instead of silently clamping).
-
-    // A short list of words the user edits as chips (skip words, exceptions).
-
-    // A factory gate straddling the belt: an inverted-U portal the belt runs
-    // through. Jobs come out of the input gate and go into the output gate; the
-    // lamp on the beam blinks while the line runs and the opening lights up each
-    // time a package passes. The belt line sits at local y = 64.
+    // The building blocks (buttons, fields, the dialog shell, the gates) are each in their own file in ui_qt/.
 
     // ── layout ──
     ColumnLayout {
@@ -443,13 +425,33 @@ ApplicationWindow {
     // it belongs to the windows it was shown over: when the last one closes it ends, so it never comes back on the next
     // window (the status line keeps the words)
     onDialogOpenChanged: if (!dialogOpen) { toastTimer.stop(); toastText = ""; }
+    // It keeps clear of the note and buttons of the window in front: above that window's footer when the window
+    // reaches down to the bottom of the screen (a small screen), else at the bottom as before.
+    function footerOf(item, depth) {            // the shown DialogFooter in a window (in an open tab, for the assistant)
+        if (!item || !item.visible || depth > 4) return null;
+        if (item.dialogFooter === true) return item;
+        for (var i = 0; i < item.children.length; i++) { var f = footerOf(item.children[i], depth + 1); if (f) return f; }
+        return null;
+    }
+    function toastBottom(tall) {
+        var lowest = win.height - 26;
+        var shown = win.toastText;                          // reading the text measures again for each new message
+        for (var i = 0; i < windows.length; i++) {
+            var w = windows[i];
+            if (!onTop(w)) continue;
+            if (w.y + w.height + 8 <= lowest - tall) return lowest;          // room below the window
+            var foot = footerOf(w.contentItem, 0);
+            return foot ? Math.min(lowest, foot.mapToItem(null, 0, 0).y - 8) : lowest;
+        }
+        return lowest;
+    }
     Rectangle {
         id: toast; objectName: "toast"
         parent: Overlay.overlay; z: 10000
         visible: opacity > 0; opacity: win.toastText !== "" && win.dialogOpen ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 160 } }
         width: Math.min(620, win.width - 80); height: toastT.implicitHeight + 22
-        x: (win.width - width) / 2; y: win.height - height - 26
+        x: (win.width - width) / 2; y: win.toastBottom(height) - height
         radius: 11; color: win.toastBad ? theme.critbg : theme.surface2
         border.width: 1; border.color: win.toastBad ? theme.crit : theme.steel
         Text { id: toastT; objectName: "toastText"; x: 14; y: 11; width: parent.width - 28; wrapMode: Text.WordWrap

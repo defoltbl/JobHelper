@@ -186,20 +186,28 @@ def test_saving_a_mailbox_tries_it_first(bridge, monkeypatch):
     answer = {"ok": True, "msg": ""}
     monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0, host="": tried.append((user, password, host)) or dict(answer))
     check = bridge._save_email_checked
-    # wrong input never reaches the mail server
+    # wrong input never reaches the mail server; each refusal names the box it is about
     assert check(3, "a@gmail.com", "abcdabcdabcdabcd")["ok"] is False
-    assert check(1, "not an address", "abcdabcdabcdabcd")["ok"] is False
-    assert "main job email" in check(2, "MAIN@gmail.com", "abcdabcdabcdabcd")["msg"]
-    assert "Enter the password" in check(2, "two@gmail.com", "")["msg"]
-    assert "16 letters" in check(2, "two@gmail.com", "short")["msg"] and "16 letters" in check(2, "two@gmail.com", "abcdabcdabcd1234")["msg"]
+    assert check(1, "not an address", "abcdabcdabcdabcd")["field"] == "address"
+    main = check(2, "MAIN@gmail.com", "abcdabcdabcdabcd")
+    assert "main job email" in main["msg"] and main["field"] == "address"
+    assert check(2, "two@gmail.com", "") == {"ok": False, "msg": "Enter the password for that address.", "field": "password"}
+    assert "16 letters" in check(2, "two@gmail.com", "short")["msg"] and check(2, "two@gmail.com", "abcdabcdabcd1234")["field"] == "password"
+    assert check(1, "me@smallfirm.example", "secret123", "not a server")["field"] == "server"
+    assert check(1, "me@smallfirm.example", "secret123")["field"] == "server"            # no server typed for an unknown provider
+    assert check(1, "me@outlook.com", "secret123")["field"] == "address"
     assert tried == [] and saved == []
     # accepted: saved; an empty password means the one already kept
     assert check(1, " main@gmail.com ", "") == {"ok": True}
     assert tried == [("main@gmail.com", "oldpasswordoldpw", "imap.gmail.com")] and saved == [(1, "main@gmail.com", "oldpasswordoldpw", "")]
     # refused: not saved, and the reason does not repeat the password
-    answer.update(ok=False, msg="The mail server refused this address and password.")
+    answer.update(ok=False, msg="The mail server refused this address and password.", field="password")
     result = check(2, "two@gmail.com", "wrongwrongwrongw")
     assert result["ok"] is False and "refused" in result["msg"] and "wrongwrongwrongw" not in result["msg"] and len(saved) == 1
+    assert result["field"] == "password"
+    answer.update(msg=email_client.UNTRUSTED, field="server")                          # a certificate fault is the server's
+    assert check(2, "two@gmail.com", "abcdabcdabcdabcd")["field"] == "server"
+    answer.pop("field")
     # the server cannot be reached: saved, with a note
     answer.update(ok=None, msg="The mail server could not be reached, so the password was not tried.")
     result = check(2, "two@gmail.com", "abcdabcdabcdabcd")
@@ -245,7 +253,7 @@ def test_what_the_app_knows_about_a_mail_provider(bridge):
     assert unknown["host"] == "" and unknown["known"] is False and "imap.smallfirm.example" in unknown["hint"] and unknown["problem"] == ""
     assert bridge.mailServer("me@smallfirm.example", "mail.smallfirm.example")["host"] == "mail.smallfirm.example"
     assert "Outlook.com" in bridge.mailServer("me@outlook.com", "")["problem"]
-    assert bridge.mailServer("", "") == {"host": "", "known": False, "gmail": False, "hint": "", "problem": ""}
+    assert bridge.mailServer("", "") == {"host": "", "known": False, "gmail": False, "hint": "", "problem": "", "about": ""}
 
 
 def test_each_mailbox_is_read_from_its_own_server(bridge, tmp_path, monkeypatch):

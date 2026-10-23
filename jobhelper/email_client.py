@@ -315,20 +315,21 @@ def _numbers(data) -> list[bytes]:
 def try_login(user: str, password: str, timeout: float = 8.0, host: str = "") -> dict[str, Any]:
     """Sign in to the mailbox and out again, to learn whether the address and password work.
 
-    {ok: True} when they do; {ok: False, msg} when the server refused them; {ok: None, msg}
-    when the server could not be reached, which says nothing about the password. Read-only:
-    no folder is opened. The password is never part of a message."""
+    {ok: True} when they do; {ok: False, msg, field} when the server refused them (field "password") or its
+    certificate is not trusted (field "server"); {ok: None, msg} when the server could not be reached, which says
+    nothing about the password. Read-only: no folder is opened. The password is never part of a message."""
     try:
         imap = _open(host, timeout)
     except ssl.SSLCertVerificationError:
-        return {"ok": False, "msg": UNTRUSTED}            # not saved: the server is not the one it claims to be
+        return {"ok": False, "msg": UNTRUSTED, "field": "server"}     # not saved: the server is not the one it claims to be
     except (OSError, imaplib.IMAP4.error):
         return {"ok": None, "msg": "The mail server could not be reached, so the password was not tried."}
     try:
         imap.login(user, password)
     except imaplib.IMAP4.error:
-        return {"ok": False, "msg": "The mail server refused this address and password. Check both. Most providers want a "
-                                    "separate app password for a program, not the one you sign in with."}
+        return {"ok": False, "field": "password",
+                "msg": "The mail server refused this address and password. Check both. Most providers want a "
+                       "separate app password for a program, not the one you sign in with."}
     except OSError:
         return {"ok": None, "msg": "The connection to the mail server was lost, so the password was not tried."}
     finally:

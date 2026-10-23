@@ -586,13 +586,13 @@ Dialog {
         FocusCatcher {} }
     contentItem: ColumnLayout {
         spacing: 0
-        RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
+        DialogHeader {
             Rectangle { implicitWidth: 38; implicitHeight: 38; radius: 19; color: Qt.rgba(theme.a6.r, theme.a6.g, theme.a6.b, 0.18); border.color: theme.a6; border.width: 1
                 Rectangle { anchors.centerIn: parent; width: 24; height: 14; radius: 7; color: theme.night
                     Row { anchors.centerIn: parent; spacing: 5
                         Repeater { model: 2; Rectangle { width: 5; height: 6; radius: 2.5; color: "#ffffff" } } } } }
             ColumnLayout { Layout.fillWidth: true; spacing: 2
-                Text { text: "Assistant"; color: theme.ink; font.pixelSize: 17; font.bold: true }
+                DialogTitle { text: "Assistant" }
                 Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
                     text: "Fills in application forms in your browser, answers questions about your search, and does things in the app after your yes." } }
             CloseButton { Layout.alignment: Qt.AlignTop; onClicked: assistantDialog.tryClose() }
@@ -711,6 +711,7 @@ Dialog {
             }
             Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
             ColumnLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 8
+                readonly property bool dialogFooter: true          // the Ask page's buttons: the message keeps above them
                 RowLayout { objectName: "asPractice"; visible: assistantDialog.practising; Layout.fillWidth: true; spacing: 8
                     Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.a6; font.pixelSize: 12; font.bold: true
                         text: "Practising for " + assistantDialog.practiceName + " · question " + (assistantDialog.practiceIndex + 1) + " of " + assistantDialog.practiceQuestions.length }
@@ -819,7 +820,7 @@ Dialog {
                 }
             }
             Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-            RowLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 6
+            DialogFooter {
                 Text { objectName: "asAnswersNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap
                     font.pixelSize: assistantDialog.answersErr !== "" ? 12 : 11; font.bold: assistantDialog.answersErr !== ""
                     color: assistantDialog.answersErr !== "" ? theme.crit : (assistantDialog.answersNote !== "" ? theme.good : theme.faint)
@@ -974,7 +975,7 @@ Dialog {
                 }
             }
             Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-            RowLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 6
+            DialogFooter {
                 Text { objectName: "asDetailsNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap
                     readonly property bool bad: !!assistantDialog.problem.msg
                     font.pixelSize: bad ? 12 : 11; font.bold: bad

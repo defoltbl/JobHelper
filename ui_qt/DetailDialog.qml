@@ -113,7 +113,8 @@ Dialog {
     function eventProblem(msg, field) { eventField = msg !== "" ? (field || "") : ""; eventErr = msg; }
     function eventMarks(field) { return eventErr !== "" && eventField === field; }     // that box is red, no other
     property string eventKind: "interview"
-    property string notesInfo: ""
+    Blame { id: notesBlame }
+    property alias notesInfo: notesBlame.text   // notesBlame.box: the company note box that is full
     property bool replyOpen: false
     property bool replyBusy: false
     property string replyInfo: ""
@@ -363,8 +364,7 @@ Dialog {
     contentItem: ColumnLayout {
         spacing: 0
         // header
-        RowLayout {
-            Layout.fillWidth: true; Layout.margins: 16; spacing: 12
+        DialogHeader {
             Rectangle { visible: detailDialog.job.score !== undefined && detailDialog.job.score !== null
                 implicitWidth: 46; implicitHeight: 46; radius: 12
                 color: win.badgeBg(detailDialog.job.tier || ""); border.width: 1
@@ -372,8 +372,7 @@ Dialog {
                 Text { anchors.centerIn: parent; text: "" + detailDialog.job.score
                     color: win.badgeColor(detailDialog.job.tier || ""); font.pixelSize: 17; font.bold: true } }
             ColumnLayout { Layout.fillWidth: true; spacing: 2
-                Text { objectName: "detailTitle"; text: detailDialog.job.title || ""; color: theme.ink; font.pixelSize: 17; font.bold: true
-                    Layout.fillWidth: true; wrapMode: Text.Wrap }
+                DialogTitle { objectName: "detailTitle"; text: detailDialog.job.title || "" }
                 Text { color: theme.soft; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.Wrap
                     text: (detailDialog.job.company || "") + (detailDialog.job.location ? "  ·  " + detailDialog.job.location : "") } }
             CloseButton { Layout.alignment: Qt.AlignTop; onClicked: detailDialog.tryClose() }
@@ -757,18 +756,18 @@ Dialog {
                         Text { text: "Who you spoke to"; color: theme.soft; font.pixelSize: 12 }
                         TextField { id: cnContact; objectName: "cnContact"; Layout.fillWidth: true; implicitHeight: 28; color: theme.ink; font.pixelSize: 12
                             selectByMouse: true; maximumLength: win.limits.company_notes.contact; placeholderText: "name, role"; placeholderTextColor: theme.faint
-                            background: Rectangle { radius: 7; color: theme.inset; border.width: 1; border.color: cnContact.activeFocus ? theme.accent : theme.line }
-                            onTextEdited: { detailDialog.notesInfo = detailDialog.full(cnContact, "“Who you spoke to”"); detailDialog.notesBad = detailDialog.notesInfo !== ""; } }
+                            background: Rectangle { radius: 7; color: theme.inset; border.width: 1; border.color: notesBlame.box === "contact" ? theme.crit : (cnContact.activeFocus ? theme.accent : theme.line) }
+                            onTextEdited: { notesBlame.say(detailDialog.full(cnContact, "“Who you spoke to”"), "contact"); detailDialog.notesBad = detailDialog.notesInfo !== ""; } }
                         Text { text: "Salary mentioned"; color: theme.soft; font.pixelSize: 12 }
                         TextField { id: cnSalary; objectName: "cnSalary"; Layout.fillWidth: true; implicitHeight: 28; color: theme.ink; font.pixelSize: 12
                             selectByMouse: true; maximumLength: win.limits.company_notes.salary; placeholderText: "what they said, what you said"; placeholderTextColor: theme.faint
-                            background: Rectangle { radius: 7; color: theme.inset; border.width: 1; border.color: cnSalary.activeFocus ? theme.accent : theme.line }
-                            onTextEdited: { detailDialog.notesInfo = detailDialog.full(cnSalary, "“Salary mentioned”"); detailDialog.notesBad = detailDialog.notesInfo !== ""; } }
+                            background: Rectangle { radius: 7; color: theme.inset; border.width: 1; border.color: notesBlame.box === "salary" ? theme.crit : (cnSalary.activeFocus ? theme.accent : theme.line) }
+                            onTextEdited: { notesBlame.say(detailDialog.full(cnSalary, "“Salary mentioned”"), "salary"); detailDialog.notesBad = detailDialog.notesInfo !== ""; } }
                         Text { text: "What they asked"; color: theme.soft; font.pixelSize: 12 }
                         TextField { id: cnAsked; objectName: "cnAsked"; Layout.fillWidth: true; implicitHeight: 28; color: theme.ink; font.pixelSize: 12
                             selectByMouse: true; maximumLength: win.limits.company_notes.asked; placeholderText: "questions, tasks"; placeholderTextColor: theme.faint
-                            background: Rectangle { radius: 7; color: theme.inset; border.width: 1; border.color: cnAsked.activeFocus ? theme.accent : theme.line }
-                            onTextEdited: { detailDialog.notesInfo = detailDialog.full(cnAsked, "“What they asked”"); detailDialog.notesBad = detailDialog.notesInfo !== ""; } }
+                            background: Rectangle { radius: 7; color: theme.inset; border.width: 1; border.color: notesBlame.box === "asked" ? theme.crit : (cnAsked.activeFocus ? theme.accent : theme.line) }
+                            onTextEdited: { notesBlame.say(detailDialog.full(cnAsked, "“What they asked”"), "asked"); detailDialog.notesBad = detailDialog.notesInfo !== ""; } }
                     }
                     Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
                         border.color: cnNotes.text.length > detailDialog.notesMax ? theme.crit : (cnNotes.activeFocus ? theme.accent : theme.line)
@@ -884,7 +883,7 @@ Dialog {
         Text { objectName: "closeNote"; visible: detailDialog.closeNote !== ""; text: detailDialog.closeNote
             Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.topMargin: 10
             wrapMode: Text.Wrap; color: theme.crit; font.pixelSize: 12; font.bold: true }
-        RowLayout { objectName: "detailFooter"; Layout.fillWidth: true; Layout.margins: 12; spacing: 6
+        DialogFooter { objectName: "detailFooter"
             Flow { objectName: "detailDocs"; Layout.fillWidth: true; Layout.minimumWidth: 120; spacing: 6
             SmallButton { visible: !!detailDialog.job.url; text: "Open posting ↗"
                 onClicked: { var r = bridge.openUrl(detailDialog.job.id);

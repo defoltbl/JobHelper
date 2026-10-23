@@ -10,11 +10,11 @@ import pytest
 pytest.importorskip("PySide6")
 pytestmark = pytest.mark.xdist_group("test_window_jobs")
 
-from PySide6.QtCore import QMetaObject, QObject  # noqa: E402
+from PySide6.QtCore import QMetaObject, QObject, QPointF  # noqa: E402
 
 from jobhelper import api_core, config, store, ui_api  # noqa: E402
 from tests.conftest import ROOT  # noqa: E402
-from tests.window_harness import (Ui, _border_with_focus, _open, _open_job, _until, _until_closed, _until_open, _until_true, qml_source)  # noqa: E402
+from tests.window_harness import (Ui, _border_with_focus, _open, _open_job, _until, _until_closed, _until_open, _until_shown, _until_true, qml_source)  # noqa: E402
 
 
 # ── dates, company notes, pasted replies, CV comparison, pay ────────────────
@@ -1268,6 +1268,131 @@ def test_a_field_with_an_error_is_red_even_with_the_focus(ui):
     assert shown == red and ui.js("String(evTime.background.border.color)", ui.find("detailDialog")) != red
     ui.js('evDate.text = ""; evTime.text = ""; detailDialog.eventProblem(""); detailDialog.close()')
     _until_closed(ui, "detailDialog")
+    assert ui.warnings == []
+
+
+def test_a_red_line_blames_a_box_only_while_it_says_that(ui):
+    said = ui.js("""(function () {
+        var b = Qt.createQmlObject('import QtQuick; Blame {}', win, Qt.resolvedUrl("Main.qml"));
+        b.say("Too long.", "name"); var first = b.box;
+        b.text = "Saved."; var after = b.box;
+        b.say("", "name"); var last = b.box;
+        b.destroy(); return [first, after, last].join(","); })()""")
+    assert said == "name,,", "a message set another way, or an empty one, blames no box"
+    assert ui.warnings == []
+
+
+def test_the_fields_named_in_a_red_line_are_red_too(ui):
+    """Five fields showed only a red line under them and kept their plain border: each now turns red by its own check."""
+    def red_one(window, field):
+        shown, red = _border_with_focus(ui, window, field)
+        return shown == red
+    # About you: the right to work in other letters
+    about = ui.find("aboutDialog")
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    ui.js('rightField.text = "Гражданин ЕС"; aboutDialog.save()', about)
+    assert "Latin letters" in ui.js("aboutDialog.err") and red_one("aboutDialog", "rightField") and not red_one("aboutDialog", "startField")
+    ui.js('startField.text = "через месяц"; aboutDialog.save()', about)                     # both in other letters: both red at once
+    assert red_one("aboutDialog", "rightField") and red_one("aboutDialog", "startField")
+    ui.js('startField.text = ""', about)
+    ui.js('rightField.text = "EU citizen"; aboutDialog.err = "Write the notes about your work in English (Latin letters)."', about)
+    assert not red_one("aboutDialog", "rightField"), "the fault is elsewhere: no red on it"
+    ui.js('aboutDialog.err = ""; rightField.text = ""; close()', about)
+    _until_closed(ui, "aboutDialog")
+    # Options: a name in other letters is red in the name box; a missing token is red in the token box only
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    ui.js('optDialog.addCompany(coName.text = "Фирма", "Greenhouse", "fern")', dialog)
+    assert red_one("optDialog", "coName") and not red_one("optDialog", "coToken")
+    ui.js('coName.text = "Fern Labs"; optDialog.addCompany("Fern Labs", "Greenhouse", "")', dialog)
+    assert "token" in ui.js("optDialog.coErr") and red_one("optDialog", "coToken") and not red_one("optDialog", "coName")
+    ui.js("coAts.activated(1)", dialog)                                                # another site: the token fault is gone
+    assert ui.js("optDialog.coErr") == ""
+    ui.js('optDialog.addCompany("Фирма", "Greenhouse", "fern"); coAts.activated(0)', dialog)
+    assert "Latin" in ui.js("optDialog.coErr") and red_one("optDialog", "coName"), "a fault in the name stays"
+    ui.js('coToken.text = "fern2"', dialog)
+    assert "Latin" in ui.js("optDialog.coErr"), "typing a token does not hide a fault in the name"
+    ui.js('companiesModel.clear(); optDialog.addCompany("Fern Labs", "Greenhouse", "fern")', dialog)
+    ui.js('optDialog.addCompany("Fern Labs", "Greenhouse", "fern")', dialog)            # the same company twice
+    assert "already in the list" in ui.js("optDialog.coErr") and red_one("optDialog", "coToken")
+    ui.js("coAts.activated(1)", dialog)
+    assert ui.js("optDialog.coErr") == ""
+    ui.js("companiesModel.clear()", dialog)
+    ui.js('coName.text = ""; optDialog.coErr = ""; confirmClose = true; close()', dialog)
+    _until_closed(ui, dialog)
+    # the job window: the company note that is full
+    _open_job(ui)
+    detail = ui.find("detailDialog")
+    ui.js('cnSalary.text = "' + "s" * 200 + '"; cnSalary.textEdited()')                      # what typing the last letter does
+    assert red_one("detailDialog", "cnSalary") and not red_one("detailDialog", "cnContact") and not red_one("detailDialog", "cnAsked")
+    ui.js('detailDialog.notesInfo = "Couldn\'t save the notes."')                     # a fault of the save, not of a box
+    assert not red_one("detailDialog", "cnSalary"), "the full box is not blamed for a failed save"
+    ui.js('cnSalary.text = ""; detailDialog.notesBad = false; detailDialog.notesInfo = ""; detailDialog.close()')
+    _until_closed(ui, detail)
+    # the start card: an address whose server is missing
+    welcome = ui.find("welcome")
+    ui.js("welcome.openCard(); welcome.editBox = 1")
+    welcome.setProperty("editEmail", True)
+    _until_shown(ui, "welcome")
+    welcome.setProperty("emailDraft", "alex@fernlabs.example")
+    welcome.setProperty("hostDraft", "")
+    ui.js("welcome.saveEmail()")
+    assert "IMAP server" in welcome.property("emailErr") and red_one("welcome", "serverRow") and not red_one("welcome", "wPw")
+    welcome.setProperty("hostDraft", "not a server")                                   # a typed server that is not one
+    ui.js("welcome.saveEmail()")
+    assert "not a mail server's name" in welcome.property("emailErr")
+    assert red_one("welcome", "serverRow") and not red_one("welcome", "wEmail") and not red_one("welcome", "wPw")
+    welcome.setProperty("hostDraft", "imap.fernlabs.example")
+    ui.bridge.emailSaved.emit({"ok": False, "box": 1, "field": "password",                    # the server refused the password
+                               "msg": "The mail server refused this address and password."})
+    assert _until_true(ui, lambda: "refused" in welcome.property("emailErr"))
+    assert red_one("welcome", "wPw") and not red_one("welcome", "serverRow"), "the server is right: no red on it"
+    ui.bridge.emailSaved.emit({"ok": False, "box": 1, "field": "server", "msg": "Couldn't connect safely."})
+    assert _until_true(ui, lambda: welcome.property("emailErr") == "Couldn't connect safely.")
+    assert red_one("welcome", "serverRow") and not red_one("welcome", "wPw"), "a certificate fault is the server's"
+    ui.js('welcome.emailErr = ""; welcome.emailDraft = ""; welcome.hostDraft = ""; welcome.editEmail = false; welcome.finish()')
+    assert _until_true(ui, lambda: welcome.property("visible") is False)
+    assert ui.warnings == []
+
+
+def test_a_message_over_a_window_keeps_clear_of_its_buttons(ui):
+    """On a short screen a window reaches down to the bottom, and the message at the bottom covered Save and Cancel."""
+    dialog, toast = ui.find("optDialog"), ui.find("toast")
+    height = ui.win.height()
+    ui.js("optsData = bridge.options()")
+    try:
+        for tall in (620, 1400):
+            ui.win.resize(ui.win.width(), tall)
+            assert _until_true(ui, lambda: ui.win.height() == tall)
+            _open(ui, dialog)
+            ui.js('ticker.text = "✓ Options saved."')
+            assert _until_true(ui, lambda: toast.property("visible") is True)
+            footer = next(o for o in dialog.findChildren(QObject) if o.metaObject().className().startswith("DialogFooter"))
+            footer_top = footer.mapToScene(QPointF(0, 0)).y()
+            top, bottom = toast.property("y"), toast.property("y") + toast.property("height")
+            if tall == 620:
+                assert bottom <= footer_top, (bottom, footer_top)                     # Save and Cancel stay in view
+            else:                                                                     # room below the window: at the bottom, as before
+                assert bottom == tall - 26 and top >= dialog.property("y") + dialog.property("height")
+            ui.js("close()", dialog)
+            _until_closed(ui, dialog)
+            ui.js('ticker.text = ""')
+        ui.win.resize(ui.win.width(), 620)                                            # the assistant's Ask page
+        assert _until_true(ui, lambda: ui.win.height() == 620)
+        ui.js("assistantDialog.show()")
+        _until_open(ui, "assistantDialog")
+        ui.js('ticker.text = "Answers saved."')
+        assert _until_true(ui, lambda: toast.property("visible") is True)
+        footer_top = ui.js("footerOf(assistantDialog.contentItem, 0).mapToItem(null, 0, 0).y")
+        assert toast.property("y") + toast.property("height") <= footer_top
+        ui.js("close()", ui.find("assistantDialog"))
+        _until_closed(ui, "assistantDialog")
+    finally:
+        ui.js('ticker.text = ""')
+        ui.win.resize(ui.win.width(), height)
+        _until_true(ui, lambda: ui.win.height() == height)
     assert ui.warnings == []
 
 

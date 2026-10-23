@@ -89,9 +89,9 @@ Dialog {
         FocusCatcher {} }
     contentItem: ColumnLayout {
         spacing: 0
-        RowLayout { Layout.fillWidth: true; Layout.margins: 16; spacing: 12
+        DialogHeader {
             ColumnLayout { Layout.fillWidth: true; spacing: 2
-                Text { text: "Cover letter"; color: theme.ink; font.pixelSize: 17; font.bold: true }
+                DialogTitle { text: "Cover letter" }
                 Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 12
                     text: (letterDialog.meta.company || "") + "  ·  " + (letterDialog.meta.title || letterDialog.meta.title_line || "") } }
             Text { objectName: "letterWords"; font.pixelSize: 12; font.bold: true
@@ -159,7 +159,7 @@ Dialog {
             }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-        RowLayout { Layout.fillWidth: true; Layout.margins: 12; spacing: 6
+        DialogFooter {
             SmallButton { text: "Open in Word"; onClicked: bridge.openDoc("letter", detailDialog.job.letter || "") }
             SmallButton { text: "Undo my changes"; enabled: letterDialog.dirty && letterDialog.busyIndex < 0
                 onClicked: { letterDialog.texts = letterDialog.original.slice();

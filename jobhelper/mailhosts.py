@@ -75,20 +75,22 @@ def is_gmail(address: str, host: str = "") -> bool:
 
 
 def server_for(address: str, typed: str = "") -> dict[str, object]:
-    """Where this address is read from: {host, known, gmail, hint, problem}.
+    """Where this address is read from: {host, known, gmail, hint, problem, about}.
 
     `typed` is the server the person entered (it wins over what the app knows, so a company
     mailbox hosted by Google can be given imap.gmail.com). `problem` is set when nothing can be
-    done yet: the provider cannot be read, the server is missing, or it is not a server name."""
+    done yet: the provider cannot be read, or the typed server is not a server name; `about` then
+    says which the window marks: "address" or "server". A missing server is only a `hint`."""
     domain, typed = domain_of(address), str(typed or "").strip().lower()
-    out = {"host": "", "known": False, "gmail": False, "hint": "", "problem": ""}
+    out = {"host": "", "known": False, "gmail": False, "hint": "", "problem": "", "about": ""}
     if never_used(domain) or never_used(typed):
-        return {**out, "known": True, "problem": NEVER_MESSAGE}
+        return {**out, "known": True, "problem": NEVER_MESSAGE, "about": "address" if never_used(domain) else "server"}
     if domain in NOT_POSSIBLE and not typed:
-        return {**out, "known": True, "problem": NOT_POSSIBLE[domain]}
+        return {**out, "known": True, "problem": NOT_POSSIBLE[domain], "about": "address"}
     if typed:
         if not _HOST.fullmatch(typed):
-            return {**out, "problem": "That is not a mail server's name. It looks like imap.example.com: letters, digits, dots and hyphens."}
+            return {**out, "about": "server",
+                    "problem": "That is not a mail server's name. It looks like imap.example.com: letters, digits, dots and hyphens."}
         gmail = is_gmail(address, typed)
         return {**out, "host": typed, "known": domain in PROVIDERS, "gmail": gmail,
                 "hint": "Use " + (PROVIDERS["gmail.com"][1] if gmail else "the password your mail provider gives for reading mail by IMAP") + "."}

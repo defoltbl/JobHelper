@@ -150,14 +150,15 @@ class JobSlots:
     @Slot(str, str, result="QVariantMap")
     def mailServer(self, address, typed):
         """What the app knows about an address's mail provider, for the line under the fields:
-        {host, known, gmail, hint, problem}."""
+        {host, known, gmail, hint, problem, about}."""
         from . import mailhosts
         return mailhosts.server_for(address, typed)
 
     @Slot(int, str, str, str)
     def saveEmailChecked(self, box, user, password, host):
         """Try the mailbox's address and password for real, then save them. In the background
-        (it talks to the mail server); the answer arrives as emailSaved: {ok, msg, note, box}.
+        (it talks to the mail server); the answer arrives as emailSaved: {ok, msg, note, box, field}, where
+        `field` is the box a refusal is about ("address", "server", "password" or "").
         A refused password is not saved. With no connection it is saved, and `note` says it was not tried.
         `host` is the IMAP server, typed for a provider the app does not know ('' otherwise)."""
         def work():
@@ -178,26 +179,26 @@ class JobSlots:
         user, host = user.strip(), host.strip().lower()
         problem = _address_problem(user)
         if problem:
-            return {"ok": False, "msg": problem}
+            return {"ok": False, "msg": problem, "field": "address"}
         if box == 2 and user.lower() == config.IMAP_USER.lower():
-            return {"ok": False, "msg": "That is already your main job email."}
+            return {"ok": False, "msg": "That is already your main job email.", "field": "address"}
         server = mailhosts.server_for(user, host)
         if server["problem"]:
-            return {"ok": False, "msg": server["problem"]}
+            return {"ok": False, "msg": server["problem"], "field": server["about"]}
         if not server["host"]:
-            return {"ok": False, "msg": server["hint"]}
+            return {"ok": False, "msg": server["hint"], "field": "server"}
         same_address = user.lower() == (config.IMAP_USER if box == 1 else config.IMAP_USER_2).lower()
         kept = (config.IMAP_PASSWORD if box == 1 else config.IMAP_PASSWORD_2) if same_address or not password.strip() else ""
         if password.strip():
             problem = mailhosts.password_problem(user, server["host"], password)
             if problem:
-                return {"ok": False, "msg": problem}
+                return {"ok": False, "msg": problem, "field": "password"}
         effective = password.strip() or kept
         if not effective:
-            return {"ok": False, "msg": "Enter the password for that address."}
+            return {"ok": False, "msg": "Enter the password for that address.", "field": "password"}
         tried = email_client.try_login(user, effective, host=server["host"])
         if tried.get("ok") is False:
-            return {"ok": False, "msg": tried["msg"]}
+            return {"ok": False, "msg": tried["msg"], "field": tried.get("field", "")}
         if box == 1:
             config.set_imap(user, effective, host=host)        # '' forgets a server typed earlier: the address tells it now
         else:

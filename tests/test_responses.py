@@ -384,6 +384,7 @@ def test_trying_a_mailbox_tells_refused_from_unreachable(monkeypatch):
     box = Box(imaplib.IMAP4.error("[AUTHENTICATIONFAILED] Invalid credentials"))
     refused = real("me@example.com", "secretsecretsecr")
     assert refused["ok"] is False and "refused" in refused["msg"] and "secretsecretsecr" not in refused["msg"] and box.calls[-1] == "logout"
+    assert refused["field"] == "password"
     box = Box(OSError("timed out"))
     assert real("me@example.com", "abcdabcdabcdabcd")["ok"] is None
 
@@ -438,7 +439,7 @@ def test_a_mail_server_with_an_untrusted_certificate_gets_no_password(monkeypatc
     monkeypatch.setattr(config, "IMAP_PORT", listener.getsockname()[1])
     tried = _REAL_TRY_LOGIN("me@example.com", "abcdabcdabcdabcd", timeout=5, host="127.0.0.1")
     listener.close()
-    assert tried == {"ok": False, "msg": email_client.UNTRUSTED} and heard == [], "no LOGIN, no password, not saved"
+    assert tried == {"ok": False, "msg": email_client.UNTRUSTED, "field": "server"} and heard == [], "no LOGIN, no password, not saved"
 
 
 def test_every_mail_connection_checks_the_server_certificate(monkeypatch):

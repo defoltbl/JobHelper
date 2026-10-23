@@ -27,7 +27,8 @@ Dialog {
 
     property var info: ({})               // what the back end sends: values, right_choices, start, estimates, boxes, …
     property var myLetters: ({})
-    property string err: ""
+    Blame { id: aboutBlame }
+    property alias err: aboutBlame.text   // the red line under the window; aboutBlame.box is the box it is about
     property string payErr: ""
     property bool confirmClose: false
     property string loaded: ""            // what was there when the window opened, to know whether anything changed
@@ -93,25 +94,28 @@ Dialog {
         payModel.append({ role: role, amount: payAmount.value });
         payRole.text = ""; payAmount.value = 0;
     }
-    function problem() {                  // '' or what must be put right before saving, in the window's own words
-        if (payRole.text.trim() !== "") return "“" + payRole.text.trim().substring(0, 40) + "” is typed under “A different figure for” but not added. Press Add, or empty the box.";
+    // what must be put right before saving, in the window's own words, and the box it is about ("" when all is well).
+    // Only the one-line boxes are named; a fault in the notes, or in their size together, is the red line alone.
+    function problem() {
+        function fault(text, box) { return { text: text, box: box || "" }; }
+        if (payRole.text.trim() !== "") return fault("“" + payRole.text.trim().substring(0, 40) + "” is typed under “A different figure for” but not added. Press Add, or empty the box.");
         for (var i = 0; i < payModel.count; i++) {      // each line by the same rule as Add
             var line = bridge.payProblem(payModel.get(i).role.trim(), payModel.get(i).amount, payRoles(i));
-            if (line !== "") return "A different figure for: " + line;
+            if (line !== "") return fault("A different figure for: " + line);
         }
-        if (win.hasNonLatin(rightField.text) || win.hasNonLatin(startField.text))
-            return "Write the right to work and the start in English (Latin letters): they go into English letters and forms.";
-        if (notesSize > notesMax) return "The notes about your work are " + (notesSize - notesMax) + " characters too long together. Shorten some, then save.";
-        if (win.hasNonLatin(generalField.text)) return "Write the notes about your work in English (Latin letters): they are used for English interviews and forms.";
+        if (win.hasNonLatin(rightField.text) || win.hasNonLatin(startField.text))        // each box in other letters turns red
+            return fault("Write the right to work and the start in English (Latin letters): they go into English letters and forms.", "latin");
+        if (notesSize > notesMax) return fault("The notes about your work are " + (notesSize - notesMax) + " characters too long together. Shorten some, then save.");
+        if (win.hasNonLatin(generalField.text)) return fault("Write the notes about your work in English (Latin letters): they are used for English interviews and forms.");
         for (var j = 0; j < boxModel.count; j++) if (win.hasNonLatin(boxModel.get(j).notes))
-            return "Write the note on “" + boxModel.get(j).job + "” in English (Latin letters).";
-        return "";
+            return fault("Write the note on “" + boxModel.get(j).job + "” in English (Latin letters).");
+        return fault("");
     }
     function save() {
         aboutSink.forceActiveFocus();     // finish any field that is still being edited
         err = ""; confirmClose = false;
         var p = problem();
-        if (p !== "") { err = p; return; }
+        if (p.text !== "") { aboutBlame.say(p.text, p.box); return; }
         var saved = bridge.saveAboutYou(collect());
         if (!(saved && saved.ok)) { err = (saved && saved.msg) || "About you could not be saved."; return; }
         win.optsData = bridge.options();
@@ -127,9 +131,9 @@ Dialog {
     Item { id: aboutSink }
     contentItem: ColumnLayout {
         spacing: 0
-        RowLayout { Layout.fillWidth: true; Layout.margins: 16
+        DialogHeader {
             ColumnLayout { Layout.fillWidth: true; spacing: 2
-                Text { text: "About you"; color: theme.ink; font.pixelSize: 17; font.bold: true }
+                DialogTitle { text: "About you" }
                 Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                     text: "The only facts about you the app states besides your CV: in letters, form answers and interview preparation." } }
             CloseButton { Layout.alignment: Qt.AlignTop; onClicked: aboutDialog.tryClose() } }
@@ -220,9 +224,10 @@ Dialog {
                             TextField { id: rightField; objectName: "rightField"; Layout.fillWidth: true; implicitHeight: 30
                                 placeholderText: "e.g. EU citizen, no permit needed"; placeholderTextColor: theme.faint
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.options.about_right_to_work
-                                onTextEdited: aboutDialog.err = text.length >= maximumLength ? "“Right to work” takes up to " + maximumLength + " characters." : ""
+                                onTextEdited: aboutBlame.say(text.length >= maximumLength ? "“Right to work” takes up to " + maximumLength + " characters." : "", "right")
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
-                                    border.color: rightField.activeFocus ? theme.accent : theme.line } }
+                                    border.color: rightField.wrong ? theme.crit : (rightField.activeFocus ? theme.accent : theme.line) }
+                                readonly property bool wrong: aboutBlame.box === "right" || (aboutBlame.box === "latin" && win.hasNonLatin(text)) }
                         }
                         Sep {}
                         ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 10; Layout.bottomMargin: 10; spacing: 6
@@ -233,11 +238,12 @@ Dialog {
                                 placeholderText: "e.g. within two weeks"; placeholderTextColor: theme.faint
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.options.about_start
                                 onTextEdited: {
-                                    aboutDialog.err = text.length >= maximumLength ? "“You can start” takes up to " + maximumLength + " characters." : "";
+                                    aboutBlame.say(text.length >= maximumLength ? "“You can start” takes up to " + maximumLength + " characters." : "", "start");
                                     aboutDialog.start = bridge.startPreview(text);
                                 }
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
-                                    border.color: (aboutDialog.start.ok === false) ? theme.crit : (startField.activeFocus ? theme.accent : theme.line) } }
+                                    border.color: aboutDialog.start.ok === false || startField.wrong ? theme.crit : (startField.activeFocus ? theme.accent : theme.line) }
+                                readonly property bool wrong: aboutBlame.box === "start" || (aboutBlame.box === "latin" && win.hasNonLatin(text)) }
                             Text { objectName: "startPreview"; visible: (aboutDialog.start.text || "") !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
                                 font.pixelSize: 11; font.bold: aboutDialog.start.ok === false
                                 color: aboutDialog.start.ok === false ? theme.crit : theme.good; text: aboutDialog.start.text || "" }
@@ -308,7 +314,7 @@ Dialog {
         }
 
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
-        RowLayout { Layout.fillWidth: true; Layout.margins: 14
+        DialogFooter {
             Text { objectName: "aboutErr"; Layout.fillWidth: true; visible: aboutDialog.err !== ""; wrapMode: Text.WordWrap
                 color: theme.crit; font.pixelSize: 12; font.bold: true; text: aboutDialog.err }
             Item { Layout.fillWidth: aboutDialog.err === "" }
