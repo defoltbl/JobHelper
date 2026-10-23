@@ -27,6 +27,7 @@ BODY_PARAGRAPHS = 5
 MIN_WORDS, MAX_WORDS = 320, 410        # instruction: about 330-400 words
 MAX_CHARS = 2550                       # keeps the letter on one page (example: 2240)
 MAX_HINT = 300                         # what you ask to change in one paragraph
+POSTING_SHOWN = 5000                   # how much of a posting the letter prompt shows (and its figures check reads)
 
 # Check 3 of the instruction (a gap admitted), the forward-looking wish (rule 1, option 2) and wording that claims
 # hands-on experience: one set of rules for every text in the person's voice (claims.py).
@@ -141,6 +142,21 @@ def _issues(paragraph: str, check: ClaimCheck) -> list[tuple[str, str, str]]:
         if term:
             out.append(("claim", term, s))
     return out
+
+
+def figure_sources(job: dict[str, Any], cv_text: str, own=(), references=()) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """(sources, references) for `claims.unbacked_figures`. Your own: the CV, your notes and About you facts, plus what
+    you typed (`own`). References: the posting (as much as the letter prompt shows), the job's title, company and location
+    ("3M", "Praha 4"), plus `references` – they may be repeated, never claimed as your amount ("5+ years")."""
+    return ((cv_text, config.experience_notes(), config.facts_block(cv_text), *own),
+            ((job.get("description") or "")[:POSTING_SHOWN], job.get("title") or "", job.get("company") or "", job.get("location") or "",
+             *references))
+
+
+def figure_problems(figures: list[str], what: str = "The letter",
+                    advice: str = "Use only the figures the CV or the notes give.") -> list[str]:
+    """What is sent back to Claude for each figure no source gives."""
+    return [f"{what} states the figure {f}, which none of the candidate's sources gives. {advice}" for f in figures]
 
 
 def fits_one_page(paragraphs: list[str]) -> bool:
@@ -328,6 +344,8 @@ def rewrite_paragraph(job: dict[str, Any], cv_text: str, paragraphs: list[str], 
             hint=hint_line, feedback=feedback), system=SYSTEM, tag="agent3_letters")
         text = clean(str((data or {}).get("paragraph", ""))).strip() if isinstance(data, dict) else ""
         problems = paragraph_problems(text, unverified, first_name) + _rewrite_length(text, most, paragraphs, index)
+        figures = claims.unbacked_figures(text, *figure_sources(job, cv_text, own=(*paragraphs, hint)), brackets_ok=False)
+        problems = figure_problems(figures, "It") + problems           # your letter and your hint are yours: their figures count
         if not problems:
             return text
         feedback = claims.rejected(problems)
@@ -433,7 +451,7 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
     adapted = _adapted_cv_text(job)
     adapted_block = (f"\nPROFILE and KEY SKILLS of the CV adapted for this same application "
                      f"(stay consistent with it):\n---\n{adapted}\n---\n") if adapted else ""
-    description = (job.get("description") or "").strip()[:5000] or "(No description was available.)"
+    description = (job.get("description") or "").strip()[:POSTING_SHOWN] or "(No description was available.)"
     backed = cv_text + "\n" + config.experience_notes()          # everything the person wrote about their own work
 
     title_line, paragraphs, role_short, feedback = "", [], "", ""
@@ -453,6 +471,7 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
         problems += [f"The letter presents '{phrase}' as the candidate's own experience, but those are the posting's words: nothing in the "
                      "master CV speaks of it. Say what the candidate really did, and name this only as part of the role or as something "
                      "the candidate wants to work with." for phrase in borrowed_claims(paragraphs, description, backed)]
+        problems += figure_problems(claims.unbacked_figures("\n".join(paragraphs), *figure_sources(job, cv_text), brackets_ok=False))
         if not problems:
             break
         feedback = claims.rejected(problems, "draft")
@@ -471,6 +490,11 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
         job["letter_check"] = left[:8]
     else:
         job.pop("letter_check", None)
+    figures = claims.unbacked_figures("\n".join(paragraphs), *figure_sources(job, cv_text), brackets_ok=False)   # the final text
+    if figures:
+        job["letter_figures"] = figures[:8]
+    else:
+        job.pop("letter_figures", None)
     # The line under the name says who writes: your own title, as your CV has it. Only a CV without such a line gets the role.
     title_line = own_title(cv_text) or title_line or re.sub(r"\s*\(.*?\)", "", job["title"]).strip()
 

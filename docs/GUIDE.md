@@ -812,6 +812,10 @@ can still be a fair word for work that you did. So you decide. Keep the term onl
 true. If it is not true, edit the Word file. You can also add what you really did under **More
 about your work** in **About you**.
 
+The line **Check the figures in your cover letter** names a number, for example a percentage.
+Your CV and your own notes do not give that number. Keep the figure only if it is true. If it is not true, select
+**Edit letter** and change the sentence.
+
 ### The cover letter
 
 The letter is written to the company, about this role, from the facts in your CV.
@@ -891,6 +895,7 @@ Figure 7.3 shows answers for one job's form.
 The answers come from your CV, the posting, and the facts in **About you**. Some
 answers need a fact that the app does not know, such as a salary figure, a date or a
 reference. The app then puts the missing part in square brackets and adds a **Check** note.
+A **Check** note also names a figure, such as "40%", that your CV and your details do not give.
 The answers stay with the job (Table 7.2).
 
 *Table 7.2 – The limits of one draft of form answers*

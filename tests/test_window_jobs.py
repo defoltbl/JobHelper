@@ -180,6 +180,13 @@ def test_application_only_cards_are_hidden_for_a_new_job_and_nothing_overflows(u
     assert footer.property("width") <= dialog_width                              # every button on, still inside the window
     assert ui.find("detailDocs").property("height") > 40                         # the document buttons wrapped to a second line
     assert ui.js("detailFlick.width") <= dialog_width
+    assert ui.find("letterFigures").property("visible") is False
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_figures=["37"]), render=False)
+    ui.js("detailDialog.refresh()")
+    figures = ui.find("letterFigures")
+    assert figures.property("visible") is True and "37" in figures.property("text")                # a figure nobody gave: named
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_figures=[]), render=False)
+    ui.js("detailDialog.refresh()")
     planner.save_company_notes("Acme", {"contact": "Jana"})                      # notes kept from an earlier application
     ui.js("detailDialog.refresh()")
     assert ui.find("notesCard").property("visible") is True and ui.find("eventCard").property("visible") is False

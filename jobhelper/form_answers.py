@@ -137,6 +137,17 @@ def _unbacked_check(answer: str, unverified: list[str]) -> str:
     return f"Mentions {term} as experience, which is not in your CV." if term else ""
 
 
+def _invented(answer: str, known: tuple[tuple[str, ...], tuple[str, ...]], *references: str) -> list[str]:
+    """The figures an answer states that its sources do not give. The question (and an earlier answer) may be repeated
+    as a reference ("situation 3"), never as an amount: "5+ years?" is asked, not shown."""
+    sources, quoted = known
+    return claims.unbacked_figures(answer, sources, (*quoted, *references))
+
+
+def _figures_check(figures: list[str]) -> str:
+    return f"States {', '.join(figures)}, which your CV and your details do not give. Check it." if figures else ""
+
+
 def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str = "") -> list[dict[str, str]]:
     """[{question, answer, check}] for the given questions. `check` is '' or what you must look at.
     Raises ValueError if there is nothing to answer or the reply is unusable."""
@@ -147,6 +158,7 @@ def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str
     unverified = cover_letter.unverified_terms(cv_text + "\n" + notes)
     first_name = cover_letter.candidate_first_name(cv_text)
     numbered = "\n".join(f"{n}. {q}" for n, q in enumerate(questions, 1))
+    known = cover_letter.figure_sources(job, cv_text, own=(notes, _salary_line(job)))
     feedback, items = "", []
     for _attempt in range(2):
         data = llm.ask_json(PROMPT.format(
@@ -161,16 +173,21 @@ def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str
         bad = [(i["question"], interview_prep.unbacked(i["answer"], unverified)) for i in items]
         bad = [(q, term) for q, term in bad if term]
         third = [i["question"] for i in items if claims.names_candidate(i["answer"], first_name)]
-        if not bad and not third:
+        found = {n: _invented(i["answer"], known, i["question"]) for n, i in enumerate(items)}
+        figures = [(items[n]["question"], f) for n, fs in found.items() for f in fs]
+        if not bad and not third and not figures:
             break
         feedback = claims.rejected(
             [f"The answer to \"{q[:70]}\" presents '{term}' as experience, but it is not in the CV. Say so plainly instead."
              for q, term in bad] +
-            [f"The answer to \"{q[:70]}\" talks about the candidate by name. Write it in the first person." for q in third])
-    for item in items:
+            [f"The answer to \"{q[:70]}\" talks about the candidate by name. Write it in the first person." for q in third] +
+            [p for q, f in figures for p in cover_letter.figure_problems(
+                [f], f"The answer to \"{q[:70]}\"", "Leave it out, or put [square brackets] around what the candidate must fill in.")])
+    for n, item in enumerate(items):
         unbacked = _unbacked_check(item["answer"], unverified)
-        if unbacked:                                        # still there after the retry: shown, never hidden
-            item["check"] = unbacked
+        invented = _figures_check(found[n])
+        if unbacked or invented:                            # still there after the retry: shown, never hidden, added to what was asked
+            item["check"] = " ".join(x for x in (unbacked, invented, item["check"]) if x)
         elif not item["answer"]:
             item["check"] = "No answer was drafted. Write this one yourself."
         elif unfilled(item["answer"]) and not item["check"]:
@@ -212,7 +229,12 @@ def rewrite(job: dict[str, Any], cv_text: str, question: str, answer: str, how: 
     new = cover_letter.clean(str((data or {}).get("answer", "") if isinstance(data, dict) else "")).strip()[:MAX_ANSWER]
     if not new:
         raise ValueError("The model returned no answer.")
-    return {"answer": new, "check": _unbacked_check(new, cover_letter.unverified_terms(cv_text + "\n" + (notes or "")))}
+    known = cover_letter.figure_sources(job, cv_text, own=(notes, _salary_line(job), str(how)))
+    flagged_before = set(_invented(str(answer), known, str(question)))        # an earlier answer backs only what it may
+    alone, with_old = _invented(new, known, str(question)), set(_invented(new, known, str(question), str(answer)))
+    figures = [f for f in alone if f in flagged_before or f in with_old]
+    return {"answer": new, "check": " ".join(x for x in (_unbacked_check(new, cover_letter.unverified_terms(cv_text + "\n" + (notes or ""))),
+                                                        _figures_check(figures)) if x)}
 
 
 def _clean(data: Any, questions: list[str]) -> list[dict[str, str]]:

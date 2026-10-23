@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- The **cover letter** and the **answers for a form** now check each figure, such as "40% faster". Your CV, your notes or your own words must give it. Claude is asked once to remove a figure that has no source. If it stays, the job window or the answer says which figure to check.
 - **Rewrite this paragraph** in the **Cover letter** window now keeps a paragraph near its length and the letter on one page. A rewrite that is too long is asked for again once, then refused with the reason.
 - A call to Claude that gets no answer now stops after 5 minutes with a clear message. Before, one stuck answer could hold a search or a scan for ever.
 - **Security:** the settings file beside your data is now private from the moment the app writes it. Before, other users of the same Mac could read it for a moment after each change.

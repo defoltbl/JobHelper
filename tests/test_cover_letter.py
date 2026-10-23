@@ -188,3 +188,21 @@ def test_a_letter_that_borrows_is_sent_back_and_what_is_left_is_noted(isolate_da
     job = store.new_job(id="j2", title="Administrator", company="Acme", description=posting)
     cover_letter.write(job, _master_text(), MASTER)
     assert job["letter_check"] == ["zebra migrations"]
+
+
+def test_a_letter_figure_nobody_gave_is_sent_back_and_what_is_left_is_noted(isolate_data, monkeypatch):
+    title, body, _ = _example()
+    monkeypatch.setattr(config, "LETTER_TEMPLATE", TEMPLATE)
+    invented = list(body)
+    invented[2] = body[2].rstrip() + " My work saved the team 37 hours a week."
+    prompts, answers = [], [{"title_line": title, "paragraphs": invented, "role_short": "Admin"},
+                            {"title_line": title, "paragraphs": body, "role_short": "Admin"}]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or answers[min(len(prompts) - 1, 1)])
+    job = store.new_job(id="f1", title="Administrator", company="Acme", description="We run Linux servers.")
+    cover_letter.write(job, _master_text(), MASTER)
+    assert len(prompts) == 2 and "The letter states the figure 37" in prompts[1] and "letter_figures" not in job
+    prompts.clear()
+    answers[1] = answers[0]                                   # the model insists: the person is told which figure to check
+    job = store.new_job(id="f2", title="Administrator", company="Acme", description="We run Linux servers.")
+    cover_letter.write(job, _master_text(), MASTER)
+    assert job["letter_figures"] == ["37"]

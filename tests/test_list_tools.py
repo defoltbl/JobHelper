@@ -254,3 +254,28 @@ def test_a_rewrite_keeps_roughly_its_length_and_the_letter_on_one_page(api, monk
     assert "no longer fits on one page" in api.rewrite_paragraph("lead", over, 0)["msg"]
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"paragraph": "I built data pipelines in Python."})
     assert api.rewrite_paragraph("lead", over, 0)["ok"] is True
+
+
+def test_saving_the_letter_names_only_the_figures_it_still_has(api):
+    store.save_jobs([dict(_lead_with_docs(), letter_figures=["37"])])
+    invented = list(PARAS)
+    invented[1] = PARAS[1] + " It saved 37 hours a week."
+    assert api.save_letter("lead", invented)["ok"] is True
+    assert store.find(store.load_jobs(), "lead")["letter_figures"] == ["37"]
+    assert api.save_letter("lead", PARAS)["ok"] is True                                   # the sentence is gone: so is the line
+    assert store.find(store.load_jobs(), "lead")["letter_figures"] == []
+
+
+def test_a_rewrite_may_use_your_figures_but_not_invent_one(api, monkeypatch):
+    store.save_jobs([_lead_with_docs()])
+    calls = []
+    replies = [{"paragraph": "I built pipelines that saved 37 hours a week."}, {"paragraph": "I built pipelines my team used daily."}]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: calls.append(prompt) or replies[len(calls) - 1])
+    assert api.rewrite_paragraph("lead", PARAS, 2)["paragraph"] == "I built pipelines my team used daily."
+    assert "It states the figure 37" in calls[1]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"paragraph": "I led a team of 8 people on these pipelines."})
+    assert api.rewrite_paragraph("lead", PARAS, 2, "say that I led a team of 8 people")["ok"] is True       # your hint
+    mine = list(PARAS)
+    mine[0] = PARAS[0] + " I worked there for 4 years."
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"paragraph": "In those 4 years I built the pipelines."})
+    assert api.rewrite_paragraph("lead", mine, 2)["ok"] is True                                          # your own letter
