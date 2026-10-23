@@ -47,8 +47,8 @@ If stage is not 'rejection', set rejection_reason='' and rejection_category='no_
 
 
 def email_text(sender: str, subject: str, body: str) -> str:
-    """One email for the prompt, marked as someone else's text (its first 3000 characters: enough to classify it)."""
-    return llm.untrusted("email", f"From: {sender}\nSubject: {subject}\nBody:\n{str(body)[:3000]}")
+    """One email for the prompt, marked as someone else's text (the start of each part: enough to classify it)."""
+    return llm.untrusted("email", f"From: {str(sender)[:HEADER_SHOWN]}\nSubject: {str(subject)[:HEADER_SHOWN]}\nBody:\n{str(body)[:BODY_SHOWN]}")
 
 
 def _ask_waiting(on_limit, call):
@@ -66,6 +66,9 @@ STAGES = ("rejection", "interview", "assessment", "offer", "acknowledged", "othe
 # A date to remember that an email put on the job (not you): a newer email may move it.
 EVENT_FROM_EMAIL = "email"
 _TEXTS = ("company", "role", "rejection_reason", "rejection_category", "sentiment", "next_step", "summary", "when")
+_MOST = {"company": 120, "role": 120, "rejection_reason": 300, "next_step": 300, "summary": 300}   # Claude's words, kept short
+_MOST_OTHER = 200                         # any other text field Claude fills in
+HEADER_SHOWN, BODY_SHOWN = 300, 3000      # how much of a sender, a subject and a body Claude is shown
 
 
 def tidy(result: dict[str, Any]) -> dict[str, Any]:
@@ -74,7 +77,7 @@ def tidy(result: dict[str, Any]) -> dict[str, Any]:
     of STAGES). A reply that was read must be filed, not end the scan. Mutates and returns `result`."""
     for key in _TEXTS:
         value = result.get(key)
-        result[key] = " ".join(str(value).split()) if isinstance(value, (str, int, float)) and not isinstance(value, bool) else ""
+        result[key] = " ".join(str(value).split())[:_MOST.get(key, _MOST_OTHER)] if isinstance(value, (str, int, float)) and not isinstance(value, bool) else ""
     said = str(result.get("stage") or "").lower()
     result["stage"] = next((name for name in STAGES if re.search(rf"\b{name}\b", said)), "other")
     if result["rejection_category"] not in db.REJECTION_CATEGORIES:
@@ -374,8 +377,8 @@ def process_inbox(jobs: list[dict[str, Any]], lookback_days: int | None = None,
                 system=SYSTEM,
                 tag="agent5_responses",
             ))
-        except llm.LimitReached:
-            raise                      # not this email's fault: pause or end the scan, it stays unread
+        except llm.STOPS_A_RUN:
+            raise                      # not this email's fault: pause or end the scan, it stays unread (a stuck Claude would cost 5 minutes per email)
         except Exception as e:  # noqa: BLE001 - one answer that cannot be read: this email is asked again next scan
             from . import trouble
             trouble.note("reading one email with Claude", RuntimeError(type(e).__name__))

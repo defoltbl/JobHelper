@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import os
 import re
+import tempfile
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -157,21 +159,34 @@ def ensure_dirs() -> None:
         d.mkdir(parents=True, exist_ok=True)
 
 
+_ENV_WRITE = threading.Lock()             # saving a mailbox runs in a worker thread: one change of the file at a time
+
+
 def _write_private(path: Path, text: str) -> None:
     """Write a file only this user can read, from its first byte: a chmod after writing left a moment in which any
-    user of the Mac could read it. Written beside the file and swapped in, so a half-written file is never left."""
-    part = path.with_name(path.name + ".part")
-    fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    os.fchmod(fd, 0o600)                       # a leftover part file may have had wider rights
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(text)
-    os.replace(part, path)
+    user of the Mac could read it. Written to a new file of its own beside it, on disk before it is swapped in, so a
+    half-written file is never left; the part file is removed when anything fails."""
+    fd, part = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".part")    # 0600, a name no other write has
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(part, path)
+    except BaseException:
+        Path(part).unlink(missing_ok=True)
+        raise
 
 
 def update_env(values: dict) -> None:
     """Create/update keys in the project .env (preserving other lines) and
     reflect them in os.environ immediately. Lets the app manage its own
     configuration instead of the user hand-editing .env."""
+    with _ENV_WRITE:
+        _update_env(values)
+
+
+def _update_env(values: dict) -> None:
     lines = ENV_PATH.read_text(encoding="utf-8").splitlines() if ENV_PATH.exists() else []
     keys = set(values)
     out, seen = [], set()
@@ -192,7 +207,11 @@ def update_env(values: dict) -> None:
 
 def remove_env(keys) -> None:
     """Drop keys from the project .env (and from this process's environment)."""
-    keys = set(keys)
+    with _ENV_WRITE:
+        _remove_env(set(keys))
+
+
+def _remove_env(keys: set) -> None:
     if ENV_PATH.exists():
         lines = ENV_PATH.read_text(encoding="utf-8").splitlines()
         kept = [ln for ln in lines if not ("=" in ln and ln.split("=", 1)[0].strip() in keys)]

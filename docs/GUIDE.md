@@ -334,7 +334,7 @@ Table 2.3 lists problems while setting up, and what to do.
 | "The app does not know this provider" | The address is at a company or a small provider | Enter its IMAP server in the third field |
 | "Microsoft no longer lets a program read…" | Outlook.com and Hotmail cannot be read with a password | Forward your job mail to another mailbox and connect that one |
 | "Saved. The mail server could not be reached" | No internet connection at that moment | Nothing. The first email scan shows whether it works |
-| "Couldn't connect safely: the mail server's certificate is not trusted" | The server name is wrong, or a network (for example public Wi-Fi) shows a false server. The app did not send your password | Check the server name. Then try again on a network that you trust |
+| "Couldn't connect safely: the mail server's certificate is not trusted" | The server name is wrong, or your company's server uses its own certificate. A network (for example public Wi-Fi) can also show a false server. The app did not send your password | Check the server name. Then try again on a network that you trust |
 | **Master CV** is red | No CV was chosen, or the file was moved | Select the **Change…** button and pick the file |
 
 ### Next steps
@@ -2315,6 +2315,7 @@ Table 20.2 lists problems with searching and scoring.
 | A score looks wrong | The posting was read only in part, or your Options changed | Read **Why this score**; see section 8 |
 | The search paused | Claude's limit ran out | The window says when it resets; select **Resume** then (section 18) |
 | The usage card says **0% left** | Claude refused a call for a used-up limit | Wait for the time shown, then select **refresh** |
+| "Claude did not answer within 5 minutes" | Claude or the connection stopped answering. The search ended, and what was done is kept. If the CV of a job was written before the stop, the app keeps it | Try again later. If a job still has no documents after two stops, open it and select **Write CV and letter** (or **Write what is missing**) |
 
 ### Replies
 
@@ -2327,6 +2328,7 @@ Table 20.3 lists problems with replies.
 | A rejection is missing | It did not arrive in a scanned mailbox or folder | Set the status by hand, or paste the reply (section 11) |
 | A scan finds "0 new" | Nothing new in the period | Use **Look further back once** in Options |
 | A scan takes long the first time | It reads a long period once | Later scans skip what was already read |
+| "Claude did not answer within 5 minutes" | Claude or the connection stopped answering. The scan ended. The replies that the app read before the stop are kept | Try again later. The next scan reads the other emails |
 
 ### Everything else
 

@@ -2,6 +2,7 @@
 import json
 import threading
 import time
+from pathlib import Path
 from datetime import datetime
 
 import pytest
@@ -324,6 +325,28 @@ def test_command_line_run_stops_cleanly_and_saves(isolate_data, monkeypatch, cap
     assert [j["match_score"] for j in store.load_jobs()] == [10, None]
 
 
+
+def test_command_line_run_saves_what_it_scored_when_claude_stops_answering(isolate_data, monkeypatch, capsys):
+    monkeypatch.setattr(agent1_cv, "load_profile", lambda current_only=False: {"_cv_file": "cv", "seniority": "junior"})
+    monkeypatch.setattr(agent1_cv, "find_cv", lambda: None)
+    monkeypatch.setattr(letters, "import_letters", lambda jobs: {"scanned": 0, "linked": 0, "seeded": 0})
+    monkeypatch.setattr(agent4_tracker, "render_all", lambda jobs: None)
+    config.ensure_dirs()
+    store.save_jobs(_jobs(2))
+    calls = []
+
+    def ask_json(*a, **k):
+        calls.append(1)
+        if len(calls) == 2:
+            raise llm.CallTimedOut()
+        return {"match_score": 10, "match_reason": "x"}
+
+    monkeypatch.setattr(llm, "ask_json", ask_json)
+    monkeypatch.setattr("sys.argv", ["run.py", "--reuse-profile", "--skip-search"])
+    assert run.main() == 1
+    assert "did not answer" in capsys.readouterr().out
+    assert [j["match_score"] for j in store.load_jobs()] == [10, None], "the first score is kept, not lost with a traceback"
+
 # ── the app: pause, wait, resume ────────────────────────────────────────────
 @pytest.fixture
 def bridge(qapp, isolate_data, monkeypatch):
@@ -497,3 +520,55 @@ def test_a_claude_call_that_never_answers_is_stopped(monkeypatch):
         llm.ask("hello", force=True)
     assert time.monotonic() - started < 5 and recorded == []
     assert "did not answer" in str(stopped.value) and isinstance(stopped.value, RuntimeError)   # the runs show its words
+
+
+def test_a_stuck_claude_ends_the_scan_at_the_first_email(isolate_data, monkeypatch):
+    """Each email used to wait its own 5 minutes: 40 emails held the scan for over three hours."""
+    mails = [{"msg_id": f"<m{n}@acme>", "date": "Mon, 01 Sep 2026", "sender": "hr@acme.com", "subject": "Your application at Acme",
+              "body": "Thank you."} for n in range(3)]
+    monkeypatch.setattr(email_client, "fetch_recent", lambda *a, **k: email_client.Fetched(mails))
+    asked = []
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: asked.append(1) or (_ for _ in ()).throw(llm.CallTimedOut()))
+    with pytest.raises(llm.CallTimedOut):
+        agent5_responses.process_inbox([store.new_job(id="a", company="Acme", title="Dev", status="waiting")])
+    assert asked == [1]
+
+
+def test_a_stuck_claude_ends_the_cv_and_letter_steps_too(monkeypatch):
+    """The CV and letter steps caught it as one job's failure and went on: 5 minutes per CV and per letter."""
+    monkeypatch.setattr(agent3_letters, "_make_tailored_cv", lambda *a, **k: (_ for _ in ()).throw(llm.CallTimedOut()))
+    monkeypatch.setattr(agent3_letters, "_make_letter", lambda *a, **k: pytest.fail("no letter after a stuck CV step"))
+    with pytest.raises(llm.CallTimedOut):
+        agent3_letters.generate_for(_jobs(1)[0], cv_text="CV", cv_path=None)
+
+
+def test_the_env_part_files_are_never_committed():
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    done = subprocess.run(["git", "-C", str(root), "check-ignore", "-q", ".env.abc123.part"])
+    assert done.returncode == 0, "a part file can hold the mail password"
+
+
+def test_a_letter_that_times_out_after_its_cv_keeps_the_cv_and_ends_the_run(monkeypatch):
+    monkeypatch.setattr(agent3_letters, "_make_tailored_cv", lambda *a, **k: "cv_made.docx")
+    monkeypatch.setattr(agent3_letters, "_make_letter", lambda *a, **k: (_ for _ in ()).throw(llm.CallTimedOut()))
+    job = _jobs(1)[0]
+    with pytest.raises(llm.CallTimedOut):
+        agent3_letters.generate_for(job, cv_text="CV", cv_path=None)
+    assert job["tailored_cv_file"] == "cv_made.docx"
+
+
+@pytest.mark.parametrize("step", ["_make_tailored_cv", "_make_letter"])
+def test_a_stuck_claude_in_a_run_uses_one_of_the_jobs_tries(isolate_data, monkeypatch, step):
+    """A job whose call hangs every time is not tried for ever: each timeout uses one of its two tries."""
+    jobs = _jobs(1)
+    jobs[0].update(match_score=90, description="We build planning tools in Python and SQL. " * 20)
+    monkeypatch.setattr(agent3_letters, "_make_tailored_cv", lambda *a, **k: "cv.docx")
+    monkeypatch.setattr(agent3_letters, step, lambda *a, **k: (_ for _ in ()).throw(llm.CallTimedOut()))
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": 90, "match_reason": "x"})
+    for tries in (1, 2):
+        with pytest.raises(llm.CallTimedOut):
+            agent3_letters.process(jobs, {"seniority": "junior"}, threshold=60, only_new=False, cv_text="CV")
+        assert jobs[0]["doc_attempts"] == tries
+    agent3_letters.process(jobs, {"seniority": "junior"}, threshold=60, cv_text="CV")       # a normal run skips a spent job
+    assert jobs[0]["doc_attempts"] == 2 and not jobs[0].get("cover_letter_file")

@@ -810,6 +810,25 @@ def test_documents_are_written_for_one_job_on_request(isolate_data, monkeypatch)
     store.save_jobs(store.load_jobs() + [store.new_job(id="x", title="Dev", company="Fox", status="found", description=text)])
     assert "master CV could not be read" in api.write_documents("x")["msg"]
     assert len(calls) == 3
+    # Claude stops answering after the CV was written: the CV is kept on the job, not paid for twice
+    from jobhelper import llm
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython, SQL.")
+    store.save_jobs(store.load_jobs() + [store.new_job(id="stuck", title="Python Developer", company="Fern", status="found",
+                                                       match_score=40, description=text)])
+    monkeypatch.setattr(agent3_letters, "_make_letter", lambda *a, **k: (_ for _ in ()).throw(llm.CallTimedOut()))
+    result = api.write_documents("stuck")
+    stuck = store.find(store.load_jobs(), "stuck")
+    assert result["ok"] is True and result["cv"] is True and result["letter"] is False      # the window refreshes and shows the CV
+    assert result["msg"].startswith("Written: the CV. Not written: the letter.") and "did not answer" in result["msg"]
+    assert stuck["tailored_cv_file"] == "CV_stuck.docx" and stuck["status"] == "letter_ready"
+    # it stops at the CV: nothing was made, so nothing is said to be written and the job stays as it was
+    monkeypatch.setattr(agent3_letters, "_make_tailored_cv", lambda *a, **k: (_ for _ in ()).throw(llm.CallTimedOut()))
+    store.save_jobs(store.load_jobs() + [store.new_job(id="early", title="Python Developer", company="Fern", status="found",
+                                                       match_score=40, description=text)])
+    before = store.find(store.load_jobs(), "early")
+    result = api.write_documents("early")
+    assert result["ok"] is False and "did not answer" in result["msg"] and store.find(store.load_jobs(), "early") == before
+
 
 
 def test_a_failure_while_writing_documents_is_said_and_changes_nothing(isolate_data, monkeypatch):

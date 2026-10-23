@@ -391,7 +391,7 @@ Table 6.2 names the module of each agent and what it may ask Claude.
 | Scout | `agent2_search` | Searches the boards, filters, keeps every dropped posting with its reason. `SearchFilters` holds the rules of one search in their order | Never |
 | Scribe | `agent3_letters` | Scores postings five per call; writes the adapted CV and the letter. `Scorer` is the one way of scoring, for a search and for scoring again | Yes |
 | Tracker | `agent4_tracker` | Writes the Excel tables | Never |
-| Postman | `agent5_responses` | Reads replies and files each to its application. `ScanStats` counts what one scan found and says it at the end. Each email goes to Claude as data (`llm.untrusted`), so words in it cannot give Claude orders | For new replies only |
+| Postman | `agent5_responses` | Reads replies and files each to its application. `ScanStats` counts what one scan found and says it at the end. Each email goes to Claude as data (`llm.untrusted`), so words in it cannot pass for the app's own instructions | For new replies only |
 
 ### What a search does with a posting
 

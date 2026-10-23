@@ -144,6 +144,39 @@ def test_a_mailbox_that_refuses_or_cannot_be_reached_is_one_sentence_in_the_log(
             assert words in out and "Traceback" not in out and "hunter2" not in out, (command, out)
 
 
+
+def test_a_scan_stopped_by_a_stuck_claude_keeps_what_was_read(isolate_data, monkeypatch, capsys):
+    """The scan ends at a timeout now; it must save first, as at the limit, or a reply already marked read is lost."""
+    from jobhelper import agent5_responses, llm
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="waiting", date_applied="2026-09-01")])
+
+    def read(jobs, lookback_days=None, **kw):
+        jobs[0]["status"] = "interview"                     # one reply was read before Claude stopped answering
+        raise llm.CallTimedOut()
+    monkeypatch.setattr(agent5_responses, "process_inbox", read)
+    assert _run(monkeypatch, "responses", "--scan") == 1
+    assert "What was read is saved" in capsys.readouterr().out and store.find(store.load_jobs(), "a")["status"] == "interview"
+
+
+def test_retailor_keeps_the_letters_made_before_claude_stopped_answering(isolate_data, monkeypatch, capsys):
+    from jobhelper import agent1_cv, agent3_letters, llm
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id=i, title="Dev", company=f"Co{i}", status="letter_ready", match_score=90) for i in ("a", "b")])
+    monkeypatch.setattr(agent1_cv, "find_cv", lambda: None)
+    done = []
+
+    def write(job, **kw):
+        if done:
+            raise llm.CallTimedOut()
+        job["cover_letter_file"] = "L_a.docx"
+        done.append(job["id"])
+        return {"letter": True, "cv": False}
+    monkeypatch.setattr(agent3_letters, "generate_for", write)
+    _run(monkeypatch, "retailor")
+    assert store.find(store.load_jobs(), "a")["cover_letter_file"] == "L_a.docx", "the first letter's file name is saved"
+    assert "did not answer" in capsys.readouterr().out
+
 def test_the_mail_server_gets_a_time_limit_and_an_empty_answer_is_no_mail(monkeypatch):
     from jobhelper import email_client
     made = {}
