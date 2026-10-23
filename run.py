@@ -143,6 +143,11 @@ def main() -> int:
     print(f"\n③ Agent 3: scoring jobs, writing cover letters & tailoring CVs (threshold {args.threshold}) …")
     try:
         stats = agent3_letters.process(jobs, profile, threshold=args.threshold, cv_text=cv_text, cv_path=cv_path)
+    except llm.CallTimedOut as e:
+        store.save_jobs(jobs)                    # Claude stopped answering: the scores and letters made so far are kept
+        agent4_tracker.render_all(jobs)
+        print(f"\n✗ {e}\n   What was finished is saved.")
+        return 1
     except llm.LimitReached as e:
         store.save_jobs(jobs)
         agent4_tracker.render_all(jobs)

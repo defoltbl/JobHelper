@@ -131,7 +131,7 @@ _HYPOTHETICAL = re.compile(
 def rejection_wording(text: str) -> str:
     """A rejection category if the text clearly says the application was turned
     down, else ''. Used as a safety net next to the model's own reading."""
-    flat = re.sub(r"\s+", " ", text or "")
+    flat = re.sub(r"\s+", " ", (text or "").replace("\u2019", "'").replace("\u2018", "'"))   # "haven’t" as "haven't"
     for pattern, category in _REJECTION:
         for m in re.finditer(pattern, flat, re.IGNORECASE):
             start = max(flat.rfind(". ", 0, m.start()), flat.rfind("! ", 0, m.start()), flat.rfind("? ", 0, m.start())) + 1
@@ -154,7 +154,8 @@ SERVER_TIMEOUT = 60.0       # seconds a mail server gets for one answer
 
 
 UNTRUSTED = ("Couldn't connect safely: the mail server's certificate is not trusted, so the app did not send your "
-             "password. Check the server name, or try again on another network.")
+             "password. The certificate may come from no known authority, have expired, or not match the server name you typed. "
+             "Check the server name, or try again on another network.")
 
 
 def tls_context() -> ssl.SSLContext:

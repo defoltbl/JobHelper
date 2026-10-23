@@ -387,8 +387,8 @@ class Scorer:
             try:
                 data = self.ask(lambda: llm.ask_json(SCORE_BATCH_PROMPT.format(profile=self.blurb, postings=postings, rules=self.rules, n=len(chunk)),
                                                      system=SYSTEM, tag="agent3_letters"))
-            except llm.LimitReached:
-                raise
+            except llm.STOPS_A_RUN:
+                raise                                   # a stuck Claude ends the run: 5 minutes per posting would hold it for hours
             except Exception as e:  # noqa: BLE001 - the ones it missed are asked alone below
                 print(f"  ! Scoring {len(chunk)} postings together failed ({e}); asking one by one")
                 data = None
@@ -405,7 +405,7 @@ class Scorer:
                 continue
             try:
                 result = self.ask(lambda: llm.ask_json(SCORE_PROMPT.format(rules=self.rules, **self.fields(job)), system=SYSTEM, tag="agent3_letters"))
-            except llm.LimitReached:
+            except llm.STOPS_A_RUN:
                 raise
             except Exception as e:  # noqa: BLE001 - one posting that cannot be scored must not stop the others
                 print(f"  ! Could not score '{job.get('title', '')}' @ {job.get('company', '')}: {e}")
@@ -508,7 +508,7 @@ def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
             if name:
                 job["tailored_cv_file"] = name
                 done["cv"] = True
-        except (llm.LimitReached, llm.PaidApiRefused):
+        except (*llm.STOPS_A_RUN, llm.PaidApiRefused):
             raise                                       # the reason nothing can be written now: the caller says it
         except Exception as e:
             print(f"  ! tailored CV failed for {job['company']}: {e}")
@@ -520,10 +520,14 @@ def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
             if name:
                 job["cover_letter_file"] = name
                 done["letter"] = True
-        except (llm.LimitReached, llm.PaidApiRefused):
+        except (*llm.STOPS_A_RUN, llm.PaidApiRefused) as e:
             if not done["cv"]:
                 raise
-            print(f"  ! letter not written for {job['company']}: Claude's limit was reached after the CV")   # the CV that was made is kept
+            if isinstance(e, llm.CallTimedOut):           # a stuck Claude ends the run; the CV made first stays on the job
+                mark_ready(job)
+                job["last_update"] = _date.today().isoformat()
+                raise
+            print(f"  ! letter not written for {job['company']}: {e}")   # the CV that was made is kept
         except Exception as e:
             print(f"  ! letter failed for {job['company']}: {e}")
 
@@ -534,6 +538,13 @@ def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
 
 
 MAX_DOC_ATTEMPTS = 2      # how many runs may try to write documents for one job
+
+
+def _give_back_try(job, stop):
+    """Claude's limit is no fault of the job, so it keeps its try; a call that hangs every time uses its tries up,
+    or it would hold every run for CALL_TIMEOUT and keep the jobs after it waiting."""
+    if isinstance(stop, llm.LimitReached):
+        job["doc_attempts"] -= 1
 
 
 def process(
@@ -649,8 +660,8 @@ def process(
         if cv_text.strip() and not job.get("tailored_cv_file"):
             try:
                 name = scorer.ask(lambda: _make_tailored_cv(job, cv_text, cv_path, fields))
-            except llm.LimitReached:
-                job["doc_attempts"] -= 1
+            except llm.STOPS_A_RUN as stop:
+                _give_back_try(job, stop)
                 raise
             except Exception as e:
                 print(f"    ! tailored CV failed for {job['company']}: {e}")
@@ -662,8 +673,8 @@ def process(
         # Step 3: write the cover letter.
         try:
             letter_file = scorer.ask(lambda: _make_letter(job, cv_text, cv_path, fields))
-        except llm.LimitReached:
-            job["doc_attempts"] -= 1
+        except llm.STOPS_A_RUN as stop:
+            _give_back_try(job, stop)
             raise
         except Exception as e:
             print(f"  ! Scored {job['match_score']} but letter failed for {job['company']}: {e}")

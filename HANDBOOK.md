@@ -178,6 +178,18 @@ data/                your data; only the *.example.* files are in git
 
 ### Things that are easy to get wrong
 
+- **Text from outside is data, never instructions.** An email goes to Claude only through `llm.untrusted` (tags the
+  text cannot close, also nested ones), and the reply window shows mail and Claude's words as `Text.PlainText`. Every
+  mail connection uses `email_client.tls_context`; every Claude call has `llm.CALL_TIMEOUT`. A timeout ends a scan, a
+  scoring run or a writing run (`llm.STOPS_A_RUN`); the work done is saved first. The usage limit pauses a run
+  instead. A timeout while writing uses one of the job's two tries (`agent3_letters._give_back_try`), so a job whose
+  call always hangs cannot hold every run; the limit gives the try back. Still open (a later PR, owner's decision 23
+  Oct): Claude's stage alone moves an application; a check of the email's own words is designed separately. The same
+  later PR looks again at the older rejection phrases in `email_client._REJECTION`: "we have not selected another
+  candidate" and "interviewing other candidates who match" count as a rejection, and "another candidate was chosen"
+  does not. A rule for "we chose another candidate" was tried and taken out (owner, 23 Oct): it needs a guard for
+  "not yet", "once we have", "still under review" and an offer that names an earlier choice ("we had chosen another
+  candidate first, but they declined"), and it must not fire on "another candidate-management tool".
 - **A running search holds its own copy of the jobs** and saves it when it ends. A hand edit
   must reach that copy too, or it is lost. `Api._change(job_id, fn)` does this by calling `fn`
   a second time on the search's copy, so **`fn` must give the same result when called twice**.

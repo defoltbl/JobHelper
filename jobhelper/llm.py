@@ -24,8 +24,11 @@ from . import config, usage
 
 def untrusted(label: str, text: str) -> str:
     """Text someone else wrote (an email, a web page) put into a prompt as data: inside <label> tags the text cannot
-    close or open itself, so nothing in it can pass for the app's own instructions. The system prompt says the rest."""
-    clean = re.sub(rf"<\s*/?\s*{re.escape(label)}\b[^>]*>", "", str(text), flags=re.IGNORECASE)
+    close or open itself, so nothing in it can pass for the app's own instructions. The system prompt says the rest.
+    The caller caps the text first: the tag search is slow on a very long run of spaces."""
+    tag, clean = re.compile(rf"<\s*/?\s*{re.escape(label)}\b[^>]*>", re.IGNORECASE), str(text)
+    while tag.search(clean):                   # nested pieces ("</em</email>ail>") would form a tag again after one pass
+        clean = tag.sub("", clean)
     return f"<{label}>\n{clean}\n</{label}>"
 
 
@@ -116,6 +119,10 @@ class LimitReached(RuntimeError):
 
 _LIMIT_TEXT = re.compile(r"hit your [a-z -]*limit|usage limit|limit reached|rate limit", re.IGNORECASE)
 _RESET_TEXT = re.compile(r"resets\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", re.IGNORECASE)
+
+
+# What ends a whole run, not one job: Claude's limit, and Claude not answering at all (each next call would wait as long).
+STOPS_A_RUN = (LimitReached, CallTimedOut)
 
 
 def reset_time_from(message: str, now: float | None = None) -> float:

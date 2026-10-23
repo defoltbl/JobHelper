@@ -92,3 +92,13 @@ def test_a_limit_wait_is_one_object_for_scoring_and_writing():
         return "done"
     assert wait(step) == "done" and len(waits) == 1
     assert Scorer(PROFILE, on_limit=wait, rules="r").ask is wait                 # the search shares its wait with the Scorer
+
+
+def test_a_stuck_claude_ends_scoring_at_the_batch(monkeypatch):
+    """After a failed batch each posting was asked alone: with Claude stuck, 5 minutes per posting."""
+    from jobhelper import llm
+    asked = []
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: asked.append(1) or (_ for _ in ()).throw(llm.CallTimedOut()))
+    with pytest.raises(llm.CallTimedOut):
+        Scorer(PROFILE, rules="rules").score(_jobs(3), lambda job, r: True)
+    assert asked == [1], "the batch call stopped the run; no posting was asked alone"
