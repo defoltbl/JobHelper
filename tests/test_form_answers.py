@@ -67,6 +67,82 @@ def test_a_claim_outside_the_cv_is_sent_back_once_and_then_flagged(monkeypatch):
     assert items[0]["check"] == "Mentions Kubernetes as experience, which is not in your CV."
 
 
+def test_a_figure_claude_invents_is_sent_back_once_and_then_flagged(monkeypatch):
+    """The prompt said never to invent numbers, but nothing checked: an answer could claim '40% faster' for an employer."""
+    prompts = []
+
+    def ask(prompt, **kw):
+        prompts.append(prompt)
+        return _reply(("My search service cut search time by 40% for 1,200 users.", ""))
+    monkeypatch.setattr(llm, "ask_json", ask)
+    items = form_answers.generate(JOB, CV, ["What did you achieve?"])
+    assert len(prompts) == 2 and "states the figure 40" in prompts[1] and "1,200" in prompts[1]
+    assert items[0]["check"] == "States 40, 1,200, which your CV and your details do not give. Check it."
+
+
+def test_figures_from_the_sources_or_in_brackets_are_fine_but_not_one_the_question_asks_for(monkeypatch):
+    calls = []
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: calls.append(1) or _reply(
+        ("I expect 60,000 CZK and can start soon [check: notice period 30 days].", "")))
+    items = form_answers.generate(JOB, CV, ["Salary expectations?"])
+    assert len(calls) == 1 and "States" not in items[0]["check"]                 # "60 000" in the salary line, "60,000" here
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: _reply(("Yes, I have 5 years of Java experience.", "Check the years")))
+    items = form_answers.generate(JOB, CV, ["Do you have 5+ years of Java?"])
+    assert "States 5" in items[0]["check"] and "Check the years" in items[0]["check"], "asked for, not shown; both notes kept"
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: _reply(("In situation 3, I fixed a slow report.", "")))
+    assert form_answers.generate(JOB, CV, ["Tell us about situation 3."])[0]["check"] == "", "a figure the question names, as a reference"
+
+
+def test_rewriting_an_answer_checks_its_figures_too(monkeypatch):
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"answer": "I made the search service 40% faster."})
+    done = form_answers.rewrite(JOB, CV, "What did you achieve?", "I built a document search service.", "add results")
+    assert done["check"] == "States 40, which your CV and your details do not give. Check it."
+    flagged = form_answers.rewrite(JOB, CV, "What did you achieve?", "It was 40% faster.", "shorter")
+    assert "States 40" in flagged["check"], "a flagged figure does not pass by being rewritten"
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"answer": "I led a team of 8."})
+    assert "States 8" in form_answers.rewrite(JOB, CV, "Leadership?", "I led a team of 8 engineers.", "shorter")["check"]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"answer": "I led a team of 8 people."})
+    assert form_answers.rewrite(JOB, CV, "Leadership?", "I led a team.", "say I led a team of 8 people")["check"] == ""
+
+
+@pytest.mark.parametrize("text, sources, references, invented", [
+    ("I expect 60,000 CZK.", ("about 60 000 CZK",), (), []),
+    ("I expect 60000 CZK.", ("about 60 000 CZK",), (), []),
+    ("I expect 60.000 CZK.", ("about 60 000 CZK",), (), []),
+    ("I can start on 1.10.2026.", ("You can start: 2026-10-01",), (), []),
+    ("I can start in 2 weeks.", ("You can start: in two weeks",), (), []),
+    ("I have 1,5 years of SQL.", ("15 projects",), (), ["1,5"]),
+    ("We grew 2022 300 users.", ("2022",), (), ["300"]),
+    ("Version 3.5 shipped to 40 teams.", ("Python 3.5",), (), ["40"]),
+    ("I have 3 years and cut costs by 40%.", ("3 years",), (), ["40"]),
+    ("I want to join 3M in Praha 4.", (), ("3M", "Praha 4"), []),                   # the job's own names: a reference
+    ("Your team of 50 builds the platform.", (), ("a team of 50",), []),
+    ("I have 5 years of Java.", (), ("5+ years of Java required",), ["5"]),          # the posting's figure as my amount
+    ("I have five years of Java and ten clients.", ("Java",), (), ["5", "10"]),     # words used as amounts are checked
+    ("I led 15 developers.", ("5 developers",), (), ["15"]),
+    ("I led 8 developers for 8 weeks.", (), ("Have you led 8+ developers?",), ["8"]),
+    ("I have 5 years of SQL.", ("SQL developer, 05/2019 - 08/2022",), (), ["5"]),     # a month of a job date is not 5 years
+    ("I have 3 years of Python.", ("Python 3.5",), (), ["3"]),                        # nor a part of a version
+    ("I worked there from 2019 to 2022.", ("05/2019 - 08/2022",), (), []),           # but the date itself is backed
+    ("I expect around 60k CZK.", ("about 60 000 CZK",), (), []),
+    ("I'd like to join one team of experts.", ("CV",), (), []),
+    ("I saved 5 million.", (), ("a company with 5 million users",), ["5000000"]),    # still an amount after scaling
+    ("I raised 40k.", (), ("a budget of 40k",), ["40000"]),
+    ("I earned 16.1k.", ("16 100 CZK",), (), []),
+    ("I have 5 years of SQL.", ("SQL developer 05/2019-08/2022",), (), ["5"]),       # a range written without spaces
+    ("Uptime was 99.9999% and I paid 1500.50 CZK.", ("uptime 99.9999%, 1500.50 CZK",), (), []),   # decimals, not dates
+])
+def test_how_figures_are_read(text, sources, references, invented):
+    from jobhelper import claims
+    assert claims.unbacked_figures(text, sources, references) == invented
+
+
+def test_a_letter_keeps_no_brackets_but_an_answer_may():
+    from jobhelper import claims
+    assert claims.unbacked_figures("It saved [40%].", ("CV",), brackets_ok=False) == ["40"]
+    assert claims.unbacked_figures("It saved [40%].", ("CV",)) == []
+
+
 def test_an_honest_answer_about_a_missing_skill_is_accepted(monkeypatch):
     calls = []
     monkeypatch.setattr(llm, "ask_json", lambda *a, **k: calls.append(1) or _reply(

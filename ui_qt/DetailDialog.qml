@@ -434,6 +434,10 @@ Dialog {
                         text: "Check your cover letter before you send it. It says you have done something with " + (detailDialog.job.letter_check || []).join(", ")
                               + ", which " + ((detailDialog.job.letter_check || []).length === 1 ? "is a term" : "are terms")
                               + " of the posting that your own CV does not mention. Keep it only if it is true of you; Edit letter lets you change the sentence." }
+                    Text { objectName: "letterFigures"; visible: (detailDialog.job.letter_figures || []).length > 0
+                        Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true
+                        text: "Check the figures in your cover letter: " + (detailDialog.job.letter_figures || []).join(", ")
+                              + ". Your CV and your own notes do not give them. Keep a figure only if it is true; Edit letter lets you change it." }
                     Repeater {
                         model: detailDialog.applySteps
                         RowLayout { Layout.fillWidth: true; spacing: 10

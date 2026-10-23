@@ -8,7 +8,7 @@ import os
 
 from datetime import date
 
-from . import agent3_letters, config, cover_letter, pdf, store, vault
+from . import agent3_letters, claims, config, cover_letter, pdf, store, vault
 from .api_base import _guarded, _stem
 
 
@@ -84,7 +84,12 @@ class LettersService:
         made = pdf.to_pdf(path)
         if made and pdf.page_count(made) > 1:
             warnings.append("The letter is now longer than one page.")
-        self._editor.change(job_id, lambda all_jobs, job: job.__setitem__("last_update", date.today().isoformat()), render=False)
+        figures = claims.unbacked_figures("\n".join(texts), *cover_letter.figure_sources(j, self._cv.text()), brackets_ok=False)
+
+        def saved(all_jobs, job):
+            job["last_update"] = date.today().isoformat()
+            job["letter_figures"] = figures[:8]                 # what you just saved, so a figure you removed is no longer named
+        self._editor.change(job_id, saved, render=False)
         return {"ok": True, "warnings": warnings, "words": sum(len(t.split()) for t in texts)}
 
     def rewrite_paragraph(self, job_id, paragraphs, index, hint=""):

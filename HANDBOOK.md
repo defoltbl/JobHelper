@@ -365,6 +365,20 @@ data/                your data; only the *.example.* files are in git
   the interview preparation ask it; only the interview allows the honest bridge ("I have not used X"). In the
   preparation, `Preparation.voice()` is the one list that is both sent back to the model and marked for the user:
   a part added to the sheet goes into that list, or it is checked in one place only.
+- **A figure Claude writes must come from somewhere** (`claims.unbacked_figures`, sources from
+  `cover_letter.figure_sources`). Your own texts back any figure: the CV, the notes, the About you facts and what you
+  typed (a rewrite hint, your letter). References (the posting, the job's title, company and location, the question, an
+  earlier answer) may be repeated ("your team of 50"), never claimed as your amount ("my 5 years", `claims.as_quantity`).
+  The letter and its rewrite send a figure back once, and a letter keeps no [square brackets]; the form answers send it
+  back once, their rewrite marks it. What is left is shown (`letter_figures`, refreshed on every save; the answer's
+  `check`, joined to its other notes). An amount needs a whole figure of your own: the month of a job date ("05/2019")
+  or a part of a version ("Python 3.5") never backs "5 years" or "3 years". "60k" and "1.5M" are read as numbers.
+  Known limits (heuristics, not a parser – accepted 23 Oct 2026):
+  - figures are compared, not claims: a whole "3" anywhere in your texts backs every "3";
+  - a reference figure used without a unit ("a team of 12" from the posting) passes; the unit list (`claims._UNIT`)
+    decides what counts as an amount, and hyphen forms ("a 5-year record") and number words above twelve are not read;
+  - an honest repeat of the question's own amount ("30 days works for me") gets a note;
+  - a true figure you typed into the letter by hand keeps the job window's line until the letter no longer has it.
 - **A sentence of a letter is a claim only where the candidate is the one doing it** (`cover_letter.borrowed_claims`):
   "the role caught my attention because it covers X" describes the role. Measure a change to these checks on the
   letters and CVs already written before it ships.

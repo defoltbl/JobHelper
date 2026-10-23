@@ -63,6 +63,78 @@ class ClaimCheck:
         return next((term for term in (self.claimed_in(s, honest_ok) for s in sentences(text)) if term), "")
 
 
+# A figure, with its thousands groups ("60 000", "60,000", "60.000") read as one number.
+FIGURE = re.compile(r"(?<![\d.,])\d{1,3}(?:[ \u00a0\u202f,.]\d{3})+(?!\d)(?:[.,]\d{1,2}(?!\d))?|\d+(?:[.,]\d+)*")
+# A figure used as an amount of something: "5 years", "40%", "1,200 users", "3x" – a claim, not a reference ("situation 3").
+_UNIT = (r"\s*\+?\s*(?:years?|yrs|months?|weeks?|days?|hours?|%|per ?cent|users|customers|clients|people|persons?|developers|"
+         r"engineers|employees|members|teams?|projects|countries|languages|times|million|thousand|k\b|x\b)")
+_NUMBER_WORDS = {w: str(n) for n, w in enumerate(("two three four five six seven eight nine ten eleven twelve").split(), 2)}  # not "one": "one team"
+_WORDED_AMOUNT = re.compile(r"\b(" + "|".join(_NUMBER_WORDS) + r")\b(?=" + _UNIT + r")", re.IGNORECASE)
+
+
+def _figure(text: str) -> str:
+    """One way to write a figure: thousands groups joined, a decimal comma as a point, no leading zeros ("01" is "1")."""
+    t = re.sub(r"[ \u00a0\u202f]", "", text)
+    if re.fullmatch(r"\d{1,3}(?:[,.]\d{3})+", t):
+        t = re.sub(r"[,.]", "", t)
+    t = re.sub(r",(\d{1,2})$", r".\1", t)
+    return ".".join(part.lstrip("0") or "0" for part in re.split(r"[.,]", t))
+
+
+_SCALED = re.compile(r"(?<![\d.,])(\d+(?:[.,]\d+)?)\s?(k|K|M|million)\b")
+
+
+def _digits(text: str) -> str:
+    """Number words used as an amount ("five years") and scaled figures ("60k", "1.5M") written as plain digits, so they
+    are checked like "5 years" and "60000"."""
+    from decimal import Decimal
+
+    def scaled(m: re.Match) -> str:              # the unit stays: "40k" is still an amount, now 40000 k
+        value = Decimal(m.group(1).replace(",", ".")) * (1000 if m.group(2) in ("k", "K") else 1_000_000)
+        return f"{value.normalize():f} {m.group(2)}"
+    return _SCALED.sub(scaled, _WORDED_AMOUNT.sub(lambda m: _NUMBER_WORDS[m.group(1).lower()], text or ""))
+
+
+def _amount(plain: str, figure: str) -> bool:
+    return bool(re.search(r"(?<![\d.,])" + re.escape(figure) + _UNIT, plain, re.IGNORECASE))
+
+
+def as_quantity(text: str, figure: str) -> bool:
+    """Whether a text uses this figure as an amount ("5 years", "40%"), not as a name or reference ("situation 3")."""
+    return _amount(_digits(text), figure)
+
+
+# A date in a source ("05/2019", "2026-10-01", "1.10.2026"): its numbers back a date, never an amount like "5 years".
+_DATE = re.compile(r"(?<![\d.,/])(?:(?:19|20)\d\d[-/.](?:0?[1-9]|1[0-2])(?:[-/.]\d{1,2})?|\d{1,2}[-/.](?:0?[1-9]|1[0-2])[-/.]\d{2,4}"
+                   r"|(?:0?[1-9]|1[0-2])[-/.](?:19|20)\d\d)(?![\d/])")
+
+
+def _known(texts) -> tuple[set[str], set[str]]:
+    """(whole figures, all figures and their parts). The parts of a date or a version back a date or a reference only."""
+    plain = [_digits(text) for text in texts]
+    dates = {part.lstrip("0") or "0" for text in plain for d in _DATE.findall(text) for part in re.split(r"[-/.]", d)}
+    whole = {_figure(f) for text in plain for f in FIGURE.findall(_DATE.sub(" ", text))}
+    return whole, whole | dates | {part for f in whole for part in f.split(".")}
+
+
+def unbacked_figures(text: str, sources=(), references=(), brackets_ok: bool = True) -> list[str]:
+    """The figures a text states that its sources do not give: a model may invent them (years, users, per cent …).
+    `sources` are the person's own (CV, notes, facts, what they typed): they back any figure. `references` (the posting,
+    the question) may be repeated as a reference – "your team of 50" – but never back an amount the text claims, such
+    as "my 5 years". A part in [square brackets] is the person's to fill in and is skipped where `brackets_ok`.
+    A date or a version is known when each of its parts is. Limit: figures are compared, not claims, so a "3" in the
+    person's sources backs every "3"."""
+    (own, own_parts), (_, quoted_parts) = _known(sources), _known(references)
+    body = _digits(re.sub(r"\[[^\]]*\]", "", text or "") if brackets_ok else text or "")
+
+    def backed(figure: str) -> bool:
+        whole, parts = _figure(figure), _figure(figure).split(".")
+        if _amount(body, figure):                         # an amount you claim: only a whole figure of your own backs it
+            return whole in own
+        return whole in own_parts or whole in quoted_parts or (len(parts) > 2 and all(p in own_parts | quoted_parts for p in parts))
+    return [f for f in dict.fromkeys(FIGURE.findall(body)) if not backed(f)]
+
+
 def rejected(problems: list[str], what: str = "version") -> str:
     """The note sent back with the next request when a draft broke a rule."""
     return f"\nYour previous {what} was rejected. Fix these problems:\n" + "\n".join(f"- {p}" for p in problems) + "\n"
