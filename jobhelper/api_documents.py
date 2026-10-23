@@ -8,7 +8,7 @@ from . import agent1_cv
 import os
 from datetime import date, datetime, timedelta
 
-from . import agent2_search, agent3_letters, config, housekeeping, store, textfmt, vault
+from . import agent2_search, agent3_letters, config, housekeeping, llm, store, textfmt, vault
 from .api_base import _guarded
 
 
@@ -77,10 +77,15 @@ class DocumentsService:
         why = self.can_write_documents(j)
         if why:
             return {"ok": False, "msg": why}
-        work = dict(j)
+        work, stopped = dict(j), ""
         try:
             cv_path = agent1_cv.find_cv()
             done = agent3_letters.generate_for(work, self._cv.text(), cv_path)
+        except llm.CallTimedOut as e:   # the CV may be made before the letter stopped: it is kept, not paid for twice
+            stopped = str(e)
+            done = {"cv": work.get("tailored_cv_file") != j.get("tailored_cv_file"), "letter": False}
+            if not done["cv"]:
+                return {"ok": False, "msg": stopped}
         except Exception as e:  # noqa: BLE001 - shown to the person as the reason (the limit, no connection)
             return {"ok": False, "msg": str(e) or "The documents could not be written."}
         if not done["cv"] and not done["letter"]:
@@ -90,6 +95,8 @@ class DocumentsService:
         def go(jobs, current):          # on a fresh copy: the writing took a while
             current.update(fresh)
         self._editor.change(job_id, go)
+        if stopped:                     # the window shows the CV it now has, as after the limit
+            return {"ok": True, "cv": True, "letter": False, "msg": f"Written: the CV. Not written: the letter. {stopped}"}
         made = " and ".join(name for name, key in (("the CV", "cv"), ("the letter", "letter")) if done[key])
         missing = [name for name, key, had in (("the CV", "cv", j.get("tailored_cv_file")), ("the letter", "letter", j.get("cover_letter_file")))
                    if not done[key] and not had]

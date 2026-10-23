@@ -113,7 +113,7 @@ def cmd_retailor(args) -> int:
         try:
             done = agent3_letters.generate_for(job, cv_text=cv_text, cv_path=cv_path,
                                                rewrite_letter=args.letters)
-        except (llm.LimitReached, llm.PaidApiRefused) as e:      # nothing more can be written now: what is done is saved
+        except (*llm.STOPS_A_RUN, llm.PaidApiRefused) as e:      # nothing more can be written now: what is done is saved
             stopped = str(e)
             break
         tag = ", ".join(k for k, v in done.items() if v) or "nothing new"
@@ -167,6 +167,11 @@ def scan_inbox(jobs: list, days: int):
         agent4_tracker.render_all(jobs)
         print(f"⏸  {e}\n   What was read is saved. Run it again after the reset: nothing is read twice.")
         raise Stopped(3) from e
+    except llm.CallTimedOut as e:
+        store.save_jobs(jobs)                    # Claude stopped answering: keep what the replies read so far changed
+        agent4_tracker.render_all(jobs)
+        print(f"✗ {e}\n   What was read is saved: nothing is read twice.")
+        raise Stopped(1) from e
     except Exception as e:  # noqa: BLE001 - said in a sentence
         raise _mail_failed(e) from e
 

@@ -66,7 +66,8 @@ Inside the window:
   grey **Resume** button whose tooltip says when the limit resets. When it has reset the
   button turns blue; press it and the run continues with the job it was on. A small
   **Stop** button next to it ends the run instead. From the command line `run.py` saves and
-  exits with a message; run it again later and only the unfinished jobs are done.
+  exits with a message; run it again later and only the unfinished jobs are done. A call that gets no answer for
+  5 minutes stops a run the same way: what was finished is saved first.
 - **Scan email** – runs Agent 5 (Postman reads inbox replies), with a real progress bar.
 - **New Jobs / Applications / Responses / Analytics** – click to see tables;
   each row has *open* buttons for the cover letter, tailored CV, or Excel file.

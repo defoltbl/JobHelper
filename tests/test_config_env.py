@@ -193,4 +193,33 @@ def test_the_env_file_is_private_from_its_first_byte(isolate_data, monkeypatch):
         os.umask(old_mask)
     assert seen == [0o600, 0o600] and stat.S_IMODE(os.stat(config.ENV_PATH).st_mode) == 0o600
     assert config.ENV_PATH.read_text(encoding="utf-8") == "IMAP_USER=jordan@example.com\n"
-    assert not config.ENV_PATH.with_name(".env.part").exists()
+    assert not list(config.ENV_PATH.parent.glob("*.part"))
+
+
+def test_a_failed_write_leaves_no_part_file_and_the_old_env_whole(isolate_data, monkeypatch):
+    """The part file holds the password lines: a write that fails (a full disk) must not leave it behind."""
+    import os
+    config.update_env({"IMAP_USER": "jordan@example.com"})
+    monkeypatch.setattr(config.os, "fsync", lambda fd: (_ for _ in ()).throw(OSError(28, "No space left on device")))
+    with pytest.raises(OSError):
+        config.update_env({"IMAP_USER": "other@example.com"})
+    assert not list(config.ENV_PATH.parent.glob("*.part")) and "jordan@example.com" in config.ENV_PATH.read_text(encoding="utf-8")
+    assert os.environ["IMAP_USER"] == "jordan@example.com"
+
+
+def test_two_saves_at_once_keep_both_keys(isolate_data):
+    """Saving a mailbox runs in a worker thread: two at once used to read the same old file and one key was lost."""
+    import threading
+    start = threading.Barrier(2)
+
+    def save(key):
+        start.wait()
+        for n in range(20):
+            config.update_env({key: str(n)})
+    threads = [threading.Thread(target=save, args=(k,)) for k in ("IMAP_USER", "IMAP_USER_2")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    text = config.ENV_PATH.read_text(encoding="utf-8")
+    assert "IMAP_USER=19" in text and "IMAP_USER_2=19" in text

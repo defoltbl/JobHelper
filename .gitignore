@@ -23,3 +23,5 @@ data_moved_to_Library*/
 # The built app and PyInstaller's work folder
 build/
 dist/
+# a write cut short can leave a part file with the mail password in it
+.env.*.part
