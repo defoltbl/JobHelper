@@ -30,7 +30,7 @@ SYSTEM = (
     "You prepare one candidate for one job interview. You only use facts from the "
     "candidate's CV: never invent experience, employers, numbers or technologies. "
     "Answers are in the first person, spoken style, 3-6 sentences. Use an en dash "
-    "with spaces, never an em dash, and no emojis. " + STE_RULES + " Reply with only the JSON object."
+    "with spaces, never an em dash, and no emojis. " + STE_RULES + " Reply with only the JSON object. " + llm.POSTING_RULE
 )
 
 PROMPT = """Prepare the candidate for an interview for the job below.
@@ -215,7 +215,7 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
         data = llm.ask_json(PROMPT.format(
             cv_text=cv_text[:12000], title=job.get("title", ""), company=job.get("company", ""),
             location=job.get("location", ""),
-            description=(job.get("description") or "").strip()[:4000] or "(No posting text was saved; use the title and the CV.)",
+            description=llm.untrusted("posting", (job.get("description") or "").strip()[:4000] or "(No posting text was saved; use the title and the CV.)"),
             emails=mail_lines, feedback=feedback, n=QUESTIONS, hr=HR_QUESTIONS, tech=QUESTIONS - HR_QUESTIONS,
             facts=config.facts_block(cv_text),
             notes=notes[:config.MAX_EXPERIENCE_NOTES] or "(nothing written yet)"),
@@ -552,7 +552,7 @@ def apply_parts(prep: dict[str, Any], edited: list[dict[str, Any]], cv_text: str
             if not text and field in ("answer", "story", "what", "proof"):
                 return prep, f"“{label[:70]}” is empty. Write it, or leave the draft as it was."
             new[section][int(index)][field] = text
-    unverified = cover_letter.unverified_terms(cv_text + "\n" + (notes or "")) if cv_text.strip() else []
-    Preparation(new).mark(unverified)
+    if cv_text.strip():                                   # without the CV nothing can be judged: the checks stay as they were
+        Preparation(new).mark(cover_letter.unverified_terms(cv_text + "\n" + (notes or "")))
     new["edited"] = date.today().isoformat()
     return new, ""

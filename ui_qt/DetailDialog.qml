@@ -422,12 +422,11 @@ Dialog {
                 DetailCard { heading: "Before you apply"; objectName: "applyCard"
                     visible: detailDialog.job.is_lead === true && (!!detailDialog.job.cv || !!detailDialog.job.letter)
                     border.color: theme.accent
-                    // words of the posting that the adapted CV states as your experience, though your own CV has neither word
+                    // what the adapted CV states that your own CV does not: the posting's words, a name, a figure
                     Text { objectName: "cvCheck"; visible: (detailDialog.job.cv_check || []).length > 0
                         Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.warn; font.pixelSize: 12; font.bold: true
                         text: "Check your adapted CV before you send it. It speaks of " + (detailDialog.job.cv_check || []).join(", ")
-                              + ", which " + ((detailDialog.job.cv_check || []).length === 1 ? "is a term" : "are terms")
-                              + " of the posting that your own CV does not mention. Keep it only if it is true of you; Compare CV shows where it stands." }
+                              + ", which your own CV does not mention. Keep it only if it is true of you; Compare CV shows where it stands." }
                     Text { objectName: "letterCheck"; visible: (detailDialog.job.letter_check || []).length > 0
                         Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.warn; font.pixelSize: 12; font.bold: true
                         text: "Check your cover letter before you send it. It says you have done something with " + (detailDialog.job.letter_check || []).join(", ")

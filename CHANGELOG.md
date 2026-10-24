@@ -7,6 +7,10 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- The **adapted CV** now checks its profile paragraph like the cover letter: a figure that your CV, your notes or About you do not give, such as "8 years", is sent back to Claude once and then removed with its sentence. If nothing else would be left, the paragraph stays and the job window names the figure. A company or technology your CV does not name is shown in the job window to check.
+- "Java" in a skills list no longer counts as in your CV because your CV says "JavaScript".
+- An interview preparation that you edit while your CV cannot be read now keeps its "not in your CV" notes.
+- **Security:** a job posting, the fields of a form and a web page now go to Claude as text to read, not as instructions, as emails already do. A posting can no longer pass its text off as instructions to Claude, for example to raise its own score.
 - **Data safety:** a damaged file of your saved answers, assistant notes, My details, Options or last-run summary is now kept in the backups (folder "damaged") before the next save. Before, the save wrote over it. The clean-up of old backups no longer removes that folder.
 - **Data safety:** when you change the question of a saved answer, the old answer is no longer lost if the new one cannot be kept, and no other answer is dropped.
 - **Data safety:** the company notes in the job window are now kept in the backups too when their file is damaged, before the next save.
