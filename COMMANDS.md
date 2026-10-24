@@ -304,9 +304,10 @@ Inside the window:
   progress bar with percent and "6 / 14 jobs", and the elapsed time.
 - **Weekly run card** – click it to turn the weekly schedule on/off and pick the
   day + time (writes the macOS LaunchAgent for you – see section 9).
-- **Usage left** – your 5-hour / 7-day subscription windows; refreshes on open and
-  with the **↻ refresh** button. With less than 20% left it also shows when the window resets; when Claude
-  has refused a call it shows **0% left** in red until that time.
+- **Usage left** – your 5-hour / 7-day subscription windows; the bar shows what is left. It refreshes on open,
+  with the **↻ refresh** button, when a window resets, and hourly while the numbers are more than an hour old (one
+  small call each). With 20% left or less it also shows when the window resets; when Claude has refused a call it
+  shows **0% left** in red until that time. After a reset it says "not read since" until Claude answers.
 - Hover any robot for its name, role, and latest result.
 
 Everything it does is the same as the commands below – the window just wraps them.

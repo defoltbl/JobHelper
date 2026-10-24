@@ -373,9 +373,11 @@ data/                your data; only the *.example.* files are in git
   between two waits. `Ui.wait` waits in short steps for that reason; do not call `QTest.qWait` directly.
 - **Rows made by a `Repeater` are not found by `findChild`.** Use `ui.seen(part)` / `ui.drawn(name)`.
 - **The usage numbers are a snapshot from Claude's last answer.** `usage.windows()` corrects them: a
-  refusal fills the window it names until its reset, a window past its reset time is empty. Everything
-  that shows or tests the limit goes through it. A number older than `usage.STALE_AFTER` (one hour) is `stale`:
-  the card shows "as of" and its time, and the widget shows "–" (while Claude refuses, nothing new comes).
+  refusal fills the window it names until its reset; a window past its reset time is unknown (`reset_passed`), never
+  "empty": Claude Code uses the same subscription. Everything that shows or tests the limit goes through it. A number
+  older than `usage.STALE_AFTER` (one hour) is `stale`: the card shows "as of" and its time, and the widget shows "–".
+  `usage_info()["should_refresh"]` says when one small question to Claude is worth it (stale, or a reset since): the
+  window asks at each reset and hourly while open (`usageHourly`), never during a run. The card's bar shows what is left.
 - **A message over an open window (the toast) ends when the last window closes** (`Main.qml`
   `onDialogOpenChanged`); the status line keeps the words. Before, it came back on the next window.
 - **Every dialog is built from one shell:** `DialogHeader`, `DialogTitle` (17 px, plain text, wraps), `CloseButton` and

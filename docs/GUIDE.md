@@ -2131,8 +2131,11 @@ Claude (Table 18.1).
 
 ### Read the Usage left card
 
-Each window has a bar and a figure for what is left. The numbers come from Claude's last
-answer. **refresh** asks Claude for the current ones (Figure 18.1).
+Each window has a bar and a figure for what is left. A full bar means that nothing is used. The
+numbers come from Claude's last answer. **refresh** asks Claude for the current ones
+(Figure 18.1). While the app is open, it also asks by itself when a window resets, and about
+once an hour when the numbers are old. It never asks during a search. Each question is one
+small call to Claude.
 
 ![A limit that is used up](img/27_limit_used_up.png)
 
@@ -2145,13 +2148,14 @@ Table 18.2 explains what the card shows.
 | You see | Meaning |
 |---|---|
 | A figure such as **66% left** | That much of the window remains |
-| **resets 14:00** under a bar | Shown when less than 20% is left: the time the window is empty again. A date is added when it is another day |
+| **resets 14:00** under a bar | Shown when 20% or less is left: the time the window starts again. A date is added when it is another day. The bar is then red and amber |
 | **as of 18 Oct 09:22** under a bar | The figure is more than one hour old. Claude gives new figures only when it answers, so they stop while Claude refuses calls. A date is added when it is another day. Select **refresh** |
 | **0% left** in red | Claude refused a call because this limit is used up. Nothing can be asked until the time shown |
-| **—** | Claude has not reported this window yet. Select **refresh** |
+| **reset at 01:20 · not read since** under a bar | The window reset at that time. Claude Code uses the same limit, so the app does not know how much is used now. It asks Claude, and the figure comes back with the answer |
+| **—** | Claude has not reported this window yet, or not since it reset. Select **refresh** |
 
-When a reset time passes while the window is open, the card corrects itself: the limit is
-shown as free again without you pressing anything.
+When a reset time passes while the window is open, the card shows the time of the reset. Then
+the app asks Claude for the new figure without you pressing anything.
 
 > **Note**
 > Other use of Claude on the same account, in the Claude app or in Claude Code, counts against
