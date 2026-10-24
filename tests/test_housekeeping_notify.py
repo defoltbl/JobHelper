@@ -441,3 +441,20 @@ def test_the_command_line_test_waits_for_the_persons_first_answer(app_library):
     app_library.permission = lambda: 2                                 # never answered: it gives up after `patience`
     slept.clear()
     assert "Choose Allow" in notify.send_test(patience=3, sleep=slept.append)["msg"] and len(slept) == 3
+
+
+def test_the_damaged_files_set_aside_are_never_pruned_as_old_backups(isolate_data):
+    """The restore message promises that the damaged file is kept; with ten backups the clean-up removed it."""
+    _backups(4)
+    damaged = vault.backups_dir() / vault.DAMAGED
+    damaged.mkdir()
+    (damaged / "jobs.20261001_120000.json").write_bytes(b"{ broken")
+    housekeeping.prune_backups(keep=1)
+    assert (damaged / "jobs.20261001_120000.json").is_file()
+
+
+def test_a_folder_without_a_time_in_its_name_is_not_an_old_backup(isolate_data):
+    _backups(3)
+    (vault.backups_dir() / "kept_by_hand").mkdir()
+    housekeeping.prune_backups(keep=1)
+    assert (vault.backups_dir() / "kept_by_hand").is_dir(), "only time-stamped backups are pruned"

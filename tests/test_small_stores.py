@@ -62,3 +62,50 @@ def test_the_usage_log_tells_its_sums_and_keeps_this_run_apart(isolate_data):
     log.reset()
     assert log.session()["calls"] == 0 and json.loads(usage.LOG.path.read_text(encoding="utf-8"))["totals"]["calls"] == 0
 
+
+@pytest.mark.parametrize("change", ["answer", "note", "turns", "details", "company", "forget", "forget_all", "forget_note"])
+def test_a_change_never_writes_over_a_damaged_store(isolate_data, change):
+    """A damaged file was read as empty, and the next save wrote the empty store over it; it is moved aside first now."""
+    from jobhelper import config, details
+    files = {"answer": answer_memory.MEMORY.path, "note": assistant_notes.NOTES.path, "turns": assistant_notes.NOTES.path,
+             "details": config.MY_DETAILS.path, "company": planner.COMPANY_NOTES.path, "forget": answer_memory.MEMORY.path,
+             "forget_all": answer_memory.MEMORY.path, "forget_note": assistant_notes.NOTES.path}
+    path = files[change]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{ damaged")
+    if change == "answer":
+        assert answer_memory.remember("Why do you want this job?", "I like the product.")
+    elif change == "note":
+        assert assistant_notes.NOTES.remember("No agencies")["ok"]
+    elif change == "turns":
+        assistant_notes.NOTES.keep_turns([("you", "hi")])
+    elif change == "company":
+        assert planner.save_company_notes("Fernhill", {"contact": "Tom"})
+    elif change == "forget":
+        answer_memory.forget("Why do you want this job?")
+    elif change == "forget_all":
+        answer_memory.forget_all()
+    elif change == "forget_note":
+        assistant_notes.NOTES.forget(1)
+    else:
+        assert details.save({**details.empty(), "first_name": "Ondra", "last_name": "Kovář", "email": "ondra@example.com"})["ok"]
+    kept = list((vault.backups_dir() / vault.DAMAGED).iterdir())
+    assert len(kept) == 1 and kept[0].read_text() == "{ damaged", "the damaged file is kept, never written over"
+
+
+def test_an_answer_that_cannot_be_kept_leaves_the_old_one(isolate_data, monkeypatch):
+    api = ui_api.Api()
+    assert api.save_my_answer("Why do you want this job?", "I like the product.")["ok"]
+    monkeypatch.setattr(answer_memory, "remember", lambda *a, **k: False)
+    assert api.save_my_answer("Why this job?", "Because.", was="Why do you want this job?")["ok"] is False
+    assert answer_memory.recall("Why do you want this job?")["answer"] == "I like the product.", "removed before the new one was kept"
+
+
+def test_renaming_an_answer_in_a_full_store_drops_no_other_answer(isolate_data):
+    """With the store full, the new wording made room by dropping the oldest answer, then the old wording went too."""
+    for i in range(answer_memory.MAX_ENTRIES):
+        assert answer_memory.remember(f"Question number {i} about the role?", f"Answer {i}.")
+    assert ui_api.Api().save_my_answer("Question five, asked again?", "Answer 5.", was="Question number 5 about the role?")["ok"]
+    assert answer_memory.MEMORY.count() == answer_memory.MAX_ENTRIES
+    assert answer_memory.recall("Question number 0 about the role?")["answer"] == "Answer 0.", "the oldest answer is still kept"
+    assert answer_memory.recall("Question number 5 about the role?") is None

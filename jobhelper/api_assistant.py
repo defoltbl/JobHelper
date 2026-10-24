@@ -59,9 +59,7 @@ class AssistantService:
         if problem:
             return {"ok": False, **problem}
         question = " ".join(str(question).split())
-        if was and answer_memory.key(was) != answer_memory.key(question):
-            answer_memory.forget(was)
-        if not answer_memory.remember(question, str(answer).strip()):
+        if not answer_memory.remember(question, str(answer).strip(), replacing=str(was or "")):
             return {"ok": False, "field": "answer", "msg": "That answer could not be kept."}
         return {"ok": True}
 

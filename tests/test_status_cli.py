@@ -144,7 +144,6 @@ def test_a_mailbox_that_refuses_or_cannot_be_reached_is_one_sentence_in_the_log(
             assert words in out and "Traceback" not in out and "hunter2" not in out, (command, out)
 
 
-
 def test_a_scan_stopped_by_a_stuck_claude_keeps_what_was_read(isolate_data, monkeypatch, capsys):
     """The scan ends at a timeout now; it must save first, as at the limit, or a reply already marked read is lost."""
     from jobhelper import agent5_responses, llm
@@ -209,3 +208,31 @@ def test_every_mail_command_says_a_mailbox_problem_the_same_way(isolate_data, mo
         assert _run(monkeypatch, *command) == 1, command
         said.add(capsys.readouterr().out.strip().splitlines()[-1])
     assert said == {"✗ Couldn't sign in to your email. Check its password in the app's Account card."}
+
+
+def test_a_scan_that_fails_part_way_keeps_what_was_read(isolate_data, monkeypatch, capsys):
+    """Each reply is marked read as it is read; a fault later lost the job changes, and the next scan skipped them."""
+    from jobhelper import agent5_responses
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="waiting", date_applied="2026-09-01")])
+
+    def read(jobs, lookback_days=None, **kw):
+        jobs[0]["status"] = "rejected"
+        raise OSError("connection lost")
+    monkeypatch.setattr(agent5_responses, "process_inbox", read)
+    assert _run(monkeypatch, "responses", "--scan") == 1
+    assert store.find(store.load_jobs(), "a")["status"] == "rejected"
+
+
+def test_a_scan_whose_save_fails_does_not_say_it_was_saved(isolate_data, monkeypatch, capsys):
+    from jobhelper import agent5_responses, llm
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="waiting", date_applied="2026-09-01")])
+
+    def read(jobs, lookback_days=None, **kw):
+        raise llm.LimitReached("Claude's 5-hour limit is used up (100%).")
+    monkeypatch.setattr(agent5_responses, "process_inbox", read)
+    monkeypatch.setattr(store, "save_jobs", lambda jobs: (_ for _ in ()).throw(OSError("No space left on /private-data/jobs.json")))
+    _run(monkeypatch, "responses", "--scan")
+    out = capsys.readouterr().out
+    assert "could not be saved (OSError)" in out and "is saved" not in out and "private-data" not in out

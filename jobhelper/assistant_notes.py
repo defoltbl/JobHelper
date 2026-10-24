@@ -34,8 +34,9 @@ class AssistantNotes:
     def path(self):
         return self._file.path
 
-    def _read(self) -> dict[str, Any]:
-        data = self._file.read()                     # None when unreadable: the assistant starts fresh
+    def _read(self, changing: bool = False) -> dict[str, Any]:
+        # None when unreadable: the assistant starts fresh; a change first moves a damaged file aside
+        data = self._file.load_for_change() if changing else self._file.read()
         if not isinstance(data, dict):
             return {"notes": [], "turns": []}
         notes = [n for n in data.get("notes") or [] if isinstance(n, dict) and isinstance(n.get("text"), str) and n["text"].strip()]
@@ -53,7 +54,7 @@ class AssistantNotes:
         if problem:
             return {"ok": False, "msg": problem}
         words = " ".join(str(text).split())
-        data = self._read()
+        data = self._read(changing=True)
         if any(n["text"].lower() == words.lower() for n in data["notes"]):
             return {"ok": True, "known": True}
         if len(data["notes"]) >= MAX_NOTES:
@@ -64,7 +65,7 @@ class AssistantNotes:
 
     def forget(self, number: Any) -> dict[str, Any]:
         """Remove a note by its number (1 = the oldest). Returns the text that was removed."""
-        data = self._read()
+        data = self._read(changing=True)
         try:
             index = int(number) - 1
         except (TypeError, ValueError):
@@ -81,7 +82,7 @@ class AssistantNotes:
     def keep_turns(self, talk: list[tuple[str, str]]) -> None:
         """Keep the last turns for the next session. Trouble here must never stop an answer."""
         try:
-            data = self._read()
+            data = self._read(changing=True)
             data["turns"] = [(who, " ".join(str(text).split())[:MAX_TURN]) for who, text in talk][-MAX_TURNS:]
             self._write(data)
         except Exception:  # noqa: BLE001 - the talk simply starts fresh next time

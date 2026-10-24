@@ -771,7 +771,9 @@ Follow these rules when code changes data:
    the CV analysis and My details use it too. `read` gives the saved value, or nothing when the file is not
    there or is damaged. `load` stops with an error for a damaged file. If the key cannot open the
    file, both stop with an error. Thus a save never writes an empty store over the data. A store
-   that may show nothing in that case catches the error itself.
+   that may show nothing in that case catches the error itself. A change starts from
+   `load_for_change`. It moves a damaged file to `backups/damaged` first, so the change never
+   writes over it. The clean-up of old backups removes only folders with a time in their name.
 2. Call `vault.make_backup(label)` before a change that touches many jobs.
 3. Move a document to the encrypted backup instead of deleting it; put old copies in the Trash.
 4. Do not change the data while the window is running.

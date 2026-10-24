@@ -222,7 +222,9 @@ data/                your data; only the *.example.* files are in git
   and the thank-you note ask it. A dated line in a job's notes is `store.add_note`; a title the app gives a job it
   knows only by its company is one of `store.PLACEHOLDER_TITLES` (`store.has_real_title`).
 - **Each small store is one object over one `vault.JsonFile`**: `assistant_notes.AssistantNotes`,
-  `answer_memory.AnswerMemory`, `planner.CompanyNotes`. A file the data key cannot open raises `VaultError`;
+  `answer_memory.AnswerMemory`, `planner.CompanyNotes`. Every change of a store starts from
+  `JsonFile.load_for_change()`: a damaged file is moved to `backups/damaged` (`vault.DAMAGED`, never pruned) before the
+  change writes, never read as empty and written over. A file the data key cannot open raises `VaultError`;
   a save never treats it as empty, or it would write over it (`CompanyNotes` shows no notes, and the save gives
   `CompanyNotes.UNREADABLE`). The other JSON files use it too, and `config` names each once: `UI_SETTINGS`
   (Options), `LAST_RUN`, `FILTERED_OUT`, `PROFILE` (the CV analysis), `MY_DETAILS`; `vault.data_files()` asks them. `load` raises for a damaged file (Options

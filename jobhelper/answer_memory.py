@@ -45,20 +45,24 @@ class AnswerMemory:
     def path(self):
         return self._file.path
 
-    def _read(self) -> dict[str, dict[str, str]]:
-        data = self._file.read()                     # None when unreadable: answers are drafted as before
+    def _read(self, changing: bool = False) -> dict[str, dict[str, str]]:
+        # None when unreadable: answers are drafted as before; a change first moves a damaged file aside
+        data = self._file.load_for_change() if changing else self._file.read()
         if not isinstance(data, dict):
             return {}
         return {str(k): v for k, v in data.items() if isinstance(v, dict) and isinstance(v.get("answer"), str)}
 
-    def remember(self, question: str, answer: str, company: str = "") -> bool:
-        """Keep the person's wording for a question. False when there is nothing worth keeping
-        (no answer, a part still in [square brackets], no real question)."""
+    def remember(self, question: str, answer: str, company: str = "", replacing: str = "") -> bool:
+        """Keep the person's wording for a question; `replacing` names the question it was asked as before, which goes
+        in the same change. False when there is nothing worth keeping (no answer, a part still in [square brackets],
+        no real question)."""
         answer = str(answer or "").strip()
         k = key(question, company)
         if not answer or len(answer) > MAX_ANSWER or unfilled(answer) or len(k) < 4:
             return False
-        data = self._read()
+        data = self._read(changing=True)
+        if replacing:
+            data.pop(key(replacing, company), None)     # the old wording of this answer, not some other answer
         data.pop(k, None)                               # the newest wording goes to the end
         data[k] = {"question": " ".join(str(question).split())[:MAX_QUESTION], "answer": answer,
                    "company": " ".join(str(company or "").split()), "when": date.today().isoformat()}
@@ -91,7 +95,7 @@ class AnswerMemory:
 
     def forget(self, question: str, company: str = "") -> bool:
         """Remove one remembered answer."""
-        data = self._read()
+        data = self._read(changing=True)
         if data.pop(key(question, company), None) is None:
             return False
         self._file.write(data)
@@ -102,7 +106,7 @@ class AnswerMemory:
 
     def forget_all(self) -> int:
         """Remove everything remembered (a backup made earlier still holds it). Returns how many there were."""
-        n = self.count()
+        n = len(self._read(changing=True))
         if self._file.exists():
             self._file.write({})
         return n
@@ -115,8 +119,8 @@ def path():
     return MEMORY.path
 
 
-def remember(question: str, answer: str, company: str = "") -> bool:
-    return MEMORY.remember(question, answer, company)
+def remember(question: str, answer: str, company: str = "", replacing: str = "") -> bool:
+    return MEMORY.remember(question, answer, company, replacing)
 
 
 def recall(question: str, company: str = "", options: list[str] | None = None) -> dict[str, str] | None:

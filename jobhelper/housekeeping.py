@@ -36,11 +36,13 @@ def _age_key(path: Path) -> tuple:
 
 
 def backup_entries() -> list[Path]:
-    """Time-stamped backups (folders and single files), newest first."""
+    """Time-stamped backups (folders and single files), newest first. Only these are ever pruned: a folder without a
+    time in its name (the damaged files, the shelf, the approved rules) is kept whatever its age."""
     root = vault.backups_dir()
     if not root.is_dir():
         return []
-    entries = [p for p in root.iterdir() if p.name not in SIDE_FOLDERS and p.name not in (SHELF, APPROVED) and not p.name.startswith(".")]
+    entries = [p for p in root.iterdir() if _STAMP.search(p.name) and p.name not in SIDE_FOLDERS
+               and p.name not in (SHELF, APPROVED, vault.DAMAGED) and not p.name.startswith(".")]
     return sorted(entries, key=_age_key, reverse=True)
 
 
