@@ -130,3 +130,11 @@ def test_a_form_answer_backed_only_by_a_job_note_is_not_marked(isolate_data, mon
     with_notes = form_answers.generate({"title": "Developer", "company": "Orbis"}, cv, ["Which tools?"], config.experience_notes())
     without = form_answers.generate({"title": "Developer", "company": "Orbis"}, cv, ["Which tools?"], "")
     assert with_notes[0]["check"] == "" and "Kafka" in without[0]["check"]
+
+
+def test_one_rule_says_when_two_kinds_of_role_are_the_same_line():
+    from jobhelper.api_options import OptionsService
+    service = OptionsService.__new__(OptionsService)
+    assert OptionsService.pay_key("Python  Developer ") == OptionsService.pay_key("python developer")
+    assert "already in the list" in service.pay_problem("Python  Developer", 30000, ["python developer"])
+    assert OptionsService.own_figure(58000, "CZK") == 58000 and OptionsService.own_figure(58000, "EUR") == 2300

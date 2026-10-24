@@ -114,6 +114,8 @@ class Api:
     MAX_SALARY = _Via("_settings")
     MAX_PAY_ROWS = _Via("_settings")
     pay_problem = _Via("_settings")
+    pay_key = _Via("_settings")
+    own_figure = _Via("_settings")
     work_notes_size = _Via("_settings")
     MODELS = _Via("_settings")
     SOURCES = _Via("_settings")

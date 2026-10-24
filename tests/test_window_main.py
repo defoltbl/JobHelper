@@ -1312,3 +1312,46 @@ def test_every_dialog_has_the_same_title_header_and_footer(ui):
     ui.js("close()", dialog)
     _until_closed(ui, dialog)
     assert ui.warnings == []
+
+
+def test_an_estimate_becomes_your_own_figure_with_one_press(ui):
+    """The estimates could not be changed where they stood: the role had to be typed again under "A different figure for"."""
+    import json
+    dialog = ui.find("aboutDialog")
+    start = ui.bridge.options()
+    assert ui.bridge.saveOptions({**start, "where": "Prague", "country": "", "wanted_roles": ["Junior Python Developer"]})["ok"] is True
+    try:
+        ui.js("aboutDialog.show()")
+        _until_open(ui, "aboutDialog")
+        def drawn(name):                                          # rows of a Repeater: drawn, not found
+            return next((i for i in ui.seen("salaryEstimates") if i.objectName() == name), None)
+        assert _until_true(ui, lambda: drawn("estimateChange_0") is not None and drawn("estimateChange_0").property("visible") is True)
+        assert "Change makes one your own figure" in ui.find("salaryNote").property("text")
+        drawn("estimateChange_0").clicked.emit()
+        assert _until_true(ui, lambda: ui.js("payModel.count", dialog) == 1)
+        row = json.loads(ui.js("JSON.stringify(payModel.get(0))", dialog))
+        assert row["role"] == "Junior Python Developer" and row["amount"] > 0, "the role and the estimate, ready to change"
+        assert drawn("estimate_0").property("text") == "your figure below" and drawn("estimateChange_0").property("visible") is False
+        assert json.loads(ui.js("JSON.stringify(aboutDialog.collect())", dialog))["salary_by_role"][0]["role"] == "Junior Python Developer"
+        czk = row["amount"]
+        # a role edited in the list: the estimate offers Change again
+        ui.js('payModel.setProperty(0, "role", "support")', dialog)
+        assert _until_true(ui, lambda: drawn("estimateChange_0").property("visible") is True)
+        # in euros the figure is the estimate said in euros, not 58 000 EUR
+        ui.js('payModel.clear(); currencyCombo.currentIndex = currencyCombo.find("EUR")', dialog)
+        drawn("estimateChange_0").clicked.emit()
+        assert _until_true(ui, lambda: ui.js("payModel.count", dialog) == 1)
+        euros = json.loads(ui.js("JSON.stringify(payModel.get(0))", dialog))["amount"]
+        assert 0 < euros < czk / 10, (czk, euros)
+        # a refused Change is said next to the estimates, in one red line
+        ui.js('payModel.clear(); for (var i = 0; i < 20; i++) payModel.append({ role: "role " + i, amount: 1000 })', dialog)
+        drawn("estimateChange_0").clicked.emit()
+        assert _until_true(ui, lambda: "up to 20 kinds of role" in ui.js("aboutDialog.estimateErr", dialog))
+        assert ui.js("aboutDialog.payErr", dialog) == ""
+        ui.find("salarySpin").setProperty("value", 60000)                         # a figure of your own: no estimates, no red line about them
+        assert _until_true(ui, lambda: drawn("estimateErr").property("visible") is False)
+    finally:
+        ui.js("payModel.clear(); aboutDialog.confirmClose = true; close()", dialog)
+        _until_closed(ui, "aboutDialog")
+        ui.bridge.saveOptions(start)
+    assert ui.warnings == []

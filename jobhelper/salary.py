@@ -79,6 +79,11 @@ def tidy(amount: float, currency: str = "CZK") -> int:
     return int(round(amount / step) * step)
 
 
+def from_czk(amount: float, currency: str) -> int:
+    """A figure in crowns (the app's estimates) said in another currency, rounded as people say it."""
+    return tidy(amount / CURRENCIES.get(currency, 1.0), currency)
+
+
 def money(amount: int, currency: str = "CZK") -> str:
     """"60 000 CZK"."""
     return f"{int(amount):,}".replace(",", " ") + " " + currency

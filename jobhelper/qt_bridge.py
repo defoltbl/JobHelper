@@ -167,6 +167,16 @@ class Bridge(RunSlots, JobSlots, QObject):
         """'' or what is wrong with a line of "A different figure for" (OptionsService.pay_problem)."""
         return self._api.pay_problem(role, int(amount), list(others or []))
 
+    @Slot(str, result=str)
+    def payKey(self, role):
+        """When two kinds of role are the same line (OptionsService.pay_key)."""
+        return self._api.pay_key(role)
+
+    @Slot(float, str, result=int)
+    def ownFigure(self, estimate_czk, currency):
+        """An estimate in crowns as your own figure in the chosen currency (OptionsService.own_figure)."""
+        return self._api.own_figure(estimate_czk, currency)
+
     @Slot("QVariantList", str, result=int)
     def workNotesSize(self, jobs, general):
         """How long the notes are as the app reads them (WorkNotes.size)."""

@@ -225,6 +225,16 @@ class OptionsService:
                 return {}, f"“{key.replace('_', ' ')}” must be on or off."
         return clean, ""
 
+    @staticmethod
+    def pay_key(role) -> str:
+        """Two lines of "A different figure for" are the same kind of role when these words are equal."""
+        return " ".join(str(role or "").split()).lower()
+
+    @staticmethod
+    def own_figure(estimate_czk, currency) -> int:
+        """An estimate (always in crowns) as a figure of your own in the currency you chose."""
+        return salary.from_czk(float(estimate_czk or 0), str(currency or "CZK"))
+
     def pay_problem(self, role, amount, others=()):
         """'' or what is wrong with one line of "A different figure for": the words the window shows when you press Add, and
         the save check of every line (one rule for both)."""
@@ -237,7 +247,7 @@ class OptionsService:
             return "Enter a kind of role in words, for example support."
         if isinstance(amount, bool) or not isinstance(amount, (int, float)) or amount != int(amount) or not 1 <= amount <= self.MAX_SALARY:
             return f"Enter the salary for “{role}”: a whole number above 0."
-        if role.lower() in [str(o).strip().lower() for o in others]:
+        if self.pay_key(role) in [self.pay_key(o) for o in others]:
             return f"“{role}” is already in the list: change its figure there."
         if len(others) >= self.MAX_PAY_ROWS:
             return f"The list takes up to {self.MAX_PAY_ROWS} kinds of role. Remove one first."

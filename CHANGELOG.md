@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **About you:** each salary estimate now has a **Change** button. It makes the estimate your own figure for that kind of role, ready to change, without typing the role again.
 - **Data safety:** a damaged file of your saved answers, assistant notes, My details, Options or last-run summary is now kept in the backups (folder "damaged") before the next save. Before, the save wrote over it. The clean-up of old backups no longer removes that folder.
 - **Data safety:** when you change the question of a saved answer, the old answer is no longer lost if the new one cannot be kept, and no other answer is dropped.
 - **Data safety:** the company notes in the job window are now kept in the backups too when their file is damaged, before the next save.

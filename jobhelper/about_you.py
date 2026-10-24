@@ -126,7 +126,8 @@ class AboutYou:
             monthly, _year = salary.estimate(role, seniority)
             if monthly:
                 rows.append({"role": role, "amount": monthly, "text": salary.money(monthly, "CZK")})
-        note = ("With 0, forms give the app's estimate for the job's kind of role:" if rows else
+        note = ("With 0, forms give the app's estimate for the job's kind of role. The roles are your kinds of role in Options; "
+                "Change makes one your own figure, in the currency you chose." if rows else
                 "The app has an estimate only for software roles, and none of your roles is one. With 0, forms leave it to you.")
         return {"available": True, "rows": rows[:6], "note": note}
 
