@@ -21,7 +21,8 @@ TOO_MANY = f"More than {MAX_CHOICES} lists and choices: ask me again after these
 
 SYSTEM = ("You answer the multiple-choice and number fields of one job application form for one candidate. You only use "
           "the candidate's CV and the facts given. When they do not settle a field, you answer null: you never guess, and "
-          "you never choose an answer about gender, age, origin, health, religion or family. Reply with only the JSON object.")
+          "you never choose an answer about gender, age, origin, health, religion or family. Reply with only the JSON object. "
+          + llm.POSTING_RULE)
 
 PROMPT = """Choose the answers for these fields of a job application form.
 
@@ -150,7 +151,7 @@ def decide(choices: list[dict[str, Any]], cv_text: str, mine: dict[str, str], jo
     facts = facts_block(cv_text, mine, job)
     data = llm.ask_json(PROMPT.format(cv_text=cv_text[:12000], facts=facts,
                                       title=(job or {}).get("title", "not stated"), company=(job or {}).get("company", "not stated"),
-                                      location=(job or {}).get("location", "not stated"), fields="\n".join(lines)),
+                                      location=(job or {}).get("location", "not stated"), fields=llm.untrusted("questions", "\n".join(lines))),
                         system=SYSTEM, tag="form_answers")
     by_n = {c["n"]: c for c in todo}
     backing = _norm(cv_text + "\n" + facts)

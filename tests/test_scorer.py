@@ -48,7 +48,8 @@ def test_the_limit_is_waited_for_when_the_caller_can_and_stops_the_run_when_it_c
 
 def test_a_posting_without_location_or_text_is_still_asked_about():
     fields = Scorer(PROFILE, rules="r").fields({"id": "x", "title": "Analyst"})
-    assert fields["location"] == "" and fields["description"] == agent3_letters.NO_DESCRIPTION and "—" not in fields["description"]
+    assert fields["location"] == "" and fields["description"] == llm.untrusted("posting", agent3_letters.NO_DESCRIPTION)
+    assert "—" not in fields["description"], "the posting goes to Claude as data, inside its tags"
 
 
 def test_a_job_with_documents_is_marked_ready_the_same_way_everywhere():

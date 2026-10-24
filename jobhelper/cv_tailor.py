@@ -23,7 +23,7 @@ from typing import Any
 from lxml import etree
 
 from .word_document import P, R, Paragraph, WordDocument, set_run_text, text_of
-from . import config, llm, pdf, store
+from . import claims, config, llm, pdf, store
 from .claims import mentions
 
 # Technologies the master does not contain (instruction, section 4). Used when
@@ -48,7 +48,7 @@ SYSTEM = (
     "experience that is not in the master CV. Use an en dash (–), never an em dash, "
     "and no emojis. You have no tools and no file access here: do not try to open, "
     "unzip, edit or convert any file. Another program builds the .docx from your "
-    "answer. Reply once, with only the JSON object."
+    "answer. Reply once, with only the JSON object. " + llm.POSTING_RULE
 )
 
 PROMPT = """Write the new PROFILE text and KEY SKILLS rows for the job posting below. The
@@ -188,16 +188,45 @@ def borrowed_claims(profile: str, description: str, backed: str) -> list[str]:
     return claimed
 
 
+POSTING_SHOWN = 5000                   # how much of a posting the CV and letter prompts show (and their figure checks read)
+
+
+def figure_sources(job: dict[str, Any], cv_text: str, own=(), references=()) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """(sources, references) for `claims.unbacked_figures`. Your own: the CV, your notes and About you facts, plus what
+    you typed (`own`). References: the posting (as much as the letter prompt shows), the job's title, company and location
+    ("3M", "Praha 4"), plus `references` – they may be repeated, never claimed as your amount ("5+ years")."""
+    return ((cv_text, config.experience_notes(), config.facts_block(cv_text), *own),
+            ((job.get("description") or "")[:POSTING_SHOWN], job.get("title") or "", job.get("company") or "", job.get("location") or "",
+             *references))
+
+
+def profile_problems(profile: str, job: dict[str, Any], cv_text: str) -> tuple[list[str], list[str]]:
+    """What a PROFILE claims that the person's own words do not back: (figures, names). A figure ("8 years") must come
+    from the CV, the notes or About you; a technology or company name from those or from this job's own company and
+    place (not its title: "Rust Developer" does not back "built Rust services"). The first word of a sentence is not taken for a name, and a sentence that names an interest
+    ("keen to grow into Kafka") claims none."""
+    sources, references = figure_sources(job, cv_text)
+    figures = claims.unbacked_figures(profile, sources, references, brackets_ok=False)
+    own = "\n".join((*sources, job.get("company") or "", job.get("location") or ""))     # not the title: it is the posting's word
+    inner = " ".join(" ".join(s.split()[1:]) for s in claims.sentences(profile) if not _INTEREST.search(s))
+    return figures, unknown_skill_terms(inner, own)
+
+
+_ABBREVIATION = re.compile(r"\b(?:e\.g|i\.e|approx|etc|vs|incl|no|st|cca)\.$", re.IGNORECASE)   # a split there is no sentence end
+_NOT_THE_SAME = {"java": "javascript"}     # a name inside a longer name of another technology: Java is not JavaScript
+
+
 def unknown_skill_terms(items: str, master_text: str) -> list[str]:
     """Technology-looking words in a KEY SKILLS row that the master never
     mentions (names with a capital letter, digit or symbol, e.g. "Kafka", "S3")."""
-    low = master_text.lower()
-    unknown = []
+    low, unknown = master_text.lower(), []
     for token in re.findall(r"[A-Za-z][A-Za-z0-9+#.]*", items):
         token = token.strip(".")
         if len(token) < 2 or token.islower():
             continue                                  # ordinary words: "schema design", "monitoring"
-        if token.lower() not in low and token not in unknown:
+        # a part of a word counts ("SQL" in "PostgreSQL", "API" in "APIs"), except inside another technology's name
+        seen = low.replace(_NOT_THE_SAME[token.lower()], " ") if token.lower() in _NOT_THE_SAME else low
+        if token.lower() not in seen and token not in unknown:
             unknown.append(token)
     return unknown
 
@@ -464,14 +493,14 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
     unverified = unverified_terms(cv_text)
     backed = cv_text + "\n" + config.experience_notes()          # everything the person wrote about their own work
 
-    description = (job.get("description") or "").strip()[:5000] or "(No description was available.)"
+    description = (job.get("description") or "").strip()[:POSTING_SHOWN] or "(No description was available.)"
     profile, skills, role_short, feedback = "", [], "", ""
     for _attempt in range(2):
         data = llm.ask_json(PROMPT.format(
             rules=load_rules(cv_text), cv_text=cv_text[:12000],
             master_rows="\n".join(f"- {r}" for r in m_rows) or "(none)",
             title=job["title"], company=job["company"], location=job.get("location", ""),
-            description=description, feedback=feedback, max_profile=MAX_PROFILE_CHARS,
+            description=llm.untrusted("posting", description), feedback=feedback, max_profile=MAX_PROFILE_CHARS,
             min_rows=MIN_ROWS, max_rows=MAX_ROWS, rows_budget=sum(len(r) for r in m_rows) + 60,
         ), system=SYSTEM, tag="agent3_cv")
         if not isinstance(data, dict):
@@ -485,17 +514,28 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
         problems += [f"PROFILE presents '{phrase}' as the candidate's experience, but those are the posting's words: nothing in the "
                      "master CV speaks of it. Leave it out, or name it only as something the candidate is keen to grow into."
                      for phrase in borrowed_claims(profile, description, backed)]
+        problems += [f"PROFILE states the figure {f}, which none of the candidate's sources gives. Use only the figures the CV "
+                     "or the notes give." for f in profile_problems(profile, job, cv_text)[0]]     # names are only noted, below
         if not problems:
             break
         feedback = "\nYour previous draft was rejected. Fix these problems:\n" + \
                    "\n".join(f"- {p}" for p in problems) + "\n"
 
     profile, skills = enforce(profile, skills, unverified, cv_text)
+    figures = profile_problems(profile, job, cv_text)[0]
+    pieces = claims.sentences(profile)
+    if figures and not any(_ABBREVIATION.search(p) for p in pieces):     # "e.g. 12 years" is not a sentence of its own
+        kept = " ".join(s for s in pieces if not profile_problems(s, job, cv_text)[0])
+        profile = kept or profile                     # nothing would be left: the profile stays, and the figure is noted
+        figures = [] if kept else figures             # an invented figure is cut out with its sentence: a CV is sent as is
     if not profile:
         raise ValueError("The model returned no usable PROFILE.")
     # What is still stated as experience in the posting's words after the retry is not cut out by the app (a phrase
-    # such as "version control" can be fair wording for what the CV does show): it is put in front of the person.
-    left = borrowed_claims(profile, description, backed)
+    # such as "version control" can be fair wording for what the CV does show): it is put in front of the person,
+    # with any name the CV and the notes do not give.
+    # a kept figure first, so the cap of eight hides a figure last; then the posting's words, then names
+    left = list(dict.fromkeys([f"the figure {f}" for f in figures] + borrowed_claims(profile, description, backed)
+                              + profile_problems(profile, job, cv_text)[1]))
     if left:
         job["cv_check"] = left[:8]
     else:

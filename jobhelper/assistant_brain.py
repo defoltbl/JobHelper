@@ -275,7 +275,7 @@ def asks(action: dict[str, Any], job: dict[str, Any] | None) -> str:
 # ── skills that are a Claude call of their own ──────────────────────────────
 BRIEF_SYSTEM = ("You brief one person before they apply to or talk with a company. You only use the facts given: the posting, the "
                 "person's own notes and the company's earlier messages. What they do not say, you do not say. At most six short "
-                "sentences, plain words, no lists, no emojis; an en dash, never an em dash.")
+                "sentences, plain words, no lists, no emojis; an en dash, never an em dash. " + llm.POSTING_RULE)
 
 BRIEF_PROMPT = """Company: {company}
 Role: {title} ({location})
@@ -306,7 +306,7 @@ Say what works, what does not, and the one or two changes these numbers suggest.
 PRACTICE_SYSTEM = ("You help one person practise for a job interview. You are given a question, the answer they just typed, their CV and "
                    "the posting. Say in at most four short sentences what is good in the answer and what is missing or weak, and name "
                    "one real thing from their CV they could add. Never invent experience for them. Plain words, no lists, no emojis; "
-                   "an en dash, never an em dash.")
+                   "an en dash, never an em dash. " + llm.POSTING_RULE)
 
 PRACTICE_PROMPT = """The role: {title} at {company}
 
@@ -331,7 +331,8 @@ The answer the person typed:
 REVIEW_SYSTEM = ("You check one job application form before the person sends it. You are given what the form holds, the person's CV and "
                  "facts, and the posting. List only real problems: an answer that contradicts the CV or the facts, a claim the CV does "
                  "not back, an answer that does not answer its question, wording that names another company, a figure outside what the "
-                 "posting states. Do not comment on style, and do not list fields that are fine. Reply with only the JSON object.")
+                 "posting states. Do not comment on style, and do not list fields that are fine. Reply with only the JSON object. "
+                 + llm.POSTING_RULE)
 
 REVIEW_PROMPT = """The role: {title} at {company}
 The posting says about pay: {pay}
@@ -367,7 +368,7 @@ What they ask for next: {next_step}
 What the applicant wants to say: {how}"""
 
 POSTING_SYSTEM = ("You copy facts out of a web page that may be a job posting. You only copy what the page states: never add or guess. "
-                  "Reply with only the JSON object.")
+                  "Reply with only the JSON object. " + llm.POSTING_RULE)
 
 POSTING_PROMPT = """The page's title: {title}
 The page's address: {url}
@@ -397,7 +398,7 @@ def brief(job: dict[str, Any], notes: dict[str, Any], replies: list[dict[str, An
                      for r in replies[:6]) or "(none)"
     return _plain(llm.ask(BRIEF_PROMPT.format(company=job.get("company", ""), title=job.get("title", ""), location=job.get("location", "") or "not stated",
                                               status=str(job.get("status", "")).replace("_", " "),
-                                              posting=str(job.get("description") or "").strip()[:6000] or "(no posting text was saved)",
+                                              posting=llm.untrusted("posting", str(job.get("description") or "").strip()[:6000] or "(no posting text was saved)"),
                                               notes=mine, replies=said), system=BRIEF_SYSTEM, tag="assistant"))
 
 
@@ -408,7 +409,7 @@ def advice(numbers: dict[str, Any]) -> str:
 def feedback(job: dict[str, Any], cv_text: str, question: str, basis: str, answer: str) -> dict[str, str]:
     """{"feedback", "rating"} for one practice answer (one call). An unknown rating counts as "ok"."""
     data = llm.ask_json(PRACTICE_PROMPT.format(title=job.get("title", ""), company=job.get("company", ""),
-                                               posting=str(job.get("description") or "").strip()[:4000] or "(no posting text was saved)",
+                                               posting=llm.untrusted("posting", str(job.get("description") or "").strip()[:4000] or "(no posting text was saved)"),
                                                cv_text=cv_text[:10000], question=_plain(question, 400), basis=_plain(basis, 800) or "(nothing prepared)",
                                                answer=str(answer).strip()[:3000]) + RATED_SHAPE, system=RATED_SYSTEM, tag="assistant")
     said = _plain(data.get("feedback") if isinstance(data, dict) else "", 1200)
@@ -429,7 +430,7 @@ def reply(job: dict[str, Any], message: dict[str, Any], how: str, name: str) -> 
 def posting(title: str, url: str, text: str) -> dict[str, Any]:
     """What a page says about the job it advertises: {is_posting, title, company, location}. A title or a company
     that does not stand on the page is dropped, so nothing is added to the list that the page does not say."""
-    data = llm.ask_json(POSTING_PROMPT.format(title=_plain(title, 300), url=_plain(url, 300), text=str(text)[:9000]), system=POSTING_SYSTEM, tag="assistant")
+    data = llm.ask_json(POSTING_PROMPT.format(title=_plain(title, 300), url=_plain(url, 300), text=llm.untrusted("page", str(text)[:9000])), system=POSTING_SYSTEM, tag="assistant")
     if not isinstance(data, dict):
         return {"is_posting": False, "title": "", "company": "", "location": ""}
     page = " ".join(f"{title} {text}".lower().split())
@@ -446,7 +447,7 @@ def review(job: dict[str, Any] | None, cv_text: str, facts: str, fields: list[di
         return []
     listing = "\n".join(f"- {f['label']}: {str(f['value'])[:600]}" for f in held[:60])
     data = llm.ask_json(REVIEW_PROMPT.format(title=(job or {}).get("title", "not known"), company=(job or {}).get("company", "not known"),
-                                             pay=pay or "nothing", cv_text=cv_text[:10000], facts=facts, fields=listing),
+                                             pay=pay or "nothing", cv_text=cv_text[:10000], facts=facts, fields=llm.untrusted("questions", listing)),
                         system=REVIEW_SYSTEM, tag="assistant")
     names = {f["label"].lower(): f["label"] for f in held}
     out = []

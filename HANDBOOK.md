@@ -91,7 +91,9 @@ These came from decisions made while building it. A change that breaks one is a 
   app wrote can be.
 - What the app cannot settle by itself is shown, not hidden: a term of the posting that an adapted CV
   or a letter still states as experience after one retry is named in the job window (`cv_check`,
-  `letter_check`); a sentence is not cut out silently.
+  `letter_check`); a sentence is not cut out silently. Two exceptions, because a CV is sent as it is: a PROFILE
+  sentence with a figure no source gives is removed (`cv_tailor.profile_problems`), and a name the CV and the notes
+  do not give is noted in `cv_check`.
 - Texts use an en dash, not an em dash, no emojis, first person.
 
 **Data**
@@ -178,8 +180,9 @@ data/                your data; only the *.example.* files are in git
 
 ### Things that are easy to get wrong
 
-- **Text from outside is data, never instructions.** An email goes to Claude only through `llm.untrusted` (tags the
-  text cannot close, also nested ones), and the reply window shows mail and Claude's words as `Text.PlainText`. Every
+- **Text from outside is data, never instructions.** An email, a job posting, a form's questions and a web page go to
+  Claude only inside `llm.untrusted` tags, and each system prompt that receives them says `llm.POSTING_RULE` (the tags
+  the text cannot close, also nested ones). The reply window shows mail and Claude's words as `Text.PlainText`. Every
   mail connection uses `email_client.tls_context`; every Claude call has `llm.CALL_TIMEOUT`. A timeout ends a scan, a
   scoring run or a writing run (`llm.STOPS_A_RUN`); the work done is saved first. The usage limit pauses a run
   instead. A timeout while writing uses one of the job's two tries (`agent3_letters._give_back_try`), so a job whose
@@ -187,8 +190,8 @@ data/                your data; only the *.example.* files are in git
   Oct): Claude's stage alone moves an application; a check of the email's own words is designed separately. The same
   later PR looks again at the older rejection phrases in `email_client._REJECTION`: "we have not selected another
   candidate" and "interviewing other candidates who match" count as a rejection, and "another candidate was chosen"
-  does not. A rule for "we chose another candidate" was tried and taken out (owner, 23 Oct): it needs a guard for
-  "not yet", "once we have", "still under review" and an offer that names an earlier choice ("we had chosen another
+  does not. A rule for "we chose another candidate" was tried and taken out (owner, 23 Oct): it needs a guard for "not
+  yet", "once we have", "still under review" and an offer that names an earlier choice ("we had chosen another
   candidate first, but they declined"), and it must not fire on "another candidate-management tool".
 - **A running search holds its own copy of the jobs** and saves it when it ends. A hand edit
   must reach that copy too, or it is lost. `Api._change(job_id, fn)` does this by calling `fn`
@@ -391,8 +394,9 @@ data/                your data; only the *.example.* files are in git
   preparation, `Preparation.voice()` is the one list that is both sent back to the model and marked for the user:
   a part added to the sheet goes into that list, or it is checked in one place only.
 - **A figure Claude writes must come from somewhere** (`claims.unbacked_figures`, sources from
-  `cover_letter.figure_sources`). Your own texts back any figure: the CV, the notes, the About you facts and what you
-  typed (a rewrite hint, your letter). References (the posting, the job's title, company and location, the question, an
+  `cv_tailor.figure_sources`; the adapted CV's PROFILE asks `cv_tailor.profile_problems`). Your own texts back any
+  figure: the CV, the notes, the About you facts and what you typed (a rewrite hint, your letter). References (the
+  posting, the job's title, company and location, the question, an
   earlier answer) may be repeated ("your team of 50"), never claimed as your amount ("my 5 years", `claims.as_quantity`).
   The letter and its rewrite send a figure back once, and a letter keeps no [square brackets]; the form answers send it
   back once, their rewrite marks it. What is left is shown (`letter_figures`, refreshed on every save; the answer's

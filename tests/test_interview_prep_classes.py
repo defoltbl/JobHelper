@@ -70,3 +70,6 @@ def test_editing_by_hand_runs_the_same_check_as_making_it():
                                                     "tech": [{"tool": "Docker", "about": "Containers.", "use": "It packed the app.", "why": "Same everywhere."}]}]}).as_dict()
     new, problem = ip.apply_parts(prep, [{"key": "projects.0.what", "text": "I built it and ran it on Kubernetes."}], cv_text="I know Python and Docker.")
     assert problem == "" and new["checks"] == ["The project Agent mentions Kubernetes as experience, which is not in your CV."]
+    # the CV could not be read this time: the checks stay as they were, they are not wiped
+    again, problem = ip.apply_parts(new, [{"key": "projects.0.what", "text": "I built it and ran it on Kubernetes, at scale."}], cv_text="")
+    assert problem == "" and again["checks"] == new["checks"]
