@@ -82,14 +82,19 @@ class SystemService:
         def moment(epoch):                    # today's time alone, another day's with its date
             when = datetime.fromtimestamp(epoch)
             return when.strftime("%H:%M") if when.date() == now.date() else when.strftime("%d %b %H:%M")
-        for name, w in usage.windows(now.timestamp()).items():
+        windows = usage.windows(now.timestamp())
+        for name, w in windows.items():
             out[name + "_used"] = None if w["used"] is None else min(100, max(0, round(w["used"] * 100)))
+            out[name + "_low"] = out[name + "_used"] is not None and 100 - out[name + "_used"] <= usage.LOW_LEFT
             out[name + "_resets"] = moment(w["resets_at"]) if w["resets_at"] else ""
             out[name + "_stale"] = w["stale"]                                   # an old number (usage.STALE_AFTER) ...
             out[name + "_as_of"] = moment(w["as_of"]) if w["stale"] else ""     # ... and when Claude last said it
+            out[name + "_reset_passed"] = moment(w["reset_passed"]) if w["reset_passed"] else ""   # reset since, not read again
         # seconds until the next limit comes back, so the card can correct itself then (0 = none is counting down)
-        coming = [w["resets_at"] - now.timestamp() for w in usage.windows(now.timestamp()).values() if w["resets_at"] and w["used"]]
+        coming = [w["resets_at"] - now.timestamp() for w in windows.values() if w["resets_at"] and w["used"]]
         out["next_reset_in"] = int(min(coming)) + 1 if coming else 0
+        # worth one small question to Claude: a number older than an hour, or a reset since the last one
+        out["should_refresh"] = any(w["stale"] or w["reset_passed"] for w in windows.values())
         return out
 
     # ── the check made when the app starts ──────────────────────

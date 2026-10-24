@@ -54,6 +54,7 @@ _WINDOW_WORDS = (("seven_day", re.compile(r"week|7[- ]?day|seven[- ]day", re.IGN
                  ("five_hour", re.compile(r"session|5[- ]?hour|five[- ]hour", re.IGNORECASE)))
 WINDOWS = ("five_hour", "seven_day")
 STALE_AFTER = 3600      # seconds: Claude reports the limits only with an answer, so an older number is shown with its time
+LOW_LEFT = 20           # per cent left or less: the card says when the window resets, and its bar turns red
 
 
 def _blank() -> dict[str, Any]:
@@ -80,9 +81,9 @@ def _moment(text: Any) -> float:
         return 0.0
 
 
-def _window(used: float | None, resets_at: float, as_of: float, now: float) -> dict[str, Any]:
+def _window(used: float | None, resets_at: float, as_of: float, now: float, reset_passed: float = 0.0) -> dict[str, Any]:
     return {"used": used, "resets_at": resets_at, "as_of": as_of,
-            "stale": used is not None and as_of > 0 and now - as_of > STALE_AFTER}
+            "stale": used is not None and as_of > 0 and now - as_of > STALE_AFTER, "reset_passed": reset_passed}
 
 
 def window_named(message: str) -> str:
@@ -165,11 +166,12 @@ class UsageLog:
 
     def windows(self, now: float | None = None) -> dict[str, dict[str, Any]]:
         """Each limit as it stands now: {window: {used (0..1 or None = never reported), resets_at (epoch, 0 = unknown),
-        as_of (epoch the number was true, 0 = unknown), stale (it is older than STALE_AFTER)}}.
+        as_of (epoch the number was true, 0 = unknown), stale (it is older than STALE_AFTER), reset_passed (epoch of a
+        reset since the last reading, 0 = none)}}.
 
-        The numbers Claude last reported, corrected by what is known since: a window
-        whose reset time has passed is empty again, and a window Claude refused a call
-        for is full until the reset it named, whatever the older numbers say."""
+        The numbers Claude last reported, corrected by what is known since: a window whose reset time has passed is
+        unknown again (Claude Code and the app share the subscription, so it need not be empty), and a window Claude
+        refused a call for is full until the reset it named, whatever the older numbers say."""
         import time
         now = time.time() if now is None else now
         state = self._read()
@@ -180,11 +182,12 @@ class UsageLog:
         for name in WINDOWS:
             w = (reported or {}).get(name)
             used, resets, as_of = (w.get("utilization"), float(w.get("resetsAt") or 0), read_at) if isinstance(w, dict) else (None, 0.0, 0.0)
+            passed = 0.0
             if not isinstance(used, (int, float)) or isinstance(used, bool):
                 used, resets, as_of = None, 0.0, 0.0
             elif resets and resets <= now:
-                used, resets, as_of = 0.0, 0.0, now
-            out[name] = _window(None if used is None else float(used), resets, as_of, now)
+                used, resets, as_of, passed = None, 0.0, 0.0, resets      # reset since the reading: what is used now is not known
+            out[name] = _window(None if used is None else float(used), resets, as_of, now, passed)
         block = state.get("limit_block") or {}
         until = float(_number(block.get("until")))
         if until > now:

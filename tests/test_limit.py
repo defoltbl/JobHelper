@@ -134,16 +134,18 @@ def test_when_both_limits_are_used_up_the_one_that_frees_later_is_named(isolate_
     assert status["window"] == "seven_day" and status["resets_at"] == NOON + 86400
 
 
-def test_a_window_whose_reset_time_passed_is_empty_again(isolate_data):
+def test_a_window_whose_reset_time_passed_is_unknown_again(isolate_data):
+    """It was shown as empty ("100% left"), but Claude Code uses the same subscription, so after a reset nobody knows."""
     _windows(five=0.87, seven=0.34, five_reset=NOON + 600, seven_reset=NOON + 86400)
     assert _kept(usage.windows(NOON)["five_hour"]) == {"used": 0.87, "resets_at": NOON + 600}
-    assert _kept(usage.windows(NOON + 601)["five_hour"]) == {"used": 0.0, "resets_at": 0.0}
-    assert usage.windows(NOON + 601)["five_hour"]["stale"] is False, "a reset that passed is known now"
-    assert usage.windows(NOON + 601)["seven_day"]["used"] == 0.34
+    after = usage.windows(NOON + 601)["five_hour"]
+    assert _kept(after) == {"used": None, "resets_at": 0.0} and after["reset_passed"] == NOON + 600
+    assert usage.windows(NOON + 601)["seven_day"]["used"] == 0.34 and usage.limit_status(now=NOON + 601)["blocked"] is False
 
 
 def test_windows_never_reported_stay_unknown(isolate_data):
-    assert usage.windows() == {name: {"used": None, "resets_at": 0.0, "as_of": 0.0, "stale": False} for name in ("five_hour", "seven_day")}
+    assert usage.windows() == {name: {"used": None, "resets_at": 0.0, "as_of": 0.0, "stale": False, "reset_passed": 0.0}
+                               for name in ("five_hour", "seven_day")}
     _saved_usage(lambda state: state.update(last_rate_limit={"at": "now", "info": {"unifiedWindows": {
         "five_hour": {"utilization": "a lot"}, "seven_day": "?"}}}))
     assert usage.windows()["five_hour"]["used"] is None and usage.windows()["seven_day"]["used"] is None
@@ -160,7 +162,8 @@ def test_the_usage_card_says_nothing_is_left_while_claude_refuses(isolate_data):
     in_an_hour = time.time() + 3600
     _windows(five=0.87, seven=0.34, five_reset=time.time() - 60, seven_reset=time.time() + 86400)
     card = ui_api.Api().usage_info()
-    assert card["five_hour_used"] == 0 and card["five_hour_resets"] == "" and card["seven_day_used"] == 34
+    assert card["five_hour_used"] is None and card["five_hour_resets"] == "" and card["seven_day_used"] == 34
+    assert card["five_hour_reset_passed"] and card["should_refresh"] is True, "reset since the reading: ask again"
     usage.note_limit(in_an_hour, SESSION_REFUSAL)
     card = ui_api.Api().usage_info()
     assert card["five_hour_used"] == 100 and card["seven_day_used"] == 34
@@ -323,7 +326,6 @@ def test_command_line_run_stops_cleanly_and_saves(isolate_data, monkeypatch, cap
     assert run.main() == 3
     assert "limit is used up" in capsys.readouterr().out
     assert [j["match_score"] for j in store.load_jobs()] == [10, None]
-
 
 
 def test_command_line_run_saves_what_it_scored_when_claude_stops_answering(isolate_data, monkeypatch, capsys):
@@ -572,3 +574,21 @@ def test_a_stuck_claude_in_a_run_uses_one_of_the_jobs_tries(isolate_data, monkey
         assert jobs[0]["doc_attempts"] == tries
     agent3_letters.process(jobs, {"seniority": "junior"}, threshold=60, cv_text="CV")       # a normal run skips a spent job
     assert jobs[0]["doc_attempts"] == 2 and not jobs[0].get("cover_letter_file")
+
+
+def test_the_card_asks_again_only_for_an_old_or_reset_figure_and_names_a_low_window(isolate_data):
+    _windows(five=0.80, seven=0.79, five_reset=time.time() + 3600, seven_reset=time.time() + 86400)
+    card = ui_api.Api().usage_info()
+    assert card["should_refresh"] is False, "a fresh reading: no question to Claude"
+    assert card["five_hour_low"] is True and card["seven_day_low"] is False, f"{usage.LOW_LEFT}% left or less is low"
+    old = datetime.fromtimestamp(time.time() - usage.STALE_AFTER - 60).replace(microsecond=0)
+    _saved_usage(lambda state: state["last_rate_limit"].update(at=old.isoformat()))
+    assert ui_api.Api().usage_info()["should_refresh"] is True, "older than an hour: one small question"
+
+
+def test_a_refused_window_and_a_reset_one_are_told_apart(isolate_data):
+    _windows(five=0.87, seven=0.34, five_reset=NOON - 60, seven_reset=NOON - 60)
+    usage.note_limit(NOON + 3600, SESSION_REFUSAL)
+    now = usage.windows(NOON)
+    assert now["five_hour"]["used"] == 1.0 and now["five_hour"]["reset_passed"] == 0.0, "the refusal is news"
+    assert now["seven_day"]["used"] is None and now["seven_day"]["reset_passed"] == NOON - 60
