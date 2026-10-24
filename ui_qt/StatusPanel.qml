@@ -45,8 +45,10 @@ Rectangle {
         }
         Repeater {
             model: [
-                { key: "five_hour", label: "5-hour", used: usageData.five_hour_used, resets: usageData.five_hour_resets, asOf: usageData.five_hour_as_of, c1: theme.a2, c2: theme.accent },
-                { key: "seven_day", label: "7-day", used: usageData.seven_day_used, resets: usageData.seven_day_resets, asOf: usageData.seven_day_as_of, c1: theme.a1, c2: theme.a3 }
+                { key: "five_hour", label: "5-hour", used: usageData.five_hour_used, resets: usageData.five_hour_resets, asOf: usageData.five_hour_as_of,
+                  resetPassed: usageData.five_hour_reset_passed, low: usageData.five_hour_low === true, c1: theme.a2, c2: theme.accent },
+                { key: "seven_day", label: "7-day", used: usageData.seven_day_used, resets: usageData.seven_day_resets, asOf: usageData.seven_day_as_of,
+                  resetPassed: usageData.seven_day_reset_passed, low: usageData.seven_day_low === true, c1: theme.a1, c2: theme.a3 }
             ]
             ColumnLayout { Layout.fillWidth: true; spacing: 5
                 RowLayout { Layout.fillWidth: true
@@ -55,18 +57,24 @@ Rectangle {
                     Text { objectName: "usageLeft_" + modelData.key; font.pixelSize: 11
                         color: modelData.used >= 100 ? theme.crit : theme.soft; font.bold: modelData.used >= 100
                         text: modelData.used === undefined || modelData.used === null ? "—" : Math.max(0, 100 - modelData.used) + "% left" } }
+                // the bar is what is LEFT, as the card's title says: full when nothing is used, empty when it is used up
                 Rectangle { Layout.fillWidth: true; implicitHeight: 8; radius: 4; color: theme.inset
-                    Rectangle { height: parent.height; radius: 4
-                        width: parent.width * Math.max(0, Math.min(1, (modelData.used === undefined || modelData.used === null ? 0 : modelData.used) / 100))
+                    Rectangle { id: bar; objectName: "usageBar_" + modelData.key; height: parent.height; radius: 4
+                        visible: modelData.used !== undefined && modelData.used !== null      // not known: no fill, never "used up"
+                        readonly property real share: modelData.used === undefined || modelData.used === null ? 0 : Math.max(0, 100 - modelData.used)
+                        width: parent.width * Math.min(1, share / 100)
                         gradient: Gradient { orientation: Gradient.Horizontal
-                            GradientStop { position: 0; color: modelData.c1 } GradientStop { position: 1; color: modelData.c2 } } } }
+                            GradientStop { position: 0; color: modelData.low ? theme.crit : modelData.c1 }      // usage.LOW_LEFT, from the back end
+                            GradientStop { position: 1; color: modelData.low ? theme.warn : modelData.c2 } } } }
                 // when little is left: the time it comes back, on its own line so the card keeps its width;
                 // else, for a number Claude reported long ago, when that was (it reports only with an answer)
                 Text { objectName: "usageResets_" + modelData.key; visible: text !== ""
-                    readonly property bool resetLine: !!modelData.resets && modelData.used >= 80
+                    readonly property bool resetLine: !!modelData.resets && modelData.low
                     Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; wrapMode: Text.Wrap
                     color: resetLine && modelData.used >= 100 ? theme.crit : theme.soft; font.pixelSize: 10
-                    text: resetLine ? "resets " + modelData.resets : (modelData.asOf ? "as of " + modelData.asOf : "") }
+                    text: resetLine ? "resets " + modelData.resets
+                          : modelData.resetPassed ? "reset at " + modelData.resetPassed + " · not read since"
+                          : (modelData.asOf ? "as of " + modelData.asOf : "") }
             }
         }
         // last run card

@@ -256,7 +256,7 @@ ApplicationWindow {
         target: bridge
         function onAgentChanged(key, status, info) { win.setAgent(key, status, info); }
         function onLogChanged(t) { win.quietTicker = true; ticker.text = t; win.quietTicker = false; }     // a run's own progress: no pop-up
-        function onRunningChanged(r) { win.appRunning = r; }
+        function onRunningChanged(r) { win.appRunning = r; if (!r) win.refreshIfDue(); }   // a reset during the run: asked about once it stops
         function onRunFinished(mode, summary) {
             ticker.text = summary; win.reloadAll();
             var bad = /^(Error|Couldn't|Email scan failed|Stopped)/.test(summary);
@@ -289,13 +289,20 @@ ApplicationWindow {
             if (!win.healthRan || !win.healthData.ok) { win.healthData = info.health ? JSON.parse(info.health) : bridge.selfCheck(info.claude === true); win.healthRan = true; }
             win.connChecked = true;
         }
-        function onUsageReady() { win.usageData = bridge.usageInfo(); win.usageBusy = false; }
+        function onUsageReady() { win.usageData = bridge.usageInfo(); win.usageBusy = false; bridge.refreshWidget(); }   // the widget too, at once
     }
-    // When a limit's reset time passes, the card corrects itself (no question to Claude: the app knows the time).
+    // When a limit's reset time passes, the card asks again (one small question to Claude): what is used after a reset is
+    // not known, because Claude Code shares the subscription. While the app is open it also asks when the numbers are
+    // older than an hour (usageInfo's should_refresh), never during a run, which brings its own numbers.
+    function refreshUsageNow() { if (!win.usageBusy && !win.appRunning) { win.usageBusy = true; bridge.refreshUsage(); } }
+    // the figures read again first (an old flag is out of date), then one question only when the back end says it is due
+    function refreshIfDue() { win.usageData = bridge.usageInfo(); if (win.usageData.should_refresh === true) win.refreshUsageNow(); }
+    Timer { id: usageHourly; objectName: "usageHourly"; interval: 3600000; repeat: true; running: true
+        onTriggered: win.refreshIfDue() }
     Timer { id: usageReset; objectName: "usageReset"
         interval: Math.max(1000, Math.min((win.usageData.next_reset_in || 0), 2000000) * 1000 + 1500)
         running: (win.usageData.next_reset_in || 0) > 0
-        onTriggered: win.usageData = bridge.usageInfo() }
+        onTriggered: win.refreshIfDue() }
 
     // ── palette ──
     // Both sets of values are chosen so that small text reads against its surfaces (contrast 4.5:1 or more
