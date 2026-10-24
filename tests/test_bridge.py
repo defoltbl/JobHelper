@@ -888,3 +888,15 @@ def test_the_start_up_check_button_is_refused_during_a_run(bridge, monkeypatch):
     assert result["ok"] is False and "running" in result["msg"] and calls == []
     bridge._set_running(False)
     assert bridge.fixProblem("repair_statuses")["ok"] is True and calls == ["repair_statuses"]
+
+
+def test_a_scan_the_mailbox_refuses_part_way_keeps_what_was_read(bridge, monkeypatch):
+    import imaplib
+
+    def refused_later(jobs, **kw):
+        jobs[0]["status"] = "interview"                     # one reply was read before the mailbox refused
+        raise imaplib.IMAP4.error("[AUTHENTICATIONFAILED]")
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="waiting")])
+    monkeypatch.setattr(agent5_responses, "process_inbox", refused_later)
+    bridge._scan(30)
+    assert store.find(store.load_jobs(), "a")["status"] == "interview"

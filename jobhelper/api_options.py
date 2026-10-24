@@ -89,6 +89,7 @@ class OptionsService:
         """Merge the given facts into the saved last-run summary."""
         data = self.last_run()
         data.update({k: v for k, v in fields.items() if v is not None})
+        config.LAST_RUN.load_for_change()           # a damaged summary is kept aside, never written over
         config.LAST_RUN.write(data)
         return data
 

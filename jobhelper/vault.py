@@ -28,6 +28,7 @@ from typing import Any, Callable
 
 SERVICE = os.getenv("JOBHELPER_VAULT_SERVICE", "JobHelper")
 MAGIC = b"JHENC1\n"                 # start of every encrypted file
+DAMAGED = "damaged"                   # the backups' folder for a damaged file that was replaced: kept, never cleaned up
 BACKUP_SUFFIX = ".enc"
 
 KEY_ACCOUNT = "data_key"
@@ -229,9 +230,29 @@ def restore_key(text: str) -> None:
     marker = _read_marker()
     if marker.get("key_id") and marker["key_id"] != _key_id(key):
         raise VaultError("That key does not belong to this data.")
+    if not marker.get("key_id") and not _opens_the_data(key):
+        raise VaultError("That key does not belong to this data.")    # no marker to compare: a data file must open
     keychain().set(KEY_ACCOUNT, base64.urlsafe_b64encode(key).decode("ascii"))
     _key = None
     data_key()
+
+
+def _opens_the_data(key: bytes) -> bool:
+    """Whether the key opens the encrypted data: True when one encrypted data file opens with it, or when none could
+    be tried (none encrypted yet, or each too short to hold even a nonce and a tag: that proves nothing about a key);
+    False when a file was tried and refused it. shortcut: a file cut short past that length cannot be told from a
+    wrong key, so with vault.json gone and every data file damaged, the right key is refused too (it fails closed)."""
+    tried = False
+    for path in data_files():
+        try:
+            blob = Path(path).read_bytes()
+        except OSError:
+            continue
+        if blob.startswith(MAGIC) and len(blob) >= len(MAGIC) + _NONCE + _TAG:
+            if _open(key, blob) is not None:
+                return True
+            tried = True                               # a file this key does not open
+    return not tried
 
 
 def state() -> str:
@@ -257,15 +278,27 @@ def encrypt(data: bytes) -> bytes:
 
 
 def decrypt(blob: bytes) -> bytes:
-    from cryptography.exceptions import InvalidTag
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     if not is_encrypted(blob):
         return blob
+    opened = _open(data_key(), blob)
+    if opened is None:
+        raise VaultError("An encrypted file is damaged or was written with a different key.")
+    return opened
+
+
+_NONCE, _TAG = 12, 16                  # what every encrypted file holds after MAGIC, before its sealed text
+
+
+def _open(key: bytes, blob: bytes) -> bytes | None:
+    """The plain bytes of an encrypted file (MAGIC, a 12-byte nonce, the sealed text), or None when this key does not
+    open it (or the sealed text was changed). A file cut short raises ValueError: it is damaged, whatever the key."""
+    from cryptography.exceptions import InvalidTag
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     body = blob[len(MAGIC):]
     try:
-        return AESGCM(data_key()).decrypt(body[:12], body[12:], MAGIC)
-    except InvalidTag as e:
-        raise VaultError("An encrypted file is damaged or was written with a different key.") from e
+        return AESGCM(key).decrypt(body[:_NONCE], body[_NONCE:], MAGIC)
+    except InvalidTag:
+        return None
 
 
 # ── files ───────────────────────────────────────────────────────────────────
@@ -273,12 +306,18 @@ def _write_atomic(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # its own temporary file per writer: the window and a running search can save the same file at once
     tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-    tmp.write_bytes(data)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)     # readable by this user only, from the first byte
     try:
-        os.chmod(tmp, 0o600)             # readable by this user only
-    except OSError:
-        pass
-    os.replace(tmp, path)
+        with os.fdopen(fd, "wb") as f:
+            try:
+                os.fchmod(f.fileno(), 0o600)     # also a leftover temporary file from an older run
+            except OSError:
+                pass                             # a disk that keeps no modes
+            f.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def read_bytes(path: Path) -> bytes:
@@ -329,6 +368,15 @@ class JsonFile:
         except VaultError:
             raise
         except (OSError, ValueError):
+            return None
+
+    def load_for_change(self) -> Any:
+        """What a change starts from. A damaged file is moved to the backups' DAMAGED folder first, so the change
+        starts from nothing and never writes over what was kept (a store that read it as empty would)."""
+        try:
+            return self.load()
+        except ValueError:
+            set_aside(self.path, DAMAGED)
             return None
 
     def exists(self) -> bool:
@@ -386,6 +434,11 @@ def encrypt_tree(root: Path) -> int:
         if path.suffix == BACKUP_SUFFIX and file_is_encrypted(path):
             continue
         plain = path.read_bytes()
+        if is_encrypted(plain):
+            try:
+                decrypt(plain)
+            except (VaultError, ValueError):
+                continue                         # a damaged encrypted file set aside: kept as it is, never a stop
         blob = plain if is_encrypted(plain) else encrypt(plain)
         if decrypt(blob) != decrypt(plain):
             raise VaultError(f"Self-check failed while encrypting {path.name}; it was left untouched.")
@@ -444,9 +497,7 @@ def restore_backup(src: Path, dest: Path) -> int:
             continue
         rel = path.relative_to(base)
         name = rel.name[:-len(BACKUP_SUFFIX)] if rel.name.endswith(BACKUP_SUFFIX) else rel.name
-        out = dest / rel.parent / name
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(read_bytes(path))
+        _write_atomic(dest / rel.parent / name, read_bytes(path))      # plain copies: readable by you only
         done += 1
     return done
 
@@ -459,8 +510,16 @@ def set_aside(path: Path, folder: str) -> Path | None:
         return None
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = backups_dir() / folder / f"{path.stem}.{stamp}{path.suffix}"
+    n = 1
+    while dest.exists():                       # two in one second: the earlier one is kept too
+        n += 1
+        dest = dest.with_name(f"{path.stem}.{stamp}-{n}{path.suffix}")
     dest.parent.mkdir(parents=True, exist_ok=True)
     path.replace(dest)
+    try:
+        os.chmod(dest, 0o600)                  # a damaged file may hold your data in plain text
+    except OSError:
+        pass
     return dest
 
 

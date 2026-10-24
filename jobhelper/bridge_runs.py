@@ -405,6 +405,7 @@ class RunSlots:
             self._save_partial(jobs)
             self.runFinished.emit("scan", "Stopped. Emails read before that are saved.")
         except imaplib.IMAP4.error:
+            self._save_partial(jobs)                             # replies read before the mailbox refused are kept
             self.runFinished.emit("scan", "Couldn't sign in to your email – check its password in the Account card.")
         except RuntimeError as e:
             self._save_partial(jobs)

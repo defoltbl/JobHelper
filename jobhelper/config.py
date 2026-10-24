@@ -365,7 +365,9 @@ def ui_settings() -> dict:
 
 
 def save_ui_settings(data: dict) -> None:
-    """Write the whole Options file (encrypted like the rest of the data). The one writer: Options and the chosen master CV."""
+    """Write the whole Options file (encrypted like the rest of the data). The one writer: Options and the chosen master CV.
+    A damaged file is kept aside first, never written over."""
+    UI_SETTINGS.load_for_change()
     UI_SETTINGS.write(data)
 
 

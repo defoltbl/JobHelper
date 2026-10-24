@@ -7,6 +7,12 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Data safety:** a damaged file of your saved answers, assistant notes, My details, Options or last-run summary is now kept in the backups (folder "damaged") before the next save. Before, the save wrote over it. The clean-up of old backups no longer removes that folder.
+- **Data safety:** when you change the question of a saved answer, the old answer is no longer lost if the new one cannot be kept, and no other answer is dropped.
+- **Data safety:** the company notes in the job window are now kept in the backups too when their file is damaged, before the next save.
+- **Data safety:** an email scan that stops part way, for example because the mailbox refused the password, now keeps the replies it read.
+- **Data safety:** a readable copy of your backup that you save to a folder is now readable by you only.
+- **Data safety:** a recovery key that does not open your data is now refused, also on a Mac where the app's own record of the key is missing.
 - The **assistant** now ticks only the boxes **I currently work here** and **I am fluent in this language**. Before, a box such as "Keep me up to date about similar jobs" or "I currently require visa sponsorship" could be ticked too.
 - The assistant no longer writes your own phone, email or name into a field about another person, such as **Referee phone** or **Next of kin name**. It no longer writes the salary you ask for into **Current salary**, or an old job into **Current employer**.
 - When the assistant stops part way, for example because the tab changed while it attached your CV, it now still says which fields and files it filled and which it did not reach. The reminder to mark the job applied still comes. A piece of your CV never goes to another tab.

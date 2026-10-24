@@ -157,22 +157,34 @@ def _mail_failed(error: Exception) -> Stopped:
     return Stopped(1)
 
 
+def _keep_what_was_read(jobs: list) -> bool:
+    """Each reply is marked read as it is read, so the job changes it made are saved whatever stopped the scan.
+    False when the save failed: that is said in a sentence, and the caller does not say it was saved."""
+    try:
+        store.save_jobs(jobs)
+        agent4_tracker.render_all(jobs)
+        return True
+    except Exception as e:  # noqa: BLE001 - said in a sentence, never with a path or a value from the data
+        print(f"✗ What was read could not be saved ({type(e).__name__})."
+              + (" Free some disk space and run the scan again." if isinstance(e, OSError) else ""))
+        return False
+
+
 def scan_inbox(jobs: list, days: int):
     """Read the replies (read-only) the way every command here does. Claude's limit: what was read is saved, and the
     command stops with 3; a mailbox problem: one sentence, and 1."""
     try:
         return agent5_responses.process_inbox(jobs, lookback_days=days)
     except llm.LimitReached as e:
-        store.save_jobs(jobs)                    # the replies read so far have already changed these jobs
-        agent4_tracker.render_all(jobs)
-        print(f"⏸  {e}\n   What was read is saved. Run it again after the reset: nothing is read twice.")
+        saved = _keep_what_was_read(jobs)
+        print(f"⏸  {e}" + ("\n   What was read is saved. Run it again after the reset: nothing is read twice." if saved else ""))
         raise Stopped(3) from e
     except llm.CallTimedOut as e:
-        store.save_jobs(jobs)                    # Claude stopped answering: keep what the replies read so far changed
-        agent4_tracker.render_all(jobs)
-        print(f"✗ {e}\n   What was read is saved: nothing is read twice.")
+        saved = _keep_what_was_read(jobs)
+        print(f"✗ {e}" + ("\n   What was read is saved: nothing is read twice." if saved else ""))
         raise Stopped(1) from e
     except Exception as e:  # noqa: BLE001 - said in a sentence
+        _keep_what_was_read(jobs)
         raise _mail_failed(e) from e
 
 

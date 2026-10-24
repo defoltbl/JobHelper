@@ -335,6 +335,7 @@ def save(values: Any) -> dict[str, Any]:
     clean, problem = check(values)
     if problem:
         return {"ok": False, **problem}
+    config.MY_DETAILS.load_for_change()             # a damaged file is kept aside, never written over
     config.MY_DETAILS.write(clean)
     return {"ok": True, "details": clean}
 

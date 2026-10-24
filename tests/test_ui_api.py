@@ -1071,7 +1071,7 @@ def test_restore_puts_back_the_newest_copy_that_opens_and_keeps_the_damaged_file
     result = api.fix_problem("restore_jobs")
     assert result["ok"] is True and "job list is back as it was on" in result["msg"]
     assert [j["id"] for j in store.load_jobs()] == ["good"]
-    kept = list((vault.backups_dir() / "damaged").iterdir())
+    kept = list((vault.backups_dir() / vault.DAMAGED).iterdir())
     assert len(kept) == 1 and kept[0].read_bytes() == damaged                 # moved aside, never deleted
 
 
@@ -1097,7 +1097,7 @@ def test_restore_without_a_usable_copy_changes_nothing(api):
     before = config.JOBS_JSON.read_bytes()
     result = api.restore_data("jobs")
     assert result["ok"] is False and "No backup copy of your job list opens" in result["msg"]
-    assert config.JOBS_JSON.read_bytes() == before and not (vault.backups_dir() / "damaged").exists()
+    assert config.JOBS_JSON.read_bytes() == before and not (vault.backups_dir() / vault.DAMAGED).exists()
 
 
 @pytest.mark.parametrize("action", ["", "delete_everything", None, 3])

@@ -133,7 +133,7 @@ class SystemService:
 
     def restore_data(self, kind):
         """Put back the newest backup copy of the job list or the replies database that opens. The damaged
-        file is moved into the backups (folder "damaged"), never deleted."""
+        file is moved into the backups (folder vault.DAMAGED), never deleted."""
         if kind not in self._RESTORABLE:
             return {"ok": False, "msg": "Only the job list and the replies database can be restored here."}
         attr, what = self._RESTORABLE[kind]
@@ -147,7 +147,7 @@ class SystemService:
                                         "If you have a copy of your own, put it back in the app's data folder."}
         data, copy = found
         try:
-            vault.set_aside(path, "damaged")
+            vault.set_aside(path, vault.DAMAGED)
             vault.write_bytes(path, data)
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "msg": f"Your {what} was not restored: {trouble._safe(e)}"}

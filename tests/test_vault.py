@@ -1,6 +1,8 @@
 """Encryption at rest and Keychain storage (always against the in-memory Keychain)."""
 import base64
 import json
+import os
+import threading
 
 import pytest
 
@@ -470,7 +472,79 @@ def test_newest_good_copy_is_none_without_a_usable_copy(isolate_data):
 def test_set_aside_moves_the_file_and_never_deletes_it(isolate_data):
     config.ensure_dirs()
     config.JOBS_JSON.write_bytes(b"damaged bytes")
-    kept = vault.set_aside(config.JOBS_JSON, "damaged")
-    assert not config.JOBS_JSON.exists() and kept.parent == vault.backups_dir() / "damaged"
+    kept = vault.set_aside(config.JOBS_JSON, vault.DAMAGED)
+    assert not config.JOBS_JSON.exists() and kept.parent == vault.backups_dir() / vault.DAMAGED
     assert kept.read_bytes() == b"damaged bytes" and kept.name.startswith("jobs.") and kept.suffix == ".json"
-    assert vault.set_aside(config.JOBS_JSON, "damaged") is None                         # nothing there any more
+    assert vault.set_aside(config.JOBS_JSON, vault.DAMAGED) is None                         # nothing there any more
+
+
+def test_without_its_marker_a_wrong_key_is_refused_by_the_data_itself(isolate_data):
+    """vault.json lost (a copied folder): a wrong key was taken, a marker written with it, and the right key refused."""
+    store.save_jobs([store.new_job(id="1", title=SECRET_TEXT)])
+    saved = vault.recovery_key()
+    (isolate_data / "vault.json").unlink()
+    vault.use_keychain(vault.MemoryKeychain())
+    with pytest.raises(vault.VaultError, match="does not belong"):
+        vault.restore_key(base64.urlsafe_b64encode(b"\x09" * 32).decode())
+    vault.restore_key(saved)                                            # the right one still works
+    assert store.load_jobs()[0]["title"] == SECRET_TEXT
+
+
+def test_a_restored_backup_is_readable_by_you_only(isolate_data, tmp_path):
+    store.save_jobs([store.new_job(id="1", title=SECRET_TEXT)])
+    backup = vault.make_backup("manual")
+    out = tmp_path / "restored"
+    out.mkdir()
+    assert vault.restore_backup(backup, out) >= 1
+    assert {oct(p.stat().st_mode & 0o777) for p in out.rglob("*") if p.is_file()} == {"0o600"}, "plain copies of your data"
+
+
+def test_the_key_check_is_not_misled_by_a_damaged_or_short_file(isolate_data, monkeypatch, tmp_path):
+    store.save_jobs([store.new_job(id="1", title=SECRET_TEXT)])
+    key = vault.data_key()
+    damaged, short = tmp_path / "damaged.json", tmp_path / "short.json"
+    damaged.write_bytes(vault.MAGIC + b"\x00" * 64)
+    short.write_bytes(vault.MAGIC + b"\x01\x02")
+    monkeypatch.setattr(vault, "data_files", lambda: [damaged, short, config.JOBS_JSON])
+    assert vault._opens_the_data(key), "a damaged file first proves nothing: the good one opens"
+    monkeypatch.setattr(vault, "data_files", lambda: [short])
+    assert vault._opens_the_data(key), "too short to hold a nonce and a tag: it proves nothing about a key"
+    monkeypatch.setattr(vault, "data_files", lambda: [short, config.JOBS_JSON])
+    assert vault._opens_the_data(base64.urlsafe_b64decode(base64.urlsafe_b64encode(b"\x09" * 32))) is False
+
+
+def test_two_damaged_copies_of_one_file_in_one_second_are_both_kept(isolate_data):
+    for text in ("first", "second"):
+        config.JOBS_JSON.write_text(text)
+        vault.set_aside(config.JOBS_JSON, vault.DAMAGED)
+    kept = sorted(p.read_text() for p in (vault.backups_dir() / vault.DAMAGED).iterdir())
+    assert kept == ["first", "second"]
+    assert {oct(p.stat().st_mode & 0o777) for p in (vault.backups_dir() / vault.DAMAGED).iterdir()} == {"0o600"}
+
+
+def test_a_damaged_encrypted_file_set_aside_never_stops_the_backups_from_being_protected(isolate_data):
+    """encrypt_tree took a damaged encrypted file in backups/damaged as a blob, failed to open it, and stopped every start."""
+    store.save_jobs([store.new_job(id="1", title=SECRET_TEXT)])
+    damaged = vault.backups_dir() / vault.DAMAGED
+    damaged.mkdir(parents=True, exist_ok=True)
+    (damaged / "jobs.20261001_120000.json").write_bytes(vault.MAGIC + b"\x00" * 64)
+    (vault.backups_dir() / "manual_20261001_120000").mkdir()
+    (vault.backups_dir() / "manual_20261001_120000" / "notes.txt").write_text("plain")
+    assert vault.encrypt_tree(vault.backups_dir()) == 1, "the plain file is encrypted, the damaged one left as it is"
+    assert (damaged / "jobs.20261001_120000.json").read_bytes().startswith(vault.MAGIC)
+
+
+def test_a_private_write_leaves_no_temporary_file_and_no_wider_mode(isolate_data, monkeypatch):
+    target = isolate_data / "kept.json"
+    tmp = target.with_name(f"{target.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp.write_bytes(b"left over")
+    os.chmod(tmp, 0o644)
+    vault._write_atomic(target, b"new")
+    assert target.read_bytes() == b"new" and oct(target.stat().st_mode & 0o777) == "0o600"
+
+    def refused(src, dst):
+        raise OSError("disk full")
+    monkeypatch.setattr(os, "replace", refused)
+    with pytest.raises(OSError):
+        vault._write_atomic(target, b"newer")
+    assert not tmp.exists() and target.read_bytes() == b"new"

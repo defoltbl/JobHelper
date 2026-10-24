@@ -255,8 +255,8 @@ class CompanyNotes:
     def path(self):
         return self._file.path
 
-    def _read(self) -> dict[str, dict[str, str]]:
-        data = self._file.read()
+    def _read(self, changing: bool = False) -> dict[str, dict[str, str]]:
+        data = self._file.load_for_change() if changing else self._file.read()     # a change moves a damaged file aside first
         return data if isinstance(data, dict) else {}
 
     def of(self, company: str) -> dict[str, str]:
@@ -273,7 +273,7 @@ class CompanyNotes:
         key = company_key(company)
         if not key or key == "unknown" or check_company_notes(fields):
             return False
-        data = self._read()
+        data = self._read(changing=True)
         entry = {f: str(fields.get(f, "") or "").strip() for f in NOTE_FIELDS}
         if any(entry.values()):
             entry.update(name=company, updated=date.today().isoformat())
