@@ -29,7 +29,7 @@ SYSTEM = (
     "candidate's CV and the facts given: never invent experience, employers, numbers, dates or "
     "technologies. Answers are in the first person, written style, short: one to four sentences "
     "unless the question asks for more. Use an en dash with spaces, never an em dash, and no "
-    "emojis. Reply with only the JSON object."
+    "emojis. Reply with only the JSON object. " + llm.POSTING_RULE
 )
 
 PROMPT = """Answer the questions of this job's application form for the candidate.
@@ -164,8 +164,8 @@ def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str
         data = llm.ask_json(PROMPT.format(
             cv_text=_with_notes(cv_text, notes), title=job.get("title", ""), company=job.get("company", ""),
             location=job.get("location", ""),
-            description=(job.get("description") or "").strip()[:4000] or "(No posting text was saved; use the title and the CV.)",
-            facts=config.facts_block(cv_text), salary=_salary_line(job), questions=numbered, feedback=feedback),
+            description=llm.untrusted("posting", (job.get("description") or "").strip()[:4000] or "(No posting text was saved; use the title and the CV.)"),
+            facts=config.facts_block(cv_text), salary=_salary_line(job), questions=llm.untrusted("questions", numbered), feedback=feedback),
             system=SYSTEM, tag="form_answers")
         items = _clean(data, questions)
         if not any(i["answer"] for i in items):
@@ -224,7 +224,7 @@ def rewrite(job: dict[str, Any], cv_text: str, question: str, answer: str, how: 
     if not str(answer or "").strip():
         raise ValueError("There is no answer to rewrite yet. Draft it first.")
     data = llm.ask_json(REWRITE_PROMPT.format(
-        cv_text=_with_notes(cv_text, notes), title=job.get("title", ""), company=job.get("company", ""), question=str(question).strip()[:MAX_QUESTION],
+        cv_text=_with_notes(cv_text, notes), title=job.get("title", ""), company=job.get("company", ""), question=llm.untrusted("questions", str(question).strip()[:MAX_QUESTION]),
         answer=str(answer).strip()[:MAX_ANSWER], how=" ".join(str(how).split())[:300]), system=SYSTEM, tag="form_answers")
     new = cover_letter.clean(str((data or {}).get("answer", "") if isinstance(data, dict) else "")).strip()[:MAX_ANSWER]
     if not new:

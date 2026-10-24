@@ -20,14 +20,13 @@ from lxml import etree
 
 from . import claims, config, cv_tailor, llm, store
 from .claims import ClaimCheck
-from .cv_tailor import clean
+from .cv_tailor import POSTING_SHOWN, clean, figure_sources
 from .word_document import P as _P, T as _T, XML_SPACE, Paragraph, WordDocument, text_of as _text
 
 BODY_PARAGRAPHS = 5
 MIN_WORDS, MAX_WORDS = 320, 410        # instruction: about 330-400 words
 MAX_CHARS = 2550                       # keeps the letter on one page (example: 2240)
 MAX_HINT = 300                         # what you ask to change in one paragraph
-POSTING_SHOWN = 5000                   # how much of a posting the letter prompt shows (and its figures check reads)
 
 # Check 3 of the instruction (a gap admitted), the forward-looking wish (rule 1, option 2) and wording that claims
 # hands-on experience: one set of rules for every text in the person's voice (claims.py).
@@ -39,7 +38,7 @@ SYSTEM = (
     "technology that is not in the master CV. Write in the first person (I, my): the "
     "candidate is the author, so never refer to them by name or as he/she. Use an en dash (–) with spaces, never "
     "an em dash, and no emojis. You have no tools and no file access here: another "
-    "program places your text into the .docx. Reply once, with only the JSON object."
+    "program places your text into the .docx. Reply once, with only the JSON object. " + llm.POSTING_RULE
 )
 
 PROMPT = """Write the text of a cover letter for the job posting below. The file handling is
@@ -142,15 +141,6 @@ def _issues(paragraph: str, check: ClaimCheck) -> list[tuple[str, str, str]]:
         if term:
             out.append(("claim", term, s))
     return out
-
-
-def figure_sources(job: dict[str, Any], cv_text: str, own=(), references=()) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """(sources, references) for `claims.unbacked_figures`. Your own: the CV, your notes and About you facts, plus what
-    you typed (`own`). References: the posting (as much as the letter prompt shows), the job's title, company and location
-    ("3M", "Praha 4"), plus `references` – they may be repeated, never claimed as your amount ("5+ years")."""
-    return ((cv_text, config.experience_notes(), config.facts_block(cv_text), *own),
-            ((job.get("description") or "")[:POSTING_SHOWN], job.get("title") or "", job.get("company") or "", job.get("location") or "",
-             *references))
 
 
 def figure_problems(figures: list[str], what: str = "The letter",
@@ -339,7 +329,7 @@ def rewrite_paragraph(job: dict[str, Any], cv_text: str, paragraphs: list[str], 
     for _attempt in range(2):
         data = llm.ask_json(REWRITE_PROMPT.format(
             rules=rules_with_facts(cv_text), cv_text=cv_text[:12000], title=job.get("title", ""), company=job.get("company", ""),
-            description=(job.get("description") or "").strip()[:3000] or "(No description was available.)",
+            description=llm.untrusted("posting", (job.get("description") or "").strip()[:3000] or "(No description was available.)"),
             letter=letter, number=index + 1, words=words, max_words=most,
             hint=hint_line, feedback=feedback), system=SYSTEM, tag="agent3_letters")
         text = clean(str((data or {}).get("paragraph", ""))).strip() if isinstance(data, dict) else ""
@@ -459,7 +449,7 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
         data = llm.ask_json(PROMPT.format(
             rules=rules_with_facts(cv_text), cv_text=cv_text[:12000], adapted=adapted_block,
             title=job["title"], company=job["company"], location=job.get("location", ""),
-            description=description, feedback=feedback, n=BODY_PARAGRAPHS,
+            description=llm.untrusted("posting", description), feedback=feedback, n=BODY_PARAGRAPHS,
             min_words=MIN_WORDS + 10, max_words=MAX_WORDS - 10,
         ), system=SYSTEM, tag="agent3_letters")
         if not isinstance(data, dict):

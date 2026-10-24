@@ -267,3 +267,58 @@ def test_a_draft_that_borrows_from_the_posting_is_sent_back_and_what_is_left_is_
     job = store.new_job(id="j3", title="Administrator", company="Acme", description=posting)
     cv_tailor.tailor(job, cv_text, MASTER)
     assert not any("zebra migrations' as the candidate" in prompt for prompt in prompts) and "cv_check" not in job
+
+
+def test_a_skill_inside_another_technologys_name_is_not_in_the_cv():
+    """"Java" was found inside "JavaScript"; a part of a word otherwise still counts ("SQL" in "PostgreSQL", "API" in "APIs")."""
+    assert cv_tailor.unknown_skill_terms("Java, Spring", "JavaScript, TypeScript") == ["Java", "Spring"]
+    assert cv_tailor.unknown_skill_terms("REST APIs, SQL, Docker, API", "RESTful API design, PostgreSQL, Dockerized apps") == ["APIs"]
+    assert cv_tailor.unknown_skill_terms("Java", "Java and JavaScript") == []
+
+
+def test_an_invented_figure_or_name_in_the_profile_is_sent_back_then_cut_or_noted(isolate_data, monkeypatch):
+    """The CV is the document employers see; its PROFILE had no figure check and no name check."""
+    profile, rows, _ = _example_content()
+    cv_text = "\n".join(p.text for p in docx.Document(str(MASTER)).paragraphs)
+    assert "Initech" not in cv_text and "8 years" not in cv_text
+    invented = profile.rstrip() + " Ran Docker clusters for 8 years at Initech."
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or {"profile": invented, "skills": rows, "role_short": "Admin"})
+    job = store.new_job(id="j1", title="Administrator", company="Acme", description="We run containers.")
+    name = cv_tailor.tailor(job, cv_text, MASTER)
+    assert len(prompts) == 2 and "PROFILE states the figure 8" in prompts[1] and "Initech" not in prompts[1], "a name is noted, not sent back"
+    text = "\n".join(p.text for p in docx.Document(str(config.TAILORED_CV_DIR / name)).paragraphs)
+    assert "8 years" not in text and "Initech" not in text, "the sentence with the invented figure is cut out"
+    noted = profile.rstrip() + " Led the platform team at Initech."
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: {"profile": noted, "skills": rows, "role_short": "Admin"})
+    job = store.new_job(id="j2", title="Administrator", company="Acme", description="We run containers.")
+    cv_tailor.tailor(job, cv_text, MASTER)
+    assert "Initech" in job["cv_check"], "a name the CV does not give is put in front of the person"
+    assert cv_tailor.profile_problems("Keen to grow into Kafka and Kubernetes.", job, cv_text) == ([], []), "an interest claims nothing"
+    rust = store.new_job(id="j3", title="Rust Developer", company="Acme", description="")
+    assert "Rust" in cv_tailor.profile_problems("I built many Rust services.", rust, cv_text)[1], "the job title backs no name"
+    # a profile that is only the invented sentence is kept, and its figure noted, rather than failing the CV
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: {"profile": "Developer with 8 years of Python.", "skills": rows, "role_short": "Dev"})
+    job = store.new_job(id="j4", title="Administrator", company="Acme", description="")
+    cv_tailor.tailor(job, cv_text, MASTER)
+    assert job["cv_check"][0] == "the figure 8", "named as a figure, first, so the cap of eight never hides it"
+
+
+
+def test_the_cv_note_lists_a_figure_first_and_a_cut_never_breaks_a_sentence(isolate_data, monkeypatch):
+    profile, rows, _ = _example_content()
+    cv_text = "\n".join(p.text for p in docx.Document(str(MASTER)).paragraphs)
+    posting = "You will run quarterly zebra migrations, tune walrus pipelines and build otter dashboards."
+    # an abbreviation: "e.g." is not a sentence end, so nothing is cut, and the figure is noted first
+    crowded = ("Backend engineer, e.g. 47 years of Python. Experienced in zebra migrations, walrus pipelines and otter dashboards. "
+               "Worked with Initech, Globex, Hooli, Umbrella, Soylent, Vandelay, Wonka and Stark on 47 releases.")
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: {"profile": crowded, "skills": rows, "role_short": "Dev"})
+    job = store.new_job(id="j1", title="Developer", company="Acme", description=posting, cv_check=["old"])
+    name = cv_tailor.tailor(job, cv_text, MASTER)
+    text = "\n".join(p.text for p in docx.Document(str(config.TAILORED_CV_DIR / name)).paragraphs)
+    assert "e.g. 47 years of Python" in text, "no half sentence is left behind"
+    assert job["cv_check"][0] == "the figure 47" and len(job["cv_check"]) <= 8 and job["cv_check"].count("the figure 47") == 1
+    # a clean draft clears an old note
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: {"profile": profile, "skills": rows, "role_short": "Dev"})
+    cv_tailor.tailor(job, cv_text, MASTER)
+    assert "cv_check" not in job

@@ -16,7 +16,7 @@ from . import config, cover_letter, cv_tailor, filters, llm, pdf, prefilter, sto
 SYSTEM = (
     "You are an expert career coach who writes concise, specific, non-generic "
     "cover letters in English. You never invent experience the candidate does "
-    "not have. Output only valid JSON."
+    "not have. Output only valid JSON. " + llm.POSTING_RULE
 )
 
 # Step 1 – scoring only (short JSON, never truncates).
@@ -80,7 +80,7 @@ LETTER_SYSTEM = (
     "invent experience the candidate does not have. Output ONLY the letter body: "
     "start with 'Dear Hiring Team,' and end with 'Yours sincerely,' on its own "
     "line. Do NOT include the candidate's name, address, contact details, date, or "
-    "the company address (those are added separately). No em dashes."
+    "the company address (those are added separately). No em dashes. " + llm.POSTING_RULE
 )
 LETTER_PROMPT = """Candidate profile (from their CV):
 {profile}
@@ -104,7 +104,7 @@ TAILOR_PROFILE_SYSTEM = (
     "the candidate's master CV; never invent or exaggerate. Target the specific "
     "role, and mirror the posting's key terminology for things the candidate "
     "genuinely has. 2-3 short, plain sentences. No em dash. Output only the "
-    "profile paragraph text (no heading, no markdown, no quotes)."
+    "profile paragraph text (no heading, no markdown, no quotes). " + llm.POSTING_RULE
 )
 TAILOR_PROFILE_PROMPT = """Master CV (source of truth, do not add anything not here):
 ---
@@ -375,7 +375,7 @@ class Scorer:
     def fields(self, job: dict[str, Any], limit: int = ONE_TEXT) -> dict[str, str]:
         """A posting as the prompts take it."""
         return dict(profile=self.blurb, title=job.get("title", ""), company=job.get("company", ""), location=job.get("location", ""),
-                    description=(job.get("description") or "").strip()[:limit] or NO_DESCRIPTION)
+                    description=llm.untrusted("posting", (job.get("description") or "").strip()[:limit] or NO_DESCRIPTION))
 
     def score(self, chunk: list[dict[str, Any]], record) -> list[dict[str, Any]]:
         """Score these postings; returns the ones that got no usable score."""

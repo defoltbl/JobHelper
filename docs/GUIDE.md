@@ -788,6 +788,12 @@ The app makes a copy of your CV for each job. In the copy, it rewords the profil
 and the skills list. It also puts first what this posting asks for. All other parts stay as
 you wrote them.
 
+The profile paragraph may state only the figures that your CV, your notes or **About you**
+give. A sentence with another figure, such as "8 years", is removed. If nothing else would be
+left, the paragraph stays and the job window names the figure. The paragraph can also
+name a company or a technology that your CV, your notes and **About you** do not name. Then
+the job window tells you to check it.
+
 **To see what changed:**
 
 1. Open the job.
@@ -804,9 +810,10 @@ you wrote them.
 > can back in an interview.
 
 Sometimes the job window shows an amber line with a few terms. The line says **Check your
-adapted CV before you send it** or **Check your cover letter before you send it**. These terms
+adapted CV before you send it** or **Check your cover letter before you send it**. Most terms
 come from the posting. The adapted CV states them as your experience, but your own CV does not
-mention them. In a letter, the line marks only a sentence that says you did it, not a sentence
+mention them. For the adapted CV, the line can also name a company, a technology or a figure
+that your own CV does not give. In a letter, the line marks only a sentence that says you did it, not a sentence
 about the role. The app already asked Claude once to remove these terms. A term that is left
 can still be a fair word for work that you did. So you decide. Keep the term only if it is
 true. If it is not true, edit the Word file. You can also add what you really did under **More

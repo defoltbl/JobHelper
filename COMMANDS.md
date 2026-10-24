@@ -199,8 +199,9 @@ Inside the window:
   box and the filter chip) in one window: **Not interested** or **Mark applied** decides and
   brings the next, **Next ›** leaves a job as it is.
 - **Check your adapted CV / cover letter** (job window) – shown when a document states a
-  two-word term of the posting as your experience although your CV has neither word. The app
-  asked for it to be removed once; what is left is yours to judge.
+  two-word term of the posting as your experience although your CV has neither word, or when the
+  adapted CV's profile names a company, a technology or a figure your CV does not give. The app
+  asked for a term or a figure to be removed once; what is left is yours to judge.
 - **Also archived mail and spam** (Options, off by default) – the email scan also reads
   the mailbox's archive ("All Mail") and spam folders, never Sent or Drafts, and still
   read-only. Turn it on if replies get archived by a filter or land in spam.
