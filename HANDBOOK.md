@@ -269,7 +269,9 @@ data/                your data; only the *.example.* files are in git
   `start_day`), the right-to-work choices, the salary estimate (`salary.estimate_available`) and `WorkNotes`, the
   notes per job. Everything that reads the notes calls `config.experience_notes()`, which asks `WorkNotes.text()`;
   `WorkNotes.size()` measures that same text, so nothing is ever cut. One line of "A different figure for" is checked
-  only by `OptionsService.pay_problem`, on Add and on save; the CV's level is read only by `agent1_cv.seniority()`.
+  only by `OptionsService.pay_problem`, on Add, on Change and on save; `OptionsService.pay_key` says when two lines are
+  the same role, and `OptionsService.own_figure` (`salary.from_czk`) turns an estimate into a figure in your currency.
+  The CV's level is read only by `agent1_cv.seniority()`.
 - **Find-as-you-type matches the start of a word** (`win.matchesStart` in Main.qml): the country picker and the
   suggestion fields use it. Do not filter a list with `indexOf` on its own.
 - **Postings are scored only through `agent3_letters.Scorer`** (the batch prompt, the J-id answers, the one-by-one

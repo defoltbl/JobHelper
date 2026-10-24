@@ -58,7 +58,7 @@ Dialog {
         boxModel.clear();
         (info.boxes || []).forEach(function (b) { boxModel.append({ job: String(b.job), notes: String(b.notes || ""), earlier: b.earlier === true }); });
         generalField.text = info.general || "";
-        err = ""; payErr = ""; confirmClose = false;
+        err = ""; payErr = ""; estimateErr = ""; confirmClose = false;
         loaded = JSON.stringify(collect());
         aboutSink.forceActiveFocus();
         if (aboutScroll && aboutScroll.contentItem) { aboutScroll.contentItem.cancelFlick(); aboutScroll.contentItem.contentY = 0; }
@@ -87,6 +87,21 @@ Dialog {
         close();
     }
     function payRoles(upTo) { var out = []; for (var i = 0; i < upTo; i++) out.push(payModel.get(i).role); return out; }
+    property int payTick: 0               // goes up with every change of the list, so the estimate rows follow edits too
+    property string estimateErr: ""       // why Change was refused, said next to the estimates
+    Connections { target: payModel
+        function onDataChanged() { aboutDialog.payTick++; }
+        function onCountChanged() { aboutDialog.payTick++; aboutDialog.estimateErr = ""; } }
+    function hasPay(role) {               // a figure of your own is already given for this kind of role (OptionsService.pay_key)
+        var key = bridge.payKey(role);
+        for (var i = 0; i < payModel.count; i++) if (bridge.payKey(payModel.get(i).role) === key) return true;
+        return false;
+    }
+    function changeEstimate(role, estimateCzk) {   // an estimate becomes a figure of your own, ready to change: by the same rule as Add
+        var amount = bridge.ownFigure(estimateCzk, currencyCombo.currentText);     // in the currency you chose, not always crowns
+        estimateErr = bridge.payProblem(String(role), amount, payRoles(payModel.count));
+        if (estimateErr === "") payModel.append({ role: String(role), amount: amount });
+    }
     function addPay() {                   // the back end's rule for one line (OptionsService.pay_problem), with its words
         var role = payRole.text.trim();
         payErr = bridge.payProblem(role, payAmount.value, payRoles(payModel.count));
@@ -171,8 +186,14 @@ Dialog {
                                       : ((aboutDialog.info.estimates || {}).note || "") }
                             Repeater { model: salarySpin.value > 0 ? [] : ((aboutDialog.info.estimates || {}).rows || [])
                                 RowLayout { Layout.fillWidth: true; spacing: 8
+                                    readonly property bool yours: aboutDialog.payTick >= 0 && aboutDialog.hasPay(modelData.role)   // follows every edit
                                     Text { text: modelData.role; color: theme.soft; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.Wrap }
-                                    Text { objectName: "estimate_" + index; text: "about " + modelData.text; color: theme.ink; font.pixelSize: 12; font.bold: true } } }
+                                    Text { objectName: "estimate_" + index; text: parent.yours ? "your figure below" : "about " + modelData.text
+                                        color: parent.yours ? theme.faint : theme.ink; font.pixelSize: 12; font.bold: !parent.yours }
+                                    SmallButton { objectName: "estimateChange_" + index; visible: !parent.yours; text: "Change"
+                                        onClicked: aboutDialog.changeEstimate(modelData.role, modelData.amount) } } }
+                            Text { objectName: "estimateErr"; visible: salarySpin.value === 0 && aboutDialog.estimateErr !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                color: theme.crit; font.pixelSize: 11; font.bold: true; text: aboutDialog.estimateErr }
                         }
                         Sep {}
                         SRow { label: "A different figure for"; hint: "a kind of role, as in job titles · used instead of the one above"

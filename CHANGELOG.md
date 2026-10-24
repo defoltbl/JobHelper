@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **About you:** each salary estimate now has a **Change** button. It makes the estimate your own figure for that kind of role, ready to change, without typing the role again.
 - The **adapted CV** now checks its profile paragraph like the cover letter: a figure that your CV, your notes or About you do not give, such as "8 years", is sent back to Claude once and then removed with its sentence. If nothing else would be left, the paragraph stays and the job window names the figure. A company or technology your CV does not name is shown in the job window to check.
 - "Java" in a skills list no longer counts as in your CV because your CV says "JavaScript".
 - An interview preparation that you edit while your CV cannot be read now keeps its "not in your CV" notes.
