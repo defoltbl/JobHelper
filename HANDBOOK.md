@@ -480,9 +480,9 @@ After every batch of changes, without being asked:
 | Outlook.com, Proton and Tuta are refused with an explanation | They cannot be read with a password; failing later would be worse than saying so at once. |
 | The salary estimate is used only for software roles in Czechia | It is a table of Prague junior software pay. Anywhere else no figure is better than a wrong one. |
 | The assistant fills in forms in the person's own browser, through Apple events (Chrome first; Brave, Edge, Opera and Safari since; Opera GX and Firefox cannot be reached this way and are said to be impossible) | The owner's choice ("I tap on him and ask to fill the form in Chrome"). The form is filled where the person is signed in; nothing is installed. A browser inside the app was removed earlier, and an extension would have to be installed by hand. |
-| The assistant presses only a menu, an entry of a menu, a radio button and a button that adds a row | The owner allowed menus on 10 October 2026 and rows on a button ("do all points") the same day. It still never presses a button that sends or continues, never ticks a box and never sends: the script that presses reads what it is given, and the words of an add button, again before it acts. |
+| The assistant presses only a menu, an entry of a menu, a radio button and a button that adds a row | The owner allowed menus on 10 October 2026 and rows on a button ("do all points") the same day. It still never presses a button that sends or continues, never ticks another box and never sends: the script that presses reads what it is given, and the words of an add button, again before it acts. |
 | A free request is decided by Claude and checked by the app | The owner chose this knowing it costs a call per request. Claude names one action from a fixed list; anything else is dropped. An action that changes data is asked about in the app's own words and done only after a yes. |
-| The one tick box the assistant may tick says that a job goes on | The owner allowed it on 10 October 2026 ("do all points"). A box that agrees to anything is refused by its words. |
+| The two tick boxes the assistant may tick say that a job goes on or that you are fluent in a language | The owner allowed them on 10 October 2026 ("do all points"). One set of words decides it for the page scripts and the planner (`form_fill.CURRENT_BOX_WORDS`, `FLUENT_WORDS`); whole phrases, not loose words. A box that agrees, allows, confirms or asks for updates is refused by its words (`NEVER_TICK_WORDS`). |
 | Answers are not streamed word by word from Claude | A decision is one object that must be checked whole before anything of it is shown or done. The window says what is being done meanwhile and writes the checked answer out. |
 | A note the person asks the assistant to remember changes only its answers | Changing what a search finds through a sentence in a talk would be app logic nobody can see. The Options do that. |
 | Noticing a form in the browser is off until turned on | It means looking at the browser without being asked. When on, only the address, the title and the number of empty fields of the tab in front are looked at. |
@@ -524,8 +524,8 @@ Everything found by reading the code and by the runs on real data up to 10 Octob
 6. **The assistant was tested in its test area** (`tests/fixtures/forms/`: a plain form, a component-built one, a long
    one, a framed one, each filled in a browser engine by the real code), **not yet on real sites in the person's browser.**
    Sites that build their fields in unusual ways (their own drop-downs, forms inside a frame from another site,
-   pages that rebuild a field after it is written) will need a look one by one. Tick boxes and dates are left to
-   the person on purpose. File fields for the CV, the letter and other attachments are given the job's documents
+   pages that rebuild a field after it is written) will need a look one by one. Dates and every tick box except
+   "I currently work here" and "I am fluent in this language" are left to the person on purpose. File fields for the CV, the letter and other attachments are given the job's documents
    (added after the first real form, 10 October 2026); a page that draws its uploader without a file field
    until it is clicked cannot be reached, and the files are then shown in Finder as before.
 

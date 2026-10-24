@@ -3,13 +3,14 @@ and filling in only what is safe to fill. The page scripts run in a real browser
 import base64
 import json
 import os
+import re
 import subprocess
 from datetime import date
 import sys
 
 import pytest
 
-from jobhelper import api_core, answer_memory, assistant, assistant_brain, chrome, config, details, form_answers, form_choices, form_fill, llm, store, ui_api, vault
+from jobhelper import api_core, answer_memory, assistant, assistant_brain, chrome, config, details, form_answers, form_choices, form_fill, form_run, llm, store, ui_api, vault
 from tests.conftest import FIXTURES
 
 MINE = {**details.empty(), "first_name": "Alex", "last_name": "Novak", "email": "alex@example.com", "phone": "+420 123 456 789", "street": "",
@@ -414,8 +415,10 @@ def _browser(monkeypatch, fields, url="https://careers.northwind.example/jobs/42
             return json.dumps({"url": url, "title": title, "fields": fields, "frames": list(frames), "boxes": boxes})
         if script == form_fill.PAGE:
             return json.dumps({"url": url, "title": title, "text": "", "stated": None})
-        if script.startswith("(function (key, part)"):           # a piece of a file on its way to the page
-            key, part = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
+        if script.startswith("(function (key, part, url)"):      # a piece of a file on its way to the page
+            key, part, to = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
+            if to != url:
+                return "moved"
             carried[key] = carried.get(key, "") + part
             return str(len(carried[key]))
         if script.startswith("(function (n, key, name, kind, url)"):
@@ -573,6 +576,7 @@ def test_area_a_long_form_is_filled_in_as_far_as_is_safe():
     # a field the app did not recognise: Claude may copy words that stand in the CV, and only those
     # the box "I currently work here" is ticked for the job that goes on, and no other box is touched
     assert state["wc"] is True and out["filled"]["I currently work here"]["value"] == "Ticked" and state["nl"] is False
+    assert state["upd"] is False, "a box in the job's row that only says \"up to date\" is not about the job"
     # a date asked as two lists: the month and the year of the degree
     assert (state["em"], state["ey"]) == ("9", "2021") and (state["xm"], state["xy"]) == ("6", "2023")
     # a field that throws away what does not arrive as typing gets it the second way
@@ -1665,7 +1669,7 @@ def test_a_file_is_offered_only_to_a_field_that_takes_its_kind(accept, name, ok)
 
 def test_a_file_travels_to_the_page_in_pieces_and_as_data():
     content = _bytes("x", form_fill.PIECE * 2)          # larger than two requests
-    pieces = form_fill.put_scripts("__jobhelper_k", content)
+    pieces = form_fill.put_scripts("__jobhelper_k", content, "https://x.example/a")
     assert len(pieces) == 3 and all(len(p) < form_fill.PIECE + 400 for p in pieces), "a request to the browser has a size limit"
     carried = "".join(json.loads("[" + p.rsplit("})(", 1)[1][:-1] + "]")[1] for p in pieces)
     assert base64.b64decode(carried) == content
@@ -1773,7 +1777,7 @@ def test_a_file_the_page_does_not_take_is_said_and_skipping_is_obeyed(isolate, t
     assert out["ok"] is False and "tab changed" in out["msg"]
 
     def gone(script):
-        if script.startswith("(function (key, part)"):
+        if script.startswith("(function (key, part, url)"):
             raise chrome.ChromeError(chrome.NOT_RUNNING)
         return real(script)
     monkeypatch.setattr(chrome, "run", gone)
@@ -2157,3 +2161,183 @@ def test_the_assistant_is_told_the_date_kinds_the_planner_accepts(monkeypatch):
     monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: seen.append(prompt) or {"say": "ok", "actions": []})
     assistant_brain.decide("hello", [], [], [], "", "")
     assert '"kind": ' + " | ".join(f'"{kind}"' for kind in planner.KINDS) in seen[0]
+
+
+@pytest.mark.parametrize("label", ["Keep me up to date about similar jobs", "I currently require visa sponsorship",
+                                   "I have a current driving licence", "I will present original documents", "I currently live in the EU",
+                                   "Notify me of new jobs", "I agree to the terms",
+                                   "I currently work here and authorize you to contact my employer",
+                                   "I am fluent in this language and accept being contacted", "Non-native speaker",
+                                   "I currently work here and all the details above are correct", "Valid until present",
+                                   "This is my current employer, please do not call them", "I do not currently work here",
+                                   "Do you currently work here?", "I am not a native speaker", "I work for the government",
+                                   "I work for myself", "I currently work at one of your clients", "I work at a startup"])
+def test_only_the_two_kinds_of_tick_box_are_ever_ticked(label):
+    """Loose words ("current", "present", "to date") ticked boxes that ask for something else."""
+    assert form_fill.classify(_field(label, kind="checkbox"))[0] == "", label
+    fields = [_field("Company", n=1), _field("Job title", n=2), _field(label, kind="checkbox", n=3)]
+    assert form_fill.plan(fields, {**FULL, "experience": [dict(JOBS[1])]})["tick"] == [], "the job goes on, but this box is not about it"
+    for kept in ("I currently work here", "Current", "Present *", "I am still working here", "This is my current job", "I am fluent in this language",
+                 "Currently working here", "I currently work at this company", "Current job", "Currently employed", "I currently work here (required)",
+                 "I currently work for this company", "Currently working", "I am fluent in this language.",
+                 "I work here now", "I work here currently", "I am currently employed here", "Native speaker"):
+        assert form_fill.classify(_field(kept, kind="checkbox"))[0] in ("current_box", "fluent_box"), kept
+    for script in (form_fill.READ, form_fill.CHOOSE):                  # the page reads the same words, never a copy of them
+        assert form_fill.CURRENT_BOX_WORDS in script and form_fill.NEVER_TICK_WORDS in script
+
+
+@pytest.mark.parametrize("field", [
+    _field("Referee phone", kind="tel"), _field("Reference email", kind="email"), _field("Phone of your manager", kind="tel"),
+    _field("Name of your spouse", auto="name"), _field("Next of kin name"), _field("Parent or guardian name"),
+    _field("Current salary"), _field("Last drawn salary"), _field("Are you available to work weekends?"),
+    _field("Company address"), _field("Previous employer address"), _field("Spouse name"), _field("Partner's full name"),
+    _field("Brother name"), _field("Beneficiary name"), _field("Contact name"), _field("Sibling phone", kind="tel"),
+    _field("Guarantor email", kind="email"), _field("Work address"), _field("Company website"), _field("Colleague name"),
+    _field("Mentor name"), _field("Maiden name"), _field("Colleague's email", kind="email"),
+    _field("Type your full name to sign electronically"), _field("Signature")])
+def test_a_field_about_someone_or_something_else_never_gets_your_value(field):
+    """"Referee phone" got your phone, "Name of your spouse" your name, "Current salary" the pay you ask for."""
+    what, _why = form_fill.classify(field)
+    assert what not in ("phone", "email", "full_name", "first_name", "last_name", "salary", "start", "employer", "street"), (field["label"], what)
+    todo = form_fill.plan([{**field, "n": 1}], {**FULL, "start": "2026-12-01"})
+    assert all(f.get("kind") != "detail" for f in todo["fill"]), todo["fill"]
+    assert form_fill.classify(_field("Phone", kind="tel"))[0] == "phone" and form_fill.classify(_field("Expected salary"))[0] == "salary"
+    if re.search(r"referee|reference|manager|spouse|kin|parent|partner|brother|beneficiary|contact|sibling|guarantor|colleague|mentor|sign",
+                 field["label"], re.I):
+        assert what != "guess", "Claude is not asked to copy your words into a field about somebody else"
+
+
+@pytest.mark.parametrize("field, what", [
+    (_field("Email address", kind="email", name="username"), "email"), (_field("First name", name="user_name"), "first_name"),
+    (_field("Location", name="schoolLocation-1"), "location"), (_field("Email", kind="email", id="login"), "email"),
+    (_field("Email", kind="email", hint="We will contact you about this position"), "email"),
+    (_field("Phone", kind="tel", hint="Our recruiter may call you"), "phone"),
+    (_field("Expected salary", hint="Compared to your current salary"), "salary"),
+    (_field("City", hint="Where you live now, not the office"), "city")])
+def test_what_the_label_says_wins_over_the_pages_inner_names_and_its_hint(field, what):
+    """Whose value a field asks for is read from its label: a hint that mentions a recruiter or your current salary
+    does not make your own email or the salary you ask for somebody else's."""
+    assert form_fill.classify(field)[0] == what
+    assert form_fill._OTHER_PERSON.search("mother tongue") is None, "a language field, not a person"
+
+
+def test_current_employer_is_never_an_old_job():
+    finished = {**FULL, "experience": [dict(JOBS[0])]}
+    todo = form_fill.plan([_field("Current employer", n=1), _field("Current job title", n=2)], finished)
+    assert not todo["fill"] and {i["why"] for i in todo["left"]} == {form_fill.NO_CURRENT_JOB}
+    goes_on = form_fill.plan([_field("Current employer", n=1)], FULL)
+    assert goes_on["fill"][0]["value"] == "Northwind", "a job that goes on is the current one"
+    newest = form_fill.plan([_field("Current or most recent employer", n=1)], finished)
+    assert newest["fill"][0]["value"] == "Old Mill", "\"or most recent\": the newest job when none goes on"
+
+
+def test_a_stop_while_attaching_still_reports_what_was_filled(isolate, tmp_path, monkeypatch):
+    """Chrome went away while the CV was on its way: the fields already filled were not said, and no reminder came."""
+    _with_files(tmp_path)
+    _browser(monkeypatch, [_field("First name", n=1), _field("Resume", kind="file", n=2)])
+    real = chrome.run
+
+    def gone(script):
+        if script.startswith("(function (key, part, url)"):
+            raise chrome.ChromeError(chrome.NOT_RUNNING)
+        return real(script)
+    monkeypatch.setattr(chrome, "run", gone)
+    out = ui_api.Api().assistant_fill()
+    assert out["ok"] is True and out["stopped"] == chrome.NOT_RUNNING and "Then I stopped" in out["say"]
+    assert [f["label"] for f in out["filled"]] == ["First name"]
+    assert {i["label"]: i["why"] for i in out["left"]} == {"Resume": form_run.FormFillRun.NOT_REACHED}, "the file it never reached is named"
+    assert store.load_jobs()[0].get("form_filled"), "the reminder to mark it applied still comes"
+
+
+def test_a_file_never_goes_to_a_page_that_is_not_the_form(isolate, tmp_path, monkeypatch):
+    piece = form_fill.put_scripts("__jobhelper_k", b"cv", "https://elsewhere.example/")[0]
+    assert _in_page(piece)[0] == "moved", "another page gets no piece of the CV"
+    _with_files(tmp_path)
+    _browser(monkeypatch, [_field("Resume", kind="file", n=1)])
+    real = chrome.run
+
+    def switched(script):
+        if script.startswith("(function (key, part, url)"):
+            return "moved"
+        return real(script)
+    monkeypatch.setattr(chrome, "run", switched)
+    out = ui_api.Api().assistant_fill()
+    assert out["ok"] is False and "tab changed" in out["msg"]
+    # the CV went in, then the tab changed before the letter: the CV is still reported
+    _browser(monkeypatch, [_field("First name", n=1), _field("Resume", kind="file", n=2), _field("Cover letter", kind="file", n=3)])
+    real, puts = chrome.run, []
+
+    def moved_later(script):
+        if script.startswith("(function (key, part, url)"):
+            key = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")[0]
+            if key not in puts:
+                puts.append(key)
+            if len(puts) > 1:
+                return "moved"
+        return real(script)
+    monkeypatch.setattr(chrome, "run", moved_later)
+    out = ui_api.Api().assistant_fill()
+    assert out["ok"] is True and "tab changed" in out["stopped"] and "Resume" in [f["label"] for f in out["filled"]]
+    # the CV went in, then Chrome failed on the letter: the CV is still reported, the letter named as not reached
+    puts.clear()
+
+    def failed_later(script):
+        if script.startswith("(function (key, part, url)"):
+            key = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")[0]
+            if key not in puts:
+                puts.append(key)
+            if len(puts) > 1:
+                raise chrome.ChromeError(chrome.NOT_RUNNING)
+        return real(script)
+    monkeypatch.setattr(chrome, "run", failed_later)
+    out = ui_api.Api().assistant_fill()
+    assert out["ok"] is True and out["stopped"] == chrome.NOT_RUNNING and "Resume" in [f["label"] for f in out["filled"]]
+    assert {i["label"]: i["why"] for i in out["left"]}.get("Cover letter") == form_run.FormFillRun.NOT_REACHED
+
+
+@pytest.mark.parametrize("field", [
+    _field("Full name", name="reference_name"), _field("Name", hint="Name of your referee"),
+    _field("Name", name="emergency_contact_name"), _field("Name", hint="Supervisor's name"),
+    _field("Country", kind="select", name="spouse_country", options=["Czechia", "Germany"])])
+def test_a_persons_word_in_the_hint_or_inner_name_keeps_your_name_and_address_out(field):
+    """A referee's block often says "Name" in the label and the person in the hint or the page's inner name."""
+    assert form_fill.classify(field)[0] not in ("full_name", "first_name", "last_name", "country", "city", "street")
+    assert form_fill.Field(field).detail() not in ("full_name", "country")
+
+
+def test_words_that_only_look_private_or_personal_are_not():
+    assert not form_fill._PRIVATE.search("current designation"), "a job title, not a signature"
+    assert not form_fill._PRIVATE.search("design portfolio") and form_fill._PRIVATE.search("type your full name to confirm")
+    assert form_fill.classify(_field("Type your full name to confirm"))[0] != "full_name", "a declaration you sign yourself"
+    assert not form_fill._OTHER_PERSON.search("apparent experience")
+    finished = {**FULL, "experience": [dict(JOBS[0])]}
+    todo = form_fill.plan([_field("Employer", n=1, id="current_employer")], finished)
+    assert todo["fill"] and todo["fill"][0]["value"] == "Old Mill", "the label decides, not the page's inner name"
+
+
+def test_a_long_run_of_spaces_in_a_label_is_read_at_once():
+    import time
+    start = time.perf_counter()
+    for words in (form_fill.CURRENT_BOX_WORDS, form_fill.FLUENT_WORDS):
+        re.search(words, "i currently work here" + " " * 5000 + "x", re.IGNORECASE)
+    assert time.perf_counter() - start < 1, "the end of the tick words must not try every way to split the spaces"
+    assert "replace(/\\s+/g, ' ').trim().slice(0, 120)" in form_fill.CHOOSE, "CHOOSE reads a label as READ does"
+
+
+
+def test_a_hint_about_contacts_sponsorship_or_signing_in_keeps_your_own_field():
+    """Round-4 refusals: "contact_name", "visa sponsorship" or "sign in" do not make a field somebody else's."""
+    assert form_fill.classify(_field("Full name", name="contact_name"))[0] == "full_name"
+    assert form_fill.classify(_field("Country", kind="text", hint="Needed for visa sponsorship"))[0] == "country"
+    assert form_fill.classify(_field("Full name", hint="Our recruiters read this"))[0] == "full_name"
+    for field in (_field("Email", kind="email", name="sign_up_email"), _field("Email", kind="email", name="sign-in-email"),
+                  _field("Email", kind="email", hint="We use it to sign you in")):
+        assert form_fill.classify(field)[0] == "email", field
+    assert form_fill.classify(_field("Type your full name to sign electronically"))[0] != "full_name"
+
+
+
+def test_a_hint_or_inner_name_that_only_contains_a_person_word_keeps_your_field():
+    assert form_fill.classify(_field("Country", kind="text", name="referral_country"))[0] == "country", "referral is not a referee"
+    assert form_fill.classify(_field("City", hint="We share with partner companies"))[0] == "city"
+    assert form_fill.classify(_field("Email", kind="email", hint="Re-enter email to confirm"))[0] == "email"

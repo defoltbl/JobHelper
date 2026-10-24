@@ -59,6 +59,23 @@ def page_reply(text: str, refused: str = "") -> dict[str, Any] | None:
     return None
 
 
+# The only tick boxes the assistant ticks: "I currently work here" for a job that goes on, and "I am fluent in this
+# language". One set of words for the page scripts (READ, CHOOSE) and for plan(): whole phrases, not loose words, so
+# "Keep me up to date", "I currently require visa sponsorship" or "I have a current driving licence" are never ticked.
+_TICK_END = r"[\s.*]*(?:\(?required\)?[\s.*]*)?$"                # "I currently work here *", "... (required)"
+CURRENT_BOX_WORDS = (r"^\s*(?:i (?:am )?(?:currently |still )?work(?:ing)? (?:at|for) this company"
+                     r"|i am (?:currently |still )?employed (?:here|there)"
+                     r"|i (?:am )?(?:currently |still )?work(?:ing)? (?:here|there)"
+                     r"|(?:currently|still) (?:work(?:ing)?|employed)(?: (?:here|there|at this company|for this company))?"
+                     r"|current|currently|present|ongoing|till now|until now|to date|still working"
+                     r"|(?:current|present) (?:job|role|position|employer)|this is my current (?:job|role|position|employer)"
+                     r"|(?:until|till) (?:now|present))(?: now| currently)?" + _TICK_END)
+FLUENT_WORDS = r"^\s*(?:i am fluent(?: in this language)?|fluent in this language|i speak this language fluently|(?:i am a )?native speaker)" + _TICK_END
+NEVER_TICK_WORDS = (r"agree|consent|terms|privacy|policy|newsletter|subscribe|marketing|keep me|notify|\bupdates?\b|alert"
+                    r"|sponsor|visa|licen[cs]e|\brequires?\b|authori[sz]|permit|allow|contact|certif|confirm|declar|accept"
+                    r"|acknowledg|gdpr|understand|opt.?in|disclos|\bnot\b|\bno longer\b|\bnever\b|former|\?|true|correct|accurate"
+                    r"|\bcall|reference|verify|\bsign")
+
 # A list counts as chosen when what it shows is a real entry: not its first line, not a "Select..." line without a value, not a greyed-out one.
 _CHOSEN = ("function chosen(el) { var o = el.options[el.selectedIndex]; "
            "return el.selectedIndex > 0 && !!o && !o.disabled && String(o.value) !== ''; }")
@@ -183,7 +200,7 @@ READ = r"""
         if (!(shown(el) || (el.labels && el.labels.length))) continue;
         if (type === 'checkbox' && !el.disabled) {
           var says = clean(el.labels && el.labels.length ? text(el.labels[0]) : (el.getAttribute('aria-label') || '')).slice(0, 120);
-          if (/current|present|still work|i work here|ongoing|to date|till now|until now|fluent in this language|i am fluent|i speak this language fluently|native speaker/i.test(says) && !/agree|consent|terms|privacy|policy|newsletter|subscribe|marketing/i.test(says)) {
+          if (/__TICK__/i.test(says) && !/__NEVER_TICK__/i.test(says)) {
             n++;
             el.setAttribute(MARK, String(n));
             fields.push({n: n, type: 'checkbox', name: clean(el.name).slice(0, 80), id: clean(el.id).slice(0, 80), auto: '', label: says, hint: '',
@@ -238,7 +255,8 @@ READ = r"""
   walk(document);
   return JSON.stringify({url: location.href, title: clean(document.title), from: String(document.referrer || '').slice(0, 2000), fields: fields, frames: frames.slice(0, 5), boxes: boxes, adds: adds.slice(0, 20)});
 })()
-""".replace("__MOST__", str(MAX_FIELDS)).replace("__CHOSEN__", _CHOSEN).strip()
+""".replace("__MOST__", str(MAX_FIELDS)).replace("__CHOSEN__", _CHOSEN).replace("__TICK__", CURRENT_BOX_WORDS + "|" + FLUENT_WORDS) \
+    .replace("__NEVER_TICK__", NEVER_TICK_WORDS).strip()
 
 FILL = r"""
 (function (items, url, typed) {
@@ -301,7 +319,7 @@ FILL = r"""
 # A file goes to the page in pieces (a request to the browser has a size limit), then the pieces are made into the file the
 # field is given, the way a file chosen by hand arrives. Only a file field that holds nothing is given one.
 PUT = r"""
-(function (key, part) { window[key] = (window[key] || '') + part; return String(window[key].length); })(__KEY__, __PART__)
+(function (key, part, url) { if (location.href !== url) return 'moved'; window[key] = (window[key] || '') + part; return String(window[key].length); })(__KEY__, __PART__, __URL__)
 """.strip()
 
 ATTACH = r"""
@@ -413,9 +431,9 @@ CHOOSE = r"""
   if (action === 'tick') {
     // One kind of tick box only: "I currently work here". Its words are read again here; a box that agrees to anything is refused.
     var box = target, label = box && box.labels && box.labels.length ? String(box.labels[0].innerText || box.labels[0].textContent || '') : (box ? String(box.getAttribute('aria-label') || '') : '');
+    label = label.replace(/\s+/g, ' ').trim().slice(0, 120);       // read as READ reads it: one line, never a page of spaces
     if (!box || box.tagName !== 'INPUT' || box.type !== 'checkbox' || box.disabled
-        || !/current|present|still work|i work here|ongoing|to date|till now|until now|fluent in this language|i am fluent|i speak this language fluently|native speaker/i.test(label)
-        || /agree|consent|terms|privacy|policy|newsletter|subscribe|marketing/i.test(label)) return JSON.stringify({ok: false});
+        || !/__TICK__/i.test(label) || /__NEVER_TICK__/i.test(label)) return JSON.stringify({ok: false});
     if (!box.checked) press(box);
     if (box.checked) mark(box.labels && box.labels.length ? box.labels[0] : box);
     return JSON.stringify({ok: box.checked});
@@ -480,7 +498,7 @@ CHOOSE = r"""
   }
   return JSON.stringify({ok: false});
 })(__ACTION__, __N__, __ARG__, __URL__)
-""".strip()
+""".replace("__TICK__", CURRENT_BOX_WORDS + "|" + FLUENT_WORDS).replace("__NEVER_TICK__", NEVER_TICK_WORDS).strip()
 
 
 def choose_script(action: str, n: int, arg: Any, url: str) -> str:
@@ -687,11 +705,13 @@ FILE_TYPES = {".pdf": "application/pdf", ".docx": "application/vnd.openxmlformat
               ".doc": "application/msword", ".txt": "text/plain", ".rtf": "application/rtf", ".odt": "application/vnd.oasis.opendocument.text"}
 
 
-def put_scripts(key: str, content: bytes) -> list[str]:
-    """The PUT scripts that carry a file to the page, piece by piece (as text; it is data, never code)."""
+def put_scripts(key: str, content: bytes, url: str) -> list[str]:
+    """The PUT scripts that carry a file to the page, piece by piece (as text; it is data, never code). A tab in front
+    that is no longer the form at `url` gets nothing and answers "moved"."""
     import base64
     text = base64.b64encode(content).decode("ascii")
-    return [with_values(PUT, key=str(key), part=text[i:i + PIECE]) for i in range(0, len(text), PIECE)]
+    return [with_values(PUT, key=str(key), part=text[i:i + PIECE], url=str(url)) for i in range(0, len(text), PIECE)]
+
 
 
 def attach_script(n: int, key: str, name: str, url: str) -> str:
@@ -767,6 +787,7 @@ CHOICE = "Choose it yourself."
 DATE = "Pick the date yourself."
 UNKNOWN = "I did not recognise this field."
 NO_DETAIL = "Not in My details yet: add your {what} there and ask me again."
+NO_CURRENT_JOB = "None of your jobs in My details goes on now. Mark the job you have now there, or fill this in yourself."
 TOO_LONG = "The field takes {most} characters and this is {size}. Shorten it and paste it yourself."
 NO_COUNTRY = "The list has no entry for {country}. Choose it yourself."
 NO_JOB = "An open question: choose the job this form is for, and I will draft the answer from your CV."
@@ -774,6 +795,7 @@ NO_LETTER = "No letter written by the app for this job. Paste your own."
 TOO_MANY = f"More than {form_answers.MAX_QUESTIONS} open questions: ask me again after these are done."
 
 _PRIVATE = re.compile(r"passw|captcha|card ?number|credit card|\bcvv\b|\bcvc\b|\biban\b|\bbank|account number|social security|\bssn\b"
+                      r"|signature|sign electronically|\bsign (?:here|below)\b|\bsigned\b|(?:name|initials) to confirm|\bconfirm (?:that|you)\b|to certify|to agree|i declare|signatory|initials"
                       r"|national id|id number|passport|birth|\bdob\b|\bage\b|gender|\bsex\b|pronoun|\brace\b|ethnic|disab|veteran"
                       r"|religio|orientation|marital|criminal|convict|health")
 _NOT_MINE = re.compile(r"company|employer|organi[sz]ation|school|universit|college|referr|referee|reference|emergency|manager|recruiter"
@@ -786,7 +808,9 @@ LISTED = {"lang_name": ("languages", "language"),
           "job_location": ("experience", "location"), "job_description": ("experience", "description"),
           "school": ("education", "school"), "degree": ("education", "degree"), "study_field": ("education", "field")}
 # Languages are asked row by row too: "Language", then how well ("Comprehension", "Overall", "Reading" ...), sometimes a "fluent" box.
-_FLUENT = re.compile(r"fluent in this language|i am fluent|i speak this language fluently|native speaker")
+_FLUENT = re.compile(FLUENT_WORDS)
+_CURRENT_BOX = re.compile(CURRENT_BOX_WORDS, re.IGNORECASE)
+_NEVER_TICK = re.compile(NEVER_TICK_WORDS, re.IGNORECASE)
 _LANG_NAME = re.compile(r"(?:language|jazyk|sprache)(?: \d+)?(?: name)?")
 _LANG_LEVEL = re.compile(r"^(?:comprehension|overall|reading|writing|speaking|listening|spoken|written|proficiency|level|fluency|úroveň)\b|"
                          r"\b(?:language )?(?:proficiency|level)$")
@@ -945,7 +969,42 @@ def date_option(options: list[str], when: str) -> tuple[str, str]:
             return o, ""
     return "", ""
 _CURRENT = re.compile(r"\b(?:current|present|latest|most recent|last)\b")
+_NOW = re.compile(r"\b(?:current|present)\b")                # "current employer": a job that goes on, never an old one
+_OR_LAST = re.compile(r"\b(?:most recent|recent|latest|last|previous)\b")      # "current or most recent employer": the newest job
 _NOT_THIS_JOB = re.compile(r"appl|desired|interested|preferred|referr|referee|emergency")
+# Fields that name one of your details but ask about somebody or something else.
+_PERSONAL = ("first_name", "last_name", "full_name", "street", "location", "city", "country", "postcode", "email", "phone")
+_OTHER_PERSON = re.compile(r"spouse|partner|\bparents?\b|guardian|\bkin\b|friend|relative|husband|wife|\b(?:father|mother)\b(?! tongue)|contact (?:person|name)"
+                           r"|colleague|mentor|co.?worker|relation|sponsor|nominee|recommender|interviewer|hiring|maiden"
+                           r"|sibling|brother|sister|child|daughter|\bson\b|dependent|beneficiary|guarantor|co.?applicant|next of|witness")
+# Read in the hint and the page's inner names too, so only words that always mean another person ("referral", "partner companies" do not).
+_PEOPLE = re.compile(r"\breferr(?:er|ee)s?\b|\breferees?\b|\breferences?\b|\bemergency\b|\bnext of\b|\bmanager\b|\bsupervisor\b"
+                     r"|\bspouse\b|\bguardian\b|\bkin\b")
+_NAME_OR_PLACE = ("first_name", "last_name", "full_name", "street", "location", "city", "country", "postcode")
+_WORKPLACE = re.compile(r"\bwork\b|office|business")      # "Work address": the employer's, not your home
+_PAST_PAY = re.compile(r"\b(?:current|present|previous|last|drawn|prior|past)\b")
+_YES_NO = re.compile(r"^(?:are|do|can|will|would|have|is) you\b")
+_A_PLACE = re.compile(r"address|phone|e ?mail|\bcity\b|\btown\b|country|post ?code|\bzip\b|web ?site|\burl\b|\blink")
+
+
+def _yours(key: str, words: str, everything: str = "") -> bool:
+    """Whether a field that names one of your details asks for your own value: not a referee's phone, a spouse's
+    name, the pay you get now, a yes/no question about being available, or an employer's address. `words` is what
+    the label says; `everything` adds its hint and the page's inner names, which are read only for a person
+    ("Name" with the inner name "referee_name" is the referee's)."""
+    if key in _PERSONAL and (_NOT_MINE.search(words) or _OTHER_PERSON.search(words)):
+        return False
+    if key in _NAME_OR_PLACE and _PEOPLE.search(everything):                # read in the hint and inner names too
+        return False
+    if key in ("street", "location", "city", "postcode") and _WORKPLACE.search(words):
+        return False
+    if key in ("employer", "job_title") and (_NOT_THIS_JOB.search(words) or _A_PLACE.search(words)):
+        return False                                # "position applied for", "referee's employer", "employer address"
+    if key == "salary" and _PAST_PAY.search(words):
+        return False                                # "current salary": not the pay you ask for
+    return not (key == "start" and _YES_NO.search(words))
+
+
 _RULES = (("linkedin", re.compile(r"linked ?in")),
           ("github", re.compile(r"git ?hub")),
           ("email", re.compile(r"e ?mail")),
@@ -1085,20 +1144,24 @@ when the field is left to the person."""
         # What the person reads comes first: a field labelled "Location" whose inner name is "schoolLocation-1" is a location.
         # Only a field whose label says nothing is judged by the names the page gives it inside.
         shown = _words({"label": field.get("label"), "hint": field.get("hint")})
+        asked = _words({"label": field.get("label")}) or shown or words     # whose value it is: the label decides, not its hint
         for seen in ([shown, words] if shown else [words]):
             if what:
                 break
             for key, rule in _RULES:
-                if rule.search(seen):
-                    if key in ("first_name", "last_name", "full_name", "street", "location", "city", "country", "postcode") and _NOT_MINE.search(seen):
-                        continue
-                    if key in ("employer", "job_title") and _NOT_THIS_JOB.search(seen):
-                        continue                        # "position applied for", "referee's employer": not a job of yours
+                if rule.search(seen) and _yours(key, asked, words):
                     what = key
                     break
+        if what and not _yours(what, asked, words):
+            what = ""                                   # the page says "email", the label says "Referee email"
         has_words = bool(re.search(r"[^\W\d_]{2}", str(field.get("label") or "")))
         if kind == "checkbox":                          # the two kinds of tick box that are reported: "I work here now", "I am fluent in this language"
-            return ("fluent_box", "") if _FLUENT.search(words) else ("current_box", "")
+            said = _words({"label": field.get("label")}).strip(" *") or words
+            if _NEVER_TICK.search(said):
+                return "", CHOICE
+            if _FLUENT.search(said):
+                return "fluent_box", ""
+            return ("current_box", "") if _CURRENT_BOX.search(said) else ("", CHOICE)
         if _LANG_NAME.fullmatch(_words({"label": field.get("label")}).strip(" *")):
             return "lang_name", ""                      # "Language" in a list of languages: one of yours, row by row
         if kind == "select" and not _NOT_A_ROW_DATE.search(words) and re.search(r"month|year|date|\bfrom\b|\bto\b|start|end", words):
@@ -1121,7 +1184,7 @@ when the field is left to the person."""
         label = str(field.get("label") or "").strip()
         if kind == "textarea" or "?" in label or len(label) >= 20:
             return ("question", "") if has_words else ("", UNKNOWN)
-        if has_words and kind in ("text", "search") and not _NOT_MINE.search(words) and not _NOT_THIS_JOB.search(words):
+        if has_words and kind in ("text", "search") and not (_NOT_MINE.search(words) or _NOT_THIS_JOB.search(words) or _OTHER_PERSON.search(words)):
             return "guess", ""                          # a few words Claude may copy from the CV; never somebody else's name or employer
         return "", UNKNOWN
 
@@ -1131,9 +1194,9 @@ when the field is left to the person."""
         words = _words(field)
         if _PRIVATE.search(words):
             return ""
+        asked = _words({"label": field.get("label")}) or words
         for key, rule in _RULES:
-            if rule.search(words) and not (key in ("first_name", "last_name", "full_name", "street") and _NOT_MINE.search(words)) \
-                    and not (key in ("employer", "job_title") and _NOT_THIS_JOB.search(words)):
+            if rule.search(words) and _yours(key, asked, words):
                 return key
         return ""
 
@@ -1513,6 +1576,12 @@ class FormPlanner:
     def _detail(self, field: Field, what: str) -> None:
         """One of your details, or the letter."""
         label, kind, most, mine = field.name, field.kind, field.most, self._mine
+        jobs = details.jobs(mine)
+        said = _words({"label": field.name}) or field.words
+        if (what in ("employer", "job_title") and _NOW.search(said) and not _OR_LAST.search(said)
+                and jobs and not any(j.get("current") for j in jobs)):
+            self._plan.leave(label, NO_CURRENT_JOB)
+            return
         index = self._rows.place(what, field) if what in LISTED else 0
         value = self._letter if what == "letter" else value_for(what, mine, index)
         if what in LISTED and not value and index:

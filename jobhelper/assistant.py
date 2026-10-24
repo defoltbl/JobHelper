@@ -19,7 +19,8 @@ HELP = ("I fill in application forms. Open the form in your browser, bring its t
         "Your name, contacts and links come from My details; open questions are answered from your CV for the job you choose. "
         "I choose from lists, menus and yes/no questions only when your CV or your details settle the answer. "
         "A field for your CV gets the CV of that job, and a field for the letter or for other attachments gets its letter. "
-        "I leave passwords, tick boxes and personal questions to you, and I never send a form.")
+        "I tick only \"I currently work here\" and \"I am fluent in this language\". I leave passwords, every other tick box "
+        "and personal questions to you, and I never send a form.")
 UNKNOWN = "I did not understand that. " + HELP
 
 # What the assistant may say about the app when asked a free question: facts, kept short. It is

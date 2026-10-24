@@ -42,6 +42,7 @@ class FormFillRun:
         self._filled: list[dict] = []         # what the report shows as done
         self._left: list[dict] = []           # what is left to the person, with the reason
         self._written: list[int] = []         # numbers of the fields the page took
+        self._stopped = ""                    # why the fill stopped after the page was changed
 
     def result(self) -> dict[str, Any]:
         """Do the whole fill and say what happened (see `AssistantService.assistant_fill`)."""
@@ -52,12 +53,18 @@ class FormFillRun:
             self._plan()
             self._leave_out_what_you_named()
             self._draft_answers()
+        except Stop as stop:
+            return stop.answer
+        try:                                  # the page changes from here on: a stop still reports what was filled
             self._choose()
             self._tick()
             self._write()
             self._attach_files()
         except Stop as stop:
-            return stop.answer
+            if not self._filled:
+                return stop.answer
+            self._stopped = str(stop)
+            self._left_unreached()
         return self._report(host)
 
     def learned(self) -> dict[str, Any]:
@@ -226,13 +233,24 @@ class FormFillRun:
         if not self._todo["attach"]:
             return
         try:
-            attached, not_attached, moved = FormFiles(self._page, self._job).attach(self._todo["attach"])
+            attached, not_attached, stopped = FormFiles(self._page, self._job).attach(self._todo["attach"])
         except (chrome.ChromeError, ValueError) as e:
             raise Stop(str(e)) from e
-        if moved:
-            raise Stop("The tab changed while I was attaching your files. Go back to the form, look what it holds, and ask me again.")
-        self._filled += attached
+        self._filled += attached                 # a file the form took is reported, also when the next one stopped
         self._left += not_attached
+        if stopped:
+            raise Stop(stopped)
+
+    NOT_REACHED = "Not filled: I stopped before I came to it. Fill it in yourself, or ask me again."
+
+    def _left_unreached(self) -> None:
+        """After a stop, every field still waiting for a value, a choice, a tick or a file is listed as left to you."""
+        said = {i["label"] for i in self._filled} | {i["label"] for i in self._left}
+        waiting = [*self._fill, *self._todo.get("choose", []), *self._todo.get("tick", []), *self._todo.get("attach", [])]
+        for item in waiting:
+            if item["label"] not in said:
+                said.add(item["label"])
+                self._left.append({"label": item["label"], "why": self.NOT_REACHED})
 
     def _report(self, host: str) -> dict[str, Any]:
         page, job, filled, left, added = self._page, self._job, self._filled, self._left, self._added
@@ -247,9 +265,10 @@ class FormFillRun:
                 "has_files": bool(self._mine["files"] or (job and (job.get("tailored_cv_file") or job.get("cover_letter_file")))),
                 "is_lead": bool(job and job.get("status") in store.LEAD_STATUSES), "can_learn": bool(self.learned()["items"]),
                 "filled": filled, "left": left, "kept": kept, "boxes": page["boxes"],
-                "added_rows": added,
+                "added_rows": added, "stopped": self._stopped,
                 "say": assistant.summary(host, filled, left, kept, page["boxes"], label, self._guessed)
-                       + (f" I asked the form for {added} more row{'' if added == 1 else 's'} for your jobs and degrees." if added else "")}
+                       + (f" I asked the form for {added} more row{'' if added == 1 else 's'} for your jobs and degrees." if added else "")
+                       + (f" Then I stopped: {self._stopped}" if self._stopped else "")}
 
     # ── how each step talks to the page ─────────────────────────
     def _letter_text(self) -> str:
@@ -411,8 +430,11 @@ class FormFiles:
     def __init__(self, page: dict[str, Any], job) -> None:
         self._page, self._job = page, job
 
-    def attach(self, wanted: list[dict[str, Any]]) -> tuple[list[dict], list[dict], bool]:
-        """Give the form's file fields the CV and the letter of this job. Returns (attached, left, the tab moved).
+    MOVED = "The tab changed while I was attaching your files. Go back to the form, look what it holds, and ask me again."
+
+    def attach(self, wanted: list[dict[str, Any]]) -> tuple[list[dict], list[dict], str]:
+        """Give the form's file fields the CV and the letter of this job. Returns (attached, left, why it stopped part
+        way: the tab moved or Chrome failed, '' when it did not).
         Only a field that holds no file is given one; the field for further documents gets the letter when the
         form has no place of its own for it. Nothing is sent: the page holds the file until you press its button."""
         page, job = self._page, self._job
@@ -449,16 +471,29 @@ class FormFiles:
                 left.append({"label": item["label"], "why": form_fill.FILE_BIG.format(name=path.name)})
                 continue
             key = "__jobhelper_" + secrets.token_hex(8)
-            for piece in form_fill.put_scripts(key, content):
-                chrome.run(piece)
-            got = form_fill.attach_answer(chrome.run(form_fill.attach_script(item["n"], key, path.name, page["url"])))
+            try:
+                if not self._carry(key, content, page["url"]):
+                    return filled, left, self.MOVED     # the tab changed: nothing more goes to any page
+                got = form_fill.attach_answer(chrome.run(form_fill.attach_script(item["n"], key, path.name, page["url"])))
+            except chrome.ChromeError as e:
+                return filled, left, str(e)             # the files attached before it are still reported
             if got["moved"]:
-                return filled, left, True
+                return filled, left, self.MOVED
             if got["ok"] and got["size"] == len(content):
                 filled.append({"label": item["label"], "value": path.name, "kind": "file", "check": check})
             else:
                 left.append({"label": item["label"], "why": form_fill.FILE_REFUSED})
-        return filled, left, False
+        return filled, left, ""
+
+    @staticmethod
+    def _carry(key: str, content: bytes, url: str) -> bool:
+        """Send a file to the form's page in pieces. False when the tab in front stopped being that page: then no
+        piece goes to another site. shortcut: the form, now in a tab behind, keeps the pieces sent so far until it is
+        reloaded (a script reaches only the tab in front); the guide says to reload it."""
+        for piece in form_fill.put_scripts(key, content, url):
+            if str(chrome.run(piece)).strip().strip('"') == "moved":
+                return False
+        return True
 
     def docs(self) -> dict[str, list]:
         """The files of the job that can go into a form: its CV and its letter, the PDF before the Word file."""
