@@ -23,7 +23,7 @@ def test_values_go_into_a_script_as_data_never_as_code():
 def test_every_builder_fills_all_of_its_values():
     built = [form_fill.choose_script("pick", 2, 5, "https://careers.example"), form_fill.fill_script([{"n": 1, "value": "x"}], "u"),
              form_fill.values_script([1], "u"), form_fill.empty_script([1], "u"), form_fill.attach_script(1, "k", "cv.pdf", "u"),
-             *form_fill.put_scripts("k", b"abc")]
+             *form_fill.put_scripts("k", b"abc", "u")]
     for script in built:
         assert "__" not in script.replace("data-jobhelper", ""), script[-120:]
 

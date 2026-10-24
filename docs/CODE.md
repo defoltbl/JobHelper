@@ -561,7 +561,8 @@ small steps that are easy to check. `form_fill` holds the scripts and the rules.
 `form_run.FormFillRun`, with one method for each step. `FormChoices` makes the choices of a form,
 and `FormFiles` gives its file fields their files. `form_fill.PageAddress` says if the assistant may
 work on a page at all. A step that cannot go on raises `Stop`
-with the message for the person, and the steps after it do not run:
+with the message for the person, and the steps after it do not run. When the page was already
+changed, the report still lists what was filled, and it adds why the fill stopped:
 
 ![How the assistant fills in a form](img/code_fill.png)
 
@@ -584,7 +585,16 @@ with the message for the person, and the steps after it do not run:
 5. A file field can ask for the CV, the letter or other attachments (`file_kind`). It gets the
    document of the job. A request to the browser has a size limit. So the file goes to the page
    as text, in pieces of 150,000 characters (`PUT`). `ATTACH` makes the pieces into a file. It
-   gives the file to the field the same way as a file chosen by hand.
+   gives the file to the field the same way as a file chosen by hand. Each piece carries the
+   address of the form. A tab that shows another page gets nothing (`PUT` answers "moved").
+   A form left in a tab behind keeps the pieces until it is reloaded.
+6. A field that names one of your details gets your value only when it asks about you
+   (`_yours`). A field about another person (a referee, a spouse) is left to you. So are the
+   salary you get now, a yes/no question and an employer's address. The words of the label come
+   before the names inside the page.
+7. Only two kinds of tick box are ticked: "I currently work here" and "I am fluent in this
+   language". The page scripts and the planner read the same words (`CURRENT_BOX_WORDS`,
+   `FLUENT_WORDS`, `NEVER_TICK_WORDS`).
 
 `match_job` finds the job of a form. A form is usually not at the address of its posting. So
 the function tries these steps in order:
@@ -616,7 +626,7 @@ the fields to fill and the fields to leave.
 
 | Rule | How it is kept |
 |---|---|
-| The form is never sent | No script presses a button that sends. Only one script presses something (`CHOOSE`). It accepts five types of element. These are what opens a menu, an entry of a menu, and a radio button. The fourth is a button that adds a row for a job or a degree. The fifth is a tick box that says a job goes on. It reads the words of the element again before it acts. It refuses anything that sends, continues, uploads or agrees. A test reads the scripts for these calls. The test area checks on each form that nothing was sent |
+| The form is never sent | No script presses a button that sends. Only one script presses something (`CHOOSE`). It accepts five types of element. These are what opens a menu, an entry of a menu, and a radio button. The fourth is a button that adds a row for a job or a degree. The fifth is a tick box. Its whole label must say that a job goes on or that the person is fluent in a language (`CURRENT_BOX_WORDS`, `FLUENT_WORDS`). A label with words from `NEVER_TICK_WORDS` is refused. It reads the words of the element again before it acts. It refuses anything that sends, continues, uploads or agrees. A test reads the scripts for these calls. The test area checks on each form that nothing was sent |
 | What a page throws away is noticed | After writing, `EMPTY` tells which fields are empty. The app writes these again, the way typing arrives. If a field is still empty, the app tells the person and does not count it as filled |
 | A choice is made only when something settles it | `form_choices.settle` uses the details of the person and the job. One call to Claude covers the other choices. The app drops an answer that is not one of the options of the field. Every choice is marked for checking |
 | Only the assistant's own answers are read back | To learn the person's corrections, `VALUES` is asked for the numbers of the fields the assistant filled as answers, and for nothing else |

@@ -990,7 +990,7 @@ fields. On a page, it presses only these things:
 - a menu, and an entry of a menu
 - a yes/no button
 - a button that adds a row for another job or degree
-- the box that says you work at a job now
+- the box that says you work at a job now, and the box that says you are fluent in a language
 
 It never presses a button that sends or continues. It never ticks a box that agrees to
 something, and it never sends the form. You read what it wrote, and you send the form
@@ -1276,6 +1276,8 @@ Table 9.4 shows what happens to each kind of field.
 | A file field, when the assistant does not know which job the form is for | Leaves it to you. Choose the job, then ask again: a CV written for another company is worse than none |
 | A password | Leaves it to you |
 | Date of birth, gender, origin, health, payment details | Leaves them to you |
+| A field about another person (**Referee phone**, **Next of kin name**), an employer's address, or **Current salary** | Your own name, contacts, address and the salary you ask for never go there. A field about another person and an employer's address are left to you. For **Current salary**, the assistant may offer words from your CV, marked for checking |
+| **Current employer** when no job in **My details** is marked **I work here now** | Leaves it to you and says why. An old job is never given as the current one. **Current or most recent employer** gets the first job in your list in **My details** |
 | The dates of a job or a degree | Writes them where the form takes a month and a year, as one field or as two lists. Where it wants a full date, the first of the month is used and marked for checking. With only a year in **My details**, a month is left to you |
 | The box **I currently work here** | Ticked for a job you marked **I work here now**. Marked for checking |
 | **Location** and **Role description** inside a job's block | Writes where that job was and what you did there, from the job in **My details**. Never your own city, and never a text drafted about you in general. Empty in **My details**: left to you, with the reason |
@@ -1307,7 +1309,8 @@ Table 9.5 lists what the assistant may answer, and what to do.
 | The form sits inside a frame from another site | The company shows a form that lives on a recruiting site | Select **Open the form in its own tab and fill it in** under the answer |
 | The menu did not open for me | The site draws its menu in a way the assistant does not know | Choose that one yourself |
 | I could not ask Claude | Claude's limit is used up, or there is no connection | The details are still filled in. Ask again after the reset time shown in the Usage card (section 18) |
-| The tab changed while I was working | You moved to another page in the meantime | Go back to the form and ask again |
+| The tab changed while I was working | You moved to another page in the meantime | Go back to the form and ask again. The answer lists what was filled before, and what was not reached |
+| The tab changed while I was attaching your files | You moved to another page while a file was on its way. The answer still lists what was filled before | Go back to the form. Look at what it holds, then ask again. Reload the form first if a file is missing |
 | An open question: choose the job this form is for | The page did not show which job it belongs to | Choose the job under **Answers are for** and ask again |
 | I do not know your details yet | **My details** is empty | Fill in **My details**, save, ask again |
 | A field stayed empty although it is listed as filled | The site rebuilt the field after it was written | Type that one yourself |

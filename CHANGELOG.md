@@ -7,6 +7,9 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- The **assistant** now ticks only the boxes **I currently work here** and **I am fluent in this language**. Before, a box such as "Keep me up to date about similar jobs" or "I currently require visa sponsorship" could be ticked too.
+- The assistant no longer writes your own phone, email or name into a field about another person, such as **Referee phone** or **Next of kin name**. It no longer writes the salary you ask for into **Current salary**, or an old job into **Current employer**.
+- When the assistant stops part way, for example because the tab changed while it attached your CV, it now still says which fields and files it filled and which it did not reach. The reminder to mark the job applied still comes. A piece of your CV never goes to another tab.
 - Every dialog window now has the same title size, header and footer. The message that shows over a window no longer covers its buttons on a small screen.
 - The box that a red message names now turns red too: **Right to work** in About you, the company's name and token in Options, the full company note in the job window, and the mail server on the start card.
 - The **cover letter** and the **answers for a form** now check each figure, such as "40% faster". Your CV, your notes or your own words must give it. Claude is asked once to remove a figure that has no source. If it stays, the job window or the answer says which figure to check.
