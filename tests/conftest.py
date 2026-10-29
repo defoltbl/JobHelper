@@ -152,6 +152,8 @@ def isolate_data(tmp_path, monkeypatch):
     from jobhelper import config
 
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    from jobhelper import usage
+    monkeypatch.setattr(usage.LOG, "_last_try", 0.0)        # this run's last question for the limits: none yet
     monkeypatch.setattr(config, "CV_DIR", tmp_path / "cv")
     monkeypatch.setattr(config, "LETTERS_DIR", tmp_path / "cover_letters")
     monkeypatch.setattr(config, "MY_LETTERS_DIR", tmp_path / "my_letters")

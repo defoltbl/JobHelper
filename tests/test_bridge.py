@@ -880,6 +880,24 @@ def test_a_used_up_limit_is_not_noted_as_a_problem(bridge, monkeypatch):
     assert noted == ["asking Claude for the current usage"]            # a real failure still is
 
 
+def test_refresh_asks_claude_at_once_also_while_a_limit_holds(bridge, monkeypatch, isolate_data):
+    """The refresh button reads the limits now, whatever the ten-minute check or a remembered refusal says."""
+    import time
+    from jobhelper import llm, usage
+    asked = []
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self: {"claude": True})
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: asked.append(k.get("force")) or "ok")
+    usage.record({"input_tokens": 1, "output_tokens": 1, "cost_usd": 0.0, "rate_limit_info": {"unifiedWindows": {}}}, tag="usage_ping")
+    usage.note_limit(time.time() + 3600, "You've hit your weekly limit · resets 9am")
+    assert usage.refresh_due() is False, "the automatic check would wait"
+    bridge._ping_usage()
+    assert asked == [True], "one question, past the limit check"
+    noted = []
+    monkeypatch.setattr(usage, "note_try", lambda: noted.append(True))
+    bridge._ping_usage()
+    assert noted == [True], "the question is noted for the automatic check"
+
+
 def test_the_start_up_check_button_is_refused_during_a_run(bridge, monkeypatch):
     calls = []
     monkeypatch.setattr(ui_api.Api, "fix_problem", lambda self, action: calls.append(action) or {"ok": True, "msg": ""})

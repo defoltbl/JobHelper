@@ -250,8 +250,8 @@ ApplicationWindow {
     }
     function startRescore() { if (win.appRunning) return false; var r = bridge.rescoreAll(); handleStart(r, "Scoring again…", "rescore"); return !!(r && r.ok); }
 
-    Timer { interval: 60; running: true; repeat: false
-        onTriggered: { win.reloadAll(); win.usageBusy = true; bridge.refreshUsage(); } }
+    Timer { id: startUp; objectName: "startUp"; interval: 60; running: true; repeat: false
+        onTriggered: { win.reloadAll(); win.refreshUsageNow(); } }
     Connections {
         target: bridge
         function onAgentChanged(key, status, info) { win.setAgent(key, status, info); }
@@ -292,13 +292,16 @@ ApplicationWindow {
         function onUsageReady() { win.usageData = bridge.usageInfo(); win.usageBusy = false; bridge.refreshWidget(); }   // the widget too, at once
     }
     // When a limit's reset time passes, the card asks again (one small question to Claude): what is used after a reset is
-    // not known, because Claude Code shares the subscription. While the app is open it also asks when the numbers are
-    // older than an hour (usageInfo's should_refresh), never during a run, which brings its own numbers.
+    // not known, because Claude Code shares the subscription. While the app window is shown it looks every minute and
+    // asks when the numbers are older than usage.REFRESH_AFTER (usageInfo's should_refresh); also when the app window
+    // comes to the front. Never during a run, which brings its own numbers.
     function refreshUsageNow() { if (!win.usageBusy && !win.appRunning) { win.usageBusy = true; bridge.refreshUsage(); } }
     // the figures read again first (an old flag is out of date), then one question only when the back end says it is due
     function refreshIfDue() { win.usageData = bridge.usageInfo(); if (win.usageData.should_refresh === true) win.refreshUsageNow(); }
-    Timer { id: usageHourly; objectName: "usageHourly"; interval: 3600000; repeat: true; running: true
+    Timer { id: usageTick; objectName: "usageTick"; interval: 60000; repeat: true      // looks only; the back end decides
+        running: win.visible && win.visibility !== Window.Minimized
         onTriggered: win.refreshIfDue() }
+    onActiveChanged: if (active) win.refreshIfDue()
     Timer { id: usageReset; objectName: "usageReset"
         interval: Math.max(1000, Math.min((win.usageData.next_reset_in || 0), 2000000) * 1000 + 1500)
         running: (win.usageData.next_reset_in || 0) > 0

@@ -9,7 +9,8 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 - **Usage left:** the bar now shows what is left, as the card's title says; a used-up window has an empty bar, not a full green one.
 - **Usage left:** after a window resets, the card and the widget no longer guess "100% left". Claude Code uses the same limit, so the app cannot know what is used.
-- **Usage left:** the card says when a window reset, and the app asks Claude for the new figure by itself. While the app is open it also asks about once an hour when the figures are old, never during a search, and the widget is updated at once.
+- **Usage left:** the app asks Claude for new figures by itself after a window resets. It also asks about every 10 minutes while the app window is shown, and when you bring it to the front. It never asks during a search or while Claude refuses calls. The widget is updated at once.
+- **Usage left:** each window shows its own reset time. When the 7-day window is used up, the 5-hour line also says when it comes back with the 7-day window.
 - **About you:** each salary estimate now has a **Change** button. It makes the estimate your own figure for that kind of role, ready to change, without typing the role again.
 - The **adapted CV** now checks its profile paragraph like the cover letter: a figure that your CV, your notes or About you do not give, such as "8 years", is sent back to Claude once and then removed with its sentence. If nothing else would be left, the paragraph stays and the job window names the figure. A company or technology your CV does not name is shown in the job window to check.
 - "Java" in a skills list no longer counts as in your CV because your CV says "JavaScript".

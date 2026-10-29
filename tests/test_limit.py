@@ -117,7 +117,8 @@ def test_a_weekly_refusal_is_not_shown_as_the_short_window(isolate_data):
     usage.note_limit(NOON + 86400, "You've hit your weekly limit · resets 9am")
     status = usage.limit_status(now=NOON)
     assert status["blocked"] and status["window"] == "seven_day"
-    assert usage.windows(NOON)["five_hour"]["used"] == 0.10
+    assert usage.windows(NOON)["five_hour"]["used"] == 0.10, "the 5-hour window keeps its own figure"
+    assert usage.windows(NOON)["five_hour"]["held_until"] == NOON + 86400, "... and says when the week frees it"
 
 
 def test_a_refusal_that_names_no_limit_is_put_on_the_fuller_window(isolate_data):
@@ -144,7 +145,7 @@ def test_a_window_whose_reset_time_passed_is_unknown_again(isolate_data):
 
 
 def test_windows_never_reported_stay_unknown(isolate_data):
-    assert usage.windows() == {name: {"used": None, "resets_at": 0.0, "as_of": 0.0, "stale": False, "reset_passed": 0.0}
+    assert usage.windows() == {name: {"used": None, "resets_at": 0.0, "as_of": 0.0, "stale": False, "reset_passed": 0.0, "held_until": 0.0}
                                for name in ("five_hour", "seven_day")}
     _saved_usage(lambda state: state.update(last_rate_limit={"at": "now", "info": {"unifiedWindows": {
         "five_hour": {"utilization": "a lot"}, "seven_day": "?"}}}))
@@ -163,7 +164,7 @@ def test_the_usage_card_says_nothing_is_left_while_claude_refuses(isolate_data):
     _windows(five=0.87, seven=0.34, five_reset=time.time() - 60, seven_reset=time.time() + 86400)
     card = ui_api.Api().usage_info()
     assert card["five_hour_used"] is None and card["five_hour_resets"] == "" and card["seven_day_used"] == 34
-    assert card["five_hour_reset_passed"] and card["should_refresh"] is True, "reset since the reading: ask again"
+    assert card["should_refresh"] is True, "reset since the reading: ask again"
     usage.note_limit(in_an_hour, SESSION_REFUSAL)
     card = ui_api.Api().usage_info()
     assert card["five_hour_used"] == 100 and card["seven_day_used"] == 34
@@ -578,12 +579,84 @@ def test_a_stuck_claude_in_a_run_uses_one_of_the_jobs_tries(isolate_data, monkey
 
 def test_the_card_asks_again_only_for_an_old_or_reset_figure_and_names_a_low_window(isolate_data):
     _windows(five=0.80, seven=0.79, five_reset=time.time() + 3600, seven_reset=time.time() + 86400)
+    _saved_usage(lambda state: state["last_rate_limit"].update(at=datetime.now().isoformat(timespec="seconds")))
     card = ui_api.Api().usage_info()
     assert card["should_refresh"] is False, "a fresh reading: no question to Claude"
     assert card["five_hour_low"] is True and card["seven_day_low"] is False, f"{usage.LOW_LEFT}% left or less is low"
-    old = datetime.fromtimestamp(time.time() - usage.STALE_AFTER - 60).replace(microsecond=0)
+    old = datetime.fromtimestamp(time.time() - usage.REFRESH_AFTER - 60).replace(microsecond=0)
     _saved_usage(lambda state: state["last_rate_limit"].update(at=old.isoformat()))
-    assert ui_api.Api().usage_info()["should_refresh"] is True, "older than an hour: one small question"
+    assert ui_api.Api().usage_info()["should_refresh"] is True, "older than ten minutes: one small question"
+    assert ui_api.Api().usage_info()["five_hour_stale"] is False, "still recent enough to show without its time"
+
+
+def test_a_question_that_brought_no_reading_is_not_asked_again_at_once(isolate_data):
+    """An answer without the limits (or none at all) left the reading old, so every minute and every return to the
+    window asked again."""
+    start = time.time()
+    _windows(five=0.5, seven=0.2, five_reset=start + 3600, seven_reset=start + 86400)
+    old = datetime.fromtimestamp(start - 2 * usage.REFRESH_AFTER).replace(microsecond=0)
+    _saved_usage(lambda state: state["last_rate_limit"].update(at=old.isoformat()))
+    assert usage.refresh_due(start) is True
+    before = config.USAGE_JSON.read_bytes()
+    usage.note_try(start)
+    assert config.USAGE_JSON.read_bytes() == before, "kept for this run only: the file is not written"
+    assert usage.refresh_due(start + 60) is False, "just asked: wait"
+    assert usage.refresh_due(start + usage.REFRESH_AFTER + 60) is True, "ten minutes later: ask again"
+    assert usage.refresh_due(start + 3601) is True, "a window reset since the question: ask at once"
+
+
+def test_a_time_ahead_of_the_clock_does_not_stop_the_asking(isolate_data):
+    """With the clock set back (by hand, or the end of summer time) a reading or a question 'from the future' kept the
+    card on old figures."""
+    start = time.time()
+    _windows(five=0.5, seven=0.2, five_reset=start + 7 * 86400, seven_reset=start + 7 * 86400)
+    ahead = datetime.fromtimestamp(start + 86400).replace(microsecond=0)
+    _saved_usage(lambda state: state["last_rate_limit"].update(at=ahead.isoformat()))
+    usage.note_try(start + 86400)
+    assert usage.refresh_due(start + 60) is True, "times ahead of the clock are not trusted: ask once"
+    usage.note_try(start + 60)
+    assert usage.refresh_due(start + 120) is False, "then the usual ten minutes"
+
+
+def test_no_question_while_claude_refuses_calls(isolate_data):
+    """Claude says nothing new until the reset it named: asking every ten minutes would only be refused."""
+    _windows(five=0.5, seven=0.2, five_reset=NOON + 3600, seven_reset=NOON + 86400)
+    usage.note_limit(NOON + 1800, SESSION_REFUSAL)
+    assert usage.refresh_due(NOON) is False
+    assert usage.refresh_due(NOON + 1801) is True, "the refusal is over: ask again"
+
+
+WEEKLY_REFUSAL = "Claude Code returned an error result: You've hit your weekly limit · resets 4:13pm (Europe/Prague) (exit code: 1)"
+
+
+def test_a_used_up_week_also_names_its_reset_on_the_5_hour_window(isolate_data):
+    """Seen in use: the weekly limit was used up and the 5-hour window showed an old reset date and "—"."""
+    _windows(five=0.87, seven=0.34, five_reset=NOON + 600, seven_reset=NOON - 60)
+    usage.note_limit(NOON + 4 * 3600, WEEKLY_REFUSAL)
+    now = usage.windows(NOON)
+    assert _kept(now["seven_day"]) == {"used": 1.0, "resets_at": NOON + 4 * 3600}
+    assert _kept(now["five_hour"]) == {"used": 0.87, "resets_at": NOON + 600}, "its own figure and its own time"
+    assert now["five_hour"]["held_until"] == NOON + 4 * 3600 and now["seven_day"]["held_until"] == 0.0
+    assert usage.limit_status(now=NOON)["window"] == "seven_day", "the run waits for the weekly window"
+    assert usage.windows(NOON + 4 * 3600 + 1)["five_hour"]["held_until"] == 0.0, "the week reset: nothing holds it any more"
+
+
+def test_a_5_hour_window_that_frees_later_needs_no_second_time(isolate_data):
+    _windows(five=1.0, seven=1.0, five_reset=NOON + 7200, seven_reset=NOON + 3600)
+    assert usage.windows(NOON)["five_hour"]["held_until"] == 0.0
+    _windows(five=0.1, seven=0.5, five_reset=NOON + 600, seven_reset=NOON + 3600)
+    assert usage.windows(NOON)["five_hour"]["held_until"] == 0.0, "the week is not used up: nothing held"
+
+
+def test_the_card_names_when_the_held_5_hour_window_comes_back(isolate_data):
+    back = time.time() + 3 * 3600
+    _windows(five=0.2, seven=0.5)
+    usage.note_limit(back, WEEKLY_REFUSAL)
+    card = ui_api.Api().usage_info()
+    when = datetime.fromtimestamp(back)
+    assert card["seven_day_used"] == 100 and card["five_hour_used"] == 20, "the 5-hour figure stays its own"
+    assert card["five_hour_held_until"] == card["seven_day_resets"] in (when.strftime("%H:%M"), when.strftime("%d %b %H:%M"))
+    assert card["seven_day_held_until"] == "" and card["five_hour_resets"] != "" and card["should_refresh"] is False
 
 
 def test_a_refused_window_and_a_reset_one_are_told_apart(isolate_data):

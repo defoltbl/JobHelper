@@ -55,6 +55,8 @@ _WINDOW_WORDS = (("seven_day", re.compile(r"week|7[- ]?day|seven[- ]day", re.IGN
 WINDOWS = ("five_hour", "seven_day")
 STALE_AFTER = 3600      # seconds: Claude reports the limits only with an answer, so an older number is shown with its time
 LOW_LEFT = 20           # per cent left or less: the card says when the window resets, and its bar turns red
+REFRESH_AFTER = 600     # seconds: while the window is open, a reading older than this is asked for again (one small question)
+FULL = 0.99             # used this much or more: the window is used up
 
 
 def _blank() -> dict[str, Any]:
@@ -83,7 +85,8 @@ def _moment(text: Any) -> float:
 
 def _window(used: float | None, resets_at: float, as_of: float, now: float, reset_passed: float = 0.0) -> dict[str, Any]:
     return {"used": used, "resets_at": resets_at, "as_of": as_of,
-            "stale": used is not None and as_of > 0 and now - as_of > STALE_AFTER, "reset_passed": reset_passed}
+            "stale": used is not None and as_of > 0 and now - as_of > STALE_AFTER, "reset_passed": reset_passed,
+            "held_until": 0.0}
 
 
 def window_named(message: str) -> str:
@@ -101,6 +104,7 @@ class UsageLog:
     def __init__(self) -> None:
         self._lock = threading.Lock()   # a search and a question to the assistant can both note a call at the same moment
         self._session = _blank()
+        self._last_try = 0.0                # when this run of the app last asked Claude for the limits (never saved)
 
     @property
     def path(self):
@@ -167,11 +171,14 @@ class UsageLog:
     def windows(self, now: float | None = None) -> dict[str, dict[str, Any]]:
         """Each limit as it stands now: {window: {used (0..1 or None = never reported), resets_at (epoch, 0 = unknown),
         as_of (epoch the number was true, 0 = unknown), stale (it is older than STALE_AFTER), reset_passed (epoch of a
-        reset since the last reading, 0 = none)}}.
+        reset since the last reading, 0 = none), held_until (epoch the used-up weekly window frees the 5-hour one too,
+        0 = it does not hold it)}}.
 
         The numbers Claude last reported, corrected by what is known since: a window whose reset time has passed is
         unknown again (Claude Code and the app share the subscription, so it need not be empty), and a window Claude
-        refused a call for is full until the reset it named, whatever the older numbers say."""
+        refused a call for is full until the reset it named, whatever the older numbers say. Each window keeps its own
+        figure and reset time; while the weekly window is used up, nothing can be used before it resets, so the 5-hour
+        window also says when that is (when it would itself free earlier)."""
         import time
         now = time.time() if now is None else now
         state = self._read()
@@ -195,9 +202,35 @@ class UsageLog:
             if not name:            # the refusal did not say which: the fuller one, the short window when neither is known
                 name = max(WINDOWS, key=lambda k: out[k]["used"] or 0.0) if any(out[k]["used"] for k in WINDOWS) else "five_hour"
             out[name] = _window(1.0, until, now, now)
+        week, short = out["seven_day"], out["five_hour"]
+        if (week["used"] or 0.0) >= FULL and week["resets_at"] > now and short["resets_at"] < week["resets_at"]:
+            short["held_until"] = week["resets_at"]
         return out
 
-    def limit_status(self, threshold: float = 0.99, now: float | None = None) -> dict[str, Any]:
+    def note_try(self, now: float | None = None) -> None:
+        """Remember that the app asked Claude for the limits, whatever came back: a question that brought no reading
+        (no answer, no limits in it, not signed in) is not asked again before REFRESH_AFTER. Kept for this run only, so
+        it never writes the file (a damaged usage.json must not be written over)."""
+        import time
+        self._last_try = time.time() if now is None else now
+
+    def refresh_due(self, now: float | None = None, windows: dict[str, dict[str, Any]] | None = None) -> bool:
+        """Is one small question to Claude worth it now? Yes when the last reading or question is older than
+        REFRESH_AFTER, or a window reset since then; no while Claude refuses calls, because it tells nothing new until
+        the reset it named. `windows` saves reading the file again when the caller has them for the same moment."""
+        import time
+        now = time.time() if now is None else now
+        state = self._read()
+        if float(_number((state.get("limit_block") or {}).get("until"))) > now:
+            return False
+        def known(moment: float) -> float:        # a time ahead of the clock (set back since) is not trusted
+            return moment if moment <= now else 0.0
+        tried = known(self._last_try)
+        last = max(known(_moment((state.get("last_rate_limit") or {}).get("at"))), tried)
+        windows = self.windows(now) if windows is None else windows
+        return now - last > REFRESH_AFTER or any(w["reset_passed"] > tried for w in windows.values())
+
+    def limit_status(self, threshold: float = FULL, now: float | None = None) -> dict[str, Any]:
         """Is the subscription limit used up right now?
 
         {blocked, window ('five_hour' | 'seven_day' | ''), used (0..1), resets_at (epoch, 0 = unknown)}.
@@ -273,8 +306,16 @@ def windows(now: float | None = None) -> dict[str, dict[str, Any]]:
     return LOG.windows(now)
 
 
-def limit_status(threshold: float = 0.99, now: float | None = None) -> dict[str, Any]:
+def limit_status(threshold: float = FULL, now: float | None = None) -> dict[str, Any]:
     return LOG.limit_status(threshold, now)
+
+
+def note_try(now: float | None = None) -> None:
+    LOG.note_try(now)
+
+
+def refresh_due(now: float | None = None, windows: dict[str, dict[str, Any]] | None = None) -> bool:
+    return LOG.refresh_due(now, windows)
 
 
 def totals() -> dict[str, Any]:
