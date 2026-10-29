@@ -46,9 +46,9 @@ Rectangle {
         Repeater {
             model: [
                 { key: "five_hour", label: "5-hour", used: usageData.five_hour_used, resets: usageData.five_hour_resets, asOf: usageData.five_hour_as_of,
-                  resetPassed: usageData.five_hour_reset_passed, low: usageData.five_hour_low === true, c1: theme.a2, c2: theme.accent },
+                  heldUntil: usageData.five_hour_held_until || "", low: usageData.five_hour_low === true, c1: theme.a2, c2: theme.accent },
                 { key: "seven_day", label: "7-day", used: usageData.seven_day_used, resets: usageData.seven_day_resets, asOf: usageData.seven_day_as_of,
-                  resetPassed: usageData.seven_day_reset_passed, low: usageData.seven_day_low === true, c1: theme.a1, c2: theme.a3 }
+                  heldUntil: usageData.seven_day_held_until || "", low: usageData.seven_day_low === true, c1: theme.a1, c2: theme.a3 }
             ]
             ColumnLayout { Layout.fillWidth: true; spacing: 5
                 RowLayout { Layout.fillWidth: true
@@ -66,15 +66,15 @@ Rectangle {
                         gradient: Gradient { orientation: Gradient.Horizontal
                             GradientStop { position: 0; color: modelData.low ? theme.crit : modelData.c1 }      // usage.LOW_LEFT, from the back end
                             GradientStop { position: 1; color: modelData.low ? theme.warn : modelData.c2 } } } }
-                // when little is left: the time it comes back, on its own line so the card keeps its width;
-                // else, for a number Claude reported long ago, when that was (it reports only with an answer)
+                // each window's own reset time, on its own line so the card keeps its width; while the weekly window
+                // is used up, the 5-hour one also says when it comes back with it; for a number Claude reported long
+                // ago, when that was (it reports only with an answer). After a reset the card asks again at once.
                 Text { objectName: "usageResets_" + modelData.key; visible: text !== ""
-                    readonly property bool resetLine: !!modelData.resets && modelData.low
                     Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; wrapMode: Text.Wrap
-                    color: resetLine && modelData.used >= 100 ? theme.crit : theme.soft; font.pixelSize: 10
-                    text: resetLine ? "resets " + modelData.resets
-                          : modelData.resetPassed ? "reset at " + modelData.resetPassed + " · not read since"
-                          : (modelData.asOf ? "as of " + modelData.asOf : "") }
+                    color: modelData.used >= 100 || modelData.heldUntil ? theme.crit : theme.soft; font.pixelSize: 10
+                    text: [modelData.resets ? "resets " + modelData.resets : "",
+                           modelData.heldUntil ? "back with 7-day: " + modelData.heldUntil : "",
+                           modelData.asOf ? "as of " + modelData.asOf : ""].filter(function (part) { return part !== ""; }).join("\n") }
             }
         }
         // last run card

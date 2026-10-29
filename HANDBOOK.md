@@ -376,8 +376,15 @@ data/                your data; only the *.example.* files are in git
   refusal fills the window it names until its reset; a window past its reset time is unknown (`reset_passed`), never
   "empty": Claude Code uses the same subscription. Everything that shows or tests the limit goes through it. A number
   older than `usage.STALE_AFTER` (one hour) is `stale`: the card shows "as of" and its time, and the widget shows "–".
-  `usage_info()["should_refresh"]` says when one small question to Claude is worth it (stale, or a reset since): the
-  window asks at each reset and hourly while open (`usageHourly`), never during a run. The card's bar shows what is left.
+  Each window keeps its own figure and reset time. While the weekly window is used up, the 5-hour one also gets
+  `held_until` (the weekly reset; nothing can be used before then), and the card shows both times.
+  `usage.refresh_due()` (`usage_info()["should_refresh"]`) says when one small question to Claude is worth it: the
+  last reading or question (`note_try`, kept in memory for this run, never written: a damaged usage.json must not be
+  written over) is older than `usage.REFRESH_AFTER` (10 minutes) or a window reset since, and never while a refusal
+  holds. Without it, a question that brought no limits was asked again on every look. A time ahead of the clock (the
+  clock was set back) is not trusted. The window looks every minute while shown (`usageTick`, stopped when minimised), at each reset
+  and when it comes to the front, never during a run. The start-up question and the **↻ refresh** button ask at once
+  (`force`), whatever `refresh_due` says. The card's bar shows what is left.
 - **A message over an open window (the toast) ends when the last window closes** (`Main.qml`
   `onDialogOpenChanged`); the status line keeps the words. Before, it came back on the next window.
 - **Every dialog is built from one shell:** `DialogHeader`, `DialogTitle` (17 px, plain text, wraps), `CloseButton` and

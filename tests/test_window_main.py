@@ -226,7 +226,7 @@ def test_an_old_usage_reading_says_when_it_was_taken(ui):
     try:
         ui.win.setProperty("usageData", {**start, "five_hour_used": 100, "five_hour_low": True, "five_hour_resets": "03:40", "five_hour_as_of": "",
                                          "seven_day_used": 0, "seven_day_resets": "22 Oct 02:00", "seven_day_as_of": "18 Oct 09:22"})
-        assert _until_true(ui, lambda: ui.drawn("usageResets_seven_day").property("text") == "as of 18 Oct 09:22")
+        assert _until_true(ui, lambda: ui.drawn("usageResets_seven_day").property("text") == "resets 22 Oct 02:00\nas of 18 Oct 09:22")
         assert ui.drawn("usageResets_five_hour").property("text") == "resets 03:40"     # a used-up window still says when it comes back
         assert ui.drawn("usageLeft_seven_day").property("text") == "100% left"
     finally:
@@ -1215,7 +1215,7 @@ def test_usage_card_shows_nothing_left_and_when_it_resets(ui):
     resets = ui.drawn("usageResets_five_hour")
     assert resets.property("visible") is True and resets.property("text") == "resets 12 Oct 14:00"
     assert seven.property("text") == "66% left"
-    assert ui.drawn("usageResets_seven_day").property("visible") is False      # the reset time matters only when little is left
+    assert ui.drawn("usageResets_seven_day").property("text") == "resets 12 Oct 09:00"      # each window says its own reset time
     assert ui.find("statusPanel").property("width") == width, "a longer text must not widen the column past the window"
     assert resets.mapToItem(None, 0, 0).x() + resets.property("width") <= ui.win.width()
     ui.js('usageData = ({ model: "sonnet", five_hour_used: 85, five_hour_low: true, five_hour_resets: "14:00" })')
@@ -1314,7 +1314,7 @@ def test_every_dialog_has_the_same_title_header_and_footer(ui):
     assert ui.warnings == []
 
 
-def test_the_usage_bar_shows_what_is_left_and_a_reset_asks_again(ui):
+def test_the_usage_bar_shows_what_is_left_and_a_reset_asks_again(ui, monkeypatch):
     """The card is titled USAGE LEFT but the bar drew what was used: a used-up window showed a full green bar."""
     import json
     import time
@@ -1326,30 +1326,55 @@ def test_the_usage_bar_shows_what_is_left_and_a_reset_asks_again(ui):
         track = bars["seven_day"].parentItem().property("width")
         assert bars["five_hour"].property("width") == 0, "nothing left: an empty bar"
         assert abs(bars["seven_day"].property("width") - 0.75 * track) < 1, "three quarters left: three quarters of the bar"
-        ui.js('usageData = ({ model: "sonnet", five_hour_used: null, five_hour_reset_passed: "01:20", seven_day_used: 25, next_reset_in: 0 })')
-        line = next(i for i in ui.seen("statusPanel") if i.objectName() == "usageResets_five_hour")
-        assert line.property("text") == "reset at 01:20 · not read since"
+        def line(key="five_hour"):           # the rows are made again with each new set of figures
+            return next(i for i in ui.seen("statusPanel") if i.objectName() == "usageResets_" + key).property("text")
+        assert line() == "resets 01:20"
+        assert line("seven_day") == "", "a window whose reset is not known says nothing"
+        ui.js('usageData = ({ model: "sonnet", five_hour_used: 40, five_hour_resets: "18:00", five_hour_held_until: "03 Nov 09:00", '
+              'seven_day_used: 100, seven_day_low: true, seven_day_resets: "03 Nov 09:00", next_reset_in: 0 })')
+        assert line() == "resets 18:00\nback with 7-day: 03 Nov 09:00", "the used-up week: both times"
+        assert line("seven_day") == "resets 03 Nov 09:00"
+        ui.js('usageData = ({ model: "sonnet", five_hour_used: 40, five_hour_resets: "18:00", seven_day_used: 10, seven_day_resets: "03 Nov 09:00" })')
+        assert line() == "resets 18:00" and line("seven_day") == "resets 03 Nov 09:00", "each its own time, also with much left"
+        ui.js('usageData = ({ model: "sonnet", five_hour_used: null, seven_day_used: 25, next_reset_in: 0 })')
+        assert line() == "", "after a reset: no old date, the card asks again"
         unknown = next(i for i in ui.seen("statusPanel") if i.objectName() == "usageBar_five_hour")
         assert unknown.property("visible") is False, "not known: no fill, so it never looks used up"
         left = next(i for i in ui.seen("statusPanel") if i.objectName() == "usageLeft_five_hour")
         assert left.property("text") == "—", "not known since the reset, not a guessed 100%"
-        hourly = ui.find("usageHourly")
-        assert hourly.property("running") is True and hourly.property("interval") == 3600000
+        tick = ui.find("usageTick")
+        assert tick.property("running") is True and tick.property("interval") == 60000, "looks every minute while shown"
         ui.js("usageBusy = false")
-        assert ui.js("usageHourly.triggered(); usageBusy") is False, "fresh figures: no question to Claude"
-        ui.js("appRunning = true")
-        assert ui.js("refreshUsageNow(); usageBusy") is False, "never during a run: the run brings its own figures"
-        ui.js("appRunning = false")
-        # an hour later the old flag is out of date: the timer reads the figures again before it decides
         from jobhelper import config
         before = config.USAGE_JSON.read_bytes() if config.USAGE_JSON.exists() else None
-        old = datetime.fromtimestamp(time.time() - 2 * 3600).isoformat(timespec="seconds")
-        config.USAGE_JSON.write_text(json.dumps({"last_rate_limit": {"at": old, "info": {"unifiedWindows": {
-            "five_hour": {"utilization": 0.3, "resetsAt": time.time() + 3600}}}}}), encoding="utf-8")
         try:
+            fresh = datetime.now().isoformat(timespec="seconds")
+            config.USAGE_JSON.write_text(json.dumps({"last_rate_limit": {"at": fresh, "info": {"unifiedWindows": {
+                "five_hour": {"utilization": 0.3, "resetsAt": time.time() + 3600}}}}}), encoding="utf-8")
+            assert ui.js("usageTick.triggered(); usageBusy") is False, "fresh figures: no question to Claude"
+            ui.js("appRunning = true")
+            assert ui.js("refreshUsageNow(); usageBusy") is False, "never during a run: the run brings its own figures"
+            ui.js("appRunning = false")
+            # later the old flag is out of date: the timer reads the figures again before it decides
+            old = datetime.fromtimestamp(time.time() - 2 * 3600).isoformat(timespec="seconds")
+            config.USAGE_JSON.write_text(json.dumps({"last_rate_limit": {"at": old, "info": {"unifiedWindows": {
+                "five_hour": {"utilization": 0.3, "resetsAt": time.time() + 3600}}}}}), encoding="utf-8")
             ui.js("usageData = ({ model: 'sonnet', five_hour_used: 30, should_refresh: false }); usageBusy = false")
-            assert ui.js("usageHourly.triggered(); usageBusy") is True
+            assert ui.js("usageTick.triggered(); usageBusy") is True
             assert _until_true(ui, lambda: ui.js("usageBusy") is False)
+            asked = []
+            monkeypatch.setattr(qt_bridge.Bridge, "_ping_usage", lambda self: asked.append(True) or self.usageReady.emit())
+            ui.js("usageBusy = true; startUp.triggered()")
+            assert ui.js("usageBusy") is True and asked == [], "start-up goes through refreshUsageNow: no second question"
+            ui.js("usageBusy = false; startUp.triggered()")
+            assert _until_true(ui, lambda: asked == [True]) and _until_true(ui, lambda: ui.js("usageBusy") is False)
+            ui.win.activeChanged.emit()                                         # back to the front with old figures: it asks
+            assert ui.js("usageBusy") is True
+            assert _until_true(ui, lambda: ui.js("usageBusy") is False)
+            ui.win.showMinimized()
+            assert _until_true(ui, lambda: ui.js("usageTick.running") is False), "minimised: no looking"
+            ui.win.showNormal()
+            assert _until_true(ui, lambda: ui.js("usageTick.running") is True)
             assert ui.js("usageReset.triggered(); usageBusy") is True, "a reset time passed: the card asks too"
             assert _until_true(ui, lambda: ui.js("usageBusy") is False)
             ui.js("appRunning = true")                                          # a run ends: first runFinished, then running false

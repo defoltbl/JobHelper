@@ -305,9 +305,11 @@ Inside the window:
 - **Weekly run card** – click it to turn the weekly schedule on/off and pick the
   day + time (writes the macOS LaunchAgent for you – see section 9).
 - **Usage left** – your 5-hour / 7-day subscription windows; the bar shows what is left. It refreshes on open,
-  with the **↻ refresh** button, when a window resets, and hourly while the numbers are more than an hour old (one
-  small call each). With 20% left or less it also shows when the window resets; when Claude has refused a call it
-  shows **0% left** in red until that time. After a reset it says "not read since" until Claude answers.
+  with the **↻ refresh** button (at once, whatever the automatic check says), when a window resets, about every 10 minutes while the window is shown, and when the
+  window comes to the front with numbers older than 10 minutes (one small call each; none while Claude refuses
+  calls). Each window shows its own reset time; when Claude has refused a call it shows **0% left** in red until
+  that time. While the 7-day window is used up, the 5-hour line also says "back with 7-day: <time>".
+  After a reset it shows "—" until Claude answers.
 - Hover any robot for its name, role, and latest result.
 
 Everything it does is the same as the commands below – the window just wraps them.

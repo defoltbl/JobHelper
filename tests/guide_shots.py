@@ -222,8 +222,10 @@ def test_guide_shots(ui, monkeypatch):
         shot("02_main")
         shot("25_sidebar", (0, 0, 238, 420))
         shot("26_usage_and_last_run", RIGHT)
-        ui.js('usageData = ({ model: "sonnet", five_hour_used: 100, five_hour_resets: "14:00", seven_day_used: 34, seven_day_resets: "" })')
-        shot("27_limit_used_up", (ui.win.width() - 236, 0, 236, 190))
+        # the weekly window used up: the 5-hour line also says when the week frees it
+        ui.js('usageData = ({ model: "sonnet", five_hour_used: 40, five_hour_resets: "18:00", five_hour_held_until: "03 Nov 09:00", '
+              'seven_day_used: 100, seven_day_low: true, seven_day_resets: "03 Nov 09:00" })')
+        shot("27_limit_used_up", (ui.win.width() - 236, 0, 236, 220))
         ui.js("usageData = bridge.usageInfo()")
         ui.js('win.healthData = ({ ok: false, problems: 1, checks: [], message: "No master CV yet. Add yours in the Account card." }); win.healthHidden = false')
         shot("28_startup_check", (238, 0, 726, 120), 1.5)

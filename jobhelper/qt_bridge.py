@@ -335,7 +335,7 @@ class Bridge(RunSlots, JobSlots, QObject):
         threading.Thread(target=self._ping_usage, daemon=True).start()
 
     def _ping_usage(self):
-        from . import llm
+        from . import llm, usage
         if self._quiet:
             self.usageReady.emit()
             return
@@ -347,4 +347,5 @@ class Bridge(RunSlots, JobSlots, QObject):
         except Exception as e:  # noqa: BLE001 - the usage card keeps its last numbers
             trouble.note("asking Claude for the current usage", e)
         finally:
+            usage.note_try()                       # an answer without the limits is not asked for again at once
             self.usageReady.emit()
