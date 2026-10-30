@@ -468,7 +468,8 @@ step still runs.
 
 At each start, `schedule.refresh()` compares the LaunchAgent with `schedule.command()`. If an older
 version or a different place of the app wrote it, the function writes it again with the same day
-and time.
+and time. When `JOBHELPER_HOME` chooses another data folder, the function does nothing and the
+window shows the weekly run as Off.
 
 ### The Claude program
 
@@ -746,6 +747,8 @@ before it uses the data. If the old folder holds data, `DataHome.settle()` moves
 
 If a step fails, the old folder stays in use and the start-up check shows the reason. The
 variable `JOBHELPER_HOME` names another data home; the tests set it to a temporary folder.
+With that variable set, the app does not read, change or remove the weekly run of the Mac
+(`schedule.problem`). The LaunchAgent always starts the app on the usual data home.
 In Table 7.1, `data/` is the folder `data` of the data home.
 
 *Table 7.1 – The files and folders in data*

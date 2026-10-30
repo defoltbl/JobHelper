@@ -328,6 +328,9 @@ data/                your data; only the *.example.* files are in git
   `app_qt.main()` before anything reads data, and the app then starts itself again. Tests set
   `JOBHELPER_HOME` to a temporary folder in `conftest.py`, and the guard watches both the Library
   folder and the old `data/`.
+- **The weekly run is one LaunchAgent for the whole Mac, outside every data home.** With `JOBHELPER_HOME` set
+  (`home.overridden()`), `schedule` neither reads nor writes it (`schedule.problem`): before, a check on a sandbox
+  home pointed the real weekly run at the sandbox at start-up, and saving Weekly run there made a real one.
 - **Word files and PDFs hide text from `git grep`.** The first privacy check missed a real CV in
   `tests/fixtures/*.docx` because the text is zipped. `scripts/push_check.py` opens them, and the
   pre-push hook runs it on every push. The repository will be public.

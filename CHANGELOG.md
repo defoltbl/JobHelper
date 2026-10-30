@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- A second copy of the app on its own data folder no longer changes your Mac's weekly run, and can no longer make a new one.
 - **Usage left:** the bar now shows what is left, as the card's title says; a used-up window has an empty bar, not a full green one.
 - **Usage left:** after a window resets, the card and the widget no longer guess "100% left". Claude Code uses the same limit, so the app cannot know what is used.
 - **Usage left:** the app asks Claude for new figures by itself after a window resets. It also asks about every 10 minutes while the app window is shown, and when you bring it to the front. It never asks during a search or while Claude refuses calls. The widget is updated at once.

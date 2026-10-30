@@ -1,5 +1,6 @@
-"""Weekly LaunchAgent management — against a temp plist with launchctl stubbed out."""
+"""Weekly LaunchAgent management – against a temp plist with launchctl stubbed out."""
 import plistlib
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -104,3 +105,36 @@ def test_refresh_says_why_it_could_not_change_it(sched):
     schedule.PLIST.write_bytes(b"not a plist")
     sched.state.update(returncode=1, stderr="Load failed: 5")
     assert schedule.refresh() == {"ok": False, "changed": False, "msg": "Load failed: 5"}
+
+
+def test_a_chosen_data_folder_never_touches_the_weekly_run_of_this_mac(tmp_path, monkeypatch):
+    """Seen in the hands-on check: the app started on a sandbox home pointed the real LaunchAgent at the sandbox, and
+    saving Weekly run there made a real one."""
+    from jobhelper import home
+    real = tmp_path / "LaunchAgents" / "com.jobhelper.weeklyscan.plist"
+    real.parent.mkdir()
+    real.write_bytes(plistlib.dumps({"Label": schedule.LABEL, "ProgramArguments": ["/old/JobHelper", "--weekly"],
+                                     "StartCalendarInterval": {"Weekday": 3, "Hour": 7, "Minute": 15}}))
+    before = real.read_bytes()
+    monkeypatch.setattr(schedule, "PLIST", real)
+    monkeypatch.setattr(schedule.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("launchctl is never run")))
+    monkeypatch.setenv(home.OVERRIDE, str(tmp_path / "sandbox"))
+    assert home.overridden() is True and schedule.available() is False
+    assert schedule.refresh() == {"ok": True, "changed": False}
+    assert schedule.read_schedule()["enabled"] is False, "the sandbox does not show the real weekly run as its own"
+    for enabled in (True, False):
+        got = schedule.write_schedule(enabled, 1, 9, 0)
+        assert got["ok"] is False and "JOBHELPER_HOME" in got["msg"]
+    assert real.read_bytes() == before, "the real LaunchAgent is untouched"
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="the weekly run is macOS-only")
+def test_the_usual_data_folder_can_set_the_weekly_run(monkeypatch):
+    """The other tests set available() to True: without this one, a wrong check would turn the weekly run off for everyone."""
+    from jobhelper import home
+    monkeypatch.delenv(home.OVERRIDE, raising=False)
+    assert home.overridden() is False and schedule.problem() == "" and schedule.available() is True
+    monkeypatch.setenv(home.OVERRIDE, "  ")
+    assert home.overridden() is False and schedule.problem() == "", "an empty setting chooses nothing"
+    monkeypatch.setenv(home.OVERRIDE, "/some/sandbox")
+    assert "JOBHELPER_HOME" in schedule.problem() and schedule.available() is False
