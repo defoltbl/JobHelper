@@ -23,9 +23,16 @@ Item {
     property int testLeft: 0
     property string testNote: ""
     property bool testBad: false
+    property var testLines: []            // one {text, bad} for each mailbox tried: each line in its own colour
+    property bool mainFailed: false       // the main mailbox's last test did not sign in: its row loses its green tick
+    function savedMailbox(box) {          // saved again: that mailbox's old test result is gone, its red line and lost tick too
+        if (box === 1) mainFailed = false;
+        testLines = testLines.filter(function (l) { return l.box !== box; });
+    }
     function testMail() {
         if (testBusy) return;
-        testNote = ""; testBad = false; testBusy = true; testLeft = connData.email2 === true ? 2 : 1;
+        testNote = ""; testBad = false; testLines = []; mainFailed = false; emailNote = "";
+        testBusy = true; testLeft = connData.email2 === true ? 2 : 1;
         bridge.testMailbox(1);
         if (connData.email2 === true) bridge.testMailbox(2);
     }
@@ -46,7 +53,7 @@ Item {
         if (r && r.ok) { restoreErr = ""; bridge.checkConnections(); win.reloadAll(); }
         else restoreErr = (r && r.msg) || "The key could not be used.";
     }
-    onShownChanged: if (!shown) { testNote = ""; testBad = false; changes = []; keyText = ""; keyErr = ""; keyCopied = false; restoreErr = ""; }
+    onShownChanged: if (!shown) { testNote = ""; testBad = false; testLines = []; mainFailed = false; emailNote = ""; changes = []; keyText = ""; keyErr = ""; keyCopied = false; restoreErr = ""; }
     Timer { interval: 60000; running: welcome.keyText !== ""; onTriggered: { welcome.keyText = ""; welcome.keyCopied = false; } }
     property bool emailBusy: false        // the mailbox is being tried with the address and password just entered
     property string emailNote: ""         // saved, but something to know (the server could not be reached)
@@ -104,11 +111,15 @@ Item {
         function onEmailTested(r) {
             welcome.testLeft -= 1; welcome.testBad = welcome.testBad || !(r && r.ok);
             welcome.testNote = (welcome.testNote !== "" ? welcome.testNote + " " : "") + ((r && r.msg) || "");
+            welcome.testLines = welcome.testLines.concat([{ box: (r && r.box) || 0, text: (r && r.msg) || "", bad: !(r && r.ok) }])
+                                                 .sort(function (a, b) { return a.box - b.box; });      // the main mailbox first, whichever answered first
+            if (r && r.box === 1 && !r.ok) welcome.mainFailed = true;
             if (welcome.testLeft <= 0) welcome.testBusy = false;
         }
         function onEmailSaved(r) {
             welcome.emailBusy = false; welcome.pwDraft = "";
-            if (r && r.ok) { welcome.editEmail = false; welcome.emailNote = r.note || ""; bridge.checkConnections(); }
+            if (r && r.ok) { welcome.editEmail = false; welcome.emailNote = r.note || ""; bridge.checkConnections();
+                             welcome.savedMailbox(welcome.editBox); }
             else { emailBlame.say((r && r.msg) ? r.msg : "Couldn't save the email.", (r && r.field) || ""); shake.restart(); }
         } }
     Timer { interval: 2500; repeat: true; running: welcome.shown && welcome.waitingLogin
@@ -249,7 +260,7 @@ Item {
                 ColumnLayout { Layout.fillWidth: true; spacing: 0
                 StepRow {
                     order: 1; label: "2"; title: "Job email"
-                    ok: connData.email === true
+                    ok: connData.email === true && !welcome.mainFailed
                     sub: connData.email === true ? ((connData.email_addr || "") + " · read-only")
                                                  : "Optional. Reads replies from your mailbox, never sends or deletes."
                     SmallButton { objectName: "mailTest"; visible: !welcome.editEmail && connData.email === true; enabled: !welcome.testBusy
@@ -259,9 +270,10 @@ Item {
                                      welcome.pwDraft = ""; welcome.emailErr = "";
                                      welcome.editEmail = true; wEmail.forceActiveFocus(); } }
                 }
-                Text { objectName: "testNote"; visible: welcome.testNote !== "" && !welcome.editEmail
-                    Layout.fillWidth: true; Layout.leftMargin: 38; wrapMode: Text.WordWrap; font.pixelSize: 11; font.bold: welcome.testBad
-                    color: welcome.testBad ? theme.crit : theme.good; text: welcome.testNote }
+                Repeater { model: welcome.editEmail ? [] : welcome.testLines
+                    Text { objectName: "testNote_" + index
+                        Layout.fillWidth: true; Layout.leftMargin: 38; wrapMode: Text.WordWrap; font.pixelSize: 11; font.bold: modelData.bad
+                        color: modelData.bad ? theme.crit : theme.good; text: modelData.text } }
                 Text { objectName: "emailNote"; visible: welcome.emailNote !== "" && !welcome.editEmail
                     Layout.fillWidth: true; Layout.leftMargin: 38; wrapMode: Text.WordWrap
                     color: theme.warn; font.pixelSize: 11; font.bold: true; text: welcome.emailNote }
@@ -344,7 +356,7 @@ Item {
                     subColor: welcome.cvErr !== "" ? theme.crit : theme.soft
                     sub: welcome.cvErr !== "" ? welcome.cvErr
                        : drop.containsDrag ? "Drop it to use this file."
-                       : welcome.hasCv ? connData.cv : "Drop a .docx or .pdf here, or choose a file."
+                       : welcome.hasCv ? connData.cv : "Drop a .docx, .pdf or .txt file here, or choose a file."
                     SmallButton { text: welcome.hasCv ? "Change…" : "Choose…"; onClicked: cvDialog.open() }
                 }
 

@@ -164,7 +164,7 @@ data/                your data; only the *.example.* files are in git
 - **Keeping data safe:** `vault` (encryption, backups), `integrity` (signed rule files),
   `housekeeping` (old backups, logs, the Trash), `store` and `db` (jobs and replies).
 - **Claude:** `llm` (every call goes through it; pauses at the limit), `usage`.
-- **My details** (`details`): `check()` answers (clean values, problem); inside, `DetailsProblem` is raised by `RowList` and its kinds `JobList`, `DegreeList`, `LanguageList` (template method: `_cell`, `_before`, `_after`), `FileList` and `Salary`. `MyDetails` is the saved details as forms use them.
+- **My details** (`details`): `check()` answers (clean values, problem), the problem with `all` (one fault for each field and list, so one Save names every box); inside, `DetailsProblem` is raised by `RowList` and its kinds `JobList`, `DegreeList`, `LanguageList` (template method: `_cell`, `_before`, `_after`), `FileList` and `Salary`. `MyDetails` is the saved details as forms use them.
 - **The window's back end:** `ui_api.Api` is a facade over ten services (OOP: one job per class,
   composition, no service imports another): `api_system`, `api_options`, `api_jobs`,
   `api_documents` (scores, moving documents, "not interested"), `api_replies`, `api_insights`,
@@ -513,7 +513,7 @@ After every batch of changes, without being asked:
 | A remote job tied to one country is kept only for your country and the countries you add, also with "Anywhere in the world" | Such a job asks you to live in that country or to have the right to work there. "Anywhere" adds only jobs for whole parts of the world ("Remote – APAC"). One rule, `places.RemoteReach`, for the search, Options and the window. |
 | The app knows every country, each with its part of the world | An unknown name was read as "no place": "Remote, South Korea" passed as open to anyone. Codes that are also US state codes (IL, ID, MA …) count as the country for someone who searches there; "City, DE" stays Germany. |
 | Duplicates are removed after all other filters | The copy kept as the duplicate's winner could then be dropped (in Czech, too old), and the other copy was lost with the reason "duplicate". |
-| The rule files and the letter template are optional | Without them the built-in rules and a plain letter are used, so their absence is not reported as a problem. |
+| The rule files and the letter template are optional | Without them the built-in rules are used, and a letter template is made from the head of the CV (`cover_letter.make_template`, marked APP_MADE and brought up to date when the CV's contacts change; a template of your own is never touched, and one that went missing is not replaced). The plain letter is left only when the CV's head gives no name or contacts. |
 | A search role the app does not know is asked about once, not refused | The words it knows grew up with software jobs. |
 | No Windows or Linux version | Not wanted. |
 | No Russian services | The owner's rule. A mailbox or server of one is refused with a plain message. |

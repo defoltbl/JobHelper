@@ -21,7 +21,7 @@ from pathlib import Path
 from . import config, vault
 
 DEFAULT_KEEP = 10
-SIDE_FOLDERS = {"letter_versions": 40, "not_interested": 60}      # newest files kept in each
+SIDE_FOLDERS = {"letter_versions": 40, "not_interested": 60, "cv_versions": 20}      # newest files kept in each
 APPROVED = "approved"                 # the text of each rule file as it was when approved: not a backup to clean up
 SHELF = "below_your_limit"            # documents that can be put back: never cleaned up automatically
 SHELF_MIN_DAYS = 7                    # copies younger than this are never removed (New Jobs still offers to put them back)

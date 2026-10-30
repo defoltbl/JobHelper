@@ -11,7 +11,7 @@ import re
 from datetime import date
 from typing import Any
 
-from . import config, cover_letter, cv_tailor, filters, llm, pdf, prefilter, store
+from . import config, cover_letter, cv_tailor, filters, llm, pdf, prefilter, store, trouble
 
 SYSTEM = (
     "You are an expert career coach who writes concise, specific, non-generic "
@@ -248,6 +248,28 @@ def _generated_letter(job: dict[str, Any]) -> bool:
         (config.LETTERS_DIR / name).exists() or (config.LETTERS_DIR / name).with_suffix(".docx").exists())
 
 
+def _keep_template(cv_text: str) -> None:
+    """A letter template from your CV's head when you have none (so the letter gets every check and Edit letter works),
+    brought up to date when your CV's contacts change. A template of your own is never touched, and one that went
+    missing is not replaced: the start-up check tells you about it. A template that cannot be made leaves the plain
+    letter, as before."""
+    from . import integrity
+    path = config.LETTER_TEMPLATE
+    state = next((f["state"] for f in integrity.check() if f["name"] == "letter_template"), "")
+    try:
+        if path.exists():
+            current = cover_letter.app_made_head(path)
+            # only a template still as the app made it: one edited in Word (state "changed", or no check yet) is yours
+            if current is None or state != "ok" or current == cover_letter.template_head(cv_text):
+                return
+        elif state == "missing":
+            return
+        if cover_letter.make_template(cv_text, path):
+            integrity.approve(["letter_template"])
+    except Exception as e:  # noqa: BLE001 - the plain letter is written instead
+        trouble.note("making the letter template", e)
+
+
 def _make_letter(job: dict[str, Any], cv_text: str, cv_path, fields: dict[str, Any]) -> str:
     """Write the cover letter for one job and return its file name ('' if none).
 
@@ -255,6 +277,8 @@ def _make_letter(job: dict[str, Any], cv_text: str, cv_path, fields: dict[str, A
     data/cover_letter_instruction.md (template head and formatting untouched);
     otherwise it falls back to a plain generated business letter."""
     previous = job.get("cover_letter_file", "") if _generated_letter(job) else ""
+    if cv_text.strip():
+        _keep_template(cv_text)
     if cv_text.strip() and config.LETTER_TEMPLATE.exists():
         name = cover_letter.write(job, cv_text, cv_path)
     else:

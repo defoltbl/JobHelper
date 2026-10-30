@@ -836,7 +836,8 @@ def test_about_you_takes_a_salary_of_its_own_for_a_kind_of_role(ui):
     assert ui.drawn("payRowAmount_0", root="payRows").property("value") == 45000
     ui.js("payModel.setProperty(0, 'amount', 0)", dialog)
     ui.js("aboutDialog.save()", dialog)
-    assert "a whole number above 0" in ui.find("aboutErr").property("text")          # a line with 0 is refused, not saved
+    assert "red line says why" in ui.find("aboutErr").property("text")               # a line with 0 is refused, not saved ...
+    assert "a whole number above 0" in ui.drawn("payRowErr_0", root="payRows").property("text"), "... and said where it stands, once"
     ui.js("payModel.remove(0); confirmClose = true; close()", dialog)
     _until_closed(ui, "aboutDialog")
     assert ui.bridge.saveOptions({**ui.bridge.options(), "salary_by_role": start.get("salary_by_role", [])})["ok"] is True
@@ -863,6 +864,10 @@ def test_the_account_card_tries_the_saved_mailboxes(ui, monkeypatch):
             break
     note = welcome.property("testNote")
     assert "Signed in to me@gmail.com" in note and "refused" in note and welcome.property("testBad") is True
+    lines = welcome.property("testLines").toVariant() if hasattr(welcome.property("testLines"), "toVariant") else welcome.property("testLines")
+    assert sorted((line["bad"], "refused" in line["text"]) for line in lines) == [(False, False), (True, True)], \
+        "each mailbox in its own colour (hands-on F2)"
+    assert welcome.property("mainFailed") is False, "the main mailbox signed in: its row keeps the tick"
     assert "secret" not in note and "abcdabcd" not in note
     ui.win.setProperty("connData", dict(READY))
     ui.js("welcome.finish()")
@@ -982,4 +987,54 @@ def test_new_jobs_can_be_reviewed_one_by_one(ui, monkeypatch):
     finally:
         store.save_jobs(kept)
         ui.js("win.reloadAll()")
+    assert ui.warnings == []
+
+
+def test_a_main_mailbox_that_cannot_be_reached_loses_its_green_tick(ui, monkeypatch):
+    """Hands-on check F2: Test could not reach the server, and the Job email row kept its green tick."""
+    from jobhelper import email_client
+    monkeypatch.setattr(config, "IMAP_USER", "me@gmail.com")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "abcdabcdabcdabcd")
+    monkeypatch.setattr(email_client, "try_login", lambda *a, **k: {"ok": None, "msg": "The mail server could not be reached."})
+    welcome = ui.find("welcome")
+    ui.js("welcome.openCard()")
+    ui.win.setProperty("connData", {**READY, "email": True, "email2": False})
+    try:
+        ui.js('welcome.emailNote = "Saved, but the server could not be reached."; welcome.testMail()')
+        assert welcome.property("emailNote") == "", "the old note goes: the test says it once"
+        assert _until_true(ui, lambda: welcome.property("testBusy") is False)
+        assert welcome.property("mainFailed") is True
+        ui.js("welcome.savedMailbox(1)")                                 # saved again: the old red line and the lost tick go
+        assert welcome.property("mainFailed") is False
+        lines = welcome.property("testLines")
+        assert not (lines.toVariant() if hasattr(lines, "toVariant") else lines)
+    finally:
+        ui.win.setProperty("connData", dict(READY))
+        ui.js("welcome.finish()")
+    assert ui.warnings == []
+
+
+def test_about_you_marks_the_box_with_the_fault(ui):
+    """Hands-on check F9 and window review H5, H6: notes over the limit had a red count but no red box; a pay line the back
+    end refuses had no red border; the "typed but not added" line stayed after Add."""
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    about = ui.find("aboutDialog")
+    try:
+        ui.js("generalField.text = 'x'.repeat(aboutDialog.notesMax + 5)", about)
+        frame = ui.js("generalField.parent.border.color.toString()", about)
+        assert frame == ui.js("theme.crit.toString()"), "the notes box turns red"
+        ui.js("generalField.text = ''", about)
+        ui.js("payRole.text = 'support'", about)
+        ui.js("aboutDialog.save()")
+        assert "but not added" in ui.js("aboutDialog.err")
+        ui.js("payAmount.value = 50000; aboutDialog.addPay()", about)
+        assert ui.js("aboutDialog.err") == "", "added: its line goes"
+        ui.js("payModel.append({ role: 'support', amount: 40000 })", about)      # the same kind of role twice
+        bad = [i for i in ui.seen("payRows") if i.objectName().startswith("payRowErr_") and i.property("visible")]
+        assert bad and "support" in bad[0].property("text"), "a refused line says why, where it stands"
+        ui.js("payModel.clear()", about)
+    finally:
+        ui.js("aboutDialog.confirmClose = true; aboutDialog.close()")
+        _until_closed(ui, "aboutDialog")
     assert ui.warnings == []

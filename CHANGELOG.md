@@ -7,6 +7,13 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Welcome card:** a damaged, empty or scanned CV file is refused with the reason. A new CV with the same name no longer replaces the old one without a backup.
+- **Welcome card:** each mailbox's test result has its own colour, and a mailbox that cannot be reached loses its green tick.
+- **About you:** a start date that has passed says so. The notes box turns red when the notes are too long.
+- **My details:** one Save names every field that needs a change, each under its own field.
+- **Cover letter:** with no letter template of your own, the app makes one from the top of your CV, so **Edit letter** works for a new user.
+- **Email scan:** a failed scan says why, for example that the mail server could not be found, instead of always "check your connection".
+- A red message is now also a red box in the search roles, the rewrite note and the salary lines.
 - **Weekly run** and **Countries for remote jobs:** ✕, Esc and **Cancel** ask once before a change is thrown away.
 - **Weekly run:** an empty hour or minute is an error, not 00. The weekly run can be switched off while its time is wrong.
 - **Form answers:** questions you typed and did not draft are no longer lost when you close the window. The **assistant** does the same for a request you typed and did not send.

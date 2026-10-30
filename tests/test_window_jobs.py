@@ -1077,7 +1077,8 @@ def test_letter_editor_explains_wrong_steps(ui, monkeypatch):
     assert saved and saved[0][1] == "Second one, changed."
     assert ui.find("hintField").property("maximumLength") == 300
     ui.js('hintField.text = "' + "h" * 300 + '"; hintField.textEdited()')
-    assert err.property("text") == "The note for a rewrite takes up to 300 characters."
+    assert ui.find("hintFull").property("visible") is True and ui.find("hintFull").property("text") == "Up to 300 characters."
+    assert ui.js("letterDialog.hintFull") is True, "red box and its words from one rule (H5)"
     ui.js('hintField.text = ""; letterDialog.err = ""; letterDialog.tryClose()')
     _until_closed(ui, dialog)
     assert dialog.property("visible") is False                                                           # saved: closes at once

@@ -1500,6 +1500,7 @@ def test_options_number_and_list_faults_are_said_once_and_go_when_fixed(ui):
         assert ui.js("optErr", dialog) == "" and ui.js("ageSpin.flagged", dialog) is False, "fixed: the line goes"
         ui.js("rolesModel.clear(); for (var i = 0; i < win.limits.list_max; i++) rolesModel.append({ text: 'data analyst ' + i })", dialog)
         assert ui.js('optDialog.addRole("software tester")', dialog) is False and "holds up to 60" in ui.js("roleErr", dialog)
+        assert ui.js("roleField.wrong", dialog) is True, "the field the red line is about turns red too (H5)"
         ui.js("skipTags.setAll(Array.apply(null, Array(win.limits.list_max)).map(function (_, i) { return 'word' + i; }))", dialog)
         assert ui.js('skipTags.add("intern")', dialog) is False and "holds up to 60" in ui.js("skipTags.err", dialog)
     finally:

@@ -60,6 +60,8 @@ Dialog {
         }
         close();
     }
+    // the rewrite note at its limit: its box turns red and says so beside it, as long as it stays full
+    readonly property bool hintFull: hintField.maximumLength > 0 && hintField.text.length >= hintField.maximumLength
     function rewrite(i) {
         if (busyIndex >= 0) return;
         if (("" + texts[i]).trim() === "") { info = ""; err = "Paragraph " + (i + 1) + " is empty. Write something for Claude to rewrite, or undo your changes."; return; }
@@ -143,10 +145,11 @@ Dialog {
                         placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                         maximumLength: letterDialog.hintMax
                         background: Rectangle { radius: 8; color: theme.inset; border.width: 1
-                            border.color: hintField.activeFocus ? theme.accent : theme.line }
+                            border.color: letterDialog.hintFull ? theme.crit : (hintField.activeFocus ? theme.accent : theme.line) }
                         // a single-line field stops taking letters at its limit: say so instead of going silent
-                        onTextEdited: { letterDialog.info = "";
-                                        letterDialog.err = text.length >= maximumLength ? "The note for a rewrite takes up to " + maximumLength + " characters." : ""; } }
+                        onTextEdited: letterDialog.info = "" }
+                    Text { objectName: "hintFull"; visible: letterDialog.hintFull; color: theme.crit; font.pixelSize: 11; font.bold: true
+                        text: "Up to " + hintField.maximumLength + " characters." }
                 }
                 Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                     text: "A rewrite asks Claude once or twice and uses your limit. It follows your letter rules and your CV; nothing is saved until you press Save." }

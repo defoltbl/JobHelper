@@ -428,7 +428,7 @@ Dialog {
                         // search roles: autocomplete field + add, chips below
                         SRow { label: win.limits.labels.queries; hint: "in English"
                             RowLayout { spacing: 6
-                                AutoField { id: roleField; objectName: "roleField"; implicitWidth: 180
+                                AutoField { id: roleField; objectName: "roleField"; implicitWidth: 180; wrong: optDialog.roleErr !== ""
                                     placeholder: "e.g. junior data scientist"; suggestions: win.roleSuggestions
                                     onEdited: { optDialog.roleErr = ""; optDialog.recheck(); }
                                     onAdd: function (v) { if (optDialog.addRole(v)) roleField.text = ""; } }

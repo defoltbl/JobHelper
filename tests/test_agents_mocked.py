@@ -73,22 +73,31 @@ def test_process_writes_letter_for_strong_match(isolate_data, monkeypatch):
     assert (config.LETTERS_DIR / job["cover_letter_file"]).exists()
 
 
+LETTER_BODY = [("I am writing to apply for the Python Developer role at Acme, because the work matches what I do every day "
+                "and I enjoy building small, well tested services in Python and SQL. ") * 2] * 5          # about 340 words in all
+
+
 def test_process_writes_tailored_cv(isolate_data, monkeypatch):
     jobs = [store.new_job(id="jobscz-9", title="Python Developer", company="Acme",
                           location="Praha", description="Python, SQL, REST")]
-    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": 85, "match_reason": "fit"})
+    # the score, then the letter: with no template of your own, one is made from the CV's head (hands-on F15)
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, *a, **k: {"title_line": "Junior Developer", "paragraphs": LETTER_BODY, "role_short": "Dev"}
+                        if "cover letter" in prompt else {"match_score": 85, "match_reason": "fit"})
 
     def fake_ask(prompt, *a, **k):
         return "# Alex Novak\n\nPython Developer\n- Python, SQL" if "Master CV" in prompt else "Dear team, letter."
 
     monkeypatch.setattr(llm, "ask", fake_ask)
     stats = agent3_letters.process(jobs, {}, threshold=60,
-                                   cv_text="Alex Novak\nJunior Developer\nSkills: Python, SQL")
+                                   cv_text="Alex Novak\nJunior Developer\nalex@example.com · +420 600 000 000\nSkills: Python, SQL")
     assert stats["letters"] == 1
     assert stats["tailored_cvs"] == 1
     job = jobs[0]
     assert job["tailored_cv_file"].startswith("CV-")
     assert (config.TAILORED_CV_DIR / job["tailored_cv_file"]).exists()
+    assert config.LETTER_TEMPLATE.exists() and job["cover_letter_file"].endswith(".docx"), "a template made from the CV's head"
+    from jobhelper import ui_api
+    assert ui_api.Api().editable_letter(job) is True, "so Edit letter works for a new person"
 
 
 def test_process_no_tailored_cv_without_cv_text(isolate_data, monkeypatch):
@@ -340,3 +349,39 @@ def test_a_cv_that_keeps_its_jobs_in_a_table_is_read_whole(tmp_path, isolate_dat
     for damaged in ("not json at all", "[1, 2]", '"text"'):
         vault.write_text(config.PROFILE_JSON, damaged)
         assert agent1_cv.load_profile() is None and agent1_cv.load_profile(current_only=True) is None, "a damaged analysis is made again, not crashed on"
+
+
+
+def test_the_letter_template_is_kept_yours_and_follows_the_cv_when_the_app_made_it(isolate_data, monkeypatch):
+    """Review of the template from the CV's head: a template of your own is never touched, one that went missing is not
+    replaced, and one the app made follows a change of your contacts."""
+    from jobhelper import cover_letter, integrity
+    cv = "Alex Novak\nJunior Developer\nalex@example.com · +420 600 000 000\nPROFILE\nText."
+    state = {"now": "absent"}
+    monkeypatch.setattr(integrity, "check", lambda: [{"name": "letter_template", "state": state["now"]}])
+    agent3_letters._keep_template(cv)
+    assert cover_letter.app_made_head(config.LETTER_TEMPLATE)[:3] == ["Alex Novak", "Junior Developer", "alex@example.com"]
+    state["now"] = "ok"                                   # still as the app made it
+    agent3_letters._keep_template(cv.replace("alex@example.com", "novak@example.com"))
+    assert cover_letter.app_made_head(config.LETTER_TEMPLATE)[2] == "novak@example.com", "your new contacts"
+    state["now"] = "changed"                              # you edited it in Word: it is yours now
+    edited = config.LETTER_TEMPLATE.read_bytes()
+    agent3_letters._keep_template(cv)
+    assert config.LETTER_TEMPLATE.read_bytes() == edited, "an app-made template you edited is never rebuilt"
+    state["now"] = "ok"
+    import docx
+    own = docx.Document()
+    for text in ("Mine", "x", "y", "z", "", "d", "Dear", "1", "2", "3", "4", "5", "Bye", "Mine"):
+        own.add_paragraph(text)
+    own.save(str(config.LETTER_TEMPLATE))
+    before = config.LETTER_TEMPLATE.read_bytes()
+    agent3_letters._keep_template(cv)
+    assert config.LETTER_TEMPLATE.read_bytes() == before, "a template of your own is never touched"
+    config.LETTER_TEMPLATE.unlink()
+    state["now"] = "missing"
+    agent3_letters._keep_template(cv)
+    assert not config.LETTER_TEMPLATE.exists(), "a missing template of yours is not replaced: the start-up check says it is gone"
+    monkeypatch.setattr(cover_letter, "make_template", lambda *a, **k: (_ for _ in ()).throw(ValueError("bad text")))
+    state["now"] = "absent"
+    agent3_letters._keep_template(cv)                     # a template that cannot be made: the plain letter, no crash
+    assert not config.LETTER_TEMPLATE.exists()

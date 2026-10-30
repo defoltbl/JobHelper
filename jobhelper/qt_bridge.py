@@ -234,15 +234,18 @@ class Bridge(RunSlots, JobSlots, QObject):
             src = Path(p)
             if not src.exists():
                 return {"ok": False, "msg": "File not found."}
-            if src.suffix.lower() not in (".docx", ".pdf", ".txt"):
-                return {"ok": False, "msg": "Use a Word (.docx), PDF (.pdf) or .txt file."}
+            from . import agent1_cv, vault
+            problem = agent1_cv.cv_file_problem(src)
+            if problem:
+                return {"ok": False, "msg": problem}
             config.ensure_dirs()
             dest = config.CV_DIR / src.name
             # picking the CV that's already the master → no-op success (avoids
             # a SameFileError leaking its raw PosixPath repr into the UI)
             if src.resolve() != dest.resolve():
+                if dest.exists():
+                    vault.keep_copy(dest, "cv_versions")      # a CV of the same name is kept, never written over unseen
                 shutil.copy2(src, dest)
-            from . import agent1_cv
             agent1_cv.remember_cv(dest.name)      # this one is the master, even if another CV in the folder sorts before it
             integrity.approve(["master_cv"])      # chosen through the app: trusted
             return {"ok": True, "name": src.name}

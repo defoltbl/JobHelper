@@ -108,6 +108,7 @@ Dialog {
         if (payErr !== "") return;
         payModel.append({ role: role, amount: payAmount.value });
         payRole.text = ""; payAmount.value = 0;
+        if (err !== "" && problem().text === "") err = "";      // the "typed but not added" line goes once it is added
     }
     // what must be put right before saving, in the window's own words, and the box it is about ("" when all is well).
     // Only the one-line boxes are named; a fault in the notes, or in their size together, is the red line alone.
@@ -116,7 +117,7 @@ Dialog {
         if (payRole.text.trim() !== "") return fault("“" + payRole.text.trim().substring(0, 40) + "” is typed under “A different figure for” but not added. Press Add, or empty the box.");
         for (var i = 0; i < payModel.count; i++) {      // each line by the same rule as Add
             var line = bridge.payProblem(payModel.get(i).role.trim(), payModel.get(i).amount, payRoles(i));
-            if (line !== "") return fault("A different figure for: " + line);
+            if (line !== "") return fault("A line under “A different figure for” needs a change: its red line says why.");
         }
         if (win.hasNonLatin(rightField.text) || win.hasNonLatin(startField.text))        // each box in other letters turns red
             return fault("Write the right to work and the start in English (Latin letters): they go into English letters and forms.", "latin");
@@ -212,15 +213,24 @@ Dialog {
                             Layout.rightMargin: 12; Layout.bottomMargin: 10; spacing: 6
                             Repeater { model: payModel
                                 RowLayout { Layout.fillWidth: true; spacing: 6
-                                    TextField { objectName: "payRowRole_" + index; Layout.fillWidth: true; implicitHeight: 30; text: model.role
+                                    TextField { id: payRowRole; objectName: "payRowRole_" + index; Layout.fillWidth: true; implicitHeight: 30; text: model.role
                                         maximumLength: win.limits.pay_role; color: theme.ink; font.pixelSize: 12; selectByMouse: true
+                                        // a line the back end refuses is red where it stands, with its reason under it (payTick: any line's change)
+                                        readonly property string fault: { aboutDialog.payTick; return model.role === undefined ? ""
+                                            : bridge.payProblem(String(model.role).trim(), model.amount, aboutDialog.payRoles(index)); }
+                                        readonly property bool wrong: fault !== ""
                                         background: Rectangle { radius: 8; color: theme.surface; border.width: 1
-                                            border.color: parent.activeFocus ? theme.accent : theme.line }
+                                            border.color: payRowRole.wrong ? theme.crit : (payRowRole.activeFocus ? theme.accent : theme.line) }
                                         onTextEdited: payModel.setProperty(index, "role", text) }
                                     ThemedSpin { objectName: "payRowAmount_" + index; from: 0; to: win.limits.salary_max; stepSize: 1000; value: model.amount
                                         onValueChanged: if (value !== model.amount) payModel.setProperty(index, "amount", value) }
                                     Text { text: currencyCombo.currentText; color: theme.faint; font.pixelSize: 11 }
                                     SmallButton { objectName: "payRowRemove_" + index; text: "Remove"; onClicked: payModel.remove(index) } } }
+                            Repeater { model: payModel      // each refused line says why, under the list
+                                Text { objectName: "payRowErr_" + index; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit
+                                    font.pixelSize: 11; font.bold: true; text: { aboutDialog.payTick; var f = model.role === undefined ? ""
+                                        : bridge.payProblem(String(model.role).trim(), model.amount, aboutDialog.payRoles(index));
+                                        return f === "" ? "" : "“" + model.role + "”: " + f; } visible: text !== "" } }
                         }
                     }
                 }
@@ -301,7 +311,9 @@ Dialog {
                             Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                                 text: "Projects, volunteering, anything that belongs to no job above." }
                             Rectangle { Layout.fillWidth: true; radius: 8; color: theme.surface; border.width: 1
-                                border.color: generalField.activeFocus ? theme.accent : theme.line
+                                // the notes over their size together: the box turns red with the count under it
+                                border.color: aboutDialog.notesSize > aboutDialog.notesMax || win.hasNonLatin(generalField.text) ? theme.crit
+                                              : (generalField.activeFocus ? theme.accent : theme.line)
                                 implicitHeight: Math.max(70, generalField.implicitHeight + 16)
                                 TextEdit { id: generalField; objectName: "generalField"; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap
                                     selectByMouse: true; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent

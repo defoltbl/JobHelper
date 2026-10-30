@@ -412,10 +412,9 @@ class RunSlots:
             self.runFinished.emit("scan", str(e))
         except Exception as e:  # noqa: BLE001
             self._save_partial(jobs)                             # statuses changed by the replies read so far are kept
-            if email_client.untrusted(e):
-                self.runFinished.emit("scan", email_client.UNTRUSTED)
-            else:
-                trouble.note("the email scan", e)
-                self.runFinished.emit("scan", "Email scan failed – check your connection and try again.")
+            if not email_client.network_fault(e):
+                trouble.note("the email scan", e)                 # a fault of the app or the disk: written down; a network fault is said
+            said = email_client.scan_problem(e, config.imap_host(1))
+            self.runFinished.emit("scan", said if email_client.untrusted(e) else "Email scan failed. " + said)
         finally:
             self._set_running(False)

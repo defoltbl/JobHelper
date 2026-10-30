@@ -1133,3 +1133,51 @@ def test_a_list_over_the_cap_is_said_apart_from_a_wrong_token(api):
                               + [{"name": f"C{n}", "ats": "lever", "token": f"c{n}"} for n in range(api.MAX_COMPANIES + 1)])
     assert "Bad4 and 2 more" in both["msg"] and "the last 1 were not saved" in both["msg"], "both faults are said"
     assert api.save_options({**api.options(), "keep_words": ["x" * 101]})["msg"].startswith("An entry under “but keep titles with”")
+
+
+def test_a_start_date_that_has_passed_says_so(api):
+    """Hands-on check F8: "2020-01-01" got "Forms cannot get a date from …"."""
+    from datetime import date
+    from jobhelper import about_you
+    said = about_you.AboutYou.start_preview("2020-01-01", today=date(2026, 10, 30))
+    assert said["ok"] is False and "has passed" in said["text"]
+    assert "cannot get a date" in about_you.AboutYou.start_preview("whenever", today=date(2026, 10, 30))["text"]
+
+
+def test_a_failed_scan_names_its_cause():
+    """Hands-on check F16: every scan failure said "check your connection", also a server name that does not exist."""
+    import socket
+    from jobhelper import email_client
+    assert "could not be found" in email_client.scan_problem(socket.gaierror(8, "nodename"), "imap.demo.invalid")
+    assert "in time" in email_client.scan_problem(TimeoutError(), "h")
+    assert "refused the connection" in email_client.scan_problem(ConnectionRefusedError(), "h")
+    assert "internet connection" in email_client.scan_problem(ConnectionResetError(), "h")
+    assert "fault in the app" in email_client.scan_problem(PermissionError(13, "disk"), "h"), "a disk fault is no network fault"
+    assert "fault in the app" in email_client.scan_problem(KeyError("x"), "h")
+    import errno
+    assert email_client.network_fault(OSError(errno.EHOSTUNREACH, "No route to host")) is True, "a dropped VPN is the network"
+    assert email_client.network_fault(OSError(errno.ENOSPC, "No space left")) is False
+
+
+def test_a_letter_template_is_made_from_the_head_of_the_cv(isolate_data, tmp_path):
+    """Hands-on check F15: Edit letter never appeared for a new person, who had no letter template."""
+    from jobhelper import cover_letter
+    cv = "Mara Example\nJunior Developer\nmara@example.com · +420 600 000 000\nlinkedin.com/in/mara-example\nPROFILE\nText."
+    path = tmp_path / "template.docx"
+    assert cover_letter.make_template(cv, path) is True
+    shape = cover_letter.read_letter(path)
+    assert len(shape["paragraphs"]) == cover_letter.BODY_PARAGRAPHS
+    import docx
+    texts = [p.text for p in docx.Document(str(path)).paragraphs]
+    assert texts[:4] == ["Mara Example", "Junior Developer", "mara@example.com  ·  +420 600 000 000", "linkedin.com/in/mara-example"]
+    assert cover_letter.make_template("", tmp_path / "none.docx") is False and not (tmp_path / "none.docx").exists()
+    two = "\nDeveloper\nalex@example.com · +420 600 000 000\n"
+    assert cover_letter.template_head("Alex\x01 Novak" + two)[:3] == ["Alex Novak", "Developer", "alex@example.com"], "no control character"
+    for not_a_name in ("CURRICULUM VITAE", "Praha, Czech Republic", "Alex Novak | Brno", "Contact: a@b.com", "alex@example.com",
+                       "Senior Software Developer With Ten Years"):
+        assert cover_letter.template_head(not_a_name + two) == [], not_a_name
+    far = "Alex Novak\nDeveloper\nalex@example.com\n" + "x\n" * 10 + "Cut 10 000 000 rows to a report."
+    assert cover_letter.template_head(far) == [], "a figure far down is no phone number: one contact, no template"
+    years = cover_letter.template_head("Alex Novak\nDeveloper\nalex@example.com\n2019 - 2021 - 2023\nlinkedin.com/in/alex")
+    assert years[2:] == ["alex@example.com", "linkedin.com/in/alex"], "a year run is no phone number"
+    assert cover_letter.template_head("Alex Novak\nDeveloper\nPROFILE") == [], "no contacts: the plain letter instead"
