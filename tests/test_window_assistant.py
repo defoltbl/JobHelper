@@ -54,7 +54,9 @@ def test_the_assistant_stands_on_the_line_blinks_and_waves(ui):
     ui.js("stagePanel.assistant.greet()")
     _until_true(ui, lambda: ui.js("stagePanel.assistant.parent.scale") > 0 and bubble.property("opacity") == 1
                 and bot.property("shown").startswith("Hi!"))
-    _until_settled(ui, lambda: bubble.property("width"))                     # the bubble grows to its words after it shows
+    # the bubble grows to its words after it shows: wait for its own target, not for a pause in the animation (a slow
+    # machine, as the CI runner, can pause between frames and look settled at 195 of 420)
+    _until_true(ui, lambda: bubble.property("width") == bubble.property("target"))
     assert floor.property("height") == 560 and ui.js("stagePanel.assistant.parent.scale") > 0
     wide = bubble.property("width")
     bot.setProperty("greeting", False)
