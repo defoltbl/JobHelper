@@ -1428,3 +1428,51 @@ def test_a_message_over_a_window_does_not_come_back_when_a_window_opens_again(ui
     assert ui.js("toastText") == ""
     ui.js('ticker.text = ""')
     assert ui.warnings == []
+
+
+def test_typed_form_questions_and_a_typed_request_are_not_lost_on_close(ui):
+    """Hands-on check F10 and window review H8: typed questions and a typed request to the assistant were thrown away by
+    Esc without a word; About you's Cancel did not ask as its ✕ did."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    ui.js('formDialog.show("app")')
+    _until_open(ui, "formDialog")
+    form = ui.find("formDialog")
+    try:
+        ui.js('fmQuestions.text = "1. Why do you want this job?\\n\\n2. Salary?"', form)
+        assert ui.js("formDialog.holdsWork") is True
+        ui.win.requestActivate()
+        QTest.keyClick(ui.win, Qt.Key_Escape)
+        assert _until(lambda: "did not draft answers" in ui.js("formDialog.err")) and form.property("opened") is True
+        ui.js("formDialog.err = ''; formDialog.confirmClose = false; formDialog.busy = true", form)
+        ui.bridge.answersReady.emit({"job_id": "app", "ok": True, "count": 1, "to_check": 0})   # the real end of a draft
+        assert _until_true(ui, lambda: ui.js("formDialog.busy") is False)
+        assert ui.js("formDialog.holdsWork") is False, "drafted as typed (the app tidies the numbers away): no false question"
+    finally:
+        ui.js("formDialog.dirty = false; formDialog.loadedQuestions = fmQuestions.text; formDialog.close()")
+        _until_closed(ui, "formDialog")
+    ui.js("assistantDialog.show()")
+    _until_open(ui, "assistantDialog")
+    assistant = ui.find("assistantDialog")
+    try:
+        ui.js('askBox.text = "fill the form"', assistant)
+        ui.js("assistantDialog.tryClose()")
+        assert assistant.property("opened") is True and "did not send it" in ui.js("assistantDialog.askErr")
+        ui.js("assistantDialog.tryClose()")
+        _until_closed(ui, "assistantDialog")
+        ui.js("assistantDialog.show()")
+        _until_open(ui, "assistantDialog")
+        assert ui.js("askBox.text", assistant) == "" and ui.js("assistantDialog.holdsWork") is False, "discarded, as it said"
+    finally:
+        ui.js('askBox.text = ""', assistant)
+        ui.js("assistantDialog.close()")
+        _until_closed(ui, "assistantDialog")
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    about = ui.find("aboutDialog")
+    ui.js("rightField.text = 'EU citizen, no visa needed'", about)
+    ui.js("aboutCancelBtn.clicked()", about)
+    assert about.property("opened") is True and ui.js("aboutDialog.confirmClose") is True, "Cancel asks once, as ✕ does"
+    ui.js("aboutCancelBtn.clicked()", about)
+    _until_closed(ui, "aboutDialog")
+    assert ui.warnings == []

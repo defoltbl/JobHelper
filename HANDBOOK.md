@@ -250,7 +250,7 @@ data/                your data; only the *.example.* files are in git
 - **The window keeps no copy of a limit.** How long a typed text may be comes from the module that checks it,
   through `Api.limits()` (`win.limits` in QML) or with the data of a dialog (`columns` of My details, `max_part`
   of a preparation). The ranges of the Options' number boxes come the same way (`numbers`, `shelf_days`,
-  `look_back`), and every limited box shows `TooLong.qml` while its text is over. The lists the back end checks come
+  `look_back`), and the weekly run's hour and minute (`schedule`, from `schedule.HOURS`/`MINUTES`), and every limited box shows `TooLong.qml` while its text is over. The lists the back end checks come
   as `choices` (`planner.KINDS`, `scrapers_ats.ATS_NAMES`, `OptionsService.MODELS`, `config.TEXT_SIZES`). A new limit
   or list goes into the owner and into that map; `tests/test_window_limits.py` keeps numbers and lists out of the
   dialogs. Suggestion pools that nothing checks (`euCities`, `roleSuggestions`) may stay in `Main.qml`.

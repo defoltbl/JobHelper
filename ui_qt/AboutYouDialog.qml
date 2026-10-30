@@ -339,7 +339,7 @@ Dialog {
             Text { objectName: "aboutErr"; Layout.fillWidth: true; visible: aboutDialog.err !== ""; wrapMode: Text.WordWrap
                 color: theme.crit; font.pixelSize: 12; font.bold: true; text: aboutDialog.err }
             Item { Layout.fillWidth: aboutDialog.err === "" }
-            SmallButton { objectName: "aboutCancel"; text: aboutDialog.confirmClose ? "Discard changes" : "Cancel"; onClicked: aboutDialog.close() }
+            SmallButton { id: aboutCancelBtn; objectName: "aboutCancel"; text: aboutDialog.confirmClose ? "Discard changes" : "Cancel"; onClicked: aboutDialog.tryClose() }
             PillButton { id: aboutSaveBtn; objectName: "aboutSave"; primaryStyle: true; text: "Save"; onClicked: aboutDialog.save() }
         }
     }

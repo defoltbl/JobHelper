@@ -289,7 +289,8 @@ Item {
                     ColumnLayout { id: emailCol; y: 10; width: parent.width; spacing: 8
                         Text { visible: welcome.editBox === 2; Layout.leftMargin: 38; text: "Second mailbox (optional)"
                             color: theme.soft; font.pixelSize: 11; font.bold: true }
-                        TextField { id: wEmail; Layout.fillWidth: true; Layout.leftMargin: 38; placeholderText: "you@gmail.com"
+                        TextField { id: wEmail; Keys.onEscapePressed: keySink.forceActiveFocus();   // Esc leaves the field; a second Esc closes the card
+                            Layout.fillWidth: true; Layout.leftMargin: 38; placeholderText: "you@gmail.com"
                             text: welcome.emailDraft; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                             placeholderTextColor: theme.faint
                             background: Rectangle { radius: 8; color: theme.inset; border.width: 1
@@ -297,7 +298,8 @@ Item {
                                     : (wEmail.activeFocus ? theme.accent : theme.line) }
                             onTextEdited: { welcome.emailDraft = text; welcome.emailErr = ""; }
                             onAccepted: wPw.forceActiveFocus() }
-                        TextField { id: wPw; Layout.fillWidth: true; Layout.leftMargin: 38; echoMode: TextInput.Password
+                        TextField { id: wPw; Keys.onEscapePressed: keySink.forceActiveFocus();   // Esc leaves the field; a second Esc closes the card
+                            Layout.fillWidth: true; Layout.leftMargin: 38; echoMode: TextInput.Password
                             placeholderText: (welcome.editBox === 2 ? connData.email2 === true : connData.email === true)
                                              ? "Password (leave blank to keep)" : "Password for this mailbox"
                             text: welcome.pwDraft; color: theme.ink; font.pixelSize: 12; selectByMouse: true
@@ -308,7 +310,8 @@ Item {
                             onTextEdited: { welcome.pwDraft = text; welcome.emailErr = ""; }
                             onAccepted: welcome.saveEmail() }
                         // the server: asked for only when the address does not tell it
-                        TextField { id: serverRow; objectName: "mailServerField"; Layout.fillWidth: true; Layout.leftMargin: 38
+                        TextField { id: serverRow; Keys.onEscapePressed: keySink.forceActiveFocus();   // Esc leaves the field; a second Esc closes the card
+                            objectName: "mailServerField"; Layout.fillWidth: true; Layout.leftMargin: 38
                             visible: welcome.needsServer
                             placeholderText: "IMAP server, e.g. imap." + (welcome.emailDraft.trim().split("@").pop() || "example.com")
                             text: welcome.hostDraft; color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.mail_server

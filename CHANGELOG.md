@@ -7,6 +7,11 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Weekly run** and **Countries for remote jobs:** ✕, Esc and **Cancel** ask once before a change is thrown away.
+- **Weekly run:** an empty hour or minute is an error, not 00. The weekly run can be switched off while its time is wrong.
+- **Form answers:** questions you typed and did not draft are no longer lost when you close the window. The **assistant** does the same for a request you typed and did not send.
+- **About you:** **Cancel** asks once before it discards changes, as ✕ and Esc do.
+- **Welcome card:** Esc leaves an email field; a second Esc closes the card.
 - **Options:** a career-site short name with a dot is refused when you add it. Before, the window took it, and **Save** said "saved" but left the company out.
 - **Options:** the country must be one the app knows ("Narnia" is refused).
 - **Options:** a search role that is too long, or a full list, is said when you select **Add**.

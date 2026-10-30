@@ -686,7 +686,7 @@ The window never touches a file. Every action goes through three layers:
 Long work (a search, a scan, a rewrite) runs in a thread and answers through a signal.
 
 The window keeps no copy of a limit. `bridge.limits()` gives the length that each typed text may
-have, and the range of each number box in Options. It also gives the choices of four lists: the kinds
+have, and the range of each number box in Options. It also gives the hour and minute of the weekly run. It also gives the choices of four lists: the kinds
 of a date, the career-site systems, the Claude models and the text sizes. Each number and each list
 comes from the module that checks it, so the window and the check always agree.
 

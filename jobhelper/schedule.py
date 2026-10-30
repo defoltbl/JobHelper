@@ -18,6 +18,8 @@ LOG = config.DATA_DIR / "weekly_jobhelper.launchd.log"
 # launchd starts a program with a short PATH: add the usual places of the Claude CLI and Homebrew
 PATH = "{home}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
+HOURS, MINUTES = (0, 23), (0, 59)        # what a time of the weekly run may be (the window asks these)
+
 # launchd Weekday: 0 or 7 = Sunday, 1 = Monday … 6 = Saturday.
 DAY_NAMES = {0: "Sun", 7: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat"}
 
@@ -104,8 +106,9 @@ def write_schedule(enabled: bool, weekday: int, hour: int, minute: int) -> dict:
         weekday, hour, minute = int(weekday), int(hour), int(minute)
     except (TypeError, ValueError):
         return {"ok": False, "msg": "Choose a day and a time."}
-    if not (0 <= weekday <= 7 and 0 <= hour <= 23 and 0 <= minute <= 59):
-        return {"ok": False, "msg": "That is not a day and time of the week (hours 0 to 23, minutes 0 to 59)."}
+    if not (0 <= weekday <= 7 and HOURS[0] <= hour <= HOURS[1] and MINUTES[0] <= minute <= MINUTES[1]):
+        return {"ok": False, "msg": f"That is not a day and time of the week (hours {HOURS[0]} to {HOURS[1]}, "
+                                    f"minutes {MINUTES[0]} to {MINUTES[1]})."}
     try:
         if PLIST.exists():
             subprocess.run(["launchctl", "unload", str(PLIST)], capture_output=True, text=True, timeout=20)

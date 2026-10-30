@@ -19,7 +19,8 @@ Dialog {
         function onModelReset() { assistantDialog.answersRevision++ } }
     onAnswersRevisionChanged: confirmAnswers = false                       // a changed answer is asked about again
     readonly property int unsaved: answersRevision >= 0 ? unsavedAnswers() : 0
-    readonly property bool holdsWork: dirty || busy || unsaved > 0      // unsaved details or answers, or Claude still working
+    readonly property bool askTyped: askBox.text.trim() !== "" && !busy  // a request typed and not sent
+    readonly property bool holdsWork: dirty || busy || unsaved > 0 || askTyped   // unsaved details, answers or request, or Claude still working
     closePolicy: holdsWork ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits ...
     // ... but it must not do nothing either: it asks once, or says why it waits (only when it is the window in front)
     Shortcut { sequence: "Escape"; enabled: assistantDialog.holdsWork && win.onTop(assistantDialog)
@@ -70,6 +71,7 @@ Dialog {
     property bool dirty: false            // a detail was changed and not saved
     property bool confirmClose: false     // Close was pressed once with unsaved details
     property bool confirmAnswers: false   // ... and once with unsaved answers: each kind is asked about on its own page
+    property bool confirmAsk: false       // ... and once with a typed request
     property bool detailsSaved: false     // something is saved already
     property var problem: ({})            // {field, msg} of the first thing wrong, as you type
     property string detailsNote: ""
@@ -242,7 +244,7 @@ Dialog {
         Qt.callLater(function () { talkFlick.contentY = Math.max(0, talkFlick.contentHeight - talkFlick.height); });
     }
     function show() {
-        askErr = ""; confirmClose = false; confirmAnswers = false; busy = false;
+        askErr = ""; confirmClose = false; confirmAnswers = false; confirmAsk = false; busy = false;
         allJobs = [{ id: "", label: "Find the job from the page" }].concat(bridge.assistantJobs());
         jobs = allJobs; jobFind.text = ""; jobFindErr = "";
         jobBox.currentIndex = 0; jobId = "";
@@ -333,7 +335,12 @@ Dialog {
             answersErr = unsavedAnswers() + (unsavedAnswers() === 1 ? " answer is" : " answers are") + " not saved. Press Save on each, or Close once more to discard the changes.";
             return;
         }
-        dirty = false; close();
+        if (askTyped && !confirmAsk) {
+            confirmAsk = true; page = "ask";
+            askErr = "You typed a request and did not send it. Press Return to send it, or Close once more to discard it.";
+            return;
+        }
+        dirty = false; confirmAsk = false; askBox.text = ""; close();      // discarded, as the question said
     }
     // ── My details ──
     function loadDetails() {
@@ -746,7 +753,7 @@ Dialog {
                         color: theme.ink; font.pixelSize: 13; selectByMouse: true; enabled: !assistantDialog.busy
                         background: Rectangle { radius: 9; color: theme.surface; border.width: 1
                             border.color: assistantDialog.askErr !== "" || askBox.text.length > assistantDialog.maxRequest ? theme.crit : (askBox.activeFocus ? theme.accent : theme.line) }
-                        onTextEdited: assistantDialog.askErr = ""
+                        onTextEdited: { assistantDialog.askErr = ""; assistantDialog.confirmAsk = false; }
                         Keys.onReturnPressed: assistantDialog.ask(text)
                         Keys.onEnterPressed: assistantDialog.ask(text) }
                     SmallButton { objectName: "asSend"; implicitHeight: 34; text: "Ask"; enabled: !assistantDialog.busy; onClicked: assistantDialog.ask(askBox.text) }

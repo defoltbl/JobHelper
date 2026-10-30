@@ -1507,3 +1507,88 @@ def test_options_number_and_list_faults_are_said_once_and_go_when_fixed(ui):
         _until_closed(ui, dialog)
         ui.js("optsData = bridge.options()")
     assert ui.warnings == []
+
+
+def test_the_weekly_run_and_remote_countries_ask_before_a_change_is_lost(ui, monkeypatch):
+    """Hands-on check F5, F6, F7 and window review H3: Esc, ✕ and Cancel threw away a change; an empty hour counted as
+    00; a wrong time stopped the weekly run being switched off."""
+    from PySide6.QtTest import QTest
+    from jobhelper import schedule
+    sent = []
+    monkeypatch.setattr(schedule, "write_schedule", lambda *a: sent.append(a) or {"ok": True})
+    sched = ui.find("schedDialog")
+    ui.js("schedData = ({ enabled: true, weekday: 1, hour: 9, minute: 0, label: 'Mon 09:00' })")
+    _open(ui, sched, 500)
+    try:
+        typing = "hourField.children.filter(function (c) { return c.objectName === 'timeInput'; })[0]"
+        ui.js("hourField.text = '7'; " + typing + ".textEdited()", sched)     # typed, as a person does: the field is in typing mode
+        assert ui.js("hourField.value", sched) == 7
+        ui.win.requestActivate()
+        QTest.keyClick(ui.win, Qt.Key_Escape)
+        assert _until_true(ui, lambda: "did not save" in ui.js("schedErr", sched)) and sched.property("opened") is True, "F6"
+        assert ui.js("schedCancelBtn.text", sched) == "Discard changes"
+        QTest.keyClick(ui.win, Qt.Key_Escape)                           # asked once: the second Esc discards
+        _until_closed(ui, sched)
+        _open(ui, sched, 500)
+        assert ui.js("hourField.text", sched) == "09" and ui.js("timeErr", sched) == "", "reopened as saved, whatever was typed"
+        ui.js("minField.text = ''", sched)
+        assert ui.js("timeErr", sched) == "Enter the minute, 0 to 59.", "an empty minute is no 00 (F7)"
+        ui.js("minField.children[minField.children.length - 1].editingFinished()", sched)
+        assert ui.js("minField.text", sched) == "" and ui.js("timeErr", sched) != "", "leaving the box keeps it empty"
+        ui.js("schedSaveBtn.clicked()", sched)
+        assert sent == [] and sched.property("opened") is True, "nothing is sent while a box is empty"
+        ui.js("minField.reset(0); hourField.text = '25'; hourField.value = 25", sched)
+        ui.js("en = false; schedDialog.changed()", sched)
+        assert ui.js("timeErr", sched) == "", "switched off: the time does not matter (H3)"
+        ui.js("schedSaveBtn.clicked()", sched)
+        assert sent and sent[-1][0] is False and sent[-1][2] == 9, "the saved time is sent, never the wrong one"
+    finally:
+        ui.js("confirmClose = true; close()", sched)
+        _until_closed(ui, sched)
+        ui.js("schedData = bridge.weeklySchedule()")
+    picker = ui.find("remoteDialog")
+    ui.js('remoteDialog.show(["germany"], "czechia")')
+    _until_open(ui, "remoteDialog")
+    try:
+        ui.js('remoteDialog.toggle("austria")')
+        ui.js("remoteCancelBtn.clicked()", picker)
+        assert picker.property("opened") is True and "did not press Done" in ui.js("err", picker), "a tick is not lost unasked (F5)"
+        ui.js("remoteCancelBtn.clicked()", picker)
+        _until_closed(ui, "remoteDialog")
+    finally:
+        ui.js("confirmClose = true; close()", picker)
+        _until_closed(ui, "remoteDialog")
+    assert ui.warnings == []
+
+
+def test_the_weekly_run_save_never_reaches_the_real_launch_agent_in_a_test_copy(ui):
+    """F17 from the window: the tests run with JOBHELPER_HOME, so Save is refused with the reason."""
+    sched = ui.find("schedDialog")
+    ui.js("schedData = ({ enabled: true, weekday: 1, hour: 9, minute: 0, label: 'Mon 09:00' })")
+    _open(ui, sched, 500)
+    try:
+        ui.js("schedSaveBtn.clicked()", sched)
+        assert sched.property("opened") is True and "JOBHELPER_HOME" in ui.js("schedErr", sched)
+    finally:
+        ui.js("confirmClose = true; close()", sched)
+        _until_closed(ui, sched)
+        ui.js("schedData = bridge.weeklySchedule()")
+    assert ui.warnings == []
+
+
+def test_esc_in_a_welcome_email_field_leaves_the_field(ui):
+    """Window review H8: Esc did nothing inside the welcome card's email fields."""
+    from PySide6.QtTest import QTest
+    ui.js("welcome.openCard()")
+    welcome = ui.find("welcome")
+    try:
+        welcome.setProperty("editEmail", True)
+        ui.js("wEmail.forceActiveFocus()", welcome)
+        assert ui.js("wEmail.activeFocus", welcome) is True
+        ui.win.requestActivate()
+        QTest.keyClick(ui.win, Qt.Key_Escape)
+        assert _until_true(ui, lambda: ui.js("wEmail.activeFocus", welcome) is False), "Esc leaves the field"
+    finally:
+        welcome.setProperty("editEmail", False)
+        ui.js("welcome.finish()")
+    assert ui.warnings == []

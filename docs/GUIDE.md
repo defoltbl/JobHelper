@@ -2107,7 +2107,7 @@ macOS can run a search and an email scan for you once a week, even with the wind
 
 1. In the right column, select the **Weekly run** card.
 2. Turn **Enabled** on.
-3. Choose the day and the time.
+3. Choose the day and the time. The hour and the minute must not be empty.
 4. Select **Save**.
 
 Figure 17.1 shows the weekly run.
@@ -2130,7 +2130,7 @@ time you open the window (Table 17.1).
 
 ### Turn it off
 
-Open the card again, turn **Enabled** off, and select **Save**.
+Open the card again, turn **Enabled** off, and select **Save**. The time does not matter then.
 
 If you put a new version of the app on your Mac, or move the app to a different folder, open
 the app one time. It then sets the weekly run to start the app in its new place, on the same

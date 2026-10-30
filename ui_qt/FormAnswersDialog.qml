@@ -10,7 +10,9 @@ import QtQuick.Effects
 Dialog {
     id: formDialog; objectName: "formDialog"
     modal: true; anchors.centerIn: parent
-    readonly property bool holdsWork: dirty || busy        // unsaved changes, or Claude still drafting
+    readonly property bool holdsWork: dirty || busy || questionsTyped     // unsaved changes, typed questions, or Claude still drafting
+    property string loadedQuestions: ""   // the questions of the answers shown: anything else typed is not drafted yet
+    readonly property bool questionsTyped: fmQuestions.text.trim() !== loadedQuestions.trim()
     closePolicy: holdsWork ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits ...
     Shortcut { sequence: "Escape"; enabled: formDialog.holdsWork && win.onTop(formDialog)   // ... nor do nothing
                onActivated: formDialog.tryClose() }
@@ -37,12 +39,16 @@ Dialog {
     }
     property bool confirmDraft: false     // "Draft again" was pressed once and would replace answers
     property bool confirmClose: false     // Close was pressed once with unsaved edits
-    function recheck() { checked = bridge.checkQuestions(fmQuestions.text); confirmDraft = false; }
+    function recheck() { checked = bridge.checkQuestions(fmQuestions.text); confirmDraft = false; confirmClose = false; }
     function tryClose() {
         if (busy) { err = "Claude is still drafting. Wait for the answers, then close."; return; }
-        if (dirty && !confirmClose) {
+        // one question that names everything open, so the second Close discards what it said
+        if ((dirty || questionsTyped) && !confirmClose) {
             confirmClose = true; note = "";
-            err = "You changed an answer and did not save it. Press Save, or Close once more to discard the change.";
+            err = dirty && questionsTyped
+                ? "You changed an answer and typed new questions, and did not save or draft them. Press Save or Draft answers, or Close once more to discard both."
+                : dirty ? "You changed an answer and did not save it. Press Save, or Close once more to discard the change."
+                : "You typed questions and did not draft answers for them. Press Draft answers, or Close once more to discard them.";
             return;
         }
         dirty = false; close();
@@ -61,6 +67,7 @@ Dialog {
         jobId = job; err = ""; note = ""; busy = false; confirmClose = false;
         fill(d);
         fmQuestions.text = (d.items || []).map(function (i) { return i.question; }).join("\n");
+        loadedQuestions = fmQuestions.text;      // the box as it stands: anything typed after this is not drafted
         recheck();
         fmFlick.contentY = 0; open();
     }
@@ -116,6 +123,7 @@ Dialog {
             formDialog.busy = false;
             if (res.ok) {
                 formDialog.fill(bridge.formAnswers(formDialog.jobId));
+                formDialog.loadedQuestions = fmQuestions.text;      // drafted as typed: the app tidied them, they are not "new"
                 formDialog.note = "Drafted " + res.count + (res.count === 1 ? " answer" : " answers")
                                   + (res.to_check > 0 ? ". " + res.to_check + " need your attention (marked below)." : ". Read them before you copy.");
                 bridge.applyStep(formDialog.jobId, "answers"); detailDialog.refresh();

@@ -178,13 +178,14 @@ class SystemService:
         """How long what you type may be, and the ranges of the number boxes, from the module that checks each one, so the
         window says it before the check refuses. Only constants: it works while the data is locked too (the window's
         bindings read it at once, and a missing key would break them)."""
-        from . import assistant, config, cover_letter, form_answers, housekeeping, mailhosts, planner, scrapers_ats
+        from . import assistant, config, cover_letter, form_answers, housekeeping, mailhosts, planner, schedule, scrapers_ats
         app = self._app                             # the Options' own limits: asked through the facade, like any other service
         return {"request": assistant.MAX_REQUEST, "question": form_answers.MAX_QUESTION, "answer": form_answers.MAX_ANSWER,
                 "event_note": planner.MAX_EVENT_NOTE, "company_notes": dict(planner.NOTE_LIMITS),
                 "experience_notes": config.MAX_EXPERIENCE_NOTES, "letter_hint": cover_letter.MAX_HINT,
                 "list_word": app.MAX_WORD, "list_max": app.MAX_LIST, "options": dict(app.OPTION_TEXTS),
                 "labels": app.labels(), "companies_max": app.MAX_COMPANIES,
+                "schedule": {"hour": list(schedule.HOURS), "minute": list(schedule.MINUTES)},
                 "company_name": app.MAX_COMPANY_NAME, "pay_role": app.MAX_PAY_ROLE,
                 "salary_max": app.MAX_SALARY,
                 "mail_server": mailhosts.MAX_HOST,
