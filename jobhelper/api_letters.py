@@ -80,15 +80,17 @@ class LettersService:
             draft.replace(path)
         finally:
             draft.unlink(missing_ok=True)
-        warnings = cover_letter.letter_warnings(texts, self._cv.text())
+        warnings = cover_letter.letter_warnings(texts, self._cv.text(), j.get("company", ""))
         made = pdf.to_pdf(path)
         if made and pdf.page_count(made) > 1:
             warnings.append("The letter is now longer than one page.")
         figures = claims.unbacked_figures("\n".join(texts), *cover_letter.figure_sources(j, self._cv.text()), brackets_ok=False)
+        misplaced = claims.EmployerCheck(self._cv.text()).misplaced("\n".join(texts), j.get("company", ""))
 
         def saved(all_jobs, job):
             job["last_update"] = date.today().isoformat()
             job["letter_figures"] = figures[:8]                 # what you just saved, so a figure you removed is no longer named
+            job["letter_misplaced"] = misplaced[:8]             # the same for work at the wrong employer
         self._editor.change(job_id, saved, render=False)
         return {"ok": True, "warnings": warnings, "words": sum(len(t.split()) for t in texts)}
 

@@ -66,6 +66,7 @@ Master CV (the only source of truth):
 
 Current KEY SKILLS rows in the master:
 {master_rows}
+{rows_shape}
 
 Job posting:
 - Title: {title}
@@ -85,7 +86,7 @@ CV may appear only in PROFILE as an interest ("Keen to grow into ..."), never in
 
 GENERIC_RULES = """PROFILE (one paragraph, 5-6 lines at most): keep the opening fact about the
 candidate's degree, replace the middle with the posting's top 3-4 themes using only things the
-CV can back up, keep one sentence about working independently, express anything the candidate
+CV can back up, keep a sentence about working independently only if the master's PROFILE has one, express anything the candidate
 has not done as interest only, and keep the master's closing sentence about languages and the
 role sought.
 KEY SKILLS (about 7 rows): put the rows the posting cares about first, name the labels with the
@@ -314,6 +315,12 @@ def build_docx(master_path, out_path, profile: str, skills: list[dict[str, str]]
         for n, row in enumerate(skills):
             p = copy.deepcopy(template)
             rr = p.findall(R)
+            if not row["label"]:                              # a plain list, as in the master: the items alone
+                set_run_text(rr[0], row["items"])
+                for r in rr[1:]:
+                    p.remove(r)
+                body.insert(anchor + n, p)
+                continue
             set_run_text(rr[0], f"{row['label']}: ")       # bold label run
             if len(rr) > 1:
                 set_run_text(rr[1], row["items"])         # regular items run
@@ -335,7 +342,84 @@ def estimate_lines(profile: str, rows: list[str]) -> int:
 
 
 def _row_text(row: dict[str, str]) -> str:
-    return f"{row['label']}: {row['items']}"
+    return f"{row['label']}: {row['items']}" if row["label"] else row["items"]
+
+
+def _items(text: str) -> list[str]:
+    return [i.strip() for i in re.split(r",(?![^()]*\))", text) if i.strip()]
+
+
+_LABEL = re.compile(r"^([^,:]{1,40}):\s*(\S.*)$")      # "Label: items" (no comma before the colon)
+_TERM_WORD = re.compile(r"[A-Za-z0-9+#]+")
+
+
+class MasterSkills:
+    """The KEY SKILLS rows of the master CV and what an adapted set of rows must keep: the master's shape (rows of
+    "Label: items", or plain lists without a label). A plain list is only reordered, so it keeps every skill; labelled
+    rows are regrouped and may leave out what the posting does not care about (the approved example does). A one-line
+    plain list once came back as five labelled rows; to fit the master's one line, each row was cut to its first item."""
+
+    def __init__(self, rows: list[str]) -> None:
+        self.rows = [r.strip() for r in rows if r.strip()]
+        labels = [bool(_LABEL.match(r)) for r in self.rows]
+        self.labelled = bool(labels) and all(labels)
+        self.plain = bool(labels) and not any(labels)    # neither (no rows, or a mix): the general rules alone
+
+    @property
+    def limits(self) -> tuple[int, int]:
+        """How many rows an adapted CV may have: a plain list keeps its number of rows; labelled rows may be
+        regrouped within MIN_ROWS..MAX_ROWS (fewer when the master has fewer)."""
+        if self.plain:
+            return (len(self.rows), len(self.rows))
+        return (min(MIN_ROWS, len(self.rows)), MAX_ROWS) if self.labelled else (MIN_ROWS, MAX_ROWS)
+
+    def items(self) -> list[str]:
+        out = []
+        for row in self.rows:
+            m = _LABEL.match(row) if self.labelled else None
+            out += _items(m.group(2) if m else row)
+        return list(dict.fromkeys(out))
+
+    def missing(self, skills: list[dict[str, str]]) -> list[str]:
+        """The skills of a plain master list that the rows no longer name ("REST APIs" counts as kept by "REST API");
+        always empty when the master's rows are not a plain list."""
+        if not self.plain:
+            return []
+        kept = {claims.singular(w) for row in skills for w in _TERM_WORD.findall(row["items"])}
+        return [item for item in self.items() if not all(claims.singular(w) in kept for w in _TERM_WORD.findall(item))]
+
+    def shape_rule(self) -> str:
+        """What the prompt says about the rows' shape; it wins over the general rules."""
+        if not self.plain:
+            return ""
+        lo = self.limits[0]
+        return (f"These rows have no labels. Return exactly {lo} row{'s' if lo > 1 else ''} the same way, each with an empty "
+                "label, and put the items the posting cares about first. Keep every item: reorder them, never drop one. "
+                "This wins over the rules above.")
+
+    def fit(self, skills: list[dict[str, str]]) -> list[dict[str, str]]:
+        """The rows in the master's shape whatever the model sent: a plain list gets its extra rows added, in order, to
+        its last row, and the skills the model left out are put back (the master is the truth)."""
+        if not self.plain:
+            return skills
+        if not skills:                                   # nothing usable came back: the master's own list
+            return [{"label": "", "items": row} for row in self.rows]
+        keep = self.limits[1]
+        rows = [dict(r) for r in skills[:keep]]
+        rows[-1]["items"] = ", ".join([rows[-1]["items"], *(r["items"] for r in skills[keep:])])
+        gone = self.missing(rows)
+        if gone:
+            rows[-1]["items"] = ", ".join([rows[-1]["items"], *gone])
+        return rows
+
+    def row(self, data: Any) -> dict[str, str] | None:
+        """One row of the model's answer in the master's shape (None when it holds nothing)."""
+        if not isinstance(data, dict) or not data.get("items"):
+            return None
+        label = "" if self.plain else clean(str(data.get("label", ""))).rstrip(":")
+        if not self.plain and not label:
+            return None
+        return {"label": label, "items": clean(str(data.get("items", ""))).rstrip(".")}
 
 
 def content_problems(profile: str, skills: list[dict[str, str]], master_profile: str,
@@ -343,10 +427,16 @@ def content_problems(profile: str, skills: list[dict[str, str]], master_profile:
     """Why this draft can't be used as is (empty list = fine)."""
     problems = []
     rows = [_row_text(r) for r in skills]
+    shape = MasterSkills(master_rows_)
+    lo, hi = shape.limits
     if len(profile) > MAX_PROFILE_CHARS:
         problems.append(f"PROFILE is {len(profile)} characters; the limit is {MAX_PROFILE_CHARS}.")
-    if not MIN_ROWS <= len(skills) <= MAX_ROWS:
-        problems.append(f"KEY SKILLS has {len(skills)} rows; use {MIN_ROWS}-{MAX_ROWS}.")
+    if not lo <= len(skills) <= hi:
+        problems.append(f"KEY SKILLS has {len(skills)} rows; use {lo}-{hi}." if lo < hi else
+                        f"KEY SKILLS has {len(skills)} rows; use exactly {lo}, as the master does.")
+    gone = shape.missing(skills)
+    if gone:
+        problems.append("KEY SKILLS no longer names " + ", ".join(f"'{g}'" for g in gone) + " from the master; keep every skill.")
     budget = estimate_lines(master_profile, master_rows_) + SPARE_LINES
     used = estimate_lines(profile, rows)
     if used > budget:
@@ -358,7 +448,8 @@ def content_problems(profile: str, skills: list[dict[str, str]], master_profile:
     if master_text:
         for row in skills:
             for term in unknown_skill_terms(row["items"], master_text):
-                problems.append(f"'{term}' (row '{row['label']}') is not in the master CV; remove it from KEY SKILLS.")
+                where = f" (row '{row['label']}')" if row["label"] else ""
+                problems.append(f"'{term}'{where} is not in the master CV; remove it from KEY SKILLS.")
     for term in unverified:
         if any(mentions(r, term) for r in rows):
             problems.append(f"'{term}' is not in the master CV, so it must not be in KEY SKILLS.")
@@ -452,16 +543,16 @@ def name_prefix(master_path) -> str:
 
 
 # ── entry point ──────────────────────────────────────────────────────────────
-def _drop_last_item(skills: list[dict[str, str]]) -> bool:
-    """Shorten the longest KEY SKILLS row by its last item. False if nothing can go."""
+def _drop_last_item(skills: list[dict[str, str]]) -> str:
+    """Shorten the longest KEY SKILLS row by its last item; the item that went ('' if nothing can go)."""
     if not skills:
-        return False
+        return ""
     longest = max(skills, key=lambda r: len(r["items"]))
-    parts = [i.strip() for i in re.split(r",(?![^()]*\))", longest["items"])]
+    parts = _items(longest["items"])
     if len(parts) <= 1:
-        return False
+        return ""
     longest["items"] = ", ".join(parts[:-1])
-    return True
+    return parts[-1]
 
 
 _master_pages: dict[tuple[str, float], int] = {}
@@ -490,6 +581,7 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
     sec = sections(WordDocument(master_path).body)
     master_profile = text_of(sec["profile"]) if sec["profile"] is not None else ""
     m_rows = [text_of(p) for p in sec["rows"]]
+    shape = MasterSkills(m_rows)
     unverified = unverified_terms(cv_text)
     backed = cv_text + "\n" + config.experience_notes()          # everything the person wrote about their own work
 
@@ -501,14 +593,13 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
             master_rows="\n".join(f"- {r}" for r in m_rows) or "(none)",
             title=job["title"], company=job["company"], location=job.get("location", ""),
             description=llm.untrusted("posting", description), feedback=feedback, max_profile=MAX_PROFILE_CHARS,
-            min_rows=MIN_ROWS, max_rows=MAX_ROWS, rows_budget=sum(len(r) for r in m_rows) + 60,
+            min_rows=shape.limits[0], max_rows=shape.limits[1], rows_budget=sum(len(r) for r in m_rows) + 60,
+            rows_shape=shape.shape_rule(),
         ), system=SYSTEM, tag="agent3_cv")
         if not isinstance(data, dict):
             raise ValueError("The model's answer was not an adapted CV.")
         profile = clean(str(data.get("profile", "")))
-        skills = [{"label": clean(str(r.get("label", ""))).rstrip(":"),
-                   "items": clean(str(r.get("items", ""))).rstrip(".")}
-                  for r in (data.get("skills") or []) if isinstance(r, dict) and r.get("label") and r.get("items")]
+        skills = [row for row in map(shape.row, data.get("skills") or []) if row]
         role_short = str(data.get("role_short", ""))
         problems = content_problems(profile, skills, master_profile, m_rows, unverified, cv_text)
         problems += [f"PROFILE presents '{phrase}' as the candidate's experience, but those are the posting's words: nothing in the "
@@ -522,6 +613,7 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
                    "\n".join(f"- {p}" for p in problems) + "\n"
 
     profile, skills = enforce(profile, skills, unverified, cv_text)
+    skills = shape.fit(skills)
     figures = profile_problems(profile, job, cv_text)[0]
     pieces = claims.sentences(profile)
     if figures and not any(_ABBREVIATION.search(p) for p in pieces):     # "e.g. 12 years" is not a sentence of its own
@@ -542,9 +634,12 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
         job.pop("cv_check", None)
     # Still too long after the retry: drop trailing items from the longest rows.
     budget = estimate_lines(master_profile, m_rows) + SPARE_LINES
+    left_out = []                                        # never silent: the person is told what went
     while skills and estimate_lines(profile, [_row_text(r) for r in skills]) > budget:
-        if not _drop_last_item(skills):
+        dropped = _drop_last_item(skills)
+        if not dropped:
             break
+        left_out.append(dropped)
 
     config.ensure_dirs()
     stem = file_stem(master_path, job, role_short)
@@ -556,12 +651,18 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
     made = pdf.to_pdf(out)
     if made and sec["rows"] and master_pages(master_path) == 1:
         for _ in range(MAX_PAGE_TRIMS):
-            if pdf.page_count(made) <= 1 or not _drop_last_item(skills):
+            dropped = "" if pdf.page_count(made) <= 1 else _drop_last_item(skills)
+            if not dropped:
                 break
+            left_out.append(dropped)
             build_docx(master_path, out, profile, skills)
             made = pdf.to_pdf(out)
             if not made:
                 break
+    if left_out:
+        job["cv_left_out"] = left_out            # shown in the job window: a skill is never cut without a word
+    else:
+        job.pop("cv_left_out", None)
     problems = verify(master_path, out)
     if problems:
         out.unlink(missing_ok=True)

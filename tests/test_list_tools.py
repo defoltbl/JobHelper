@@ -266,6 +266,22 @@ def test_saving_the_letter_names_only_the_figures_it_still_has(api):
     assert store.find(store.load_jobs(), "lead")["letter_figures"] == []
 
 
+def test_saving_the_letter_names_work_at_the_wrong_employer_until_it_is_gone(api, monkeypatch):
+    cv = ("EXPERIENCE\nJunior Developer – Northwind Parcel (2024 – present): built an internal REST API in Django.\n"
+          "IT Intern – Fabrikam Labs (2023 – 2024): maintained Python scripts.\n")
+    monkeypatch.setattr(api._letters._cv, "text", lambda: cv)
+    store.save_jobs([_lead_with_docs()])
+    moved = list(PARAS)
+    moved[1] = PARAS[1] + " At Fabrikam Labs I built internal REST APIs."
+    assert api.save_letter("lead", moved)["ok"] is True
+    assert store.find(store.load_jobs(), "lead")["letter_misplaced"] == ["'REST', 'APIs' at Fabrikam Labs"]
+    assert api.save_letter("lead", PARAS)["ok"] is True                                   # corrected: the line goes
+    assert store.find(store.load_jobs(), "lead")["letter_misplaced"] == []
+    store.save_jobs([dict(_lead_with_docs(), company="Fabrikam Labs")])                    # written to them: no note
+    assert api.save_letter("lead", moved)["ok"] is True
+    assert store.find(store.load_jobs(), "lead")["letter_misplaced"] == []
+
+
 def test_a_rewrite_may_use_your_figures_but_not_invent_one(api, monkeypatch):
     store.save_jobs([_lead_with_docs()])
     calls = []

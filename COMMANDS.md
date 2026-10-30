@@ -201,7 +201,11 @@ Inside the window:
 - **Check your adapted CV / cover letter** (job window) – shown when a document states a
   two-word term of the posting as your experience although your CV has neither word, or when the
   adapted CV's profile names a company, a technology or a figure your CV does not give. The app
-  asked for a term or a figure to be removed once; what is left is yours to judge.
+  asked for a term or a figure to be removed once; what is left is yours to judge. Two more amber
+  lines: **Your adapted CV leaves out** names a skill cut to fit one page (a one-line skills list
+  without labels is only reordered; a skill goes only to fit the page), and **It puts work at an
+  employer where your CV does not show it** names work the letter gives to another job than your CV
+  does (it reads job lines such as "Title – Employer (2022 – 2024)").
 - **Also archived mail and spam** (Options, off by default) – the email scan also reads
   the mailbox's archive ("All Mail") and spam folders, never Sent or Drafts, and still
   read-only. Turn it on if replies get archived by a filter or land in spam.

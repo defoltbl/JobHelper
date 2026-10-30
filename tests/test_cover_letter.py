@@ -206,3 +206,50 @@ def test_a_letter_figure_nobody_gave_is_sent_back_and_what_is_left_is_noted(isol
     job = store.new_job(id="f2", title="Administrator", company="Acme", description="We run Linux servers.")
     cover_letter.write(job, _master_text(), MASTER)
     assert job["letter_figures"] == ["37"]
+
+
+def test_a_letter_that_moves_work_to_another_employer_is_sent_back_and_what_is_left_is_noted(isolate_data, monkeypatch):
+    """Seen in the hands-on check: the letter put the REST API work at the internship, not at the job where it was done."""
+    title, body, _ = _example()
+    monkeypatch.setattr(config, "LETTER_TEMPLATE", TEMPLATE)
+    cv = _master_text() + ("\nEXPERIENCE\nJunior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built an internal REST API in Django.\n"
+                           "IT Intern – Fabrikam Labs, Brno (2023 – 2024): maintained Python scripts for data imports.\n")
+    moved = list(body)
+    moved[2] = body[2].rstrip() + " At Fabrikam Labs I built internal REST APIs."
+    prompts, answers = [], [{"title_line": title, "paragraphs": moved, "role_short": "Admin"},
+                            {"title_line": title, "paragraphs": body, "role_short": "Admin"}]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or answers[min(len(prompts) - 1, 1)])
+    job = store.new_job(id="m1", title="Administrator", company="Acme", description="We run Linux servers.")
+    cover_letter.write(job, cv, MASTER)          # (the fixture CV has a "Northwind Labs" too: "Labs" names neither)
+    assert len(prompts) == 2 and "The letter puts 'REST', 'APIs' at Fabrikam" in prompts[1] and "letter_misplaced" not in job
+    prompts.clear()
+    answers[1] = answers[0]                                   # the model insists: the person is told what to look at
+    job = store.new_job(id="m2", title="Administrator", company="Acme", description="We run Linux servers.")
+    cover_letter.write(job, cv, MASTER)
+    assert job["letter_misplaced"] == ["'REST', 'APIs' at Fabrikam"] and "letter_check" not in job, "a note of its own"
+    assert any("at Fabrikam" in w for w in cover_letter.letter_warnings(moved, cv)), "a hand-edited letter is warned too"
+    assert not any("at Fabrikam" in w for w in cover_letter.letter_warnings(moved, cv, "Fabrikam")), "unless it is written to them"
+
+
+def test_a_rewrite_that_moves_work_is_sent_back_once_then_given(isolate_data, monkeypatch):
+    title, body, _ = _example()
+    cv = _master_text() + "\nEXPERIENCE\nJunior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built an internal REST API in Django.\n" \
+                          "IT Intern – Fabrikam Labs, Brno (2023 – 2024): maintained Python scripts for data imports.\n"
+    moved = body[2].rstrip() + " At Fabrikam I built internal REST APIs."
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or {"paragraph": moved})
+    job = store.new_job(id="r1", title="Administrator", company="Acme", description="We run Linux servers.")
+    assert cover_letter.rewrite_paragraph(job, cv, list(body), 2) == moved, "the second answer is given: you see it, then a warning"
+    assert len(prompts) == 2 and "It puts 'REST', 'APIs' at Fabrikam" in prompts[1]
+
+
+def test_a_rewrite_with_a_real_problem_and_moved_work_is_refused(isolate_data, monkeypatch):
+    title, body, _ = _example()
+    cv = _master_text() + "\nEXPERIENCE\nIT Intern – Fabrikam Labs, Brno (2023 – 2024): maintained Python scripts.\n" \
+                          "Junior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built an internal REST API in Django.\n"
+    bad = body[2].rstrip() + " At Fabrikam I built internal REST APIs and deployed Kubernetes daily."
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: {"paragraph": bad})
+    monkeypatch.setattr(cover_letter, "unverified_terms", lambda cv_text: ["Kubernetes"])
+    job = store.new_job(id="r2", title="Administrator", company="Acme", description="We run Linux servers.")
+    with pytest.raises(ValueError, match="Kubernetes"):
+        cover_letter.rewrite_paragraph(job, cv, list(body), 2)

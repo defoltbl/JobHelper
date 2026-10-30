@@ -186,6 +186,15 @@ def test_application_only_cards_are_hidden_for_a_new_job_and_nothing_overflows(u
     figures = ui.find("letterFigures")
     assert figures.property("visible") is True and "37" in figures.property("text")                # a figure nobody gave: named
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_figures=[]), render=False)
+    for name in ("cvLeftOut", "letterMisplaced"):
+        assert ui.find(name).property("visible") is False, name
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(cv_left_out=["Linux"], letter_misplaced=["'REST' at Fabrikam"]), render=False)
+    ui.js("detailDialog.refresh()")
+    left_out, misplaced = ui.find("cvLeftOut"), ui.find("letterMisplaced")
+    assert left_out.property("visible") is True and "leaves out Linux so that it fits on one page" in left_out.property("text")
+    assert misplaced.property("visible") is True and "where your CV does not show it: 'REST' at Fabrikam." in misplaced.property("text")
+    assert "which your own CV does not mention" not in left_out.property("text") + misplaced.property("text"), "each note its own words"
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(cv_left_out=[], letter_misplaced=[]), render=False)
     ui.js("detailDialog.refresh()")
     planner.save_company_notes("Acme", {"contact": "Jana"})                      # notes kept from an earlier application
     ui.js("detailDialog.refresh()")
