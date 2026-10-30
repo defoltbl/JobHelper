@@ -7,6 +7,10 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- A number box now takes a number of 1000 and more as you type it. Before, a salary such as 60000 went back to 6 at its fifth digit.
+- **Welcome card:** the mailbox test says why a mail server cannot be reached, for example that its name could not be found.
+- **Cover letter:** the employer check reads more job titles right (Self-employed, a teacher at a school) and no longer takes a line of work or a degree for a job.
+- **My details:** the country must be one the app knows, as in Options.
 - **Welcome card:** a damaged, empty or scanned CV file is refused with the reason. A new CV with the same name no longer replaces the old one without a backup.
 - **Welcome card:** each mailbox's test result has its own colour, and a mailbox that cannot be reached loses its green tick.
 - **About you:** a start date that has passed says so. The notes box turns red when the notes are too long.

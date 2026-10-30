@@ -283,6 +283,13 @@ class OptionsService:
         """An estimate (always in crowns) as a figure of your own in the currency you chose."""
         return salary.from_czk(float(estimate_czk or 0), str(currency or "CZK"))
 
+    def pay_fault(self, role, amount, others=()):
+        """pay_problem with the box it is about: {msg, box} where box is "role", "amount" or "" (the line as a whole)."""
+        msg = self.pay_problem(role, amount, others)
+        if not msg:
+            return {"msg": "", "box": ""}
+        return {"msg": msg, "box": "amount" if msg.startswith("Enter the salary") else ("" if msg.startswith("The list takes") else "role")}
+
     def pay_problem(self, role, amount, others=()):
         """'' or what is wrong with one line of "A different figure for": the words the window shows when you press Add, and
         the save check of every line (one rule for both)."""

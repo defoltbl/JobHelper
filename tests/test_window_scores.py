@@ -1038,3 +1038,50 @@ def test_about_you_marks_the_box_with_the_fault(ui):
         ui.js("aboutDialog.confirmClose = true; aboutDialog.close()")
         _until_closed(ui, "aboutDialog")
     assert ui.warnings == []
+
+
+
+def _type(ui, digits):
+    """Type digits into the field that has the focus, key by key, as a person does."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    for ch in digits:
+        QTest.keyClick(ui.win, getattr(Qt.Key, f"Key_{ch}"))
+        ui.wait(60)                         # the window takes each key before the next, as with a person typing
+
+
+def test_about_you_says_a_wrong_number_before_it_is_changed_unseen(ui):
+    """Last full check (H4 in About you): a salary above the most was cut as the window closed; the box took no more than
+    six digits, so the check could not fire for a typed number; a red box stayed after the window was opened again."""
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    about = ui.find("aboutDialog")
+    try:
+        ui.win.requestActivate()
+        ui.js("salarySpin.contentItem.forceActiveFocus(); salarySpin.contentItem.selectAll()", about)
+        _type(ui, "999999999")                                    # typed, through the box's own validator
+        assert ui.js("salarySpin.typed()", about) == 999999999, "nine digits can be typed (the box shows 1000 as '1 000')"
+        ui.js("aboutDialog.save()")
+        assert about.property("opened") is True and "you typed 999999999" in ui.js("aboutDialog.err")
+        assert ui.js("salarySpin.flagged", about) is True and ui.js("salarySpin.note", about) == "", "one message, the box red"
+        ui.js("salarySpin.contentItem.selectAll()", about)
+        _type(ui, "60000")
+        assert ui.js("salarySpin.value", about) == 60000, "a five-digit salary can be typed: it used to reset to 6 at '6 0000'"
+        assert ui.js("aboutDialog.err") == "" and ui.js("salarySpin.flagged", about) is False, "put right: its line goes"
+        ui.js("payRole.text = ''; aboutDialog.addPay()", about)
+        assert ui.js("aboutDialog.payBox") == "role" and ui.js("payAmount.flagged", about) is False, "the role is at fault"
+        ui.js("payRole.text = 'support'; payAmount.value = 0; aboutDialog.addPay()", about)
+        assert ui.js("aboutDialog.payBox") == "amount" and ui.js("payAmount.flagged", about) is True, "the figure is at fault"
+        ui.js("payRole.text = ''", about)
+        ui.js("salarySpin.flagged = true; payAmount.flagged = true", about)
+        ui.js("aboutDialog.confirmClose = true; aboutDialog.close()")
+        _until_closed(ui, "aboutDialog")
+        ui.js("aboutDialog.show()")
+        _until_open(ui, "aboutDialog")
+        assert ui.js("salarySpin.flagged", about) is False and ui.js("payAmount.flagged", about) is False, "no red box from last time"
+        ui.js("generalField.text = ''; boxModel.count > 0 ? boxModel.setProperty(0, 'notes', 'Ηλεκτρονικά') : null", about)
+    finally:
+        ui.js("salarySpin.contentItem.text = '0'; salarySpin.value = 0; payAmount.value = 0; payRole.text = ''", about)
+        ui.js("aboutDialog.confirmClose = true; aboutDialog.close()")
+        _until_closed(ui, "aboutDialog")
+    assert ui.warnings == []

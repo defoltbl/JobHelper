@@ -209,7 +209,7 @@ def test_saving_a_mailbox_tries_it_first(bridge, monkeypatch):
     assert check(2, "two@gmail.com", "abcdabcdabcdabcd")["field"] == "server"
     answer.pop("field")
     # the server cannot be reached: saved, with a note
-    answer.update(ok=None, msg="The mail server could not be reached, so the password was not tried.")
+    answer.update(ok=None, msg="The mail server could not be reached. The password was not tried.")
     result = check(2, "two@gmail.com", "abcdabcdabcdabcd")
     assert result["ok"] is True and "not tried" in result["note"] and saved[-1] == (2, "two@gmail.com", "abcdabcdabcdabcd", "")
 
@@ -405,8 +405,10 @@ def test_save_options_applies_model_and_lead_floor(bridge):
 
 
 def test_save_companies_tolerates_odd_rows(bridge):
-    bridge.saveCompanies([{"name": "Proton", "ats": "greenhouse", "token": "proton"}, 42, None])
+    result = bridge.saveCompanies([{"name": "Proton", "ats": "greenhouse", "token": "proton"}, 42, None])
     assert bridge.companies() == [{"name": "Proton", "ats": "greenhouse", "token": "proton"}]
+    assert result["ok"] is False and "Not saved: 42, None" in result["msg"], "an odd row is named, never dropped silently"
+
 
 
 def test_save_email_writes_to_env(bridge, tmp_path, monkeypatch):

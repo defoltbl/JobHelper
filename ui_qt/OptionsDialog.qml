@@ -174,7 +174,7 @@ Dialog {
         var boxes = [[yearsSpin, "max_years"], [ageSpin, "max_age_days"], [pqSpin, "per_query"], [thrSpin, "threshold"],
                      [minSpin, "min_lead_score"], [fuSpin, "followup_days"], [keepSpin, "keep_backups"], [scanSpin, "scan_days"]];
         for (var i = 0; i < boxes.length; i++) {
-            var box = boxes[i][0], typed = parseInt(box.contentItem.text, 10);
+            var box = boxes[i][0], typed = box.typed();
             box.flagged = !isNaN(typed) && (typed < box.from || typed > box.to);
             if (box.flagged) {
                 box.note = "";                 // one message: the footer's, which names the box

@@ -26,6 +26,7 @@ Dialog {
     property int mm: 0
     property string schedErr: ""
     property bool confirmClose: false
+    readonly property string footerText: confirmClose ? schedErr : (timeErr || schedErr)
     property string loaded: ""            // the weekly run as the window opened, to tell whether it changed
     function snapshot() { return JSON.stringify([en, wd, hourField.empty ? "" : hourField.value, minField.empty ? "" : minField.value]); }
     function tryClose() {                 // the ✕, Cancel and Esc: ask once before a change is thrown away
@@ -88,9 +89,10 @@ Dialog {
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         DialogFooter {
-            Text { Layout.fillWidth: true; visible: (schedDialog.timeErr || schedDialog.schedErr) !== ""; wrapMode: Text.WordWrap
-                color: theme.crit; font.pixelSize: 12; font.bold: true; text: schedDialog.timeErr || schedDialog.schedErr }
-            Item { Layout.fillWidth: (schedDialog.timeErr || schedDialog.schedErr) === "" }
+            // the close question first: a wrong time must not hide it before the second Esc discards the change
+            Text { Layout.fillWidth: true; visible: schedDialog.footerText !== ""; wrapMode: Text.WordWrap
+                color: theme.crit; font.pixelSize: 12; font.bold: true; text: schedDialog.footerText }
+            Item { Layout.fillWidth: schedDialog.footerText === "" }
             SmallButton { id: schedCancelBtn; text: schedDialog.confirmClose ? "Discard changes" : "Cancel"; onClicked: schedDialog.tryClose() }
             PillButton { id: schedSaveBtn; objectName: "schedSave"; primaryStyle: true; text: "Save"
                 onClicked: {

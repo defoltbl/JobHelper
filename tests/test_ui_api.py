@@ -1159,6 +1159,12 @@ def test_a_failed_scan_names_its_cause():
     assert email_client.network_fault(OSError(errno.ENOSPC, "No space left")) is False
 
 
+def test_the_back_end_says_which_salary_box_is_at_fault(api):
+    """Last full check: the About you window guessed the box from the figure, copying the back end's rule."""
+    assert api.pay_fault("", 1000)["box"] == "role" and api.pay_fault("support", 0)["box"] == "amount"
+    assert api.pay_fault("support", 1000) == {"msg": "", "box": ""}
+
+
 def test_a_letter_template_is_made_from_the_head_of_the_cv(isolate_data, tmp_path):
     """Hands-on check F15: Edit letter never appeared for a new person, who had no letter template."""
     from jobhelper import cover_letter
@@ -1181,3 +1187,18 @@ def test_a_letter_template_is_made_from_the_head_of_the_cv(isolate_data, tmp_pat
     years = cover_letter.template_head("Alex Novak\nDeveloper\nalex@example.com\n2019 - 2021 - 2023\nlinkedin.com/in/alex")
     assert years[2:] == ["alex@example.com", "linkedin.com/in/alex"], "a year run is no phone number"
     assert cover_letter.template_head("Alex Novak\nDeveloper\nPROFILE") == [], "no contacts: the plain letter instead"
+    assert cover_letter.template_head("ALEX NOVAK" + two)[0] == "ALEX NOVAK", "a name in capitals is a name"
+    for heading in ("CONTACT", "PROFILE", "SUMMARY", "ABOUT ME"):
+        assert cover_letter.template_head(heading + two) == [], heading
+    assert cover_letter.template_head("Alex Novak" + "x" * 5000 + two) == [], "a very long first line: read short, no name"
+
+
+
+def test_a_mailbox_test_that_cannot_reach_the_server_says_why(monkeypatch):
+    """Last full check (F2): the mailbox Test said one generic text for every server it could not reach."""
+    import socket
+    from jobhelper import email_client
+    monkeypatch.setattr(email_client, "_open", lambda host, timeout: (_ for _ in ()).throw(socket.gaierror(8, "nodename")))
+    said = email_client.real_try_login("me@example.com", "secret", host="imap.demo.invalid")      # the real one, _open faked
+    assert said["ok"] is None and "could not be found" in said["msg"] and "password was not tried" in said["msg"]
+    assert "secret" not in said["msg"]

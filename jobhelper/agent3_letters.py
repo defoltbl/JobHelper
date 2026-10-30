@@ -264,6 +264,9 @@ def _keep_template(cv_text: str) -> None:
                 return
         elif state == "missing":
             return
+        if path.exists():
+            from . import vault
+            vault.keep_copy(path, "letter_versions")     # the template as it was, before the app writes it again
         if cover_letter.make_template(cv_text, path):
             integrity.approve(["letter_template"])
     except Exception as e:  # noqa: BLE001 - the plain letter is written instead

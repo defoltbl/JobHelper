@@ -86,8 +86,10 @@ A few decisions worth highlighting, each with the problem that led to it.
   unusual layout may lose less-common sections from the adaptation; the app then leaves them as
   they were.
 - PDFs are made with LibreOffice; without it only the Word files are written.
-- A letter or CV never claims what the master CV and your notes do not say, so a posting far
-  from your experience gives a short, plain letter.
+- A letter or CV is checked against the master CV and your notes, so a posting far from your
+  experience gives a short, plain letter. The checks are plain code and do not catch everything: a
+  duration ("over the past year"), a claim that names no job ("used Docker daily") and an employer
+  the model invented are not caught. Read each letter before you send it.
 
 **The assistant**
 

@@ -435,14 +435,15 @@ data/                your data; only the *.example.* files are in git
   into `cv_check`, whose line says "which your own CV does not mention".
 - **Work stays with its employer** (`claims.EmployerCheck`, used by the letter, its rewrite and a hand-edited letter):
   a position is a line "title, separator (– - | or a comma), employer, dates" (a range, or a year in brackets) that is
-  no bullet, no degree (a first word such as BSc) and no place of study, and is not under a study section (EDUCATION,
+  no bullet, no degree (BSc, "Master of …") and no place of study unless its title names a job ("Teacher – … School"), and is not under a study section (EDUCATION,
   CERTIFICATES …, also letter-spaced); its employer's names are words after the separator that the CV uses only in
   position headings (case counts, title words such as "Freelance" never), two roles at one employer are one, a word two
   employers share names neither, and the company written to names no former employer. A sentence that names exactly one employer must not name work the CV gives only to another position. What
   is left goes to `letter_misplaced` (its own amber line, refreshed when you save the letter); a rewrite is sent back
   once, then given. Measured before it shipped on 74 real letters: the first version flagged 33, this one 0 (it
   reads 2 of the owner's jobs; a degree word late in a title, "(Pre-Diploma Practice)", once hid one).
-  Not caught: a duration ("over the past year") or a claim no position names ("used Docker daily").
+  Not caught: a duration ("over the past year"), a claim no position names ("used Docker daily"), an employer the model
+  invented, and a job whose noun is not in `claims._JOB_WORDS` ("Pianist – … Conservatory" reads as study).
 - **A sentence of a letter is a claim only where the candidate is the one doing it** (`cover_letter.borrowed_claims`):
   "the role caught my attention because it covers X" describes the role. Measure a change to these checks on the
   letters and CVs already written before it ships.

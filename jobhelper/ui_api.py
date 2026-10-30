@@ -99,6 +99,7 @@ class Api:
     country_problem = _Via("_settings")
     company_token_problem = _Via("_settings")
     labels = _Via("_settings")
+    pay_fault = _Via("_settings")
     countries = _Via("_settings")
     remote_choices = _Via("_settings")
     last_run = _Via("_settings")

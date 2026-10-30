@@ -1593,3 +1593,25 @@ def test_esc_in_a_welcome_email_field_leaves_the_field(ui):
         welcome.setProperty("editEmail", False)
         ui.js("welcome.finish()")
     assert ui.warnings == []
+
+
+
+def test_the_weekly_run_close_question_is_never_hidden_by_a_wrong_time(ui):
+    """Last full check: with a wrong hour, the "close once more" question was hidden, and the second Esc discarded."""
+    sched = ui.find("schedDialog")
+    ui.js("schedData = ({ enabled: true, weekday: 1, hour: 9, minute: 0, label: 'Mon 09:00' })")
+    _open(ui, sched, 500)
+    try:
+        ui.js("hourField.text = '25'; hourField.value = 25; schedDialog.changed()", sched)
+        assert ui.js("footerText", sched) == "Hour must be between 0 and 23."
+        ui.js("tryClose()", sched)
+        assert "did not save" in ui.js("footerText", sched), "the question wins over the time fault"
+        ui.js("en = false; schedDialog.changed()", sched)
+        assert ui.js("hourField.enabled", sched) is False and ui.js("footerText", sched) == "", "switched off: no fault shown"
+        frame = ui.js("hourField.children[0].border.color.toString()", sched)
+        assert frame != ui.js("theme.crit.toString()"), "and its box is not red"
+    finally:
+        ui.js("confirmClose = true; close()", sched)
+        _until_closed(ui, sched)
+        ui.js("schedData = bridge.weeklySchedule()")
+    assert ui.warnings == []

@@ -348,8 +348,10 @@ def try_login(user: str, password: str, timeout: float = 8.0, host: str = "") ->
         imap = _open(host, timeout)
     except ssl.SSLCertVerificationError:
         return {"ok": False, "msg": UNTRUSTED, "field": "server"}     # not saved: the server is not the one it claims to be
-    except (OSError, imaplib.IMAP4.error):
-        return {"ok": None, "msg": "The mail server could not be reached, so the password was not tried."}
+    except (OSError, imaplib.IMAP4.error) as e:          # the cause in words, as a scan says it
+        cause = (scan_problem(e, host) if network_fault(e) else "The mail server could not be reached.") if isinstance(e, OSError) \
+            else "The mail server did not answer as a mail server does."
+        return {"ok": None, "msg": cause + " The password was not tried."}
     try:
         imap.login(user, password)
     except imaplib.IMAP4.error:

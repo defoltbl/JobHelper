@@ -1251,10 +1251,10 @@ def test_a_field_with_an_error_is_red_even_with_the_focus(ui):
     # About you: a pay line that cannot be added
     ui.js("aboutDialog.show()")
     _until_open(ui, "aboutDialog")
-    ui.js('aboutDialog.payErr = "Write what kind of role this figure is for."')
+    ui.js('aboutDialog.payErr = "Write what kind of role this figure is for."; aboutDialog.payBox = "role"')     # the back end names the box
     shown, red = _border_with_focus(ui, "aboutDialog", "payRole")
     assert shown == red, "payRole"
-    ui.js('aboutDialog.payErr = ""; payRole.text = ""; close()', ui.find("aboutDialog"))
+    ui.js('aboutDialog.payErr = ""; aboutDialog.payBox = ""; payRole.text = ""; close()', ui.find("aboutDialog"))
     _until_closed(ui, "aboutDialog")
     # Options: a country with digits in it
     dialog = ui.find("optDialog")

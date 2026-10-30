@@ -60,6 +60,9 @@ def test_details_are_saved_encrypted_and_read_back(isolate):
     assert details.load() == details.empty()
     wrong = {"field": "email", "msg": details.check({"email": "nope"})[1]["msg"]}
     assert details.save({**MINE, "email": "nope"}) == {"ok": False, **wrong, "all": [wrong]}
+    narnia = details.check({**MINE, "country": "Narnia"})[1]
+    assert narnia["field"] == "country" and "not a country the app knows" in narnia["msg"], "My details as Options (F3)"
+    assert details.check({**MINE, "country": "Czech Republic"})[1] == {}
     both = details.check({**MINE, "email": "nope", "phone": "call me"})[1]
     assert [f["field"] for f in both["all"]] == ["email", "phone"], "every wrong field at once (hands-on F11)"
     assert details.any_given(details.empty()) is False and details.any_given(MINE)

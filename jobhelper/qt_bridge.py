@@ -162,6 +162,11 @@ class Bridge(RunSlots, JobSlots, QObject):
     def startPreview(self, text):
         return self._api.start_preview(text)
 
+    @Slot(str, int, "QVariantList", result="QVariantMap")
+    def payFault(self, role, amount, others):
+        """{msg, box} for a line of "A different figure for": which box the fault is about (OptionsService.pay_fault)."""
+        return self._api.pay_fault(role, int(amount), list(others or []))
+
     @Slot(str, int, "QVariantList", result=str)
     def payProblem(self, role, amount, others):
         """'' or what is wrong with a line of "A different figure for" (OptionsService.pay_problem)."""
@@ -196,14 +201,11 @@ class Bridge(RunSlots, JobSlots, QObject):
     @Slot("QVariantList", result="QVariantMap")
     def saveCompanies(self, companies):
         clean = []
-        try:
-            for c in (companies or []):
-                if isinstance(c, dict):
-                    clean.append(c)
-                else:  # tolerate odd item types from the bridge
-                    clean.append({"name": c["name"], "ats": c["ats"], "token": c["token"]})
-        except Exception as e:  # noqa: BLE001 - what could be read is saved
-            trouble.note("reading the career-site list from the window", e)
+        for c in (companies or []):
+            try:
+                clean.append(c if isinstance(c, dict) else {"name": c["name"], "ats": c["ats"], "token": c["token"]})
+            except Exception:  # noqa: BLE001 - a row that cannot be read is named as not saved, never dropped silently
+                clean.append({"name": str(c)[:40]})
         return self._api.save_companies(clean)
 
     # ── actions ─────────────────────────────────────────────────

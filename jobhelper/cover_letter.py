@@ -238,7 +238,8 @@ def _set_para(p, text: str) -> None:
 APP_MADE = "Made by JobHelper from the head of your CV"      # the template's comment: one the app may bring up to date
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _YEARS = re.compile(r"^(?:(?:19|20)\d{2}[\s()-]*)+$")      # "2019 - 2021": dates, not a phone
-_NOT_A_NAME = re.compile(r"\b(cv|curriculum|vitae|resume|résumé|lebenslauf)\b", re.IGNORECASE)
+_NOT_A_NAME = re.compile(r"\b(cv|curriculum|vitae|resume|résumé|lebenslauf|profile|contact|contacts|summary|skills|experience|"
+                         r"education|about|objective|personal|details)\b", re.IGNORECASE)
 
 
 def template_head(cv_text: str) -> list[str]:
@@ -246,10 +247,9 @@ def template_head(cv_text: str) -> list[str]:
     contacts ([] when the CV's top gives no clear name or not two kinds of contact: then the plain letter is written).
     Only the first eight lines are read, so a figure further down ("10 000 000 rows") is never a phone number; a year
     run ("2019 - 2021") is no phone either; and nothing is guessed (no city from the search settings)."""
-    head = [_CONTROL.sub("", " ".join(line.split())) for line in (cv_text or "").splitlines() if line.strip()][:8]
+    head = [_CONTROL.sub("", " ".join(line.split()))[:200] for line in (cv_text or "").splitlines()[:40] if line.strip()][:8]
     name = head[0] if head else ""
-    if (not name or len(name.split()) > 4 or re.search(r"[@\d|,:]", name) or _NOT_A_NAME.search(name)
-            or (name.isupper() and len(name.split()) > 1 and not re.search(r"[a-z]", name))):
+    if not name or len(name) > 60 or len(name.split()) > 4 or re.search(r"[@\d|,:]", name) or _NOT_A_NAME.search(name):
         return []
     top = "\n".join(head)
     email = re.search(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", top)

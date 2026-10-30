@@ -364,6 +364,8 @@ def test_the_letter_template_is_kept_yours_and_follows_the_cv_when_the_app_made_
     state["now"] = "ok"                                   # still as the app made it
     agent3_letters._keep_template(cv.replace("alex@example.com", "novak@example.com"))
     assert cover_letter.app_made_head(config.LETTER_TEMPLATE)[2] == "novak@example.com", "your new contacts"
+    from jobhelper import vault
+    assert list((vault.backups_dir() / "letter_versions").glob("*")), "the template as it was is kept before it is rebuilt"
     state["now"] = "changed"                              # you edited it in Word: it is yours now
     edited = config.LETTER_TEMPLATE.read_bytes()
     agent3_letters._keep_template(cv)

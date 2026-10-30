@@ -1065,7 +1065,7 @@ written here (Figure 9.2).
 | **First name**, **Last name** | Your name as you want it on applications | Letters only |
 | **Email** | The address you apply from | A name, an @ and a domain |
 | **Phone** | Your number with the country code, like *+420 123 456 789* | 6 to 15 digits; + only at the start |
-| **Street and number**, **City**, **Postcode**, **Country** | Your address. Leave out what you do not want to give | Letters for the city and the country |
+| **Street and number**, **City**, **Postcode**, **Country** | Your address. Leave out what you do not want to give | Letters for the city. For the country, its English name that the app knows, for example Germany |
 | **LinkedIn**, **GitHub** | The address of your profile. *https://* is added for you | An address at that site, with no spaces |
 | **Website or portfolio** | Any other page about your work | A web address with no spaces |
 | **Notice period** | How soon you can leave, like *1 month*. The assistant also picks it from a list that offers it | Length only |

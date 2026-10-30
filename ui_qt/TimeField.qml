@@ -21,7 +21,7 @@ Item {
     onValueChanged: if (!_typing) ti.text = _fmt(value)   // don't reformat mid-type
     Rectangle {
         anchors.fill: parent; radius: 8; color: theme.surface; border.width: 1.5
-        border.color: !tfr.valid ? theme.crit : (ti.activeFocus ? theme.accent : theme.line)
+        border.color: !tfr.valid && tfr.enabled ? theme.crit : (ti.activeFocus ? theme.accent : theme.line)     // switched off: no fault shown
     }
     Rectangle {
         x: 1; y: 1; width: 32; height: parent.height - 2; radius: 7

@@ -19,6 +19,10 @@ SpinBox {
     property bool noteBad: false
     property bool flagged: false         // the window's own message names this box (a Save refused): red until it is edited
     signal edited()                      // typed into or changed with − and +
+    // the number typed in the box (NaN when none): the digits alone, because the box shows 1000 and up as "9 999", and
+    // reading that up to its space gave 9, so a salary of five digits could never be typed
+    function typedOf(text) { var digits = ("" + (text || "")).replace(/[^0-9]/g, ""); return digits === "" ? NaN : parseInt(digits, 10); }
+    function typed() { return typedOf(contentItem.text); }
     background: Rectangle { radius: 8; color: theme.surface
         border.color: (sp.note !== "" && sp.noteBad) || sp.flagged ? theme.crit : (sp.activeFocus ? theme.accent : theme.line); border.width: 1 }
     Timer { id: noteTimer; interval: 4500; onTriggered: sp.note = "" }
@@ -35,13 +39,13 @@ SpinBox {
         selectByMouse: true; cursorVisible: sp.activeFocus
         horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter
         readOnly: !sp.editable
-        validator: IntValidator { bottom: 0; top: 999999 }        // any number can be typed, so a wrong one can be explained
+        validator: IntValidator { bottom: 0; top: 2147483647 }    // any number can be typed, so a wrong one can be explained
         inputMethodHints: Qt.ImhDigitsOnly
         // What is typed becomes the value at once, so Save never stores the old
         // number because the field still had the cursor in it. A number outside the
         // range is not taken: the field turns red and says what it accepts.
         onTextEdited: {
-            var v = parseInt(text, 10);
+            var v = sp.typedOf(text);
             noteTimer.stop(); sp.flagged = false;
             if (text === "" || isNaN(v)) sp.note = "";
             else if (v < sp.from || v > sp.to) { sp.noteBad = true; sp.note = "Between " + sp.from + " and " + sp.to; }
@@ -50,7 +54,7 @@ SpinBox {
         }
         // when editing ends the field shows a valid number again, and says so if it had to change it
         onEditingFinished: {
-            var v = parseInt(text, 10);
+            var v = sp.typedOf(text);
             if (text === "" || isNaN(v)) { sp.noteBad = false; sp.note = "Left at " + sp.value; noteTimer.restart(); }
             else if (v < sp.from || v > sp.to) {
                 sp.value = v < sp.from ? sp.from : sp.to;
