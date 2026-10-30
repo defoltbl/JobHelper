@@ -7,6 +7,10 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- The **adapted CV** keeps a one-line skills list without labels in one line: it changes only the order, and a skill goes only to fit one page. Before, the list could turn into several rows with one skill each.
+- When the **adapted CV** must leave out a skill to fit on one page, the job window now names that skill in a line of its own.
+- The **adapted CV**'s profile no longer adds a sentence about working independently when your CV's profile has none.
+- The **cover letter** now keeps each piece of work with the employer where you did it. A draft that moves work to another employer is sent back, and what is left is shown in a line of its own in the job window.
 - **Usage left:** the bar now shows what is left, as the card's title says; a used-up window has an empty bar, not a full green one.
 - **Usage left:** after a window resets, the card and the widget no longer guess "100% left". Claude Code uses the same limit, so the app cannot know what is used.
 - **Usage left:** the app asks Claude for new figures by itself after a window resets. It also asks about every 10 minutes while the app window is shown, and when you bring it to the front. It never asks during a search or while Claude refuses calls. The widget is updated at once.

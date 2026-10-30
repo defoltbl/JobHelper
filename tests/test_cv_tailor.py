@@ -322,3 +322,97 @@ def test_the_cv_note_lists_a_figure_first_and_a_cut_never_breaks_a_sentence(isol
     monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: {"profile": profile, "skills": rows, "role_short": "Dev"})
     cv_tailor.tailor(job, cv_text, MASTER)
     assert "cv_check" not in job
+
+
+# ── a plain skills list: reordered, never cut to one item a row (hands-on check, 29 Oct) ──
+PLAIN_SKILLS = "Python, Django, Flask, PostgreSQL, SQL, Git, Docker, pytest, REST APIs, Linux"
+
+
+def _plain_master(path: Path) -> Path:
+    """A one-page CV of an invented person whose KEY SKILLS is one line without a label."""
+    d = docx.Document()
+    for text in ("Mara Example", "Junior Software Developer | Brno | mara@example.com", "PROFILE",
+                 "Junior Python developer with two years of practice building small web services and test automation.",
+                 "KEY SKILLS", PLAIN_SKILLS, "EXPERIENCE",
+                 "Junior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built an internal REST API in Django.",
+                 "EDUCATION", "Bc. Applied Informatics – Example University, Brno (2020 – 2023)"):
+        d.add_paragraph(text)
+    d.save(str(path))
+    return path
+
+
+def test_a_plain_skills_list_keeps_its_shape_and_every_skill(isolate_data, monkeypatch, tmp_path):
+    """Seen in the hands-on check: KEY SKILLS came out as "Django: Python / PostgreSQL: PostgreSQL / …", and Flask,
+    SQL, Git and Linux were gone, with no note."""
+    from jobhelper import pdf
+    master = _plain_master(tmp_path / "Mara_CV.docx")
+    cv_text = "\n".join(p.text for p in docx.Document(str(master)).paragraphs)
+    shape = cv_tailor.MasterSkills(cv_tailor.master_rows(master))
+    assert shape.labelled is False and shape.limits == (1, 1) and "Flask" in shape.items()
+    labelled = [{"label": "Django", "items": "Python, Django"}, {"label": "PostgreSQL", "items": "PostgreSQL, SQL"},
+                {"label": "Docker", "items": "Docker, Git"}, {"label": "pytest", "items": "pytest"}, {"label": "Other", "items": "REST APIs"}]
+    one_row_short = [{"label": "", "items": "Django, Python, REST APIs, pytest, PostgreSQL"}]
+    prompts, answers = [], [{"profile": "Junior Python developer.", "skills": labelled, "role_short": "Python Dev"},
+                            {"profile": "Junior Python developer.", "skills": one_row_short, "role_short": "Python Dev"}]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or answers[min(len(prompts) - 1, 1)])
+    monkeypatch.setattr(pdf, "to_pdf", lambda path: None)
+    job = store.new_job(id="p1", title="Python Developer", company="Contoso", description="Django, REST APIs, pytest.")
+    name = cv_tailor.tailor(job, cv_text, master)
+    assert "These rows have no labels. Return exactly 1 row" in prompts[0]
+    assert "KEY SKILLS has 5 rows; use exactly 1, as the master does." in prompts[1]
+    texts = [p.text for p in docx.Document(str(config.TAILORED_CV_DIR / name)).paragraphs]
+    row = texts[texts.index("KEY SKILLS") + 1]
+    assert row.startswith("Django, Python, REST APIs") and ":" not in row, "the posting's skills first, no label"
+    items = [i.strip() for i in row.split(",")]
+    for skill in ("Flask", "SQL", "Git", "Linux", "Docker"):
+        assert skill in items, f"{skill} from the master is kept"
+    assert texts[texts.index("KEY SKILLS") + 2] == "EXPERIENCE" and cv_tailor.verify(master, config.TAILORED_CV_DIR / name) == []
+
+
+def test_a_skill_left_out_to_fit_the_page_is_named_for_the_person(isolate_data, monkeypatch, tmp_path):
+    from jobhelper import pdf
+    master = _plain_master(tmp_path / "Mara_CV.docx")
+    cv_text = "\n".join(p.text for p in docx.Document(str(master)).paragraphs)
+    long_row = [{"label": "", "items": PLAIN_SKILLS + ", " + ", ".join(["Python"] * 60)}]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: {"profile": "Junior Python developer.", "skills": long_row, "role_short": "Dev"})
+    monkeypatch.setattr(pdf, "to_pdf", lambda path: None)
+    job = store.new_job(id="p2", title="Python Developer", company="Contoso", description="Python.")
+    cv_tailor.tailor(job, cv_text, master)
+    assert job["cv_left_out"][0] == "Python" and "cv_check" not in job, "never cut silently, in a note of its own"
+    assert cv_tailor._drop_last_item([{"label": "", "items": "Git"}]) == "", "a last item is never taken"
+
+
+def test_the_general_rules_ask_for_working_independently_only_when_the_cv_says_it():
+    """Seen in the hands-on check: the profile gained "Works independently on backend tasks…", which the CV never said."""
+    assert "keep a sentence about working independently only if the master's PROFILE has one" in cv_tailor.GENERIC_RULES
+    assert "keep one sentence about working independently" not in cv_tailor.GENERIC_RULES
+
+
+def test_the_shape_of_the_master_rows_decides_what_is_kept():
+    labelled = cv_tailor.MasterSkills(["Languages: Python, SQL", "Tools: Git, Docker"])
+    assert labelled.labelled and not labelled.plain and labelled.limits == (2, 8)
+    assert labelled.missing([{"label": "Code", "items": "Python"}]) == [], "labelled rows may leave out what the posting ignores"
+    assert labelled.shape_rule() == "" and labelled.row({"label": "Code", "items": "Python."}) == {"label": "Code", "items": "Python"}
+    assert cv_tailor.MasterSkills(["a: b"] * 6).limits == (4, 8)
+    for neither in ([], ["Python, Django", "Languages: English"]):        # no rows found, or a mix: the general rules alone
+        shape = cv_tailor.MasterSkills(neither)
+        assert not shape.plain and shape.limits == (cv_tailor.MIN_ROWS, cv_tailor.MAX_ROWS) and shape.shape_rule() == ""
+        assert shape.missing([{"label": "X", "items": "Python"}]) == []
+    plain = cv_tailor.MasterSkills([PLAIN_SKILLS])
+    assert plain.row({"label": "Backend", "items": "Python"}) == {"label": "", "items": "Python"}, "a plain list has no labels"
+    assert plain.missing([{"label": "", "items": "Python, Django, Flask, PostgreSQL, SQL, Git, Docker, pytest, REST API, Linux"}]) == []
+
+
+def test_a_plain_list_sent_back_twice_in_rows_is_put_together_again(isolate_data, monkeypatch, tmp_path):
+    from jobhelper import pdf
+    master = _plain_master(tmp_path / "Mara_CV.docx")
+    cv_text = "\n".join(p.text for p in docx.Document(str(master)).paragraphs)
+    rows = [{"label": "Web", "items": "Django, Flask"}, {"label": "Data", "items": "PostgreSQL"}, {"label": "Tools", "items": "Git"}]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: {"profile": "Junior Python developer.", "skills": rows, "role_short": "Dev"})
+    monkeypatch.setattr(pdf, "to_pdf", lambda path: None)
+    job = store.new_job(id="p3", title="Python Developer", company="Contoso", description="Django.")
+    name = cv_tailor.tailor(job, cv_text, master)
+    texts = [p.text for p in docx.Document(str(config.TAILORED_CV_DIR / name)).paragraphs]
+    row = texts[texts.index("KEY SKILLS") + 1]
+    assert texts[texts.index("KEY SKILLS") + 2] == "EXPERIENCE", "one row, as in the master"
+    assert row.startswith("Django, Flask, PostgreSQL, Git") and set(PLAIN_SKILLS.split(", ")) <= set(row.split(", "))

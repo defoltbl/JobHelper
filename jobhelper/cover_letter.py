@@ -321,12 +321,13 @@ def rewrite_paragraph(job: dict[str, Any], cv_text: str, paragraphs: list[str], 
     if not 0 <= index < len(paragraphs):
         raise ValueError("That paragraph does not exist.")
     unverified, first_name = unverified_terms(cv_text), candidate_first_name(cv_text)
+    employers = claims.EmployerCheck(cv_text)
     letter = "\n".join(f"{n}. {p}" for n, p in enumerate(paragraphs, 1))
     words = len(paragraphs[index].split())
     most = max(words + 25, 60)                 # roughly its length: what the prompt asks, and what is checked
     hint_line = f"What the candidate wants changed: {hint.strip()[:MAX_HINT]}\n" if hint.strip() else ""
     feedback, text = "", ""
-    for _attempt in range(2):
+    for attempt in range(2):
         data = llm.ask_json(REWRITE_PROMPT.format(
             rules=rules_with_facts(cv_text), cv_text=cv_text[:12000], title=job.get("title", ""), company=job.get("company", ""),
             description=llm.untrusted("posting", (job.get("description") or "").strip()[:3000] or "(No description was available.)"),
@@ -336,8 +337,10 @@ def rewrite_paragraph(job: dict[str, Any], cv_text: str, paragraphs: list[str], 
         problems = paragraph_problems(text, unverified, first_name) + _rewrite_length(text, most, paragraphs, index)
         figures = claims.unbacked_figures(text, *figure_sources(job, cv_text, own=(*paragraphs, hint)), brackets_ok=False)
         problems = figure_problems(figures, "It") + problems           # your letter and your hint are yours: their figures count
-        if not problems:
-            return text
+        misplaced = misplaced_problems(text, employers, "It", job.get("company", "")) if text else []
+        if not problems and (not misplaced or attempt == 1):
+            return text                     # work at the wrong employer is sent back once, then shown when you save
+        problems += misplaced
         feedback = claims.rejected(problems)
     raise ValueError(problems[0] if text else "The model returned no paragraph.")
 
@@ -354,7 +357,14 @@ def _rewrite_length(text: str, most: int, paragraphs: list[str], index: int) -> 
     return []
 
 
-def paragraph_problems(text: str, unverified: list[str], first_name: str = "") -> list[str]:
+def misplaced_problems(text: str, employers: claims.EmployerCheck, what: str = "The letter", company: str = "") -> list[str]:
+    """Work given to the wrong employer (claims.EmployerCheck), in the words a draft is sent back with."""
+    return [f"{what} puts {where}, but the CV names that work only under another position. Keep each piece of work "
+            "with the job where it was done." for where in employers.misplaced(text, company)]
+
+
+def paragraph_problems(text: str, unverified: list[str], first_name: str = "",
+                       employers: claims.EmployerCheck | None = None, company: str = "") -> list[str]:
     """The letter rules, applied to a single paragraph."""
     if not text.strip():
         return ["The paragraph is empty."]
@@ -364,10 +374,12 @@ def paragraph_problems(text: str, unverified: list[str], first_name: str = "") -
     for kind, what, _s in _issues(text, ClaimCheck(unverified)):
         problems.append(f"It admits a gap (\"{what}\"). Remove it or state a forward-looking wish instead." if kind == "gap"
                         else f"It presents '{what}' as experience, but it is not in the master CV.")
+    if employers is not None:
+        problems += misplaced_problems(text, employers, "It", company)
     return problems
 
 
-def letter_warnings(paragraphs: list[str], cv_text: str) -> list[str]:
+def letter_warnings(paragraphs: list[str], cv_text: str, company: str = "") -> list[str]:
     """What a hand-edited letter no longer follows (shown to the user, never blocking)."""
     out = []
     words = sum(len(p.split()) for p in paragraphs)
@@ -375,9 +387,9 @@ def letter_warnings(paragraphs: list[str], cv_text: str) -> list[str]:
         out.append(f"The letter is short: {words} words (the usual range is {MIN_WORDS}-{MAX_WORDS}).")
     if words > MAX_WORDS:
         out.append(f"The letter is long: {words} words (the usual range is {MIN_WORDS}-{MAX_WORDS}); it may not fit on one page.")
-    unverified, first_name = unverified_terms(cv_text), candidate_first_name(cv_text)
+    unverified, first_name, employers = unverified_terms(cv_text), candidate_first_name(cv_text), claims.EmployerCheck(cv_text)
     for n, p in enumerate(paragraphs, 1):
-        out += [f"Paragraph {n}: {x}" for x in paragraph_problems(p, unverified, first_name)]
+        out += [f"Paragraph {n}: {x}" for x in paragraph_problems(p, unverified, first_name, employers, company)]
     return out
 
 
@@ -443,6 +455,7 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
                      f"(stay consistent with it):\n---\n{adapted}\n---\n") if adapted else ""
     description = (job.get("description") or "").strip()[:POSTING_SHOWN] or "(No description was available.)"
     backed = cv_text + "\n" + config.experience_notes()          # everything the person wrote about their own work
+    employers = claims.EmployerCheck(cv_text)
 
     title_line, paragraphs, role_short, feedback = "", [], "", ""
     for _attempt in range(2):
@@ -462,6 +475,7 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
                      "master CV speaks of it. Say what the candidate really did, and name this only as part of the role or as something "
                      "the candidate wants to work with." for phrase in borrowed_claims(paragraphs, description, backed)]
         problems += figure_problems(claims.unbacked_figures("\n".join(paragraphs), *figure_sources(job, cv_text), brackets_ok=False))
+        problems += misplaced_problems("\n".join(paragraphs), employers, company=job.get("company", ""))
         if not problems:
             break
         feedback = claims.rejected(problems, "draft")
@@ -475,6 +489,12 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
         raise ValueError("A paragraph was empty after removing unbacked claims.")
     # What is still stated as experience in the posting's words is not cut out (it can be fair wording for what the CV
     # does show): it is put in front of the person, next to the same note about the adapted CV.
+    # work still given to the wrong employer is shown in its own line: the person knows where each piece of work was done
+    misplaced = employers.misplaced("\n".join(paragraphs), job.get("company", ""))
+    if misplaced:
+        job["letter_misplaced"] = misplaced[:8]
+    else:
+        job.pop("letter_misplaced", None)
     left = borrowed_claims(paragraphs, description, backed)
     if left:
         job["letter_check"] = left[:8]

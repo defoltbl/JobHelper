@@ -432,6 +432,17 @@ Dialog {
                         text: "Check your cover letter before you send it. It says you have done something with " + (detailDialog.job.letter_check || []).join(", ")
                               + ", which " + ((detailDialog.job.letter_check || []).length === 1 ? "is a term" : "are terms")
                               + " of the posting that your own CV does not mention. Keep it only if it is true of you; Edit letter lets you change the sentence." }
+                    // a skill the adapted CV had to leave out to fit on one page (never cut without a word)
+                    Text { objectName: "cvLeftOut"; visible: (detailDialog.job.cv_left_out || []).length > 0
+                        Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true
+                        text: "Your adapted CV leaves out " + (detailDialog.job.cv_left_out || []).join(", ")
+                              + " so that it fits on one page. If a skill matters for this job, add it back in Word." }
+                    // work the letter puts at an employer where your CV does not show it
+                    Text { objectName: "letterMisplaced"; visible: (detailDialog.job.letter_misplaced || []).length > 0
+                        Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true
+                        text: "Check your cover letter before you send it. It puts work at an employer where your CV does not show it: "
+                              + (detailDialog.job.letter_misplaced || []).join("; ")
+                              + ". Keep each piece of work with the job where you did it; Edit letter lets you change the sentence." }
                     Text { objectName: "letterFigures"; visible: (detailDialog.job.letter_figures || []).length > 0
                         Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true
                         text: "Check the figures in your cover letter: " + (detailDialog.job.letter_figures || []).join(", ")

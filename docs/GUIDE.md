@@ -788,6 +788,10 @@ The app makes a copy of your CV for each job. In the copy, it rewords the profil
 and the skills list. It also puts first what this posting asks for. All other parts stay as
 you wrote them.
 
+If your skills list is one line without labels, the copy keeps it in one line and only changes
+the order. A skill is left out only so that the CV fits on one page. Then the job window names
+that skill.
+
 The profile paragraph may state only the figures that your CV, your notes or **About you**
 give. A sentence with another figure, such as "8 years", is removed. If nothing else would be
 left, the paragraph stays and the job window names the figure. The paragraph can also
@@ -823,9 +827,23 @@ The line **Check the figures in your cover letter** names a number, for example 
 Your CV and your own notes do not give that number. Keep the figure only if it is true. If it is not true, select
 **Edit letter** and change the sentence.
 
+The line **Your adapted CV leaves out** names a skill that the app removed so that the CV fits on
+one page. If the skill matters for this job, add it back in the Word file.
+
+The line **It puts work at an employer where your CV does not show it** names work, for
+example "'REST' at Fabrikam". Select **Edit letter** and keep each piece of work with
+the job where you did it.
+
 ### The cover letter
 
 The letter is written to the company, about this role, from the facts in your CV.
+
+The app also checks that the letter keeps each piece of work with the job where you did it. If
+your CV puts the REST API at one employer, the letter must not put it at another. When a draft
+does this, Claude writes it again. If the problem stays, the job window shows it so you can
+correct it. The app reads one line for each job in your CV: the title, a dash or a comma, the
+employer and the dates. If your CV gives the employer on a line of its own, the app cannot do
+this check.
 
 **To edit a letter:**
 
