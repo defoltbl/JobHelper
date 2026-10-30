@@ -351,8 +351,6 @@ def test_both_themes_render_without_warnings(ui):
     ('hasNonLatin("Plzeň developer")', False),
     ('looksLikeRole("junior python developer")', True),
     ('looksLikeRole("asdfgh qwerty")', False),
-    ('isSlug("proton-ag")', True),
-    ('isSlug("no spaces")', False),
     ('cityEN("Praha")', "Prague"),
     ('cityEN("")', ""),
     ('cityEN("Berlin")', "Berlin"),
@@ -996,7 +994,8 @@ def test_job_sources_are_picked_in_any_combination(ui):
     ui.js('cityCombo.editText = "Prague"', dialog)
     before = ui.bridge.options()["sources"]
     ui.js("optSaveBtn.clicked()", dialog)                                   # Save with nothing picked: refused, nothing stored
-    assert ui.js("optErr", dialog) == "Choose at least one job source." and dialog.property("opened") is True
+    assert ui.find("sourcesErr").property("visible") is True and dialog.property("opened") is True
+    assert ui.js("optErr", dialog) == "", "said once, by its own red line, not again in the footer"
     assert "at least one job source" in ui.bridge.saveOptions({**ui.bridge.options(), "sources": []})["msg"]   # the back end refuses it too
     assert ui.bridge.options()["sources"] == before
     ui.js("confirmClose = true; close()", dialog)
@@ -1435,4 +1434,76 @@ def test_an_estimate_becomes_your_own_figure_with_one_press(ui):
         ui.js("payModel.clear(); aboutDialog.confirmClose = true; close()", dialog)
         _until_closed(ui, "aboutDialog")
         ui.bridge.saveOptions(start)
+    assert ui.warnings == []
+
+
+def test_options_ask_the_back_end_rules_and_never_lose_a_change_unseen(ui):
+    """Hands-on check and window review (H1, H2, H4, F3, F4, H6, H8): a token the search refuses was accepted and then
+    dropped at Save as "saved"; "Narnia" was a country; a 150-character role came back at Save under the key "queries";
+    9999 in Max job age was cut to 3650 as the window closed; footer lines stayed after the fault was put right."""
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    try:
+        assert ui.js('optDialog.addCompany("Acme", "greenhouse", "acme.io")', dialog) is False
+        assert ui.js("coErr", dialog).startswith("Use the short name"), "the rule the search uses (H1)"
+        assert "is not a country the app knows" in ui.js('optDialog.countryProblem("Narnia")', dialog), "F3"
+        assert ui.js('optDialog.countryProblem("Czech Republic")', dialog) == ""
+        assert ui.js('optDialog.addRole("data " + "a".repeat(150))', dialog) is False and "up to 100 characters" in ui.js("roleErr", dialog), "H2"
+        ui.js('ageSpin.contentItem.text = "9999"', dialog)
+        ui.js("optSaveBtn.clicked()", dialog)
+        assert dialog.property("opened") is True and "“Max job age” takes 0 to 3650; you typed 9999" in ui.js("optErr", dialog), "H4"
+        ui.js("ageSpin.contentItem.text = '10'; ageSpin.value = 10", dialog)
+        ui.js('cityCombo.editText = ""', dialog)
+        ui.js("optSaveBtn.clicked()", dialog)
+        assert ui.js("optErr", dialog) == "Enter a city (e.g. Prague) before saving."
+        ui.js('cityCombo.editText = "Prague"', dialog)
+        assert ui.js("optErr", dialog) == "", "the fault is put right: its line goes (F4)"
+        ui.js("tryClose()", dialog)
+        assert ui.js("confirmClose", dialog) is True
+        ui.js('cityCombo.editText = "Brno"', dialog)
+        assert ui.js("confirmClose", dialog) is False, "an edit after the prompt: closing asks again (H6)"
+        ui.js("optCancelBtn.clicked()", dialog)
+        assert ui.js("confirmClose", dialog) is True and dialog.property("opened") is True, "Cancel asks once, as ✕ and Esc do (H8)"
+    finally:
+        ui.js("confirmClose = true; close()", dialog)
+        _until_closed(ui, dialog)
+        ui.js("optsData = bridge.options()")
+    assert ui.warnings == []
+
+
+def test_option_messages_name_what_the_window_shows(isolate_data):
+    from jobhelper import ui_api
+    api = ui_api.Api()
+    result = api.save_options({**api.options(), "queries": ["data " + "a" * 150]})
+    assert result["ok"] is False and "“Search roles”" in result["msg"] and "queries" not in result["msg"], "H2"
+    assert api.save_options({**api.options(), "where": "x" * 90})["msg"].startswith("“City”"), "H7"
+
+
+def test_options_number_and_list_faults_are_said_once_and_go_when_fixed(ui):
+    """Review of the Options fixes: a fixed number kept its red line; two boxes that are no options blocked Save; a full
+    list was refused only at Save."""
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    try:
+        ui.js('cityCombo.editText = "Prague"', dialog)
+        ui.js('shelfSpin.contentItem.text = "99999"', dialog)
+        assert ui.js("optDialog.numberProblem()", dialog) == "", "the tidy and scan-back boxes are no options"
+        ui.js('shelfSpin.contentItem.text = "30"', dialog)
+        ui.js('ageSpin.contentItem.text = "9999"', dialog)
+        ui.js("optErr = optDialog.numberProblem()", dialog)
+        assert "you typed 9999" in ui.js("optErr", dialog) and ui.js("ageSpin.flagged", dialog) is True and ui.js("ageSpin.note", dialog) == ""
+        ui.js("ageSpin.contentItem.text = '9998'; ageSpin.contentItem.textEdited()", dialog)       # another wrong number
+        assert "you typed 9998" in ui.js("optErr", dialog) and ui.js("ageSpin.note", dialog) == "", "one message, not two"
+        ui.js("ageSpin.contentItem.text = '10'; ageSpin.contentItem.textEdited()", dialog)
+        assert ui.js("optErr", dialog) == "" and ui.js("ageSpin.flagged", dialog) is False, "fixed: the line goes"
+        ui.js("rolesModel.clear(); for (var i = 0; i < win.limits.list_max; i++) rolesModel.append({ text: 'data analyst ' + i })", dialog)
+        assert ui.js('optDialog.addRole("software tester")', dialog) is False and "holds up to 60" in ui.js("roleErr", dialog)
+        ui.js("skipTags.setAll(Array.apply(null, Array(win.limits.list_max)).map(function (_, i) { return 'word' + i; }))", dialog)
+        assert ui.js('skipTags.add("intern")', dialog) is False and "holds up to 60" in ui.js("skipTags.err", dialog)
+    finally:
+        ui.js("confirmClose = true; close()", dialog)
+        _until_closed(ui, dialog)
+        ui.js("optsData = bridge.options()")
     assert ui.warnings == []

@@ -7,6 +7,15 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Options:** a career-site short name with a dot is refused when you add it. Before, the window took it, and **Save** said "saved" but left the company out.
+- **Options:** the country must be one the app knows ("Narnia" is refused).
+- **Options:** a search role that is too long, or a full list, is said when you select **Add**.
+- **Options:** a message names each setting as the window does, for example "Search roles".
+- **Options:** **Save** stops when a number box holds a number outside its range. Before, the number was changed as the window closed.
+- **Options:** a red line goes when you put the fault right.
+- **Options:** **Cancel** asks before it discards changes, as ✕ and Esc do.
+- **Options:** "Choose at least one job source" is said once, and Options shows it.
+- **Options:** a country saved by an older version is kept as it is.
 - The **adapted CV** keeps a one-line skills list without labels in one line: it changes only the order, and a skill goes only to fit one page. Before, the list could turn into several rows with one skill each.
 - When the **adapted CV** must leave out a skill to fit on one page, the job window now names that skill in a line of its own.
 - The **adapted CV**'s profile no longer adds a sentence about working independently when your CV's profile has none.

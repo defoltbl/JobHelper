@@ -193,7 +193,7 @@ class Bridge(RunSlots, JobSlots, QObject):
     def companies(self):
         return self._api.companies()
 
-    @Slot("QVariantList")
+    @Slot("QVariantList", result="QVariantMap")
     def saveCompanies(self, companies):
         clean = []
         try:
@@ -204,7 +204,7 @@ class Bridge(RunSlots, JobSlots, QObject):
                     clean.append({"name": c["name"], "ats": c["ats"], "token": c["token"]})
         except Exception as e:  # noqa: BLE001 - what could be read is saved
             trouble.note("reading the career-site list from the window", e)
-        self._api.save_companies(clean)
+        return self._api.save_companies(clean)
 
     # ── actions ─────────────────────────────────────────────────
     @Slot(str, result=bool)

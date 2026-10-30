@@ -420,6 +420,12 @@ data/                your data; only the *.example.* files are in git
     decides what counts as an amount, and hyphen forms ("a 5-year record") and number words above twelve are not read;
   - an honest repeat of the question's own amount ("30 days works for me") gets a note;
   - a true figure you typed into the letter by hand keeps the job window's line until the letter no longer has it.
+- **Options ask the back end, never a copy** (window review H1/H9, 30 Oct): the career-site token rule is
+  `scrapers_ats.is_token` (the window asks `bridge.companyTokenProblem`; its own `isSlug` allowed dots and the company
+  was dropped at Save as "saved"), the country rule is `OptionsService.country_problem` (a country `places` knows), and
+  `save_companies` returns `{ok, msg}` when it leaves a company out. Messages name a setting by its window label
+  (`OptionsService._LABELS`). `optDialog.firstProblem()` is the one list of what stops a save; `recheck()` runs it after
+  each edit, so a red line goes when the fault is put right and closing asks again.
 - **The master CV decides the shape of KEY SKILLS** (`cv_tailor.MasterSkills`): labelled "Label: items" rows may be
   regrouped (4–8) and may leave out what the posting does not care about (the approved example does); a plain list
   without labels keeps its number of rows and every skill (except a skill cut to fit one page), and a skill the model drops is put back. An item cut to fit

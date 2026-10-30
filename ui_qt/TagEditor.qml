@@ -24,7 +24,8 @@ ColumnLayout {
         if (!t) return false;
         if (win.hasNonLatin(t)) { err = "Use Latin letters, as job titles are written."; return false; }
         if (!/[a-z]/.test(t) || t.length < 2) { err = "Enter a word from a job title, for example: intern."; return false; }
-        if (t.length > win.limits.list_word) { err = "That is too long. Use one word or a short phrase."; return false; }
+        if (t.length > win.limits.list_word) { err = "That is too long: up to " + win.limits.list_word + " characters. Use one word or a short phrase."; return false; }
+        if (teModel.count >= win.limits.list_max) { err = "The list holds up to " + win.limits.list_max + " entries. Remove one first."; return false; }
         for (var i = 0; i < teModel.count; i++)
             if (teModel.get(i).text === t) { err = "That word is already in the list."; return false; }
         teModel.append({ text: t });

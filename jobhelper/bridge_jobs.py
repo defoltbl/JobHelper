@@ -137,6 +137,16 @@ class JobSlots:
     def countryOf(self, city):
         return self._api.country_of(city)
 
+    @Slot(str, result=str)
+    def countryProblem(self, text):
+        """What is wrong with a typed country ('' = nothing): the Options' own check, as you type."""
+        return self._api.country_problem(text)
+
+    @Slot(str, result=str)
+    def companyTokenProblem(self, token):
+        """What is wrong with a career site's token ('' = nothing): the rule the search uses."""
+        return self._api.company_token_problem(token)
+
     @Slot(result="QVariantList")
     def countries(self):
         """Every country the app knows, for the remote-jobs country picker: [{key, name, area}]."""

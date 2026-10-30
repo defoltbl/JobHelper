@@ -39,7 +39,7 @@ def test_companies_roundtrip_drops_incomplete_rows(api):
         {"name": "Broken", "ats": "", "token": "x"},
         {"name": "Broken2", "ats": "lever", "token": ""},
     ])
-    assert result == {"ok": True, "count": 2}
+    assert result["ok"] is False and result["count"] == 2 and result["msg"].startswith("Not saved: Broken, Broken2."), "each one named"
     assert api.companies() == [{"name": "Proton", "ats": "greenhouse", "token": "proton"},
                                {"name": "acme", "ats": "lever", "token": "acme"}]
 
@@ -995,8 +995,11 @@ def test_a_career_site_token_is_a_plain_slug_and_nothing_else(api, isolate_data)
     result = api.save_companies([{"name": "Proton", "ats": "greenhouse", "token": "proton"}, {"name": "Bad", "ats": "recruitee", "token": "evil.example/x#"},
                                  {"name": "Bad2", "ats": "lever", "token": "a b"}, {"name": "Bad3", "ats": "workday", "token": "acme"},
                                  {"name": ["x"], "ats": "lever", "token": "acme-corp_1"}, "junk", None, {"ats": ["lever"], "token": "x"}])
-    assert result == {"ok": True, "count": 2} and [c["token"] for c in api.companies()] == ["proton", "acme-corp_1"]
+    assert result["ok"] is False and result["count"] == 2 and [c["token"] for c in api.companies()] == ["proton", "acme-corp_1"]
     assert api.save_companies("not a list") == {"ok": True, "count": 0}
+    assert api.save_companies([{"name": "Proton", "ats": "greenhouse", "token": "proton"}]) == {"ok": True, "count": 1}
+    assert api.company_token_problem("acme.io").startswith("Use the short name"), "the window asks the same rule (H1)"
+    assert api.company_token_problem("acme-io") == "" and "Enter" in api.company_token_problem("  ")
     for token, ok in (("gitlab", True), ("Acme-Corp_1", True), ("", False), ("a.b", False), ("a/b", False), ("-a", False), ("x" * 81, False), (None, False)):
         assert scrapers_ats.is_token(token) is ok, token
     (config.DATA_DIR / "companies.json").write_text(json.dumps([{"name": "A", "ats": "recruitee", "token": "ok-1"}, {"name": "B", "ats": "recruitee", "token": "evil.example/x#"}]),
@@ -1108,3 +1111,25 @@ def test_an_unknown_fix_is_refused(api, action):
 
 def test_restore_of_something_else_is_refused(api):
     assert api.restore_data("profile")["ok"] is False
+
+
+def test_a_country_must_be_known_unless_it_was_saved_before(api):
+    from jobhelper import config
+    assert "is not a country the app knows" in api.save_options({**api.options(), "where": "Berlin", "country": "Narnia"})["msg"]
+    assert "Latin letters" in api.country_problem("Германия") and "up to 60 characters" in api.country_problem("A" * 61)
+    assert api.save_options({**api.options(), "where": "Berlin", "country": "Germany"})["ok"] is True
+    config.save_ui_settings({**config.ui_settings(), "country": "Oldland"})      # as an older version could have saved it
+    assert api.options()["country"] == "Oldland"
+    assert api.save_options({**api.options(), "threshold": 55})["ok"] is True, "an unchanged old country never blocks a save"
+    assert "is not a country" in api.save_options({**api.options(), "country": "Newland"})["msg"], "a changed one is checked"
+    limits = api.limits()
+    assert limits["list_max"] == api.MAX_LIST and limits["labels"]["queries"] == "Search roles" and limits["companies_max"] == api.MAX_COMPANIES
+
+
+def test_a_list_over_the_cap_is_said_apart_from_a_wrong_token(api):
+    many = api.save_companies([{"name": f"C{n}", "ats": "lever", "token": f"c{n}"} for n in range(api.MAX_COMPANIES + 3)])
+    assert many["ok"] is False and many["count"] == api.MAX_COMPANIES and "the last 3 were not saved" in many["msg"]
+    both = api.save_companies([{"name": f"Bad{n}", "ats": "lever", "token": "a.b"} for n in range(7)]
+                              + [{"name": f"C{n}", "ats": "lever", "token": f"c{n}"} for n in range(api.MAX_COMPANIES + 1)])
+    assert "Bad4 and 2 more" in both["msg"] and "the last 1 were not saved" in both["msg"], "both faults are said"
+    assert api.save_options({**api.options(), "keep_words": ["x" * 101]})["msg"].startswith("An entry under “but keep titles with”")

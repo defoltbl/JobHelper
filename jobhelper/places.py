@@ -31,7 +31,7 @@ COUNTRIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "italy": (("italy", "italia"), ("rome", "roma", "milan", "milano", "turin", "torino", "bologna", "florence", "naples")),
     "switzerland": (("switzerland", "schweiz", "suisse"), ("zurich", "geneva", "geneve", "basel", "bern", "lausanne")),
     "ireland": (("ireland",), ("dublin", "cork", "galway", "limerick")),
-    "united kingdom": (("united kingdom", "england", "scotland", "wales", "great britain", "northern ireland"),
+    "united kingdom": (("united kingdom", "england", "scotland", "wales", "great britain", "britain", "northern ireland"),
                        ("london", "manchester", "birmingham", "edinburgh", "glasgow", "leeds", "bristol", "cambridge", "oxford")),
     "sweden": (("sweden", "sverige"), ("stockholm", "gothenburg", "goteborg", "malmo")),
     "denmark": (("denmark", "danmark"), ("copenhagen", "kobenhavn", "aarhus")),
@@ -48,7 +48,7 @@ COUNTRIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "estonia": (("estonia", "eesti"), ("tallinn", "tartu")),
     "latvia": (("latvia", "latvija"), ("riga",)),
     "lithuania": (("lithuania", "lietuva"), ("vilnius", "kaunas")),
-    "united states": (("united states", "usa", "u.s."), ("new york", "san francisco", "seattle", "boston", "chicago", "austin",
+    "united states": (("united states", "united states of america", "usa", "u.s."), ("new york", "san francisco", "seattle", "boston", "chicago", "austin",
                                                          "los angeles", "denver", "atlanta", "washington")),
     "canada": (("canada",), ("toronto", "vancouver", "montreal", "ottawa", "calgary")),
     "india": (("india",), ("bangalore", "bengaluru", "hyderabad", "mumbai", "pune", "chennai", "delhi", "gurgaon", "noida")),
@@ -211,6 +211,34 @@ def shown(country: str) -> str:
     """A country as the window shows it: "united kingdom" is "United Kingdom", "dr congo" is "DR Congo"."""
     key = plain(country)
     return _SHOWN.get(key) or " ".join(w if w in ("and", "the", "of") else w.capitalize() for w in key.split())
+
+
+# words of many countries' names: "Czech Republic" is Czechia although the list knows it as "czech"
+_COUNTRY_WORDS = frozenset("republic kingdom united states state islands island federation federal democratic people peoples "
+                           "saint st north south east west great new and the of".split())
+
+
+def country_named(text: str) -> str:
+    """The one country a text names by itself ("Germany", "Czech Republic", "Bosnia-Herzegovina", "Singapore"), never by
+    a city of it ("Prague") or by a code added to other words ("Foo-DE"); '' when it names none, or more than one."""
+    key = plain(text).rstrip(".")
+    if key in COUNTRIES:
+        return key
+    by_name = next((country for country, (names, _cities) in COUNTRIES.items() if key in (plain(n).rstrip(".") for n in names)), "")
+    if by_name:                                     # one of its own names ("Holland", "U.S.")
+        return by_name
+    by_code = next((country for country, code in _CODES.items() if key == code), "")
+    if by_code:                                     # "UK", "DE" typed alone
+        return by_code
+    found = named_countries(text)
+    if len(found) != 1:
+        return ""
+    country = found.pop()
+    names, cities = COUNTRIES[country]
+    known = set(re.findall(r"[a-z]+", " ".join((country, *names))))
+    if any(key == plain(city) for city in cities) and key not in (plain(n) for n in names):
+        return ""                                   # a city, not the country (Singapore is both, and is its key)
+    return country if all(w in known or w in _COUNTRY_WORDS for w in re.findall(r"[a-z]+", key)) else ""
 
 
 def country_of(place: str) -> str:

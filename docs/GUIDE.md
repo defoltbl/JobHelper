@@ -138,8 +138,8 @@ Four kinds of box mark what deserves attention (Table 1.4).
 The figures show the real window of the app, filled with **invented** people and companies.
 
 > **Note**
-> A window that holds text you did not save never closes without a question. The ✕ and the Esc
-> key ask once. Press them again to discard the changes. While Claude is still working in a
+> A window that holds text you did not save never closes without a question. The ✕, the Esc
+> key and **Cancel** ask once. Press one again to discard the changes. While Claude is still working in a
 > window, it waits until the work is done. A button that you cannot use at the moment is pale.
 > The Tab key also reaches the ✕ of each window. Press Space to close the window.
 
@@ -1911,8 +1911,9 @@ right column, or with a chip under **Search** in the left column (Figure 16.1).
 
 > **Note**
 > Every field checks what you type. A value the app cannot use is marked in red with the
-> reason, and **Save** waits until it is corrected. Closing Options with unsaved changes asks
-> once.
+> reason, and **Save** waits until it is corrected. When you correct it, the red line goes.
+> Closing Options with unsaved changes asks once. Each list holds up to 60 entries, and each
+> entry up to 100 characters.
 
 ### Search
 
@@ -1923,7 +1924,7 @@ Table 16.1 lists the Search settings.
 | Setting | What it does | Values | Why you would change it |
 |---|---|---|---|
 | **City** | Where to search | A city name | The app will not search without one |
-| **Country** | Which postings count as "here", from the career site of a company. They can be in the city, anywhere in this country, or in the region of the country ("Europe", "EMEA"). **Remote jobs** uses this country too | A country's name in English. Empty = the country of the city, shown in grey | Type it when the field says that it does not know the city. Also type it when you want jobs from a neighbouring country |
+| **Country** | Which postings count as "here", from the career site of a company. They can be in the city, anywhere in this country, or in the region of the country ("Europe", "EMEA"). **Remote jobs** uses this country too | A country's name in English that the app knows, for example Germany. Empty = the country of the city, shown in grey | Type it when the field says that it does not know the city. Also type it when you want jobs from a neighbouring country |
 | **Remote jobs** | Which remote jobs a search keeps, from all job sources. A job open to all countries is always kept. A job for one country is kept only for your country and the countries you add. **In** your country keeps a job for a part of the world that your country is in. **Anywhere in the world** keeps a job for any part of the world | In your country or anywhere in the world, with added countries | Add a country when you have the right to work there. Select anywhere when all time zones suit you |
 | **Job sources** | Which job boards are read. Select one or more: a search reads all that you select. The app reads the Czech boards only for a city in Czechia. For a city in another country, the log of the run says that they were not used | Czech boards, LinkedIn, Career sites, Remote boards, in any combination | More sources find more and take longer |
 | **Search roles** | The words typed into the job boards, in English | One or more roles | Too few results: add a role. Too many poor ones: remove one |
@@ -1989,8 +1990,10 @@ Some companies publish their openings on their own career site. To read one dire
 1. Find the company's career page and note the short name in its address (for example,
    `boards.greenhouse.io/example` gives `example`).
 2. Under **Company career sites**, enter the company's name and that short name, and choose
-   the system.
+   the system. The short name has only letters, digits, - and _.
 3. Select **Add**.
+
+If a career site cannot be saved, **Save** says so and Options stays open.
 
 ### Matching and follow-up
 

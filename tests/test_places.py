@@ -242,3 +242,17 @@ def test_the_picker_gets_every_other_name_of_a_country():
     assert "usa" in by_key["united states"]["names"] and "england" in by_key["united kingdom"]["names"]
     assert by_key["germany"]["key"] not in by_key["germany"]["names"]                # the key itself is not repeated
     assert all(isinstance(c["names"], list) for c in by_key.values())
+
+
+def test_a_typed_country_is_one_the_app_knows_by_any_of_its_names():
+    """Review of the Options fixes: Singapore, UK and Britain could not be entered; "Foo-DE" passed by its code."""
+    for country, (names, _cities) in places.COUNTRIES.items():
+        for name in (country, *names):
+            assert places.country_named(name) == country, name
+    for text, country in (("Singapore", "singapore"), ("UK", "united kingdom"), ("Britain", "united kingdom"),
+                          ("Czech Republic", "czechia"), ("Bosnia-Herzegovina", "bosnia and herzegovina"), ("Côte d'Ivoire", "ivory coast"),
+                          ("St. Lucia", "saint lucia"), ("U.S.", "united states"),
+                          ("United States of America", "united states"), ("St Lucia", "saint lucia")):
+        assert places.country_named(text) == country, text
+    for wrong in ("Narnia", "Prague", "Foo-DE", "Narnia-US", "Xy-DE", "A-US", "Of-UK", "Germany, Austria", "Republic of Narnia", ""):
+        assert places.country_named(wrong) == "", wrong

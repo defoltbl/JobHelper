@@ -49,6 +49,8 @@ Dialog {
         if (!t) return false;
         if (win.hasNonLatin(t)) { roleErr = "Use English (Latin letters) for search roles."; return false; }
         if (!/[a-zA-Z]/.test(t) || t.length < 2) { roleErr = "Enter a real role, e.g. 'junior data analyst'."; return false; }
+        if (t.length > win.limits.list_word) { roleErr = "A search role takes up to " + win.limits.list_word + " characters. Shorten it."; return false; }
+        if (rolesModel.count >= win.limits.list_max) { roleErr = "The list holds up to " + win.limits.list_max + " search roles. Remove one first."; return false; }
         for (var i = 0; i < rolesModel.count; i++)
             if (rolesModel.get(i).text.toLowerCase() === t.toLowerCase()) { roleErr = "That role is already in the list."; return false; }
         // a role the app does not know is not wrong (the list of words it knows grew up with software jobs):
@@ -72,8 +74,9 @@ Dialog {
         coErr = "";
         if (win.hasNonLatin(name)) { coBlame.say("Write the company name in Latin letters.", "name"); return false; }
         if ((name || "").trim().length > win.limits.company_name) { coBlame.say("The company name is " + (name || "").trim().length + " characters long; the most is " + win.limits.company_name + ".", "name"); return false; }
-        if (!tok) { coBlame.say("Enter the company's token (the slug in its career-site URL).", "token"); return false; }
-        if (!win.isSlug(tok)) { coBlame.say("Token looks wrong – use the URL slug only (letters, digits, - or _), no spaces or https://.", "token"); return false; }
+        if (companiesModel.count >= win.limits.companies_max) { coBlame.say("The list holds up to " + win.limits.companies_max + " career sites. Remove one first.", "token"); return false; }
+        var tokenProblem = bridge.companyTokenProblem(tok);         // the rule the search itself uses
+        if (tokenProblem !== "") { coBlame.say(tokenProblem, "token"); return false; }
         for (var i = 0; i < companiesModel.count; i++)
             if (companiesModel.get(i).token.toLowerCase() === tok.toLowerCase()
                 && companiesModel.get(i).ats === ats) { coBlame.say("That company is already in the list.", "token"); return false; }
@@ -162,16 +165,47 @@ Dialog {
         } }
     FolderDialog { id: exportDialog; title: "Choose an empty folder for the readable copy"
         onAccepted: optDialog.storage("export", "" + selectedFolder) }
-    // what is wrong with a typed country ('' = nothing): its English name in letters, as postings write it
-    function countryProblem(text) {
-        var t = (text || "").trim();
-        if (t === "") return "";
-        if (win.hasNonLatin(t)) return "Write the country in English (Latin letters), e.g. Germany.";
-        if (/[0-9]/.test(t)) return "A country's name has no digits. Write it in letters, e.g. Germany.";
-        if (!/^[A-Za-z\u00C0-\u024F]+(?:[ '.\-]+[A-Za-z\u00C0-\u024F]+)*\.?$/.test(t)) return "Write only the country's name, e.g. Germany.";
-        if (t.length >= 60) return "“Country” takes up to 60 characters.";
+    // what is wrong with a typed country ('' = nothing): the Options' own check, a country the app knows
+    function countryProblem(text) {      // a country saved by an older version stays as it is
+        return (text || "").trim() === (win.optsData.country || "").trim() ? "" : bridge.countryProblem(text || "");
+    }
+    // A number box that holds a number outside its range: Save would change it as the window closes, unseen.
+    function numberProblem() {
+        var boxes = [[yearsSpin, "max_years"], [ageSpin, "max_age_days"], [pqSpin, "per_query"], [thrSpin, "threshold"],
+                     [minSpin, "min_lead_score"], [fuSpin, "followup_days"], [keepSpin, "keep_backups"], [scanSpin, "scan_days"]];
+        for (var i = 0; i < boxes.length; i++) {
+            var box = boxes[i][0], typed = parseInt(box.contentItem.text, 10);
+            box.flagged = !isNaN(typed) && (typed < box.from || typed > box.to);
+            if (box.flagged) {
+                box.note = "";                 // one message: the footer's, which names the box
+                return "“" + win.limits.labels[boxes[i][1]] + "” takes " + box.from + " to " + box.to + "; you typed " + typed + ". Change it, then save.";
+            }
+        }
         return "";
     }
+    // the first thing that stops a save ('' = none); a source missing is said by its own red line
+    function firstProblem() {
+        var city = (cityCombo.editText || "").trim();
+        if (city === "") return "Enter a city (e.g. Prague) before saving.";
+        if (win.hasNonLatin(city)) return "City must be in English (Latin letters), e.g. Prague.";
+        if (city.length > win.limits.options.where) return "“City” takes up to " + win.limits.options.where + " characters.";
+        if (countryProblem(countryField.text) !== "") return countryProblem(countryField.text);
+        var both = wantedTags.all().filter(function (w) { return unwantedTags.all().indexOf(w) >= 0; });
+        if (both.length > 0) return "“" + both[0] + "” is under both the roles you want and the roles you do not want. Remove it from one.";
+        var qs = [];
+        for (var i = 0; i < rolesModel.count; i++) qs.push("" + rolesModel.get(i).text);
+        var clash = roleClash(qs, skipTags.all(), keepTags.all());
+        if (clash !== "") return clash;
+        return notAdded();
+    }
+    // after an edit: a line about a fault you have put right goes, and closing asks again
+    function recheck() {
+        if (!visible) return;
+        confirmClose = false;
+        if (optErr !== "") optErr = numberProblem() || firstProblem();
+    }
+    Connections { target: rolesModel; function onCountChanged() { optDialog.recheck(); } }
+    Connections { target: companiesModel; function onCountChanged() { optDialog.recheck(); } }
     property string backNote: ""          // what happened when "Scan now" was pressed
     property bool backBad: false
     function scanBack() {
@@ -313,18 +347,20 @@ Dialog {
                 ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; spacing: 6
                     GroupTitle { text: "Search" }
                     Card {
-                        SRow { label: "City"
+                        SRow { label: win.limits.labels.where
                             ThemedCombo { id: cityCombo; objectName: "cityCombo"; editable: true; plainText: true
-                                implicitWidth: 200; model: win.euCities } }
+                                implicitWidth: 200; model: win.euCities
+                                onEditTextChanged: optDialog.recheck() } }
                         Sep {}
                         // which postings of a company's career site, and which remote jobs, count as "here"
-                        SRow { label: "Country"; hint: "for career sites and remote jobs · empty = the city's country"
+                        SRow { label: win.limits.labels.country; hint: "for career sites and remote jobs · empty = the city's country"
                             TextField { id: countryField; objectName: "countryField"; implicitWidth: 200; implicitHeight: 30
                                 readonly property string guessed: bridge.countryOf(cityCombo.editText)
                                 placeholderText: guessed !== "" ? guessed + " (from the city)" : "not known for this city: type it"
                                 placeholderTextColor: guessed !== "" ? theme.faint : theme.warn
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.options.country
-                                onTextEdited: optDialog.optErr = optDialog.countryProblem(text)
+                                onTextEdited: optDialog.recheck()
+                                onEditingFinished: if (optDialog.optErr === "") optDialog.optErr = optDialog.countryProblem(text)     // said when you leave the field
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
                                     border.color: optDialog.countryProblem(countryField.text) !== "" ? theme.crit
                                                   : (countryField.activeFocus ? theme.accent : theme.line) } } }
@@ -385,16 +421,16 @@ Dialog {
                                         Text { id: scT; anchors.centerIn: parent; text: (parent.picked ? "✓ " : "") + modelData.name
                                             font.pixelSize: 12; font.bold: parent.picked; color: parent.picked ? theme.accentInk : theme.soft }
                                         MouseArea { id: scMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                            onClicked: optDialog.toggleSource(modelData.key) } } } }
-                            Text { objectName: "sourcesErr"; visible: optDialog.pickedSources.length === 0; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                            onClicked: { optDialog.toggleSource(modelData.key); optDialog.recheck(); } } } } }
+                            Text { id: sourcesErr; objectName: "sourcesErr"; visible: optDialog.pickedSources.length === 0; Layout.fillWidth: true; wrapMode: Text.WordWrap
                                 color: theme.crit; font.pixelSize: 11; font.bold: true; text: "Choose at least one job source." } }
                         Sep {}
                         // search roles: autocomplete field + add, chips below
-                        SRow { label: "Search roles"; hint: "in English"
+                        SRow { label: win.limits.labels.queries; hint: "in English"
                             RowLayout { spacing: 6
                                 AutoField { id: roleField; objectName: "roleField"; implicitWidth: 180
                                     placeholder: "e.g. junior data scientist"; suggestions: win.roleSuggestions
-                                    onEdited: optDialog.roleErr = ""
+                                    onEdited: { optDialog.roleErr = ""; optDialog.recheck(); }
                                     onAdd: function (v) { if (optDialog.addRole(v)) roleField.text = ""; } }
                                 SmallButton { text: "+ Add"; primaryStyle: true
                                     onClicked: { if (optDialog.addRole(roleField.text)) roleField.text = ""; } } } }
@@ -417,15 +453,18 @@ Dialog {
                         }
                         Sep {}
                         TagEditor { id: skipTags; objectName: "skipTags"; chipTone: theme.crit
-                            label: "Skip titles with"; hint: "these jobs are left out"
+                            onTagCountChanged: optDialog.recheck(); onTypedChanged: optDialog.recheck()
+                            label: win.limits.labels.skip_words; hint: "these jobs are left out"
                             placeholder: "e.g. intern" }
                         Sep {}
                         TagEditor { id: keepTags; objectName: "keepTags"; chipTone: theme.good
-                            label: "…but keep titles with"; hint: "exceptions: these words beat a skip word"
+                            onTagCountChanged: optDialog.recheck(); onTypedChanged: optDialog.recheck()
+                            label: win.limits.labels.keep_words; hint: "exceptions: these words beat a skip word"
                             placeholder: "e.g. graduate program" }
                         Sep {}
                         TagEditor { id: wantedTags; objectName: "wantedTags"; chipTone: theme.good
-                            label: "Kinds of role you want"; hint: "the score measures fit for these · another field scores 40 at most"
+                            onTagCountChanged: optDialog.recheck(); onTypedChanged: optDialog.recheck()
+                            label: win.limits.labels.wanted_roles; hint: "the score measures fit for these · another field scores 40 at most"
                             placeholder: "e.g. backend developer" }
                         // which professions the free first look takes as yours: read from the roles above as you type them, or picked here
                         ColumnLayout { id: fieldsBox; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12; spacing: 8
@@ -457,15 +496,17 @@ Dialog {
                         }
                         Sep {}
                         TagEditor { id: unwantedTags; objectName: "unwantedTags"; chipTone: theme.crit
-                            label: "Kinds of role you do not want"; hint: "a title that names one is skipped before scoring · otherwise scored 20 at most"
+                            onTagCountChanged: optDialog.recheck(); onTypedChanged: optDialog.recheck()
+                            label: win.limits.labels.unwanted_roles; hint: "a title that names one is skipped before scoring · otherwise scored 20 at most"
                             placeholder: "e.g. economist" }
                         Sep {}
                         TagEditor { id: levelTags; objectName: "levelTags"; chipTone: theme.warn
-                            label: "Skip levels above yours"; hint: "title words · empty the list if you are senior"
+                            onTagCountChanged: optDialog.recheck(); onTypedChanged: optDialog.recheck()
+                            label: win.limits.labels.level_words; hint: "title words · empty the list if you are senior"
                             placeholder: "e.g. senior" }
                         Sep {}
-                        SRow { label: "Skip jobs asking for"; hint: "years of experience or more · 0 = never"
-                            ThemedSpin { id: yearsSpin; objectName: "yearsSpin"; from: win.limits.numbers.max_years[0]; to: win.limits.numbers.max_years[1]; value: 4 } }
+                        SRow { label: win.limits.labels.max_years; hint: "years of experience or more · 0 = never"
+                            ThemedSpin { id: yearsSpin; onEdited: optDialog.recheck(); objectName: "yearsSpin"; from: win.limits.numbers.max_years[0]; to: win.limits.numbers.max_years[1]; value: 4 } }
                         Sep {}
                         SRow { label: "Full-time only"; hint: "hide part-time roles"
                             ThemedSwitch { id: fullSw; objectName: "fullSw" } }
@@ -473,11 +514,11 @@ Dialog {
                         SRow { label: "English only"; hint: "hide ads in another language, and roles that need one"
                             ThemedSwitch { id: engSw; objectName: "engSw" } }
                         Sep {}
-                        SRow { label: "Max job age"; hint: "in days · 0 = any date"
-                            ThemedSpin { id: ageSpin; from: win.limits.numbers.max_age_days[0]; to: win.limits.numbers.max_age_days[1]; value: 10 } }
+                        SRow { label: win.limits.labels.max_age_days; hint: "in days · 0 = any date"
+                            ThemedSpin { id: ageSpin; onEdited: optDialog.recheck(); from: win.limits.numbers.max_age_days[0]; to: win.limits.numbers.max_age_days[1]; value: 10 } }
                         Sep {}
-                        SRow { label: "Results per query"
-                            ThemedSpin { id: pqSpin; from: win.limits.numbers.per_query[0]; to: win.limits.numbers.per_query[1]; value: 15 } }
+                        SRow { label: win.limits.labels.per_query
+                            ThemedSpin { id: pqSpin; onEdited: optDialog.recheck(); from: win.limits.numbers.per_query[0]; to: win.limits.numbers.per_query[1]; value: 15 } }
                     }
                 }
 
@@ -531,7 +572,7 @@ Dialog {
                                 background: Rectangle { radius: 7; color: theme.surface; border.width: 1
                                     border.color: coToken.wrong ? theme.crit : (coToken.activeFocus ? theme.accent : theme.line) }
                                 readonly property bool wrong: coBlame.box === "token"     // a missing, wrong or listed token
-                                onTextChanged: if (coBlame.box === "token") optDialog.coErr = ""     // a fault in the name stays
+                                onTextChanged: { if (coBlame.box === "token") optDialog.coErr = ""; optDialog.recheck(); }     // a fault in the name stays
                                 onAccepted: { if (optDialog.addCompany(coName.text, coAts.currentText, coToken.text)) { coName.text = ""; coToken.text = ""; } } }
                             SmallButton { text: "+ Add"; primaryStyle: true
                                 onClicked: { if (optDialog.addCompany(coName.text, coAts.currentText, coToken.text)) { coName.text = ""; coToken.text = ""; } } }
@@ -546,11 +587,11 @@ Dialog {
                 ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; spacing: 6
                     GroupTitle { text: "Matching" }
                     Card {
-                        SRow { label: "Write letters above"; hint: "match score " + win.limits.numbers.threshold.join("–")
-                            ThemedSpin { id: thrSpin; from: win.limits.numbers.threshold[0]; to: win.limits.numbers.threshold[1]; value: 50 } }
+                        SRow { label: win.limits.labels.threshold; hint: "match score " + win.limits.numbers.threshold.join("–")
+                            ThemedSpin { id: thrSpin; onEdited: optDialog.recheck(); from: win.limits.numbers.threshold[0]; to: win.limits.numbers.threshold[1]; value: 50 } }
                         Sep {}
-                        SRow { label: "Hide leads below"; hint: "0 = show all leads"
-                            ThemedSpin { id: minSpin; from: win.limits.numbers.min_lead_score[0]; to: win.limits.numbers.min_lead_score[1]; value: 0 } }
+                        SRow { label: win.limits.labels.min_lead_score; hint: "0 = show all leads"
+                            ThemedSpin { id: minSpin; onEdited: optDialog.recheck(); from: win.limits.numbers.min_lead_score[0]; to: win.limits.numbers.min_lead_score[1]; value: 0 } }
                     }
                 }
 
@@ -558,8 +599,8 @@ Dialog {
                 ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; spacing: 6
                     GroupTitle { text: "Follow-up" }
                     Card {
-                        SRow { label: "Remind me after"; hint: "days without a reply · 0 = never"
-                            ThemedSpin { id: fuSpin; objectName: "fuSpin"; from: win.limits.numbers.followup_days[0]; to: win.limits.numbers.followup_days[1]; value: 10 } }
+                        SRow { label: win.limits.labels.followup_days; hint: "days without a reply · 0 = never"
+                            ThemedSpin { id: fuSpin; onEdited: optDialog.recheck(); objectName: "fuSpin"; from: win.limits.numbers.followup_days[0]; to: win.limits.numbers.followup_days[1]; value: 10 } }
                     }
                 }
 
@@ -588,7 +629,7 @@ Dialog {
                         SRow { label: "Notifications"; hint: "run finished, paused on the limit, interview invitation"
                             RowLayout { spacing: 8
                                 SmallButton { id: notifyTestBtn; objectName: "notifyTest"; text: "Test"
-                                    onClicked: { var r = bridge.testNotification(); optDialog.notifyNote = r.msg || "";
+                                    onClicked: { var r = bridge.testNotification(); optDialog.notifyNote = (r && r.msg) || "";
                                                  optDialog.notifyBad = !(r && r.ok); optDialog.notifyPermission = bridge.notificationPermission(); } }
                                 ThemedSwitch { id: notifySw; objectName: "notifySw" } } }
                         Text { objectName: "notifyNote"; visible: optDialog.notifyNote !== "" && !(notifySw.checked && optDialog.notifyPermission === "off")
@@ -604,8 +645,8 @@ Dialog {
                             SmallButton { objectName: "notifySettings"; text: "Open System Settings"
                                 onClicked: bridge.openNotificationSettings() } }
                         Sep {}
-                        SRow { label: "Keep backups"; hint: "newest ones kept, older deleted · 0 = keep all"
-                            ThemedSpin { id: keepSpin; objectName: "keepSpin"; from: win.limits.numbers.keep_backups[0]; to: win.limits.numbers.keep_backups[1]; value: 10 } }
+                        SRow { label: win.limits.labels.keep_backups; hint: "newest ones kept, older deleted · 0 = keep all"
+                            ThemedSpin { id: keepSpin; onEdited: optDialog.recheck(); objectName: "keepSpin"; from: win.limits.numbers.keep_backups[0]; to: win.limits.numbers.keep_backups[1]; value: 10 } }
                         Sep {}
                         // letters and CVs moved out of the way because their job fell below your limit: only you remove them
                         SRow { label: "Moved documents older than"; hint: "days · moves those copies to the Trash"
@@ -643,8 +684,8 @@ Dialog {
                 ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; spacing: 6
                     GroupTitle { text: "Email scan" }
                     Card {
-                        SRow { label: "Scan emails from the last"; hint: "days · emails already read are skipped"
-                            ThemedSpin { id: scanSpin; objectName: "scanSpin"; from: win.limits.numbers.scan_days[0]; to: win.limits.numbers.scan_days[1]; value: 30 } }
+                        SRow { label: win.limits.labels.scan_days; hint: "days · emails already read are skipped"
+                            ThemedSpin { id: scanSpin; onEdited: optDialog.recheck(); objectName: "scanSpin"; from: win.limits.numbers.scan_days[0]; to: win.limits.numbers.scan_days[1]; value: 30 } }
                         Sep {}
                         SRow { label: "Also archived mail and spam"; hint: "not only the Inbox · never Sent or Drafts"
                             ThemedSwitch { id: foldersSw; objectName: "foldersSw" } }
@@ -680,34 +721,25 @@ Dialog {
             Text { Layout.fillWidth: true; visible: optDialog.optErr !== ""; wrapMode: Text.WordWrap
                 color: theme.crit; font.pixelSize: 12; font.bold: true; text: optDialog.optErr }
             Item { Layout.fillWidth: optDialog.optErr === "" }
-            SmallButton { objectName: "optCancel"; text: optDialog.confirmClose ? "Discard changes" : "Cancel"; onClicked: optDialog.close() }
+            SmallButton { id: optCancelBtn; objectName: "optCancel"; text: optDialog.confirmClose ? "Discard changes" : "Cancel"; onClicked: optDialog.tryClose() }
             PillButton { id: optSaveBtn; objectName: "optSave"; primaryStyle: true; text: "Save"
                 onClicked: {
+                    optDialog.optErr = optDialog.numberProblem();    // before the boxes are finished: they would change it unseen
+                    if (optDialog.optErr !== "") return;
                     optSink.forceActiveFocus();        // finish any field that is still being edited
-                    optDialog.optErr = ""; optDialog.confirmClose = false;
-                    if ((cityCombo.editText || "").trim() === "") {
-                        optDialog.optErr = "Enter a city (e.g. Prague) before saving."; return;
+                    optDialog.confirmClose = false;
+                    if (optDialog.pickedSources.length === 0) {         // its own red line says so: brought into view
+                        optScroll.contentItem.contentY = Math.max(0, sourcesErr.mapToItem(optScroll.contentItem.contentItem, 0, 0).y - 80);
+                        return;
                     }
-                    if (win.hasNonLatin(cityCombo.editText)) {
-                        optDialog.optErr = "City must be in English (Latin letters), e.g. Prague."; return;
-                    }
-                    if (optDialog.countryProblem(countryField.text) !== "") { optDialog.optErr = optDialog.countryProblem(countryField.text); return; }
-                    if (optDialog.pickedSources.length === 0) { optDialog.optErr = "Choose at least one job source."; return; }
-                    var qs = [];
-                    for (var i = 0; i < rolesModel.count; i++) qs.push("" + rolesModel.get(i).text);
-                    var both = wantedTags.all().filter(function (w) { return unwantedTags.all().indexOf(w) >= 0; });
-                    if (both.length > 0) {
-                        optDialog.optErr = "“" + both[0] + "” is under both the roles you want and the roles you do not want. Remove it from one."; return;
-                    }
-                    var clash = optDialog.roleClash(qs, skipTags.all(), keepTags.all());
-                    if (clash !== "") { optDialog.optErr = clash; return; }
-                    var left = optDialog.notAdded();
-                    if (left !== "") { optDialog.optErr = left; return; }
+                    optDialog.optErr = optDialog.firstProblem();
+                    if (optDialog.optErr !== "") return;
                     var all = optDialog.collect();
                     var saved = bridge.saveOptions(all.options);
                     if (!(saved && saved.ok)) { optDialog.optErr = (saved && saved.msg) || "The Options could not be saved."; return; }
-                    bridge.saveCompanies(all.companies);
+                    var sites = bridge.saveCompanies(all.companies);
                     win.optsData = bridge.options();
+                    if (!(sites && sites.ok)) { optDialog.optErr = (sites && sites.msg) || "The career sites could not be saved."; return; }
                     win.countsData = bridge.counts();      // the follow-up count depends on the new setting
                     ticker.text = "✓ Options saved.";
                     optDialog.close();
