@@ -164,7 +164,7 @@ data/                your data; only the *.example.* files are in git
 - **Keeping data safe:** `vault` (encryption, backups), `integrity` (signed rule files),
   `housekeeping` (old backups, logs, the Trash), `store` and `db` (jobs and replies).
 - **Claude:** `llm` (every call goes through it; pauses at the limit), `usage`.
-- **My details** (`details`): `check()` answers (clean values, problem); inside, `DetailsProblem` is raised by `RowList` and its kinds `JobList`, `DegreeList`, `LanguageList` (template method: `_cell`, `_before`, `_after`), `FileList` and `Salary`. `MyDetails` is the saved details as forms use them.
+- **My details** (`details`): `check()` answers (clean values, problem), the problem with `all` (one fault for each field and list, so one Save names every box); inside, `DetailsProblem` is raised by `RowList` and its kinds `JobList`, `DegreeList`, `LanguageList` (template method: `_cell`, `_before`, `_after`), `FileList` and `Salary`. `MyDetails` is the saved details as forms use them.
 - **The window's back end:** `ui_api.Api` is a facade over ten services (OOP: one job per class,
   composition, no service imports another): `api_system`, `api_options`, `api_jobs`,
   `api_documents` (scores, moving documents, "not interested"), `api_replies`, `api_insights`,
@@ -250,7 +250,7 @@ data/                your data; only the *.example.* files are in git
 - **The window keeps no copy of a limit.** How long a typed text may be comes from the module that checks it,
   through `Api.limits()` (`win.limits` in QML) or with the data of a dialog (`columns` of My details, `max_part`
   of a preparation). The ranges of the Options' number boxes come the same way (`numbers`, `shelf_days`,
-  `look_back`), and every limited box shows `TooLong.qml` while its text is over. The lists the back end checks come
+  `look_back`), and the weekly run's hour and minute (`schedule`, from `schedule.HOURS`/`MINUTES`), and every limited box shows `TooLong.qml` while its text is over. The lists the back end checks come
   as `choices` (`planner.KINDS`, `scrapers_ats.ATS_NAMES`, `OptionsService.MODELS`, `config.TEXT_SIZES`). A new limit
   or list goes into the owner and into that map; `tests/test_window_limits.py` keeps numbers and lists out of the
   dialogs. Suggestion pools that nothing checks (`euCities`, `roleSuggestions`) may stay in `Main.qml`.
@@ -420,6 +420,12 @@ data/                your data; only the *.example.* files are in git
     decides what counts as an amount, and hyphen forms ("a 5-year record") and number words above twelve are not read;
   - an honest repeat of the question's own amount ("30 days works for me") gets a note;
   - a true figure you typed into the letter by hand keeps the job window's line until the letter no longer has it.
+- **Options ask the back end, never a copy** (window review H1/H9, 30 Oct): the career-site token rule is
+  `scrapers_ats.is_token` (the window asks `bridge.companyTokenProblem`; its own `isSlug` allowed dots and the company
+  was dropped at Save as "saved"), the country rule is `OptionsService.country_problem` (a country `places` knows), and
+  `save_companies` returns `{ok, msg}` when it leaves a company out. Messages name a setting by its window label
+  (`OptionsService._LABELS`). `optDialog.firstProblem()` is the one list of what stops a save; `recheck()` runs it after
+  each edit, so a red line goes when the fault is put right and closing asks again.
 - **The master CV decides the shape of KEY SKILLS** (`cv_tailor.MasterSkills`): labelled "Label: items" rows may be
   regrouped (4–8) and may leave out what the posting does not care about (the approved example does); a plain list
   without labels keeps its number of rows and every skill (except a skill cut to fit one page), and a skill the model drops is put back. An item cut to fit
@@ -429,14 +435,15 @@ data/                your data; only the *.example.* files are in git
   into `cv_check`, whose line says "which your own CV does not mention".
 - **Work stays with its employer** (`claims.EmployerCheck`, used by the letter, its rewrite and a hand-edited letter):
   a position is a line "title, separator (– - | or a comma), employer, dates" (a range, or a year in brackets) that is
-  no bullet, no degree (a first word such as BSc) and no place of study, and is not under a study section (EDUCATION,
+  no bullet, no degree (BSc, "Master of …") and no place of study unless its title names a job ("Teacher – … School"), and is not under a study section (EDUCATION,
   CERTIFICATES …, also letter-spaced); its employer's names are words after the separator that the CV uses only in
   position headings (case counts, title words such as "Freelance" never), two roles at one employer are one, a word two
   employers share names neither, and the company written to names no former employer. A sentence that names exactly one employer must not name work the CV gives only to another position. What
   is left goes to `letter_misplaced` (its own amber line, refreshed when you save the letter); a rewrite is sent back
   once, then given. Measured before it shipped on 74 real letters: the first version flagged 33, this one 0 (it
   reads 2 of the owner's jobs; a degree word late in a title, "(Pre-Diploma Practice)", once hid one).
-  Not caught: a duration ("over the past year") or a claim no position names ("used Docker daily").
+  Not caught: a duration ("over the past year"), a claim no position names ("used Docker daily"), an employer the model
+  invented, and a job whose noun is not in `claims._JOB_WORDS` ("Pianist – … Conservatory" reads as study).
 - **A sentence of a letter is a claim only where the candidate is the one doing it** (`cover_letter.borrowed_claims`):
   "the role caught my attention because it covers X" describes the role. Measure a change to these checks on the
   letters and CVs already written before it ships.
@@ -507,7 +514,7 @@ After every batch of changes, without being asked:
 | A remote job tied to one country is kept only for your country and the countries you add, also with "Anywhere in the world" | Such a job asks you to live in that country or to have the right to work there. "Anywhere" adds only jobs for whole parts of the world ("Remote – APAC"). One rule, `places.RemoteReach`, for the search, Options and the window. |
 | The app knows every country, each with its part of the world | An unknown name was read as "no place": "Remote, South Korea" passed as open to anyone. Codes that are also US state codes (IL, ID, MA …) count as the country for someone who searches there; "City, DE" stays Germany. |
 | Duplicates are removed after all other filters | The copy kept as the duplicate's winner could then be dropped (in Czech, too old), and the other copy was lost with the reason "duplicate". |
-| The rule files and the letter template are optional | Without them the built-in rules and a plain letter are used, so their absence is not reported as a problem. |
+| The rule files and the letter template are optional | Without them the built-in rules are used, and a letter template is made from the head of the CV (`cover_letter.make_template`, marked APP_MADE and brought up to date when the CV's contacts change; a template of your own is never touched, and one that went missing is not replaced). The plain letter is left only when the CV's head gives no name or contacts. |
 | A search role the app does not know is asked about once, not refused | The words it knows grew up with software jobs. |
 | No Windows or Linux version | Not wanted. |
 | No Russian services | The owner's rule. A mailbox or server of one is refused with a plain message. |

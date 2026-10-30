@@ -209,7 +209,7 @@ def test_saving_a_mailbox_tries_it_first(bridge, monkeypatch):
     assert check(2, "two@gmail.com", "abcdabcdabcdabcd")["field"] == "server"
     answer.pop("field")
     # the server cannot be reached: saved, with a note
-    answer.update(ok=None, msg="The mail server could not be reached, so the password was not tried.")
+    answer.update(ok=None, msg="The mail server could not be reached. The password was not tried.")
     result = check(2, "two@gmail.com", "abcdabcdabcdabcd")
     assert result["ok"] is True and "not tried" in result["note"] and saved[-1] == (2, "two@gmail.com", "abcdabcdabcdabcd", "")
 
@@ -350,14 +350,44 @@ def test_check_connections_answers_through_the_signal(bridge, qapp):
     assert got and got[0]["claude"] is True and got[0]["plan"] == "pro"
 
 
+CV_WORDS = ("Mara Example, Junior Developer. Built an internal REST API in Django, wrote pytest suites and cut a nightly "
+            "report from forty to six minutes at Northwind Parcel in Brno.")
+
+
+def _cv_file(path, words=CV_WORDS):
+    """A small Word CV of an invented person, with enough text for the app to use."""
+    import docx
+    path.parent.mkdir(parents=True, exist_ok=True)
+    d = docx.Document()
+    d.add_paragraph(words)
+    d.save(str(path))
+    return path
+
+
 def test_set_master_cv_copies_the_file(bridge, tmp_path):
-    src = tmp_path / "outside" / "My CV.docx"
-    src.parent.mkdir()
-    src.write_bytes(b"cv")
+    src = _cv_file(tmp_path / "outside" / "My CV.docx")
     result = bridge.setMasterCV("file://" + str(src).replace(" ", "%20"))
     assert result == {"ok": True, "name": "My CV.docx"}
-    assert (config.CV_DIR / "My CV.docx").read_bytes() == b"cv"
+    assert (config.CV_DIR / "My CV.docx").read_bytes() == src.read_bytes()
     assert bridge.setMasterCV(str(config.CV_DIR / "My CV.docx")) == {"ok": True, "name": "My CV.docx"}
+
+
+def test_a_damaged_or_empty_cv_is_refused_and_an_old_one_is_kept(bridge, tmp_path):
+    """Hands-on check F1: an 8-byte broken.docx and an empty PDF were taken as your CV with a green tick."""
+    broken = tmp_path / "broken.docx"
+    broken.write_bytes(b"not docx")
+    assert "cannot be read" in bridge.setMasterCV(str(broken))["msg"]
+    empty = tmp_path / "empty.pdf"
+    empty.write_bytes(b"")
+    assert "empty" in bridge.setMasterCV(str(empty))["msg"]
+    thin = _cv_file(tmp_path / "thin.docx", "Mara")
+    assert "almost no text" in bridge.setMasterCV(str(thin))["msg"]
+    first = _cv_file(tmp_path / "a" / "Mara_CV.docx")
+    assert bridge.setMasterCV(str(first))["ok"] is True
+    second = _cv_file(tmp_path / "b" / "Mara_CV.docx", CV_WORDS + " Also speaks Czech.")
+    assert bridge.setMasterCV(str(second))["ok"] is True
+    kept = list((vault.backups_dir() / "cv_versions").glob("*"))
+    assert kept, "the CV of the same name was kept before it was replaced"
 
 
 def test_set_master_cv_rejects_bad_files(bridge, tmp_path):
@@ -375,8 +405,10 @@ def test_save_options_applies_model_and_lead_floor(bridge):
 
 
 def test_save_companies_tolerates_odd_rows(bridge):
-    bridge.saveCompanies([{"name": "Proton", "ats": "greenhouse", "token": "proton"}, 42, None])
+    result = bridge.saveCompanies([{"name": "Proton", "ats": "greenhouse", "token": "proton"}, 42, None])
     assert bridge.companies() == [{"name": "Proton", "ats": "greenhouse", "token": "proton"}]
+    assert result["ok"] is False and "Not saved: 42, None" in result["msg"], "an odd row is named, never dropped silently"
+
 
 
 def test_save_email_writes_to_env(bridge, tmp_path, monkeypatch):
@@ -411,9 +443,7 @@ def test_run_search_refuses_files_changed_outside_the_app(bridge, monkeypatch):
 
 def test_choosing_a_cv_in_the_app_counts_as_approved(bridge, tmp_path):
     integrity.approve()
-    src = tmp_path / "outside" / "cv.docx"
-    src.parent.mkdir()
-    src.write_bytes(b"new cv")
+    src = _cv_file(tmp_path / "outside" / "cv.docx")
     assert bridge.setMasterCV(str(src))["ok"] is True
     assert integrity.problems() == []
 
@@ -503,6 +533,26 @@ def test_a_scan_refused_by_an_untrusted_certificate_says_so(bridge, monkeypatch)
     events = _record(bridge)
     bridge._scan(30)
     assert events[-1][1:] == ("scan", email_client.UNTRUSTED)
+
+
+@pytest.mark.parametrize("fault, said, noted", [
+    (lambda: __import__("socket").gaierror(8, "nodename nor servname"), "could not be found", False),
+    (lambda: TimeoutError(), "did not answer in time", False),
+    (lambda: KeyError("x"), "fault in the app", True),
+    (lambda: PermissionError(13, "disk"), "fault in the app", True)])      # a disk fault is no network fault
+def test_a_failed_scan_says_its_cause_and_writes_down_an_app_fault(bridge, monkeypatch, fault, said, noted):
+    """Hands-on check F16: every failure said "check your connection", and a disk fault was taken for a network one."""
+    from jobhelper import trouble
+    written = []
+    monkeypatch.setattr(trouble, "note", lambda where, e: written.append(where))
+
+    def failing(jobs, **kw):
+        raise fault()
+    monkeypatch.setattr(agent5_responses, "process_inbox", failing)
+    events = _record(bridge)
+    bridge._scan(30)
+    assert events[-1][1] == "scan" and events[-1][2].startswith("Email scan failed. ") and said in events[-1][2]
+    assert bool(written) is noted
 
 def test_stop_during_email_scan_saves_progress(bridge, monkeypatch):
     def process_inbox(jobs, progress=None, **kw):

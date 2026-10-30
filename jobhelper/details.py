@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import config, llm, salary, vault
+from . import config, llm, places, salary, vault
 
 # (key, what the window calls it, the most characters)
 FIELDS = (("first_name", "First name", 60), ("last_name", "Last name", 60), ("email", "Email", 120),
@@ -104,12 +104,36 @@ class DetailsProblem(ValueError):
 
 
 def check(values: Any) -> tuple[dict[str, Any], dict[str, str]]:
-    """(clean values, {}) or ({}, {"field": where, "msg": what is wrong}). The window
-    checks the same things as you type; this is the last word."""
+    """(clean values, {}) or ({}, {"field": where, "msg": what is wrong, "all": every fault}). The window checks the
+    same things as you type; this is the last word. "all" holds one fault for each field and each list, in the order of
+    the page, so one Save names every box that needs a change, not one box a Save."""
     try:
         return _checked(values), {}
     except DetailsProblem as problem:
-        return {}, problem.as_dict()
+        faults = _all_faults(values) or [problem.as_dict()]
+        return {}, {**faults[0], "all": faults}
+
+
+def _all_faults(values: Any) -> list[dict[str, str]]:
+    """One fault for each field and each list that has one (each checked on its own, as _checked does in turn)."""
+    if not isinstance(values, dict):
+        return []
+    faults = []
+    for key, _label, _most in FIELDS:
+        try:
+            _checked({key: values.get(key)})
+        except DetailsProblem as problem:
+            faults.append(problem.as_dict())
+    for name in (*LISTS, "files"):
+        try:
+            _checked({name: values.get(name)})
+        except DetailsProblem as problem:
+            faults.append(problem.as_dict())
+    try:
+        Salary.from_values(values)
+    except DetailsProblem as problem:
+        faults.append(problem.as_dict())
+    return faults
 
 
 def _checked(values: Any) -> dict[str, Any]:
@@ -309,9 +333,21 @@ def _link(value: str) -> str:
     return value if re.match(r"https?://", value, re.IGNORECASE) else "https://" + value
 
 
+def _saved() -> dict[str, Any]:
+    """Your saved details as stored, unchecked (load() checks them, and a check that asked load() would never end), or
+    none when they cannot be read: a check never fails because of them."""
+    try:
+        kept = config.MY_DETAILS.load()
+    except Exception:  # noqa: BLE001 - then nothing counts as saved before
+        return {}
+    return kept if isinstance(kept, dict) else {}
+
+
 def _problem(key: str, label: str, value: str) -> str:
     if key in ("first_name", "last_name", "city", "country") and not _WORDS.fullmatch(value):
         return f"“{label}” must be written in letters."
+    if key == "country" and value != str(_saved().get("country") or "") and not places.country_named(value):
+        return f"“{value}” is not a country the app knows. Write its English name, for example Germany."
     if key == "email" and not _EMAIL.fullmatch(value):
         return "That does not look like an email address. It needs a name, an @ and a domain, like name@example.com."
     if key == "phone":

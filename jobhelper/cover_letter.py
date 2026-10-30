@@ -235,6 +235,61 @@ def _set_para(p, text: str) -> None:
     para.write(text)
 
 
+APP_MADE = "Made by JobHelper from the head of your CV"      # the template's comment: one the app may bring up to date
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_YEARS = re.compile(r"^(?:(?:19|20)\d{2}[\s()-]*)+$")      # "2019 - 2021": dates, not a phone
+_NOT_A_NAME = re.compile(r"\b(cv|curriculum|vitae|resume|résumé|lebenslauf|profile|contact|contacts|summary|skills|experience|"
+                         r"education|about|objective|personal|details)\b", re.IGNORECASE)
+
+
+def template_head(cv_text: str) -> list[str]:
+    """The four head lines of a letter template from the top of a CV: name, what you call yourself, and two lines of
+    contacts ([] when the CV's top gives no clear name or not two kinds of contact: then the plain letter is written).
+    Only the first eight lines are read, so a figure further down ("10 000 000 rows") is never a phone number; a year
+    run ("2019 - 2021") is no phone either; and nothing is guessed (no city from the search settings)."""
+    head = [_CONTROL.sub("", " ".join(line.split()))[:200] for line in (cv_text or "").splitlines()[:40] if line.strip()][:8]
+    name = head[0] if head else ""
+    if not name or len(name) > 60 or len(name.split()) > 4 or re.search(r"[@\d|,:]", name) or _NOT_A_NAME.search(name):
+        return []
+    top = "\n".join(head)
+    email = re.search(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", top)
+    phone = next((m.group(0).strip() for m in re.finditer(r"\+?\d[\d ()-]{7,}\d", top)
+                  if (m.group(0).startswith("+") or len(re.sub(r"\D", "", m.group(0))) >= 9) and not _YEARS.match(m.group(0).strip())), "")
+    links = "  ·  ".join(dict.fromkeys(re.findall(r"(?:linkedin\.com/in/|github\.com/)[\w-]+", top)[:2]))
+    contacts = [x for x in (email.group(0) if email else "", phone, links) if x]
+    if len(contacts) < 2:
+        return []                               # one kind of contact: the head has no second line without a guess
+    lines = [contacts[0], "  ·  ".join(contacts[1:])] if len(contacts) == 2 else ["  ·  ".join(contacts[:2]), contacts[2]]
+    return [name, own_title("\n".join(head)) or "Applicant", *lines]
+
+
+def make_template(cv_text: str, path) -> bool:
+    """Write a plain letter template from the head of your CV when you have none of your own (a new person could never
+    use Edit letter before): the head (template_head), the date, the salutation, BODY_PARAGRAPHS body paragraphs, the
+    closing and your name again. Marked as made by the app (APP_MADE). True when it was written."""
+    import docx
+    from docx.shared import Pt
+    head = template_head(cv_text)
+    if not head:
+        return False
+    doc = docx.Document()
+    for text in (*head, "", letter_date(), "Dear Hiring Team,", *[f"Paragraph {n}." for n in range(1, BODY_PARAGRAPHS + 1)],
+                 "Yours sincerely,", head[0]):
+        doc.add_paragraph().add_run(text).font.size = Pt(11)
+    doc.core_properties.comments = APP_MADE
+    doc.save(str(path))
+    return True
+
+
+def app_made_head(path) -> list[str] | None:
+    """The four head lines of a template the app made, or None for a template of your own (never changed by the app)."""
+    import docx
+    doc = docx.Document(str(path))
+    if doc.core_properties.comments != APP_MADE:
+        return None
+    return [p.text for p in doc.paragraphs[:4]]
+
+
 def letter_date(d: date | None = None) -> str:
     d = d or date.today()
     return f"{d.day} {d:%B %Y}"                      # 6 October 2026

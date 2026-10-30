@@ -72,6 +72,31 @@ def read_cv_text(path: Path) -> str:
 CV_TYPES = {".pdf", ".docx", ".txt", ".md"}
 
 
+MIN_CV_WORDS = 20                  # fewer readable words: a scan, or not a CV
+MAX_CV_BYTES = 20 * 1024 * 1024    # a CV is far smaller: a bigger file is not read at all
+
+
+def cv_file_problem(path: Path) -> str:
+    """Why a file cannot be your master CV ('' = it can): it must be one of CV_TYPES that the app can read, with text
+    in it. A damaged file, or a scan without text, would give every letter and adapted CV nothing to work from."""
+    path = Path(path)
+    if path.suffix.lower() not in CV_TYPES:
+        return "Use a Word (.docx), PDF (.pdf) or text (.txt, .md) file."
+    if not path.is_file():
+        return "That file is not there any more. Choose the file of your CV."
+    if path.stat().st_size == 0:
+        return "That file is empty. Choose the file of your CV."
+    if path.stat().st_size > MAX_CV_BYTES:
+        return f"That file is larger than {MAX_CV_BYTES // (1024 * 1024)} MB, far more than a CV. Choose the file of your CV."
+    try:
+        text = read_cv_text(path)
+    except Exception:  # noqa: BLE001 - any reader fault means the file cannot be used
+        return "That file cannot be read: it may be damaged. Open it in Word, save it again, then choose it."
+    if len(text.split()) < MIN_CV_WORDS:
+        return "That file has almost no text the app can read. A scanned CV must be saved as a Word file or a PDF with text."
+    return ""
+
+
 def find_cv() -> Path | None:
     """The master CV: the file you chose in the app if it is still there, else the first
     CV file in data/cv/ by name."""

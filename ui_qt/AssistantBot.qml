@@ -129,7 +129,8 @@ Item {
         id: bubble; objectName: "assistantBubble"
         visible: opacity > 0; opacity: root.talking ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 160 } }
-        width: Math.min(root.note !== "" && root.greeting ? 420 : 250, bubbleText.implicitWidth + 24); height: bubbleText.implicitHeight + 16
+        readonly property real target: Math.min(root.note !== "" && root.greeting ? 420 : 250, bubbleText.implicitWidth + 24)   // where the width goes
+        width: target; height: bubbleText.implicitHeight + 16
         Behavior on width { enabled: bubble.opacity === 1; NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
         // beside it and never higher than its own head: the line and the robots above stay in view
         x: -width - 2; y: Math.max(16, Math.min(40, root.height - height - 2)); radius: 10; z: 5

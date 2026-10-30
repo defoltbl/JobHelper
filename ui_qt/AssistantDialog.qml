@@ -19,7 +19,8 @@ Dialog {
         function onModelReset() { assistantDialog.answersRevision++ } }
     onAnswersRevisionChanged: confirmAnswers = false                       // a changed answer is asked about again
     readonly property int unsaved: answersRevision >= 0 ? unsavedAnswers() : 0
-    readonly property bool holdsWork: dirty || busy || unsaved > 0      // unsaved details or answers, or Claude still working
+    readonly property bool askTyped: askBox.text.trim() !== "" && !busy  // a request typed and not sent
+    readonly property bool holdsWork: dirty || busy || unsaved > 0 || askTyped   // unsaved details, answers or request, or Claude still working
     closePolicy: holdsWork ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits ...
     // ... but it must not do nothing either: it asks once, or says why it waits (only when it is the window in front)
     Shortcut { sequence: "Escape"; enabled: assistantDialog.holdsWork && win.onTop(assistantDialog)
@@ -70,6 +71,7 @@ Dialog {
     property bool dirty: false            // a detail was changed and not saved
     property bool confirmClose: false     // Close was pressed once with unsaved details
     property bool confirmAnswers: false   // ... and once with unsaved answers: each kind is asked about on its own page
+    property bool confirmAsk: false       // ... and once with a typed request
     property bool detailsSaved: false     // something is saved already
     property var problem: ({})            // {field, msg} of the first thing wrong, as you type
     property string detailsNote: ""
@@ -242,7 +244,7 @@ Dialog {
         Qt.callLater(function () { talkFlick.contentY = Math.max(0, talkFlick.contentHeight - talkFlick.height); });
     }
     function show() {
-        askErr = ""; confirmClose = false; confirmAnswers = false; busy = false;
+        askErr = ""; confirmClose = false; confirmAnswers = false; confirmAsk = false; busy = false;
         allJobs = [{ id: "", label: "Find the job from the page" }].concat(bridge.assistantJobs());
         jobs = allJobs; jobFind.text = ""; jobFindErr = "";
         jobBox.currentIndex = 0; jobId = "";
@@ -333,9 +335,29 @@ Dialog {
             answersErr = unsavedAnswers() + (unsavedAnswers() === 1 ? " answer is" : " answers are") + " not saved. Press Save on each, or Close once more to discard the changes.";
             return;
         }
-        dirty = false; close();
+        if (askTyped && !confirmAsk) {
+            confirmAsk = true; page = "ask";
+            askErr = "You typed a request and did not send it. Press Return to send it, or Close once more to discard it.";
+            return;
+        }
+        dirty = false; confirmAsk = false; askBox.text = ""; close();      // discarded, as the question said
     }
     // ── My details ──
+    // the message for one field from every fault the back end's check found ('' = none); a fault of the whole form
+    // ("Every field is empty") is said in the footer alone, with its field outlined
+    function faultAt(key) {
+        var all = problem.all || [];
+        for (var i = 0; i < all.length; i++) if (all[i].field === key) return all[i].msg;
+        return "";
+    }
+    function faultCount() { return (problem.all || []).length; }
+    // the fault of one list ("experience", "education" …) for its editor, so each list shows its own, not only the first
+    function faultIn(list) {
+        var all = problem.all || [problem];
+        for (var i = 0; i < all.length; i++)
+            if (("" + (all[i].field || "")) === list || ("" + (all[i].field || "")).indexOf(list + ".") === 0) return all[i];
+        return ({});
+    }
     function loadDetails() {
         var d = bridge.myDetails();
         fieldModel.clear();
@@ -490,7 +512,7 @@ Dialog {
         for (var i = 0; i < fieldModel.count; i++) if (String(fieldModel.get(i).value).trim() !== "") empty = false;
         if (empty && !detailsSaved) { problem = { field: "first_name", msg: "Every field is empty. Fill in at least your name and email, then save." }; return; }
         var r = bridge.saveMyDetails(JSON.stringify(all));
-        if (!(r && r.ok)) { problem = { field: (r && r.field) || "", msg: (r && r.msg) || "Your details could not be saved." }; return; }
+        if (!(r && r.ok)) { problem = (r && r.msg) ? r : { field: "", msg: "Your details could not be saved." }; return; }     // with every fault
         loadDetails();
         detailsNote = "Saved, encrypted on this Mac. Forms are filled in with exactly this.";
     }
@@ -746,7 +768,7 @@ Dialog {
                         color: theme.ink; font.pixelSize: 13; selectByMouse: true; enabled: !assistantDialog.busy
                         background: Rectangle { radius: 9; color: theme.surface; border.width: 1
                             border.color: assistantDialog.askErr !== "" || askBox.text.length > assistantDialog.maxRequest ? theme.crit : (askBox.activeFocus ? theme.accent : theme.line) }
-                        onTextEdited: assistantDialog.askErr = ""
+                        onTextEdited: { assistantDialog.askErr = ""; assistantDialog.confirmAsk = false; }
                         Keys.onReturnPressed: assistantDialog.ask(text)
                         Keys.onEnterPressed: assistantDialog.ask(text) }
                     SmallButton { objectName: "asSend"; implicitHeight: 34; text: "Ask"; enabled: !assistantDialog.busy; onClicked: assistantDialog.ask(askBox.text) }
@@ -880,7 +902,8 @@ Dialog {
                         Repeater {
                             model: fieldModel
                             ColumnLayout { id: cell; Layout.fillWidth: true; Layout.preferredWidth: 100; spacing: 3
-                                readonly property bool wrong: assistantDialog.problem.field === model.key
+                                readonly property string fault: assistantDialog.faultAt(model.key)       // its own message, from every fault
+                                readonly property bool wrong: fault !== "" || assistantDialog.problem.field === model.key
                                 RowLayout { Layout.fillWidth: true; spacing: 6
                                     Text { text: model.label; color: theme.ink; font.pixelSize: 12; font.bold: true }
                                     Text { visible: model.fromCv; text: "from your CV"; color: theme.a6; font.pixelSize: 10; font.bold: true }
@@ -892,7 +915,7 @@ Dialog {
                                     onTextEdited: assistantDialog.setField(model.key, text) }
                                 TooLong { Layout.fillWidth: true; length: cell.wrong ? 0 : box.text.length; most: model.most }
                                 Text { visible: cell.wrong; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true
-                                    text: assistantDialog.problem.msg || "" }
+                                    text: cell.fault }
                             }
                         }
                     }
@@ -907,7 +930,7 @@ Dialog {
                         text: jobModel.count === 0 ? "No jobs listed. Forms that ask for your employer and job title are filled in from this list; several jobs may be current at once."
                               : "A form with several “Company” fields gets these in order: the current jobs first, then the others as listed here." }
                     RowsEditor { objectName: "asJobs"; Layout.fillWidth: true; store: jobModel; cols: assistantDialog.jobCols; listName: "experience"; withCurrent: true
-                        problem: assistantDialog.problem; onChanged: assistantDialog.touched() }
+                        problem: assistantDialog.faultIn(listName); onChanged: assistantDialog.touched() }
 
                     // ── degrees ──
                     RowLayout { Layout.fillWidth: true; Layout.topMargin: 8; spacing: 6
@@ -916,7 +939,7 @@ Dialog {
                     Text { visible: schoolModel.count === 0; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 12
                         text: "No degrees listed. Add each one: the highest first, as forms ask for them." }
                     RowsEditor { objectName: "asSchools"; Layout.fillWidth: true; store: schoolModel; cols: assistantDialog.schoolCols; listName: "education"
-                        problem: assistantDialog.problem; onChanged: assistantDialog.touched() }
+                        problem: assistantDialog.faultIn(listName); onChanged: assistantDialog.touched() }
 
                     // ── languages ──
                     RowLayout { Layout.fillWidth: true; Layout.topMargin: 8; spacing: 6
@@ -926,7 +949,7 @@ Dialog {
                         text: langModel.count === 0 ? "No languages listed. Forms that ask for each language and how well you speak it are filled in from this list."
                                                     : "The level is one of: Native, Fluent, Advanced, Intermediate, Basic. It is what forms are told, so set it as you would say it yourself. Where a form has no entry for Native, Fluent is chosen." }
                     RowsEditor { objectName: "asLangs"; Layout.fillWidth: true; store: langModel; cols: assistantDialog.langCols; listName: "languages"
-                        problem: assistantDialog.problem; onChanged: assistantDialog.touched() }
+                        problem: assistantDialog.faultIn(listName); onChanged: assistantDialog.touched() }
 
                     // ── the salary you ask for ──
                     GroupTitle { text: "Salary expectation"; Layout.topMargin: 8 }
@@ -935,7 +958,7 @@ Dialog {
                             placeholderText: "60000"; placeholderTextColor: theme.faint
                             text: assistantDialog.salaryAmount
                             background: Rectangle { radius: 7; color: theme.surface; border.width: 1
-                                border.color: assistantDialog.problem.field === "salary" ? theme.crit : (payBox.activeFocus ? theme.accent : theme.line) }
+                                border.color: assistantDialog.faultIn("salary").msg ? theme.crit : (payBox.activeFocus ? theme.accent : theme.line) }
                             onTextEdited: { assistantDialog.salaryAmount = text; assistantDialog.touched(); } }
                         ThemedCombo { objectName: "asCurrency"; plainText: true; Layout.preferredWidth: 96; model: assistantDialog.currencies
                             currentIndex: Math.max(0, assistantDialog.currencies.indexOf(assistantDialog.salaryCurrency))
@@ -945,8 +968,8 @@ Dialog {
                             onActivated: { assistantDialog.salaryPeriod = currentIndex === 1 ? "year" : "month"; assistantDialog.touched(); } }
                         Item { Layout.fillWidth: true } }
                     Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
-                        color: assistantDialog.problem.field === "salary" ? theme.crit : theme.faint; font.bold: assistantDialog.problem.field === "salary"
-                        text: assistantDialog.problem.field === "salary" ? (assistantDialog.problem.msg || "")
+                        color: assistantDialog.faultIn("salary").msg ? theme.crit : theme.faint; font.bold: !!assistantDialog.faultIn("salary").msg
+                        text: assistantDialog.faultIn("salary").msg ? assistantDialog.faultIn("salary").msg
                             : assistantDialog.salaryAmount.trim() === "" ? "Gross, as a whole number. Left empty, a form that asks is answered from the figure in Options, or left to you."
                             : "A form that asks gets: " + assistantDialog.salaryAmount.trim().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " " + assistantDialog.salaryCurrency + " gross per " + assistantDialog.salaryPeriod + "." }
 
@@ -959,7 +982,8 @@ Dialog {
                     Repeater {
                         model: fileModel
                         ColumnLayout { id: fileRow; Layout.fillWidth: true; spacing: 2
-                            readonly property bool wrong: assistantDialog.problem.field === "files." + index
+                            readonly property string fault: assistantDialog.faultIn("files").field === "files." + index ? assistantDialog.faultIn("files").msg : ""
+                            readonly property bool wrong: fault !== ""
                             RowLayout { Layout.fillWidth: true; spacing: 8
                                 TextField { id: fileBox; Layout.preferredWidth: 220; implicitHeight: 30; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                                     Component.onCompleted: text = model.label
@@ -969,9 +993,9 @@ Dialog {
                                 Text { Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; color: theme.soft; font.pixelSize: 12; text: model.name }
                                 SmallButton { text: "Remove"; onClicked: { fileModel.remove(index); assistantDialog.touched(); } } }
                             Text { visible: fileRow.wrong; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true
-                                text: assistantDialog.problem.msg || "" } } }
-                    Text { visible: assistantDialog.problem.field === "files"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true
-                        text: assistantDialog.problem.msg || "" }
+                                text: fileRow.fault } } }
+                    Text { visible: assistantDialog.faultIn("files").field === "files"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true
+                        text: assistantDialog.faultIn("files").msg || "" }
                 }
             }
             Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
@@ -980,7 +1004,9 @@ Dialog {
                     readonly property bool bad: !!assistantDialog.problem.msg
                     font.pixelSize: bad ? 12 : 11; font.bold: bad
                     color: bad ? theme.crit : (assistantDialog.detailsNote !== "" ? theme.good : theme.faint)
-                    text: bad ? assistantDialog.problem.msg
+                    // a fault of a field is said under that field: the footer says how many, never the same words again
+                    text: bad ? (assistantDialog.faultCount() > 0 ? assistantDialog.faultCount() + (assistantDialog.faultCount() === 1 ? " field needs" : " fields need")
+                                                                + " a change: see the red lines above." : assistantDialog.problem.msg)
                         : assistantDialog.detailsNote !== "" ? assistantDialog.detailsNote
                         : assistantDialog.dirty ? "Changed, not saved yet."
                         : assistantDialog.detailsSaved ? "Saved. The right to work and your start date are in About you, under Options."

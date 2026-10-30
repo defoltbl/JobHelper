@@ -134,8 +134,54 @@ class OptionsService:
     OPTION_TEXTS = {"where": 80, "country": 60, "about_right_to_work": 300, "about_start": 300, "about_experience": config.MAX_EXPERIENCE_NOTES}
     MAX_LIST, MAX_WORD = 60, 100
     MAX_COMPANY_NAME, MAX_PAY_ROLE = 60, 60          # a career site's name; a kind of role under "salary by role"
+    MAX_COMPANIES = 200
+    # what the window calls each setting: a message names it the way the person sees it, never by its key
+    _LABELS = {"queries": "Search roles", "skip_words": "Skip titles with", "keep_words": "…but keep titles with",
+              "level_words": "Skip levels above yours", "wanted_roles": "Kinds of role you want",
+              "unwanted_roles": "Kinds of role you do not want", "my_fields": "Your fields", "where": "City", "country": "Country",
+              "about_right_to_work": "Right to work", "about_start": "You can start", "about_experience": "More about your work",
+              "salary_target": "Salary target", "threshold": "Write letters above", "min_lead_score": "Hide leads below",
+              "max_age_days": "Max job age", "per_query": "Results per query", "max_years": "Skip jobs asking for",
+              "keep_backups": "Keep backups", "followup_days": "Remind me after", "scan_days": "Scan emails from the last"}
     MODELS = ("sonnet", "opus", "haiku")
     SOURCES = ("czech", "linkedin", "remote", "careers", "adzuna", "jooble", "all")
+
+    @classmethod
+    def labels(cls) -> dict[str, str]:
+        """What the window calls each setting (its rows and its messages ask this one list)."""
+        return dict(cls._LABELS)
+
+    @classmethod
+    def _label(cls, key: str) -> str:
+        return cls._LABELS.get(key, key.replace("_", " ")).lstrip("…")
+
+    def country_problem(self, text):
+        """What is wrong with a typed country ('' = nothing): it must be a country the app knows, by its English name."""
+        name = " ".join(str(text or "").split())
+        if not name:
+            return ""
+        if len(name) > self.OPTION_TEXTS["country"]:
+            return f"“Country” takes up to {self.OPTION_TEXTS['country']} characters."
+        if re.search(r"[^\x00-\u024F]", name):
+            return "Write the country in English (Latin letters), for example Germany."
+        if re.search(r"\d", name):
+            return "A country's name has no digits. Write it in letters, for example Germany."
+        if not re.fullmatch(r"[A-Za-z\u00C0-\u024F]+(?:[ '.\-]+[A-Za-z\u00C0-\u024F]+)*\.?", name):
+            return "Write only the country's name, for example Germany."
+        if not places.country_named(name):
+            return f"“{name}” is not a country the app knows. Write its English name, for example Germany."
+        return ""
+
+    @staticmethod
+    def company_token_problem(token):
+        """What is wrong with a career site's token ('' = nothing): the rule the search itself uses (scrapers_ats.is_token)."""
+        from . import scrapers_ats
+        token = str(token or "").strip()
+        if not token:
+            return "Enter the company's token (the short name in its career-site address)."
+        if not scrapers_ats.is_token(token):
+            return "Use the short name from the career-site address only: letters, digits, - or _ (no dots, spaces or https://)."
+        return ""
 
     def check_options(self, opts):
         """(clean options, '') or ({}, what is wrong). The window checks the same things as you type;
@@ -156,26 +202,26 @@ class OptionsService:
             if key in clean:
                 value = clean[key]
                 if isinstance(value, bool) or not isinstance(value, (int, float)) or value != int(value) or not low <= value <= high:
-                    return {}, f"“{key.replace('_', ' ')}” must be a whole number from {low} to {high}."
+                    return {}, f"“{self._label(key)}” must be a whole number from {low} to {high}."
                 clean[key] = int(value)
         for key in self.OPTION_LISTS:
             if key in clean:
                 if not isinstance(clean[key], (list, tuple)):
-                    return {}, f"“{key.replace('_', ' ')}” must be a list of words."
+                    return {}, f"“{self._label(key)}” must be a list of words."
                 words = [str(w).strip() for w in clean[key] if isinstance(w, str) and str(w).strip()]
                 if len(words) > self.MAX_LIST:
-                    return {}, f"“{key.replace('_', ' ')}” has {len(words)} entries; the most is {self.MAX_LIST}."
+                    return {}, f"“{self._label(key)}” has {len(words)} entries; the most is {self.MAX_LIST}. Remove some."
                 long = next((w for w in words if len(w) > self.MAX_WORD), None)
                 if long:
-                    return {}, f"An entry under “{key.replace('_', ' ')}” is {len(long)} characters long; the most is {self.MAX_WORD}."
+                    return {}, f"An entry under “{self._label(key)}” is {len(long)} characters long; the most is {self.MAX_WORD}."
                 clean[key] = list(dict.fromkeys(words))
         for key, limit in self.OPTION_TEXTS.items():
             if key in clean:
                 text = str(clean[key] or "").strip() if isinstance(clean[key], (str, type(None))) else None
                 if text is None:
-                    return {}, f"“{key.replace('_', ' ')}” must be text."
+                    return {}, f"“{self._label(key)}” must be text."
                 if len(text) > limit:
-                    return {}, f"“{key.replace('_', ' ')}” is {len(text)} characters long; the most is {limit}. Shorten it."
+                    return {}, f"“{self._label(key)}” is {len(text)} characters long; the most is {limit}. Shorten it."
                 clean[key] = text
         if "salary_by_role" in clean:
             entries = clean["salary_by_role"]
@@ -213,8 +259,10 @@ class OptionsService:
                 return {}, f"“{key}” must be one of: " + ", ".join(allowed) + "."
         if "assistant_browser" in clean and (not isinstance(clean["assistant_browser"], str) or clean["assistant_browser"] not in chrome.BROWSERS):
             return {}, "“assistant browser” must be one of: " + ", ".join(chrome.BROWSERS) + "."
-        if clean.get("country") and not re.fullmatch(r"[^\W\d_]+(?:[ '.\-]+[^\W\d_]+)*\.?", clean["country"]):
-            return {}, "“country” must be a country's name in letters, for example Germany."
+        # a country saved by an older version stays as it is: only a changed one must be one the app knows
+        problem = self.country_problem(clean["country"]) if clean.get("country") and clean["country"] != self.options().get("country") else ""
+        if problem:
+            return {}, problem
         remote_problem = places.RemoteReach.problem(clean)
         if remote_problem:
             return {}, remote_problem
@@ -222,7 +270,7 @@ class OptionsService:
             clean["remote_countries"] = list(places.RemoteReach("country", clean["remote_countries"]).countries)
         for key in ("include_remote", "all_languages", "full_time_only", "notifications", "scan_all_folders", "assistant_watch"):
             if key in clean and not isinstance(clean[key], bool):
-                return {}, f"“{key.replace('_', ' ')}” must be on or off."
+                return {}, f"“{self._label(key)}” must be on or off."
         return clean, ""
 
     @staticmethod
@@ -234,6 +282,13 @@ class OptionsService:
     def own_figure(estimate_czk, currency) -> int:
         """An estimate (always in crowns) as a figure of your own in the currency you chose."""
         return salary.from_czk(float(estimate_czk or 0), str(currency or "CZK"))
+
+    def pay_fault(self, role, amount, others=()):
+        """pay_problem with the box it is about: {msg, box} where box is "role", "amount" or "" (the line as a whole)."""
+        msg = self.pay_problem(role, amount, others)
+        if not msg:
+            return {"msg": "", "box": ""}
+        return {"msg": msg, "box": "amount" if msg.startswith("Enter the salary") else ("" if msg.startswith("The list takes") else "role")}
 
     def pay_problem(self, role, amount, others=()):
         """'' or what is wrong with one line of "A different figure for": the words the window shows when you press Add, and
@@ -278,11 +333,24 @@ class OptionsService:
         config.ensure_dirs()
         # The token becomes part of an address the app asks (https://<token>.recruitee.com …): only a plain slug is kept,
         # so nothing typed or pasted here can send a request anywhere else. The window checks the same as you type.
-        clean = [{"name": " ".join(str(c.get("name") or c["token"]).split())[:self.MAX_COMPANY_NAME], "ats": c["ats"], "token": c["token"]}
-                 for c in (companies if isinstance(companies, (list, tuple)) else [])
-                 if isinstance(c, dict) and isinstance(c.get("ats"), str) and c["ats"] in scrapers_ats.ATS_NAMES
-                 and isinstance(c.get("token"), str) and scrapers_ats.is_token(c["token"])][:200]
+        given = companies if isinstance(companies, (list, tuple)) else []
+
+        def usable(c) -> bool:
+            return (isinstance(c, dict) and isinstance(c.get("ats"), str) and c["ats"] in scrapers_ats.ATS_NAMES
+                    and isinstance(c.get("token"), str) and scrapers_ats.is_token(c["token"]))
+        kept = [{"name": " ".join(str(c.get("name") or c["token"]).split())[:self.MAX_COMPANY_NAME], "ats": c["ats"], "token": c["token"]}
+                for c in given if usable(c)]
+        wrong = [c for c in given if not usable(c)]
+        clean = kept[:self.MAX_COMPANIES]
         (config.DATA_DIR / "companies.json").write_text(
             json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
         integrity.approve(["companies"])          # changed through the app: trusted
-        return {"ok": True, "count": len(clean)}
+        # never "saved" while a company was left out without a word: each one left out is named
+        said = []
+        if wrong:
+            names = ", ".join(str(c.get("name") or c.get("token") or "?") if isinstance(c, dict) else "?" for c in wrong[:5])
+            more = f" and {len(wrong) - 5} more" if len(wrong) > 5 else ""
+            said.append(f"Not saved: {names}{more}. Its short name or site is not one the app can ask. Remove it, then add it again.")
+        if len(kept) > self.MAX_COMPANIES:
+            said.append(f"The list holds up to {self.MAX_COMPANIES} career sites; the last {len(kept) - self.MAX_COMPANIES} were not saved.")
+        return {"ok": False, "count": len(clean), "msg": " ".join(said)} if said else {"ok": True, "count": len(clean)}

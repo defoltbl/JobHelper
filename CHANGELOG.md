@@ -7,6 +7,31 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- A number box now takes a number of 1000 and more as you type it. Before, a salary such as 60000 went back to 6 at its fifth digit.
+- **Welcome card:** the mailbox test says why a mail server cannot be reached, for example that its name could not be found.
+- **Cover letter:** the employer check reads more job titles right (Self-employed, a teacher at a school) and no longer takes a line of work or a degree for a job.
+- **My details:** the country must be one the app knows, as in Options.
+- **Welcome card:** a damaged, empty or scanned CV file is refused with the reason. A new CV with the same name no longer replaces the old one without a backup.
+- **Welcome card:** each mailbox's test result has its own colour, and a mailbox that cannot be reached loses its green tick.
+- **About you:** a start date that has passed says so. The notes box turns red when the notes are too long.
+- **My details:** one Save names every field that needs a change, each under its own field.
+- **Cover letter:** with no letter template of your own, the app makes one from the top of your CV, so **Edit letter** works for a new user.
+- **Email scan:** a failed scan says why, for example that the mail server could not be found, instead of always "check your connection".
+- A red message is now also a red box in the search roles, the rewrite note and the salary lines.
+- **Weekly run** and **Countries for remote jobs:** ✕, Esc and **Cancel** ask once before a change is thrown away.
+- **Weekly run:** an empty hour or minute is an error, not 00. The weekly run can be switched off while its time is wrong.
+- **Form answers:** questions you typed and did not draft are no longer lost when you close the window. The **assistant** does the same for a request you typed and did not send.
+- **About you:** **Cancel** asks once before it discards changes, as ✕ and Esc do.
+- **Welcome card:** Esc leaves an email field; a second Esc closes the card.
+- **Options:** a career-site short name with a dot is refused when you add it. Before, the window took it, and **Save** said "saved" but left the company out.
+- **Options:** the country must be one the app knows ("Narnia" is refused).
+- **Options:** a search role that is too long, or a full list, is said when you select **Add**.
+- **Options:** a message names each setting as the window does, for example "Search roles".
+- **Options:** **Save** stops when a number box holds a number outside its range. Before, the number was changed as the window closed.
+- **Options:** a red line goes when you put the fault right.
+- **Options:** **Cancel** asks before it discards changes, as ✕ and Esc do.
+- **Options:** "Choose at least one job source" is said once, and Options shows it.
+- **Options:** a country saved by an older version is kept as it is.
 - The **adapted CV** keeps a one-line skills list without labels in one line: it changes only the order, and a skill goes only to fit one page. Before, the list could turn into several rows with one skill each.
 - When the **adapted CV** must leave out a skill to fit on one page, the job window now names that skill in a line of its own.
 - The **adapted CV**'s profile no longer adds a sentence about working independently when your CV's profile has none.

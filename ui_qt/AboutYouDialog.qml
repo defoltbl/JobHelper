@@ -30,6 +30,12 @@ Dialog {
     Blame { id: aboutBlame }
     property alias err: aboutBlame.text   // the red line under the window; aboutBlame.box is the box it is about
     property string payErr: ""
+    property string payBox: ""            // which box of "A different figure for" the fault is about: "role", "amount" or ""
+    property bool numberFault: false      // the red line is about a number box: it is checked again as the box is edited
+    function recheckNumbers() {           // a number put right: its line goes; another one still wrong: its line stays
+        if (!numberFault) return;
+        var w = numberProblem(); numberFault = w !== ""; aboutBlame.say(w, "");
+    }
     property bool confirmClose: false
     property string loaded: ""            // what was there when the window opened, to know whether anything changed
     property var start: ({ ok: true, text: "" })
@@ -58,7 +64,8 @@ Dialog {
         boxModel.clear();
         (info.boxes || []).forEach(function (b) { boxModel.append({ job: String(b.job), notes: String(b.notes || ""), earlier: b.earlier === true }); });
         generalField.text = info.general || "";
-        err = ""; payErr = ""; estimateErr = ""; confirmClose = false;
+        err = ""; payErr = ""; payBox = ""; estimateErr = ""; confirmClose = false; numberFault = false;
+        salarySpin.flagged = false; payAmount.flagged = false;     // a red box from the last time never stays
         loaded = JSON.stringify(collect());
         aboutSink.forceActiveFocus();
         if (aboutScroll && aboutScroll.contentItem) { aboutScroll.contentItem.cancelFlick(); aboutScroll.contentItem.contentY = 0; }
@@ -104,10 +111,13 @@ Dialog {
     }
     function addPay() {                   // the back end's rule for one line (OptionsService.pay_problem), with its words
         var role = payRole.text.trim();
-        payErr = bridge.payProblem(role, payAmount.value, payRoles(payModel.count));
+        var fault = bridge.payFault(role, payAmount.value, payRoles(payModel.count));      // the back end says which box
+        payErr = fault.msg; payBox = fault.box;
+        payAmount.flagged = payBox === "amount";
         if (payErr !== "") return;
         payModel.append({ role: role, amount: payAmount.value });
         payRole.text = ""; payAmount.value = 0;
+        if (err !== "" && problem().text === "") err = "";      // the "typed but not added" line goes once it is added
     }
     // what must be put right before saving, in the window's own words, and the box it is about ("" when all is well).
     // Only the one-line boxes are named; a fault in the notes, or in their size together, is the red line alone.
@@ -116,7 +126,7 @@ Dialog {
         if (payRole.text.trim() !== "") return fault("“" + payRole.text.trim().substring(0, 40) + "” is typed under “A different figure for” but not added. Press Add, or empty the box.");
         for (var i = 0; i < payModel.count; i++) {      // each line by the same rule as Add
             var line = bridge.payProblem(payModel.get(i).role.trim(), payModel.get(i).amount, payRoles(i));
-            if (line !== "") return fault("A different figure for: " + line);
+            if (line !== "") return fault("A line under “A different figure for” needs a change: its red line says why.");
         }
         if (win.hasNonLatin(rightField.text) || win.hasNonLatin(startField.text))        // each box in other letters turns red
             return fault("Write the right to work and the start in English (Latin letters): they go into English letters and forms.", "latin");
@@ -126,7 +136,20 @@ Dialog {
             return fault("Write the note on “" + boxModel.get(j).job + "” in English (Latin letters).");
         return fault("");
     }
+    // a number box holding a number outside its range: Save would change it as the window closes, unseen (as Options)
+    function numberProblem() {
+        var boxes = [[salarySpin, "Salary you ask for"], [payAmount, "A different figure for"]];     // the labels of their rows
+        for (var i = 0; i < boxes.length; i++) {
+            var box = boxes[i][0], typed = box.typed();
+            box.flagged = !isNaN(typed) && (typed < box.from || typed > box.to);
+            if (box.flagged) { box.note = ""; return "“" + boxes[i][1] + "” takes " + box.from + " to " + box.to + "; you typed " + typed + ". Change it, then save."; }
+        }
+        return "";
+    }
     function save() {
+        var wrongNumber = numberProblem();    // before the boxes are finished: they would change it unseen
+        numberFault = wrongNumber !== "";
+        if (wrongNumber !== "") { aboutBlame.say(wrongNumber, ""); return; }
         aboutSink.forceActiveFocus();     // finish any field that is still being edited
         err = ""; confirmClose = false;
         var p = problem();
@@ -175,7 +198,8 @@ Dialog {
                     Card {
                         SRow { label: "Salary you ask for"; hint: "gross per month · 0 = none given"
                             RowLayout { spacing: 8
-                                ThemedSpin { id: salarySpin; objectName: "salarySpin"; from: 0; to: win.limits.salary_max; stepSize: 1000; value: 0 }
+                                ThemedSpin { id: salarySpin; objectName: "salarySpin"; from: 0; to: win.limits.salary_max; stepSize: 1000; value: 0
+                                    onEdited: aboutDialog.recheckNumbers() }
                                 ThemedCombo { id: currencyCombo; objectName: "currencyCombo"; implicitWidth: 84; plainText: true } } }
                         // with 0: what forms give instead, the app's own estimate for your kinds of role (or why there is none)
                         ColumnLayout { objectName: "salaryEstimates"; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12
@@ -201,9 +225,11 @@ Dialog {
                                 TextField { id: payRole; objectName: "payRole"; implicitWidth: 120; implicitHeight: 30; maximumLength: win.limits.pay_role
                                     placeholderText: "e.g. support"; placeholderTextColor: theme.faint; color: theme.ink; font.pixelSize: 12; selectByMouse: true
                                     background: Rectangle { radius: 8; color: theme.surface; border.width: 1
-                                        border.color: aboutDialog.payErr !== "" ? theme.crit : (payRole.activeFocus ? theme.accent : theme.line) }
-                                    onTextEdited: aboutDialog.payErr = ""; onAccepted: aboutDialog.addPay() }
-                                ThemedSpin { id: payAmount; objectName: "payAmount"; from: 0; to: win.limits.salary_max; stepSize: 1000; value: 0 }
+                                        border.color: aboutDialog.payBox === "role" ? theme.crit : (payRole.activeFocus ? theme.accent : theme.line) }
+                                    onTextEdited: { aboutDialog.payErr = ""; aboutDialog.payBox = ""; payAmount.flagged = false; }
+                                    onAccepted: aboutDialog.addPay() }
+                                ThemedSpin { id: payAmount; objectName: "payAmount"; from: 0; to: win.limits.salary_max; stepSize: 1000; value: 0
+                                    onEdited: { if (aboutDialog.payBox === "amount") { aboutDialog.payErr = ""; aboutDialog.payBox = ""; } aboutDialog.recheckNumbers(); } }
                                 SmallButton { objectName: "payAdd"; text: "+ Add"; onClicked: aboutDialog.addPay() } } }
                         Text { objectName: "payErr"; visible: aboutDialog.payErr !== ""; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12
                             wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true; text: aboutDialog.payErr }
@@ -212,15 +238,24 @@ Dialog {
                             Layout.rightMargin: 12; Layout.bottomMargin: 10; spacing: 6
                             Repeater { model: payModel
                                 RowLayout { Layout.fillWidth: true; spacing: 6
-                                    TextField { objectName: "payRowRole_" + index; Layout.fillWidth: true; implicitHeight: 30; text: model.role
+                                    TextField { id: payRowRole; objectName: "payRowRole_" + index; Layout.fillWidth: true; implicitHeight: 30; text: model.role
                                         maximumLength: win.limits.pay_role; color: theme.ink; font.pixelSize: 12; selectByMouse: true
+                                        // a line the back end refuses is red where it stands, with its reason under it (payTick: any line's change)
+                                        readonly property string fault: { aboutDialog.payTick; return model.role === undefined ? ""
+                                            : bridge.payProblem(String(model.role).trim(), model.amount, aboutDialog.payRoles(index)); }
+                                        readonly property bool wrong: fault !== ""
                                         background: Rectangle { radius: 8; color: theme.surface; border.width: 1
-                                            border.color: parent.activeFocus ? theme.accent : theme.line }
+                                            border.color: payRowRole.wrong ? theme.crit : (payRowRole.activeFocus ? theme.accent : theme.line) }
                                         onTextEdited: payModel.setProperty(index, "role", text) }
                                     ThemedSpin { objectName: "payRowAmount_" + index; from: 0; to: win.limits.salary_max; stepSize: 1000; value: model.amount
                                         onValueChanged: if (value !== model.amount) payModel.setProperty(index, "amount", value) }
                                     Text { text: currencyCombo.currentText; color: theme.faint; font.pixelSize: 11 }
                                     SmallButton { objectName: "payRowRemove_" + index; text: "Remove"; onClicked: payModel.remove(index) } } }
+                            Repeater { model: payModel      // each refused line says why, under the list
+                                Text { objectName: "payRowErr_" + index; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit
+                                    font.pixelSize: 11; font.bold: true; text: { aboutDialog.payTick; var f = model.role === undefined ? ""
+                                        : bridge.payProblem(String(model.role).trim(), model.amount, aboutDialog.payRoles(index));
+                                        return f === "" ? "" : "“" + model.role + "”: " + f; } visible: text !== "" } }
                         }
                     }
                 }
@@ -288,7 +323,9 @@ Dialog {
                                     Text { visible: model.earlier; text: "no longer in My details"; color: theme.warn; font.pixelSize: 10; font.bold: true }
                                     SmallButton { objectName: "boxRemove_" + index; visible: model.earlier; text: "Remove"; onClicked: boxModel.remove(index) } }
                                 Rectangle { Layout.fillWidth: true; radius: 8; color: theme.surface; border.width: 1
-                                    border.color: boxEdit.activeFocus ? theme.accent : theme.line
+                                    // in other letters, or the notes too long together: each box with a fault is red
+                                    border.color: win.hasNonLatin(boxEdit.text) || (aboutDialog.notesSize > aboutDialog.notesMax && boxEdit.text !== "") ? theme.crit
+                                                  : (boxEdit.activeFocus ? theme.accent : theme.line)
                                     implicitHeight: Math.max(70, boxEdit.implicitHeight + 16)
                                     TextEdit { id: boxEdit; objectName: "boxNotes_" + index; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap
                                         selectByMouse: true; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent; text: model.notes
@@ -301,7 +338,9 @@ Dialog {
                             Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                                 text: "Projects, volunteering, anything that belongs to no job above." }
                             Rectangle { Layout.fillWidth: true; radius: 8; color: theme.surface; border.width: 1
-                                border.color: generalField.activeFocus ? theme.accent : theme.line
+                                // the notes over their size together: the box turns red with the count under it
+                                border.color: aboutDialog.notesSize > aboutDialog.notesMax || win.hasNonLatin(generalField.text) ? theme.crit
+                                              : (generalField.activeFocus ? theme.accent : theme.line)
                                 implicitHeight: Math.max(70, generalField.implicitHeight + 16)
                                 TextEdit { id: generalField; objectName: "generalField"; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap
                                     selectByMouse: true; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
@@ -339,7 +378,7 @@ Dialog {
             Text { objectName: "aboutErr"; Layout.fillWidth: true; visible: aboutDialog.err !== ""; wrapMode: Text.WordWrap
                 color: theme.crit; font.pixelSize: 12; font.bold: true; text: aboutDialog.err }
             Item { Layout.fillWidth: aboutDialog.err === "" }
-            SmallButton { objectName: "aboutCancel"; text: aboutDialog.confirmClose ? "Discard changes" : "Cancel"; onClicked: aboutDialog.close() }
+            SmallButton { id: aboutCancelBtn; objectName: "aboutCancel"; text: aboutDialog.confirmClose ? "Discard changes" : "Cancel"; onClicked: aboutDialog.tryClose() }
             PillButton { id: aboutSaveBtn; objectName: "aboutSave"; primaryStyle: true; text: "Save"; onClicked: aboutDialog.save() }
         }
     }

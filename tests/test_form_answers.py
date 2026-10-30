@@ -308,7 +308,7 @@ def test_salary_settings_are_checked(isolate_data):
     for wrong in ({"salary_target": -1}, {"salary_target": 2.5}, {"salary_target": "a lot"}, {"salary_target": 10**9},
                   {"salary_currency": "XXX"}, {"salary_currency": ""}, {"salary_currency": 5}):
         result = api.save_options({**api.options(), **wrong})
-        assert result["ok"] is False and "salary" in result["msg"], wrong
+        assert result["ok"] is False and "salary" in result["msg"].lower(), wrong
     assert api.save_options({**api.options(), "salary_target": 4000, "salary_currency": "gbp"})["ok"] is True
     assert (api.options()["salary_target"], api.options()["salary_currency"]) == (4000, "GBP")
     assert "CZK" in api.currencies() and "EUR" in api.currencies()

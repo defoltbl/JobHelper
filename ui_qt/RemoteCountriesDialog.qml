@@ -11,7 +11,9 @@ import QtQuick.Effects
 
 Dialog {
     id: remoteDialog; objectName: "remoteDialog"
-    modal: true; anchors.centerIn: parent; closePolicy: Popup.CloseOnEscape
+    modal: true; anchors.centerIn: parent
+    closePolicy: Popup.NoAutoClose        // Esc goes through tryClose, so ticks are never thrown away unasked
+    Shortcut { sequence: "Escape"; enabled: win.onTop(remoteDialog); onActivated: remoteDialog.tryClose() }
     enter: Transition { ParallelAnimation {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
         NumberAnimation { property: "scale"; from: 0.92; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 0.7 } } }
@@ -32,6 +34,17 @@ Dialog {
     property string query: ""
     property string area: ""
     property string err: ""
+    property bool confirmClose: false
+    property string loaded: ""            // the ticks as the window opened
+    function tryClose() {                 // the ✕, Cancel and Esc: ask once before ticks are thrown away
+        if (JSON.stringify(picked.slice().sort()) !== loaded && !confirmClose) {
+            confirmClose = true;
+            err = "You changed the countries and did not press Done. Press Done, or close once more to discard the change.";
+            return;
+        }
+        close();
+    }
+    onClosed: confirmClose = false
     readonly property var shown: all.filter(function (c) {          // by the start of a word of its name, or of another name it has
         return c.key !== home && (area === "" || c.area === area) && win.matchesStart([c.name].concat(c.names || []), query);
     })
@@ -39,14 +52,15 @@ Dialog {
     function show(keys, homeKey) {
         home = (homeKey || "").toLowerCase();
         picked = (keys || []).filter(function (k) { return k !== home; });
-        query = ""; area = ""; err = ""; searchField.text = "";
+        query = ""; area = ""; err = ""; searchField.text = ""; confirmClose = false;
+        loaded = JSON.stringify(picked.slice().sort());
         countryList.positionViewAtBeginning();
         open();
     }
     function toggle(key) {
         var on = picked.indexOf(key) >= 0;
         if (!on && picked.length >= most) { err = "You can add up to " + most + " countries."; return; }
-        err = "";
+        err = ""; confirmClose = false;
         // kept in the order of the list, so the chips in Options read alphabetically
         picked = all.map(function (c) { return c.key; })
                     .filter(function (k) { return k === key ? !on : picked.indexOf(k) >= 0; });
@@ -66,7 +80,7 @@ Dialog {
                 Text { objectName: "remoteHomeNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.soft; font.pixelSize: 11
                     text: (remoteDialog.home !== "" ? remoteDialog.nameOf(remoteDialog.home) + " is always included. " : "")
                           + "A search also keeps remote jobs open to the countries you tick." } }
-            CloseButton { onClicked: remoteDialog.close() } }
+            CloseButton { onClicked: remoteDialog.tryClose() } }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
 
         ColumnLayout { Layout.fillWidth: true; Layout.fillHeight: true; Layout.margins: 14; spacing: 10
@@ -129,8 +143,8 @@ Dialog {
                 text: remoteDialog.picked.length === 0 ? "No country added"
                       : remoteDialog.picked.length === 1 ? "1 country added" : remoteDialog.picked.length + " countries added" }
             SmallButton { objectName: "remoteClear"; text: "Clear"; visible: remoteDialog.picked.length > 0
-                onClicked: { remoteDialog.picked = []; remoteDialog.err = ""; } }
-            SmallButton { text: "Cancel"; onClicked: remoteDialog.close() }
+                onClicked: { remoteDialog.picked = []; remoteDialog.err = ""; remoteDialog.confirmClose = false; } }
+            SmallButton { id: remoteCancelBtn; text: remoteDialog.confirmClose ? "Discard changes" : "Cancel"; onClicked: remoteDialog.tryClose() }
             SmallButton { id: remoteDoneBtn; objectName: "remoteDone"; text: "Done"; primaryStyle: true
                 onClicked: { optDialog.pickedRemote = remoteDialog.picked.slice(); remoteDialog.close(); } } }
     }

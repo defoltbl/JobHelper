@@ -10,6 +10,7 @@ Item {
     id: af
     property var suggestions: []
     property string placeholder: ""
+    property bool wrong: false            // the window's red line is about this field: its border turns red too
     property alias text: tf.text
     signal add(string value)
     signal edited()
@@ -27,7 +28,7 @@ Item {
         id: tf; anchors.fill: parent
         placeholderText: af.placeholder; color: theme.ink; font.pixelSize: 12; selectByMouse: true
         background: Rectangle { radius: 7; color: theme.surface; border.width: 1
-            border.color: tf.activeFocus ? theme.accent : theme.line }
+            border.color: af.wrong ? theme.crit : (tf.activeFocus ? theme.accent : theme.line) }
         onTextEdited: { af.edited(); sugPop.refresh(); }
         onActiveFocusChanged: if (!activeFocus) sugPop.close()
         Keys.onReturnPressed: af.take()

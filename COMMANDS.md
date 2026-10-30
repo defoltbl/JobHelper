@@ -575,7 +575,7 @@ Your own letters are never converted.
 ### How the cover letter is made
 
 The rules live in `data/cover_letter_instruction.md`; the look comes from
-`data/cover_letter_template.docx` (a letter of your own, whose head and layout are kept). After editing either
+`data/cover_letter_template.docx` (a letter of your own, or one the app makes from the head of your CV; its head and layout are kept). After editing either
 file by hand, approve the change (section 10). Only the title line,
 the date and the five body paragraphs get new text; the head block, fonts,
 spacing and page setup are untouched (only `word/document.xml` is edited). The

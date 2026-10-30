@@ -54,7 +54,9 @@ def test_the_assistant_stands_on_the_line_blinks_and_waves(ui):
     ui.js("stagePanel.assistant.greet()")
     _until_true(ui, lambda: ui.js("stagePanel.assistant.parent.scale") > 0 and bubble.property("opacity") == 1
                 and bot.property("shown").startswith("Hi!"))
-    _until_settled(ui, lambda: bubble.property("width"))                     # the bubble grows to its words after it shows
+    # the bubble grows to its words after it shows: wait for its own target, not for a pause in the animation (a slow
+    # machine, as the CI runner, can pause between frames and look settled at 195 of 420)
+    _until_true(ui, lambda: bubble.property("width") == bubble.property("target"))
     assert floor.property("height") == 560 and ui.js("stagePanel.assistant.parent.scale") > 0
     wide = bubble.property("width")
     bot.setProperty("greeting", False)
@@ -84,7 +86,11 @@ def test_the_assistant_asks_for_your_details_first_and_checks_them(ui):
     assert "Every field is empty" in ui.find("asDetailsNote").property("text") and not details.path().exists()
     ui.js('assistantDialog.setField("first_name", "Alex"); assistantDialog.setField("last_name", "Novak"); assistantDialog.setField("email", "alex@example")')
     assert dialog.property("dirty") and ui.js("assistantDialog.problem.field") == "email"
-    assert "email address" in ui.find("asDetailsNote").property("text")
+    assert "email address" in ui.js('assistantDialog.faultAt("email")') and ui.find("asDetailsNote").property("text") == \
+        "1 field needs a change: see the red lines above.", "said once, under its field (hands-on F11)"
+    ui.js('assistantDialog.setField("phone", "call me")')
+    assert ui.find("asDetailsNote").property("text").startswith("2 fields need a change") and "digits" in ui.js('assistantDialog.faultAt("phone")')
+    ui.js('assistantDialog.setField("phone", "")')
     ui.js("assistantDialog.saveDetails()")
     assert not details.path().exists(), "a wrong field is not saved"
     ui.js("assistantDialog.tryClose()")
@@ -371,7 +377,8 @@ def test_my_details_takes_several_jobs_degrees_a_salary_with_its_currency_and_fi
         ui.js("assistantDialog.addRow(jobModel, assistantDialog.jobCols, true)")
     assert ui.js("jobModel.count") == 3 and dialog.property("dirty")
     ui.js('assistantDialog.setRow(jobModel, 0, "employer", "Old Mill")')
-    assert ui.js("assistantDialog.problem.field") == "experience.0.title" and "missing" in ui.find("asDetailsNote").property("text")
+    assert ui.js("assistantDialog.problem.field") == "experience.0.title" and "missing" in ui.js('assistantDialog.faultIn("experience").msg')
+    assert ui.find("asDetailsNote").property("text").startswith("1 field needs a change"), "said under its row, counted in the footer"
     ui.js('assistantDialog.setRow(jobModel, 0, "title", "Intern"); assistantDialog.setRow(jobModel, 0, "start", "2020"); assistantDialog.setRow(jobModel, 0, "end", "2019")')
     assert ui.js("assistantDialog.problem.field") == "experience.0.end" and "earlier" in ui.js("assistantDialog.problem.msg")
     ui.js('assistantDialog.setRow(jobModel, 0, "end", "2021")')
@@ -1191,3 +1198,22 @@ def test_the_notes_count_includes_the_job_names_and_follows_each_box(ui):
     ui.bridge.saveOptions(start)
     details.save(details.empty())
     assert ui.warnings == []
+
+
+def test_my_details_keeps_every_fault_after_save_salary_too(ui):
+    """Review of F11: a refused Save dropped the per-field messages, and a salary fault showed only when it came first."""
+    ui.js("assistantDialog.show()")
+    _until_open(ui, "assistantDialog")
+    dialog = ui.find("assistantDialog")
+    try:
+        ui.js('assistantDialog.page = "details"')
+        ui.js('assistantDialog.setField("first_name", "Alex"); assistantDialog.setField("email", "alex@example"); assistantDialog.setField("phone", "call me")')
+        ui.js("assistantDialog.saveDetails()")
+        assert "email address" in ui.js('assistantDialog.faultAt("email")') and "digits" in ui.js('assistantDialog.faultAt("phone")'), \
+            "Save keeps every field's own message"
+        ui.js('assistantDialog.salaryAmount = "a lot"; assistantDialog.touched()', dialog)
+        ui.js("assistantDialog.problem = bridge.checkMyDetails(JSON.stringify(assistantDialog.values()))")
+        assert ui.js('assistantDialog.faultIn("salary").msg') != "" and ui.js("assistantDialog.faultCount()") >= 3
+    finally:
+        ui.js("assistantDialog.dirty = false; assistantDialog.confirmClose = false; assistantDialog.problem = ({}); assistantDialog.close()")
+        _until_closed(ui, "assistantDialog")

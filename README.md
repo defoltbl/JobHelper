@@ -18,8 +18,9 @@ API key, no per-token bill – and your data stays on your Mac, encrypted.
 ## Highlights
 
 - **Never acts in your name.** It does not apply or send anything, and reads the mailbox read-only.
-- **Never claims what your CV does not show.** Every CV, letter and form answer the model writes is
-  checked against your own CV in plain code before it is saved.
+- **Checks what it writes against your CV.** Every CV, letter and form answer the model writes is
+  checked against your own CV in plain code before it is saved, and what a check cannot settle is
+  shown to you. Read each letter before you send it.
 - **Search and scoring you can read.** Czech boards, LinkedIn, company career sites and remote
   boards; each posting gets a 0–100 score with the reason in words.
 - **Fills application forms** in Chrome, Brave, Edge, Opera or Safari – empty fields only, never

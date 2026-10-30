@@ -15,6 +15,9 @@ def test_the_limits_come_from_the_module_that_checks_them():
     assert limits["company_notes"] == planner.NOTE_LIMITS and limits["event_note"] == planner.MAX_EVENT_NOTE
     assert limits["experience_notes"] == config.MAX_EXPERIENCE_NOTES and limits["letter_hint"] == cover_letter.MAX_HINT
     assert limits["options"] == OptionsService.OPTION_TEXTS and limits["list_word"] == OptionsService.MAX_WORD
+    from jobhelper import schedule
+    assert limits["schedule"] == {"hour": list(schedule.HOURS), "minute": list(schedule.MINUTES)} == {"hour": [0, 23], "minute": [0, 59]}
+    assert limits["list_max"] == OptionsService.MAX_LIST and limits["labels"] == OptionsService.labels()
     assert (limits["company_name"], limits["pay_role"], limits["mail_server"]) == (OptionsService.MAX_COMPANY_NAME, OptionsService.MAX_PAY_ROLE, mailhosts.MAX_HOST)
     assert limits["numbers"] == {key: list(span) for key, span in OptionsService.OPTION_NUMBERS.items()}
     assert limits["shelf_days"] == [housekeeping.SHELF_MIN_DAYS, Api().SHELF_MAX_DAYS] and limits["look_back"] == list(config.LOOK_BACK_ONCE)

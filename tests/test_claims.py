@@ -167,3 +167,24 @@ def test_a_line_of_work_with_a_comma_or_dash_heads_no_job():
     assert check.misplaced("At Contoso Finance I loaded data into Snowflake.") == ["'Snowflake' at Contoso Finance"], "a title may start with -ed"
     for title in ("Full-stack Developer – Contoso", "iOS Developer – Contoso", "Data scientist – Contoso", "Co-founder & CTO, Contoso"):
         assert claims.EmployerCheck._head_end(title + " (2020 – 2022)") > 0, f"{title} is a job"
+
+
+def test_titles_and_places_that_once_hid_a_job_or_made_one():
+    """Later list of the employer-check reviews: "Rebuilt billing, …" headed a job; "Self-employed …" and
+    "Master Data Engineer …" did not; an academy or a school as employer hid the job."""
+    head = claims.EmployerCheck._head_end
+    for work in ("Rebuilt billing, Contoso (2022 – 2023)", "Rewrote the parser, Contoso (2022 – 2023)",
+                 "Oversaw the move, Contoso (2022 – 2023)", "Held workshops, Contoso (2022 – 2023)"):
+        assert head(work) == 0, work
+    # degrees stay study, also in title case and with no place word, and with a curly apostrophe (last full check)
+    for degree in ("Master of Science – Charles University (2014 – 2016)", "Master's in Physics, Example University (2014 – 2016)",
+                   "Master’s degree, ETH (2014 – 2016)", "Master Programme in CS – Tailspin (2014 – 2016)",
+                   "Master 2 Informatique – Example (2014 – 2016)", "Software Engineering, Example University (2014 – 2018)",
+                   "Data Science – Charles University (2018 – 2020)", "Doctor of Philosophy – Example University (2010 – 2014)",
+                   "Student – Example Polytechnic (2020 – 2024)", "MA History – Example University (2010 – 2012)",
+                   "Teacher Training Course, University of X (2015 – 2016)", "Data Analyst Bootcamp, Example Academy (2020 – 2021)"):
+        assert head(degree) == 0, degree
+    for job in ("Self-employed Photographer, Contoso (2019 – 2021)", "Master Data Engineer – Contoso (2020 – 2022)",
+                "Intern – Fabrikam Academy (2021 – 2022)", "Teacher – International School of Prague (2018 – 2020)",
+                "Physics Teacher, Example Gymnasium (2018 – 2020)"):
+        assert head(job) > 0, job

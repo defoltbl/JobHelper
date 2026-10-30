@@ -110,6 +110,7 @@ def safe_environment(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(agent2_search, "refetch_description", lambda job: "")     # never read a real job board
     monkeypatch.setattr(agent2_search, "posting_closed", lambda job: None)        # nor ask one whether a posting is still open
     from jobhelper import email_client
+    monkeypatch.setattr(email_client, "real_try_login", email_client.try_login, raising=False)    # for a test that fakes _open itself
     monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0, host="": {"ok": True, "msg": ""})   # never a real mail server
     from jobhelper import chrome, trouble
 

@@ -105,6 +105,9 @@ class AboutYou:
         if not words:
             return {"ok": True, "text": ""}
         day, worked = form_fill.start_day(words, today)
+        if day is None and form_fill.start_day(words, date.min)[0] is not None:      # a day the rule reads, but it has passed
+            return {"ok": False, "text": f"“{words}” has passed. Write a date from today on, or a time from now (two weeks, "
+                                         "one month)."}
         if day is None:
             return {"ok": False, "text": f"Forms cannot get a date from “{words}”. Write a date (2026-11-01) or a time "
                                          "from now (two weeks, one month), or leave it to forms to ask."}

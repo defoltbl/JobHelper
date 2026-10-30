@@ -197,7 +197,6 @@ ApplicationWindow {
     function isEmail(s) { return /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test((s || "").trim()); }
     function cleanPw(s) { return (s || "").replace(/\s+/g, ""); }
     function isAppPassword(s) { return /^[a-z]{16}$/i.test(cleanPw(s)); }   // Gmail app password = 16 letters
-    function isSlug(s) { return /^[a-z0-9][a-z0-9._-]{0,60}$/i.test((s || "").trim()); }
     function cityEN(c) {
         var m = { "praha": "Prague", "plzeň": "Pilsen", "plzen": "Pilsen", "wien": "Vienna",
                   "münchen": "Munich", "köln": "Cologne", "warszawa": "Warsaw" };

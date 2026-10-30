@@ -138,8 +138,8 @@ Four kinds of box mark what deserves attention (Table 1.4).
 The figures show the real window of the app, filled with **invented** people and companies.
 
 > **Note**
-> A window that holds text you did not save never closes without a question. The ✕ and the Esc
-> key ask once. Press them again to discard the changes. While Claude is still working in a
+> A window that holds text you did not save never closes without a question. The ✕, the Esc
+> key and **Cancel** ask once. Press one again to discard the changes. While Claude is still working in a
 > window, it waits until the work is done. A button that you cannot use at the moment is pale.
 > The Tab key also reaches the ✕ of each window. Press Space to close the window.
 
@@ -227,6 +227,11 @@ copies. To get PDF copies, install LibreOffice from libreoffice.org, then select
 2. Pick your CV file.
 3. The row shows the file name and turns green.
 
+If the file is of another type, empty, damaged, larger than 20 MB or a scan without text, the
+row says so in red. The app then keeps
+your CV as it was. If you choose a new CV with the same name, the app keeps a copy of the old
+one in the backups.
+
 > **Tip**
 > A `.docx` whose sections are headed PROFILE and KEY SKILLS gives the best result: the app
 > can then adapt both sections for each job. With other files it rewrites the profile
@@ -313,7 +318,8 @@ mailboxes can still be read:
 2. On the **Job email** row, select **Test**.
 
 A green line says that the app signed in; a red line says what the mail server answered. Both
-mailboxes are tried when you have two.
+mailboxes are tried when you have two, and each has its own line. When the main mailbox cannot be
+read, its row loses its green tick.
 
 ### Open the card again later
 
@@ -335,7 +341,7 @@ Table 2.3 lists problems while setting up, and what to do.
 | "Microsoft no longer lets a program read…" | Outlook.com and Hotmail cannot be read with a password | Forward your job mail to another mailbox and connect that one |
 | "Saved. The mail server could not be reached" | No internet connection at that moment | Nothing. The first email scan shows whether it works |
 | "Couldn't connect safely: the mail server's certificate is not trusted" | The server name is wrong, or your company's server uses its own certificate. A network (for example public Wi-Fi) can also show a false server. The app did not send your password | Check the server name. Then try again on a network that you trust |
-| **Master CV** is red | No CV was chosen, or the file was moved | Select the **Change…** button and pick the file |
+| **Master CV** is red | No CV was chosen, the file was moved, or the file is empty, damaged or a scan without text | Select the **Change…** button and pick the file. Save a scan as a Word file or a PDF with text first |
 
 ### Next steps
 
@@ -838,6 +844,10 @@ the job where you did it.
 
 The letter is written to the company, about this role, from the facts in your CV.
 
+If you do not have a letter template, the app makes one from the top of your CV. It holds your
+name, what you call yourself, your contacts and your city. **Edit letter** then works for each
+letter that the app writes.
+
 The app also checks that the letter keeps each piece of work with the job where you did it. If
 your CV puts the REST API at one employer, the letter must not put it at another. When a draft
 does this, Claude writes it again. If the problem stays, the job window shows it so you can
@@ -1055,13 +1065,14 @@ written here (Figure 9.2).
 | **First name**, **Last name** | Your name as you want it on applications | Letters only |
 | **Email** | The address you apply from | A name, an @ and a domain |
 | **Phone** | Your number with the country code, like *+420 123 456 789* | 6 to 15 digits; + only at the start |
-| **Street and number**, **City**, **Postcode**, **Country** | Your address. Leave out what you do not want to give | Letters for the city and the country |
+| **Street and number**, **City**, **Postcode**, **Country** | Your address. Leave out what you do not want to give | Letters for the city. For the country, its English name that the app knows, for example Germany |
 | **LinkedIn**, **GitHub** | The address of your profile. *https://* is added for you | An address at that site, with no spaces |
 | **Website or portfolio** | Any other page about your work | A web address with no spaces |
 | **Notice period** | How soon you can leave, like *1 month*. The assistant also picks it from a list that offers it | Length only |
 
 A field you leave empty is left empty in the form too. When something is wrong, the field
-turns red and the line under it says what to change; nothing is saved until it is right.
+turns red and the line under it says what to change; nothing is saved until it is right. One
+**Save** marks every field that needs a change, and the line at the bottom says how many.
 
 > **Note**
 > Your right to work and your start date are not on this page. They are in **About you**
@@ -1635,6 +1646,13 @@ question (Table 12.1).
 Claude then reads each chosen message and decides whether it is an invitation, a rejection, an
 offer, or an automatic confirmation. A message that turns out to be none of these is not filed.
 
+### When a scan fails
+
+The status line starts with "Email scan failed" and says why (a mail server whose certificate is
+not trusted is said in its own words). For example, the mail server could
+not be found: check its name in the Welcome card. Or the server did not answer in time: try again
+later. A fault in the app is written in the log of problems.
+
 ### How far back a scan looks
 
 A scan reads the mail of the last days set in Options under **Scan emails from the last**.
@@ -1911,8 +1929,9 @@ right column, or with a chip under **Search** in the left column (Figure 16.1).
 
 > **Note**
 > Every field checks what you type. A value the app cannot use is marked in red with the
-> reason, and **Save** waits until it is corrected. Closing Options with unsaved changes asks
-> once.
+> reason, and **Save** waits until it is corrected. When you correct it, the red line goes.
+> Closing Options with unsaved changes asks once. Each list holds up to 60 entries, and each
+> entry up to 100 characters.
 
 ### Search
 
@@ -1923,7 +1942,7 @@ Table 16.1 lists the Search settings.
 | Setting | What it does | Values | Why you would change it |
 |---|---|---|---|
 | **City** | Where to search | A city name | The app will not search without one |
-| **Country** | Which postings count as "here", from the career site of a company. They can be in the city, anywhere in this country, or in the region of the country ("Europe", "EMEA"). **Remote jobs** uses this country too | A country's name in English. Empty = the country of the city, shown in grey | Type it when the field says that it does not know the city. Also type it when you want jobs from a neighbouring country |
+| **Country** | Which postings count as "here", from the career site of a company. They can be in the city, anywhere in this country, or in the region of the country ("Europe", "EMEA"). **Remote jobs** uses this country too | A country's name in English that the app knows, for example Germany. Empty = the country of the city, shown in grey | Type it when the field says that it does not know the city. Also type it when you want jobs from a neighbouring country |
 | **Remote jobs** | Which remote jobs a search keeps, from all job sources. A job open to all countries is always kept. A job for one country is kept only for your country and the countries you add. **In** your country keeps a job for a part of the world that your country is in. **Anywhere in the world** keeps a job for any part of the world | In your country or anywhere in the world, with added countries | Add a country when you have the right to work there. Select anywhere when all time zones suit you |
 | **Job sources** | Which job boards are read. Select one or more: a search reads all that you select. The app reads the Czech boards only for a city in Czechia. For a city in another country, the log of the run says that they were not used | Czech boards, LinkedIn, Career sites, Remote boards, in any combination | More sources find more and take longer |
 | **Search roles** | The words typed into the job boards, in English | One or more roles | Too few results: add a role. Too many poor ones: remove one |
@@ -1989,8 +2008,10 @@ Some companies publish their openings on their own career site. To read one dire
 1. Find the company's career page and note the short name in its address (for example,
    `boards.greenhouse.io/example` gives `example`).
 2. Under **Company career sites**, enter the company's name and that short name, and choose
-   the system.
+   the system. The short name has only letters, digits, - and _.
 3. Select **Add**.
+
+If a career site cannot be saved, **Save** says so and Options stays open.
 
 ### Matching and follow-up
 
@@ -2027,8 +2048,8 @@ Table 16.3 lists what you can enter.
 | **Salary you ask for** | Your expected pay, gross per month, with its currency. Form answers give it as your expectation. The job window and the lists show it. Insights compares what postings pay with it. 0 = none given. Then the window shows the app's own estimate for your types of role. The types of role come from **Kinds of role you want** in **Options**. To give your own figure for one of them, select **Change** next to it. The figure then shows under **A different figure for**, in your currency, where you can change it. **Remove** brings the estimate back. The app has an estimate only for software roles in Czechia. In other cases, you fill in the figure yourself |
 | **A different figure for** | A salary for one type of role. The app uses it instead of the general figure when the words are in the job's title (*support* for "IT Support Specialist"). Enter the type of role and the figure, then select **+ Add**. To change a figure, change it in the list. To delete it, select **Remove** |
 | **Right to work** | How letters and answers should say it. Select one of the usual answers to fill in the field, and then change the words if necessary. Empty = not mentioned |
-| **You can start** | When you can start, for example *immediately*, *one month* or *2026-11-01*. Letters say it as you write it. Under the field, the window shows the date that forms get. A red line tells you when the app cannot find a date in your words. Empty = not mentioned |
-| **More about your work** | What you really did in each job beyond what the CV says. There is one box for each job in **My details**, and a box for other work. The app may use the text like the CV. All boxes together, with the names of the jobs, can have 4,000 characters |
+| **You can start** | When you can start, for example *immediately*, *one month* or *2026-11-01*. Letters say it as you write it. Under the field, the window shows the date that forms get. A red line tells you when the app cannot find a date in your words, or when the date has passed. Empty = not mentioned |
+| **More about your work** | What you really did in each job beyond what the CV says. There is one box for each job in **My details**, and a box for other work. The app may use the text like the CV. All boxes together, with the names of the jobs, can have 4,000 characters. When they have more, the box of other work turns red |
 | **Your own letters** | The folder for letters you wrote yourself (section 7) |
 
 Figure 16.5 shows the boxes for your work.
@@ -2104,7 +2125,7 @@ macOS can run a search and an email scan for you once a week, even with the wind
 
 1. In the right column, select the **Weekly run** card.
 2. Turn **Enabled** on.
-3. Choose the day and the time.
+3. Choose the day and the time. The hour and the minute must not be empty.
 4. Select **Save**.
 
 Figure 17.1 shows the weekly run.
@@ -2127,7 +2148,7 @@ time you open the window (Table 17.1).
 
 ### Turn it off
 
-Open the card again, turn **Enabled** off, and select **Save**.
+Open the card again, turn **Enabled** off, and select **Save**. The time does not matter then.
 
 If you put a new version of the app on your Mac, or move the app to a different folder, open
 the app one time. It then sets the weekly run to start the app in its new place, on the same

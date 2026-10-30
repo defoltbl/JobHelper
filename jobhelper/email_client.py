@@ -171,6 +171,31 @@ def untrusted(error: BaseException) -> bool:
     return isinstance(error, ssl.SSLCertVerificationError)
 
 
+def network_fault(error: BaseException) -> bool:
+    """Whether a scan failed on the way to the mail server (name, connection, time, TLS, no route), not in the app or
+    on the disk."""
+    import errno
+    import socket
+    return isinstance(error, (socket.gaierror, ConnectionError, TimeoutError, ssl.SSLError)) or (
+        isinstance(error, OSError) and error.errno in (errno.ENETUNREACH, errno.EHOSTUNREACH, errno.ENETDOWN, errno.EHOSTDOWN))
+
+
+def scan_problem(error: BaseException, host: str) -> str:
+    """What to say when an email scan fails: the cause in words, never "check your connection" for every fault."""
+    import socket
+    if untrusted(error):
+        return UNTRUSTED
+    if isinstance(error, socket.gaierror):
+        return f"The mail server “{host}” could not be found. Check its name in the Welcome card, and your internet connection."
+    if isinstance(error, TimeoutError):
+        return "The mail server did not answer in time. Try again later."
+    if isinstance(error, ConnectionRefusedError):
+        return f"The mail server “{host}” refused the connection. Check its name in the Welcome card."
+    if network_fault(error):
+        return "The mail server could not be reached. Check your internet connection and try again."
+    return "A fault in the app stopped it (a full or missing disk counts too). It is written in the log of problems."
+
+
 def _open(host: str, timeout: float) -> imaplib.IMAP4_SSL:
     """A connection to the mail server, made only after its certificate passed the checks."""
     return imaplib.IMAP4_SSL(host or config.imap_host(1), config.IMAP_PORT, timeout=timeout, ssl_context=tls_context())
@@ -323,8 +348,10 @@ def try_login(user: str, password: str, timeout: float = 8.0, host: str = "") ->
         imap = _open(host, timeout)
     except ssl.SSLCertVerificationError:
         return {"ok": False, "msg": UNTRUSTED, "field": "server"}     # not saved: the server is not the one it claims to be
-    except (OSError, imaplib.IMAP4.error):
-        return {"ok": None, "msg": "The mail server could not be reached, so the password was not tried."}
+    except (OSError, imaplib.IMAP4.error) as e:          # the cause in words, as a scan says it
+        cause = (scan_problem(e, host) if network_fault(e) else "The mail server could not be reached.") if isinstance(e, OSError) \
+            else "The mail server did not answer as a mail server does."
+        return {"ok": None, "msg": cause + " The password was not tried."}
     try:
         imap.login(user, password)
     except imaplib.IMAP4.error:

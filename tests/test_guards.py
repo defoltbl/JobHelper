@@ -542,7 +542,7 @@ def test_the_cv_you_chose_is_the_master_whatever_else_is_in_the_folder(isolate_d
 
 
 @pytest.mark.parametrize("change, words", [
-    ({"threshold": 101}, "“threshold” must be a whole number from 0 to 100"), ({"threshold": "fifty"}, "whole number"),
+    ({"threshold": 101}, "“Write letters above” must be a whole number from 0 to 100"), ({"threshold": "fifty"}, "whole number"),
     ({"per_query": 0}, "from 1 to 100"), ({"max_years": 2.5}, "whole number"), ({"keep_backups": True}, "whole number"),
     ({"skip_words": "intern"}, "must be a list of words"), ({"queries": ["x" * 101]}, "101 characters long; the most is 100"),
     ({"wanted_roles": [f"role {n}" for n in range(61)]}, "has 61 entries; the most is 60"),

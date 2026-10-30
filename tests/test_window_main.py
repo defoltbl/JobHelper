@@ -351,8 +351,6 @@ def test_both_themes_render_without_warnings(ui):
     ('hasNonLatin("Plzeň developer")', False),
     ('looksLikeRole("junior python developer")', True),
     ('looksLikeRole("asdfgh qwerty")', False),
-    ('isSlug("proton-ag")', True),
-    ('isSlug("no spaces")', False),
     ('cityEN("Praha")', "Prague"),
     ('cityEN("")', ""),
     ('cityEN("Berlin")', "Berlin"),
@@ -996,7 +994,8 @@ def test_job_sources_are_picked_in_any_combination(ui):
     ui.js('cityCombo.editText = "Prague"', dialog)
     before = ui.bridge.options()["sources"]
     ui.js("optSaveBtn.clicked()", dialog)                                   # Save with nothing picked: refused, nothing stored
-    assert ui.js("optErr", dialog) == "Choose at least one job source." and dialog.property("opened") is True
+    assert ui.find("sourcesErr").property("visible") is True and dialog.property("opened") is True
+    assert ui.js("optErr", dialog) == "", "said once, by its own red line, not again in the footer"
     assert "at least one job source" in ui.bridge.saveOptions({**ui.bridge.options(), "sources": []})["msg"]   # the back end refuses it too
     assert ui.bridge.options()["sources"] == before
     ui.js("confirmClose = true; close()", dialog)
@@ -1435,4 +1434,184 @@ def test_an_estimate_becomes_your_own_figure_with_one_press(ui):
         ui.js("payModel.clear(); aboutDialog.confirmClose = true; close()", dialog)
         _until_closed(ui, "aboutDialog")
         ui.bridge.saveOptions(start)
+    assert ui.warnings == []
+
+
+def test_options_ask_the_back_end_rules_and_never_lose_a_change_unseen(ui):
+    """Hands-on check and window review (H1, H2, H4, F3, F4, H6, H8): a token the search refuses was accepted and then
+    dropped at Save as "saved"; "Narnia" was a country; a 150-character role came back at Save under the key "queries";
+    9999 in Max job age was cut to 3650 as the window closed; footer lines stayed after the fault was put right."""
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    try:
+        assert ui.js('optDialog.addCompany("Acme", "greenhouse", "acme.io")', dialog) is False
+        assert ui.js("coErr", dialog).startswith("Use the short name"), "the rule the search uses (H1)"
+        assert "is not a country the app knows" in ui.js('optDialog.countryProblem("Narnia")', dialog), "F3"
+        assert ui.js('optDialog.countryProblem("Czech Republic")', dialog) == ""
+        assert ui.js('optDialog.addRole("data " + "a".repeat(150))', dialog) is False and "up to 100 characters" in ui.js("roleErr", dialog), "H2"
+        ui.js('ageSpin.contentItem.text = "9999"', dialog)
+        ui.js("optSaveBtn.clicked()", dialog)
+        assert dialog.property("opened") is True and "“Max job age” takes 0 to 3650; you typed 9999" in ui.js("optErr", dialog), "H4"
+        ui.js("ageSpin.contentItem.text = '10'; ageSpin.value = 10", dialog)
+        ui.js('cityCombo.editText = ""', dialog)
+        ui.js("optSaveBtn.clicked()", dialog)
+        assert ui.js("optErr", dialog) == "Enter a city (e.g. Prague) before saving."
+        ui.js('cityCombo.editText = "Prague"', dialog)
+        assert ui.js("optErr", dialog) == "", "the fault is put right: its line goes (F4)"
+        ui.js("tryClose()", dialog)
+        assert ui.js("confirmClose", dialog) is True
+        ui.js('cityCombo.editText = "Brno"', dialog)
+        assert ui.js("confirmClose", dialog) is False, "an edit after the prompt: closing asks again (H6)"
+        ui.js("optCancelBtn.clicked()", dialog)
+        assert ui.js("confirmClose", dialog) is True and dialog.property("opened") is True, "Cancel asks once, as ✕ and Esc do (H8)"
+    finally:
+        ui.js("confirmClose = true; close()", dialog)
+        _until_closed(ui, dialog)
+        ui.js("optsData = bridge.options()")
+    assert ui.warnings == []
+
+
+def test_option_messages_name_what_the_window_shows(isolate_data):
+    from jobhelper import ui_api
+    api = ui_api.Api()
+    result = api.save_options({**api.options(), "queries": ["data " + "a" * 150]})
+    assert result["ok"] is False and "“Search roles”" in result["msg"] and "queries" not in result["msg"], "H2"
+    assert api.save_options({**api.options(), "where": "x" * 90})["msg"].startswith("“City”"), "H7"
+
+
+def test_options_number_and_list_faults_are_said_once_and_go_when_fixed(ui):
+    """Review of the Options fixes: a fixed number kept its red line; two boxes that are no options blocked Save; a full
+    list was refused only at Save."""
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    try:
+        ui.js('cityCombo.editText = "Prague"', dialog)
+        ui.js('shelfSpin.contentItem.text = "99999"', dialog)
+        assert ui.js("optDialog.numberProblem()", dialog) == "", "the tidy and scan-back boxes are no options"
+        ui.js('shelfSpin.contentItem.text = "30"', dialog)
+        ui.js('ageSpin.contentItem.text = "9999"', dialog)
+        ui.js("optErr = optDialog.numberProblem()", dialog)
+        assert "you typed 9999" in ui.js("optErr", dialog) and ui.js("ageSpin.flagged", dialog) is True and ui.js("ageSpin.note", dialog) == ""
+        ui.js("ageSpin.contentItem.text = '9998'; ageSpin.contentItem.textEdited()", dialog)       # another wrong number
+        assert "you typed 9998" in ui.js("optErr", dialog) and ui.js("ageSpin.note", dialog) == "", "one message, not two"
+        ui.js("ageSpin.contentItem.text = '10'; ageSpin.contentItem.textEdited()", dialog)
+        assert ui.js("optErr", dialog) == "" and ui.js("ageSpin.flagged", dialog) is False, "fixed: the line goes"
+        ui.js("rolesModel.clear(); for (var i = 0; i < win.limits.list_max; i++) rolesModel.append({ text: 'data analyst ' + i })", dialog)
+        assert ui.js('optDialog.addRole("software tester")', dialog) is False and "holds up to 60" in ui.js("roleErr", dialog)
+        assert ui.js("roleField.wrong", dialog) is True, "the field the red line is about turns red too (H5)"
+        ui.js("skipTags.setAll(Array.apply(null, Array(win.limits.list_max)).map(function (_, i) { return 'word' + i; }))", dialog)
+        assert ui.js('skipTags.add("intern")', dialog) is False and "holds up to 60" in ui.js("skipTags.err", dialog)
+    finally:
+        ui.js("confirmClose = true; close()", dialog)
+        _until_closed(ui, dialog)
+        ui.js("optsData = bridge.options()")
+    assert ui.warnings == []
+
+
+def test_the_weekly_run_and_remote_countries_ask_before_a_change_is_lost(ui, monkeypatch):
+    """Hands-on check F5, F6, F7 and window review H3: Esc, ✕ and Cancel threw away a change; an empty hour counted as
+    00; a wrong time stopped the weekly run being switched off."""
+    from PySide6.QtTest import QTest
+    from jobhelper import schedule
+    sent = []
+    monkeypatch.setattr(schedule, "write_schedule", lambda *a: sent.append(a) or {"ok": True})
+    sched = ui.find("schedDialog")
+    ui.js("schedData = ({ enabled: true, weekday: 1, hour: 9, minute: 0, label: 'Mon 09:00' })")
+    _open(ui, sched, 500)
+    try:
+        typing = "hourField.children.filter(function (c) { return c.objectName === 'timeInput'; })[0]"
+        ui.js("hourField.text = '7'; " + typing + ".textEdited()", sched)     # typed, as a person does: the field is in typing mode
+        assert ui.js("hourField.value", sched) == 7
+        ui.win.requestActivate()
+        QTest.keyClick(ui.win, Qt.Key_Escape)
+        assert _until_true(ui, lambda: "did not save" in ui.js("schedErr", sched)) and sched.property("opened") is True, "F6"
+        assert ui.js("schedCancelBtn.text", sched) == "Discard changes"
+        QTest.keyClick(ui.win, Qt.Key_Escape)                           # asked once: the second Esc discards
+        _until_closed(ui, sched)
+        _open(ui, sched, 500)
+        assert ui.js("hourField.text", sched) == "09" and ui.js("timeErr", sched) == "", "reopened as saved, whatever was typed"
+        ui.js("minField.text = ''", sched)
+        assert ui.js("timeErr", sched) == "Enter the minute, 0 to 59.", "an empty minute is no 00 (F7)"
+        ui.js("minField.children[minField.children.length - 1].editingFinished()", sched)
+        assert ui.js("minField.text", sched) == "" and ui.js("timeErr", sched) != "", "leaving the box keeps it empty"
+        ui.js("schedSaveBtn.clicked()", sched)
+        assert sent == [] and sched.property("opened") is True, "nothing is sent while a box is empty"
+        ui.js("minField.reset(0); hourField.text = '25'; hourField.value = 25", sched)
+        ui.js("en = false; schedDialog.changed()", sched)
+        assert ui.js("timeErr", sched) == "", "switched off: the time does not matter (H3)"
+        ui.js("schedSaveBtn.clicked()", sched)
+        assert sent and sent[-1][0] is False and sent[-1][2] == 9, "the saved time is sent, never the wrong one"
+    finally:
+        ui.js("confirmClose = true; close()", sched)
+        _until_closed(ui, sched)
+        ui.js("schedData = bridge.weeklySchedule()")
+    picker = ui.find("remoteDialog")
+    ui.js('remoteDialog.show(["germany"], "czechia")')
+    _until_open(ui, "remoteDialog")
+    try:
+        ui.js('remoteDialog.toggle("austria")')
+        ui.js("remoteCancelBtn.clicked()", picker)
+        assert picker.property("opened") is True and "did not press Done" in ui.js("err", picker), "a tick is not lost unasked (F5)"
+        ui.js("remoteCancelBtn.clicked()", picker)
+        _until_closed(ui, "remoteDialog")
+    finally:
+        ui.js("confirmClose = true; close()", picker)
+        _until_closed(ui, "remoteDialog")
+    assert ui.warnings == []
+
+
+def test_the_weekly_run_save_never_reaches_the_real_launch_agent_in_a_test_copy(ui):
+    """F17 from the window: the tests run with JOBHELPER_HOME, so Save is refused with the reason."""
+    sched = ui.find("schedDialog")
+    ui.js("schedData = ({ enabled: true, weekday: 1, hour: 9, minute: 0, label: 'Mon 09:00' })")
+    _open(ui, sched, 500)
+    try:
+        ui.js("schedSaveBtn.clicked()", sched)
+        assert sched.property("opened") is True and "JOBHELPER_HOME" in ui.js("schedErr", sched)
+    finally:
+        ui.js("confirmClose = true; close()", sched)
+        _until_closed(ui, sched)
+        ui.js("schedData = bridge.weeklySchedule()")
+    assert ui.warnings == []
+
+
+def test_esc_in_a_welcome_email_field_leaves_the_field(ui):
+    """Window review H8: Esc did nothing inside the welcome card's email fields."""
+    from PySide6.QtTest import QTest
+    ui.js("welcome.openCard()")
+    welcome = ui.find("welcome")
+    try:
+        welcome.setProperty("editEmail", True)
+        ui.js("wEmail.forceActiveFocus()", welcome)
+        assert ui.js("wEmail.activeFocus", welcome) is True
+        ui.win.requestActivate()
+        QTest.keyClick(ui.win, Qt.Key_Escape)
+        assert _until_true(ui, lambda: ui.js("wEmail.activeFocus", welcome) is False), "Esc leaves the field"
+    finally:
+        welcome.setProperty("editEmail", False)
+        ui.js("welcome.finish()")
+    assert ui.warnings == []
+
+
+
+def test_the_weekly_run_close_question_is_never_hidden_by_a_wrong_time(ui):
+    """Last full check: with a wrong hour, the "close once more" question was hidden, and the second Esc discarded."""
+    sched = ui.find("schedDialog")
+    ui.js("schedData = ({ enabled: true, weekday: 1, hour: 9, minute: 0, label: 'Mon 09:00' })")
+    _open(ui, sched, 500)
+    try:
+        ui.js("hourField.text = '25'; hourField.value = 25; schedDialog.changed()", sched)
+        assert ui.js("footerText", sched) == "Hour must be between 0 and 23."
+        ui.js("tryClose()", sched)
+        assert "did not save" in ui.js("footerText", sched), "the question wins over the time fault"
+        ui.js("en = false; schedDialog.changed()", sched)
+        assert ui.js("hourField.enabled", sched) is False and ui.js("footerText", sched) == "", "switched off: no fault shown"
+        frame = ui.js("hourField.children[0].border.color.toString()", sched)
+        assert frame != ui.js("theme.crit.toString()"), "and its box is not red"
+    finally:
+        ui.js("confirmClose = true; close()", sched)
+        _until_closed(ui, sched)
+        ui.js("schedData = bridge.weeklySchedule()")
     assert ui.warnings == []
