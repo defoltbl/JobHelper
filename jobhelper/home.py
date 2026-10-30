@@ -60,9 +60,8 @@ class DataHome:
     def for_this_mac(cls, environ=None) -> "DataHome":
         """The real one: JOBHELPER_HOME if it is set (then only that folder), else the Library and the old project folder."""
         environ = os.environ if environ is None else environ
-        override = str(environ.get(OVERRIDE) or "").strip()
-        if override:
-            return cls(Path(override).expanduser())
+        if overridden(environ):
+            return cls(Path(str(environ[OVERRIDE]).strip()).expanduser())
         return cls(LIBRARY, ROOT / "data", ROOT / ".env")
 
     # ── where things are ─────────────────────────────────────────────────────
@@ -165,6 +164,12 @@ def _free_name(path: Path) -> Path:
     while path.with_name(f"{path.name}_{n}").exists():
         n += 1
     return path.with_name(f"{path.name}_{n}")
+
+
+def overridden(environ=None) -> bool:
+    """Whether JOBHELPER_HOME chooses the data folder (tests, a second set of data) instead of the usual one."""
+    environ = os.environ if environ is None else environ
+    return bool(str(environ.get(OVERRIDE) or "").strip())
 
 
 def here() -> DataHome:

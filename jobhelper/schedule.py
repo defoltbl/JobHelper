@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import config
+from . import config, home
 
 LABEL = "com.jobhelper.weeklyscan"
 PLIST = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
@@ -22,13 +22,24 @@ PATH = "{home}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sb
 DAY_NAMES = {0: "Sun", 7: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat"}
 
 
+def problem() -> str:
+    """Why this app cannot set the weekly run ('' = it can). The LaunchAgent is one for the whole Mac and starts the
+    app on its usual data folder, so a data folder chosen with JOBHELPER_HOME (tests, a check on invented data) never
+    reads, changes or removes it."""
+    if sys.platform != "darwin":
+        return "Weekly scheduling is macOS-only."
+    if home.overridden():
+        return "The weekly run can be set only for the usual data folder, not for one chosen with JOBHELPER_HOME."
+    return ""
+
+
 def available() -> bool:
-    return sys.platform == "darwin"
+    return not problem()
 
 
 def read_schedule() -> dict:
     """Current schedule: {enabled, weekday, hour, minute, label}."""
-    if not PLIST.exists():
+    if not available() or not PLIST.exists():
         return {"enabled": False, "weekday": 1, "hour": 9, "minute": 0, "label": "Off"}
     try:
         data = plistlib.loads(PLIST.read_bytes())
@@ -70,7 +81,8 @@ def _plist_bytes(weekday: int, hour: int, minute: int) -> bytes:
 def refresh() -> dict:
     """At the app's start: a weekly run set up by an older version, or for the app in another place
     (the source, a copy in Applications), is pointed at this program and this data folder again,
-    on the same day and time. {ok, changed} (and msg when it could not be changed)."""
+    on the same day and time. {ok, changed} (and msg when it could not be changed). With JOBHELPER_HOME set it does
+    nothing (problem())."""
     if not available() or not PLIST.exists():
         return {"ok": True, "changed": False}
     try:
@@ -87,7 +99,7 @@ def refresh() -> dict:
 
 def write_schedule(enabled: bool, weekday: int, hour: int, minute: int) -> dict:
     if not available():
-        return {"ok": False, "msg": "Weekly scheduling is macOS-only."}
+        return {"ok": False, "msg": problem()}
     try:
         weekday, hour, minute = int(weekday), int(hour), int(minute)
     except (TypeError, ValueError):

@@ -591,7 +591,7 @@ place can be set as `COVER_LETTERS_DIR` in `.env`). They are never rewritten.
 A LaunchAgent runs a **job search + email analysis** once a week, on the day and at the time you chose:
 `~/Library/LaunchAgents/com.jobhelper.weeklyscan.plist` → the app with `--weekly` (from the source:
 `python app_qt.py --weekly`; the packaged app: `JobHelper --weekly`) → `run.py --reuse-profile` then
-`status.py sync --summary`, with no window. When the app starts, it points an older weekly run at itself again.
+`status.py sync --summary`, with no window. When the app starts, it points an older weekly run at itself again, unless `JOBHELPER_HOME` chooses another data folder (then the weekly run is left alone).
 
 Easiest way to change it: click the **Weekly run** card in the app to turn it
 on/off and pick the day + time. The commands below do the same by hand:
