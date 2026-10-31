@@ -5,7 +5,7 @@ Format: a `## ` heading, then one `- ` line per change; `**words**` are shown in
 in a version go under `## Unreleased`; a released version's heading is `## 1.1.0 – 18 October 2026`
 (its tag is `v1.1.0` on GitHub). Version 1.0.0 is everything up to 17 October 2026, listed by date.
 
-## Unreleased
+## 1.2.0 – 31 October 2026
 
 - **Email scan:** a reply is put on its job before its mail counts as read. A scan that stops half-way no longer loses a reply.
 - **Search:** an error from Jooble or Adzuna never shows your key. The message says what the board answered.
