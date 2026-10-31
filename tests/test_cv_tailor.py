@@ -274,6 +274,13 @@ def test_a_skill_inside_another_technologys_name_is_not_in_the_cv():
     assert cv_tailor.unknown_skill_terms("Java, Spring", "JavaScript, TypeScript") == ["Java", "Spring"]
     assert cv_tailor.unknown_skill_terms("REST APIs, SQL, Docker, API", "RESTful API design, PostgreSQL, Dockerized apps") == ["APIs"]
     assert cv_tailor.unknown_skill_terms("Java", "Java and JavaScript") == []
+    # audit: a name was found inside any word ("Go" in "good", "Rust" in "trust")
+    assert cv_tailor.unknown_skill_terms("Go, Rust, R", "A good team I trust, run with care.") == ["Go", "Rust"]
+    assert cv_tailor.unknown_skill_terms("Go, Rust, Docker", "Go services, Rust tools, Dockerized apps") == []
+    assert cv_tailor.unknown_skill_terms("Go, Git, Qt", "Golang services, GitHub Actions, PyQt apps") == [], "their longer names back them"
+    assert cv_tailor.unknown_skill_terms("Vue, Spark, Mac", "VueJS front ends, PySpark jobs, macOS apps") == [], "as before 1.2.0"
+    assert cv_tailor.unknown_skill_terms("Vue, Git", "Vuetify apps, Gitflow") == []
+    assert cv_tailor.unknown_skill_terms("Go, Git", "She goes the extra mile and gites") == ["Go", "Git"], "a plural is an s alone"
 
 
 def test_an_invented_figure_or_name_in_the_profile_is_sent_back_then_cut_or_noted(isolate_data, monkeypatch):
@@ -295,6 +302,14 @@ def test_an_invented_figure_or_name_in_the_profile_is_sent_back_then_cut_or_note
     cv_tailor.tailor(job, cv_text, MASTER)
     assert "Initech" in job["cv_check"], "a name the CV does not give is put in front of the person"
     assert cv_tailor.profile_problems("Keen to grow into Kafka and Kubernetes.", job, cv_text) == ([], []), "an interest claims nothing"
+    built = cv_tailor.profile_problems("Built Kafka pipelines at scale and keen to grow into Kubernetes.", job, cv_text)[1]
+    assert "Kafka" in built and "Kubernetes" not in built, "the interest frees only what it names (audit)"
+    # last check: the draft check, the last line of defence and the borrowed phrases read it the same way
+    claimed = "Built Kafka pipelines at scale and keen to grow into Kubernetes."
+    said = cv_tailor.content_problems(claimed, [], "", [], ["Kafka", "Kubernetes"])
+    assert any("'Kafka'" in p for p in said) and not any("'Kubernetes'" in p for p in said)
+    assert cv_tailor.enforce(claimed, [], ["Kafka"])[0] == "", "a sentence that claims Kafka is cut, its interest or not"
+    assert cv_tailor.enforce("Keen to grow into Kafka.", [], ["Kafka"])[0] == "Keen to grow into Kafka."
     rust = store.new_job(id="j3", title="Rust Developer", company="Acme", description="")
     assert "Rust" in cv_tailor.profile_problems("I built many Rust services.", rust, cv_text)[1], "the job title backs no name"
     # a profile that is only the invented sentence is kept, and its figure noted, rather than failing the CV

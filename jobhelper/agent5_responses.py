@@ -384,14 +384,18 @@ def process_inbox(jobs: list[dict[str, Any]], lookback_days: int | None = None,
             trouble.note("reading one email with Claude", RuntimeError(type(e).__name__))
             continue
 
-        db.mark_seen(msg["msg_id"])  # spent the call — don't reclassify next time
         if not isinstance(result, dict) or not result.get("is_response"):
+            db.mark_seen(msg["msg_id"])  # spent the call – don't reclassify next time
             continue                   # an answer that is not what was asked for must not end the scan
         if guess and str(result.get("role") or "").strip():
             # the model read the role from the body: pick that posting among the company's, not just any of them
             guess = email_client.best_job_for_company_role(guess["company"], str(result["role"]), jobs) or guess
 
         _file_reply(msg, result, guess, stats)
+        # the reply is on its job before the mail counts as read: an app closed during the scan never leaves a mail read
+        # whose reply was not filed (a filing that fails leaves it unread, so the next scan asks again)
+        store.save_jobs(jobs)
+        db.mark_seen(msg["msg_id"])
 
     stats.jobs_created = reconcile_jobs(jobs)
     return stats

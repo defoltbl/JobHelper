@@ -73,6 +73,35 @@ def test_the_set_up_line_names_what_is_missing(ui):
     assert ui.js("welcome.neededText()") == ""
 
 
+def test_a_sign_in_check_with_no_answer_is_not_shown_as_signed_out(ui):
+    """Audit: a slow sign-in check showed "Not signed in" and "Sign in to Claude"."""
+    unsure = "Claude did not answer the sign-in check."
+    ui.win.setProperty("connData", {**READY, "claude": False, "claude_unsure": True, "claude_msg": unsure})
+    try:
+        assert ui.find("accountName").property("text") == "Sign-in not checked"
+        assert ui.find("accountNote").property("text") == "Claude did not answer"
+        warn, crit = ui.js("theme.warn.toString()"), ui.js("theme.crit.toString()")
+        assert ui.find("accountDot").property("color").name() == warn, "the dot says what the note says"
+        assert ui.find("accountNote").property("color").name() == warn
+        # a locked data key is a real fault: red, in its own words, also while the sign-in is not known
+        ui.win.setProperty("connData", {**READY, "claude": False, "claude_unsure": True, "claude_msg": unsure, "vault": "locked"})
+        assert ui.find("accountNote").property("text") == "Encryption key missing"
+        assert ui.find("accountDot").property("color").name() == crit and ui.find("accountNote").property("color").name() == crit
+        ui.win.setProperty("connData", {**READY, "vault": "locked"})
+        assert ui.find("accountDot").property("color").name() == crit, "signed in with a locked key: not green (last check)"
+        ui.win.setProperty("connData", {**READY, "claude": False, "claude_unsure": True, "paid_api": True})
+        assert ui.find("accountDot").property("color").name() == ui.js("theme.crit.toString()"), "a paid key stays red"
+        ui.win.setProperty("connData", {**READY, "claude": False, "claude_unsure": True, "claude_msg": unsure})
+        assert ui.js("welcome.neededText()") == "Needed before the line can run: an answer from Claude to the sign-in check."
+        assert ui.find("welcome").property("offersCheckAgain") is True, "the first thing to do is to ask again, not to sign in"
+        ui.win.setProperty("connData", {**READY, "claude": False})
+        assert ui.find("accountName").property("text") == "Not signed in" and ui.find("accountNote").property("text") == "Sign in to Claude"
+        assert ui.find("welcome").property("offersCheckAgain") is False
+    finally:
+        ui.win.setProperty("connData", dict(READY))
+    assert ui.warnings == []
+
+
 def test_welcome_is_not_ready_without_claude_or_cv(ui):
     welcome = ui.find("welcome")
     for missing in ({"claude": False}, {"cv": ""}, {"paid_api": True},

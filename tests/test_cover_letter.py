@@ -165,6 +165,9 @@ def test_a_letter_that_states_the_posting_s_terms_as_experience_is_noticed():
                  "The Analyst I opening stood out to me because it covers cost centers and tax codes."):
         assert claims([fine], POSTING, ACCOUNTANT) == [], fine
     assert claims([], POSTING, ACCOUNTANT) == [] and claims(said, "", ACCOUNTANT) == []
+    # audit: a wish word later in the sentence freed the claim before it
+    wished = ["I assign tax codes and cost centers to every invoice and would love to keep doing so."]
+    assert {"tax codes", "cost centers"} <= {c.lower() for c in claims(wished, POSTING, ACCOUNTANT)}
     # what the person wrote in their own notes is theirs
     assert claims(said, POSTING, ACCOUNTANT + " I assigned tax codes and cost centers to every invoice.") == []
 

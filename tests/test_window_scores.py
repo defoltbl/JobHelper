@@ -932,7 +932,9 @@ def test_new_jobs_can_be_reviewed_one_by_one(ui, monkeypatch):
     done = []
     monkeypatch.setattr(qt_bridge.Bridge, "applyJob", qt_bridge.Slot(str, result=bool)(lambda self, job_id: done.append(("apply", job_id)) or True))
     monkeypatch.setattr(ui_api.Api, "dismiss_job", lambda self, job_id: done.append(("dismiss", job_id)) or {"ok": True})
+    pause = ui.js("detailDialog.decisionPause")
     try:
+        ui.js("detailDialog.decisionPause = 0")                     # decisions here come faster than a person's; the pause has its own test
         ui.js('openView("new")')
         _until_open(ui, "tableDialog")
         table, detail = ui.find("tableDialog"), ui.find("detailDialog")
@@ -985,6 +987,42 @@ def test_new_jobs_can_be_reviewed_one_by_one(ui, monkeypatch):
         ui.js('tableDialog.groupFilter = ""; tableDialog.apply(); tableDialog.close()')
         _until_closed(ui, "tableDialog")
     finally:
+        ui.js(f"detailDialog.decisionPause = {pause}")
+        store.save_jobs(kept)
+        ui.js("win.reloadAll()")
+    assert ui.warnings == []
+
+
+def test_a_double_click_on_a_decision_decides_only_the_job_in_view(ui, monkeypatch):
+    """Audit: in a review round the next job comes at once, so the second click of a double-click decided it too."""
+    kept = store.load_jobs()
+    text = "We build tools in Python. " * 30
+    store.save_jobs(kept + [store.new_job(id=f"d{n}", title=f"Role {n}", company=f"Firm {n}", status="letter_ready", match_score=40,
+                                          match_tier="stretch", description=text, cover_letter_file=f"L{n}.docx", tailored_cv_file=f"C{n}.docx")
+                            for n in range(3)])
+    done = []
+    monkeypatch.setattr(qt_bridge.Bridge, "applyJob", qt_bridge.Slot(str, result=bool)(lambda self, job_id: done.append(("apply", job_id)) or True))
+    monkeypatch.setattr(ui_api.Api, "dismiss_job", lambda self, job_id: done.append(("dismiss", job_id)) or {"ok": True})
+    pause = ui.js("detailDialog.decisionPause")
+    try:
+        ui.js("detailDialog.decisionPause = 60000")                 # no real time in the test: the pause lasts until it is ended
+        ui.js("detailDialog.startReview(['d0', 'd1', 'd2'])")
+        _until_open(ui, "detailDialog")
+        ui.js("detailDialog.markApplied(); detailDialog.markApplied()")
+        _until_true(ui, lambda: ui.js("detailDialog.job.id") == "d1")
+        ui.js("detailDialog.notInterested()")
+        assert done == [("apply", "d0")] and ui.js("detailDialog.job.id") == "d1", "the second click and a quick third are not taken"
+        assert ui.find("applyBottom").property("enabled") is False and ui.find("notInterested").property("enabled") is False, "and look it"
+        ui.js("detailDialog.decisionPaused = false; detailDialog.notInterested()")         # after the pause: taken as usual
+        assert done == [("apply", "d0"), ("dismiss", "d1")]
+        # a refused decision does not pause the buttons: the next try is taken at once
+        monkeypatch.setattr(ui_api.Api, "dismiss_job", lambda self, job_id: done.append(("refused", job_id)) or {"ok": False, "msg": "No."})
+        ui.js("detailDialog.decisionPaused = false; detailDialog.notInterested()")
+        assert ui.js("detailDialog.decisionPaused") is False and ui.find("notInterested").property("enabled") is True
+    finally:
+        ui.js(f"detailDialog.decisionPause = {pause}; detailDialog.decisionPaused = false")
+        ui.js("detailDialog.close()")
+        _until_closed(ui, "detailDialog")
         store.save_jobs(kept)
         ui.js("win.reloadAll()")
     assert ui.warnings == []

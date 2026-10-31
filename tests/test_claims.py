@@ -13,6 +13,24 @@ def test_a_claim_is_hands_on_wording_about_a_technology_the_cv_lacks():
     assert check.claimed_in("I have not used Kafka, but I have experience with queues.", honest_ok=True) == ""
 
 
+def test_leading_owning_and_a_wish_elsewhere_in_the_sentence_are_claims_too():
+    """Audit: "I led the move to Kafka" and "my Kafka pipelines" passed, and one wish word anywhere freed the sentence."""
+    check = ClaimCheck(["Kafka", "Spark"])
+    for said, term in (("I led the move to Kafka.", "Kafka"), ("I designed our Kafka topics.", "Kafka"), ("I created Spark jobs.", "Spark"),
+                       ("I delivered the Kafka upgrade.", "Kafka"), ("I migrated the queues to Kafka.", "Kafka"),
+                       ("I owned the Kafka cluster.", "Kafka"), ("My Kafka pipelines ran daily.", "Kafka"),
+                       ("Our streaming Kafka cluster grew.", "Kafka"), ("I built Kafka pipelines and am keen to grow.", "Kafka"),
+                       ("I am keen to join, as I have run Kafka clusters.", "Kafka"),
+                       ("I would like to learn Spark,\nbut I built Kafka pipelines.", "Kafka")):     # a line break inside a wish
+        assert check.claimed_in(said) == term, said
+    for wish in ("I have used Python and would like to learn Kafka.", "I would love to work with Kafka and Spark.",
+                 "Kafka is central to your team.", "Your Kafka platform is what I would like to work on."):
+        assert check.claimed_in(wish) == "", wish
+    assert claims.unwished("I have used Kafka and would like to learn Spark; I have run Flink.") == "I have used Kafka and  ; I have run Flink."
+    # outside an interview a missing technology is named only as a wish: "limited" before a wish is still flagged
+    assert check.claimed_in("While my production experience with Kafka is limited, I am eager to learn.") == "Kafka"
+
+
 def test_a_term_is_named_only_as_a_whole_word():
     assert claims.mentions("I used Go daily.", "Go") and not claims.mentions("I used Google Docs.", "Go")
     assert claims.mentions("We used C++ there.", "C++") and not claims.mentions("", "C++")

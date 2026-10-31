@@ -62,6 +62,33 @@ def test_run_search_points_at_what_is_missing(bridge, monkeypatch, change, fix):
     assert started == [] and bridge.running is False
 
 
+def test_a_sign_in_check_that_got_no_answer_is_not_called_signed_out(bridge, monkeypatch):
+    """Audit: a slow `claude auth status` said "Log in to Claude first" and opened Account, though you were signed in."""
+    from jobhelper import api_system
+    started = _no_thread(monkeypatch)
+    bridge.conn.update(claude=False, claude_unsure=True, claude_msg=api_system.UNSURE)
+    for result in (bridge.runSearch({"where": "Brno"}), bridge.rescoreAll()):
+        assert result == {"ok": False, "msg": api_system.UNSURE}, "no sign-in offered"
+    assert started == [] and bridge.running is False
+
+
+def test_a_sign_in_that_could_not_be_checked_is_no_fault_of_the_start_up_check(bridge, monkeypatch):
+    """Last check: the start-up line said "You are not signed in to Claude" while the Account chip said "not checked"."""
+    from jobhelper import api_system
+    names = lambda result: [c["name"] for c in result["checks"]]
+    assert "Claude" not in names(bridge.selfCheckFor({"claude": False, "claude_unsure": True}))
+    out = bridge.selfCheckFor({"claude": False})
+    assert "Claude" in names(out) and "not signed in" in next(c["problem"] for c in out["checks"] if c["name"] == "Claude")
+    sent = []
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self: (_ for _ in ()).throw(RuntimeError("broken")))
+    monkeypatch.setattr(qt_bridge.threading, "Thread", lambda target=None, daemon=None: type("T", (), {"start": lambda self: target()})())
+    bridge.connectionsReady.connect(sent.append)
+    bridge.checkConnections()
+    assert sent and sent[0]["claude_unsure"] is True and sent[0]["claude_msg"] == api_system.UNSURE
+    import json
+    assert "Claude" not in [c["name"] for c in json.loads(sent[0]["health"])["checks"]]
+
+
 def test_run_search_refuses_the_paid_api(bridge, monkeypatch):
     started = _no_thread(monkeypatch)
     bridge.conn["paid_api"] = True

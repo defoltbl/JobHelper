@@ -484,6 +484,13 @@ class JobSlots:
     def weekSummary(self):
         return self._api.week_summary()
 
+    @Slot("QVariantMap", result="QVariantMap")
+    def selfCheckFor(self, info):
+        """The start-up check from what the connection check found: a sign-in that could not be checked is not
+        reported as "not signed in" (the Account chip says it was not checked)."""
+        info = info or {}
+        return self._api.self_check(None if info.get("claude_unsure") else info.get("claude") is True)
+
     @Slot(bool, result="QVariantMap")
     def selfCheck(self, claude_signed_in):
         """The start-up check; the window passes what its connection check found about Claude."""

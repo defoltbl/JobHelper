@@ -18,11 +18,14 @@ GAP = re.compile(
 # A forward-looking wish: naming a technology this way is not a claim.
 WISH = re.compile(r"\b(would like|would love|keen|look(ing)? forward|want to|eager|hope to|"
                   r"excited to|wish to|aim to|motivated to)\b", re.IGNORECASE)
+# Where a wish ends: the next "I" or "we" (a new claim may start there), "but", or a semicolon.
+_WISH_END = r".*?(?=\b(?:I|I've|I'm|[Ww]e|but)\b|;|$)"
 # Wording that claims hands-on experience.
 CLAIM = re.compile(
     r"\b(I|I've|we)\s+(have\s+|also\s+|regularly\s+|currently\s+)*(work(ed)?|use[ds]?|built|build|"
     r"deploy(ed)?|ran|run|administer(ed)?|manage[ds]?|configure[ds]?|operate[ds]?|maintain(ed)?|"
-    r"wrote|written|set up|automate[ds]?|implemented?|develop(ed)?)\b|"
+    r"wrote|written|set up|automate[ds]?|implemented?|develop(ed)?|lead|led|design(ed)?|create[ds]?|"
+    r"deliver(ed)?|migrate[ds]?|own(ed)?)\b|"
     r"\b(experience(d)? (with|in)|hands-on|proficient|skilled|familiar with|expertise|background in|"
     r"knowledge of|my work with)\b", re.IGNORECASE)
 # An honest bridge names the missing thing on purpose (in an interview that is the right answer).
@@ -32,6 +35,12 @@ HONEST = re.compile(r"\b(have not|haven't|do not have|don't have|not (?:yet )?(?
 FIRST_PERSON = re.compile(r"\b(?:I|my|me|I'm|I've)\b")
 
 
+def unwished(sentence: str, wish: re.Pattern = WISH) -> str:
+    """The sentence without its wishes: from each wish word to where the wish ends. "I have used Kafka and would like
+    to learn Spark" keeps "I have used Kafka and"; a wish elsewhere in a sentence never hides a claim."""
+    return re.sub(f"(?:{wish.pattern}){_WISH_END}", " ", sentence, flags=(wish.flags & re.IGNORECASE) | re.DOTALL)
+
+
 def sentences(text: str) -> list[str]:
     return [s for s in re.split(r"(?<=[.!?])\s+", text or "") if s.strip()]
 
@@ -39,6 +48,11 @@ def sentences(text: str) -> list[str]:
 def mentions(text: str, term: str) -> bool:
     """Whether `text` names `term` as a whole word (case blind)."""
     return bool(re.search(rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])", text or "", re.IGNORECASE))
+
+
+def _owned(text: str, term: str) -> bool:
+    """Whether `text` speaks of `term` as the person's own: "my Kafka pipelines", "our streaming Kafka cluster"."""
+    return bool(re.search(rf"\b(?:my|our)\s+(?:[\w-]+\s+){{0,2}}{re.escape(term)}(?![A-Za-z0-9])", text, re.IGNORECASE))
 
 
 def names_candidate(text: str, first_name: str) -> bool:
@@ -53,11 +67,14 @@ class ClaimCheck:
         self.terms = list(unverified or [])
 
     def claimed_in(self, sentence: str, honest_ok: bool = False) -> str:
-        """The first technology this sentence presents as experience ('' if none). A wish is never a claim;
-        with `honest_ok` an honest bridge is not one either."""
-        if not CLAIM.search(sentence) or WISH.search(sentence) or (honest_ok and HONEST.search(sentence)):
+        """The first technology this sentence presents as experience ('' if none): claiming wording, or "my"/"our" up
+        to two words before it ("my Kafka pipelines"). What a wish names is never a claim; with `honest_ok` an honest
+        bridge is not one either."""
+        if honest_ok and HONEST.search(sentence):
             return ""
-        return next((term for term in self.terms if mentions(sentence, term)), "")
+        said = unwished(sentence)
+        claims_any = bool(CLAIM.search(said))
+        return next((term for term in self.terms if mentions(said, term) and (claims_any or _owned(said, term))), "")
 
     def unbacked(self, text: str, honest_ok: bool = False) -> str:
         """The first technology a text presents as experience though the CV lacks it ('' if none)."""

@@ -20,7 +20,7 @@ from typing import Any, Callable
 
 import requests
 
-from . import config, email_client, filters, job_sources, language, salary, scrapers_intl, store, textfmt
+from . import config, email_client, filters, job_sources, language, salary, scrapers_intl, store, textfmt, trouble
 
 _clean = textfmt.strip_tags          # text from a board, without its HTML
 
@@ -335,9 +335,8 @@ def reread_missing(jobs: list[dict[str, Any]], english_only: bool = True, droppe
 
 
 def safe_error(error) -> str:
-    """An error's text without the address's query part: API keys travel there
-    (…?app_id=…&app_key=…) and must never reach a log file or the screen."""
-    return re.sub(r"(https?://[^\s?'\"]+)\?[^\s'\"]*", r"\1", str(error))
+    """An error's text without the address's query part (`trouble.without_query`)."""
+    return trouble.without_query(error)
 
 
 _COMPANY_IN_TEXT = re.compile(r"\b(?:Firma|Společnost|Zaměstnavatel|Company|Employer)\s*:\s*(.{2,80}?)\s*(?:\(|Místo pracoviště|Adresa|Location|\||\n|$)")
@@ -414,7 +413,6 @@ def _collect(sources: list, queries: list[str], where: str, per_query: int, prog
             except requests.RequestException as e:
                 print(f"  ! {name} network error for '{q}': {safe_error(e)}")
             except Exception as e:  # noqa: BLE001 - a board that changed its pages must not end the whole search
-                from . import trouble
                 trouble.note(f"reading {name} for a search", RuntimeError(safe_error(f"{type(e).__name__}: {e}")))
                 print(f"  ! {name} could not be read for '{q}' ({type(e).__name__}); the other sources go on")
         print(f"  · {name}: +{got} new listings")

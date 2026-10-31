@@ -46,6 +46,20 @@ class JobSource(ABC):
         """Whether it can be asked now (a key that is set, a list of companies that exists)."""
         return True
 
+    def _keyed(self, send) -> requests.Response:
+        """`send()` for a board whose key travels in the address: an error says the status alone, never the address
+        (it would reach the screen and the log of problems), and nothing of the first error is chained on."""
+        try:
+            resp = send()
+            resp.raise_for_status()
+            return resp
+        except Exception as e:                             # noqa: BLE001 - any error's text may carry the address
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            label = self.name.capitalize()
+            if status:
+                raise requests.HTTPError(f"{label} answered {status}.") from None
+            raise requests.ConnectionError(f"{label} could not be reached.") from None
+
     def reset(self) -> None:
         """Forget what an earlier search read. A source that keeps nothing has nothing to forget."""
 
@@ -100,8 +114,7 @@ class AdzunaSource(JobSource):
     def find(self, query: str, where: str, per_query: int) -> list[dict[str, Any]]:
         params = {"app_id": config.ADZUNA_APP_ID, "app_key": config.ADZUNA_APP_KEY, "what": query, "where": where,
                   "results_per_page": per_query, "content-type": "application/json"}
-        resp = requests.get(self.URL.format(country=config.ADZUNA_COUNTRY, page=1), params=params, timeout=30)
-        resp.raise_for_status()
+        resp = self._keyed(lambda: requests.get(self.URL.format(country=config.ADZUNA_COUNTRY, page=1), params=params, timeout=30))
         out = []
         for raw in resp.json().get("results", []):
             smin, smax = raw.get("salary_min"), raw.get("salary_max")
@@ -127,8 +140,8 @@ class JoobleSource(JobSource):
         return bool(config.has_jooble())
 
     def find(self, query: str, where: str, per_query: int) -> list[dict[str, Any]]:
-        resp = requests.post(self.URL.format(key=config.JOOBLE_API_KEY), json={"keywords": query, "location": where}, timeout=30)
-        resp.raise_for_status()
+        resp = self._keyed(lambda: requests.post(self.URL.format(key=config.JOOBLE_API_KEY), json={"keywords": query, "location": where},
+                                                 timeout=30))
         return [store.new_job(
             id=f"jooble-{raw.get('id')}", title=_clean(raw.get("title", "")), company=_clean(raw.get("company", "")),
             location=_clean(raw.get("location", "")), source=f"jooble/{_clean(raw.get('source', ''))}"[:40],

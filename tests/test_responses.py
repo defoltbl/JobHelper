@@ -108,6 +108,34 @@ def test_process_inbox_stores_and_updates_status(isolate_data, monkeypatch):
     assert db.total() == 1
 
 
+def test_a_reply_is_on_its_job_before_its_mail_counts_as_read(isolate_data, monkeypatch):
+    """Audit before 1.2.0: a mail was marked read at once, but its job changed only in memory, saved at the end; an app
+    closed during the scan lost the reply for good (the next scan skipped the mail)."""
+    jobs = [store.new_job(id="jobscz-1", company="Acme", title="Python Dev", status="waiting"),
+            store.new_job(id="jobscz-2", company="Fabrikam", title="Tester", status="waiting")]
+    store.save_jobs(jobs)
+    monkeypatch.setattr(email_client, "fetch_recent", lambda *a, **k: email_client.Fetched([
+        {"msg_id": "<r1@acme>", "date": "Mon, 01 Sep 2026", "sender": "hr@acme.com", "subject": "Interview", "body": "Let us meet."},
+        {"msg_id": "<r2@fabrikam>", "date": "Mon, 01 Sep 2026", "sender": "hr@fabrikam.com", "subject": "Interview", "body": "Meet us."},
+    ]))
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, *a, **k: {
+        "is_response": True, "stage": "interview", "company": "Fabrikam" if "fabrikam" in prompt.lower() else "Acme",
+        "role": "", "rejection_category": "no_reason_given", "sentiment": "positive", "next_step": "", "summary": "Interview"})
+    filed = []
+    real = agent5_responses._file_reply
+
+    def file_then_fail(msg, result, guess, stats):
+        if filed:
+            raise RuntimeError("the app closed")                  # the second mail: the scan ends here
+        filed.append(msg["msg_id"])
+        return real(msg, result, guess, stats)
+    monkeypatch.setattr(agent5_responses, "_file_reply", file_then_fail)
+    with pytest.raises(RuntimeError):
+        agent5_responses.process_inbox(jobs)
+    assert store.find(store.load_jobs(), "jobscz-1")["status"] == "interview", "the first reply is saved with its job"
+    assert db.is_seen("<r1@acme>") is True and db.is_seen("<r2@fabrikam>") is False, "the mail not filed stays unread"
+
+
 def test_analytics(isolate_data, monkeypatch):
     jobs = [store.new_job(id="a", status="waiting"), store.new_job(id="b", status="rejected"),
             store.new_job(id="c", status="interview")]

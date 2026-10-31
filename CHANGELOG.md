@@ -7,6 +7,18 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Email scan:** a reply is put on its job before its mail counts as read. A scan that stops half-way no longer loses a reply.
+- **Search:** an error from Jooble or Adzuna never shows your key. The message says what the board answered.
+- **Search:** a search role made only of common words still filters the postings of company career sites.
+- **Assistant:** more personal and payment fields are left for you, also in Czech and German forms.
+- **Assistant:** a question that asks you to agree, to accept terms or to confirm is left for you. The assistant never answers it.
+- **Assistant:** when Chrome stops answering, the report still names the choices already made, and an open menu is closed.
+- **Cover letter** and **adapted CV:** more words count as a claim of experience, for example "I led" and "my Kafka pipelines".
+- **Cover letter** and **adapted CV:** a wish in one part of a sentence no longer hides a claim in another part.
+- **Adapted CV:** a skill name inside another word no longer counts as in your CV ("Go" is not in "good").
+- **Job window:** a letter that could not be written says why, instead of "try again". **Write what is missing** also says why a CV was not written.
+- **Account:** when Claude does not answer the sign-in check, the app says so instead of "Not signed in". **Check again** asks once more.
+- **Job window:** a double-click on **Mark applied** or **Not interested** decides only the job in view, also when going through jobs one by one.
 - A number box now takes a number of 1000 and more as you type it. Before, a salary such as 60000 went back to 6 at its fifth digit.
 - **Welcome card:** the mailbox test says why a mail server cannot be reached, for example that its name could not be found.
 - **Cover letter:** the employer check reads more job titles right (Self-employed, a teacher at a school) and no longer takes a line of work or a degree for a job.

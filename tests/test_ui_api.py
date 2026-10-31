@@ -1,5 +1,6 @@
 """Data access behind the desktop app (jobhelper.ui_api.Api)."""
 import json
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -124,7 +125,18 @@ def test_connections_logged_out_hides_account(api, monkeypatch):
 
 def test_connections_when_cli_is_missing(api, monkeypatch):
     _fake_cli(monkeypatch, error=FileNotFoundError("claude"))
-    assert api.connections()["claude"] is False
+    conn = api.connections()
+    assert conn["claude"] is False and conn["claude_unsure"] is False and conn["claude_msg"] == api_system.SIGN_IN
+
+
+@pytest.mark.parametrize("error", [subprocess.TimeoutExpired("claude", 8), PermissionError("blocked")])
+def test_a_sign_in_check_that_gets_no_answer_is_unsure_not_signed_out(api, monkeypatch, error):
+    """Audit: a slow `claude auth status` (8 s) read as "not signed in"."""
+    _fake_cli(monkeypatch, error=error)
+    conn = api.connections()
+    assert conn["claude"] is False and conn["claude_unsure"] is True and conn["claude_msg"] == api_system.UNSURE
+    _fake_cli(monkeypatch, json.dumps({"loggedIn": True}))
+    assert api.connections()["claude_unsure"] is False and api.connections()["claude_msg"] == ""
 
 
 def test_connections_reports_master_cv(api, monkeypatch):
@@ -833,6 +845,7 @@ def test_documents_are_written_for_one_job_on_request(isolate_data, monkeypatch)
 
 def test_a_failure_while_writing_documents_is_said_and_changes_nothing(isolate_data, monkeypatch):
     from jobhelper import agent1_cv, agent3_letters, llm
+    real_generate = agent3_letters.generate_for
     text = "We build planning tools in Python and SQL. " * 30
     store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="found", match_score=25, description=text)])
     monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nPython.")
@@ -841,11 +854,23 @@ def test_a_failure_while_writing_documents_is_said_and_changes_nothing(isolate_d
     monkeypatch.setattr(agent3_letters, "_make_letter", lambda *a: (_ for _ in ()).throw(RuntimeError("no connection")))
     api = ui_api.Api()
     result = api.write_documents("a")
-    assert result["ok"] is False and "Nothing could be written" in result["msg"]
+    assert result["ok"] is False and result["msg"] == "The letter could not be written: no connection. Write it again from this window."
     job = store.find(store.load_jobs(), "a")
     assert job["status"] == "found" and not job["tailored_cv_file"] and not job["cover_letter_file"]
     monkeypatch.setattr(agent3_letters, "generate_for", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's 5-hour limit is used up.")))
     assert "limit is used up" in api.write_documents("a")["msg"]
+    monkeypatch.setattr(agent3_letters, "generate_for", real_generate)       # the writers again (the letter still fails)
+    # last check: the same failure as the one the job already holds still says why, and a later success clears it
+    old = "The letter could not be written: no connection. Write it again from this window."
+    jobs = store.load_jobs()
+    store.find(jobs, "a")["hold"] = old
+    store.save_jobs(jobs)
+    monkeypatch.setattr(agent3_letters, "_make_tailored_cv", lambda *a: "CV_a.docx")
+    again = api.write_documents("a")
+    assert again["ok"] is True and again["msg"] == "Written: the CV. " + old, "not 'try again'"
+    monkeypatch.setattr(agent3_letters, "_make_letter", lambda *a: "L_a.docx")
+    assert api.write_documents("a")["msg"].endswith("the letter."), "written, with no old reason after it"
+    assert store.find(store.load_jobs(), "a").get("hold", "") == "", "the old reason goes when the letter is written"
 
 
 # ── usage, the log of problems and backups, all from the window ─────────────
@@ -962,7 +987,8 @@ def test_a_reached_limit_is_said_when_documents_are_asked_for_one_job(isolate_da
     monkeypatch.setattr(agent3_letters, "_make_tailored_cv", lambda job, cv_text, cv_path, fields: "CV_a.docx")
     monkeypatch.setattr(agent3_letters, "_make_letter", no_cv)
     result = api.write_documents("a")
-    assert result["ok"] is True and result["msg"] == "Written: the CV. Not written: the letter; try again in a moment."
+    assert result["ok"] is True and result["msg"] == ("Written: the CV. The letter could not be written: Claude's 5-hour limit is used up "
+                                                      "(100%). It resets at 18:00 on 10 Oct. Write it again from this window."), "why, not 'try again'"
     assert store.find(store.load_jobs(), "a")["tailored_cv_file"] == "CV_a.docx"
     # the command line stops at the limit, keeps what was done and says so (exit code 3, as a search does)
     monkeypatch.setattr(agent3_letters, "_make_tailored_cv", no_cv)

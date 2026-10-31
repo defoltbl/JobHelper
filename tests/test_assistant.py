@@ -187,6 +187,32 @@ def test_fields_are_recognised_by_what_the_page_calls_them(field, what):
     (_field("Disability status", kind="select"), form_fill.PRIVATE), (_field("Card number"), form_fill.PRIVATE),
     (_field("Passport number"), form_fill.PRIVATE), (_field("Race / Ethnicity", kind="select"), form_fill.PRIVATE),
     (_field("Veteran status", kind="select"), form_fill.PRIVATE), (_field("IBAN"), form_fill.PRIVATE),
+    # audit before 1.2.0: the card's name, citizenship, tax, Czech and German words, and private autocomplete values
+    (_field("Name on card"), form_fill.PRIVATE), (_field("Cardholder name"), form_fill.PRIVATE),
+    (_field("Expiry date"), form_fill.PRIVATE), (_field("Citizenship", kind="select"), form_fill.PRIVATE),
+    (_field("Nationality"), form_fill.PRIVATE), (_field("Tax ID"), form_fill.PRIVATE),
+    (_field("Datum narození"), form_fill.PRIVATE), (_field("Pohlaví", kind="select"), form_fill.PRIVATE),
+    (_field("Státní příslušnost"), form_fill.PRIVATE), (_field("Rodné číslo"), form_fill.PRIVATE),
+    (_field("Geburtsdatum"), form_fill.PRIVATE), (_field("Geschlecht", kind="radio"), form_fill.PRIVATE),
+    (_field("Staatsangehörigkeit"), form_fill.PRIVATE), (_field("Steuernummer"), form_fill.PRIVATE),
+    (_field("Name", auto="cc-name"), form_fill.PRIVATE), (_field("Date", auto="bday"), form_fill.PRIVATE),
+    (_field("Do you agree to the processing of your personal data?", kind="radio"), form_fill.CHOICE),
+    (_field("Souhlasíte se zpracováním osobních údajů?", kind="select"), form_fill.CHOICE),
+    (_field("Einwilligung zur Datenverarbeitung", kind="radio"), form_fill.CHOICE),
+    # last check: more of the same, and autocomplete with a section or "billing" in front
+    (_field("Národnost"), form_fill.PRIVATE), (_field("Věk", kind="number"), form_fill.PRIVATE),
+    (_field("Rodinný stav", kind="select"), form_fill.PRIVATE), (_field("Číslo karty"), form_fill.PRIVATE),
+    (_field("Kreditkartennummer"), form_fill.PRIVATE), (_field("Alter", kind="number"), form_fill.PRIVATE),
+    (_field("Nationalität"), form_fill.PRIVATE), (_field("Familienstand", kind="select"), form_fill.PRIVATE),
+    (_field("Geboren am"), form_fill.PRIVATE), (_field("Date de naissance"), form_fill.PRIVATE),
+    (_field("Security code"), form_fill.PRIVATE), (_field("Exp date"), form_fill.PRIVATE),
+    (_field("Number", auto="billing cc-number"), form_fill.PRIVATE), (_field("Code", auto="section-x cc-csc"), form_fill.PRIVATE),
+    (_field("Date", auto="section-a bday"), form_fill.PRIVATE),
+    (_field("Do you accept the Terms of Use?", kind="radio"), form_fill.CHOICE),
+    (_field("I acknowledge that the information is true", kind="select"), form_fill.CHOICE),
+    (_field("Do you authorize a background check?", kind="radio"), form_fill.CHOICE),
+    (_field("I certify that my answers are complete", kind="menu"), form_fill.CHOICE),
+    (_field("Ich bestätige die AGB", kind="radio"), form_fill.CHOICE),
     (_field("Date of the interview", kind="date"), form_fill.DATE),
     (_field("Meeting", kind="time"), form_fill.DATE),
     (_field("", kind="select"), form_fill.CHOICE), (_field("", kind="radio"), form_fill.CHOICE), (_field("Volume", kind="range"), form_fill.CHOICE),
@@ -196,6 +222,32 @@ def test_fields_are_recognised_by_what_the_page_calls_them(field, what):
     (_field(""), form_fill.UNKNOWN), (_field("???", kind="textarea"), form_fill.UNKNOWN)])
 def test_what_is_not_the_assistants_to_fill_is_left_with_the_reason(field, why):
     assert form_fill.classify(field) == ("", why)
+
+
+@pytest.mark.parametrize("label", ["Are you authorized to work in the EU?", "Would you accept a lower salary?",
+                                   "Do you hold a certification in accounting?", "Are you willing to relocate?",
+                                   "Do you agree to relocate?", "Experience with GDPR compliance"])
+def test_questions_about_you_are_still_the_assistants_to_answer(label):
+    """The consent and private words must not take a question the assistant answers from your details."""
+    assert form_fill.classify(_field(label, kind="radio")) == ("choice", "")
+
+
+def test_a_salary_before_tax_is_still_the_salary():
+    """Last check: "tax" alone made "Expected salary (before tax)" a private field, so the salary was never filled."""
+    assert form_fill.classify(_field("Expected salary (gross, before tax)")) == ("salary", "")
+    assert form_fill.classify(_field("Day rate (excl. VAT)"))[1] != form_fill.PRIVATE
+    assert form_fill.classify(_field("Gehaltsvorstellung (brutto, vor Steuern)"))[1] != form_fill.PRIVATE
+    for private in ("Tax ID", "VAT number", "Taxpayer number", "Steuernummer", "Steuer-ID", "Steuerliche Identifikationsnummer",
+                    "Steuernr.", "Staatsbürgerschaft", "Kontonummer", "Kartennummer", "Reisepass", "Sozialversicherungsnummer",
+                    "Občanství", "Číslo účtu", "Číslo OP", "DIČ", "Daňové identifikační číslo", "CVV2", "Expiration month",
+                    "Číslo pasu", "Karteninhaber", "Ablaufdatum", "Platnost karty", "Konto-Nr.", "SV-Nummer", "Staatsbuergerschaft",
+                    "National Insurance number", "Rentenversicherungsnummer", "Tax_ID", "Card-number",
+                    "Obc\u030canstvi\u0301"):              # the accents as separate marks, as text pasted on a Mac can have them
+        assert form_fill.classify(_field(private)) == ("", form_fill.PRIVATE), private
+    # the private words are no part of an ordinary question (last check)
+    for question in ("Why do you want to work at Renaissance Technologies?", "Zkušenosti s daňovým poradenstvím",
+                     "When does your contract expire?"):
+        assert form_fill.classify(_field(question, kind="textarea"))[1] != form_fill.PRIVATE, question
 
 
 def test_the_plan_fills_details_asks_questions_and_leaves_the_rest():
@@ -719,6 +771,34 @@ def test_choosing_goes_through_the_page_step_by_step(isolate, monkeypatch):
     assert "2 choices made for you" in out["say"] and "2 of them need" in out["say"]
 
 
+def test_choices_made_before_chrome_stops_answering_are_still_reported(isolate, monkeypatch):
+    """Audit: Chrome stopped answering at the last menu; the report said only that, not the choices already made, and the menu stayed open."""
+    store.save_jobs([_job()])
+    details.save(MINE)
+    monkeypatch.setattr(chrome, "pause", lambda seconds: None)
+    monkeypatch.setattr(chrome, "active_tab", lambda: {"url": "https://careers.northwind.example/jobs/42", "title": "Junior Analyst - Northwind"})
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"choices": [{"n": 2, "answer": "No"}, {"n": 4, "answer": "Blue"}]})
+    fields = [_field("Country", kind="menu", n=1), _field("Do you need sponsorship?", kind="radio", n=2, options=["Yes", "No"]),
+              _field("Colour", kind="menu", n=4)]
+    steps = []
+
+    def run(script):
+        if script == form_fill.READ:
+            return json.dumps({"url": "https://careers.northwind.example/jobs/42", "title": "t", "fields": fields, "frames": [], "boxes": 0})
+        action, n, arg, _url = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
+        steps.append((action, n, arg))
+        if action == "pick" and n == 4:
+            raise chrome.ChromeError(chrome.NO_ANSWER)
+        if action == "options":
+            return json.dumps({"options": {1: ["Germany", "Czech Republic"], 4: ["Blue", "Green"]}[n]})
+        return json.dumps({"ok": True})
+    monkeypatch.setattr(chrome, "run", run)
+    out = ui_api.Api().assistant_fill("nw1")
+    assert out["ok"] is True and out["stopped"] == chrome.NO_ANSWER
+    assert [f["label"] for f in out["filled"]] == ["Country", "Do you need sponsorship?"], "what was chosen is named"
+    assert steps[-1] == ("close", 4, False), "the menu Chrome stopped in is closed again"
+
+
 def test_a_country_is_found_in_a_list_however_it_is_spelt():
     assert form_fill.country_option(["Choose", "Germany", "Czech Republic"], "Czechia") == "Czech Republic"
     assert form_fill.country_option(["czechia"], "Czechia") == "czechia" and form_fill.country_option(["Chad", ""], "Czechia") == ""
@@ -1193,6 +1273,12 @@ def test_what_is_read_back_for_a_review_is_checked_and_private_values_go_no_furt
     assert [f["label"] for f in page["fields"]] == ["Email", "Date of birth", "Why us?", "A field with no name"]
     assert page["fields"][1] == {"label": "Date of birth", "value": "", "filled": True, "required": False, "private": True, "kind": "text"}
     assert len(page["fields"][2]["value"]) == 3000 and page["fields"][3]["filled"] is False
+    # last check: the review reads a label as the planner does, so "Tax_ID" is private here too and its value stays
+    marked = form_fill.review_answer(json.dumps({"url": "https://x.example/a", "title": "T", "fields": [
+        {"label": "Tax_ID", "value": "CZ12345678"}, {"label": "Card-number", "value": "4111"}, {"label": "Expiry-date", "value": "12/30"},
+        {"label": "DoB", "value": "1999-01-02"}, {"label": "PassWord", "value": "x"}]}))
+    assert [(f["private"], f["value"]) for f in marked["fields"]] == [(True, ""), (True, ""), (True, ""), (True, ""), (True, "")]
+    assert form_fill.classify(_field("DoB")) == ("", form_fill.PRIVATE), "the planner reads it the same way"
     for bad in ("", "[]", '{"fields": 3}'):
         with pytest.raises(ValueError):
             form_fill.review_answer(bad)

@@ -159,6 +159,16 @@ def _loc_ok(loc: str, where: str) -> bool:
     return filters.location_fits(loc, where)
 
 
+def _matches(title: str, terms: list[str], keyword: str) -> bool:
+    """Whether a posting's title fits the role searched for: one of its telling words, or, when the role has none
+    ("QA Engineer", "Junior Developer": short or common words only), every word of it. An empty filter once let every
+    posting of every career site through."""
+    if terms:
+        return any(t in title for t in terms)
+    words = re.findall(r"[a-z0-9+#]+", keyword.lower())
+    return bool(words) and all(re.search(rf"(?<![a-z0-9]){re.escape(w)}(?![a-z0-9])", title) for w in words)
+
+
 def careers(keyword: str, where: str, limit: int, with_description: bool = True) -> list[dict[str, Any]]:
     """Search the configured company career centers for a keyword near `where`.
 
@@ -175,7 +185,7 @@ def careers(keyword: str, where: str, limit: int, with_description: bool = True)
             if not placement.fits(job["location"]):
                 continue
             title = job["title"].lower()
-            if terms and not any(t in title for t in terms):
+            if not _matches(title, terms, keyword):
                 continue
             results.append(job)
             if len(results) >= limit * 3:
