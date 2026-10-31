@@ -1,6 +1,6 @@
 """The app's name, version and identity, in one place (the window, the build and the docs use them)."""
 NAME = "JobHelper"
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 BUNDLE_ID = "local.jobhelper.app"
 APPLE_EVENTS_REASON = ("JobHelper fills in the job forms you open in Google Chrome, and opens Terminal "
                        "when you sign in to Claude.")
