@@ -1029,7 +1029,7 @@ fields. On a page, it presses only these things:
 - a button that adds a row for another job or degree
 - the box that says you work at a job now, and the box that says you are fluent in a language
 
-It never presses a button that sends or continues. It never ticks a box that agrees to
+It never presses a button that sends or continues. It never answers a field that agrees to
 something, and it never sends the form. You read what it wrote, and you send the form
 yourself.
 
@@ -1313,8 +1313,8 @@ Table 9.4 shows what happens to each kind of field.
 | Any other file field (a photo, a passport, a transcript). Also a file larger than 4 MB, or a type of file that the field does not take | Leaves it to you, with the reason |
 | A file field, when the assistant does not know which job the form is for | Leaves it to you. Choose the job, then ask again: a CV written for another company is worse than none |
 | A password | Leaves it to you |
-| Date of birth, gender, origin, citizenship, health, tax numbers, payment details (also the name on a card) | Leaves them to you, also in Czech and German forms |
-| A box or a question that asks you to agree or to confirm: terms, the use of your data, a background check | Leaves it to you: you agree, not the assistant |
+| Date of birth, gender, origin, citizenship, health, tax numbers, payment details, a PIN or a one-time code | Leaves them to you, also in Czech and German forms |
+| A field that asks you to agree or to confirm: terms, your data, a background check, a newsletter, job alerts | Leaves it to you: you agree, not the assistant |
 | A field about another person (**Referee phone**, **Next of kin name**), an employer's address, or **Current salary** | Your own name, contacts, address and the salary you ask for never go there. A field about another person and an employer's address are left to you. For **Current salary**, the assistant may offer words from your CV, marked for checking |
 | **Current employer** when no job in **My details** is marked **I work here now** | Leaves it to you and says why. An old job is never given as the current one. **Current or most recent employer** gets the first job in your list in **My details** |
 | The dates of a job or a degree | Writes them where the form takes a month and a year, as one field or as two lists. Where it wants a full date, the first of the month is used and marked for checking. With only a year in **My details**, a month is left to you |

@@ -5,6 +5,12 @@ Format: a `## ` heading, then one `- ` line per change; `**words**` are shown in
 in a version go under `## Unreleased`; a released version's heading is `## 1.1.0 – 18 October 2026`
 (its tag is `v1.1.0` on GitHub). Version 1.0.0 is everything up to 17 October 2026, listed by date.
 
+## Unreleased
+
+- **Assistant:** a question that gives consent in your name is left for you in every kind of field, also a text box ("Type I AGREE"). Newsletters, job alerts and "keep my data on file" count too.
+- **Assistant:** more personal fields are left for you, for example a one-time code, a PIN, a sort code and medical questions.
+- **Assistant:** the review of a form never sends a card number or a date of birth to Claude, also when the field's label does not say what it is.
+
 ## 1.2.0 – 31 October 2026
 
 - **Email scan:** a reply is put on its job before its mail counts as read. A scan that stops half-way no longer loses a reply.

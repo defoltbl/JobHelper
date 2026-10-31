@@ -467,11 +467,22 @@ data/                your data; only the *.example.* files are in git
 - **A decision in the job window turns its buttons off for `decisionPause` (700 ms)** (DetailDialog `decisionPaused`, only
   after a decision that was taken): in a review round the next job opens at once, and the second click of a double-click
   decided it too.
-- **Consent is never the model's** (`form_fill._CONSENT`, for lists, radios and menus): "I agree", agree to terms or to
-  the use of data, accept terms, acknowledge, authorize, certify, "I confirm/declare", a background check, a privacy
-  policy, also in Czech and German. "Are you authorized to work …", "Do you agree to relocate?" and "Experience with GDPR"
-  are questions about you and stay the model's. Tick boxes have their own list (`NEVER_TICK_WORDS`). "Tax" and "VAT"
-  are private only as a number ("Tax ID"), never in "salary before tax".
+- **Consent is never the model's** (`form_fill.CONSENT_WORDS`, one list for the planner and the page scripts): "I agree",
+  agree to terms or to the use of data, accept terms, acknowledge, authorize, certify, "I confirm/declare", a background
+  check, a privacy policy, newsletters, job alerts, "keep my data on file", also in Czech, German, Spanish and French. It
+  holds for every field kind but tick boxes, which have the longer `NEVER_TICK_WORDS` (it starts with the consent
+  words). A consent field is left with `form_fill.CONSENT`, before answer memory can replay an earlier "Yes". "Are you
+  authorized to work …", "Do you agree to relocate?" and "Experience with GDPR" are questions about you and stay the
+  model's. "Tax" and "VAT" are private only as a number ("Tax ID"), never in "salary before tax".
+- **A text box gives consent only when it asks you to type it** (`form_fill._consent`, `_TYPED_CONSENT`: "I agree",
+  "Type I AGREE", or a box the page names "consent_text"): a question that only mentions personal data or a background
+  check stays a question. A list or radios is read by its words and its options ("Accept" / "Decline"). Short words
+  that are private only as a whole label ("SWIFT", "TIN", "Username") are in `_PRIVATE_ALONE`, so "Swift experience"
+  stays a question. The signature words ("to certify", "I declare") are in both lists: a list gives consent, a box asks
+  for your name. In a review, a value shaped like a card number (13 to 19 digits, Luhn) is private whatever its name.
+- **A field is private by its name, its words or its autocomplete value** (`form_fill._private`), and the review of a
+  form asks the same function with what the REVIEW script reports (label, `name`, `autocomplete`), so a value the
+  planner leaves alone never goes to Claude in a review.
 - **An error's text never carries a key** (`trouble.without_query`, also for an address with no "https://"; boards whose
   key is in the address go through `JobSource._keyed`, which says the status alone).
 

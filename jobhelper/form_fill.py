@@ -72,7 +72,25 @@ CURRENT_BOX_WORDS = (r"^\s*(?:i (?:am )?(?:currently |still )?work(?:ing)? (?:at
                      r"|(?:current|present) (?:job|role|position|employer)|this is my current (?:job|role|position|employer)"
                      r"|(?:until|till) (?:now|present))(?: now| currently)?" + _TICK_END)
 FLUENT_WORDS = r"^\s*(?:i am fluent(?: in this language)?|fluent in this language|i speak this language fluently|(?:i am a )?native speaker)" + _TICK_END
-NEVER_TICK_WORDS = (r"agree|consent|terms|privacy|policy|newsletter|subscribe|marketing|keep me|notify|\bupdates?\b|alert"
+# Words that give consent in your name: the assistant never answers them, whatever kind of field asks (#83). Written so
+# that Python and the page's JavaScript read them alike (no inline flags, no "/"); both read them case-blind.
+# "Do you agree to relocate?", "Would you accept a lower salary?" and "Marketing experience" are questions about you.
+CONSENT_WORDS = (r"\bi (?:hereby )?agree\b|\bagree (?:to|with) (?:the |our |these |your )?(?:terms|conditions|polic|privacy|processing"
+                 r"|storage|use of|data)|consent|terms (?:and|&) conditions|terms of (?:use|service)|privacy (?:polic|notice|statement)"
+                 r"|personal data|\baccept\b[^?]{0,40}\b(?:terms|polic|conditions|agreement|statement)|^[\s*]*do you (?:accept|agree)[\s*?]*$"
+                 r"|^[\s*]*(?:i )?(?:accept|agree)[\s*.!]*$|^[\s*]*(?:terms|gdpr|privacy|data protection)[\s*:]*$|\bt ?& ?cs?\b"
+                 r"|^[\s*]*(?:i )?confirm[\s*.!]*$|marketing preferences|keep me (?:updated|informed|posted)"
+                 r"|share my (?:details|data|information)|\btype yes\b"
+                 r"|\backnowledg|\bauthori[sz]e\b|\bcertify\b|to certify|to agree"
+                 r"|\bi (?:hereby )?(?:confirm|declare)\b|\bconfirm (?:that|you)\b|background check|\bi have read\b|read and underst"
+                 r"|(?:data|details|cv|resume|information|application|profile) on file|permission to (?:store|keep|contact|share|use|process)"
+                 r"|\bopt[\s-]?in\b|newsletter|subscribe|marketing (?:e-?mails?|messages|communications?|updates|purposes)|job alerts?"
+                 r"|talent (?:community|pool|network)|contact(?:ed)? (?:you|me) (?:about|for|with) (?:future|other|new|similar)"
+                 r"|future (?:openings|opportunities|vacancies)|^[\s*]*declaration[\s*:]*$|please confirm (?:all|the above|that)"
+                 r"|souhlas|zpracov[áa]n[íi] osobn|prohla[šs]uji|potvrzuji|beru na v[ěe]dom[íi]|obchodn[íi] podm[íi]nky"
+                 r"|einwillig|zustimm|einverstanden|ich stimme zu|datenschutz|dsgvo|best[äa]tige|versichere|akzeptiere"
+                 r"|nutzungsbedingungen|\bagb\b|acepto|j['’]accepte")
+NEVER_TICK_WORDS = (CONSENT_WORDS + r"|agree|terms|privacy|policy|marketing|keep me|notify|\bupdates?\b|alert"
                     r"|sponsor|visa|licen[cs]e|\brequires?\b|authori[sz]|permit|allow|contact|certif|confirm|declar|accept"
                     r"|acknowledg|gdpr|understand|opt.?in|disclos|\bnot\b|\bno longer\b|\bnever\b|former|\?|true|correct|accurate"
                     r"|\bcall|reference|verify|\bsign")
@@ -603,13 +621,17 @@ REVIEW = r"""
       if (type === 'radio') {
         if (!el.name) continue;
         var set = el.closest('fieldset'), asked = set && set.querySelector('legend') ? text(set.querySelector('legend')) : el.name;
-        if (seen[el.name] === undefined) { seen[el.name] = out.length; out.push({label: asked.slice(0, 200), value: '', required: !!el.required, kind: 'radio'}); }
+        if (seen[el.name] === undefined) { seen[el.name] = out.length; out.push({label: asked.slice(0, 200), value: '', required: !!el.required, kind: 'radio',
+                                                                                 name: String(el.name).slice(0, 100), id: '', hint: '', auto: String(el.getAttribute('autocomplete') || '').slice(0, 100)}); }
         if (el.checked) out[seen[el.name]].value = (el.labels && el.labels.length ? text(el.labels[0]) : clean(el.value)).slice(0, 200);
         continue;
       }
       if (r.width < 2 || r.height < 2) continue;
       var value = tag === 'SELECT' ? (chosen(el) ? clean(el.options[el.selectedIndex].text) : '') : String(el.value || '');
-      out.push({label: name(el).slice(0, 200), value: value.slice(0, 3000), required: !!(el.required || el.getAttribute('aria-required') === 'true'), kind: type});
+      out.push({label: name(el).slice(0, 200), value: value.slice(0, 3000), required: !!(el.required || el.getAttribute('aria-required') === 'true'), kind: type,
+                name: String(el.name || '').slice(0, 100), id: String(el.id || '').slice(0, 100),
+                hint: clean(el.getAttribute('placeholder') || el.getAttribute('aria-label') || '').slice(0, 200),
+                auto: String(el.getAttribute('autocomplete') || '').slice(0, 100)});
     }
   }
   walk(document);
@@ -630,7 +652,9 @@ def review_answer(text: str) -> dict[str, Any]:
             continue
         label = " ".join(str(raw.get("label") or "").split())[:200]
         value = str(raw.get("value") or "")[:3000]
-        private = _named_private({"label": label})
+        named = {"label": label, "name": raw.get("name"), "id": raw.get("id"), "hint": raw.get("hint"), "auto": raw.get("auto")}
+        nameless = not label and not str(raw.get("name") or "").strip() and not str(raw.get("id") or "").strip()
+        private = nameless or _private(named) or _consent(named) or _card_number(value)
         fields.append({"label": label or "A field with no name", "value": "" if private else value, "filled": bool(value.strip()),
                        "required": bool(raw.get("required")), "private": private, "kind": str(raw.get("kind") or "text")[:20]})
     return {"url": str(data.get("url") or ""), "title": str(data.get("title") or "")[:300], "fields": fields}
@@ -785,6 +809,7 @@ FILE_MASTER = "This is your own CV, not one adapted to this job. " + FILE_CHECK
 FILE_REASONS = (FILE, FILE_BUTTON, FILE_NO_JOB, FILE_NO_CV, FILE_NO_LETTER, FILE_OTHER, FILE_BIG, FILE_REFUSED)
 PRIVATE = "Personal or payment information: fill it in yourself."
 CHOICE = "Choose it yourself."
+CONSENT = "It gives consent in your name: answer it yourself."
 DATE = "Pick the date yourself."
 UNKNOWN = "I did not recognise this field."
 NO_DETAIL = "Not in My details yet: add your {what} there and ask me again."
@@ -795,15 +820,27 @@ NO_JOB = "An open question: choose the job this form is for, and I will draft th
 NO_LETTER = "No letter written by the app for this job. Paste your own."
 TOO_MANY = f"More than {form_answers.MAX_QUESTIONS} open questions: ask me again after these are done."
 
-_PRIVATE = re.compile(r"passw|captcha|card ?number|credit card|\bcvv\b|\bcvc\b|\biban\b|\bbank|account number|social security|\bssn\b"
-                      r"|signature|sign electronically|\bsign (?:here|below)\b|\bsigned\b|(?:name|initials) to confirm|\bconfirm (?:that|you)\b|to certify|to agree|i declare|signatory|initials"
+_PRIVATE = re.compile(r"passw|captcha|card ?number|credit card|\biban\b|\bbank|account number|social security|\bssn\b"
+                      r"|signature|sign electronically|\bsign (?:here|below)\b|\bsigned\b|(?:name|initials) to confirm|signatory|initials"
+                      r"|to certify|to agree|i declare|\bconfirm (?:that|you)\b"
+                      # a card or a code named by the page only ("cc_number", "card_no", "mfa_code")
+                      r"|\bcc ?(?:num|number|exp|csc|cvc|cvv)|\bcard ?(?:num|no)\b|\bbday\b|\b(?:pw|mfa|2fa|totp)\b|auth(?:entication)? code"
+                      r"|\bcv[cv]2?\b|\bccv\b|\bcv2\b"
                       r"|national id|id number|passport|birth|\bdob\b|\bage\b|gender|\bsex\b|pronoun|\brace\b|ethnic|disab|veteran"
                       r"|religio|orientation|marital|criminal|convict|health"
+                      # #84: more of the same, and codes that sign you in
+                      r"|born on|year (?:of )?birth|year born|maiden name|security (?:question|answer)|\bpin\b|\bpwd\b|one.?time (?:code|password)"
+                      r"|verification code|\botp\b|sort code|routing (?:number|no\b)|swift ?(?:code|bic)|\bbic (?:code|number)"
+                      r"|social insurance|insurance number"
+                      r"|\bpesel\b|licen[cs]e (?:number|no\b)|passcode|\d-digit code|code (?:we|that we) sent|enter the code"
+                      r"|account (?:no\b|number)|\bni (?:number|no\b)|diagnos(?:is|es|ed)\b|medication|union membership"
+                      r"|medical (?:conditions?|history|records?|needs?|issues?|certificate)|allerg|pregnan"
+                      r"|political (?:views?|opinions?|affiliation|party|beliefs?)|trade union"
                       # the card's own name and date, citizenship and tax; the same in Czech and German (audit before 1.2.0)
                       r"|name on (?:the )?card|card ?holder|expir(?:y|ation)? ?(?:date|month|year)|valid (?:thru|through|until)"
                       r"|citizenship|nationality"
                       r"|\btax ?(?:id|number|no\b|code|identif)|tax ?payer|\bvat ?(?:id|number|no\b)|\bust.?id"   # not "before tax"
-                      r"|security code|\bcvv2\b|\bexp\.? ?date\b|\bnaissance"
+                      r"|security code|\bexp\.? ?date\b|\bnaissance"
                       r"|narozen|pohlav|p[řr][íi]slu[šs]nost|rodn[ée] [čc][íi]slo|ob[čc]ansk|ob[čc]anstv|n[áa]rodnost|\bv[ěe]k\b"
                       r"|da[ňn]ov[ée] identifika|\bdi[čc]\b|rodinn[ýy] stav|[čc][íi]slo (?:karty|[úu][čc]tu|op\b|pasu|pas\b)|platnost karty"
                       r"|geburt|geboren|geschlecht|staatsangeh|staatsb(?:[üu]|ue)rger|nationalit|steuer(?:liche)? ?(?:nummer|nr\b|-?id|ident)"
@@ -811,18 +848,25 @@ _PRIVATE = re.compile(r"passw|captcha|card ?number|credit card|\bcvv\b|\bcvc\b|\
                       r"|ablaufdatum|kontonummer|\bkonto ?nr\b|\balter\b|familienstand|national insurance")
 # what a page's autocomplete names as payment or personal: never filled, whatever the label says. One token at a time:
 # autocomplete may start with a section or "billing" ("section-a cc-csc", "billing cc-number").
-_PRIVATE_AUTO = re.compile(r"cc-.*|bday.*|sex|transaction-.*")
+_PRIVATE_AUTO = re.compile(r"cc-.*|bday.*|sex|transaction-.*|current-password|new-password|one-time-code")
+# short words that are private only as the whole label ("SWIFT", "TIN", "Username"), not inside a question ("Swift experience")
+_PRIVATE_ALONE = re.compile(r"^[\s*]*(?:swift|bic|tin|sin|d ?o ?b|user ?name)(?: code| no| number)?[\s*:.]*$")
+# an option that gives consent: the consent words, and the short answers to a consent question ("Accept" / "Decline",
+# "Agree" / "Disagree", "I do not accept"); the question it answers is yours
+_CONSENT_OPTION = re.compile(r"^[\s*]*(?:yes,? )?(?:i )?(?:agree|accept|consent|certify|confirm|authori[sz]e|acknowledge|decline|disagree)"
+                             r"(?:d|s)?\b|\bi (?:hereby |do not |don't )?(?:agree|accept|consent)\b|\bopt[\s-]?(?:in|out)\b"
+                             r"|^[\s*]*yes,? (?:keep me|share my)|(?:ne)?souhlas|zustimm|ablehnen|einverstanden|ich stimme|acepto|j.accepte",
+                             re.IGNORECASE)
+# a text box that asks you to type your consent ("Type I AGREE", "I consent to …"): ordinary questions that only mention
+# personal data or a background check stay questions
+_TYPED_CONSENT = re.compile(r"\bi (?:hereby )?(?:agree|consent|accept|confirm|declare|certify)\b|\btype (?:yes|agree|accept|i agree)\b"
+                            r"|to certify|to agree", re.IGNORECASE)
+# a text box the page itself names for consent ("consent_text", "accept_terms")
+_CONSENT_NAME = re.compile(r"\b(?:consent|agree|agreement|accept|acceptance|terms|gdpr)\b")
 # a question in a list or a set of radios that gives consent in your name: yours to answer, never the model's
 # ("Are you authorized to work in …?" is a question about you, not consent: "authorize" alone is)
 # ("Do you agree to relocate?" and "Experience with GDPR compliance" are questions about you, not consent)
-_CONSENT = re.compile(r"\bi (?:hereby )?agree\b|\bagree (?:to|with) (?:the |our |these |your )?(?:terms|conditions|polic|privacy|processing"
-                      r"|storage|use of|data)|consent|terms (?:and|&) conditions|terms of (?:use|service)|privacy (?:polic|notice|statement)"
-                      r"|personal data"
-                      r"|\baccept\b[^?]{0,40}\b(?:terms|polic|conditions|agreement|statement)|\backnowledg|\bauthori[sz]e\b"
-                      r"|\bcertify\b|\bi (?:hereby )?(?:confirm|declare)\b|background check"
-                      r"|souhlas|zpracov[áa]n[íi] osobn|prohla[šs]uji|potvrzuji|beru na v[ěe]dom[íi]|obchodn[íi] podm[íi]nky"
-                      r"|einwillig|zustimm|einverstanden|datenschutz|best[äa]tige|versichere|akzeptiere|nutzungsbedingungen|\bagb\b",
-                      re.IGNORECASE)
+_CONSENT = re.compile(CONSENT_WORDS, re.IGNORECASE)
 _NOT_MINE = re.compile(r"company|employer|organi[sz]ation|school|universit|college|referr|referee|reference|emergency|manager|recruiter"
                        r"|supervisor|\btitle\b|position|\brole\b|degree|skill|user ?name|login|nick")
 # what forms ask again and again; when it is not in My details, an open question is drafted instead
@@ -1061,11 +1105,36 @@ WHAT = {"job_location": "job's place (under your jobs: Where it was)", "job_desc
         "study_field": "degrees", "salary": "salary", **{key: label.lower() for key, label in details.LABELS.items()}}
 
 
-def _named_private(field: dict[str, Any]) -> bool:
-    """Whether the field's name says it is personal or payment information, read both as written ("DoB", "PassWord")
-    and as plain words ("Tax_ID", "Card-number"): a field is private when either reading says so."""
+def _private(field: dict[str, Any]) -> bool:
+    """Whether the field is personal or payment information: its name read as written ("DoB", "PassWord") or as
+    plain words ("Tax_ID", "Card-number"), or its autocomplete value ("cc-number", "one-time-code"). The planner and
+    the review of a form both ask this, so a value the planner leaves alone never goes to Claude in a review either."""
     written = " ".join(str(field.get(k) or "") for k in ("label", "hint", "name", "id")).lower()
-    return bool(_PRIVATE.search(written) or _PRIVATE.search(_words(field)))
+    auto = str(field.get("auto") or "").lower().split()
+    alone = bool(_PRIVATE_ALONE.match(_words({"label": field.get("label")})))      # the label only: name="username" on an email box
+    return bool(_PRIVATE.search(written) or _PRIVATE.search(_words(field)) or alone or any(_PRIVATE_AUTO.fullmatch(t) for t in auto))
+
+
+def _card_number(value: str) -> bool:
+    """Whether a typed value is shaped like a payment card number: 13 to 19 digits that pass the Luhn check."""
+    digits = re.sub(r"[\s-]", "", unicodedata.normalize("NFKC", value or ""))     # fullwidth digits become plain digits
+    if not 13 <= len(digits) <= 19 or not digits.isdecimal():                       # "፩" is a digit sign int() refuses
+        return False
+    total = sum(int(d) for d in digits[-1::-2]) + sum(sum(divmod(2 * int(d), 10)) for d in digits[-2::-2])
+    return total % 10 == 0
+
+
+def _consent(field: dict[str, Any], picked: bool = False) -> bool:
+    """Whether answering the field gives consent in your name: by its label (a text box's hint, name or id say nothing:
+    "We never share your personal data" under an email box is no question), and for a list or radios also by its own
+    words and its options ("Please select one": "I agree" / "I do not agree")."""
+    label = _words({"label": field.get("label")})
+    if not picked:
+        return bool(_TYPED_CONSENT.search(label) or _CONSENT_NAME.search(_words({"name": field.get("name"), "id": field.get("id")})))
+    if _CONSENT.search(label) or _CONSENT.search(_words(field)):
+        return True
+    # an option by the short answers only: "Company newsletter" as an answer to "How did you hear about us?" is no consent
+    return any(_CONSENT_OPTION.search(str(o)) or re.search(r"\bconsent\b", str(o), re.IGNORECASE) for o in field.get("options") or [])
 
 
 def _words(field: dict[str, Any]) -> str:
@@ -1146,10 +1215,10 @@ when the field is left to the person."""
             return "", PASSWORD
         if kind == "file":
             return "file", ""
-        if _named_private(field) or any(_PRIVATE_AUTO.fullmatch(t) for t in str(field.get("auto") or "").lower().split()):
+        if _private(field):
             return "", PRIVATE
-        if picked and _CONSENT.search(words):
-            return "", CHOICE                           # "Do you agree to the processing of your personal data?": yours alone
+        if kind != "checkbox" and _consent(field, picked):
+            return "", CONSENT                          # a list, a radio or a text box ("Type I AGREE"): yours alone
         if field.get("part") and kind in ("text", "number", "tel"):
             # one box of a date that is split into a month and a year: the pair's own name says whose date it is
             pair = _words({"label": field.get("group")})
@@ -1191,7 +1260,7 @@ when the field is left to the person."""
         has_words = bool(re.search(r"[^\W\d_]{2}", str(field.get("label") or "")))
         if kind == "checkbox":                          # the two kinds of tick box that are reported: "I work here now", "I am fluent in this language"
             said = _words({"label": field.get("label")}).strip(" *") or words
-            if _NEVER_TICK.search(said):
+            if _NEVER_TICK.search(said) or _NEVER_TICK.search(_words({"name": field.get("name"), "id": field.get("id")})):
                 return "", CHOICE
             if _FLUENT.search(said):
                 return "fluent_box", ""
@@ -1226,7 +1295,7 @@ when the field is left to the person."""
         """Which of the details a field asks for, whatever kind of field it is ('' = none): a hint for a choice."""
         field = self._raw
         words = _words(field)
-        if _PRIVATE.search(words):
+        if _private(field):
             return ""
         asked = _words({"label": field.get("label")}) or words
         for key, rule in _RULES:
