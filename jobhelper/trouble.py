@@ -39,6 +39,12 @@ def _folder():
     return config.DATA_DIR
 
 
+def kind_of(error: BaseException) -> str:
+    """What the person is told about an unexpected fault: its kind only. Its text may hold a path or words of a page,
+    so that goes to the log of problems (`note`), never to the screen."""
+    return f"{type(error).__name__}. The details are in Help > Usage and problems."
+
+
 def note(where: str, error: BaseException | str) -> None:
     """Remember that `where` failed with `error`, and carry on."""
     try:

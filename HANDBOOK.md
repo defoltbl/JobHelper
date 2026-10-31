@@ -480,6 +480,20 @@ data/                your data; only the *.example.* files are in git
   that are private only as a whole label ("SWIFT", "TIN", "Username") are in `_PRIVATE_ALONE`, so "Swift experience"
   stays a question. The signature words ("to certify", "I declare") are in both lists: a list gives consent, a box asks
   for your name. In a review, a value shaped like a card number (13 to 19 digits, Luhn) is private whatever its name.
+- **A text box that a person cannot see is never read** (READ's `trap()`, #77): placed above or left of the page
+  (counting the scroll of every box around it up to the page's own scroller, across a shadow root's edge, so a scrolled
+  sheet is no trap), or see-through (opacity 0 on it, a parent or a shadow host, unless the browser is fading it in
+  right now: `getAnimations()`, so a theme's `* {transition: all}` is no excuse). `aria-hidden` fields were skipped
+  before. Robots fill such "honeypots" and the page then drops the application. Lists and radios are often
+  see-through on purpose, so they are not asked; a combobox's box is. `trap.html` and `trap_scrolled.html` prove it in
+  a real browser engine (Submit, Next, a password, a scrolled page), `sheet.html` that a scrolled sheet, a component and
+  a step fading in are still filled. A test page's name has letters and "_" only (the test server refuses others).
+  Not caught yet (#91): clipping, far right or below, tiny or nearly see-through boxes, `inert`, covered boxes, frames.
+- **A field the page emptied again is written again by typing, and checked again** (`FormFillRun._type_again`): a field
+  is reported written only when a look saw it hold its value. When Chrome stops answering, the tab changes, the page
+  drew the field anew, gives no readable answer or refuses the second writing, it is reported as not written. A fault
+  after something was written keeps the report of what was written (`FormFillRun.result`, `_wrote`); the screen names
+  only the fault's kind (`trouble.kind_of`), its text goes to the log of problems.
 - **A field is private by its name, its words or its autocomplete value** (`form_fill._private`), and the review of a
   form asks the same function with what the REVIEW script reports (label, `name`, `autocomplete`), so a value the
   planner leaves alone never goes to Claude in a review.

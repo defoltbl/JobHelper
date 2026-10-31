@@ -9,7 +9,7 @@ from datetime import date
 from typing import Any
 
 from . import (agent1_cv, answer_memory, assistant, chrome, config, cover_letter, details, form_answers, form_choices,
-               form_fill, store)
+               form_fill, store, trouble)
 
 SHOWN = 90      # characters of a filled-in value shown in the report
 
@@ -43,6 +43,7 @@ class FormFillRun:
         self._left: list[dict] = []           # what is left to the person, with the reason
         self._written: list[int] = []         # numbers of the fields the page took
         self._stopped = ""                    # why the fill stopped after the page was changed
+        self._wrote = False                   # something was written into the page (a fault after it still reports)
 
     def result(self) -> dict[str, Any]:
         """Do the whole fill and say what happened (see `AssistantService.assistant_fill`)."""
@@ -64,6 +65,12 @@ class FormFillRun:
             if not self._filled:
                 return stop.answer
             self._stopped = str(stop)
+            self._left_unreached()
+        except Exception as e:  # noqa: BLE001 - what was written is on the page: it is reported, and the fault named (#77)
+            if not (self._filled or self._wrote):
+                raise
+            trouble.note("filling in a form", e)
+            self._stopped = f"Something went wrong: {trouble.kind_of(e)}"
             self._left_unreached()
         return self._report(host)
 
@@ -94,6 +101,8 @@ class FormFillRun:
         if address.refused:
             raise Stop(address.refusal("fill in forms on this site"))
         self._page = self._read()
+        if form_fill.PageAddress(self._page["url"]).host != host:     # the tab changed between the check and the reading (#77)
+            raise Stop("The tab changed while I was reading the form, so I wrote nothing. Go back to the form and ask me again.")
         if not self._page["fields"]:
             if self._page["frames"]:
                 inner = form_fill.host_of(self._page["frames"][0]) or "another site"
@@ -203,6 +212,7 @@ class FormFillRun:
             raise Stop(str(e)) from e
         if done["moved"]:
             raise Stop("The tab changed while I was working, so I wrote nothing. Go back to the form and ask me again.")
+        self._wrote = bool(done["done"])
         thrown = self._type_again([i["n"] for i in fill if i["n"] in done["done"]])
         self._written = [n for n in done["done"] if n not in thrown]
         for item in fill:
@@ -219,17 +229,20 @@ class FormFillRun:
         Returns the fields that are still empty after that."""
         if not texts:
             return []
-        url = self._page["url"]
+        url, lost = self._page["url"], set(texts)       # not looked at yet: not known to be written
         try:
             chrome.pause(0.35)
-            lost = set(form_fill.empty_answer(chrome.run(form_fill.empty_script(texts, url))))
+            lost = set(form_fill.empty_answer(chrome.run(form_fill.empty_script(texts, url)), texts))
             if not lost:
                 return []
-            chrome.run(form_fill.fill_script([i for i in self._fill if i["n"] in lost], url, typed=True))
+            again = form_fill.fill_answer(chrome.run(form_fill.fill_script([i for i in self._fill if i["n"] in lost], url, typed=True)))
+            if again["moved"]:
+                return sorted(lost)         # the tab changed: what was thrown away was not written again
             chrome.pause(0.35)
-            return form_fill.empty_answer(chrome.run(form_fill.empty_script(sorted(lost), url)))
-        except chrome.ChromeError:
-            return []                       # looking again failed: what was written is reported as it was
+            still = set(form_fill.empty_answer(chrome.run(form_fill.empty_script(sorted(lost), url)), lost))
+            return sorted(still | (lost - set(again["done"])))      # empty again, or never written the second time
+        except (chrome.ChromeError, ValueError):
+            return sorted(lost)             # Chrome stopped answering: every field not seen to hold its value is reported (#77)
 
     def _attach_files(self) -> None:
         if not self._todo["attach"]:
@@ -488,7 +501,7 @@ class FormFiles:
                 if not self._carry(key, content, page["url"]):
                     return filled, left, self.MOVED     # the tab changed: nothing more goes to any page
                 got = form_fill.attach_answer(chrome.run(form_fill.attach_script(item["n"], key, path.name, page["url"])))
-            except chrome.ChromeError as e:
+            except (chrome.ChromeError, ValueError) as e:
                 return filled, left, str(e)             # the files attached before it are still reported
             if got["moved"]:
                 return filled, left, self.MOVED

@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 
 from . import (answer_memory, assistant, assistant_brain, chrome, config, details, form_answers, form_fill, form_run,
-               salary, store)
+               salary, store, trouble)
 from .api_base import _guarded
 
 
@@ -275,7 +275,11 @@ class AssistantService:
         pressed are a menu, an entry of a menu and a radio button; file fields get the CV and the letter
         of the job; the form is not sent. Returns what was filled, what was left and why (see `form_run`)."""
         run = form_run.FormFillRun(self._app, self._editor, self._cv, job_id, skip)
-        out = run.result()
+        try:
+            out = run.result()
+        except Exception as e:  # noqa: BLE001 - said to the person as the reason, as the other assistant calls do (#77)
+            trouble.note("filling in a form", e)
+            return {"ok": False, "action": "fill", "msg": f"I could not fill in the form: {trouble.kind_of(e)}"}
         if out["ok"]:
             self._last_fill = run.learned()
         return out

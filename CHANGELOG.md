@@ -7,6 +7,10 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Assistant:** a field placed outside the page or made see-through, a trap for robots, is left empty.
+- **Assistant:** a field that the page emptied again is listed as not filled in, also when Chrome stops answering while the assistant types it again.
+- **Assistant:** when the tab changes while the form is read, nothing is written.
+- **Assistant:** a fault in the middle of a fill still lists what was filled in, and says what went wrong.
 - **Assistant:** a question that gives consent in your name is left for you in every kind of field, also a text box ("Type I AGREE"). Newsletters, job alerts and "keep my data on file" count too.
 - **Assistant:** more personal fields are left for you, for example a one-time code, a PIN, a sort code and medical questions.
 - **Assistant:** the review of a form never sends a card number or a date of birth to Claude, also when the field's label does not say what it is.

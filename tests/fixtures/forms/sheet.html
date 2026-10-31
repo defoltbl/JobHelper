@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Junior Analyst - Fabrikam Careers</title>
+<style>
+  #sheet { position: fixed; top: 20px; left: 20px; width: 420px; height: 260px; overflow: auto; border: 1px solid #888; }
+  .row { height: 120px; }
+  #step { opacity: 0; transition: opacity 0.4s 5s; }
+</style></head>
+<body>
+<div id="sheet">
+  <div class="row"><label for="fn">First name</label><input id="fn" name="first_name"></div>
+  <div class="row"><label for="ln">Last name</label><input id="ln" name="last_name"></div>
+  <div class="row" id="host"></div>
+  <div class="row"><label for="em">Email</label><input id="em" type="email" name="email"></div>
+  <div class="row" id="step"><label for="city">City</label><input id="city" name="city"></div>
+  <div class="row"></div>
+</div>
+<!-- a dialog component: its own box scrolls, and the page's fields are slotted into it -->
+<x-dialog id="dlg" style="position: fixed; top: 20px; left: 480px;">
+  <label for="pc">Postal code</label><input id="pc" name="postcode">
+  <div style="height: 600px"></div>
+  <label for="ct">Country</label><input id="ct" name="country">
+</x-dialog>
+<script>
+  // a field of a component library, inside a shadow root, also above the top of the scrolled sheet
+  document.getElementById('host').attachShadow({mode: 'open'}).innerHTML = '<label for="ph">Phone</label><input id="ph" type="tel" name="phone">';
+  var step = document.getElementById('step');
+  getComputedStyle(step).opacity;            // the step starts to fade in now (it is still see-through while it waits)
+  step.style.opacity = 1;
+  document.getElementById('sheet').scrollTop = 420;   // the person has scrolled the sheet down
+  var inner = document.getElementById('dlg').attachShadow({mode: 'open'});
+  inner.innerHTML = '<div id="box" style="height: 200px; width: 400px; overflow: auto"><slot></slot></div>';
+  inner.getElementById('box').scrollTop = 400;          // the postal code is far above the top of the dialog's own box
+</script>
+</body></html>

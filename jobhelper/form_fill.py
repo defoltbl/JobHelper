@@ -109,6 +109,23 @@ READ = r"""
     var r = el.getBoundingClientRect(), s = el.ownerDocument.defaultView.getComputedStyle(el);
     return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && s.display !== 'none';
   }
+  // a box a person cannot see (#77): placed above or left of the page, or see-through. Robots fill such "honeypots",
+  // and the page then throws the application away. Lists and radios are often see-through on purpose (a styled look
+  // over them), so this is asked of text boxes only. (aria-hidden is skipped for every field before this.)
+  // the box a person sees around this one: through a slot into a component, and across a shadow root's edge
+  function up(p) { return p.assignedSlot || p.parentElement || (p.getRootNode && p.getRootNode().host) || null; }
+  function trap(el) {
+    var doc = el.ownerDocument, view = doc.defaultView, r = el.getBoundingClientRect(), x = r.right + view.scrollX, y = r.bottom + view.scrollY;
+    for (var q = up(el); q && q !== doc.scrollingElement; q = up(q)) { x += q.scrollLeft; y += q.scrollTop; }   // a scrolled sheet or modal
+    if (x <= 0 || y <= 0) return true;
+    for (var p = el; p && p.nodeType === 1; p = up(p)) {
+      if (view.getComputedStyle(p).opacity !== '0') continue;
+      // see-through, unless the browser is fading it in right now (a step or a window still appearing)
+      // shortcut: a fade done by a script, step by step, still reads as a trap; ask again a moment later
+      return !(p.getAnimations && p.getAnimations().length);
+    }
+    return false;
+  }
   function byId(root, id) {
     try { return root.getElementById ? root.getElementById(id) : root.querySelector('#' + CSS.escape(id)); } catch (e) { return null; }
   }
@@ -241,6 +258,7 @@ READ = r"""
         continue;
       }
       if (type !== 'file' && !shown(el)) continue;
+      if (type !== 'file' && tag !== 'SELECT' && trap(el)) continue;
       if (el.disabled || (el.readOnly && el.getAttribute('role') !== 'combobox')) continue;       // a list's box is often read-only: it is pressed, not typed in
       n++;
       el.setAttribute(MARK, String(n));
@@ -380,8 +398,8 @@ ATTACH = r"""
 EMPTY = r"""
 (function (wanted, url) {
   __CHOSEN__
-  if (location.href !== url) return JSON.stringify({moved: true});
-  var MARK = 'data-jobhelper', empty = [];
+  if (location.href !== url) return JSON.stringify({moved: true, empty: wanted});     // another page: nothing is known to be there
+  var MARK = 'data-jobhelper', empty = [], found = {};
   function walk(root) {
     var all = root.querySelectorAll('*');
     for (var i = 0; i < all.length; i++) {
@@ -390,10 +408,12 @@ EMPTY = r"""
       if (el.tagName === 'IFRAME') { var inner = null; try { inner = el.contentDocument; } catch (e) { inner = null; } if (inner && inner.body) walk(inner); continue; }
       var mark = Number(el.getAttribute(MARK));
       if (!mark || wanted.indexOf(mark) < 0) continue;
+      found[mark] = true;
       if (el.tagName === 'SELECT' ? !chosen(el) : String(el.value || '').trim() === '') empty.push(mark);
     }
   }
   walk(document);
+  for (var k = 0; k < wanted.length; k++) if (!found[wanted[k]]) empty.push(wanted[k]);   // the page drew the field anew: not known to hold it
   return JSON.stringify({empty: empty});
 })(__WANTED__, __URL__)
 """.replace("__CHOSEN__", _CHOSEN).strip()
@@ -788,9 +808,13 @@ def empty_script(numbers: list[int], url: str) -> str:
     return with_values(EMPTY, wanted=[int(n) for n in numbers], url=str(url))
 
 
-def empty_answer(text: str) -> list[int]:
-    empty = (page_reply(text) or {}).get("empty")
-    return [n for n in empty if isinstance(n, int)] if isinstance(empty, list) else []
+def empty_answer(text: str, wanted=()) -> list[int]:
+    """The fields the look after a fill found empty; on another page, every field it was asked about (`wanted`)."""
+    data = page_reply(text) or {}
+    empty = data.get("empty")
+    if data.get("moved") or not isinstance(empty, list):
+        return sorted(set(wanted))                  # another page, or no readable answer: none is known to hold its value
+    return [n for n in empty if isinstance(n, int)]
 
 
 # ── what a field is ─────────────────────────────────────────────────────────

@@ -1,0 +1,23 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Junior Analyst - Fabrikam Careers</title></head>
+<body>
+<form id="application" action="/never-sent" onsubmit="window.sent = true; return false;">
+  <label for="fn">First name *</label><input id="fn" name="first_name" required>
+  <label for="ln">Last name *</label><input id="ln" name="last_name" required>
+  <label for="em">Email *</label><input id="em" type="email" name="email" required>
+  <label for="pw">Create a password</label><input type="password" id="pw" name="password">
+  <!-- fields a person cannot see: robots fill them, and the page throws the application away -->
+  <div style="position:absolute; left:-9999px"><label for="hp1">Email</label><input id="hp1" type="email" name="email_confirm"></div>
+  <div aria-hidden="true"><label for="hp2">Phone</label><input id="hp2" type="tel" name="phone_alt" tabindex="-1"></div>
+  <div style="opacity:0"><label for="hp3">Website</label><input id="hp3" type="url" name="homepage"></div>
+  <label><input type="checkbox" id="terms" name="terms"> I agree to the terms</label>
+  <button type="button" id="next">Next</button>
+  <a href="#" id="go">Continue</a>
+  <button type="submit" id="send">Submit application</button>
+</form>
+<script>
+  ['send', 'next', 'go'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', function (e) { e.preventDefault(); window.clicked = true; });
+  });
+</script>
+</body></html>

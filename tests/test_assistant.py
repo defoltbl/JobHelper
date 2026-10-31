@@ -995,6 +995,123 @@ def test_what_you_change_on_the_page_is_learned_from_the_assistants_own_fields_o
     assert api.assistant_memory() == {"count": 1} and "1 remembered" in api.assistant_forget()["say"] and api.assistant_memory() == {"count": 0}
 
 
+# ── #77: the second typing pass, a tab that changes, a fill that fails, fields nobody can see ─────────────
+def _typing(monkeypatch, second, first=None):
+    """A page that throws away the first writing of field 1; `second` is what the second, typed writing does, `first`
+    (when given) what the first look after the writing answers."""
+    url = "https://careers.northwind.example/jobs/42"
+    monkeypatch.setattr(chrome, "active_tab", lambda: {"url": url, "title": "Junior Analyst - Northwind"})
+    monkeypatch.setattr(chrome, "pause", lambda seconds: None)
+    looks = []
+
+    def run(script):
+        if script == form_fill.READ:
+            return json.dumps({"url": url, "title": "t", "frames": [], "boxes": 0, "fields": [_field("First name", n=1), _field("Email", n=2)]})
+        if "empty.push" in script:
+            looks.append(script)
+            if first and len(looks) == 1:
+                return first()
+            return json.dumps({"empty": [1] if len(looks) == 1 else []})
+        items = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
+        if items[-1] is True:                          # the second, typed writing
+            return second()
+        return json.dumps({"done": [i["n"] for i in items[0]], "skipped": []})
+    monkeypatch.setattr(chrome, "run", run)
+
+
+@pytest.mark.parametrize("second", [lambda: (_ for _ in ()).throw(chrome.ChromeError(chrome.NO_ANSWER)),
+                                    lambda: json.dumps({"moved": True}), lambda: json.dumps({"done": [], "skipped": [1]}), lambda: "junk"])
+def test_a_field_the_page_threw_away_is_never_reported_written_unless_the_second_writing_took(isolate, monkeypatch, second):
+    """#77: when Chrome failed, the tab changed or the page refused the second, typed writing, the field was still said
+    to be filled in."""
+    store.save_jobs([_job()])
+    details.save(MINE)
+    _typing(monkeypatch, second)
+    out = ui_api.Api().assistant_fill("nw1")
+    assert out["ok"], out
+    assert [f["label"] for f in out["filled"]] == ["Email"]
+    assert {i["label"]: i["why"] for i in out["left"]}["First name"] == form_fill.THROWN
+
+
+@pytest.mark.parametrize("first", [lambda: (_ for _ in ()).throw(chrome.ChromeError(chrome.NO_ANSWER)), lambda: json.dumps({"moved": True}),
+                                   lambda: ""])
+def test_fields_the_first_look_could_not_see_are_not_reported_written(isolate, monkeypatch, first):
+    """Second check of #77: when the look after the writing failed or found another page, both fields were reported written."""
+    store.save_jobs([_job()])
+    details.save(MINE)
+    _typing(monkeypatch, lambda: json.dumps({"moved": True}), first=first)          # the page stays gone
+    out = ui_api.Api().assistant_fill("nw1")
+    assert out["ok"] and out["filled"] == [] and {i["label"] for i in out["left"]} >= {"First name", "Email"}
+
+
+def test_the_look_after_a_fill_counts_a_field_the_page_drew_anew_as_empty():
+    """Second check of #77: a field that is no longer on the page (drawn anew) was taken as filled."""
+    look = form_fill.empty_script([1, 99], "X").replace('"X")', "location.href)")
+    read, after = _in_page(form_fill.READ, look)
+    assert json.loads(read)["fields"] and 99 in json.loads(after)["empty"]
+    assert form_fill.empty_answer('{"moved": true}', [3, 1]) == [1, 3], "another page: none of them is known to be there"
+    assert form_fill.empty_answer("", [2]) == [2] and form_fill.empty_answer("null", [2]) == [2], "no readable answer: not known"
+
+
+def test_area_fields_of_a_scrolled_sheet_and_a_step_that_fades_in_are_filled():
+    """Second check of #77: fields scrolled above the top of a sheet read as placed off the page, and a step still
+    fading in read as see-through: both were left out without a word."""
+    out = _area("sheet.html")
+    state = out["state"]
+    assert state["fn"] == "Alex" and state["ln"] == "Novak" and state["em"] == MINE["email"] and state["city"] == MINE["city"]
+    assert "Phone" in out["filled"], "a field of a component (shadow root) above the top of the scrolled sheet too"
+    assert state["pc"] == MINE["postcode"], "a field slotted into a component whose own box is scrolled (last check)"
+
+
+def test_area_traps_on_a_scrolled_page_in_a_theme_that_animates_everything():
+    """Third check of #77: the page's scroll was counted twice, any CSS transition passed for a fade, a see-through
+    combobox and a field inside a see-through shadow host were filled."""
+    out = _area("trap_scrolled.html")
+    state = out["state"]
+    assert state["fn"] == "Alex" and state["em"] == MINE["email"], "the fields a person sees"
+    assert state["hp1"] == "" and state["hp2"] == "" and state["hp3"] == "" and state["hp4"] == "", "no trap is filled"
+
+
+def test_the_tab_in_front_must_still_be_the_form_when_it_is_read(isolate, monkeypatch):
+    """#77: the tab could change between the check of its address and the reading of its fields."""
+    details.save(MINE)
+    monkeypatch.setattr(chrome, "active_tab", lambda: {"url": "https://careers.northwind.example/jobs/42", "title": "t"})
+    monkeypatch.setattr(chrome, "run", lambda script: json.dumps({"url": "https://mail.example.org/inbox", "title": "Inbox", "frames": [],
+                                                                  "boxes": 0, "fields": [_field("To", n=1)]}))
+    out = ui_api.Api().assistant_fill()
+    assert out["ok"] is False and "tab changed" in out["msg"]
+
+
+def test_a_fill_that_fails_on_the_way_says_why_like_the_other_assistant_calls(isolate, monkeypatch):
+    """#77: an error inside a fill reached the window as an error, not as the assistant's answer."""
+    monkeypatch.setattr(form_run.FormFillRun, "result", lambda self: (_ for _ in ()).throw(RuntimeError("the data could not be read")))
+    out = ui_api.Api().assistant_fill()
+    assert out["ok"] is False and out["msg"].startswith("I could not fill in the form: RuntimeError.")
+    assert "could not be read" not in out["msg"], "the fault's own text goes to the log of problems, not the screen"
+
+
+def test_a_fault_after_fields_were_written_still_reports_them(isolate, monkeypatch):
+    """Second check of #77: a fault after the writing (here while attaching) said only "I could not fill in the form",
+    though names and email were on the page."""
+    store.save_jobs([_job()])
+    details.save(MINE)
+    _browser(monkeypatch, [_field("First name", n=1), _field("Email", n=2)])
+    monkeypatch.setattr(form_run.FormFillRun, "_attach_files", lambda self: (_ for _ in ()).throw(KeyError("size")))
+    out = ui_api.Api().assistant_fill("nw1")
+    assert out["ok"] is True and [f["label"] for f in out["filled"]] == ["First name", "Email"] and "went wrong" in out["stopped"]
+
+
+def test_area_a_trap_page_keeps_its_hidden_fields_its_buttons_and_its_password():
+    """#77: a page with fields nobody can see (off the page, hidden from screen readers, see-through), a password, a
+    terms box and three buttons that would send or continue. _area itself asserts that nothing was sent or pressed."""
+    out = _area("trap.html")
+    state = out["state"]
+    assert state["fn"] == "Alex" and state["ln"] == "Novak" and state["em"] == MINE["email"]
+    assert state["hp1"] == "" and state["hp2"] == "" and state["hp3"] == "", "a robot trap is never filled"
+    assert state["pw"] == "" and state["terms"] is False
+    assert set(out["filled"]) == {"First name *", "Last name *", "Email *"}, "the hidden boxes are not even reported"
+
+
 # ── the small helpers around a fill ─────────────────────────────────────────
 def test_a_framed_form_is_opened_in_its_own_tab_only_at_a_web_address(isolate, monkeypatch):
     opened = []

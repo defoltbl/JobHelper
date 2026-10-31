@@ -1307,6 +1307,7 @@ Table 9.4 shows what happens to each kind of field.
 | An open question, such as "Why do you want to work here?" | Drafts the answer from your CV and the posting, in one Claude call for the whole form. Nothing outside your CV is claimed |
 | A cover letter box | Pastes the letter the app wrote for this job |
 | A field that already holds something | Leaves it as it is |
+| A field placed outside the page or made see-through (a trap for robots) | Leaves it empty |
 | A file field for your CV or resume | Attaches the CV adapted to this job, as a PDF when the field takes one. When the job has no adapted CV, it attaches your own CV and says so. Marked for checking |
 | A file field for the cover letter | Attaches the letter of this job |
 | A file field for other attachments | Attaches the letter of this job, when the form has no other place for it. Certificates and diplomas stay yours to add |
@@ -1349,6 +1350,9 @@ Table 9.5 lists what the assistant may answer, and what to do.
 | The menu did not open for me | The site draws its menu in a way the assistant does not know | Choose that one yourself |
 | I could not ask Claude | Claude's limit is used up, or there is no connection | The details are still filled in. Ask again after the reset time shown in the Usage card (section 18) |
 | The tab changed while I was working | You moved to another page in the meantime | Go back to the form and ask again. The answer lists what was filled before, and what was not reached |
+| The tab changed while I was reading the form | You moved to another page before anything was written | Go back to the form and ask again. Nothing was written |
+| "I could not fill in the form: …" | Something went wrong before anything was written. The line says what kind of fault | Ask again. If it stays, open **Help** > **Usage and problems** |
+| "Something went wrong: …" under what was filled | A fault stopped the fill after some fields were written | Check the fields in the list, then fill in the rest yourself or ask again |
 | The tab changed while I was attaching your files | You moved to another page while a file was on its way. The answer still lists what was filled before | Go back to the form. Look at what it holds, then ask again. Reload the form first if a file is missing |
 | An open question: choose the job this form is for | The page did not show which job it belongs to | Choose the job under **Answers are for** and ask again |
 | I do not know your details yet | **My details** is empty | Fill in **My details**, save, ask again |
