@@ -335,6 +335,7 @@ Table 2.3 lists problems while setting up, and what to do.
 | What you see | Cause | What to do |
 |---|---|---|
 | **Claude account** stays red after you sign in | The sign-in was done in another browser profile, or was cancelled | Select **Sign in with Claude** again |
+| **Claude account** says that Claude did not answer the sign-in check | Claude was slow or could not be asked. This does not mean that you are signed out | Select **Check again**. Sign in only when the row then says that you are not signed in |
 | "A paid API key is set" | A paid Claude key is set on this Mac | Ask whoever set up the app to remove it, then start the app again. The app never bills you per use |
 | "The mail server refused this address and password" | The normal password was used where an app password is needed, the app password was cancelled, or it belongs to another address | Create an app password for this address and enter that one |
 | "The app does not know this provider" | The address is at a company or a small provider | Enter its IMAP server in the third field |
@@ -683,7 +684,8 @@ have to open each job from the list and then go back to the list.
 2. Select **Review these … one by one**. The first job opens, with a bar that says where you
    are (Figure 5.2).
 3. Read **Why this score**, then decide: **Not interested** removes the job, **Mark applied**
-   moves it to Applications. The next job opens by itself.
+   moves it to Applications. The next job opens by itself. For a moment the two buttons are off,
+   so a double-click does not decide the next job too.
 4. To leave a job as it is, select **Next ›**. **‹ Previous** goes back.
 
 ![Reviewing jobs one by one](img/36_review_one_by_one.png)
@@ -1311,7 +1313,8 @@ Table 9.4 shows what happens to each kind of field.
 | Any other file field (a photo, a passport, a transcript). Also a file larger than 4 MB, or a type of file that the field does not take | Leaves it to you, with the reason |
 | A file field, when the assistant does not know which job the form is for | Leaves it to you. Choose the job, then ask again: a CV written for another company is worse than none |
 | A password | Leaves it to you |
-| Date of birth, gender, origin, health, payment details | Leaves them to you |
+| Date of birth, gender, origin, citizenship, health, tax numbers, payment details (also the name on a card) | Leaves them to you, also in Czech and German forms |
+| A box or a question that asks you to agree or to confirm: terms, the use of your data, a background check | Leaves it to you: you agree, not the assistant |
 | A field about another person (**Referee phone**, **Next of kin name**), an employer's address, or **Current salary** | Your own name, contacts, address and the salary you ask for never go there. A field about another person and an employer's address are left to you. For **Current salary**, the assistant may offer words from your CV, marked for checking |
 | **Current employer** when no job in **My details** is marked **I work here now** | Leaves it to you and says why. An old job is never given as the current one. **Current or most recent employer** gets the first job in your list in **My details** |
 | The dates of a job or a degree | Writes them where the form takes a month and a year, as one field or as two lists. Where it wants a full date, the first of the month is used and marked for checking. With only a year in **My details**, a month is left to you |
@@ -2351,6 +2354,7 @@ Table 20.1 lists problems with starting and signing in.
 | "Your job list is damaged" | The file of the job list cannot be read | Select **Restore from backup** on the red line |
 | A button does nothing | A required row of the Account card is red | Open the **Account** chip and make the rows green |
 | "A paid API key is set" | A paid Claude key is set on this Mac | Ask whoever set up the app to remove it, then start the app again |
+| **Sign-in not checked** on the Account chip | Claude did not answer when the app asked who is signed in. This does not mean that you are signed out | Open the **Account** card and select **Check again** |
 
 ### Searching and scoring
 
@@ -2366,6 +2370,7 @@ Table 20.2 lists problems with searching and scoring.
 | A score looks wrong | The posting was read only in part, or your Options changed | Read **Why this score**; see section 8 |
 | The search paused | Claude's limit ran out | The window says when it resets; select **Resume** then (section 18) |
 | The usage card says **0% left** | Claude refused a call for a used-up limit | Wait for the time shown, then select **refresh** |
+| "The letter could not be written: …" in a job's window, or "The CV could not be written: …" after you write the documents | Writing the document failed. The line says why, for example what Claude answered | Put right what the line names. Then select **Write CV and letter** or **Write what is missing** in the job's window |
 | "Claude did not answer within 5 minutes" | Claude or the connection stopped answering. The search ended, and what was done is kept. If the CV of a job was written before the stop, the app keeps it | Try again later. If a job still has no documents after two stops, open it and select **Write CV and letter** (or **Write what is missing**) |
 
 ### Replies

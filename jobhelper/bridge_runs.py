@@ -13,7 +13,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QMetaObject, Qt, Slot
 
-from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, config, email_client, job_sources, letters, notify, store,
+from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, api_system, config, email_client, job_sources, letters, notify, store,
                trouble, usage)
 
 
@@ -28,6 +28,13 @@ class RunCancelled(BaseException):
 class RunSlots:
     """Mixed into `qt_bridge.Bridge`; uses its signals, `_api`, `_set_running` and the run's own state."""
 
+    @staticmethod
+    def _no_claude(conn):
+        """A run refused for the Claude sign-in: Account is offered only when signing in is the fix, not when the
+        check itself got no answer."""
+        refusal = {"ok": False, "msg": conn.get("claude_msg") or api_system.SIGN_IN}
+        return refusal if conn.get("claude_unsure") else {**refusal, "fix": "claude"}
+
     @Slot("QVariantMap", result="QVariantMap")
     def runSearch(self, opts):
         if self._running:
@@ -36,7 +43,7 @@ class RunSlots:
         if conn.get("paid_api"):
             return {"ok": False, "msg": "Unset ANTHROPIC_API_KEY to use your subscription."}
         if not conn.get("claude"):
-            return {"ok": False, "msg": "Log in to Claude first (open Account).", "fix": "claude"}
+            return self._no_claude(conn)
         if not conn.get("cv"):
             return {"ok": False, "msg": "Add your CV first (open Account).", "fix": "cv"}
         if conn.get("vault") == "locked":
@@ -113,7 +120,7 @@ class RunSlots:
         if conn.get("paid_api"):
             return {"ok": False, "msg": "Unset ANTHROPIC_API_KEY to use your subscription."}
         if not conn.get("claude"):
-            return {"ok": False, "msg": "Log in to Claude first (open Account).", "fix": "claude"}
+            return self._no_claude(conn)
         if not self._api.rescore_ids():
             return {"ok": False, "msg": "There are no scored new jobs to score again."}
         self._stop.clear()

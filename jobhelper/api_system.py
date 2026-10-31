@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -17,6 +18,10 @@ def _claude_auth_status():
     """Ask the Claude program who is signed in: the same program the SDK asks with (tests replace this,
     so they never run the real one)."""
     return ClaudeCli.of_the_sdk().auth_status()
+
+
+SIGN_IN = "Log in to Claude first (open Account)."
+UNSURE = "Claude did not answer the sign-in check, so it is not known whether you are signed in. Try again in a moment."
 
 
 class SystemService:
@@ -47,7 +52,9 @@ class SystemService:
 
     # ── read: status / data ─────────────────────────────────────
     def connections(self):
-        claude, plan, claude_email = False, "", ""
+        """What is set up. `claude_unsure`: the sign-in could not be checked (Claude was slow or could not be asked),
+        which is not the same as signed out; `claude_msg` says what to do when `claude` is not True."""
+        claude, plan, claude_email, unsure = False, "", "", False
         try:
             out = _claude_auth_status()
             try:
@@ -57,8 +64,11 @@ class SystemService:
                 claude_email = str(info.get("email") or "")
             except ValueError:
                 claude = '"loggedIn": true' in out.stdout
-        except Exception:
-            claude = False
+        except FileNotFoundError:
+            claude = False                                   # no Claude program: signing in is what to do
+        except (subprocess.TimeoutExpired, OSError) as e:
+            unsure = True
+            trouble.note("the Claude sign-in check", e)
         cv = agent1_cv.find_cv()
         changed = []
         try:
@@ -67,6 +77,7 @@ class SystemService:
             pass
         return {"vault": vault.state(), "changed_files": changed, "pdf": pdf.available(),
                 "claude": claude, "plan": plan if claude else "",
+                "claude_unsure": unsure, "claude_msg": "" if claude else (UNSURE if unsure else SIGN_IN),
                 "claude_email": claude_email if claude else "",
                 "paid_api": config.using_paid_api(),
                 "email": config.has_imap(), "email_addr": config.IMAP_USER,

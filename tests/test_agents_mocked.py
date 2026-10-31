@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from jobhelper import agent1_cv, agent3_letters, config, llm, store
+from jobhelper import agent1_cv, agent3_letters, config, llm, store, ui_api
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
@@ -96,7 +96,6 @@ def test_process_writes_tailored_cv(isolate_data, monkeypatch):
     assert job["tailored_cv_file"].startswith("CV-")
     assert (config.TAILORED_CV_DIR / job["tailored_cv_file"]).exists()
     assert config.LETTER_TEMPLATE.exists() and job["cover_letter_file"].endswith(".docx"), "a template made from the CV's head"
-    from jobhelper import ui_api
     assert ui_api.Api().editable_letter(job) is True, "so Edit letter works for a new person"
 
 
@@ -107,6 +106,21 @@ def test_process_no_tailored_cv_without_cv_text(isolate_data, monkeypatch):
     stats = agent3_letters.process(jobs, {}, threshold=60)  # no cv_text
     assert stats["tailored_cvs"] == 0
     assert jobs[0]["tailored_cv_file"] == ""
+
+
+def test_a_letter_that_could_not_be_written_says_why_in_the_job_window(isolate_data, monkeypatch):
+    """Audit: a failed letter left only "letter failed" in the log; the job window said nothing, or "try again"."""
+    text = "We build planning tools in Python and SQL. " * 30
+    jobs = [store.new_job(id="jobscz-11", title="Dev", company="Acme", description=text),
+            store.new_job(id="jobscz-12", title="Dev", company="Borg", description=text)]
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: {"match_score": 85, "match_reason": "fit"})
+    monkeypatch.setattr(agent3_letters, "_make_letter",
+                        lambda job, *a: "" if job["id"] == "jobscz-12" else (_ for _ in ()).throw(RuntimeError("LibreOffice could not open the template")))
+    agent3_letters.process(jobs, {}, threshold=60)
+    assert jobs[0]["hold"] == "The letter could not be written: LibreOffice could not open the template. Write it again from this window."
+    assert jobs[1]["hold"].startswith("The letter could not be written: " + agent3_letters.EMPTY_ANSWER)
+    store.save_jobs(jobs)
+    assert ui_api.Api().job_detail("jobscz-11")["hold"].startswith("The letter could not be written"), "the window shows it"
 
 
 def test_process_skips_weak_match(isolate_data, monkeypatch):

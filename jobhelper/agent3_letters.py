@@ -539,6 +539,7 @@ def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
             raise                                       # the reason nothing can be written now: the caller says it
         except Exception as e:
             print(f"  ! tailored CV failed for {job['company']}: {e}")
+            job["hold"] = failed_note("The CV", e)
 
     missing = not job.get("cover_letter_file")
     if write_letter and (missing or (rewrite_letter and _generated_letter(job))):
@@ -547,6 +548,8 @@ def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
             if name:
                 job["cover_letter_file"] = name
                 done["letter"] = True
+            else:
+                job["hold"] = failed_note("The letter", EMPTY_ANSWER)
         except (*llm.STOPS_A_RUN, llm.PaidApiRefused) as e:
             if not done["cv"]:
                 raise
@@ -555,8 +558,10 @@ def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
                 job["last_update"] = _date.today().isoformat()
                 raise
             print(f"  ! letter not written for {job['company']}: {e}")   # the CV that was made is kept
+            job["hold"] = failed_note("The letter", e)
         except Exception as e:
             print(f"  ! letter failed for {job['company']}: {e}")
+            job["hold"] = failed_note("The letter", e)
 
     if done["letter"] or done["cv"]:
         mark_ready(job)
@@ -565,6 +570,13 @@ def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
 
 
 MAX_DOC_ATTEMPTS = 2      # how many runs may try to write documents for one job
+EMPTY_ANSWER = "Claude gave no text for it"
+
+
+def failed_note(what: str, why) -> str:
+    """The job's hold line when a document could not be written: what and why, never a bare "try again"."""
+    reason = " ".join(str(why).split())[:200].rstrip(". ") or "no reason was given"
+    return f"{what} could not be written: {reason}. Write it again from this window."
 
 
 def _give_back_try(job, stop):
@@ -700,11 +712,14 @@ def process(
         # Step 3: write the cover letter.
         try:
             letter_file = scorer.ask(lambda: _make_letter(job, cv_text, cv_path, fields))
+            if not letter_file:
+                job["hold"] = failed_note("The letter", EMPTY_ANSWER)
         except llm.STOPS_A_RUN as stop:
             _give_back_try(job, stop)
             raise
         except Exception as e:
             print(f"  ! Scored {job['match_score']} but letter failed for {job['company']}: {e}")
+            job["hold"] = failed_note("The letter", e)
             letter_file = ""
         if letter_file:
             job["cover_letter_file"] = letter_file

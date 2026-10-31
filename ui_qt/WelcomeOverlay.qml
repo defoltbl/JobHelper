@@ -68,11 +68,13 @@ Item {
     readonly property var changedFiles: connData.changed_files || []
     readonly property bool protectedOk: connData.vault !== "locked" && changedFiles.length === 0
     readonly property bool ready: connData.claude === true && hasCv && connData.paid_api !== true && protectedOk
+    // the sign-in check got no answer: asking again comes before signing in
+    readonly property bool offersCheckAgain: connData.claude_unsure === true && !waitingLogin
     // what is still missing, in words: "Needed before the line can run: your master CV."
     function neededText() {
         if (connData.paid_api === true) return "A paid Claude key is set on this Mac. Remove it, then start the app again.";
         var missing = [];
-        if (connData.claude !== true) missing.push("the Claude sign-in");
+        if (connData.claude !== true) missing.push(connData.claude_unsure === true ? "an answer from Claude to the sign-in check" : "the Claude sign-in");
         if (!hasCv) missing.push("your master CV");
         return missing.length === 0 ? "" : "Needed before the line can run: " + missing.join(" and ") + ".";
     }
@@ -244,14 +246,17 @@ Item {
                     order: 0; label: "1"; title: "Claude account"
                     ok: connData.claude === true && connData.paid_api !== true
                     busy: welcome.waitingLogin || !win.connChecked
-                    subColor: connData.paid_api === true ? theme.crit : theme.soft
+                    subColor: connData.paid_api === true ? theme.crit : (connData.claude_unsure === true ? theme.warn : theme.soft)
                     sub: connData.paid_api === true ? "A paid API key is set. Unset ANTHROPIC_API_KEY to use your subscription."
                        : connData.claude === true ? ((connData.claude_email || "Signed in") + (connData.plan ? " · " + connData.plan.charAt(0).toUpperCase() + connData.plan.slice(1) + " plan" : ""))
                        : welcome.waitingLogin ? "Finish signing in in the Terminal window that opened. This updates by itself."
+                       : connData.claude_unsure === true ? connData.claude_msg
                        : "Runs on your subscription, never the paid API."
                     SmallButton { visible: connData.claude === true; text: "Switch"
                         onClicked: { bridge.claudeLogin(); } }
-                    PillButton { visible: connData.claude !== true; primaryStyle: true
+                    PillButton { objectName: "claudeCheckAgain"; visible: welcome.offersCheckAgain
+                        text: "Check again"; onClicked: bridge.checkConnections() }       // not known is not signed out: ask again first
+                    PillButton { visible: connData.claude !== true; primaryStyle: connData.claude_unsure !== true
                         text: welcome.waitingLogin ? "Waiting…" : "Sign in with Claude"; enabled: !welcome.waitingLogin
                         onClicked: { var r = bridge.claudeLogin(); if (r && r.ok) welcome.waitingLogin = true; } }
                 }

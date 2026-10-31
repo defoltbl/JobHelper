@@ -447,6 +447,33 @@ data/                your data; only the *.example.* files are in git
 - **A sentence of a letter is a claim only where the candidate is the one doing it** (`cover_letter.borrowed_claims`):
   "the role caught my attention because it covers X" describes the role. Measure a change to these checks on the
   letters and CVs already written before it ships.
+- **A wish frees only what it names** (`claims.unwished`, used by `ClaimCheck`, `borrowed_claims` and the CV profile check
+  with its own interest words): the wish runs from its word to the next "I", "we", "but" or semicolon. Before (audit, 30
+  Oct), one wish word anywhere freed the whole sentence ("I built Kafka pipelines and am keen to grow"). "I led", "I
+  designed", "I created", "I delivered", "I migrated", "I owned" and "my/our" up to two words before a term are claims too.
+  Measured on the 74 real letters: one more letter flagged, and its sentence already admitted a gap ("limited").
+- **A skill is in the master CV where a word starts** (`cv_tailor._named_in`): "Docker" in "Dockerized" counts, "Rust" in
+  "trust" and "Go" in "good" do not (a name under 4 letters must be a whole word or its plural), unless the master has
+  one of its longer names in `_INSIDE` ("Golang", "GitHub", "PyQt", "PySpark", "VueJS"); an abbreviation in capitals
+  counts anywhere ("SQL" in "PostgreSQL").
+  `enforce` drops a KEY SKILLS item the master does not back, so a rule that is too strict loses real skills unseen.
+- **A document that could not be written says why** (`agent3_letters.failed_note` into `job["hold"]`), never a bare "try
+  again". The job window shows `hold` only while there is no letter (`api_jobs`), so a failed CV is named only in the
+  message of Write; the CV and the letter share one `hold`, and the later failure is the one kept.
+- **"Not known" is not "signed out"** (`SystemService.connections`: `claude_unsure`, `claude_msg`): a `claude auth status`
+  that times out or cannot be run says so, a run is refused without offering Account, the start-up check leaves Claude
+  out (`selfCheckFor`), and the welcome card offers **Check again**. The check still runs on the window's thread when a
+  run starts (up to 8 s).
+- **A decision in the job window turns its buttons off for `decisionPause` (700 ms)** (DetailDialog `decisionPaused`, only
+  after a decision that was taken): in a review round the next job opens at once, and the second click of a double-click
+  decided it too.
+- **Consent is never the model's** (`form_fill._CONSENT`, for lists, radios and menus): "I agree", agree to terms or to
+  the use of data, accept terms, acknowledge, authorize, certify, "I confirm/declare", a background check, a privacy
+  policy, also in Czech and German. "Are you authorized to work …", "Do you agree to relocate?" and "Experience with GDPR"
+  are questions about you and stay the model's. Tick boxes have their own list (`NEVER_TICK_WORDS`). "Tax" and "VAT"
+  are private only as a number ("Tax ID"), never in "salary before tax".
+- **An error's text never carries a key** (`trouble.without_query`, also for an address with no "https://"; boards whose
+  key is in the address go through `JobSource._keyed`, which says the status alone).
 
 ---
 

@@ -15,10 +15,23 @@ LOG_NAME = "app_trouble.log"
 _MAX_LINE = 400
 
 
+def without_query(text) -> str:
+    """An error's text without the query part of any address in it, with or without "https://": API keys travel
+    there (…?app_id=…&app_key=…) and must never reach a log file or the screen."""
+    def cut(m: re.Match) -> str:
+        token = m.group(0)
+        scheme = token.find("://")
+        if scheme >= 0:                                  # an address: everything from its "?" on
+            at = token.find("?", scheme)
+            return token if at < 0 else token[:at]
+        at = token.find("?")                             # no scheme ("url: /v1/…?app_key=…"): only a real query
+        return token[:at] if 0 < at < len(token) - 1 and ("/" in token[:at] or "." in token[:at]) and "=" in token[at:] else token
+    return re.sub(r"[^\s'\"]+", cut, str(text))
+
+
 def _safe(text: str) -> str:
     """No query part of an address (keys travel there) and no line breaks."""
-    text = re.sub(r"(https?://[^\s?'\"]+)\?[^\s'\"]*", r"\1", str(text))
-    return re.sub(r"\s+", " ", text).strip()[:_MAX_LINE]
+    return re.sub(r"\s+", " ", without_query(text)).strip()[:_MAX_LINE]
 
 
 def _folder():

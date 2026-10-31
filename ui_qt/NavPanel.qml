@@ -77,6 +77,10 @@ Rectangle {
             id: chip; objectName: "accountChip"
             readonly property bool allOk: connData.claude === true && (connData.cv || "") !== "" && connData.paid_api !== true
                                           && welcome.protectedOk
+            // the one fault is a sign-in check with no answer: amber, not red (a paid key, a missing CV, a locked or changed
+            // data file stays red, and its own words are shown)
+            readonly property bool unsureOnly: connData.claude_unsure === true && connData.paid_api !== true && (connData.cv || "") !== ""
+                                               && welcome.protectedOk
             Layout.fillWidth: true; implicitHeight: Math.max(56, chipCol.implicitHeight + 18); radius: 13
             color: chipMa.containsMouse ? theme.surface2 : theme.inset
             border.color: chipMa.containsMouse ? theme.steel : theme.line; border.width: 1
@@ -91,19 +95,21 @@ Rectangle {
                                              GradientStop { position: 1; color: Qt.darker(theme.accent, 1.35) } }
                         Text { anchors.centerIn: parent; color: theme.accentInk; font.pixelSize: 15; font.bold: true
                             text: connData.claude === true && connData.claude_email ? connData.claude_email.charAt(0).toUpperCase() : "?" } }
-                    Rectangle { width: 12; height: 12; radius: 6; x: 24; y: 24
-                        color: !win.connChecked ? theme.steel : (chip.allOk ? theme.good : theme.crit)
+                    Rectangle { objectName: "accountDot"; width: 12; height: 12; radius: 6; x: 24; y: 24
+                        color: !win.connChecked ? theme.steel : (chip.allOk ? theme.good : chip.unsureOnly ? theme.warn : theme.crit)
                         border.color: theme.surface; border.width: 2 }
                 }
                 ColumnLayout { id: chipCol; Layout.fillWidth: true; spacing: 0
-                    Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.ink; font.pixelSize: 12; font.bold: true
+                    Text { objectName: "accountName"; Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.ink; font.pixelSize: 12; font.bold: true
                         text: !win.connChecked ? "Checking…"
-                            : connData.claude === true ? (connData.claude_email || "Claude account") : "Not signed in" }
-                    Text { Layout.fillWidth: true; wrapMode: Text.Wrap; font.pixelSize: 11
-                        color: !win.connChecked || chip.allOk ? theme.faint : theme.crit
+                            : connData.claude === true ? (connData.claude_email || "Claude account")
+                            : connData.claude_unsure === true ? "Sign-in not checked" : "Not signed in" }
+                    Text { objectName: "accountNote"; Layout.fillWidth: true; wrapMode: Text.Wrap; font.pixelSize: 11
+                        color: !win.connChecked || chip.allOk ? theme.faint : (chip.unsureOnly ? theme.warn : theme.crit)
                         text: !win.connChecked ? "connections"
                             : connData.paid_api === true ? "Paid API key is set"
-                            : connData.claude !== true ? "Sign in to Claude"
+                            : chip.unsureOnly ? "Claude did not answer"
+                            : connData.claude !== true && connData.claude_unsure !== true ? "Sign in to Claude"
                             : (connData.cv || "") === "" ? "Add your master CV"
                             : connData.vault === "locked" ? "Encryption key missing"
                             : welcome.changedFiles.length > 0 ? "Files changed, review"

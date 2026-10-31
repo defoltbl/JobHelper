@@ -77,7 +77,7 @@ class DocumentsService:
         why = self.can_write_documents(j)
         if why:
             return {"ok": False, "msg": why}
-        work, stopped = dict(j), ""
+        work, stopped = {**j, "hold": ""}, ""          # a reason left by this try only; written over the old one
         try:
             cv_path = agent1_cv.find_cv()
             done = agent3_letters.generate_for(work, self._cv.text(), cv_path)
@@ -88,8 +88,9 @@ class DocumentsService:
                 return {"ok": False, "msg": stopped}
         except Exception as e:  # noqa: BLE001 - shown to the person as the reason (the limit, no connection)
             return {"ok": False, "msg": str(e) or "The documents could not be written."}
+        why = work.get("hold", "")                      # what could not be written this time, and why
         if not done["cv"] and not done["letter"]:
-            return {"ok": False, "msg": "Nothing could be written this time. Try again in a moment."}
+            return {"ok": False, "msg": why or "Nothing could be written this time. Try again in a moment."}
         fresh = {k: v for k, v in work.items() if j.get(k) != v}
 
         def go(jobs, current):          # on a fresh copy: the writing took a while
@@ -101,7 +102,8 @@ class DocumentsService:
         missing = [name for name, key, had in (("the CV", "cv", j.get("tailored_cv_file")), ("the letter", "letter", j.get("cover_letter_file")))
                    if not done[key] and not had]
         return {"ok": True, "cv": done["cv"], "letter": done["letter"],
-                "msg": f"Written: {made}." + (f" Not written: {' and '.join(missing)}; try again in a moment." if missing else "")}
+                "msg": f"Written: {made}." + ((f" {why}" if why else f" Not written: {' and '.join(missing)}; try again in a moment.")
+                                              if missing else "")}
 
     def score_anyway(self, job_id):
         """Send a job the free pre-filter skipped to scoring on the next run."""

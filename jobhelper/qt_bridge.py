@@ -28,7 +28,7 @@ from .ui_api import Api
 from .bridge_jobs import JobSlots
 from .bridge_runs import RunSlots
 from . import trouble  # noqa: I001
-from . import (claude_cli, config, integrity, schedule)
+from . import (api_system, claude_cli, config, integrity, schedule)
 from .claude_cli import ClaudeCli
 
 
@@ -275,12 +275,13 @@ class Bridge(RunSlots, JobSlots, QObject):
         def work():
             try:
                 info = self._api.connections()
-            except Exception:  # noqa: BLE001
-                info = {}
+            except Exception as e:  # noqa: BLE001 - nothing could be checked: Claude's sign-in is not known
+                trouble.note("the connection check", e)
+                info = {"claude_unsure": True, "claude_msg": api_system.UNSURE}
             # The start-up check too: it reads every job, which costs the window a frame or two. As text,
             # because an answer sent from another thread arrives only when its values are plain ones.
             try:
-                info["health"] = json.dumps(self._api.self_check(info.get("claude") is True))
+                info["health"] = json.dumps(self.selfCheckFor(info))
             except Exception as e:  # noqa: BLE001 - the window then runs the check itself
                 trouble.note("the start-up check", e)
             self.connectionsReady.emit(info)

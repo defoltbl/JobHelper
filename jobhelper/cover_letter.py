@@ -194,7 +194,8 @@ def borrowed_claims(paragraphs: list[str], description: str, backed: str) -> lis
     found: list[str] = []
     for para in paragraphs:
         for sentence in _sentences(para):
-            if not claims.FIRST_PERSON.search(sentence) or claims.WISH.search(sentence):
+            sentence = claims.unwished(sentence)            # what a wish names is no claim; the rest of the sentence still is
+            if not claims.FIRST_PERSON.search(sentence):
                 continue
             start = _I_DID.search(sentence)                 # "I process …", "I've built …": the candidate as the one who did it
             if not start:

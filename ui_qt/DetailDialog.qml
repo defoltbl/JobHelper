@@ -61,21 +61,27 @@ Dialog {
         show(rest[Math.min(at, rest.length - 1)]);
         reviewQueue = rest; reviewTotal = total; reviewDone = done; reviewNote = what;
     }
+    // A decision moves on to the next job at once: the second click of a double-click must not decide that one too.
+    // The buttons are off (and look it) for a moment after a decision that was made.
+    property int decisionPause: 700                      // ms
+    property bool decisionPaused: false
+    Timer { id: decisionTimer; interval: Math.max(1, detailDialog.decisionPause); onTriggered: detailDialog.decisionPaused = false }
+    function decided() { if (decisionPause > 0) { decisionPaused = true; decisionTimer.restart(); } }
     function markApplied() {
-        if (!mayLeave("apply", "Mark applied")) return;
+        if (decisionPaused || !mayLeave("apply", "Mark applied")) return;
         var wasReviewing = reviewing;
         if (!bridge.applyJob(job.id)) {           // refused (already an application, or gone): say so, do not claim it moved
             ticker.text = "That job was not moved: it is already among your applications, or it is no longer in the list."; close(); win.reloadAll(); return;
         }
-        ticker.text = "Moved to Applications (waiting).";
+        ticker.text = "Moved to Applications (waiting)."; decided();
         if (wasReviewing) { reviewAfterDecision("Moved to Applications."); win.reloadAll(); return; }
         close(); tableDialog.close(); win.reloadAll();
     }
     function notInterested() {
-        if (!mayLeave("dismiss", "Not interested")) return;
+        if (decisionPaused || !mayLeave("dismiss", "Not interested")) return;
         var wasReviewing = reviewing;
         var r = bridge.dismissJob(job.id);
-        if (r && r.ok) { ticker.text = "Removed. It will not come back in later searches (see the “not interested” filter to undo).";
+        if (r && r.ok) { ticker.text = "Removed. It will not come back in later searches (see the “not interested” filter to undo)."; decided();
             if (wasReviewing) { reviewAfterDecision("Removed from New Jobs."); return; }
             close(); win.countsData = bridge.counts(); win.refreshOpenView(); }
         else ticker.text = (r && r.msg) ? r.msg : "Couldn't remove that job.";
@@ -88,7 +94,7 @@ Dialog {
         }
         close();
     }
-    onClosed: { confirmClose = false; confirmAction = ""; closeNote = ""; reviewQueue = []; reviewNote = ""; }
+    onClosed: { confirmClose = false; confirmAction = ""; closeNote = ""; reviewQueue = []; reviewNote = ""; decisionPaused = false; }
     Shortcut { sequence: "Escape"
         enabled: detailDialog.pending.length > 0 && win.onTop(detailDialog)      // only the window in front takes Esc
         onActivated: detailDialog.tryClose() }
@@ -465,7 +471,7 @@ Dialog {
                     RowLayout { Layout.fillWidth: true; spacing: 10
                         Text { objectName: "applyCount"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                             text: detailDialog.stepsDone + " of " + detailDialog.applySteps.length + " done. Then send your application and press Mark applied." }
-                        PillButton { objectName: "applyNow"; primaryStyle: true; text: "Mark applied"
+                        PillButton { objectName: "applyNow"; primaryStyle: true; text: "Mark applied"; enabled: !detailDialog.decisionPaused
                             onClicked: detailDialog.markApplied() }
                     }
                 }
@@ -915,13 +921,13 @@ Dialog {
                 text: "Form answers"; onClicked: formDialog.show(detailDialog.job.id) }
             SmallButton { objectName: "assistantOpen"; visible: detailDialog.job.is_dismissed !== true
                 text: "Fill the form"; onClicked: assistantDialog.forJob(detailDialog.job.id) }
-            SmallButton { objectName: "notInterested"; visible: detailDialog.job.is_lead === true; text: "Not interested"
+            SmallButton { objectName: "notInterested"; visible: detailDialog.job.is_lead === true; text: "Not interested"; enabled: !detailDialog.decisionPaused
                 onClicked: detailDialog.notInterested() }
             SmallButton { visible: detailDialog.job.is_dismissed === true; primaryStyle: true; text: "Restore to New Jobs"
                 onClicked: { var back = bridge.restoreJob(detailDialog.job.id); detailDialog.refresh();
                              win.countsData = bridge.counts(); win.refreshOpenView();
                              ticker.text = (back && back.ok) ? "Back in New Jobs." : ((back && back.msg) || "Couldn't restore that job."); } }
-            PillButton { objectName: "applyBottom"; visible: detailDialog.job.is_lead === true; primaryStyle: true; text: "Mark applied"
+            PillButton { objectName: "applyBottom"; visible: detailDialog.job.is_lead === true; primaryStyle: true; text: "Mark applied"; enabled: !detailDialog.decisionPaused
                 onClicked: detailDialog.markApplied() }
         }
     }

@@ -183,10 +183,14 @@ def borrowed_claims(profile: str, description: str, backed: str) -> list[str]:
     phrases = borrowed_phrases(profile, description, backed)
     claimed = []
     for sentence in re.split(r"(?<=[.!?])\s+", profile or ""):
-        if _INTEREST.search(sentence):
-            continue
-        claimed += [p for p in phrases if mentions(sentence, p) and p not in claimed]
+        said = _as_experience(sentence)
+        claimed += [p for p in phrases if mentions(said, p) and p not in claimed]
     return claimed
+
+
+def _as_experience(sentence: str) -> str:
+    """The sentence without what an interest names ("keen to grow into Kafka"): the rest is stated as experience."""
+    return claims.unwished(sentence, _INTEREST)
 
 
 POSTING_SHOWN = 5000                   # how much of a posting the CV and letter prompts show (and their figure checks read)
@@ -204,17 +208,28 @@ def figure_sources(job: dict[str, Any], cv_text: str, own=(), references=()) -> 
 def profile_problems(profile: str, job: dict[str, Any], cv_text: str) -> tuple[list[str], list[str]]:
     """What a PROFILE claims that the person's own words do not back: (figures, names). A figure ("8 years") must come
     from the CV, the notes or About you; a technology or company name from those or from this job's own company and
-    place (not its title: "Rust Developer" does not back "built Rust services"). The first word of a sentence is not taken for a name, and a sentence that names an interest
-    ("keen to grow into Kafka") claims none."""
+    place (not its title: "Rust Developer" does not back "built Rust services"). The first word of a sentence is not taken for a name, and what an interest
+    names ("keen to grow into Kafka") is no claim; the rest of its sentence still is."""
     sources, references = figure_sources(job, cv_text)
     figures = claims.unbacked_figures(profile, sources, references, brackets_ok=False)
     own = "\n".join((*sources, job.get("company") or "", job.get("location") or ""))     # not the title: it is the posting's word
-    inner = " ".join(" ".join(s.split()[1:]) for s in claims.sentences(profile) if not _INTEREST.search(s))
+    inner = " ".join(_after_first_word(s, _as_experience(s)) for s in claims.sentences(profile))
     return figures, unknown_skill_terms(inner, own)
+
+
+def _after_first_word(sentence: str, rest: str) -> str:
+    """`rest` (the sentence without its interests) without the sentence's first word, which is capital for being first."""
+    words = rest.split()
+    return " ".join(words[1:] if words and words[0] == sentence.split()[0] else words)
 
 
 _ABBREVIATION = re.compile(r"\b(?:e\.g|i\.e|approx|etc|vs|incl|no|st|cca)\.$", re.IGNORECASE)   # a split there is no sentence end
 _NOT_THE_SAME = {"java": "javascript"}     # a name inside a longer name of another technology: Java is not JavaScript
+# a name inside the longer names CVs give it ("GitHub" backs "Git", "PySpark" backs "Spark"); elsewhere a name starts a
+# word, and a short one is a whole word or its plural
+_INSIDE = {"go": ("golang",), "git": ("github", "gitlab", "gitea", "gitops", "gitflow"), "qt": ("pyqt", "pyside", "qtquick"),
+           "vue": ("vuejs", "vuex", "vuetify", "nuxt"), "spark": ("pyspark",), "mac": ("macos",), "ant": ("antd",),
+           "torch": ("pytorch",), "test": ("pytest",)}
 
 
 def unknown_skill_terms(items: str, master_text: str) -> list[str]:
@@ -225,11 +240,23 @@ def unknown_skill_terms(items: str, master_text: str) -> list[str]:
         token = token.strip(".")
         if len(token) < 2 or token.islower():
             continue                                  # ordinary words: "schema design", "monitoring"
-        # a part of a word counts ("SQL" in "PostgreSQL", "API" in "APIs"), except inside another technology's name
         seen = low.replace(_NOT_THE_SAME[token.lower()], " ") if token.lower() in _NOT_THE_SAME else low
-        if token.lower() not in seen and token not in unknown:
+        if not _named_in(token, seen) and token not in unknown:
             unknown.append(token)
     return unknown
+
+
+def _named_in(token: str, low: str) -> bool:
+    """Whether the lowercase master names `token` where a word starts ("Docker" in "Dockerized"; "Rust" is not in
+    "trust"); a short name only as a whole word ("Go" is not in "good"). An abbreviation in capitals counts anywhere
+    ("SQL" in "PostgreSQL", "API" in "APIs")."""
+    word = token.lower()
+    if token.isupper() and word in low:
+        return True
+    if any(form in low for form in _INSIDE.get(word, ())):
+        return True
+    end = r"s?(?![a-z])" if len(word) < 4 else ""          # "Gos", never "goes"
+    return bool(re.search(rf"(?<![a-z]){re.escape(word)}{end}", low))
 
 
 # ── docx (document.xml) helpers ──────────────────────────────────────────────
@@ -454,7 +481,7 @@ def content_problems(profile: str, skills: list[dict[str, str]], master_profile:
         if any(mentions(r, term) for r in rows):
             problems.append(f"'{term}' is not in the master CV, so it must not be in KEY SKILLS.")
         for sentence in re.split(r"(?<=[.!?])\s+", profile):
-            if mentions(sentence, term) and not _INTEREST.search(sentence):
+            if mentions(_as_experience(sentence), term):
                 problems.append(f"'{term}' is not in the master CV; mention it in PROFILE only as an interest.")
                 break
     return problems
@@ -465,7 +492,7 @@ def enforce(profile: str, skills: list[dict[str, str]], unverified: list[str],
     """Last line of defence: strip anything the master cannot back up."""
     kept_sentences = []
     for sentence in re.split(r"(?<=[.!?])\s+", profile):
-        if any(mentions(sentence, t) for t in unverified) and not _INTEREST.search(sentence):
+        if any(mentions(_as_experience(sentence), t) for t in unverified):
             continue
         kept_sentences.append(sentence)
     out_rows = []

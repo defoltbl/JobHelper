@@ -157,3 +157,67 @@ def test_one_owner_decides_which_sources_a_setting_includes():
     assert job_sources.SourceChoice.from_command_line("linkedin", True).kinds == ("linkedin", "remote")
     assert not hasattr(job_sources, "_tags")
     assert {s.kind for s in job_sources.all_sources()} <= {k for k, _n in job_sources.SourceChoice.KINDS + job_sources.SourceChoice.EXTRA}
+
+
+
+def test_a_jooble_error_never_shows_its_key(monkeypatch):
+    """Audit before 1.2.0: the key is in the address's path, which the error cleaners keep, so a 4xx showed it."""
+    import requests
+    from jobhelper import config, job_sources
+    monkeypatch.setattr(config, "JOOBLE_API_KEY", "fakekey-fakekey-fake")
+
+    def refused(url, **kw):
+        response = requests.Response()
+        response.status_code, response.url = 403, url
+        raise requests.HTTPError(f"403 Client Error: Forbidden for url: {url}", response=response)
+    monkeypatch.setattr(job_sources.requests, "post", refused)
+    try:
+        job_sources.JoobleSource().find("tester", "Brno", 10)
+    except requests.HTTPError as e:            # the search's own branch for a board's answer: its words reach the screen
+        assert str(e) == "Jooble answered 403." and "fakekey" not in repr(e) and e.__cause__ is None and e.__suppress_context__
+    else:
+        raise AssertionError("an error was expected")
+
+
+def test_an_adzuna_outage_never_shows_its_key(monkeypatch):
+    """Last check: a connection error names the address with no "https://" ("url: /v1/…?app_key=…"), which the
+    cleaner kept, so the key reached the screen and the log of problems."""
+    import requests
+    from jobhelper import agent2_search, config, job_sources, trouble
+    monkeypatch.setattr(config, "ADZUNA_APP_KEY", "fakekey-fakekey-fake")
+    monkeypatch.setattr(config, "ADZUNA_APP_ID", "fake-id")
+
+    def down(url, params=None, **kw):
+        raise requests.ConnectionError("HTTPSConnectionPool(host='api.adzuna.com', port=443): Max retries exceeded with url: "
+                                       "/v1/api/jobs/gb/search/1?app_id=fake-id&app_key=fakekey-fakekey-fake (Caused by X)")
+    monkeypatch.setattr(job_sources.requests, "get", down)
+    try:
+        job_sources.AdzunaSource().find("tester", "London", 10)
+    except requests.ConnectionError as e:
+        assert str(e) == "Adzuna could not be reached." and e.__cause__ is None and e.__suppress_context__
+    else:
+        raise AssertionError("an error was expected")
+    said = "Max retries exceeded with url: /v1/api/jobs/gb/search/1?app_id=fake-id&app_key=fakekey-fakekey-fake (x)"
+    for cleaner in (agent2_search.safe_error, trouble._safe):
+        assert "fakekey" not in cleaner(said) and "/v1/api/jobs/gb/search/1" in cleaner(said)
+    assert trouble.without_query("Is it on? Yes.") == "Is it on? Yes.", "a question mark in words stays"
+    assert trouble.without_query("api.adzuna.com?app_key=SECRET") == "api.adzuna.com", "a host with a query and no path"
+    assert trouble.without_query("see https://a.example/b?SECRETTOKEN") == "see https://a.example/b", "an address loses any query"
+    assert trouble.without_query("why?https://x.example/a?key=S") == "why?https://x.example/a"
+    import time
+    started = time.monotonic()
+    trouble.without_query("x" * 50000 + " " + "y/" * 25000)
+    assert time.monotonic() - started < 0.5, "a long text is read once, not again from every place"
+
+
+def test_a_role_of_common_words_only_still_filters_career_sites(monkeypatch):
+    """Audit before 1.2.0: "QA Engineer" left no telling word, so every posting of every career site came back."""
+    from jobhelper import filters, scrapers_ats
+    monkeypatch.setattr(scrapers_ats, "load_companies", lambda: [{"name": "Contoso", "ats": "greenhouse", "token": "contoso"}])
+    postings = [{"title": "QA Engineer", "location": "Brno"}, {"title": "Sales Manager", "location": "Brno"},
+                {"title": "Senior QA Engineer", "location": "Brno"}, {"title": "Data Engineer", "location": "Brno"}]
+    monkeypatch.setattr(scrapers_ats, "_company_jobs", lambda name, ats, token: [dict(p) for p in postings])
+    monkeypatch.setattr(filters.Placement, "for_search", classmethod(lambda cls, where: type("P", (), {"fits": lambda self, loc: True})()))
+    titles = [j["title"] for j in scrapers_ats.careers("QA Engineer", "Brno", 10)]
+    assert titles == ["QA Engineer", "Senior QA Engineer"]
+    assert [j["title"] for j in scrapers_ats.careers("Python Developer", "Brno", 10)] == [], "a telling word still decides"

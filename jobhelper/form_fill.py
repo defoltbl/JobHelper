@@ -24,6 +24,7 @@ import calendar
 import json
 import os
 import re
+import unicodedata
 from datetime import date, timedelta
 from typing import Any
 from urllib.parse import urlsplit
@@ -629,7 +630,7 @@ def review_answer(text: str) -> dict[str, Any]:
             continue
         label = " ".join(str(raw.get("label") or "").split())[:200]
         value = str(raw.get("value") or "")[:3000]
-        private = bool(_PRIVATE.search(label.lower()))
+        private = _named_private({"label": label})
         fields.append({"label": label or "A field with no name", "value": "" if private else value, "filled": bool(value.strip()),
                        "required": bool(raw.get("required")), "private": private, "kind": str(raw.get("kind") or "text")[:20]})
     return {"url": str(data.get("url") or ""), "title": str(data.get("title") or "")[:300], "fields": fields}
@@ -797,7 +798,31 @@ TOO_MANY = f"More than {form_answers.MAX_QUESTIONS} open questions: ask me again
 _PRIVATE = re.compile(r"passw|captcha|card ?number|credit card|\bcvv\b|\bcvc\b|\biban\b|\bbank|account number|social security|\bssn\b"
                       r"|signature|sign electronically|\bsign (?:here|below)\b|\bsigned\b|(?:name|initials) to confirm|\bconfirm (?:that|you)\b|to certify|to agree|i declare|signatory|initials"
                       r"|national id|id number|passport|birth|\bdob\b|\bage\b|gender|\bsex\b|pronoun|\brace\b|ethnic|disab|veteran"
-                      r"|religio|orientation|marital|criminal|convict|health")
+                      r"|religio|orientation|marital|criminal|convict|health"
+                      # the card's own name and date, citizenship and tax; the same in Czech and German (audit before 1.2.0)
+                      r"|name on (?:the )?card|card ?holder|expir(?:y|ation)? ?(?:date|month|year)|valid (?:thru|through|until)"
+                      r"|citizenship|nationality"
+                      r"|\btax ?(?:id|number|no\b|code|identif)|tax ?payer|\bvat ?(?:id|number|no\b)|\bust.?id"   # not "before tax"
+                      r"|security code|\bcvv2\b|\bexp\.? ?date\b|\bnaissance"
+                      r"|narozen|pohlav|p[řr][íi]slu[šs]nost|rodn[ée] [čc][íi]slo|ob[čc]ansk|ob[čc]anstv|n[áa]rodnost|\bv[ěe]k\b"
+                      r"|da[ňn]ov[ée] identifika|\bdi[čc]\b|rodinn[ýy] stav|[čc][íi]slo (?:karty|[úu][čc]tu|op\b|pasu|pas\b)|platnost karty"
+                      r"|geburt|geboren|geschlecht|staatsangeh|staatsb(?:[üu]|ue)rger|nationalit|steuer(?:liche)? ?(?:nummer|nr\b|-?id|ident)"
+                      r"|ausweis|reisepass|sozialversicherung|rentenversicherung|\bsv ?nummer|kreditkart|kartennummer|karteninhaber"
+                      r"|ablaufdatum|kontonummer|\bkonto ?nr\b|\balter\b|familienstand|national insurance")
+# what a page's autocomplete names as payment or personal: never filled, whatever the label says. One token at a time:
+# autocomplete may start with a section or "billing" ("section-a cc-csc", "billing cc-number").
+_PRIVATE_AUTO = re.compile(r"cc-.*|bday.*|sex|transaction-.*")
+# a question in a list or a set of radios that gives consent in your name: yours to answer, never the model's
+# ("Are you authorized to work in …?" is a question about you, not consent: "authorize" alone is)
+# ("Do you agree to relocate?" and "Experience with GDPR compliance" are questions about you, not consent)
+_CONSENT = re.compile(r"\bi (?:hereby )?agree\b|\bagree (?:to|with) (?:the |our |these |your )?(?:terms|conditions|polic|privacy|processing"
+                      r"|storage|use of|data)|consent|terms (?:and|&) conditions|terms of (?:use|service)|privacy (?:polic|notice|statement)"
+                      r"|personal data"
+                      r"|\baccept\b[^?]{0,40}\b(?:terms|polic|conditions|agreement|statement)|\backnowledg|\bauthori[sz]e\b"
+                      r"|\bcertify\b|\bi (?:hereby )?(?:confirm|declare)\b|background check"
+                      r"|souhlas|zpracov[áa]n[íi] osobn|prohla[šs]uji|potvrzuji|beru na v[ěe]dom[íi]|obchodn[íi] podm[íi]nky"
+                      r"|einwillig|zustimm|einverstanden|datenschutz|best[äa]tige|versichere|akzeptiere|nutzungsbedingungen|\bagb\b",
+                      re.IGNORECASE)
 _NOT_MINE = re.compile(r"company|employer|organi[sz]ation|school|universit|college|referr|referee|reference|emergency|manager|recruiter"
                        r"|supervisor|\btitle\b|position|\brole\b|degree|skill|user ?name|login|nick")
 # what forms ask again and again; when it is not in My details, an open question is drafted instead
@@ -1036,9 +1061,16 @@ WHAT = {"job_location": "job's place (under your jobs: Where it was)", "job_desc
         "study_field": "degrees", "salary": "salary", **{key: label.lower() for key, label in details.LABELS.items()}}
 
 
+def _named_private(field: dict[str, Any]) -> bool:
+    """Whether the field's name says it is personal or payment information, read both as written ("DoB", "PassWord")
+    and as plain words ("Tax_ID", "Card-number"): a field is private when either reading says so."""
+    written = " ".join(str(field.get(k) or "") for k in ("label", "hint", "name", "id")).lower()
+    return bool(_PRIVATE.search(written) or _PRIVATE.search(_words(field)))
+
+
 def _words(field: dict[str, Any]) -> str:
     """What the page calls the field, as plain lower-case words (firstName, first_name -> first name)."""
-    parts = " ".join(str(field.get(k) or "") for k in ("label", "hint", "name", "id"))
+    parts = unicodedata.normalize("NFC", " ".join(str(field.get(k) or "") for k in ("label", "hint", "name", "id")))   # "č" as one letter
     parts = re.sub(r"([a-z])([A-Z])", r"\1 \2", parts)
     return " ".join(re.sub(r"[_\-.\[\]:()]+", " ", parts).lower().split())
 
@@ -1114,8 +1146,10 @@ when the field is left to the person."""
             return "", PASSWORD
         if kind == "file":
             return "file", ""
-        if _PRIVATE.search(words):
+        if _named_private(field) or any(_PRIVATE_AUTO.fullmatch(t) for t in str(field.get("auto") or "").lower().split()):
             return "", PRIVATE
+        if picked and _CONSENT.search(words):
+            return "", CHOICE                           # "Do you agree to the processing of your personal data?": yours alone
         if field.get("part") and kind in ("text", "number", "tel"):
             # one box of a date that is split into a month and a year: the pair's own name says whose date it is
             pair = _words({"label": field.get("group")})
