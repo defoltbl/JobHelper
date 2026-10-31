@@ -196,9 +196,9 @@ def test_fields_are_recognised_by_what_the_page_calls_them(field, what):
     (_field("Geburtsdatum"), form_fill.PRIVATE), (_field("Geschlecht", kind="radio"), form_fill.PRIVATE),
     (_field("Staatsangehörigkeit"), form_fill.PRIVATE), (_field("Steuernummer"), form_fill.PRIVATE),
     (_field("Name", auto="cc-name"), form_fill.PRIVATE), (_field("Date", auto="bday"), form_fill.PRIVATE),
-    (_field("Do you agree to the processing of your personal data?", kind="radio"), form_fill.CHOICE),
-    (_field("Souhlasíte se zpracováním osobních údajů?", kind="select"), form_fill.CHOICE),
-    (_field("Einwilligung zur Datenverarbeitung", kind="radio"), form_fill.CHOICE),
+    (_field("Do you agree to the processing of your personal data?", kind="radio"), form_fill.CONSENT),
+    (_field("Souhlasíte se zpracováním osobních údajů?", kind="select"), form_fill.CONSENT),
+    (_field("Einwilligung zur Datenverarbeitung", kind="radio"), form_fill.CONSENT),
     # last check: more of the same, and autocomplete with a section or "billing" in front
     (_field("Národnost"), form_fill.PRIVATE), (_field("Věk", kind="number"), form_fill.PRIVATE),
     (_field("Rodinný stav", kind="select"), form_fill.PRIVATE), (_field("Číslo karty"), form_fill.PRIVATE),
@@ -208,17 +208,17 @@ def test_fields_are_recognised_by_what_the_page_calls_them(field, what):
     (_field("Security code"), form_fill.PRIVATE), (_field("Exp date"), form_fill.PRIVATE),
     (_field("Number", auto="billing cc-number"), form_fill.PRIVATE), (_field("Code", auto="section-x cc-csc"), form_fill.PRIVATE),
     (_field("Date", auto="section-a bday"), form_fill.PRIVATE),
-    (_field("Do you accept the Terms of Use?", kind="radio"), form_fill.CHOICE),
-    (_field("I acknowledge that the information is true", kind="select"), form_fill.CHOICE),
-    (_field("Do you authorize a background check?", kind="radio"), form_fill.CHOICE),
-    (_field("I certify that my answers are complete", kind="menu"), form_fill.CHOICE),
-    (_field("Ich bestätige die AGB", kind="radio"), form_fill.CHOICE),
+    (_field("Do you accept the Terms of Use?", kind="radio"), form_fill.CONSENT),
+    (_field("I acknowledge that the information is true", kind="select"), form_fill.CONSENT),
+    (_field("Do you authorize a background check?", kind="radio"), form_fill.CONSENT),
+    (_field("I certify that my answers are complete", kind="menu"), form_fill.CONSENT),
+    (_field("Ich bestätige die AGB", kind="radio"), form_fill.CONSENT),
     (_field("Date of the interview", kind="date"), form_fill.DATE),
     (_field("Meeting", kind="time"), form_fill.DATE),
     (_field("", kind="select"), form_fill.CHOICE), (_field("", kind="radio"), form_fill.CHOICE), (_field("Volume", kind="range"), form_fill.CHOICE),
     (_field("Gender", kind="radio"), form_fill.PRIVATE), (_field("Gender", kind="menu"), form_fill.PRIVATE), (_field("Age", kind="number"), form_fill.PRIVATE),
     (_field("Position applied"), form_fill.UNKNOWN), (_field("Referee's employer"), form_fill.UNKNOWN), (_field("Referee's name"), form_fill.UNKNOWN),
-    (_field("Username"), form_fill.UNKNOWN), (_field("", kind="number"), form_fill.UNKNOWN),
+    (_field("Username"), form_fill.PRIVATE), (_field("", kind="number"), form_fill.UNKNOWN),
     (_field(""), form_fill.UNKNOWN), (_field("???", kind="textarea"), form_fill.UNKNOWN)])
 def test_what_is_not_the_assistants_to_fill_is_left_with_the_reason(field, why):
     assert form_fill.classify(field) == ("", why)
@@ -226,10 +226,121 @@ def test_what_is_not_the_assistants_to_fill_is_left_with_the_reason(field, why):
 
 @pytest.mark.parametrize("label", ["Are you authorized to work in the EU?", "Would you accept a lower salary?",
                                    "Do you hold a certification in accounting?", "Are you willing to relocate?",
-                                   "Do you agree to relocate?", "Experience with GDPR compliance"])
+                                   "Do you agree to relocate?", "Experience with GDPR compliance", "Would you accept relocation to Prague?",
+                                   "Years of marketing experience"])
 def test_questions_about_you_are_still_the_assistants_to_answer(label):
     """The consent and private words must not take a question the assistant answers from your details."""
     assert form_fill.classify(_field(label, kind="radio")) == ("choice", "")
+
+
+@pytest.mark.parametrize("label, kind", [
+    ("Type I AGREE to accept the terms", "text"), ("I consent to the processing of my personal data, type your name", "text"),
+    ("I have read and understood the privacy notice", "radio"), ("Do you accept?", "radio"), ("Terms", "select"),
+    ("Confirm", "radio"), ("Keep my data on file?", "radio"), ("Permission to store your CV", "select"),
+    ("Opt in to job alerts", "radio"), ("Subscribe to our newsletter", "select"), ("Join our talent community", "radio"),
+    ("May we contact you about future openings?", "radio"), ("Ich stimme zu", "radio"), ("Acepto", "radio"),
+    ("J'accepte", "radio"), ("DSGVO", "select"),
+    # second check: bare forms, a "*" in front, and consent only in the options
+    ("I accept", "radio"), ("Agree", "radio"), ("Do you agree?", "radio"), ("GDPR", "select"), ("Privacy", "radio"),
+    ("Data protection", "radio"), ("T&Cs", "radio"), ("Marketing preferences", "select"), ("Keep me updated", "radio"),
+    ("Share my details with partners", "radio"), ("Type YES to continue", "text"), ("* Terms", "radio"), ("* Confirm", "radio")])
+def test_what_gives_consent_in_your_name_is_never_answered_for_you(label, kind):
+    """#83: consent wording on lists and radios, and consent typed into a text field, are yours alone."""
+    assert form_fill.classify(_field(label, kind=kind)) == ("", form_fill.CONSENT)
+
+
+def test_a_list_whose_options_give_consent_is_yours():
+    assert form_fill.classify(_field("Please select one", kind="radio", options=["I agree", "I do not agree"])) == ("", form_fill.CONSENT)
+    for options in (["Accept", "Decline"], ["Agree", "Disagree"], ["I give my consent", "No"], ["Souhlasím", "Nesouhlasím"],
+                    ["Zustimmen", "Ablehnen"], ["Acepto", "No acepto"], ["Yes, I authorize", "No"], ["I confirm", "No"],
+                    ["Opt in", "Opt out"], ["Yes, keep me updated", "No"], ["Yes, share my details with partners", "No"], ["Accepted", "Declined"]):
+        assert form_fill.classify(_field("Pick one", kind="radio", options=options)) == ("", form_fill.CONSENT), options
+    for label in ("Declaration", "Please confirm all of the above"):
+        assert form_fill.classify(_field(label, kind="radio", options=["Yes", "No"])) == ("", form_fill.CONSENT), label
+    assert form_fill.classify(_field("Notes", name="consent_text")) == ("", form_fill.CONSENT), "a text box the page names for consent"
+    heard = _field("How did you hear about us?", kind="select", options=["LinkedIn", "Company newsletter", "Job alerts email", "Talent community"])
+    assert form_fill.classify(heard)[0] == "choice", "an ordinary answer that names a newsletter is no consent (last check)"
+    assert form_fill.classify(_field("Please select one", kind="radio", options=["Yes", "No"]))[0] == "choice"
+
+
+@pytest.mark.parametrize("field", [
+    _field("Email", kind="email", hint="We never share your personal data"), _field("Comments", kind="textarea", name="opt_in_comments"),
+    _field("Cover letter", kind="textarea", hint="Do not include personal data"), _field("Do you have Swift experience?", kind="radio"),
+    _field("Primary skill (e.g. Swift)"), _field("Field of study (e.g. Political Science)"), _field("Email", kind="email", auto="username"),
+    # third check: a text question that only mentions personal data or a background check, and work words
+    _field("Describe your experience handling personal data in a CRM", kind="textarea"),
+    _field("Experience with consent management", kind="textarea"), _field("Newsletter marketing experience", kind="textarea"),
+    _field("Are you willing to undergo a background check?", kind="textarea"), _field("Diagnostics software experience", kind="textarea"),
+    _field("Medical information systems experience", kind="textarea")])
+def test_a_field_is_not_refused_for_a_word_beside_its_question(field):
+    """Second check: a text box's hint, name or id, and "Swift" or "political" inside a question, refused ordinary fields."""
+    assert form_fill.classify(field)[1] not in (form_fill.CONSENT, form_fill.PRIVATE), field
+
+
+def test_one_consent_rule_for_tick_boxes_and_questions():
+    """#83: the tick-box words start with the consent words, so the two lists cannot drift apart."""
+    assert form_fill.NEVER_TICK_WORDS.startswith(form_fill.CONSENT_WORDS + "|")
+    assert form_fill.classify(_field("Subscribe to our newsletter", kind="checkbox")) == ("", form_fill.CHOICE), "a tick box stays unticked"
+    assert form_fill.classify(_field("I currently work here", kind="checkbox", name="accept_terms")) == ("", form_fill.CHOICE), \
+        "a box named to accept something behind a harmless label is not ticked"
+    assert form_fill.classify(_field("Medical device sales experience", kind="textarea")) == ("question", "")
+
+
+def test_an_answer_given_before_is_never_replayed_as_consent(isolate):
+    """#83: answer memory could fill "Yes" into a consent question it had seen before."""
+    answer_memory.remember("Do you accept?", "Yes")
+    todo = form_fill.plan([_field("Do you accept?", kind="radio", n=1, options=["Yes", "No"])], MINE, has_job=True)
+    assert todo["choose"] == [] and todo["left"] == [{"label": "Do you accept?", "why": form_fill.CONSENT}]
+
+
+@pytest.mark.parametrize("label", ["Born on", "Year born", "Maiden name", "Security answer", "PIN", "One-time code",
+                                   "Verification code", "Sort code", "Routing number", "SWIFT", "Social insurance number", "PESEL",
+                                   "TIN", "Licence number", "Sozialversicherungsnummer", "Criminal record", "Medical conditions",
+                                   "Allergies", "Pregnancy", "Political views", "Trade union member", "pwd", "SIN", "D.O.B.",
+                                   "Username", "Enter the code we sent you", "6-digit code", "Passcode", "Account no.", "NI number",
+                                   "Diagnosis", "Medication", "Union membership"])
+def test_more_private_fields_are_left_to_you(label):
+    """#84."""
+    assert form_fill.classify(_field(label)) == ("", form_fill.PRIVATE)
+
+
+@pytest.mark.parametrize("auto", ["current-password", "new-password", "one-time-code", "section-x one-time-code"])
+def test_what_the_page_marks_as_a_code_or_a_sign_in_is_left_to_you(auto):
+    """#84: a text field that the page's autocomplete marks as a password, a one-time code or a user name."""
+    assert form_fill.classify(_field("Code", auto=auto)) == ("", form_fill.PRIVATE)
+
+
+def test_the_review_keeps_a_value_private_by_its_autocomplete_and_name():
+    """#84: the review read "private" from the label alone, so a card number labelled "Number" went to Claude."""
+    page = form_fill.review_answer(json.dumps({"url": "https://x.example/a", "title": "T", "fields": [
+        {"label": "Number", "value": "4111", "auto": "billing cc-number", "name": "field_9"},
+        {"label": "When", "value": "1999-01-02", "name": "dob"}, {"label": "City", "value": "Brno", "auto": "address-level2"}]}))
+    assert [(f["private"], f["value"]) for f in page["fields"]] == [(True, ""), (True, ""), (False, "Brno")]
+    hidden = form_fill.review_answer(json.dumps({"url": "u", "title": "t", "fields": [
+        {"label": "Number", "value": "1", "id": "dob", "name": "f9"}, {"label": "Number", "value": "2", "hint": "Date of birth"},
+        {"label": "", "value": "3"}, {"label": "Type your full name to certify", "value": "Alex Novak"}]}))
+    assert [(f["private"], f["value"]) for f in hidden["fields"]] == [(True, "")] * 4, "by id, by hint, with no name, a signature"
+    named = form_fill.review_answer(json.dumps({"url": "u", "title": "t", "fields": [
+        {"label": "Number", "name": "cc_number", "value": "4111111111111111"}, {"label": "Reference", "value": "4111 1111 1111 1111"},
+        {"label": "Code", "name": "mfa_code", "value": "123456"}, {"label": "Phone", "value": "+420 123 456 789"}]}))
+    assert [(f["private"], f["value"]) for f in named["fields"]] == [(True, ""), (True, ""), (True, ""), (False, "+420 123 456 789")], \
+        "a card by its name or by its shape (Luhn), a sign-in code by its name; a phone number is no card"
+    codes = form_fill.review_answer(json.dumps({"url": "u", "title": "t", "fields": [
+        {"label": "Your answer", "name": name, "value": "123"} for name in ("cvc2", "cvv2", "ccv", "cv2")] + [
+        {"label": "Reference", "value": "፩" * 13}, {"label": "Reference", "value": "４１１１１１１１１１１１１１１１"},
+        {"label": "Upload your CV", "name": "cv", "value": "x"}, {"label": "CV", "name": "cv_file", "value": "y"}]}))
+    assert [f["private"] for f in codes["fields"]] == [True, True, True, True, False, True, False, False], \
+        "card codes by name; a digit sign int() refuses never crashes the review; a fullwidth card number is a card; a CV is no card code"
+
+
+def test_a_signature_asked_for_in_a_hint_is_yours():
+    """Third check: moving the signature words to the consent list made a "Full name" box with the hint "Type your full name
+    to certify" fillable again."""
+    for hint in ("Type your full name to certify", "Type your name to agree", "I declare the above is true", "Type to confirm that you read it"):
+        assert form_fill.classify(_field("Full name", hint=hint)) == ("", form_fill.PRIVATE), hint
+    fields = form_fill.review_answer(_in_page(form_fill.REVIEW, page="review.html")[0])["fields"]
+    assert [(f["label"], f["private"], f["value"]) for f in fields] == [("Number", True, ""), ("When", True, ""), ("City", False, "Brno")], \
+        "the page script reports each field's autocomplete and name"
 
 
 def test_a_salary_before_tax_is_still_the_salary():
@@ -298,7 +409,7 @@ def test_values_travel_into_the_page_as_data_and_nothing_is_ever_clicked():
     assert "el.type === 'submit' || el.closest('[type=submit]')" in form_fill.CHOOSE, "what sends a form is never pressed"
     assert form_fill.CHOOSE.count("press(") == 7, ("pressed: a radio button, an entry of a menu, what opens a menu (an input or another element), "
                                                    "a button that adds a row, the tick box of a current job; nothing else")
-    assert "agree|consent|terms|privacy" in form_fill.CHOOSE, "a box that agrees to something is never ticked"
+    assert form_fill.CONSENT_WORDS in form_fill.CHOOSE and form_fill.CONSENT_WORDS in form_fill.READ, "a box that agrees to something is never ticked"
     for words, kind in (("Add another job", "experience"), ("+ Add work experience", "experience"), ("Add education", "education"), ("Add a degree", "education"),
                         ("Add another", ""), ("Add and continue", ""), ("Add & submit application", ""), ("Add job and save", ""), ("Add file", ""),
                         ("Upload CV", ""), ("Next", ""), ("Submit", ""), ("Add work and education", "")):

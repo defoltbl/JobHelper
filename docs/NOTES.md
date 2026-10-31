@@ -103,6 +103,6 @@ A few decisions worth highlighting, each with the problem that led to it.
   the files in Finder).
 - It attaches the CV and the letter of the job only when it knows which job the form is for,
   and only files up to 4 MB. Certificates, a photo or a passport are yours to add.
-- It never presses Submit or Next, never ticks a box that agrees to something, and never fills
+- It never presses Submit or Next, never answers a field that agrees to something, and never fills
   in a password, a payment field or a personal-status question.
 - An answer comes back whole, not word by word, because the app checks it before showing it.

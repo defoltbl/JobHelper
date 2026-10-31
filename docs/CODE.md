@@ -634,7 +634,7 @@ the fields to fill and the fields to leave.
 | Only empty fields are written | The filling script tests each field again just before it writes |
 | Values are data, never code | They travel as JSON inside the script, and the script travels as an argument of `osascript` |
 | What the page answers is not trusted | `read_answer` and `fill_answer` accept only the expected shape and cut every text to a fixed length |
-| Private fields are left alone | Passwords, payment and personal-status fields are never planned. The planner finds them by their kind, their label (also in Czech and German) or their autocomplete value (`cc-`, `bday`, `sex`). A box or a question that gives consent (terms, personal data, a background check) is never answered |
+| Private fields are left alone | Passwords, payment and personal-status fields are never planned. The planner finds them by their kind, their label (also in Czech and German) or their autocomplete value (`cc-`, `bday`, `sex`, `one-time-code`). The review of a form uses the same check. A field of any kind that gives consent (terms, personal data, a background check, a newsletter) is never answered |
 | A file is attached only when it is clearly the right one | The field must ask for a CV, a letter or other attachments. It must be empty and take the type of file. The app must know the job. A photo, a passport or a transcript is never attached. The page must report a file of the same size. If not, the field is listed as left |
 | The right page gets the values | The filling script compares the page's address with the one that was read, and writes nothing when they differ |
 | The browser is never started | The request first asks whether the browser is running and stops there when it is not |
