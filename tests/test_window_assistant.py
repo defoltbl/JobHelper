@@ -986,13 +986,15 @@ def test_the_account_card_stays_inside_the_smallest_window(ui):
 
 def test_saving_one_part_of_the_job_window_keeps_what_was_typed_in_the_others(ui):
     """A date typed and not saved yet must still be there after the company notes are saved (and the other way round)."""
+    from datetime import date, timedelta
+    soon = (date.today() + timedelta(days=9)).isoformat()                    # a date to come, whenever the test runs
     _open_job(ui, "app")
     try:
-        ui.js('evDate.text = "2026-11-03"; evTime.text = "10:30"; evNote.text = "second round"; detailDialog.eventKind = "call"')
+        ui.js(f'evDate.text = "{soon}"; evTime.text = "10:30"; evNote.text = "second round"; detailDialog.eventKind = "call"')
         ui.js('cnNotes.text = "They pay monthly."')
         ui.js("detailDialog.saveNotes()"); ui.wait(60)
         assert ui.js("detailDialog.notesBad") is False
-        assert ui.js("evDate.text") == "2026-11-03" and ui.js("evTime.text") == "10:30" and ui.js("evNote.text") == "second round"
+        assert ui.js("evDate.text") == soon and ui.js("evTime.text") == "10:30" and ui.js("evNote.text") == "second round"
         assert ui.js("detailDialog.eventKind") == "call"
         assert ui.js("detailDialog.pending.join('|')") == "the date to remember"          # the notes are saved, the date is still open
         ui.js('cnAsked.text = "about my last project"')
