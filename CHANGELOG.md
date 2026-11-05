@@ -7,6 +7,10 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **About you:** a figure you changed for a kind of role has its own **Save figures** button. Before, only **Save** at the bottom of the window saved it.
+- **About you:** the boxes under **More about your work** are the jobs that your master CV names. You can rename a box or remove a job, and bring a removed job back.
+- **About you:** each part says why to fill it in and where the app uses it.
+
 - **Assistant:** a field placed outside the page or made see-through, a trap for robots, is left empty.
 - **Assistant:** a field that the page emptied again is listed as not filled in, also when Chrome stops answering while the assistant types it again.
 - **Assistant:** when the tab changes while the form is read, nothing is written.

@@ -5,11 +5,21 @@ from jobhelper import about_you, config, details, form_answers, ui_api
 from jobhelper.about_you import AboutYou, WorkNotes
 
 MY_JOBS = [{"employer": "Northwind", "title": "Junior analyst", "current": True}, {"employer": "Acme", "title": "Intern"}]
+NAMES = [WorkNotes.job_name(r) for r in MY_JOBS]
+CV = """Alex Novak
+EXPERIENCE
+Junior Analyst – Northwind Traders (Mar 2023 – present)
+- Built the monthly SQL reports.
+Intern, Acme (2021 – 2022)
+- Wrote tests.
+EDUCATION
+BSc Computer Science – Example University (2018 – 2021)
+"""
 
 
 def test_work_notes_get_a_box_for_each_job_and_keep_a_note_whose_job_is_gone():
     notes = WorkNotes([{"job": "Intern, Acme", "notes": "Wrote tests."}, {"job": "Tester, Gone Ltd", "notes": "Ran checks."}], "Built a game.")
-    boxes = notes.boxes(MY_JOBS)
+    boxes = notes.boxes(NAMES)
     assert [(b["job"], b["notes"], b["earlier"]) for b in boxes] == [
         ("Junior analyst, Northwind", "", False), ("Intern, Acme", "Wrote tests.", False), ("Tester, Gone Ltd", "Ran checks.", True)]
     assert notes.text() == "At Intern, Acme: Wrote tests.\n\nAt Tester, Gone Ltd: Ran checks.\n\nBuilt a game."
@@ -17,9 +27,61 @@ def test_work_notes_get_a_box_for_each_job_and_keep_a_note_whose_job_is_gone():
 
 def test_work_notes_are_checked_together():
     assert WorkNotes([{"job": "A, B", "notes": "x" * 3000}], "y" * 1001).problem().startswith("The notes about your work are 4012")
-    assert WorkNotes([{"job": "", "notes": "text"}]).problem() == "A note on a job needs the job's name."
+    assert WorkNotes([{"job": "", "notes": "text"}]).problem() == "A job needs a name. Write one, or remove the job."
     assert WorkNotes([{"job": "A, B", "notes": "ok"}], "fine").problem() == ""
     assert WorkNotes([{"job": "A, B", "notes": ""}]).as_options()["about_jobs"] == []           # an empty box is not saved
+
+
+def test_the_jobs_come_from_the_master_cv_and_can_be_renamed_or_removed():
+    """Owner, 5 Nov: the boxes should come from the master CV, and each should be renamed or removed as needed."""
+    from jobhelper import claims
+    names = claims.EmployerCheck.job_names(CV)
+    assert names == ["Junior Analyst, Northwind Traders", "Intern, Acme"], "a degree is no job"
+    notes = WorkNotes([{"job": "Reporting analyst", "from": names[0], "notes": "Built the reports."},
+                       {"job": names[1], "from": names[1], "removed": True},
+                       {"job": "Tester, Gone Ltd", "notes": "Ran checks."}])
+    boxes = notes.boxes(names)
+    assert [(b["job"], b["from"], b["removed"], b["earlier"]) for b in boxes] == [
+        ("Reporting analyst", names[0], False, False), (names[1], names[1], True, False), ("Tester, Gone Ltd", "", False, True)]
+    assert notes.text() == "At Reporting analyst: Built the reports.\n\nAt Tester, Gone Ltd: Ran checks.", "a removed job says nothing"
+    kept = notes.as_options()["about_jobs"]
+    assert {"job": names[1], "from": names[1], "removed": True} in kept, "a removed job stays removed"
+    assert WorkNotes([{"job": "My name", "from": names[0]}]).as_options()["about_jobs"] == [{"job": "My name", "from": names[0]}], \
+        "a rename without notes is kept too"
+    assert WorkNotes([{"job": "", "from": names[0]}]).problem().startswith("A job needs a name")
+    # a note written before this change (named as in My details, no "from") stays with its job, however it is written
+    assert WorkNotes([{"job": "Intern, Acme", "notes": "Old note."}]).boxes(names)[1]["notes"] == "Old note."
+    assert WorkNotes([{"job": "Junior analyst, Northwind", "notes": "Old."}]).boxes(names)[0]["notes"] == "Old.", \
+        "the same title at the employer the CV names in full"
+    assert WorkNotes([{"job": "Senior analyst, Northwind", "notes": "Other."}]).boxes(names)[0]["notes"] == "", "another title is another job"
+    assert not WorkNotes.same_job("Intern, Acme", "Intern, Acmeville"), "a longer word is another employer"
+
+
+def test_a_month_before_the_year_is_no_part_of_a_job_s_name():
+    """Check of 5 Nov: "…, Jan 2022 – Mar 2023" gave "…, Northwind Parcel, Jan", so a note lost its job when the dates changed."""
+    from jobhelper import claims
+    cv = "EXPERIENCE\nJunior Developer – Northwind Parcel, Jan 2022 – Mar 2023\n- Built things.\nTester, Acme (Sept. 2020 – 2021)\n"
+    assert claims.EmployerCheck.job_names(cv) == ["Junior Developer, Northwind Parcel", "Tester, Acme"]
+
+
+def test_two_jobs_never_share_a_name():
+    two = WorkNotes([{"job": "Analyst, Acme", "from": "A, B", "notes": "x"}, {"job": "analyst, acme", "from": "C, D", "notes": "y"}])
+    assert two.problem().startswith("Two jobs have the same name")
+
+
+def test_the_jobs_of_my_details_are_used_when_the_cv_names_none():
+    page = AboutYou({}).job_boxes({**details.empty(), "experience": MY_JOBS}, "Alex Novak\nPython developer.")
+    assert page["jobs_from"] == "details" and [b["job"] for b in page["boxes"]] == NAMES
+    assert AboutYou({}).job_boxes({**details.empty(), "experience": MY_JOBS}, CV)["jobs_from"] == "cv"
+    assert AboutYou({}).job_boxes(details.empty(), "")["jobs_from"] == ""
+
+
+def test_the_window_says_why_each_part_is_worth_filling_in_and_where_it_is_used():
+    """Owner, 5 Nov: say why I need to fill it in and where it will be used."""
+    uses = AboutYou({}).page(details.empty(), "junior", CV)["uses"]
+    assert set(uses) == {"salary", "right", "start", "work"}
+    assert all(text.startswith("Why: ") and "Used in: " in text for text in uses.values())
+    assert "interview preparation" in uses["work"] and "form answers" in uses["salary"]
 
 
 def test_the_notes_everyone_reads_include_each_job(isolate_data):
@@ -42,7 +104,9 @@ def test_the_size_counts_what_everyone_reads_so_nothing_is_cut():
 
 def test_a_job_name_may_be_as_long_as_my_details_allows():
     longest = "T" * 100 + ", " + "E" * 100                    # a title and an employer, each at My details' limit
-    assert WorkNotes([{"job": longest, "notes": "ok"}]).problem() == "" and WorkNotes.MAX_JOB_NAME == 202
+    most = sum(m for key, _label, m in details.ROWS["experience"] if key in ("title", "employer")) + 2
+    assert WorkNotes([{"job": longest, "notes": "ok"}]).problem() == "" and WorkNotes.MAX_JOB_NAME == most
+    assert "takes up to" in WorkNotes([{"job": "x" * (most + 1), "notes": "ok"}]).problem()
 
 
 def test_save_about_you_stores_only_its_own_facts(isolate_data):

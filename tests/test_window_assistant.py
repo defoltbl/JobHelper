@@ -986,13 +986,15 @@ def test_the_account_card_stays_inside_the_smallest_window(ui):
 
 def test_saving_one_part_of_the_job_window_keeps_what_was_typed_in_the_others(ui):
     """A date typed and not saved yet must still be there after the company notes are saved (and the other way round)."""
+    from datetime import date, timedelta
+    soon = (date.today() + timedelta(days=9)).isoformat()                    # a date to come, whenever the test runs
     _open_job(ui, "app")
     try:
-        ui.js('evDate.text = "2026-11-03"; evTime.text = "10:30"; evNote.text = "second round"; detailDialog.eventKind = "call"')
+        ui.js(f'evDate.text = "{soon}"; evTime.text = "10:30"; evNote.text = "second round"; detailDialog.eventKind = "call"')
         ui.js('cnNotes.text = "They pay monthly."')
         ui.js("detailDialog.saveNotes()"); ui.wait(60)
         assert ui.js("detailDialog.notesBad") is False
-        assert ui.js("evDate.text") == "2026-11-03" and ui.js("evTime.text") == "10:30" and ui.js("evNote.text") == "second round"
+        assert ui.js("evDate.text") == soon and ui.js("evTime.text") == "10:30" and ui.js("evNote.text") == "second round"
         assert ui.js("detailDialog.eventKind") == "call"
         assert ui.js("detailDialog.pending.join('|')") == "the date to remember"          # the notes are saved, the date is still open
         ui.js('cnAsked.text = "about my last project"')
@@ -1130,6 +1132,7 @@ def test_about_you_has_its_own_window_under_options(ui):
     assert "cannot get a date" in ui.find("startPreview").property("text") and ui.js("aboutDialog.start.ok") is False
     # a box for each job of My details, and the note of a job that is gone, which can be removed
     assert ui.js("boxModel.count", dialog) == 2 and ui.js("boxModel.get(0).job", dialog) == "Junior analyst, Northwind"
+    assert ui.find("usesWork").property("text").count("Used in: ") == 1 and ui.find("usesSalary").property("text").startswith("Why: ")
     assert ui.js("boxModel.get(1).earlier", dialog) is True and ui.drawn("boxRemove_1", root="aboutScroll").property("visible") is True
     ui.js("boxModel.setProperty(0, 'notes', 'I built the monthly SQL reports.'); boxModel.remove(1)", dialog)
     ui.js('startField.text = "one month"', dialog)
@@ -1139,10 +1142,84 @@ def test_about_you_has_its_own_window_under_options(ui):
     ui.js("aboutDialog.save()", dialog)
     _until_closed(ui, "aboutDialog")
     saved = ui.bridge.options()
-    assert saved["about_jobs"] == [{"job": "Junior analyst, Northwind", "notes": "I built the monthly SQL reports."}]
+    assert saved["about_jobs"] == [{"job": "Junior analyst, Northwind", "notes": "I built the monthly SQL reports.",
+                                    "from": "Junior analyst, Northwind"}]
     assert saved["about_right_to_work"] == "EU/EEA citizen: no work permit needed" and saved["about_start"] == "one month"
     ui.bridge.saveOptions(start)
     details.save(details.empty())
+    assert ui.warnings == []
+
+
+def test_a_job_box_is_renamed_removed_with_one_question_and_brought_back(ui):
+    """Owner, 5 Nov: a box's name can be changed, and a job deleted."""
+    from jobhelper import details
+    start = ui.bridge.options()
+    ui.bridge.saveOptions({**start, "about_jobs": []})                         # no note left by another test
+    details.save({**details.empty(), "first_name": "Alex", "last_name": "Novak", "email": "alex@example.com",
+                  "experience": [{"employer": "Northwind", "title": "Junior analyst", "start": "03/2023", "end": "", "current": True},
+                                 {"employer": "Acme", "title": "Intern", "start": "2021", "end": "2022"}]})
+    dialog = ui.find("aboutDialog")
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    try:
+        ui.js("boxModel.setProperty(0, 'job', 'Reporting analyst'); boxModel.setProperty(1, 'notes', 'Wrote tests.')", dialog)
+        ui.js("aboutDialog.removeBox(1)", dialog)
+        assert ui.js("boxModel.get(1).removed", dialog) is False and "has notes" in ui.find("aboutErr").property("text"), "asks once"
+        ui.js("aboutDialog.removeBox(1)", dialog)
+        assert ui.js("boxModel.get(1).removed", dialog) is True and ui.js("boxModel.get(1).notes", dialog) == ""
+        ui.js("aboutDialog.save()", dialog)
+        _until_closed(ui, "aboutDialog")
+        jobs = ui.bridge.options()["about_jobs"]
+        assert {"job": "Reporting analyst", "from": "Junior analyst, Northwind"} in jobs
+        assert {"job": "Intern, Acme", "from": "Intern, Acme", "removed": True} in jobs
+        ui.js("aboutDialog.show()")
+        _until_open(ui, "aboutDialog")
+        assert ui.js("boxModel.get(0).job", dialog) == "Reporting analyst" and ui.js("boxModel.get(1).removed", dialog) is True
+        ui.js("boxModel.setProperty(1, 'removed', false)", dialog)                 # Bring back
+        assert ui.js("boxModel.get(1).removed", dialog) is False
+        # an empty name is said at once and names the job; a question about Remove does not carry over to an edit
+        most = ui.js("aboutDialog.info.max_job_name", dialog)
+        ui.js(f"aboutDialog.jobNameSaid('', boxModel.get(0).from, {most})", dialog)
+        assert ui.find("aboutErr").property("text") == "“Junior analyst, Northwind” needs a name. Write one, or remove the job."
+        ui.js(f"aboutDialog.jobNameSaid('x'.repeat({most}), boxModel.get(0).from, {most})", dialog)
+        assert ui.find("aboutErr").property("text") == f"A job's name takes up to {most} characters." and ui.js("aboutBlame.box", dialog) == "job"
+        ui.js("aboutBlame.say('Another fault.', 'start')", dialog)
+        ui.js(f"aboutDialog.jobNameSaid('Analyst', boxModel.get(0).from, {most})", dialog)
+        assert ui.find("aboutErr").property("text") == "Another fault.", "a good name does not wipe another box's fault"
+        ui.js("aboutBlame.say('', '')", dialog)
+        ui.js("boxModel.setProperty(1, 'notes', 'Wrote tests.'); aboutDialog.removeBox(1); aboutDialog.removeAsked = -1; aboutDialog.removeBox(1)", dialog)
+        assert ui.js("boxModel.get(1).removed", dialog) is False, "after an edit, Remove asks again"
+    finally:
+        ui.js("aboutDialog.confirmClose = true; aboutDialog.close()")
+        _until_closed(ui, "aboutDialog")
+        ui.bridge.saveOptions({**start, "about_jobs": start.get("about_jobs") or []})
+        details.save(details.empty())
+    assert ui.warnings == []
+
+
+def test_a_changed_salary_figure_has_a_save_of_its_own(ui):
+    """Owner, 5 Nov: after Change the new amount could not be saved – there was no button next to it."""
+    start = ui.bridge.options()
+    ui.bridge.saveOptions({**start, "salary_by_role": []})
+    dialog = ui.find("aboutDialog")
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    try:
+        assert ui.js("aboutDialog.payChanged", dialog) is False
+        ui.js("payModel.append({ role: 'Junior Python Developer', amount: 58000 })", dialog)
+        assert ui.js("aboutDialog.payChanged", dialog) is True and ui.find("paySave").property("visible") is True
+        ui.js("startField.text = 'one month'", dialog)                              # another change, not saved by this button
+        ui.js("aboutDialog.savePay()", dialog)
+        saved = ui.bridge.options()
+        assert saved["salary_by_role"] == [{"role": "Junior Python Developer", "amount": 58000}]
+        assert saved.get("about_start", "") != "one month", "only the figures are saved here"
+        assert ui.js("aboutDialog.payChanged", dialog) is False and "Saved" in ui.find("payNote").property("text")
+        ui.js("payModel.setProperty(0, 'amount', 61000)", dialog)
+        assert ui.find("paySave").property("visible") is True and ui.find("payNote").property("text").startswith("Not saved yet")
+    finally:
+        ui.js("aboutDialog.confirmClose = true; aboutDialog.close()")
+        _until_closed(ui, "aboutDialog")
+        ui.bridge.saveOptions(start)
     assert ui.warnings == []
 
 

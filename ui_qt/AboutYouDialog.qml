@@ -57,14 +57,16 @@ Dialog {
         currencyCombo.currentIndex = Math.max(0, cur.indexOf(info.salary_currency || "CZK"));
         payModel.clear();
         (info.salary_by_role || []).forEach(function (e) { payModel.append({ role: String(e.role), amount: Number(e.amount) }); });
+        savedPay = JSON.stringify(payLines()); payNote = "";
         payRole.text = ""; payAmount.value = 0;
         rightField.text = info.about_right_to_work || "";
         startField.text = info.about_start || "";
         start = info.start || ({ ok: true, text: "" });
         boxModel.clear();
-        (info.boxes || []).forEach(function (b) { boxModel.append({ job: String(b.job), notes: String(b.notes || ""), earlier: b.earlier === true }); });
+        (info.boxes || []).forEach(function (b) { boxModel.append({ job: String(b.job), from: String(b.from || ""), notes: String(b.notes || ""),
+                                                                    earlier: b.earlier === true, removed: b.removed === true }); });
         generalField.text = info.general || "";
-        err = ""; payErr = ""; payBox = ""; estimateErr = ""; confirmClose = false; numberFault = false;
+        err = ""; payErr = ""; payBox = ""; estimateErr = ""; confirmClose = false; numberFault = false; removeAsked = -1;
         salarySpin.flagged = false; payAmount.flagged = false;     // a red box from the last time never stays
         loaded = JSON.stringify(collect());
         aboutSink.forceActiveFocus();
@@ -74,11 +76,11 @@ Dialog {
     onClosed: { confirmClose = false; loaded = ""; }
 
     function collect() {                  // what Save stores: only the About you facts
-        var pay = [], jobs = [];
-        for (var i = 0; i < payModel.count; i++) pay.push({ role: payModel.get(i).role.trim(), amount: payModel.get(i).amount });
+        var pay = payLines(), jobs = [];
         for (var j = 0; j < boxModel.count; j++) {
-            var b = boxModel.get(j), text = String(b.notes || "").trim();
-            if (text !== "") jobs.push({ job: b.job, notes: text });
+            var b = boxModel.get(j), text = String(b.notes || "").trim(), name = String(b.job || "").trim();
+            if (b.removed) jobs.push({ job: name || b.from, from: b.from, removed: true });
+            else if (text !== "" || (b.from !== "" && name !== b.from)) jobs.push({ job: name, notes: text, from: b.from });
         }
         return { salary_target: salarySpin.value, salary_currency: currencyCombo.currentText, salary_by_role: pay,
                  about_right_to_work: rightField.text.trim(), about_start: startField.text.trim(),
@@ -93,12 +95,48 @@ Dialog {
         }
         close();
     }
+    // a job's name as it is typed: empty or at its limit is said at once, naming the job
+    function jobNameSaid(text, from, most) {
+        if (text.trim() === "") aboutBlame.say("“" + (from || "A job") + "” needs a name. Write one, or remove the job.", "job");
+        else if (text.length >= most) aboutBlame.say("A job's name takes up to " + most + " characters.", "job");
+        else if (aboutBlame.box === "job") aboutBlame.say("", "");    // only its own words go: another fault stays said
+    }
+    // Remove on a job box: a job with notes asks once (its notes would go); a job the CV names stays listed as removed
+    property int removeAsked: -1
+    function removeBox(i) {
+        var b = boxModel.get(i);
+        if (String(b.notes || "").trim() !== "" && removeAsked !== i) {
+            removeAsked = i;
+            err = "“" + b.job + "” has notes. Press Remove once more to drop the job and its notes.";
+            return;
+        }
+        removeAsked = -1; err = "";
+        if (b.earlier) boxModel.remove(i);
+        else { boxModel.setProperty(i, "removed", true); boxModel.setProperty(i, "notes", ""); }
+        notesTick++;
+    }
     function payRoles(upTo) { var out = []; for (var i = 0; i < upTo; i++) out.push(payModel.get(i).role); return out; }
+    function payLines() { var out = []; for (var i = 0; i < payModel.count; i++) out.push({ role: payModel.get(i).role.trim(), amount: payModel.get(i).amount }); return out; }
+    // the figures for kinds of role are saved on their own, next to them: Change and a new figure need no hunt for Save below
+    property string savedPay: "[]"        // the lines as last saved
+    property string payNote: ""           // what their own Save said
+    readonly property bool payChanged: { payTick; return JSON.stringify(payLines()) !== savedPay; }
+    function savePay() {
+        for (var i = 0; i < payModel.count; i++) {
+            var line = bridge.payProblem(payModel.get(i).role.trim(), payModel.get(i).amount, payRoles(i));
+            if (line !== "") { payNote = ""; payBox = ""; payErr = "“" + payModel.get(i).role + "”: " + line; return; }
+        }
+        var saved = bridge.saveAboutYou({ salary_by_role: payLines(), salary_currency: currencyCombo.currentText });
+        if (!(saved && saved.ok)) { payNote = ""; payBox = ""; payErr = (saved && saved.msg) || "The figures could not be saved."; return; }
+        payErr = ""; payBox = ""; savedPay = JSON.stringify(payLines()); payNote = "✓ Saved. Forms now give these figures for these kinds of role.";
+        if (loaded !== "") { var snap = JSON.parse(loaded); snap.salary_by_role = payLines(); snap.salary_currency = currencyCombo.currentText; loaded = JSON.stringify(snap); }
+        win.optsData = bridge.options();
+    }
     property int payTick: 0               // goes up with every change of the list, so the estimate rows follow edits too
     property string estimateErr: ""       // why Change was refused, said next to the estimates
     Connections { target: payModel
-        function onDataChanged() { aboutDialog.payTick++; }
-        function onCountChanged() { aboutDialog.payTick++; aboutDialog.estimateErr = ""; } }
+        function onDataChanged() { aboutDialog.payTick++; aboutDialog.payNote = ""; }
+        function onCountChanged() { aboutDialog.payTick++; aboutDialog.estimateErr = ""; aboutDialog.payNote = ""; } }
     function hasPay(role) {               // a figure of your own is already given for this kind of role (OptionsService.pay_key)
         var key = bridge.payKey(role);
         for (var i = 0; i < payModel.count; i++) if (bridge.payKey(payModel.get(i).role) === key) return true;
@@ -195,6 +233,8 @@ Dialog {
                 // ── SALARY ──
                 ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; spacing: 6
                     GroupTitle { text: "Salary" }
+                    Text { objectName: "usesSalary"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
+                        text: (aboutDialog.info.uses || {}).salary || "" }
                     Card {
                         SRow { label: "Salary you ask for"; hint: "gross per month · 0 = none given"
                             RowLayout { spacing: 8
@@ -251,6 +291,13 @@ Dialog {
                                         onValueChanged: if (value !== model.amount) payModel.setProperty(index, "amount", value) }
                                     Text { text: currencyCombo.currentText; color: theme.faint; font.pixelSize: 11 }
                                     SmallButton { objectName: "payRowRemove_" + index; text: "Remove"; onClicked: payModel.remove(index) } } }
+                            RowLayout { Layout.fillWidth: true; spacing: 8
+                                Text { objectName: "payNote"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
+                                    color: aboutDialog.payNote !== "" ? theme.good : theme.faint
+                                    text: aboutDialog.payNote !== "" ? aboutDialog.payNote
+                                          : (aboutDialog.payChanged ? "Not saved yet: save these figures here, or with Save below." : "") }
+                                PillButton { objectName: "paySave"; visible: aboutDialog.payChanged; primaryStyle: true; text: "Save figures"
+                                    onClicked: aboutDialog.savePay() } }
                             Repeater { model: payModel      // each refused line says why, under the list
                                 Text { objectName: "payRowErr_" + index; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.crit
                                     font.pixelSize: 11; font.bold: true; text: { aboutDialog.payTick; var f = model.role === undefined ? ""
@@ -266,8 +313,8 @@ Dialog {
                     Card {
                         ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 10; Layout.bottomMargin: 10; spacing: 6
                             Text { text: "Right to work"; color: theme.ink; font.pixelSize: 13 }
-                            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
-                                text: "As letters and forms should say it · empty = not mentioned. Choose a usual answer, then change it if you need to." }
+                            Text { objectName: "usesRight"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
+                                text: ((aboutDialog.info.uses || {}).right || "") + " Choose a usual answer, then change it if you need to." }
                             Flow { objectName: "rightChoices"; Layout.fillWidth: true; spacing: 6
                                 Repeater { model: aboutDialog.info.right_choices || []
                                     Rectangle { objectName: "rightChoice_" + index; radius: 999; implicitHeight: 26; implicitWidth: choiceText.implicitWidth + 20
@@ -288,8 +335,8 @@ Dialog {
                         Sep {}
                         ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 10; Layout.bottomMargin: 10; spacing: 6
                             Text { text: "You can start"; color: theme.ink; font.pixelSize: 13 }
-                            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
-                                text: "A date (2026-11-01) or a time from now (two weeks, one month) · empty = not mentioned. Letters say it as you write it; forms get a date." }
+                            Text { objectName: "usesStart"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
+                                text: "A date (2026-11-01) or a time from now (two weeks, one month). " + ((aboutDialog.info.uses || {}).start || "") }
                             TextField { id: startField; objectName: "startField"; Layout.fillWidth: true; implicitHeight: 30
                                 placeholderText: "e.g. within two weeks"; placeholderTextColor: theme.faint
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.options.about_start
@@ -310,26 +357,40 @@ Dialog {
                 // ── YOUR WORK ──
                 ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; spacing: 6
                     GroupTitle { text: "More about your work" }
-                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
-                        text: "What you really did in each job beyond what the CV says: tasks, tools, team, results. In English. Interview preparation and form answers use it like your CV, so write only what is true." }
+                    Text { objectName: "usesWork"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
+                        text: "What you really did in each job beyond what the CV says: tasks, tools, team, results. " + ((aboutDialog.info.uses || {}).work || "") }
+                    Text { objectName: "jobsFrom"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
+                        visible: text !== ""
+                        text: (aboutDialog.info.jobs_from_text || {})[aboutDialog.info.jobs_from || ""] || "" }
                     Card {
                         Text { objectName: "noJobs"; visible: boxModel.count === 0; Layout.fillWidth: true; Layout.margins: 14; wrapMode: Text.WordWrap
                             color: theme.soft; font.pixelSize: 12
-                            text: "Add your jobs on the My details page of the assistant: each job then gets a box of its own here. Until then, write under Other work." }
+                            text: "Neither your master CV nor My details names a job the app can read. Write about your work under Other work." }
                         Repeater { model: boxModel
                             ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 10; spacing: 5
-                                RowLayout { Layout.fillWidth: true; spacing: 8
-                                    Text { text: model.job; color: theme.ink; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; wrapMode: Text.Wrap }
-                                    Text { visible: model.earlier; text: "no longer in My details"; color: theme.warn; font.pixelSize: 10; font.bold: true }
-                                    SmallButton { objectName: "boxRemove_" + index; visible: model.earlier; text: "Remove"; onClicked: boxModel.remove(index) } }
-                                Rectangle { Layout.fillWidth: true; radius: 8; color: theme.surface; border.width: 1
+                                // a removed job: one line, and a way back
+                                RowLayout { visible: model.removed; Layout.fillWidth: true; spacing: 8
+                                    Text { objectName: "boxRemovedName_" + index; text: model.job + " · removed, no notes"; color: theme.faint; font.pixelSize: 12
+                                        Layout.fillWidth: true; wrapMode: Text.Wrap }
+                                    SmallButton { objectName: "boxBack_" + index; text: "Bring back"; onClicked: { boxModel.setProperty(index, "removed", false); aboutDialog.notesTick++; } } }
+                                RowLayout { visible: !model.removed; Layout.fillWidth: true; spacing: 8
+                                    TextField { id: boxName; objectName: "boxName_" + index; Layout.fillWidth: true; implicitHeight: 30; text: model.job
+                                        maximumLength: aboutDialog.info.max_job_name; color: theme.ink; font.pixelSize: 13; font.bold: true; selectByMouse: true
+                                        background: Rectangle { radius: 8; color: boxName.activeFocus ? theme.surface : "transparent"; border.width: 1
+                                            border.color: boxName.text.trim() === "" ? theme.crit : (boxName.activeFocus ? theme.accent : "transparent") }
+                                        onTextEdited: { boxModel.setProperty(index, "job", text); aboutDialog.removeAsked = -1; aboutDialog.notesTick++;
+                                                        aboutDialog.jobNameSaid(text, model.from, maximumLength); } }
+                                    Text { visible: model.earlier; text: aboutDialog.info.jobs_from === "cv" ? "no longer in your CV" : "no longer in My details"
+                                        color: theme.warn; font.pixelSize: 10; font.bold: true }
+                                    SmallButton { objectName: "boxRemove_" + index; text: "Remove"; onClicked: aboutDialog.removeBox(index) } }
+                                Rectangle { visible: !model.removed; Layout.fillWidth: true; radius: 8; color: theme.surface; border.width: 1
                                     // in other letters, or the notes too long together: each box with a fault is red
                                     border.color: win.hasNonLatin(boxEdit.text) || (aboutDialog.notesSize > aboutDialog.notesMax && boxEdit.text !== "") ? theme.crit
                                                   : (boxEdit.activeFocus ? theme.accent : theme.line)
                                     implicitHeight: Math.max(70, boxEdit.implicitHeight + 16)
                                     TextEdit { id: boxEdit; objectName: "boxNotes_" + index; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap
                                         selectByMouse: true; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent; text: model.notes
-                                        onTextChanged: if (text !== model.notes) { boxModel.setProperty(index, "notes", text); aboutDialog.err = ""; aboutDialog.notesTick++; }
+                                        onTextChanged: if (text !== model.notes) { boxModel.setProperty(index, "notes", text); aboutDialog.err = ""; aboutDialog.removeAsked = -1; aboutDialog.notesTick++; }
                                         Text { visible: boxEdit.text === ""; width: parent.width; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 12
                                             text: "e.g. I was in a team of four. I wrote the import service in Python, added its tests, and fixed about thirty tickets." } } }
                             } }

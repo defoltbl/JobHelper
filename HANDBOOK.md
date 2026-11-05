@@ -497,6 +497,11 @@ data/                your data; only the *.example.* files are in git
 - **A field is private by its name, its words or its autocomplete value** (`form_fill._private`), and the review of a
   form asks the same function with what the REVIEW script reports (label, `name`, `autocomplete`), so a value the
   planner leaves alone never goes to Claude in a review.
+- **The work-note boxes are the master CV's jobs** (`claims.EmployerCheck.job_names`, else My details; `AboutYou.job_boxes`).
+  A saved note keeps the name the CV gave its job (`from`), so a box you renamed keeps its notes and a removed job
+  (`removed`) does not come back; a note from before has no `from` and matches by its name. The "why and where" lines
+  of the window are `AboutYou.USES`, said once. The figures for kinds of role have their own Save (`savePay`), which
+  saves only `salary_by_role` and the currency.
 - **An error's text never carries a key** (`trouble.without_query`, also for an address with no "https://"; boards whose
   key is in the address go through `JobSource._keyed`, which says the status alone).
 

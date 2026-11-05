@@ -141,7 +141,8 @@ Inside the window:
 - **Last run card, Emails read** – how many messages the last scan went through and how many were
   sent to Claude. **Options → Email scan → Look further back once** runs one longer scan.
 - **More about your work** (About you, its own window under Options) – what you really did in
-  each job beyond the CV, in one box per job of My details and one for other work: tasks, tools,
+  each job beyond the CV, in one box per job your master CV names (else My details), which you can rename or
+  remove, and one for other work: tasks, tools,
   team, results (up to 4,000 characters together with the names of the jobs, in English). Interview preparation
   and form answers treat it like the CV, so the work-experience part of the interview sheet
   gets as detailed as what you write here. Nothing is invented for you.

@@ -2053,10 +2053,10 @@ Table 16.3 lists what you can enter.
 | Part | What it does |
 |---|---|
 | **Salary you ask for** | Your expected pay, gross per month, with its currency. Form answers give it as your expectation. The job window and the lists show it. Insights compares what postings pay with it. 0 = none given. Then the window shows the app's own estimate for your types of role. The types of role come from **Kinds of role you want** in **Options**. To give your own figure for one of them, select **Change** next to it. The figure then shows under **A different figure for**, in your currency, where you can change it. **Remove** brings the estimate back. The app has an estimate only for software roles in Czechia. In other cases, you fill in the figure yourself |
-| **A different figure for** | A salary for one type of role. The app uses it instead of the general figure when the words are in the job's title (*support* for "IT Support Specialist"). Enter the type of role and the figure, then select **+ Add**. To change a figure, change it in the list. To delete it, select **Remove** |
+| **A different figure for** | A salary for one type of role. The app uses it instead of the general figure when the words are in the job's title (*support* for "IT Support Specialist"). Enter the type of role and the figure, then select **+ Add**. To change a figure, change it in the list. To delete it, select **Remove**. A changed figure shows **Save figures** under the list: select it to save the figures at once, or select **Save** at the bottom |
 | **Right to work** | How letters and answers should say it. Select one of the usual answers to fill in the field, and then change the words if necessary. Empty = not mentioned |
 | **You can start** | When you can start, for example *immediately*, *one month* or *2026-11-01*. Letters say it as you write it. Under the field, the window shows the date that forms get. A red line tells you when the app cannot find a date in your words, or when the date has passed. Empty = not mentioned |
-| **More about your work** | What you really did in each job beyond what the CV says. There is one box for each job in **My details**, and a box for other work. The app may use the text like the CV. All boxes together, with the names of the jobs, can have 4,000 characters. When they have more, the box of other work turns red |
+| **More about your work** | What you really did in each job beyond what the CV says. There is one box for each job that your master CV names, and a box for other work. When the app cannot read the jobs from your CV, the boxes are for the jobs in **My details**. To give a job another name, select its name and type. To delete a job and its notes, select **Remove**. All boxes together, with the names of the jobs, can have 4,000 characters. When they have more, the box of other work turns red |
 | **Your own letters** | The folder for letters you wrote yourself (section 7) |
 
 Figure 16.5 shows the boxes for your work.
@@ -2065,8 +2065,14 @@ Figure 16.5 shows the boxes for your work.
 
 *Figure 16.5 – More about your work, one box for each job*
 
-A note stays when you rename or delete its job in **My details**. The window marks it as no
-longer in My details. Select **Remove** to delete the note.
+Each part of the window tells you why to fill it in and where the app uses it. The notes about
+your work go into cover letters, the adapted CV, form answers, interview preparation and the
+answers of the assistant.
+
+A note stays when its job leaves your CV or **My details**. The window marks it as no longer
+there. Select **Remove** to delete the note. When a job has notes, **Remove** asks once: select
+it again to delete the job and its notes. A job that you removed stays removed. To use it again,
+select **Bring back**.
 
 > **Important**
 > Write only true facts here. The app treats them as true and uses them in letters, form
