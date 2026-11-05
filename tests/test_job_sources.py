@@ -210,6 +210,19 @@ def test_an_adzuna_outage_never_shows_its_key(monkeypatch):
     assert time.monotonic() - started < 0.5, "a long text is read once, not again from every place"
 
 
+def test_a_key_the_app_holds_is_hidden_wherever_it_stands_in_an_error(monkeypatch):
+    """#87: Jooble's key is in the address's path, which the query cleaner keeps; a password could stand in any text."""
+    from jobhelper import agent2_search, config, trouble
+    monkeypatch.setattr(config, "JOOBLE_API_KEY", "jooble-fake-key-abc")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "fakepass-fakepass")
+    said = "404 for url: https://jooble.org/api/jooble-fake-key-abc and login fakepass-fakepass refused"
+    for cleaner in (trouble.scrub, agent2_search.safe_error, trouble._safe):
+        out = cleaner(said)
+        assert "jooble-fake-key" not in out and "fakepass" not in out and "https://jooble.org/api/[hidden]" in out, cleaner
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "abc")
+    assert trouble.scrub("abc and abcd") == "abc and abcd", "a value too short to be a secret is not hunted for in words"
+
+
 def test_a_role_of_common_words_only_still_filters_career_sites(monkeypatch):
     """Audit before 1.2.0: "QA Engineer" left no telling word, so every posting of every career site came back."""
     from jobhelper import filters, scrapers_ats

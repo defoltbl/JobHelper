@@ -106,7 +106,8 @@ def safe_environment(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: None)   # never open a real file, folder or web page
     monkeypatch.setattr(api_core.Desktop, "reveal", lambda self, target: None)  # nor a real Finder window
     from jobhelper import agent2_search
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)                         # the app refuses to ask with it set; tests set it on purpose
+    for name in config.PAID_SETTINGS:                                               # the app refuses to ask with one set; tests set them on purpose
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(agent2_search, "refetch_description", lambda job: "")     # never read a real job board
     monkeypatch.setattr(agent2_search, "posting_closed", lambda job: None)        # nor ask one whether a posting is still open
     from jobhelper import email_client

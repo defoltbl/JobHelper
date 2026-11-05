@@ -7,6 +7,7 @@ password).
 from __future__ import annotations
 
 import email
+import hashlib
 import imaplib
 import re
 import ssl
@@ -16,7 +17,7 @@ from datetime import datetime, timedelta
 from email.header import decode_header
 from typing import Any, Callable
 
-from . import config, store
+from . import config, store, trouble
 
 # Map an extracted stage → an application status. Never move a job backwards
 # (except "rejected", which can apply from any stage).
@@ -267,7 +268,8 @@ class Mailbox:
 
     def archive_only(self, since: str) -> list[bytes]:
         """Gmail: the archived messages from that day on that are in no other folder we read or wrote."""
-        after = datetime.strptime(since, "%d-%b-%Y").strftime("%Y/%m/%d")
+        day, month, year = since.split("-")
+        after = f"{year}/{_MONTHS.index(month) + 1:02d}/{int(day):02d}"
         _typ, data = self._imap.search(None, "X-GM-RAW", f'"-in:inbox -in:sent -in:drafts -in:chats after:{after}"')
         return _numbers(data)
 
@@ -279,7 +281,6 @@ class Mailbox:
         try:
             return _message(msg_data[0][1], num, self.user, folder)
         except Exception as e:  # noqa: BLE001 - one message that cannot be taken apart is left out; the others are still read
-            from . import trouble
             trouble.note("reading one message of the mailbox", RuntimeError(type(e).__name__))
             return None
 
@@ -319,10 +320,25 @@ class Mailbox:
         return out
 
 
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def imap_date(when) -> str:
+    """A day as IMAP wants it ("07-Sep-2026"): English month names, never the Mac's language ("lis" in Czech, #74)."""
+    return f"{when.day:02d}-{_MONTHS[when.month - 1]}-{when.year}"
+
+
+def _stable_id(msg, user: str) -> str:
+    """An id for a mail without a Message-ID: the same from scan to scan (a message number changes as mail comes and
+    goes, so it could name another mail later, #74)."""
+    said = "\n".join(_decode(msg.get(k)) for k in ("From", "Date", "Subject")) + "\n" + _body_text(msg)[:400]
+    return f"made-{user}-{hashlib.sha256(said.encode('utf-8', 'replace')).hexdigest()[:24]}"
+
+
 def _message(raw: bytes, num, user: str, folder: str) -> dict[str, Any]:
     msg = email.message_from_bytes(raw)
     return {
-        "msg_id": _decode(msg.get("Message-ID")) or f"num-{user}-{folder}-{num.decode()}",
+        "msg_id": _decode(msg.get("Message-ID")) or _stable_id(msg, user),
         "date": _decode(msg.get("Date")),
         "sender": _decode(msg.get("From")),
         "subject": _decode(msg.get("Subject")),
@@ -385,7 +401,7 @@ def fetch_recent(lookback_days: int | None = None, all_folders: bool | None = No
             "No mailbox is connected. Add your job email in the app's Account card."
         )
     days = lookback_days if lookback_days is not None else config.IMAP_LOOKBACK_DAYS
-    since = (datetime.now() - timedelta(days=days)).strftime("%d-%b-%Y")
+    since = imap_date(datetime.now() - timedelta(days=days))
     if all_folders is None:
         all_folders = config.ui_settings().get("scan_all_folders") is True
     main = read_mailbox(boxes[0]["user"], boxes[0]["password"], since, all_folders, host=boxes[0].get("host", ""))
@@ -398,7 +414,9 @@ def fetch_recent(lookback_days: int | None = None, all_folders: bool | None = No
             warnings.append(f"Couldn't sign in to {box['user']}: check its password in the Account card.")
             continue
         except OSError as e:
-            warnings.append(f"{box['user']}: {UNTRUSTED}" if untrusted(e) else f"Couldn't reach {box['user']}: {e}")
+            if not network_fault(e):
+                trouble.note("the second mailbox", type(e).__name__)       # the message points to the log of problems
+            warnings.append(f"{box['user']}: {scan_problem(e, box.get('host', '') or config.imap_host(2))}")
             continue
         out += [m for m in extra.messages if m["msg_id"] not in seen]     # the same mail delivered to both
         seen.update(m["msg_id"] for m in extra.messages)

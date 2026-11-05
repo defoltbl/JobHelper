@@ -41,7 +41,7 @@ class RunSlots:
             return {"ok": False, "msg": "A run is already in progress."}
         conn = self._api.connections()
         if conn.get("paid_api"):
-            return {"ok": False, "msg": "Unset ANTHROPIC_API_KEY to use your subscription."}
+            return {"ok": False, "msg": f"Unset {config.paid_setting_named()} to use your subscription."}
         if not conn.get("claude"):
             return self._no_claude(conn)
         if not conn.get("cv"):
@@ -118,7 +118,7 @@ class RunSlots:
             return {"ok": False, "msg": "A run is already in progress."}
         conn = self._api.connections()
         if conn.get("paid_api"):
-            return {"ok": False, "msg": "Unset ANTHROPIC_API_KEY to use your subscription."}
+            return {"ok": False, "msg": f"Unset {config.paid_setting_named()} to use your subscription."}
         if not conn.get("claude"):
             return self._no_claude(conn)
         if not self._api.rescore_ids():
@@ -420,7 +420,7 @@ class RunSlots:
         except Exception as e:  # noqa: BLE001
             self._save_partial(jobs)                             # statuses changed by the replies read so far are kept
             if not email_client.network_fault(e):
-                trouble.note("the email scan", e)                 # a fault of the app or the disk: written down; a network fault is said
+                trouble.note("the email scan", type(e).__name__)  # a fault of the app or the disk: its kind written down; a network fault is said
             said = email_client.scan_problem(e, config.imap_host(1))
             self.runFinished.emit("scan", said if email_client.untrusted(e) else "Email scan failed. " + said)
         finally:

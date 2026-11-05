@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
 
 from openpyxl import Workbook
@@ -213,7 +213,7 @@ def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, An
     })
     stats.filed(stage, str(result.get("company") or (guess["company"] if guess else "") or "a company"))
     if guess and stage in ("interview", "assessment"):
-        saved = _save_date(guess, result, "interview" if stage == "interview" else "test task")
+        saved = _save_date(guess, result, "interview" if stage == "interview" else "test task", msg["date"])
         if saved:
             stats.dated(saved)
 
@@ -236,10 +236,20 @@ def _file_reply(msg: dict[str, Any], result: dict[str, Any], guess: dict[str, An
     return stage
 
 
-def _save_date(job: dict[str, Any], result: dict[str, Any], kind: str) -> str:
+def _arrival(mail_date: str) -> datetime:
+    """When a mail arrived, in UTC, for comparing two mails: an unreadable or impossible date ("31 Dec 9999") is as
+    old as can be, a date in the future is now (a forged one never locks a date against the real mails after it)."""
+    try:
+        arrived = db.received_at(mail_date).astimezone(timezone.utc)
+    except (OverflowError, ValueError):
+        return datetime.min.replace(tzinfo=timezone.utc)
+    return min(arrived, datetime.now(timezone.utc))
+
+
+def _save_date(job: dict[str, Any], result: dict[str, Any], kind: str, mail_date: str) -> str:
     """Put the day an email fixes (an interview, a test) on the job as its date to remember.
-    A date that came from an earlier email is moved by a newer one (an interview that was put off);
-    a coming date you set yourself is never overwritten. Returns "13 Oct 11:30 · Company" or ''."""
+    A date that came from an earlier email is moved by a newer one (an interview that was put off), never by an older
+    one read later (#74); a coming date you set yourself is never overwritten. Returns "13 Oct 11:30 · Company" or ''."""
     from . import planner
     m = re.fullmatch(r"\s*(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}:\d{2}))?.*", str(result.get("when") or ""))
     if not m:
@@ -252,12 +262,16 @@ def _save_date(job: dict[str, Any], result: dict[str, Any], kind: str) -> str:
     by_email = event.get("from") == EVENT_FROM_EMAIL
     if current and current >= date.today().isoformat() and current != day and not by_email:
         return ""                                   # you have your own date on this job: it is not overwritten
+    arrived = _arrival(mail_date)                   # one zone, so two arrival times compare as text
+    if by_email and event.get("mail_at") and arrived.isoformat() < event["mail_at"]:
+        return ""                                   # this mail is older than the one that set the date
     if current == day and not clock:
         clock = event.get("time", "")               # a reminder naming only the day keeps the time already known
     note = str(result.get("next_step") or result.get("summary") or "").strip()[:200]
     if planner.set_event(job, day, clock, kind, note):
         return ""                                   # a past or unreadable date: nothing saved
     job["event"]["from"] = EVENT_FROM_EMAIL         # a later email may move it; an edit by hand drops this mark
+    job["event"]["mail_at"] = arrived.isoformat()   # when that email arrived: an older one never moves it
     when = date.fromisoformat(day)
     return f"{when.day} {when:%b}" + (f" {clock}" if clock else "") + f" · {job.get('company') or job.get('title', '')}"
 

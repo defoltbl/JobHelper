@@ -4,7 +4,7 @@ from email.message import EmailMessage
 
 import pytest
 
-from jobhelper import agent5_responses, db, email_client, llm, store
+from jobhelper import agent5_responses, config, db, email_client, llm, store
 
 REJECT_HTML = """<html><head><style>p{color:red}</style><title>Update</title></head><body>
 <p>Hello Alex,</p><p>Thank you for your interest in our <b>QA&nbsp;Engineer</b> position.<br>
@@ -293,3 +293,77 @@ def test_scan_stats_count_each_reply_once_by_its_kind():
     assert ScanStats(asked=None, scanned=1).summary() == "Scanned 1 email · 0 new."            # a pasted reply: no "sent to Claude"
     assert ScanStats(scanned=45, asked=None).detail() == "45 · 0 asked"
     assert ScanStats().invites is not ScanStats().invites                                        # each scan its own list
+
+
+# ── #74 and #87: the second mailbox, dates for the server, ids of mails without one ─────────
+def test_a_date_for_the_mail_server_is_in_english_whatever_the_language(monkeypatch):
+    """#74: "%d-%b-%Y" writes the Mac's own month name ("lis" in Czech), and the server answers BAD."""
+    import datetime as dt
+    import locale
+    assert email_client.imap_date(dt.date(2026, 11, 5)) == "05-Nov-2026"
+    before = locale.setlocale(locale.LC_TIME)
+    try:
+        locale.setlocale(locale.LC_TIME, "cs_CZ.UTF-8")
+    except locale.Error:
+        pass                                            # no Czech locale here: the plain check above still holds
+    try:
+        searched = []
+        fake = type("Imap", (), {"search": lambda self, *a: searched.append(a) or ("OK", [b""])})()
+        box = email_client.Mailbox.__new__(email_client.Mailbox)
+        box._imap = fake
+        box.archive_only(email_client.imap_date(dt.date(2026, 11, 5)))
+        assert "after:2026/11/05" in searched[0][-1]
+    finally:
+        locale.setlocale(locale.LC_TIME, before)
+
+
+def test_a_mail_without_a_message_id_keeps_one_id_from_scan_to_scan():
+    """#74: the id was made from the message's number in its folder, which changes as mail comes and goes."""
+    raw = b"From: HR <hr@contoso.example>\r\nDate: Mon, 5 Oct 2026 10:15:00 +0200\r\nSubject: Your application\r\n\r\nThank you."
+    first, later = email_client._message(raw, b"7", "me@example.com", "INBOX"), email_client._message(raw, b"31", "me@example.com", "INBOX")
+    assert first["msg_id"] == later["msg_id"] and first["msg_id"].startswith("made-me@example.com-")
+    other = email_client._message(raw.replace(b"Your application", b"Next steps"), b"7", "me@example.com", "INBOX")
+    assert other["msg_id"] != first["msg_id"]
+
+
+def test_the_second_mailbox_that_cannot_be_reached_says_why_in_the_same_words(monkeypatch):
+    """#87: the second mailbox's fault showed its raw text; the first one's says the cause in words."""
+    import socket
+    monkeypatch.setattr(config, "IMAP_USER", "me@example.com")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "fakepass-1")
+    monkeypatch.setattr(config, "IMAP_USER_2", "other@example.org")
+    monkeypatch.setattr(config, "IMAP_PASSWORD_2", "fakepass-2")
+
+    def read(user, password, since, all_folders=False, host=""):
+        if user == "other@example.org":
+            raise socket.gaierror(8, "nodename nor servname provided, or not known")
+        return email_client.Fetched([], [])
+    monkeypatch.setattr(email_client, "read_mailbox", read)
+    fetched = email_client.fetch_recent(7, all_folders=False)
+    assert fetched.warnings and fetched.warnings[0].startswith("other@example.org: The mail server")
+    assert "could not be found" in fetched.warnings[0] and "nodename" not in fetched.warnings[0]
+
+
+def test_a_fault_of_the_second_mailbox_that_is_no_network_fault_is_written_down(monkeypatch):
+    """Check of #87: the message pointed to the log of problems, but nothing was written there."""
+    from jobhelper import trouble
+    monkeypatch.setattr(config, "IMAP_USER", "me@example.com")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "fakepass-1")
+    monkeypatch.setattr(config, "IMAP_USER_2", "other@example.org")
+    monkeypatch.setattr(config, "IMAP_PASSWORD_2", "fakepass-2")
+    noted = []
+    monkeypatch.setattr(trouble, "note", lambda where, error: noted.append((where, error)))
+
+    def read(user, password, since, all_folders=False, host=""):
+        if user == "other@example.org":
+            raise FileNotFoundError(2, "No such file", "/certs/fakepass-2.pem")
+        return email_client.Fetched([], [])
+    monkeypatch.setattr(email_client, "read_mailbox", read)
+    email_client.fetch_recent(7, all_folders=False)
+    assert noted == [("the second mailbox", "FileNotFoundError")], "its kind only: a path or an account stays out of the log"
+
+
+def test_two_mails_alike_in_sender_date_and_subject_keep_apart():
+    head = b"From: HR <hr@contoso.example>\r\nDate: Mon, 5 Oct 2026 10:15:00 +0200\r\nSubject: Update\r\n\r\n"
+    one, two = (email_client._message(head + body, b"1", "me@example.com", "INBOX") for body in (b"You are invited.", b"We chose another."))
+    assert one["msg_id"] != two["msg_id"]
