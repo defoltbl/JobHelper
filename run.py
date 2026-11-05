@@ -63,7 +63,7 @@ def main() -> int:
         print("✗ No city to search in. Choose one in the app's Options, or pass it: python run.py --where Brno")
         return 1
     if config.using_paid_api():
-        print("✗ " + llm.PAID_API_MESSAGE)
+        print("✗ " + llm.paid_api_message())
         return 2
 
     # ── Agent 1: analyze CV ─────────────────────────────────────────────

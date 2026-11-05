@@ -77,7 +77,8 @@ These came from decisions made while building it. A change that breaks one is a 
 
 **Claude and accounts**
 - The app runs on the Claude **subscription** through the Claude Code CLI, never the paid API.
-  `ANTHROPIC_API_KEY` must stay unset; the app refuses to run a search with it set.
+  `ANTHROPIC_API_KEY` must stay unset, and so must the other settings in `config.PAID_SETTINGS`; the app refuses to run
+  a search with one set.
 - The mailbox is opened **read-only**. Nothing is ever sent, deleted or marked.
 - Secrets (the mailbox passwords, the data key) live in the macOS Keychain and are never
   printed, logged or put in an error message. An address in an error loses its query part.
@@ -285,7 +286,8 @@ data/                your data; only the *.example.* files are in git
   is the one list, for the company key and for the name words.
 - **A reply moves an application only through `email_client.status_after`**: forward only, a rejection
   from any status. The scan, the progress check and filing a reply by hand all ask it.
-- **Every call to Claude goes through `llm.ask`,** which refuses while `ANTHROPIC_API_KEY` is set.
+- **Every call to Claude goes through `llm.ask`,** which refuses while `ANTHROPIC_API_KEY` is set, or another setting
+  that bills a paid account (`config.PAID_SETTINGS`: a token, another address, Bedrock, Vertex).
   Do not add a second way to ask.
 - **A CV's sections are found by their headings, whatever they are called** (`cv_tailor.sections`):
   never by a fixed list of names, or another person's CV loses a section.
@@ -497,7 +499,12 @@ data/                your data; only the *.example.* files are in git
 - **A field is private by its name, its words or its autocomplete value** (`form_fill._private`), and the review of a
   form asks the same function with what the REVIEW script reports (label, `name`, `autocomplete`), so a value the
   planner leaves alone never goes to Claude in a review.
-- **An error's text never carries a key** (`trouble.without_query`, also for an address with no "https://"; boards whose
+- **Mail dates and ids** (#74): a day sent to the mail server goes through `email_client.imap_date` (English month
+  names, never the Mac's locale); a mail without a Message-ID gets `_stable_id` (sender, date, subject and the start of
+  the body), never its number in the folder; a date an email puts on a job keeps `mail_at` (`agent5_responses._arrival`,
+  UTC, a forged or future date clamped), so an older mail read later never moves it.
+- **An error's text never carries a key** (`trouble.scrub`: the query part of an address, and any key or password the
+  app holds wherever it stands; `trouble.without_query`, also for an address with no "https://"; boards whose
   key is in the address go through `JobSource._keyed`, which says the status alone).
 
 ---

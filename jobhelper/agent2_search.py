@@ -335,8 +335,8 @@ def reread_missing(jobs: list[dict[str, Any]], english_only: bool = True, droppe
 
 
 def safe_error(error) -> str:
-    """An error's text without the address's query part (`trouble.without_query`)."""
-    return trouble.without_query(error)
+    """An error's text without the address's query part or a key the app holds (`trouble.scrub`)."""
+    return trouble.scrub(error)
 
 
 _COMPANY_IN_TEXT = re.compile(r"\b(?:Firma|Společnost|Zaměstnavatel|Company|Employer)\s*:\s*(.{2,80}?)\s*(?:\(|Místo pracoviště|Adresa|Location|\||\n|$)")

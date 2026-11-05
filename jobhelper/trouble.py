@@ -29,9 +29,25 @@ def without_query(text) -> str:
     return re.sub(r"[^\s'\"]+", cut, str(text))
 
 
+def _secrets() -> list[str]:
+    """The keys and passwords the app holds (in the settings): a value of 6 or more characters, longest first."""
+    from . import config
+    held = [config.JOOBLE_API_KEY, config.ADZUNA_APP_KEY, config.ADZUNA_APP_ID, config.IMAP_PASSWORD, config.IMAP_PASSWORD_2]
+    return sorted({str(v) for v in held if v and len(str(v)) >= 6}, key=len, reverse=True)
+
+
+def scrub(text) -> str:
+    """An error's text fit for the screen and the log: no query part of an address, and no key or password the app
+    holds wherever it stands (Jooble's key is in the address's path, #87)."""
+    text = without_query(text)
+    for secret in _secrets():
+        text = text.replace(secret, "[hidden]")
+    return text
+
+
 def _safe(text: str) -> str:
-    """No query part of an address (keys travel there) and no line breaks."""
-    return re.sub(r"\s+", " ", without_query(text)).strip()[:_MAX_LINE]
+    """Scrubbed (`scrub`) and on one line."""
+    return re.sub(r"\s+", " ", scrub(text)).strip()[:_MAX_LINE]
 
 
 def _folder():

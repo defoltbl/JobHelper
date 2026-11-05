@@ -137,10 +137,23 @@ def has_imap() -> bool:
     return bool(IMAP_USER and IMAP_PASSWORD)
 
 
+# Settings that make the Claude program bill an API account (or a cloud's) instead of the subscription (#87).
+PAID_SETTINGS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX")
+
+
 def using_paid_api() -> bool:
-    """True if an API key is set, which would bill the paid API instead of
-    the subscription. We warn the user about this."""
-    return bool(os.getenv("ANTHROPIC_API_KEY"))
+    """True if a setting is there that would bill the paid API instead of the subscription. We warn the user about this."""
+    return bool(paid_setting())
+
+
+def paid_setting() -> str:
+    """The first setting that would bill the paid API ('' = none): the one a message names."""
+    return next((name for name in PAID_SETTINGS if os.getenv(name)), "")
+
+
+def paid_setting_named() -> str:
+    """The setting a message about the paid API names: the one that is set, else the usual one."""
+    return paid_setting() or PAID_SETTINGS[0]
 
 
 def work_dir() -> Path:

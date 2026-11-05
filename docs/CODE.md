@@ -42,7 +42,7 @@ Six rules shape the whole code base, and every change must keep them (Table 1.1)
 
 | Rule | What it means in the code |
 |---|---|
-| The subscription, never the paid API | `llm.ask` refuses to run while `ANTHROPIC_API_KEY` is set. No code path calls the API directly |
+| The subscription, never the paid API | `llm.ask` refuses to run while `ANTHROPIC_API_KEY` or another setting in `config.PAID_SETTINGS` is set. No code path calls the API directly |
 | The mailbox is read-only | Folders are opened read-only and messages are fetched with `PEEK`. Nothing sends, deletes, moves or marks mail |
 | Nothing is claimed that the CV does not show | Every written text is checked in plain code against the CV after the model wrote it |
 | The person's own letters are never changed | Only letters the app wrote may be replaced or moved |
@@ -915,7 +915,7 @@ Table 10.1 lists the problems met most often while working on the code.
 
 | What you see | Cause | What to do |
 |---|---|---|
-| "Unset ANTHROPIC_API_KEY to use your subscription" | The paid key is set in the shell | Run `unset ANTHROPIC_API_KEY`, then start again |
+| "Unset ANTHROPIC_API_KEY to use your subscription" | The paid key (or the setting the message names) is set in the shell | Run `unset` with that name, then start again |
 | The window says Claude is not signed in | The Claude Code program has no session | Run `claude auth login` |
 | A test of a PDF fails after a change to a document | The PDF is older than its text | Run `python scripts/guide_pdf.py` |
 | A test of the numbering fails | A figure or table was added or moved | Run `python scripts/guide_number.py` |

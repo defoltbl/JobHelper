@@ -223,3 +223,21 @@ def test_two_saves_at_once_keep_both_keys(isolate_data):
         t.join()
     text = config.ENV_PATH.read_text(encoding="utf-8")
     assert "IMAP_USER=19" in text and "IMAP_USER_2=19" in text
+
+
+@pytest.mark.parametrize("name", config.PAID_SETTINGS)
+def test_every_setting_that_bills_the_paid_api_is_noticed(monkeypatch, name):
+    """#87: only ANTHROPIC_API_KEY was checked; a token, another address or a cloud's switch also leave the subscription."""
+    for other in config.PAID_SETTINGS:
+        monkeypatch.delenv(other, raising=False)
+    assert config.using_paid_api() is False
+    monkeypatch.setenv(name, "1")
+    assert config.using_paid_api() is True
+
+
+def test_a_message_about_the_paid_api_names_the_setting_that_is_set(monkeypatch):
+    for other in config.PAID_SETTINGS:
+        monkeypatch.delenv(other, raising=False)
+    assert config.paid_setting_named() == "ANTHROPIC_API_KEY", "none set: the usual one is named"
+    monkeypatch.setenv("CLAUDE_CODE_USE_BEDROCK", "1")
+    assert config.paid_setting_named() == "CLAUDE_CODE_USE_BEDROCK"

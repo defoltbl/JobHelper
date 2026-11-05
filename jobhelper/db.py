@@ -133,7 +133,7 @@ def received_at(text: str) -> datetime:
     text = (text or "").strip()
     try:
         when = parsedate_to_datetime(text)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):       # a forged date ("31 Dec 9999") on another Python version
         try:
             when = datetime.fromisoformat(text)
         except ValueError:

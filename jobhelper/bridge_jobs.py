@@ -233,7 +233,7 @@ class JobSlots:
                     result = {"ok": tried.get("ok") is True,
                               "msg": f"Signed in to {user}: the mailbox can be read." if tried.get("ok") is True else tried.get("msg", "It did not work.")}
                 except Exception as e:  # noqa: BLE001 - the card must always get an answer
-                    trouble.note("trying a saved mailbox", e)
+                    trouble.note("trying a saved mailbox", type(e).__name__)     # a mailbox's fault text may hold its account
                     result = {"ok": False, "msg": "The mailbox could not be tried."}
             result["box"] = box
             self._post("emailTested", result)
