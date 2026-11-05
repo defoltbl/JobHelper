@@ -336,7 +336,7 @@ Table 2.3 lists problems while setting up, and what to do.
 |---|---|---|
 | **Claude account** stays red after you sign in | The sign-in was done in another browser profile, or was cancelled | Select **Sign in with Claude** again |
 | **Claude account** says that Claude did not answer the sign-in check | Claude was slow or could not be asked. This does not mean that you are signed out | Select **Check again**. Sign in only when the row then says that you are not signed in |
-| "A paid API key is set" | A paid Claude key is set on this Mac | Ask whoever set up the app to remove it, then start the app again. The app never bills you per use |
+| "A paid API key is set" | A paid Claude key, or another setting that bills a paid account, is set on this Mac | Ask whoever set up the app to remove it, then start the app again. The app never bills you per use |
 | "The mail server refused this address and password" | The normal password was used where an app password is needed, the app password was cancelled, or it belongs to another address | Create an app password for this address and enter that one |
 | "The app does not know this provider" | The address is at a company or a small provider | Enter its IMAP server in the third field |
 | "Microsoft no longer lets a program read…" | Outlook.com and Hotmail cannot be read with a password | Forward your job mail to another mailbox and connect that one |
@@ -1757,7 +1757,7 @@ Table 12.4 lists problems with replies, and what to do.
 | "0 new" after a scan | No new replies in the period, or they were read by an earlier scan | Nothing. **Emails read** on the Last run card shows what the scan went through. To look further back, use **Look further back once** |
 | A rejection is missing | It did not arrive in a scanned mailbox, or it is in another folder | Turn on **Also archived mail and spam**, or paste the reply into the application (section 11) |
 | A reply was filed to the wrong application, or to none | Two applications at the same company, or a sender the app could not place | Open the reply and select **File under…** |
-| A warning about the second mailbox | Its password was cancelled or mistyped | Open the Account card and select **Change** for the second mailbox |
+| A warning about the second mailbox | Its password was cancelled or mistyped, or its mail server could not be reached. The warning says which | Check the second mailbox in the Account card. For a password, select **Change** |
 
 ---
 
@@ -2357,7 +2357,7 @@ Table 20.1 lists problems with starting and signing in.
 | "Jobs have a status the app does not know" | A job has a status from an older version or from a change by hand | Select **Repair** on the red line |
 | "Your job list is damaged" | The file of the job list cannot be read | Select **Restore from backup** on the red line |
 | A button does nothing | A required row of the Account card is red | Open the **Account** chip and make the rows green |
-| "A paid API key is set" | A paid Claude key is set on this Mac | Ask whoever set up the app to remove it, then start the app again |
+| "A paid API key is set" | A paid Claude key, or another setting that bills a paid account, is set on this Mac | Ask whoever set up the app to remove it, then start the app again |
 | **Sign-in not checked** on the Account chip | Claude did not answer when the app asked who is signed in. This does not mean that you are signed out | Open the **Account** card and select **Check again** |
 
 ### Searching and scoring

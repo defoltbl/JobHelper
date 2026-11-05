@@ -96,8 +96,10 @@ async def _ask_async(prompt: str, system: str | None, model: str) -> tuple[str, 
     return text, rec
 
 
-PAID_API_MESSAGE = ("ANTHROPIC_API_KEY is set, so this would be billed to the paid API instead of your Claude subscription. "
-                    "Nothing was asked. Unset the variable (and remove it from .env) to go on.")
+def paid_api_message() -> str:
+    """Why nothing was asked, naming the setting that would bill the paid API (the command line and `ask` say it)."""
+    return (f"{config.paid_setting_named()} is set, so this would be billed to the paid API instead of your Claude subscription. "
+            "Nothing was asked. Unset the variable (and remove it from .env) to go on.")
 
 
 class PaidApiRefused(RuntimeError):
@@ -165,7 +167,7 @@ def ask(prompt: str, system: str | None = None, model: str | None = None, tag: s
     so a run can pause instead of failing job after job. `force` skips the
     check (the usage refresh needs to ask in order to learn the new state)."""
     if config.using_paid_api():
-        raise PaidApiRefused(PAID_API_MESSAGE)
+        raise PaidApiRefused(paid_api_message())
     if not force:
         status = usage.limit_status()
         if status["blocked"]:

@@ -102,6 +102,16 @@ def test_a_sign_in_check_with_no_answer_is_not_shown_as_signed_out(ui):
     assert ui.warnings == []
 
 
+def test_the_welcome_card_names_the_paid_setting_that_is_set(ui):
+    """Check of #87: the card always said "Unset ANTHROPIC_API_KEY", also when another setting was the cause."""
+    try:
+        ui.win.setProperty("connData", {**READY, "paid_api": True, "paid_setting": "CLAUDE_CODE_USE_BEDROCK"})
+        assert "Unset CLAUDE_CODE_USE_BEDROCK to use your subscription." in ui.find("claudeRow").property("sub")
+    finally:
+        ui.win.setProperty("connData", dict(READY))
+    assert ui.warnings == []
+
+
 def test_welcome_is_not_ready_without_claude_or_cv(ui):
     welcome = ui.find("welcome")
     for missing in ({"claude": False}, {"cv": ""}, {"paid_api": True},

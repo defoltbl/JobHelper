@@ -344,24 +344,54 @@ def test_the_interview_day_in_an_email_becomes_the_date_to_remember():
     from jobhelper import agent5_responses as a5, store
     job = store.new_job(id="ml", title="ML Engineer", company="BRIGHTLINE", status="interview")
     day = _soon()
-    saved = a5._save_date(job, {"when": f"{day} 9:30", "next_step": "Join the Google Meet call."}, "interview")
+    saved = a5._save_date(job, {"when": f"{day} 9:30", "next_step": "Join the Google Meet call."}, "interview",
+                          "Mon, 5 Oct 2026 10:00:00 +0000")
     when = date.fromisoformat(day)
     assert saved == f"{when.day} {when:%b} 09:30 · BRIGHTLINE"
-    assert job["event"] == {"date": day, "time": "09:30", "kind": "interview", "note": "Join the Google Meet call.", "from": "email"}
-    assert a5._save_date(job, {"when": day, "next_step": "Reminder"}, "interview") != ""           # the same day again, no time given:
+    assert job["event"] == {"date": day, "time": "09:30", "kind": "interview", "note": "Join the Google Meet call.", "from": "email",
+                            "mail_at": "2026-10-05T10:00:00+00:00"}       # when that mail arrived
+    assert a5._save_date(job, {"when": day, "next_step": "Reminder"}, "interview", "Tue, 6 Oct 2026 10:00:00 +0000") != ""   # same day, no time:
     assert job["event"]["time"] == "09:30" and job["event"]["note"] == "Reminder"                  # updated, and the time is kept
     other = _soon(9)
-    saved = a5._save_date(job, {"when": f"{other} 13:30", "next_step": "New time"}, "interview")   # put off by a newer email: moved
+    saved = a5._save_date(job, {"when": f"{other} 13:30", "next_step": "New time"}, "interview", "Wed, 7 Oct 2026 10:00:00 +0000")   # put off
     assert saved != "" and job["event"]["date"] == other and job["event"]["time"] == "13:30" and job["event"]["from"] == "email"
     planner_job = store.new_job(id="mine", title="T", company="C", status="interview")
     from jobhelper import planner
     assert planner.set_event(planner_job, day, "10:00", "interview", "my own") == ""                 # a date you set yourself
-    assert a5._save_date(planner_job, {"when": f"{other} 13:30"}, "interview") == ""
+    assert a5._save_date(planner_job, {"when": f"{other} 13:30"}, "interview", "Wed, 7 Oct 2026 10:00:00 +0000") == ""
     assert planner_job["event"] == {"date": day, "time": "10:00", "kind": "interview", "note": "my own"}   # is never overwritten
     assert planner.set_event(job, other, "14:00", "interview", "") == "" and "from" not in job["event"]  # an edit by hand makes it yours
     for nothing in ("", None, "next Tuesday", "2020-01-01 10:00", "13.10.2026"):
         fresh = store.new_job(id="x", title="T", company="C")
-        assert a5._save_date(fresh, {"when": nothing}, "interview") == "" and "event" not in fresh
+        assert a5._save_date(fresh, {"when": nothing}, "interview", "") == "" and "event" not in fresh
+
+
+def test_an_older_email_read_later_never_moves_a_date_a_newer_one_set():
+    """#74: a scan reads newest first in some folders, so the older "Thursday 10:00" overwrote the newer "Friday 13:30"."""
+    from jobhelper import agent5_responses as a5, store
+    job = store.new_job(id="ml", title="ML Engineer", company="BRIGHTLINE", status="interview")
+    friday, thursday = _soon(9), _soon()
+    assert a5._save_date(job, {"when": f"{friday} 13:30"}, "interview", "Tue, 20 Oct 2026 10:00:00 +0200") != ""
+    assert a5._save_date(job, {"when": f"{thursday} 10:00"}, "interview", "Mon, 19 Oct 2026 09:00:00 +0000") == ""
+    assert job["event"]["date"] == friday and job["event"]["time"] == "13:30", "the newer email's date stays"
+    assert a5._save_date(job, {"when": f"{thursday} 11:00"}, "interview", "Tue, 20 Oct 2026 09:30:00 +0000") != "", \
+        "a newer email (09:30 UTC is after 10:00 +0200) moves it"
+    assert job["event"]["date"] == thursday
+
+
+def test_a_forged_mail_date_neither_breaks_the_scan_nor_locks_the_date():
+    """Check of #74: "31 Dec 9999" raised OverflowError and stopped every scan; a date in the future made every real
+    mail after it "older"."""
+    from datetime import datetime, timezone
+
+    from jobhelper import agent5_responses as a5, store
+    job = store.new_job(id="ml", title="ML Engineer", company="BRIGHTLINE", status="interview")
+    friday, thursday = _soon(9), _soon()
+    assert a5._save_date(job, {"when": f"{friday} 13:30"}, "interview", "Fri, 31 Dec 9999 23:00:00 -0500") != "", "no crash"
+    assert job["event"]["mail_at"] == "0001-01-01T00:00:00+00:00", "an impossible date is as old as can be"
+    assert a5._save_date(job, {"when": f"{thursday} 10:00"}, "interview", "Sat, 31 Oct 2026 09:00:00 +0000") != ""
+    assert job["event"]["date"] == thursday, "so a real mail after it still moves the date"
+    assert a5._arrival("Mon, 1 Jan 2099 10:00:00 +0000") <= datetime.now(timezone.utc), "a date in the future counts as now"
 
 
 def test_a_scan_files_both_emails_under_one_application_and_saves_the_date(isolate_data, monkeypatch):
@@ -403,7 +433,7 @@ def test_an_interview_that_is_put_off_gets_its_new_date(isolate_data, monkeypatc
     jobs = _brightline()
     by = {j["id"]: j for j in jobs}
     by["ml"]["status"] = "interview"
-    assert a5._save_date(by["ml"], {"when": f"{first} 11:30"}, "interview") != ""          # the first invitation's date, from an email
+    assert a5._save_date(by["ml"], {"when": f"{first} 11:30"}, "interview", "Fri, 9 Oct 2026 09:00:00 +0200") != ""   # the first invitation
     stats = a5.process_inbox(jobs)
     assert by["ml"]["status"] == "interview" and stats.rejections == 0
     assert by["ml"]["event"]["date"] == later and by["ml"]["event"]["time"] == "13:30"

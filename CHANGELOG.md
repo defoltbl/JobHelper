@@ -7,6 +7,13 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Email scan:** the dates sent to the mail server are in English, whatever language your Mac uses.
+- **Email scan:** an older email no longer moves an interview date that a newer email set.
+- **Email scan:** an email without a number of its own is no longer filed twice by two scans. Such an email that is already filed is read once more after the update.
+- **Email scan:** a second mailbox that cannot be reached says why in words, as the main one does.
+- **Search:** a key or a password that the app holds never shows in an error, wherever it stands in the text.
+- **Account:** the app also stops when another setting would bill Claude to a paid account, and the message names that setting.
+
 - **Assistant:** a field placed outside the page or made see-through, a trap for robots, is left empty.
 - **Assistant:** a field that the page emptied again is listed as not filled in, also when Chrome stops answering while the assistant types it again.
 - **Assistant:** when the tab changes while the form is read, nothing is written.

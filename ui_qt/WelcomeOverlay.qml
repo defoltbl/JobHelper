@@ -243,11 +243,12 @@ Item {
 
                 // 1 · Claude
                 StepRow {
-                    order: 0; label: "1"; title: "Claude account"
+                    objectName: "claudeRow"; order: 0; label: "1"; title: "Claude account"
                     ok: connData.claude === true && connData.paid_api !== true
                     busy: welcome.waitingLogin || !win.connChecked
                     subColor: connData.paid_api === true ? theme.crit : (connData.claude_unsure === true ? theme.warn : theme.soft)
-                    sub: connData.paid_api === true ? "A paid API key is set. Unset ANTHROPIC_API_KEY to use your subscription."
+                    // the back end names the setting (config.paid_setting_named); the fallback only guards an older answer
+                    sub: connData.paid_api === true ? "A paid API key is set. Unset " + (connData.paid_setting || "ANTHROPIC_API_KEY") + " to use your subscription."
                        : connData.claude === true ? ((connData.claude_email || "Signed in") + (connData.plan ? " · " + connData.plan.charAt(0).toUpperCase() + connData.plan.slice(1) + " plan" : ""))
                        : welcome.waitingLogin ? "Finish signing in in the Terminal window that opened. This updates by itself."
                        : connData.claude_unsure === true ? connData.claude_msg

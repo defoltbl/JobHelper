@@ -395,7 +395,10 @@ def test_the_command_line_refuses_the_paid_api_too(isolate_data, monkeypatch, ca
     monkeypatch.setattr("sys.argv", ["run.py", "--where", "Prague"])
     assert run.main() == 2
     out = capsys.readouterr().out
-    assert "paid API" in out and "sk-test" not in out
+    assert "paid API" in out and "sk-test" not in out and "ANTHROPIC_API_KEY is set" in out and "{" not in out
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    monkeypatch.setenv("CLAUDE_CODE_USE_VERTEX", "1")
+    assert run.main() == 2 and "CLAUDE_CODE_USE_VERTEX is set" in capsys.readouterr().out, "the message names the setting that is set"
 
 
 def test_only_web_links_and_plain_file_names_are_opened(isolate_data, monkeypatch):

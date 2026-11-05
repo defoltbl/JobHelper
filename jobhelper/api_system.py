@@ -79,7 +79,7 @@ class SystemService:
                 "claude": claude, "plan": plan if claude else "",
                 "claude_unsure": unsure, "claude_msg": "" if claude else (UNSURE if unsure else SIGN_IN),
                 "claude_email": claude_email if claude else "",
-                "paid_api": config.using_paid_api(),
+                "paid_api": config.using_paid_api(), "paid_setting": config.paid_setting_named(),
                 "email": config.has_imap(), "email_addr": config.IMAP_USER,
                 "email2": bool(config.IMAP_USER_2 and config.IMAP_PASSWORD_2), "email2_addr": config.IMAP_USER_2,
                 "email_host": config.IMAP_HOST, "email2_host": config.IMAP_HOST_2,       # a server typed by hand ('' = read from the address)
