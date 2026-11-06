@@ -9,7 +9,7 @@ import os
 from datetime import date, datetime, timedelta
 
 from . import agent2_search, agent3_letters, config, housekeeping, llm, store, textfmt, vault
-from .api_base import _guarded
+from .api_base import _guarded, _holding_jobs
 
 
 class DocumentsService:
@@ -330,6 +330,7 @@ class DocumentsService:
         return {"ok": True, "files": len(files), "bytes": sum(p.stat().st_size for p in files),
                 "old": len(old), "old_bytes": sum(p.stat().st_size for p in old), "days": days}
 
+    @_holding_jobs()
     def tidy_shelf(self, days=None, expected=-1):
         """Move the moved documents older than `days` to the Trash. `expected` is the count the
         question named; if it is no longer right nothing is moved. Jobs whose copies are gone

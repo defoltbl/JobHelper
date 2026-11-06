@@ -2158,6 +2158,10 @@ time you open the window (Table 17.1).
 | The Mac is asleep | The run starts when it wakes |
 | The Mac is switched off | That week's run is skipped |
 | Claude's limit is used up | The run stops early and keeps what was finished |
+| The window searches, scans or scores jobs | The run waits up to one hour. If the window is still busy, that week's run is skipped |
+
+While the weekly run works on your jobs, the window does not start a search, a scan or a new
+score. It also does not change a job. A red line tells you to try again when the run is done.
 
 ### Turn it off
 
@@ -2292,7 +2296,9 @@ To make a backup of everything yourself, for example before you move to a new Ma
 1. Open **Options** > **Notifications and storage**.
 2. Select **Back up now**. The green line names the folder of the backup.
 3. Optional: select **Check backups**. The app restores a backup into a temporary folder. Then it
-   compares the copy with your data. This proves that the backup works.
+   compares the copy with your data. This proves that the backup works. The app keeps only the
+   newest of these test copies, and they do not count toward **Keep backups**. When **Keep backups**
+   is 0, the app keeps all backups and all test copies.
 
 To take your data out of the app in a form that any program can open:
 
@@ -2312,6 +2318,9 @@ your master CV are signed. If one of them is changed outside the app, the next r
 2. Select **See what changed**. Removed lines show in red with a minus sign. Added lines show in
    green with a plus sign.
 3. Select **Approve** if the change is yours. Otherwise put the file back as it was.
+
+If the Keychain does not answer, the **Data protection** row says that the protected files were
+not checked. A search does not start until the Keychain answers again.
 
 > **Note**
 > The app keeps the text of each file as it was when you approved it. For a file approved

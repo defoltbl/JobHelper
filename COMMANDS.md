@@ -161,7 +161,8 @@ Inside the window:
   are deleted for good at every start (0 = keep all). Weekly log files keep their last 400 lines.
 - **Back up everything** (Options → Notifications and storage) – **Back up now** (one encrypted
   backup of the data, your CV, your letters, the documents and the rules), **Check backups**
-  (restores one into a throwaway folder and compares it) and **Save a readable copy…** (the
+  (restores one into a throwaway folder and compares it. Only the newest test copy is kept. Test copies do not
+  count toward Keep backups. 0 keeps all) and **Save a readable copy…** (the
   newest full backup, not encrypted, into an empty folder you choose). The same as
   `python status.py security backup-all`, `test-restore` and `restore`.
 - **A date to remember** (job window of an application) – an interview, deadline, test task or call with a
@@ -326,6 +327,10 @@ Section 10 (security) is worth reading once either way.
 ## 2. Run the pipeline (Agents 1→4)
 
 Analyze CV → search jobs → write cover letters → build the Excel tracker.
+
+While the window or the weekly run works on your jobs, `run.py` and every `status.py` command that
+changes jobs stop at once with a message (nothing is changed). `list`, `followups`, `usage`, `pdf`, `responses`
+without `--scan` and the `security` actions other than `protect` and `restore` still run.
 
 ```bash
 python run.py                         # the city and settings saved in the app's Options;

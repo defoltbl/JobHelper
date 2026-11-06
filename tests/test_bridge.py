@@ -995,3 +995,39 @@ def test_a_scan_the_mailbox_refuses_part_way_keeps_what_was_read(bridge, monkeyp
     monkeypatch.setattr(agent5_responses, "process_inbox", refused_later)
     bridge._scan(30)
     assert store.find(store.load_jobs(), "a")["status"] == "interview"
+
+
+def test_a_search_scan_or_rescore_is_refused_while_the_weekly_run_holds_the_jobs(bridge, monkeypatch, jobs_held_elsewhere):
+    """#72: the window's run loaded the list, worked for minutes and wrote it back over the weekly run's results."""
+    started = _no_thread(monkeypatch)
+    monkeypatch.setattr(config, "has_imap", lambda: True)
+    monkeypatch.setattr(ui_api.Api, "rescore_ids", lambda self: ["j1"])
+    busy = {"ok": False, "msg": store.RunLock.BUSY}
+    assert bridge.runSearch({"where": "Brno"}) == busy
+    assert bridge.scanEmail() == busy
+    assert bridge.rescoreAll() == busy
+    assert started == [] and bridge._running is False and store.RunLock._held == 0
+
+
+def test_the_end_of_a_run_gives_the_job_list_back(bridge, monkeypatch):
+    import subprocess
+    import sys
+    started = _no_thread(monkeypatch)
+    monkeypatch.setattr(config, "has_imap", lambda: True)
+    assert bridge.scanEmail() == {"ok": True} and started == ["_scan"]
+    assert store.RunLock._held == 1, "the run holds the list"
+    bridge._set_running(False)
+    assert store.RunLock._held == 0
+    other = subprocess.run([sys.executable, "-c", (
+        "import fcntl, sys; fcntl.flock(open(sys.argv[1], 'a+'), fcntl.LOCK_EX | fcntl.LOCK_NB); print('free')"),
+        str(store.RunLock.path())], capture_output=True, text=True, timeout=30)
+    assert other.stdout.strip() == "free", "the weekly run can take it now"
+
+
+def test_a_run_that_breaks_at_its_first_line_still_gives_the_job_list_back(bridge, monkeypatch):
+    _no_thread(monkeypatch)
+    monkeypatch.setattr(config, "has_imap", lambda: True)
+    assert bridge.scanEmail() == {"ok": True}
+    monkeypatch.setattr(usage, "total_cost", lambda: (_ for _ in ()).throw(ValueError("usage.json is damaged")))
+    bridge._scan()
+    assert store.RunLock._held == 0 and bridge._running is False

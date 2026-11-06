@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 from pathlib import Path
 
 from . import vault
@@ -53,23 +54,44 @@ def _signature(name: str, path: Path) -> str:
     return mac.hexdigest()
 
 
+_MAC = re.compile(r"[0-9a-f]{64}")      # an HMAC-SHA256 as _signature writes it
+
+
 def _load() -> dict:
+    """The signed entries ({name: {file, mac}}). A damaged list gives none, so every file reads as not signed; whether a
+    list is there at all is _signed_list_there()."""
     try:
         data = json.loads(_manifest_path().read_text(encoding="utf-8"))
-        return data.get("files", {}) if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
+    files = data.get("files") if isinstance(data, dict) else None
+    return {name: entry for name, entry in files.items()
+            if isinstance(entry, dict) and isinstance(entry.get("mac"), str) and _MAC.fullmatch(entry["mac"])
+            } if isinstance(files, dict) else {}
+
+
+def _signed_list_there() -> bool:
+    """Whether a signed list was ever written, readable or not (#75): a damaged one must never pass for "no list yet",
+    or the next start would sign the files as they are now."""
+    return _manifest_path().exists()
 
 
 def _save(files: dict) -> None:
     from . import config
     config.ensure_dirs()
-    _manifest_path().write_text(json.dumps({"files": files}, indent=2, sort_keys=True), encoding="utf-8")
+    vault.write_plain(_manifest_path(), json.dumps({"files": files}, indent=2, sort_keys=True).encode("utf-8"))   # whole or not at all
+
+
+# what the window lists when the check itself could not run: a run stops as for a changed file, and nothing is approved
+NOT_CHECKED = "Protected files (not checked: the Keychain did not answer)"
+NOT_CHECKED_SAY = ("The protected files could not be checked, because the Keychain did not answer. A search starts only "
+                   "when it answers again. Open the Account card to check again.")
 
 
 def active() -> bool:
-    """Checks run only once a baseline exists (and the vault is usable)."""
-    return vault.state() == "ok" and vault.get_secret(BASELINE_FLAG) == "1"
+    """Checks run once a baseline exists (and the vault is usable). A signed list of files is a baseline too, also when
+    the Keychain's mark of it is gone (#75): the check never switches itself off for that."""
+    return vault.state() == "ok" and (vault.get_secret(BASELINE_FLAG) == "1" or _signed_list_there())
 
 
 def check() -> list[dict]:
@@ -169,8 +191,22 @@ def approve(names: list[str] | None = None) -> list[str]:
 
 
 def ensure_baseline() -> bool:
-    """Sign everything once, the first time protection is set up. True if it did."""
+    """Sign everything once, the first time protection is set up. True if it did. A signed list that is already there,
+    also a damaged one, is never signed over (#75): only the Keychain's mark of it is put back, so a changed file is
+    still found (a damaged list shows every file as not signed, for the person to approve)."""
     if vault.state() != "ok" or vault.get_secret(BASELINE_FLAG) == "1":
+        return False
+    if _signed_list_there():
+        vault.set_secret(BASELINE_FLAG, "1")
         return False
     approve()
     return True
+
+
+def changed_titles() -> list[str]:
+    """The titles of the protected files that need a look, for the window: NOT_CHECKED when the check could not run
+    (the Keychain did not answer), never "nothing changed" for that (#75)."""
+    try:
+        return [f["title"] for f in problems()]
+    except vault.VaultError:
+        return [NOT_CHECKED]

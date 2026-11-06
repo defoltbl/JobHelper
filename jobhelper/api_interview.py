@@ -6,7 +6,7 @@ from __future__ import annotations
 
 
 from . import (agent1_cv, answer_memory, cv_tailor, form_answers, prep_doc, config, db, interview_prep, planner, store, vault)
-from .api_base import _guarded
+from .api_base import _guarded, _holding_jobs
 
 
 class InterviewService:
@@ -30,6 +30,7 @@ class InterviewService:
     def upcoming(self, limit=0):
         return planner.upcoming(store.load_jobs(), limit=int(limit or 0))
 
+    @_holding_jobs(refused=list)            # nothing is announced, so nothing is marked: it comes again later
     def due_reminders(self):
         """Events that are tomorrow or today and were not announced yet (marks them announced)."""
         try:

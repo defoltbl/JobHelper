@@ -36,36 +36,53 @@ def command_step(module_name: str, args: list[str]) -> Callable[[], int]:
 class WeeklyRun:
     """The steps of the weekly run, and the log they write into."""
 
+    WAIT = 60 * 60                  # how long the run waits for the window to finish a search or a scan (seconds)
+    BUSY_CODE = 75                  # "try again later": the window kept the job list for the whole wait
+
     def __init__(self, log: Path, steps: list[tuple[str, Callable[[], int]]] | None = None,
-                 now: Callable[[], datetime] = datetime.now) -> None:
+                 now: Callable[[], datetime] = datetime.now, wait: float | None = None) -> None:
         self._log = Path(log)
         self._steps = steps if steps is not None else [
             ("job search", command_step("run", ["--reuse-profile"])),
             ("email analysis", command_step("status", ["sync", "--summary"])),
         ]
         self._now = now
+        self._wait = self.WAIT if wait is None else wait
 
     @property
     def log(self) -> Path:
         return self._log
 
     def run(self) -> int:
-        """Run every step; 0 when all of them ended well, else the code of the last one that did not."""
+        """Run every step; 0 when all of them ended well, else the code of the last one that did not. The steps hold the
+        job list's lock (store.RunLock): the run waits while the window works on the list, and never writes over it."""
+        from . import store
         self._log.parent.mkdir(parents=True, exist_ok=True)
-        worst = 0
         with self._log.open("a", encoding="utf-8") as out, redirect_stdout(out), redirect_stderr(out):
             print(f"===== weekly JobHelper {self._now():%Y-%m-%d %H:%M} =====", flush=True)
-            for title, step in self._steps:
-                print(f"--- {title} ---", flush=True)
-                try:
-                    code = step()
-                except Exception:  # noqa: BLE001 - the log says what went wrong; the next step still runs
-                    traceback.print_exc(file=out)
-                    code = 1
-                if code:
-                    print(f"({title} ended with code {code})", flush=True)
-                    worst = code
+            if not store.RunLock.take(self._wait):
+                print("The app was working on your jobs for the whole wait, so this week's run did not start. "
+                      "It runs again next week, or start a search in the app.", flush=True)
+                return self.BUSY_CODE
+            try:
+                worst = self._steps_run(out)
+            finally:
+                store.RunLock.release()
             print("", flush=True)
+        return worst
+
+    def _steps_run(self, out) -> int:
+        worst = 0
+        for title, step in self._steps:
+            print(f"--- {title} ---", flush=True)
+            try:
+                code = step()
+            except Exception:  # noqa: BLE001 - the log says what went wrong; the next step still runs
+                traceback.print_exc(file=out)
+                code = 1
+            if code:
+                print(f"({title} ended with code {code})", flush=True)
+                worst = code
         return worst
 
 

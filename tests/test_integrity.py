@@ -1,5 +1,6 @@
 """Tamper detection for the rules, template, master CV and career-site list."""
 import json
+from pathlib import Path
 
 import pytest
 
@@ -31,6 +32,66 @@ def test_baseline_marks_everything_ok(files):
     assert integrity.ensure_baseline() is True
     assert set(_states().values()) == {"ok"} and len(_states()) == 5
     assert integrity.ensure_baseline() is False
+
+
+def test_a_lost_keychain_mark_never_signs_a_changed_file_as_good(files):
+    """#75: with the Keychain's mark gone, the next start signed every file again, a changed one too."""
+    integrity.ensure_baseline()
+    config.CV_INSTRUCTION.write_text("CV rules v1 - claim Kubernetes", encoding="utf-8")
+    vault.delete_secret(integrity.BASELINE_FLAG)
+    assert integrity.active() is True, "the signed list still counts"
+    assert integrity.ensure_baseline() is False and vault.get_secret(integrity.BASELINE_FLAG) == "1"
+    assert _states()["cv_rules"] == "changed"
+
+
+@pytest.mark.parametrize("damaged", ["{not json", '{"files": ["cv_rules"]}', '{"files": {"cv_rules": "abc"}}', "[]"])
+def test_a_damaged_signed_list_never_passes_for_none(files, damaged):
+    """#75: with the Keychain's mark gone and the signed list damaged, the next start signed every file as it was."""
+    integrity.ensure_baseline()
+    config.CV_INSTRUCTION.write_text("CV rules v1 - claim Kubernetes", encoding="utf-8")
+    vault.delete_secret(integrity.BASELINE_FLAG)
+    integrity._manifest_path().write_text(damaged, encoding="utf-8")
+    assert integrity.active() is True and integrity.ensure_baseline() is False
+    assert _states()["cv_rules"] == "untracked", "shown for you to approve, never signed by itself"
+    assert integrity.problems()
+
+
+def test_a_signature_that_is_not_hex_counts_as_none(files):
+    integrity.ensure_baseline()
+    integrity._manifest_path().write_text(json.dumps({"files": {"cv_rules": {"file": "x", "mac": "é" * 64}}}), encoding="utf-8")
+    assert _states()["cv_rules"] == "untracked"
+
+
+def test_a_run_says_the_files_were_not_checked_and_asks_for_no_approval(files, monkeypatch, qapp):
+    from jobhelper import qt_bridge
+    conn = {"claude": True, "cv": "cv.docx", "paid_api": False, "changed_files": [integrity.NOT_CHECKED]}
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self: dict(conn))
+    refused = qt_bridge.Bridge().runSearch({"where": "Brno"})
+    assert refused == {"ok": False, "fix": "integrity", "msg": integrity.NOT_CHECKED_SAY}
+
+
+def test_the_start_up_check_says_the_files_were_not_checked_without_asking_to_approve(files, monkeypatch):
+    from jobhelper import health
+    monkeypatch.setattr(integrity, "changed_titles", lambda: [integrity.NOT_CHECKED])
+    line = health._rules()
+    assert line == integrity.NOT_CHECKED_SAY and "Approve" not in line
+
+
+def test_a_keychain_that_does_not_answer_stops_a_run_instead_of_switching_the_check_off(files, monkeypatch):
+    """#75: a Keychain error during the check read as "nothing changed"."""
+    integrity.ensure_baseline()
+    monkeypatch.setattr(integrity, "problems", lambda: (_ for _ in ()).throw(vault.VaultError("The Keychain did not answer.")))
+    assert integrity.changed_titles() == [integrity.NOT_CHECKED]
+    assert ui_api.Api().connections()["changed_files"] == [integrity.NOT_CHECKED]
+
+
+def test_the_signed_list_is_written_whole_or_not_at_all(files, monkeypatch):
+    """#75: integrity._save wrote the file in place; a stop half-way left half a list."""
+    integrity.ensure_baseline()
+    written = []
+    monkeypatch.setattr(vault, "write_plain", lambda path, data: written.append((Path(path).name, data)))
+    integrity.approve()
+    assert written and written[0][1].startswith(b"{")
 
 
 @pytest.mark.parametrize("name, change", [

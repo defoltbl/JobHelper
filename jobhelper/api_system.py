@@ -12,6 +12,7 @@ from pathlib import Path
 from . import trouble
 from .claude_cli import ClaudeCli
 from . import agent1_cv, agent4_tracker, health, config, integrity, pdf, store, usage, vault
+from .api_base import _holding_jobs
 
 
 def _claude_auth_status():
@@ -70,11 +71,7 @@ class SystemService:
             unsure = True
             trouble.note("the Claude sign-in check", e)
         cv = agent1_cv.find_cv()
-        changed = []
-        try:
-            changed = [f["title"] for f in integrity.problems()]
-        except vault.VaultError:
-            pass
+        changed = integrity.changed_titles()        # a check that could not run stops a run too, never "nothing changed"
         return {"vault": vault.state(), "changed_files": changed, "pdf": pdf.available(),
                 "claude": claude, "plan": plan if claude else "",
                 "claude_unsure": unsure, "claude_msg": "" if claude else (UNSURE if unsure else SIGN_IN),
@@ -125,6 +122,7 @@ class SystemService:
             return {"ok": False, "msg": "The app has no fix for this problem. Select Show all to read what to do."}
         return fix()
 
+    @_holding_jobs()
     def repair_statuses(self):
         """Give every job whose status the app does not know a status it knows. A backup is made first."""
         try:
@@ -147,6 +145,7 @@ class SystemService:
         return {"ok": True, "fixed": count,
                 "msg": f"Repaired {count} {'job' if count == 1 else 'jobs'}. Each one has a note that tells what was changed."}
 
+    @_holding_jobs()
     def restore_data(self, kind):
         """Put back the newest backup copy of the job list or the replies database that opens. The damaged
         file is moved into the backups (folder vault.DAMAGED), never deleted."""
@@ -163,7 +162,7 @@ class SystemService:
                                         "If you have a copy of your own, put it back in the app's data folder."}
         data, copy = found
         try:
-            vault.set_aside(path, vault.DAMAGED)
+            vault.set_aside(path, vault.DAMAGED, move=False)     # a copy: the file stays until its replacement is whole (#75)
             vault.write_bytes(path, data)
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "msg": f"Your {what} was not restored: {trouble._safe(e)}"}

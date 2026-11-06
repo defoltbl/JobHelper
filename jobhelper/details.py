@@ -79,10 +79,22 @@ def load() -> dict[str, Any]:
                 for name in ROWS:                   # a list with one bad row keeps its good rows
                     if not out[name] and isinstance(kept.get(name), list):
                         out[name] = [rows[0] for rows, wrong in (_rows(name, [row]) for row in kept[name][:MAX_ROWS]) if not wrong and rows]
+                if not out["files"] and isinstance(kept.get("files"), list):     # one file gone: the others stay listed (#75)
+                    out["files"] = _files_on_disk(kept["files"])
     except vault.VaultError:
         raise
     except Exception:  # noqa: BLE001 - an unreadable file is the same as none: the page shows empty fields
         pass
+    return out
+
+
+def _files_on_disk(rows: list[Any]) -> list[dict[str, Any]]:
+    """The saved file rows that still pass the check one by one (a file still on the disk), each path once."""
+    out: list[dict[str, Any]] = []
+    for row in rows[:MAX_FILES]:
+        part, wrong = check({"files": [row]})
+        if not wrong and part["files"] and part["files"][0]["path"] not in {f["path"] for f in out}:
+            out.append(part["files"][0])
     return out
 
 

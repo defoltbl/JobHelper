@@ -28,7 +28,7 @@ from .ui_api import Api
 from .bridge_jobs import JobSlots
 from .bridge_runs import RunSlots
 from . import trouble  # noqa: I001
-from . import (api_system, claude_cli, config, integrity, schedule)
+from . import (api_system, claude_cli, config, integrity, schedule, store)
 from .claude_cli import ClaudeCli
 
 
@@ -91,6 +91,9 @@ class Bridge(RunSlots, JobSlots, QObject):
     def _set_running(self, val: bool) -> None:
         if not val:
             self._api.live = None                # the run is over: hand edits go straight to disk again
+            if getattr(self, "_holds_jobs", False):
+                store.RunLock.release()           # the job list is free for the weekly run again
+                self._holds_jobs = False
         self._running = val
         self.runningChanged.emit(val)
 

@@ -6,10 +6,15 @@ email) modify this store and then re-render Excel.
 """
 from __future__ import annotations
 
+import fcntl
 import json
+import os
 import re
+import threading
+import time
+from contextlib import contextmanager
 from datetime import date
-from typing import Any
+from typing import Any, Callable
 
 from . import config, vault
 
@@ -45,6 +50,93 @@ def applied_on_import(job: dict[str, Any]) -> bool:
     return job.get("source") == "manual" and bool(job.get("date_applied")) and job.get("date_applied") == job.get("date_found")
 
 
+class JobsBusy(RuntimeError):
+    """Another process is working on the job list: writing now would put an older copy over its changes."""
+
+
+class RunLock:
+    """One lock on the job list between processes – the open window and the weekly run (#72). A process that works on
+    the list for minutes (a search, a scan, the weekly run) holds it, so another process never writes an older copy of
+    the list over its changes. It is held per process: the window's own hand edits during its own search go on, as
+    `JobEditor.live` keeps them; another process's writes wait or are refused with BUSY."""
+
+    BUSY = "The weekly run is working on your jobs right now. Try again when it has finished."
+    COMMAND_BUSY = ("✗ The app is working on your jobs right now (a search, a scan or the weekly run). Nothing was "
+                    "changed. Run this again when it has finished.")
+    _held = 0                        # how many holders in this process
+    _file = None
+    _guard = threading.Lock()
+
+    @staticmethod
+    def path():
+        return config.DATA_DIR / ".jobs.lock"
+
+    @classmethod
+    def take(cls, wait: float = 0.0) -> bool:
+        """Hold the lock (waiting up to `wait` seconds for another process to let it go). False when it stays busy."""
+        deadline = time.monotonic() + max(0.0, wait)
+        while not cls._try_once():
+            left = deadline - time.monotonic()
+            if left <= 0:
+                return False
+            time.sleep(min(2.0, max(0.05, left)))           # never while holding _guard: the window's threads go on
+        return True
+
+    @classmethod
+    def _try_once(cls) -> bool:
+        with cls._guard:
+            if cls._held:
+                cls._held += 1
+                return True
+            config.ensure_dirs()
+            f = os.fdopen(os.open(cls.path(), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600), "r+")   # never through a link
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                f.close()
+                return False
+            except OSError:          # a disk without file locks (ENOLCK, ENOTSUP): no other process can share the list there
+                f.close()
+                f = None
+            cls._file, cls._held = f, 1
+            return True
+
+    @classmethod
+    def release(cls) -> None:
+        with cls._guard:
+            if not cls._held:
+                return
+            cls._held -= 1
+            if not cls._held and cls._file is not None:
+                fcntl.flock(cls._file, fcntl.LOCK_UN)
+                cls._file.close()
+                cls._file = None
+
+    @classmethod
+    def command(cls, fn: Callable[[], int]) -> int:
+        """A command (run.py, status.py) that holds the lock for its whole run, so a save half-way through is never
+        refused and the work lost. In the weekly run the lock is already held by the same process. 1 while busy."""
+        if not cls.take():
+            print(cls.COMMAND_BUSY)
+            return 1
+        try:
+            return fn()
+        finally:
+            cls.release()
+
+    @classmethod
+    @contextmanager
+    def holding(cls):
+        """Hold the lock for one change of the list (read, change, write), so another process never starts in between.
+        Raises JobsBusy while another process holds it."""
+        if not cls.take():
+            raise JobsBusy(cls.BUSY)
+        try:
+            yield
+        finally:
+            cls.release()
+
+
 def load_jobs() -> list[dict[str, Any]]:
     if not config.JOBS_JSON.exists():
         return []
@@ -52,8 +144,10 @@ def load_jobs() -> list[dict[str, Any]]:
 
 
 def save_jobs(jobs: list[dict[str, Any]]) -> None:
-    config.ensure_dirs()
-    vault.write_text(config.JOBS_JSON, json.dumps(jobs, ensure_ascii=False, indent=2))
+    """Write the job list, holding RunLock. Refused (JobsBusy) while another process works on it, never written over it."""
+    with RunLock.holding():
+        config.ensure_dirs()
+        vault.write_text(config.JOBS_JSON, json.dumps(jobs, ensure_ascii=False, indent=2))
 
 
 def upsert(jobs: list[dict[str, Any]], new_jobs: list[dict[str, Any]]) -> tuple[int, int]:

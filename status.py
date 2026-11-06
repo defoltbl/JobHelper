@@ -433,6 +433,18 @@ def cmd_security(args) -> int:
     return 0
 
 
+def _changes_jobs(args) -> bool:
+    """Whether a command may write the job list or the data files: only those hold the job list's lock, so the others
+    (lists, usage, the PDFs, the Keychain tools) still run while the window or the weekly run works."""
+    if args.cmd in ("list", "followups", "usage", "pdf"):
+        return False
+    if args.cmd == "responses":
+        return bool(args.scan)
+    if args.cmd == "security":
+        return args.action in ("protect", "restore")
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="JobHelper status tools.")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -500,7 +512,9 @@ def main() -> int:
     try:
         if args.cmd != "security":
             vault.protect_all()
-        return args.func(args)
+        if not _changes_jobs(args):
+            return args.func(args)
+        return store.RunLock.command(lambda: args.func(args))      # never stopped half-way by a refused save
     except Stopped as stop:
         return stop.code
     except vault.VaultError as e:

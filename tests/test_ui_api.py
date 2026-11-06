@@ -1104,6 +1104,18 @@ def test_restore_puts_back_the_newest_copy_that_opens_and_keeps_the_damaged_file
     assert len(kept) == 1 and kept[0].read_bytes() == damaged                 # moved aside, never deleted
 
 
+def test_a_restore_whose_write_fails_leaves_the_file_where_it_was(api, monkeypatch):
+    """#75: the damaged file was moved aside before the new one was written; a write that failed left no job list."""
+    config.ensure_dirs()
+    _copy_in_backups("jobs.json", json.dumps([store.new_job(id="good", title="Dev", company="Acme")]).encode(), age=300)
+    vault.write_text(config.JOBS_JSON, "{not json")
+    damaged = config.JOBS_JSON.read_bytes()
+    monkeypatch.setattr(vault, "write_bytes", lambda path, data: (_ for _ in ()).throw(OSError(28, "No space left on device")))
+    result = api.restore_data("jobs")
+    assert result["ok"] is False and config.JOBS_JSON.read_bytes() == damaged, "the file is still there, as it was"
+    assert [p.read_bytes() for p in (vault.backups_dir() / vault.DAMAGED).iterdir()] == [damaged], "and a copy is kept"
+
+
 def test_restore_of_the_replies_database(api):
     import sqlite3
     conn = sqlite3.connect(":memory:")
@@ -1228,3 +1240,18 @@ def test_a_mailbox_test_that_cannot_reach_the_server_says_why(monkeypatch):
     said = email_client.real_try_login("me@example.com", "secret", host="imap.demo.invalid")      # the real one, _open faked
     assert said["ok"] is None and "could not be found" in said["msg"] and "password was not tried" in said["msg"]
     assert "secret" not in said["msg"]
+
+
+@pytest.mark.parametrize("call, refused", [
+    (lambda api: api.restore_data("jobs"), {"ok": False, "msg": store.RunLock.BUSY}),
+    (lambda api: api.repair_statuses(), {"ok": False, "msg": store.RunLock.BUSY}),
+    (lambda api: api.bring_back(0), {"ok": False, "msg": store.RunLock.BUSY}),
+    (lambda api: api.tidy_shelf(), {"ok": False, "msg": store.RunLock.BUSY}),
+    (lambda api: api.due_reminders(), []),
+])
+def test_a_change_of_the_job_list_waits_for_no_weekly_run(jobs_held_elsewhere, call, refused):
+    """#72: these wrote the job list (or put a backup over it) while the weekly run worked on it, and its save came after."""
+    config.JOBS_JSON.write_bytes(b"[]")
+    before = config.JOBS_JSON.read_bytes()
+    assert call(ui_api.Api()) == refused
+    assert config.JOBS_JSON.read_bytes() == before

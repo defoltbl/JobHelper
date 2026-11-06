@@ -17,6 +17,11 @@ from jobhelper import (agent1_cv, agent2_search, agent3_letters, agent4_tracker,
 
 
 def main() -> int:
+    """The pipeline, holding the job list's lock (store.RunLock) from start to end."""
+    return store.RunLock.command(_pipeline)
+
+
+def _pipeline() -> int:
     parser = argparse.ArgumentParser(description="Run the JobHelper pipeline.")
     parser.add_argument("--where", default="", help="City to search in (default: the city saved in the app's Options)")
     parser.add_argument("--source", default="czech",

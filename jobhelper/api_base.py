@@ -1,10 +1,11 @@
-"""What every part of the window's back end shares: reads that survive locked data, and small text helpers."""
+"""What every part of the window's back end shares: reads that survive locked data, changes of the job list that wait for
+no other process, and small text helpers."""
 from __future__ import annotations
 
 import functools
 import os
 
-from . import vault
+from . import store, vault
 
 
 def _guarded(default):
@@ -17,6 +18,24 @@ def _guarded(default):
                 return fn(self, *args, **kwargs)
             except vault.VaultError:
                 return default() if callable(default) else default
+        return inner
+    return wrap
+
+
+def _holding_jobs(refused=None):
+    """A change of the job list made while holding its lock (store.RunLock) from the first read to the last write, so the
+    weekly run never starts in between (#72). While another process holds it, the call changes nothing and returns
+    `refused` (a value, or a function that makes it); the default is the refusal {ok: False, msg: RunLock.BUSY}."""
+    def wrap(fn):
+        @functools.wraps(fn)
+        def inner(*args, **kwargs):
+            try:
+                with store.RunLock.holding():
+                    return fn(*args, **kwargs)
+            except store.JobsBusy:
+                if refused is None:
+                    return {"ok": False, "msg": store.RunLock.BUSY}
+                return refused() if callable(refused) else refused
         return inner
     return wrap
 

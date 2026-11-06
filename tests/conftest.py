@@ -202,3 +202,31 @@ def qapp():
     from PySide6.QtGui import QGuiApplication
 
     return QGuiApplication.instance() or QGuiApplication([])
+
+
+@pytest.fixture(autouse=True)
+def _job_list_lock_given_back():
+    """store.RunLock counts its holders in class state: a test that left it held would hide another process's lock from
+    every later test in this process."""
+    yield
+    from jobhelper import store
+    while store.RunLock._held:
+        store.RunLock.release()
+
+
+@pytest.fixture
+def jobs_held_elsewhere(isolate_data):
+    """Another process (the weekly run) holds the job list's lock for the test."""
+    import subprocess
+    import sys
+    from jobhelper import config, store
+    config.ensure_dirs()
+    holder = subprocess.Popen([sys.executable, "-c", (
+        "import fcntl, sys, time; f = open(sys.argv[1], 'a+'); fcntl.flock(f, fcntl.LOCK_EX); print('held', flush=True); time.sleep(60)"),
+        str(store.RunLock.path())], stdout=subprocess.PIPE, text=True)
+    try:
+        assert holder.stdout.readline().strip() == "held"
+        yield holder
+    finally:
+        holder.kill()
+        holder.wait()

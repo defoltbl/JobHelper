@@ -7,6 +7,15 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Weekly run:** while the window searches, scans or scores, the weekly run waits up to one hour. It never writes over the jobs that the window saves.
+- **Weekly run:** while it works on your jobs, the window refuses to start a search, a scan or a new score, and to change a job, with a message.
+- **Data protection:** when the Keychain does not answer, the **Data protection** row says that the protected files were not checked. Before, the check was switched off without a word.
+- **Data protection:** a changed rule file stays marked as changed when the Keychain loses its mark. Before, the app could sign the changed file as good.
+- **Restore from backup:** the damaged file is copied aside and stays in place until the backup is written over it in full.
+- **Check backups:** its test copies no longer push your real backups out of the number that **Keep backups** sets.
+- **My details:** one attached file that is gone from the disk no longer empties the list of files.
+- **Saving:** each data file the app saves is on the disk in full before the app goes on, also after a power cut.
+- **Commands:** `run.py` and the `status.py` commands that change your jobs stop with a message while the window or the weekly run works on them. Nothing is changed.
 - **About you:** a figure you changed for a kind of role has its own **Save figures** button. Before, only **Save** at the bottom of the window saved it.
 - **About you:** the boxes under **More about your work** are the jobs that your master CV names. You can rename a box or remove a job, and bring a removed job back.
 - **About you:** each part says why to fill it in and where the app uses it.
