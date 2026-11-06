@@ -103,22 +103,22 @@ def _pipeline() -> int:
         options = {**ui_api.Api().options(), "where": args.where, "per_query": args.per_query,
                    "all_languages": args.all_languages, "max_age_days": args.max_age_days}
         settings = agent2_search.SearchSettings.from_options(options, agent1_cv.level_of(profile))
-        filtered = []
+        filtered, failed = [], []
         try:
-            new_jobs = settings.run(queries, choice, dropped=filtered)
+            new_jobs = settings.run(queries, choice, dropped=filtered, failed=failed)
         except RuntimeError as e:
             print(f"   ✗ {e}")
             return 1
         # Skip only the SAME role at a company you've already applied to /
         # been rejected by. Different roles at the same company are kept.
-        took = agent2_search.take_in(jobs, new_jobs, english_only=settings.english_only, dropped=filtered)
+        took = agent2_search.take_in(jobs, new_jobs, english_only=settings.english_only, dropped=filtered, failed=failed)
         added = took["added"]
         msg = f"   found {took['found']} listings — {added} new, {took['skipped']} already tracked"
         if took["closed"]:
             msg += f"; {took['closed']} earlier ones no longer accept applications"
         if took["known"]:
             msg += f"; skipped {took['known']} you've already applied to (same role & company)"
-        print(msg)
+        print(msg + agent2_search.not_read_note(failed))
         store.save_jobs(jobs)
     else:
         print("\n② Agent 2: skipped")

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from . import config, places
+from . import config, places, textfmt
 
 # "management" is not in the level words below: it names a field ("Risk Management", "Repository Management"), not a level
 _JUNIOR_RE = re.compile(r"\b(junior|jr\.?|entry[- ]level|graduate|absolvent)\b", re.IGNORECASE)
@@ -221,18 +221,13 @@ def needs_too_many_years(text: str, candidate_seniority: str, limit: int | None 
     return bool(limit) and years_required(text) >= limit
 
 
-def _fold(text: str) -> str:
-    import unicodedata
-    return unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().lower()
-
-
 def _word_in(title: str, word: str) -> bool:
     """Whole word or phrase, case and accent blind, with a simple plural:
     "intern" matches "Intern" and "Interns", never "Internal" or "International"."""
-    w = _fold(word).strip()
+    w = textfmt.fold(word).strip()
     if not w:
         return False
-    return bool(re.search(rf"(?<![a-z0-9]){re.escape(w)}s?(?![a-z0-9])", _fold(title)))
+    return bool(re.search(rf"(?<![a-z0-9]){re.escape(w)}s?(?![a-z0-9])", textfmt.fold(title)))
 
 
 def skipped_word(title: str, skip_words, keep_words=()) -> str:

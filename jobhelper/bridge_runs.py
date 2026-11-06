@@ -343,10 +343,11 @@ class RunSlots:
             queries = (o.get("queries") or profile.get("search_queries")
                        or profile.get("target_roles") or [])
             settings = agent2_search.SearchSettings.from_options(o, seniority)
-            dropped = []                                     # what the filters remove, with the reason
+            dropped, failed = [], []                         # what the filters remove, with the reason; sources not read
             found = settings.run(queries, job_sources.SourceChoice.from_options(o), dropped=dropped,    # every kind ticked, in one pass
-                                 progress=lambda d, t: self._tick("a2", int(d * 100), max(1, t * 100)))
-            added = agent2_search.take_in(jobs, found, english_only=settings.english_only, dropped=dropped)["added"]
+                                 progress=lambda d, t: self._tick("a2", int(d * 100), max(1, t * 100)), failed=failed)
+            added = agent2_search.take_in(jobs, found, english_only=settings.english_only, dropped=dropped,
+                                          failed=failed)["added"]
             store.save_jobs(jobs)
             self.agentChanged.emit("a2", "done", "+%d new" % added)
 
@@ -377,12 +378,16 @@ class RunSlots:
             leads = sum(1 for j in jobs if j["status"] in store.LEAD_STATUSES)
             self.agentChanged.emit("a4", "done", "%d leads" % leads)
 
-            self.runFinished.emit("search",
-                                  "Done · +%d new jobs, %d letters + CVs ready." % (added, stats["letters"]))
+            self.runFinished.emit("search", "Done · +%d new jobs, %d letters + CVs ready." % (added, stats["letters"])
+                                  + agent2_search.not_read_note(failed))
             self._notify(notify.search_text(added, stats["letters"]), "Search finished")
         except RunCancelled:
             self._save_partial(jobs)
             self.runFinished.emit("search", "Stopped. Everything finished before that is saved.")
+        except agent2_search.SourcesDown as e:                   # no network or every board down: not a fault of the app
+            self._save_partial(jobs)
+            self.runFinished.emit("search", "Error: %s" % agent2_search.safe_error(e))
+            self._notify(notify.FAILED, "Search stopped")
         except Exception as e:  # noqa: BLE001
             self._save_partial(jobs)                             # what was scored and written before the error is kept
             trouble.note("the search", e)

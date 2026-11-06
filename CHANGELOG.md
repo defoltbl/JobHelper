@@ -7,6 +7,13 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Search:** when no job source can be read (for example, with no internet), the search stops and says so. Before, it said that it found nothing.
+- **Search:** a source that cannot be read is named at the end of the search, and **Filtered out** keeps the postings it had before from that source.
+- **Search:** a company's career site that cannot be read is named in the log of the run. Before, it gave no postings and no word.
+- **Search:** a SmartRecruiters career site is read up to 2,000 postings. Before, only the first 100 were read.
+- **Search:** the same role written with or without accents, for example "Projektový manažer" and "Projektovy manazer", counts as one role.
+- **Search:** the text of a posting page keeps its accents, also when the page does not say which alphabet it uses.
+- **Search:** the app reads a posting's page only from the public internet, also after a redirect. It never reads this Mac or your local network.
 - **Weekly run:** while the window searches, scans or scores, the weekly run waits up to one hour. It never writes over the jobs that the window saves.
 - **Weekly run:** while it works on your jobs, the window refuses to start a search, a scan or a new score, and to change a job, with a message.
 - **Data protection:** when the Keychain does not answer, the **Data protection** row says that the protected files were not checked. Before, the check was switched off without a word.

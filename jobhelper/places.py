@@ -11,8 +11,9 @@ country and in the countries you add, or remote jobs anywhere in the world.
 from __future__ import annotations
 
 import re
-import unicodedata
 from typing import Any, Iterable
+
+from . import textfmt
 
 # country: (how it is written in a posting's location, its larger cities with their other spellings)
 COUNTRIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
@@ -204,7 +205,7 @@ def _named(names, text: str) -> bool:
 
 def plain(text: str) -> str:
     """Lower case without accents: "Kraków" and "krakow", "München" and "munchen" compare equal."""
-    return unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().lower().strip()
+    return textfmt.fold(text).strip()
 
 
 def shown(country: str) -> str:

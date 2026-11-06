@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import re
 from typing import Any
-from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -41,8 +40,9 @@ def _postings(node: Any, depth: int = 0):
                 yield from _postings(node[key], depth + 1)
 
 
-def parse_posting(html_text: str) -> str:
-    """The longest JobPosting description in a page, as plain text ('' if the page has none)."""
+def parse_posting(html_text: str | bytes) -> str:
+    """The longest JobPosting description in a page, as plain text ('' if the page has none). Bytes are a page whose
+    server named no character set: the page's own <meta charset>, else its bytes, decide (#76: not Latin-1)."""
     soup = BeautifulSoup(html_text, "lxml")
     best = ""
     for tag in soup.find_all("script", attrs={"type": re.compile(r"^application/ld\+json", re.IGNORECASE)}):
@@ -68,18 +68,21 @@ def parse_posting(html_text: str) -> str:
 
 
 def posting_text(url: str) -> str:
-    """Read a posting's own page and return its published text ('' if it has none or cannot be read)."""
-    if urlparse(url or "").scheme not in ("http", "https"):
-        return ""
+    """Read a posting's own page and return its published text ('' if it has none or cannot be read). The link comes
+    from a job board: it and every redirect must be a public address (web.public_address), never a blind request."""
     try:
-        with requests.get(url, headers=_HEADERS, timeout=_TIMEOUT, stream=True) as resp:
-            if resp.status_code != 200 or "html" not in (resp.headers.get("Content-Type") or "").lower():
+        resp = web.public_get(url, headers=_HEADERS, timeout=_TIMEOUT, stream=True)
+        if resp is None:
+            return ""
+        with resp:
+            kind = (resp.headers.get("Content-Type") or "").lower()
+            if resp.status_code != 200 or "html" not in kind:
                 return ""
             body = b""
             for chunk in resp.iter_content(65536):
                 body += chunk
                 if len(body) >= _MAX_PAGE:
                     break
-            return parse_posting(body.decode(resp.encoding or "utf-8", errors="replace"))
+            return parse_posting(body.decode(resp.encoding, errors="replace") if "charset=" in kind else body)
     except (requests.RequestException, ValueError, LookupError):      # LookupError: a page that names an encoding nobody knows
         return ""

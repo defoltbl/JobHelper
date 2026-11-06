@@ -1031,3 +1031,30 @@ def test_a_run_that_breaks_at_its_first_line_still_gives_the_job_list_back(bridg
     monkeypatch.setattr(usage, "total_cost", lambda: (_ for _ in ()).throw(ValueError("usage.json is damaged")))
     bridge._scan()
     assert store.RunLock._held == 0 and bridge._running is False
+
+
+def test_a_search_with_no_source_answering_says_so_and_files_no_fault(bridge, monkeypatch):
+    """#76: an offline search reads as an error in words, and an offline Mac is not a fault of the app."""
+    from jobhelper import trouble
+
+    def down(queries, progress=None, **kw):
+        raise agent2_search.SourcesDown("No job source could be read (jobs.cz).")
+    _stub_agents(monkeypatch, search=down)
+    noted = []
+    monkeypatch.setattr(trouble, "note", lambda *a, **k: noted.append(a))
+    events = _record(bridge)
+    bridge._set_running(True)
+    bridge._pipeline({})
+    assert events[-1][:2] == ("finished", "search") and events[-1][2].startswith("Error: No job source could be read (jobs.cz)")
+    assert noted == [] and bridge.running is False
+
+
+def test_the_end_of_a_search_names_a_source_it_could_not_read(bridge, monkeypatch):
+    def partly(queries, progress=None, failed=None, **kw):
+        failed.append("careers (Contoso)")
+        return [store.new_job(id="n1", title="Dev", company="Acme")]
+    _stub_agents(monkeypatch, search=partly)
+    events = _record(bridge)
+    bridge._set_running(True)
+    bridge._pipeline({})
+    assert events[-1][2].endswith("Not read this time: careers (Contoso).")

@@ -108,6 +108,7 @@ def safe_environment(tmp_path_factory, monkeypatch):
     from jobhelper import agent2_search
     for name in config.PAID_SETTINGS:                                               # the app refuses to ask with one set; tests set them on purpose
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(agent2_search, "real_refetch_description", agent2_search.refetch_description, raising=False)  # for a test that fakes the readers
     monkeypatch.setattr(agent2_search, "refetch_description", lambda job: "")     # never read a real job board
     monkeypatch.setattr(agent2_search, "posting_closed", lambda job: None)        # nor ask one whether a posting is still open
     from jobhelper import email_client

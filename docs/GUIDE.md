@@ -611,6 +611,8 @@ Table 4.2 lists problems with a search, and what to do.
 |---|---|---|
 | "No city yet" | Options has no city | Open Options and choose a city |
 | The search finds nothing new | Your roles are too narrow, or everything was filtered | Open **Filtered out** on the Last run card (section 14) |
+| "No job source could be read" | The Mac has no internet, or every job site was down or turned the app away | Check the internet connection, or search again later |
+| The search ends with "Not read this time" | A job site or a company's career site did not answer | Nothing to do. **Filtered out** keeps what it had from that site, and the next search tries it again |
 | Too many poor postings | The filters are too loose | Add words to **Skip titles with**, or set **Kinds of role you want** |
 | A source is missing from the results | That site turned programs away this time | Nothing to do. The app leaves such a site alone and tries again at the next search |
 
@@ -1857,6 +1859,9 @@ Figure 14.1 shows postings the last search filtered out.
 
 Each row is one dropped posting with the reason in words. The chips at the top group the rows
 by reason (Table 14.1).
+
+Each search makes a new list. When a source could not be read, the list also keeps the postings
+that it had before. Thus a site that is down for a moment does not empty the list.
 
 *Table 14.1 – Reasons a posting is filtered out, and where to change each rule*
 

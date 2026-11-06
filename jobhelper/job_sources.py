@@ -63,6 +63,11 @@ class JobSource(ABC):
     def reset(self) -> None:
         """Forget what an earlier search read. A source that keeps nothing has nothing to forget."""
 
+    def failures(self) -> list[str]:
+        """The parts of this source a search could not read although the source answered (one company's career site
+        of many), as the log names them. Most sources fail as a whole, with an error from `find`."""
+        return []
+
     @abstractmethod
     def find(self, query: str, where: str, per_query: int) -> list[dict[str, Any]]:
         """The postings for one search role in one place, as job records."""
@@ -73,9 +78,9 @@ class Board(JobSource):
 
     def __init__(self, name: str, fetch: Fetch, kind: str = "",
                  forget: Callable[[], None] | None = None, needs: Callable[[], Any] | None = None,
-                 countries: tuple[str, ...] = ()) -> None:
+                 countries: tuple[str, ...] = (), failed: Callable[[], list[str]] | None = None) -> None:
         super().__init__(name, kind)
-        self._fetch, self._forget, self._needs = fetch, forget, needs
+        self._fetch, self._forget, self._needs, self._failed = fetch, forget, needs, failed
         self.countries = countries
 
     def available(self) -> bool:
@@ -84,6 +89,9 @@ class Board(JobSource):
     def reset(self) -> None:
         if self._forget:
             self._forget()
+
+    def failures(self) -> list[str]:
+        return list(self._failed()) if self._failed else []
 
     def find(self, query: str, where: str, per_query: int) -> list[dict[str, Any]]:
         return self._fetch(query, where, per_query)
@@ -157,7 +165,8 @@ def all_sources(max_age_days: int = 0) -> list[JobSource]:
         LinkedInSource(max_age_days),
         Board("remoteok", scrapers_remote.remoteok, "remote", forget=scrapers_remote.forget_remoteok),
         Board("weworkremotely", scrapers_remote.weworkremotely, "remote", forget=scrapers_remote.forget_wwr),
-        Board("careers", scrapers_ats.careers, "careers", forget=scrapers_ats.forget, needs=scrapers_ats.load_companies),
+        Board("careers", scrapers_ats.careers, "careers", forget=scrapers_ats.forget, needs=scrapers_ats.load_companies,
+              failed=scrapers_ats.failed),
         JoobleSource(),
         AdzunaSource(),
     ]
