@@ -87,8 +87,8 @@ def forget_remoteok() -> None:
 def remoteok(keyword: str, where: str, limit: int, with_description: bool = True) -> list[dict[str, Any]]:
     try:
         payload = _remoteok_payload()
-    except (requests.RequestException, ValueError):      # ValueError: the board answered with something that is not its list
-        return []
+    except ValueError:                                   # the board answered with something that is not its list
+        raise requests.ConnectionError("RemoteOK answered with something that is not its list.") from None
     out: list[dict[str, Any]] = []
     for raw in payload:
         position = raw.get("position") or raw.get("title") or ""
@@ -150,10 +150,14 @@ def forget_wwr() -> None:
 
 def weworkremotely(keyword: str, where: str, limit: int, with_description: bool = True) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    for feed in wwr_feeds():
+    feeds, failed = wwr_feeds(), 0
+    for feed in feeds:
         try:
             rss = _wwr_feed(feed)
         except requests.RequestException:
+            failed += 1
+            if failed == len(feeds):            # no feed answered: the search says so, never "nothing found" (#76)
+                raise
             continue
         for it in _parse_wwr_items(rss):
             title_raw = _clean(it["title"])

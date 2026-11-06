@@ -1,3 +1,5 @@
+import pytest
+
 from jobhelper import scrapers_cz
 
 
@@ -137,14 +139,14 @@ def test_the_answer_of_a_branded_page_becomes_plain_text():
 def test_a_branded_posting_is_read_in_full(monkeypatch):
     asked, posted = [], []
 
-    def get(url, params=None):
+    def get(url):
         asked.append(url)
         return _Page(SITE_SCRIPT if "script.min.js" in url else BRANDED_PAGE, "https://example.jobs.cz/vacancy-detail?r=detail&id=2001452066")
 
     def post(url, **kw):
         posted.append((url, kw))
         return _Answer(_answer(FULL_HTML))
-    monkeypatch.setattr(scrapers_cz, "_get", get)
+    monkeypatch.setattr(scrapers_cz, "_read_link", get)
     monkeypatch.setattr(scrapers_cz.requests, "post", post)
     description, company = scrapers_cz._fetch_detail("https://www.jobs.cz/rpd/2001452066/")
     assert len(description) > 800 and description.startswith("You will build internal tools") and company == "Example Group"   # the page's own name wins
@@ -158,7 +160,7 @@ def test_a_branded_page_falls_back_to_its_summary(monkeypatch):
     page = _Page(BRANDED_PAGE, "https://example.jobs.cz/pd/2001452066")
     summary = scrapers_cz.parse_detail(BRANDED_PAGE)[0]
     assert 40 < len(summary) < 400
-    monkeypatch.setattr(scrapers_cz, "_get", lambda url, params=None: _Page(SITE_SCRIPT, url) if "script.min.js" in url else page)
+    monkeypatch.setattr(scrapers_cz, "_read_link", lambda url: _Page(SITE_SCRIPT, url) if "script.min.js" in url else page)
     for answer in (_Answer({}, fail=True), _Answer({"errors": [{"message": "denied"}]}), _Answer(_answer("<p>tiny</p>"))):
         monkeypatch.setattr(scrapers_cz.requests, "post", lambda url, answer=answer, **kw: answer)
         assert scrapers_cz._fetch_detail("https://example.jobs.cz/pd/2001452066") == (summary, "Example Group")
@@ -171,7 +173,7 @@ def test_a_branded_page_falls_back_to_its_summary(monkeypatch):
 
 def test_an_ordinary_page_with_its_text_asks_nothing_more(monkeypatch):
     full = "<html><body><main>" + "Our team builds data pipelines in Python and SQL every day. " * 12 + "</main></body></html>"
-    monkeypatch.setattr(scrapers_cz, "_get", lambda url, params=None: _Page(full, url))
+    monkeypatch.setattr(scrapers_cz, "_read_link", lambda url: _Page(full, url))
 
     def never(*a, **k):
         raise AssertionError("an ordinary page needs no second question")
@@ -180,7 +182,7 @@ def test_an_ordinary_page_with_its_text_asks_nothing_more(monkeypatch):
 
     def gone(url, params=None):
         raise scrapers_cz.requests.ConnectionError("down")
-    monkeypatch.setattr(scrapers_cz, "_get", gone)
+    monkeypatch.setattr(scrapers_cz, "_read_link", gone)
     assert scrapers_cz._fetch_detail("https://www.jobs.cz/rpd/1/") == ("", "")
 
 
@@ -196,7 +198,7 @@ def test_a_branded_page_that_carries_its_own_settings(monkeypatch):
     assert scrapers_cz.widget_in_page(BRANDED_PAGE) == {} and scrapers_cz.widget_in_page("<script>window.__LMC_CAREER_WIDGET__.push({broken});</script>") == {}
     assert scrapers_cz.widget_in_page('<script>window.__LMC_CAREER_WIDGET__.push({"widgetId":"w"});</script>') == {}
     asked, posted = [], []
-    monkeypatch.setattr(scrapers_cz, "_get", lambda url, params=None: asked.append(url) or _Page(INLINE_PAGE, "https://example.jobs.cz/vacancy-detail?r=detail&id=2001408263&rps=0"))
+    monkeypatch.setattr(scrapers_cz, "_read_link", lambda url: asked.append(url) or _Page(INLINE_PAGE, "https://example.jobs.cz/vacancy-detail?r=detail&id=2001408263&rps=0"))
     monkeypatch.setattr(scrapers_cz.requests, "post", lambda url, **kw: posted.append(kw) or _Answer(_answer(FULL_HTML, company="Example Works s.r.o.")))
     description, company = scrapers_cz._fetch_detail("https://www.jobs.cz/rpd/2001408263/")
     assert len(description) > 800 and company == "Example Works"
@@ -233,9 +235,14 @@ def test_a_page_s_own_copy_of_the_posting_is_read():
 
 
 class _Stream:
-    def __init__(self, body=b"", status=200, kind="text/html; charset=utf-8", pieces=None):
-        self.status_code, self.headers, self.encoding = status, {"Content-Type": kind}, "utf-8"
+    def __init__(self, body=b"", status=200, kind="text/html; charset=utf-8", pieces=None, to=""):
+        self.status_code, self.headers = status, {"Content-Type": kind, **({"Location": to} if to else {})}
+        self.encoding = "utf-8" if "charset=utf-8" in kind else "ISO-8859-1"    # what requests says for text/* without one
+        self.is_redirect = bool(to)
         self._pieces, self.read = pieces if pieces is not None else [body], 0
+
+    def close(self):
+        pass
 
     def __enter__(self):
         return self
@@ -249,7 +256,69 @@ class _Stream:
             yield piece
 
 
-def test_a_posting_page_is_read_with_care(monkeypatch):
+_NAMES = {"careers.example.com": "93.184.216.34", "jobs.example.org": "93.184.216.35", "intranet.example.com": "10.0.0.5",
+          "localhost": "127.0.0.1", "split.example.com": ("93.184.216.36", "192.168.1.9"),
+          "nat64.example.com": "64:ff9b::a00:5", "sitelocal.example.com": "fec0::1", "v6.example.com": "2606:2800:220:1::1"}
+
+
+@pytest.fixture
+def names(monkeypatch):
+    """Host names looked up without the network: a public, a private and a mixed one."""
+    from jobhelper import web
+
+    def getaddrinfo(host, port, *a, **k):
+        found = _NAMES.get(host, host)
+        if not any(c.isdigit() for c in str(found)) and ":" not in str(found):
+            raise web.socket.gaierror("no such name")
+        return [(None, None, None, "", (ip, port)) for ip in (found if isinstance(found, tuple) else (found,))]
+    monkeypatch.setattr(web.socket, "getaddrinfo", getaddrinfo)
+
+
+def test_only_a_public_address_is_read(names):
+    from jobhelper import web
+    assert web.public_address("https://careers.example.com/jobs/1") and web.public_address("https://v6.example.com/")
+    for private in ("http://nat64.example.com/", "http://sitelocal.example.com/", "http://127.0.0.1/", "http://[::1]/x", "http://localhost:8080/", "http://intranet.example.com/",
+                    "http://169.254.169.254/latest/meta-data", "http://split.example.com/", "http://no-such.invalid/",
+                    "ftp://careers.example.com/", "file:///etc/hosts", "https://careers.example.com:notaport/", "http://127.0.0.1\\@example.com/",
+                    "http://169.254.169.254\\@careers.example.com/", "http://careers.example.com/\x00", "", None):
+        assert not web.public_address(private), private
+
+
+def test_a_redirect_never_takes_the_reader_to_a_private_address(monkeypatch, names):
+    """#76: requests followed every redirect of a posting's link, also to this Mac or the local network."""
+    from jobhelper import scrapers_page
+    page = ("<html>" + _ld({"@type": "JobPosting", "description": "Write tests."}) + "</html>").encode()
+    asked = []
+
+    def get(url, **kw):
+        asked.append(url)
+        assert kw["allow_redirects"] is False
+        return answers.pop(0)
+    monkeypatch.setattr(scrapers_page.requests, "get", get)
+    answers = [_Stream(status=302, to="http://169.254.169.254/latest/meta-data")]
+    assert scrapers_page.posting_text("https://careers.example.com/jobs/1") == "" and asked == ["https://careers.example.com/jobs/1"]
+    asked.clear()
+    answers = [_Stream(status=301, to="/jobs/2"), _Stream(status=302, to="https://jobs.example.org/2"), _Stream(page)]
+    assert scrapers_page.posting_text("https://careers.example.com/jobs/1") == "Write tests."
+    assert asked == ["https://careers.example.com/jobs/1", "https://careers.example.com/jobs/2", "https://jobs.example.org/2"]
+    answers = [_Stream(status=302, to="/again")] * (scrapers_page.web.MAX_HOPS + 1)
+    assert scrapers_page.posting_text("https://careers.example.com/loop") == ""
+    asked.clear()
+    assert scrapers_page.posting_text("http://intranet.example.com/jobs/1") == "" and asked == []
+
+
+def test_a_page_without_a_character_set_is_read_as_its_own_bytes_say(monkeypatch, names):
+    """#76: the server named no character set, requests guessed Latin-1, and "Projektový manažer" came out broken."""
+    from jobhelper import scrapers_page
+    page = ("<html>" + _ld({"@type": "JobPosting", "description": "Projektový manažer, Brno"}) + "</html>").encode("utf-8")
+    monkeypatch.setattr(scrapers_page.requests, "get", lambda url, **kw: _Stream(page, kind="text/html"))
+    assert scrapers_page.posting_text("https://careers.example.com/jobs/1") == "Projektový manažer, Brno"
+    latin = ('<html><meta charset="windows-1250">' + _ld({"@type": "JobPosting", "description": "Účetní"}) + "</html>").encode("cp1250")
+    monkeypatch.setattr(scrapers_page.requests, "get", lambda url, **kw: _Stream(latin, kind="text/html"))
+    assert scrapers_page.posting_text("https://careers.example.com/jobs/2") == "Účetní", "the page's own meta charset"
+
+
+def test_a_posting_page_is_read_with_care(monkeypatch, names):
     from jobhelper import scrapers_page
     page = ("<html>" + _ld({"@type": "JobPosting", "description": "<p>You will write Python services and test them.</p>"}) + "</html>").encode()
     asked = []
@@ -274,3 +343,43 @@ def test_a_posting_page_is_read_with_care(monkeypatch):
         raise scrapers_page.requests.ConnectionError("down")
     monkeypatch.setattr(scrapers_page.requests, "get", down)
     assert scrapers_page.posting_text("https://careers.example.com/jobs/1") == ""
+
+
+def test_a_jobs_cz_link_to_a_private_address_is_never_asked(monkeypatch, names):
+    """#76: the jobs.cz reader followed a posting's link and its script's address anywhere."""
+    asked = []
+    monkeypatch.setattr(scrapers_cz.requests, "get", lambda url, **kw: asked.append(url) or _Stream(b"<html></html>"))
+    assert scrapers_cz._fetch_detail("http://intranet.example.com/rpd/1/") == ("", "") and asked == []
+    monkeypatch.setattr(scrapers_cz.requests, "get", lambda url, **kw: asked.append(url) or _Stream(status=302, to="http://127.0.0.1:8080/"))
+    assert scrapers_cz._fetch_detail("https://careers.example.com/rpd/1/") == ("", "") and asked == ["https://careers.example.com/rpd/1/"]
+
+
+def test_a_board_that_cannot_be_read_says_so_instead_of_finding_nothing(monkeypatch):
+    """#76: LinkedIn and the remote boards turned a failure into an empty list, so the search said it found nothing."""
+    from jobhelper import scrapers_intl, scrapers_remote
+    requests = scrapers_intl.requests
+
+    class _Refused:
+        status_code, text = 429, ""
+    monkeypatch.setattr(scrapers_intl.requests, "get", lambda *a, **kw: _Refused())
+    with pytest.raises(requests.HTTPError):
+        scrapers_intl.linkedin("python", "Prague", 10)
+    monkeypatch.setattr(scrapers_remote, "_remoteok_payload", lambda: (_ for _ in ()).throw(ValueError("not a list")))
+    with pytest.raises(requests.ConnectionError):
+        scrapers_remote.remoteok("python", "Prague", 10)
+    monkeypatch.setattr(scrapers_remote, "wwr_feeds", lambda: ["a", "b"])
+    monkeypatch.setattr(scrapers_remote, "_wwr_feed", lambda feed: (_ for _ in ()).throw(requests.ConnectionError("down")))
+    with pytest.raises(requests.ConnectionError):
+        scrapers_remote.weworkremotely("python", "Prague", 10)
+    monkeypatch.setattr(scrapers_remote, "_wwr_feed", lambda feed: "<rss></rss>" if feed == "b" else (_ for _ in ()).throw(requests.ConnectionError("down")))
+    assert scrapers_remote.weworkremotely("python", "Prague", 10) == [], "one feed down: the other is still read"
+
+
+def test_the_board_s_own_search_needs_no_name_check(monkeypatch):
+    """A VPN that hands out its own addresses must not stop the jobs.cz search, which asks a fixed address."""
+    from jobhelper import web
+    monkeypatch.setattr(web, "public_address", lambda url: False)
+    monkeypatch.setattr(scrapers_cz.requests, "get", lambda url, **kw: type("R", (), {"raise_for_status": lambda self: None, "text": "<html></html>"})())
+    assert scrapers_cz._get("https://www.jobs.cz/prace/praha/", params={"q": "python"}).text == "<html></html>"
+    with pytest.raises(scrapers_cz.requests.ConnectionError):
+        scrapers_cz._read_link("https://www.jobs.cz/rpd/1/")                   # a posting's link is checked

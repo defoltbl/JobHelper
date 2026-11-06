@@ -243,9 +243,11 @@ def test_a_failing_board_prints_no_key(monkeypatch, capsys):
     def failing(q, where, n):
         raise requests.HTTPError("503 for url: https://api.example.com/search?app_key=SECRETKEY99&q=x")
     monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda source, max_age_days=0, country="": [job_sources.Board("example", failing)])
-    assert agent2_search.search(["python"], where="Prague") == []
+    with pytest.raises(agent2_search.SourcesDown) as down:                      # the only board failed: not "nothing found"
+        agent2_search.search(["python"], where="Prague")
     out = capsys.readouterr().out
     assert "example error for 'python'" in out and "SECRETKEY99" not in out and "app_key" not in out
+    assert "SECRETKEY99" not in str(down.value) and "example" in str(down.value)
 
 
 @pytest.mark.parametrize("description, company", [

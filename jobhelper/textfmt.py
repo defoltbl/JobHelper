@@ -8,6 +8,7 @@ from the board's own "Show more Show less" buttons).
 from __future__ import annotations
 
 import re
+import unicodedata
 
 # Section headings as postings write them. Longest first, so "Bonus qualifications" wins over "Bonus".
 _HEADINGS = sorted([
@@ -106,3 +107,8 @@ def has_non_latin(text) -> bool:
     """Whether a text has letters of another script than Latin (punctuation such as ’ or – is fine)."""
     return bool(_NON_LATIN.search(str(text or "")))
 
+
+def fold(text) -> str:
+    """Lower case without accents ("Projektový Manažer" → "projektovy manazer"): how words are compared when the
+    accents may or may not be typed."""
+    return unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore").decode().lower()

@@ -149,7 +149,15 @@ data/                your data; only the *.example.* files are in git
 
 - **Reading postings:** `scrapers_cz` (jobs.cz, prace.cz, company-branded pages), `scrapers_intl`
   (LinkedIn guest pages), `scrapers_remote`, `scrapers_ats` (company career systems),
-  `scrapers_page` (any other page: only the copy it publishes for search engines).
+  `scrapers_page` (any other page: only the copy it publishes for search engines). A link from a board is read only
+  when it and every redirect are on the public internet (`web.public_get`: `public_address` for each hop, redirects
+  followed by hand; `scrapers_cz._get` and `scrapers_page` use it): never this Mac or the local network. A page whose server names no character set is given to the parser as bytes.
+- **A source that fails is never "nothing found"** (#76): `agent2_search._collect` names it in the log and in
+  `failed` (a career site of many through `JobSource.failures()`); with no answer at all it raises `SourcesDown`.
+  `take_in(failed=...)` then keeps the earlier Filtered out rows of those sources only, never one now in the job
+  list (`_with_earlier`). A source that failed as a whole is named once; `failures()` gives only the names of its
+  parts (one company), and `_collect` alone writes "careers (Fabrikam)". Words are compared without accents
+  with `textfmt.fold` (role keys, the filters).
 - **Rules without a model call:** `filters` (level, years, languages), `prefilter` (another
   profession, unwanted roles), `keywords`, `salary`, `merge`, `followup`, `planner`, `language`
   (which language an ad is written in), `mailhosts` (which server a mailbox is read from), `places` (which city is in which country, and what

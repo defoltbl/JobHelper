@@ -293,7 +293,9 @@ Some important points:
 
 A search can also be run from the command line. It does the same work as **Run search** and
 writes to the same files. Both make one `agent2_search.SearchSettings` from the Options, and both add
-what the search found with `agent2_search.take_in`.
+what the search found with `agent2_search.take_in`. A source that cannot be read is named in
+the log and in the list `failed`. Then `take_in` keeps the earlier rows of the Filtered out list.
+When no source answers, the search raises `agent2_search.SourcesDown`.
 
 ```bash
 python run.py
@@ -445,7 +447,7 @@ Table 6.3 groups the other modules by what they are for.
 
 | Group | Modules | What they do |
 |---|---|---|
-| Reading postings | `job_sources`, `scrapers_cz`, `scrapers_intl`, `scrapers_remote`, `scrapers_ats`, `scrapers_page`, `web` | Each board, feed or API is one `JobSource` with the same interface: find, reset, available. Each source has one kind; `SourceChoice` alone decides which kinds a setting reads. One scraper module per kind of site; `web` says how the app introduces itself to all of them, and jobs.cz and prace.cz share one `LmcBoard`. A site that turns programs away is left alone |
+| Reading postings | `job_sources`, `scrapers_cz`, `scrapers_intl`, `scrapers_remote`, `scrapers_ats`, `scrapers_page`, `web` | Each board, feed or API is one `JobSource` with the same interface: find, reset, available, failures. Each source has one kind; `SourceChoice` alone decides which kinds a setting reads. One scraper module per kind of site; `web` says how the app introduces itself to all of them. `web` also reads a link from a posting only on the public internet (`public_address`, `public_get`). jobs.cz and prace.cz share one `LmcBoard`. A site that turns programs away is left alone |
 | Rules without a model call | `filters`, `prefilter`, `language`, `places`, `keywords`, `salary`, `merge`, `followup`, `planner` | Level, years, language, location, profession, pay, duplicates, reminders. `places.RemoteReach` decides which remote jobs fit, for the search and for Options. `filters.Placement`, made once per search, says whether a posting is in the right place and why not. Its `home` is the country of the search. `planner.EventCheck` checks a date to remember and names the field of a refusal |
 | Writing | `word_document`, `about_you`, `claims`, `cv_tailor`, `cover_letter`, `letters`, `form_answers`, `interview_prep`, `prep_doc`, `pdf` | The adapted CV, the letter, form answers, the interview documents (one for HR, one technical). `WordDocument` opens a .docx and saves it with only the text changed; every other part stays byte for byte. `claims.ClaimCheck` checks that a text in your voice claims nothing more than the CV. The letter, the form answers and the interview preparation all use it. `claims.EmployerCheck` keeps work with its employer. `cover_letter.make_template` makes a letter template from the CV's head. `cv_tailor.MasterSkills` keeps the shape of KEY SKILLS. `claims.unbacked_figures` finds a figure that no source gives; the adapted CV's profile, the letter and the form answers use it. `about_you.AboutYou` holds the facts of the About you window; `WorkNotes` makes the notes for each job into the one text that the app reads |
 | Mail | `email_client`, `mailhosts` | Reading mailboxes read-only; which server a mailbox is read from. A fetch gives `Fetched`: the messages, and a warning for each folder or mailbox it could not read |

@@ -259,3 +259,89 @@ def test_the_country_of_a_search_is_one_rule():
     assert filters.Placement("Prague", "Germany").home == "germany"
     assert filters.Placement("Prague", "Atlantis").home == "czechia"        # a Country the app does not know: the city's
     assert filters.Placement("Nowhere", "").home == ""
+
+
+class _Source(job_sources.JobSource):
+    def __init__(self, name, answer, failures=()):
+        super().__init__(name, "boards")
+        self._answer, self._failures = answer, list(failures)
+
+    def find(self, query, where, per_query):
+        if isinstance(self._answer, Exception):
+            raise self._answer
+        return [store.new_job(id=f"{self.name}-{query}", title="Data Analyst", company="Fabrikam", url="https://x.example/1")]
+
+    def failures(self):
+        return self._failures
+
+
+def test_a_search_that_reaches_no_source_is_not_nothing_found(capsys):
+    """#76: with the network down every board failed, and the search said it found nothing."""
+    import pytest
+    import requests
+    down = [_Source("jobs.cz", requests.ConnectionError("down")), _Source("linkedin", requests.HTTPError("503"))]
+    with pytest.raises(agent2_search.SourcesDown, match="jobs.cz, linkedin"):
+        agent2_search._collect(down, ["analyst"], "Brno", 5)
+    failed = []
+    found = agent2_search._collect([down[0], _Source("careers", None, failures=["Contoso"])], ["analyst"], "Brno", 5,
+                                   failed=failed)
+    assert [j["id"] for j in found] == ["careers-analyst"] and failed == ["jobs.cz", "careers (Contoso)"]
+    assert "Not read this time: jobs.cz, careers (Contoso)" in capsys.readouterr().out
+    assert agent2_search.not_read_note(failed) == " Not read this time: jobs.cz, careers (Contoso)." and agent2_search.not_read_note([]) == ""
+    failed = []
+    with pytest.raises(agent2_search.SourcesDown):
+        agent2_search._collect([_Source("careers", requests.ConnectionError("none"), failures=["Contoso", "Fabrikam"])],
+                               ["analyst"], "Brno", 5, failed=failed)
+    assert failed == ["careers"], "a source that failed as a whole is named once, not with each of its sites"
+
+
+def test_a_source_that_was_not_read_keeps_its_filtered_out_postings(isolate_data, monkeypatch):
+    """#76: a search that could not read a source saved a Filtered out list without that source's postings."""
+    monkeypatch.setattr(agent2_search, "check_closed", lambda jobs, dropped=None: {"removed": 0, "marked": 0})
+    monkeypatch.setattr(agent2_search, "reread_missing", lambda jobs, english_only=True, dropped=None: {"removed": 0})
+    def row(id, source, company="Fabrikam"):
+        return {"title": "Analyst", "company": company, "source": source, "group": "level", "reason": "senior",
+                "job": store.new_job(id=id, title="Analyst", company=company, source=source)}
+    agent2_search.save_dropped([row("old-1", "jobs.cz"), row("old-2", "linkedin"), row("old-3", "careers", "Contoso"),
+                                row("old-4", "careers", "Northwind"), row("taken", "jobs.cz")])
+    rows = [row("new-1", "prace.cz")]
+    agent2_search.take_in([store.new_job(id="taken", title="Analyst")], [], dropped=list(rows), failed=["jobs.cz", "careers (Contoso)"])
+    kept = [r["job"]["id"] for r in agent2_search.load_dropped()["rows"]]
+    assert kept == ["new-1", "old-1", "old-3"], "only the sources not read keep their rows, never one now in the list"
+    agent2_search.take_in([], [], dropped=list(rows), failed=["jobs.cz"])
+    assert [r["job"]["id"] for r in agent2_search.load_dropped()["rows"]] == ["new-1", "old-1"], "kept once"
+    agent2_search.take_in([], [], dropped=list(rows))
+    assert [r["job"]["id"] for r in agent2_search.load_dropped()["rows"]] == ["new-1"], "a full search replaces the list"
+
+
+def test_a_role_written_with_or_without_accents_is_the_same_role():
+    """#76: "Projektový manažer" fell apart into "projektov" and "mana"."""
+    assert agent2_search.role_key("Projektový manažer") == agent2_search.role_key("Projektovy Manazer") == {"projektovy", "manazer"}
+
+
+def test_a_jobs_cz_word_in_an_address_is_not_jobs_cz(monkeypatch):
+    """#76: any link with "jobs.cz" in it was read by the jobs.cz reader, without the check of the address."""
+    from jobhelper import scrapers_cz, scrapers_page
+    asked = []
+    monkeypatch.setattr(scrapers_cz, "_fetch_detail", lambda url: asked.append(url) or ("text", ""))
+    monkeypatch.setattr(scrapers_page, "posting_text", lambda url: "")
+    read = agent2_search.real_refetch_description                              # conftest fakes refetch_description
+    assert read({"url": "http://127.0.0.1/?next=jobs.cz", "source": "jooble"}) == ""
+    assert asked == []
+    assert read({"url": "https://www.jobs.cz/rpd/123/", "source": "jobs.cz"}) == "text"
+
+
+def test_a_look_alike_link_is_never_taken_for_the_board(monkeypatch):
+    from jobhelper import scrapers_cz, scrapers_intl, scrapers_page
+    asked = []
+    monkeypatch.setattr(scrapers_intl, "read_posting", lambda job: asked.append("linkedin") or ("", False, ""))
+    monkeypatch.setattr(scrapers_cz, "_fetch_detail", lambda url: asked.append("cz") or ("", ""))
+    monkeypatch.setattr(scrapers_page, "posting_text", lambda url: asked.append("page") or "")
+    read = agent2_search.real_refetch_description
+    for url in ("https://evil.example/?x=linkedin.com", "https://notjobs.cz/rpd/1", "https://jobs.cz.evil.example/1",
+                "https://evil.example/jooble.org/1"):
+        read({"url": url, "source": "jooble"})
+    assert asked == ["page"] * 4
+    read({"url": "https://cz.linkedin.com/jobs/view/1", "source": "x"})
+    read({"url": "https://jooble.org/desc/1", "source": "x"})
+    assert asked[4:] == ["linkedin"], "a real subdomain counts; jooble is never read twice"

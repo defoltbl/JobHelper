@@ -14,7 +14,7 @@ kept with its reason for the "Filtered out" list. Plain HTTP: no Claude usage is
 from __future__ import annotations
 
 import re
-import unicodedata
+from urllib.parse import urlparse
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -35,7 +35,7 @@ _ROLE_NOISE = {
 
 def role_key(title: str) -> frozenset[str]:
     """Normalise a job title to its core role tokens (drops seniority/gender/noise)."""
-    tokens = re.findall(r"[a-z0-9+#]{2,}", (title or "").lower())
+    tokens = re.findall(r"[a-z0-9+#]{2,}", textfmt.fold(title))       # "Projektový manažer" = "Projektovy manazer"
     return frozenset(t for t in tokens if t not in _ROLE_NOISE)
 
 
@@ -84,7 +84,7 @@ def drop_known_applications(
 
 def _lead_key(job: dict[str, Any]) -> tuple[str, str]:
     title = re.sub(r"\([^)]*\)", " ", (job.get("title") or "").lower())
-    title = re.sub(r"[^a-z0-9]+", " ", unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()).strip()
+    title = re.sub(r"[^a-z0-9]+", " ", textfmt.fold(title)).strip()
     return email_client.norm_company(job.get("company", "")), title
 
 
@@ -277,12 +277,16 @@ def refetch_description(job: dict[str, Any]) -> str:
     A first read can fail for a moment (the board answers too many requests with nothing)."""
     url, source = job.get("url") or "", (job.get("source") or "").split("/")[0]
     try:
-        if source == "linkedin" or "linkedin.com" in url:
-            return scrapers_intl.read_posting(job)[0]
-        if "jobs.cz" in url or "prace.cz" in url:
+        host = (urlparse(url).hostname or "").lower()
+
+        def on(*sites):                                  # the link's host, never a word somewhere in it
+            return any(host == s or host.endswith("." + s) for s in sites)
+        if source == "linkedin" or on("linkedin.com"):
+            return scrapers_intl.read_posting(job)[0]     # by the posting's number: the app makes the address itself
+        if on("jobs.cz", "prace.cz"):
             from . import scrapers_cz
             return scrapers_cz._fetch_detail(url)[0]
-        if not url or any(host in url for host in _NO_SECOND_READ):
+        if not url or on(*_NO_SECOND_READ):
             return ""
         # any other board or company page: the copy of the posting the page itself publishes
         from . import scrapers_page
@@ -368,6 +372,25 @@ def note_dropped(dropped: list | None, job: dict[str, Any], group: str, reason: 
 NO_BRING_BACK = {"duplicate", "already applied", "closed"}
 
 
+def _with_earlier(rows: list[dict[str, Any]], failed: list[str], jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The new rows, then the earlier list's rows of the sources this search could not read (`failed`, as _collect
+    names them: "jobs.cz", "careers (Fabrikam)"), so a source that was down does not empty what it had filtered out
+    (#76). A posting that is now in the job list or among the new rows is not kept twice."""
+    def key(row):
+        return (row.get("job") or {}).get("id") or row.get("url") or (row.get("title"), row.get("company"))
+
+    def from_failed(row):
+        source = str(row.get("source") or (row.get("job") or {}).get("source") or "").split("/")[0]
+        for entry in failed:
+            name, _, part = entry.partition(" (")
+            if source == name and (not part or str(row.get("company") or "") == part[:-1]):
+                return True
+        return False
+    have = {key(r) for r in rows} | {j.get("id") for j in jobs}
+    return rows + [r for r in load_dropped()["rows"] if key(r) not in have and from_failed(r)]   # save_dropped keeps
+    # the first MAX_DROPPED: the new rows come first, so it is the oldest kept ones that go
+
+
 def save_dropped(rows: list[dict[str, Any]], when: str = "") -> None:
     """Keep what the latest search filtered out (replaces the previous search's list)."""
     from datetime import datetime
@@ -391,13 +414,24 @@ def load_dropped() -> dict[str, Any]:
 
 
 
-def _collect(sources: list, queries: list[str], where: str, per_query: int, progress=None) -> list[dict[str, Any]]:
+def not_read_note(failed: list[str]) -> str:
+    """What the end of a search says about the sources it could not read ('' when it read them all)."""
+    return f" Not read this time: {', '.join(failed)}." if failed else ""
+
+
+class SourcesDown(RuntimeError):
+    """No source answered at all (no network, every board down): that is not "nothing found" (#76)."""
+
+
+def _collect(sources: list, queries: list[str], where: str, per_query: int, progress=None,
+             failed: list[str] | None = None) -> list[dict[str, Any]]:
     """Every posting the sources find for the queries, once each (the first source to find it keeps it).
-    A source that fails is noted and the others go on."""
+    A source that fails is said in the log, added to `failed`, and the others go on. SourcesDown when none answered."""
     found: dict[str, dict[str, Any]] = {}
-    steps, step = len(sources) * len(queries), 0
+    failed = [] if failed is None else failed
+    steps, step, answered = len(sources) * len(queries), 0, 0
     for src in sources:
-        name, got = src.name, 0
+        name, got, broke = src.name, 0, False
         for q in queries:
             if progress:
                 progress(step, steps)
@@ -408,14 +442,25 @@ def _collect(sources: list, queries: list[str], where: str, per_query: int, prog
                         job["query"] = q            # which keyword found it (for the Insights view)
                         found[job["id"]] = job
                         got += 1
+                answered += 1
             except requests.HTTPError as e:
                 print(f"  ! {name} error for '{q}': {safe_error(e)}")
+                broke = True
             except requests.RequestException as e:
                 print(f"  ! {name} network error for '{q}': {safe_error(e)}")
+                broke = True
             except Exception as e:  # noqa: BLE001 - a board that changed its pages must not end the whole search
                 trouble.note(f"reading {name} for a search", RuntimeError(safe_error(f"{type(e).__name__}: {e}")))
                 print(f"  ! {name} could not be read for '{q}' ({type(e).__name__}); the other sources go on")
+                broke = True
         print(f"  · {name}: +{got} new listings")
+        parts = [] if broke else [f"{name} ({part})" for part in src.failures()]      # a source that failed as a whole is named once
+        failed.extend(f for f in ([name] if broke else parts) if f not in failed)
+    if steps and not answered:
+        raise SourcesDown(f"No job source could be read ({', '.join(failed)}). Check the internet connection, or "
+                          "search again later.")
+    if failed:
+        print(f"  ! Not read this time: {', '.join(failed)}. The Filtered out list keeps its earlier postings too.")
     return list(found.values())
 
 
@@ -543,20 +588,22 @@ class SearchSettings:
                    level_words=tuple(level) if isinstance(level, (list, tuple)) else None,
                    max_years=None if o.get("max_years") is None else int(o["max_years"]))
 
-    def run(self, queries: list[str], source, dropped: list | None = None, progress=None) -> list[dict[str, Any]]:
+    def run(self, queries: list[str], source, dropped: list | None = None, progress=None,
+            failed: list[str] | None = None) -> list[dict[str, Any]]:
         """The search itself (see `search`)."""
         return search(queries, where=self.where, per_query=self.per_query, source=source, english_only=self.english_only,
                       candidate_seniority=self.seniority, max_age_days=self.max_age_days, progress=progress,
                       full_time_only=self.full_time_only, skip_words=list(self.skip_words), keep_words=list(self.keep_words),
                       dropped=dropped, level_words=None if self.level_words is None else list(self.level_words),
-                      max_years=self.max_years)
+                      max_years=self.max_years, failed=failed)
 
 
 def take_in(jobs: list[dict[str, Any]], found: list[dict[str, Any]], english_only: bool = True,
-            dropped: list | None = None) -> dict[str, int]:
+            dropped: list | None = None, failed: list[str] | None = None) -> dict[str, int]:
     """Add what a search found to the job list, the same way after every search: roles you already applied to are
     left out, a role already listed from another board is kept once, an empty posting is read once more, and
-    postings that stopped taking applications are noted. The Filtered out list is saved. Mutates `jobs`.
+    postings that stopped taking applications are noted. The Filtered out list is saved; when a source could not be
+    read (`failed`, from the search), its earlier rows stay in it. Mutates `jobs`.
     Returns {found, added, skipped, known, closed}."""
     dropped = dropped if dropped is not None else []
     found, known = drop_known_applications(found, jobs, dropped=dropped)
@@ -564,7 +611,7 @@ def take_in(jobs: list[dict[str, Any]], found: list[dict[str, Any]], english_onl
     added -= len(prune_duplicate_leads(jobs))                       # same role already listed from another board
     added -= reread_missing(jobs, english_only=english_only, dropped=dropped)["removed"]
     closed = check_closed(jobs, dropped=dropped)                    # postings that stopped accepting applications
-    save_dropped(dropped)
+    save_dropped(_with_earlier(dropped, failed, jobs) if failed else dropped)
     return {"found": len(found), "added": added, "skipped": skipped, "known": known,
             "closed": closed["removed"] + closed["marked"]}
 
@@ -584,6 +631,7 @@ def search(
     dropped: list[dict[str, Any]] | None = None,
     level_words=None,
     max_years: int | None = None,
+    failed: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Run each query against every active provider; return de-duped records.
 
@@ -593,7 +641,8 @@ def search(
     candidate's level are dropped for junior/mid. With max_age_days>0, jobs with a
     known posting date older than that are dropped (undated jobs are kept).
 
-    Every posting a filter removes is added to `dropped` (if given) with the reason.
+    Every posting a filter removes is added to `dropped` (if given) with the reason; every source that could not be
+    read is added to `failed` (if given). SourcesDown when no source answered.
 
     level_words / max_years come from Options ("Skip levels above yours", "Skip jobs
     asking for … years"). None means: decide from the level in the CV.
@@ -616,7 +665,7 @@ def search(
             "  • jooble → set JOOBLE_API_KEY"
         )
 
-    results = _collect(sources, queries, where, per_query, progress)
+    results = _collect(sources, queries, where, per_query, progress, failed)
     for job in results:
         fill_company(job)
     results = SearchFilters(placement, candidate_seniority, english_only=english_only, max_age_days=max_age_days,

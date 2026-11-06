@@ -151,9 +151,13 @@ def linkedin(keyword: str, where: str, limit: int, with_description: bool = True
             r = requests.get(_SEARCH, params={**base_params, "start": start},
                              headers=_HEADERS, timeout=_TIMEOUT)
             if r.status_code != 200:
+                if start == 0:                  # not read at all: the search says so, never "nothing found" (#76)
+                    raise requests.HTTPError(f"LinkedIn answered {r.status_code}.")
                 break
         except requests.RequestException:
-            break
+            if start == 0:
+                raise
+            break                               # a later page: what the earlier ones gave is kept
         page = parse_linkedin(r.text, where, 1000)
         if not page:
             break

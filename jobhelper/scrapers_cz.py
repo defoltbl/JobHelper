@@ -39,7 +39,18 @@ def _slug(text: str) -> str:
 
 
 def _get(url: str, params: dict[str, Any] | None = None) -> requests.Response:
+    """A page of the board's own search, at its fixed address."""
     resp = requests.get(url, params=params, headers=_HEADERS, timeout=_TIMEOUT)
+    resp.raise_for_status()
+    return resp
+
+
+def _read_link(url: str) -> requests.Response:
+    """A page a posting links to (its own page, its script): only a public address, each redirect checked
+    (web.public_get), never this Mac or the local network (#76)."""
+    resp = web.public_get(url, headers=_HEADERS, timeout=_TIMEOUT)
+    if resp is None:
+        raise requests.ConnectionError("The link does not lead to a page on the public internet.")
     resp.raise_for_status()
     return resp
 
@@ -161,7 +172,7 @@ def _fetch_widget(page_html: str, page_url: str) -> tuple[str, str]:
         widget = widget_in_page(page_html)
         if not widget:
             script = widget_script(page_html)
-            widget = widget_of(page_html, _get(urljoin(page_url, script)).text) if script else {}
+            widget = widget_of(page_html, _read_link(urljoin(page_url, script)).text) if script else {}
         if not widget:
             return "", ""
         # the key belongs to the page and is only used for this one question; it is never stored or shown
@@ -178,7 +189,7 @@ def _fetch_widget(page_html: str, page_url: str) -> tuple[str, str]:
 
 def _fetch_detail(url: str) -> tuple[str, str]:
     try:
-        page = _get(url)
+        page = _read_link(url)
     except requests.RequestException:
         return "", ""
     description, company = parse_detail(page.text)
