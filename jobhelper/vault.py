@@ -314,10 +314,25 @@ def _write_atomic(path: Path, data: bytes) -> None:
             except OSError:
                 pass                             # a disk that keeps no modes
             f.write(data)
+            f.flush()
+            os.fsync(f.fileno())                 # on the disk before it takes the old file's place (#75)
         os.replace(tmp, path)
+        try:                                     # and the new name too
+            folder = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(folder)
+            finally:
+                os.close(folder)
+        except OSError:
+            pass                                 # a folder that cannot be synced on this disk
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
+
+
+def write_plain(path: Path, data: bytes) -> None:
+    """Write a file that is not encrypted (the signed list of protected files), whole or not at all."""
+    _write_atomic(Path(path), data)
 
 
 def read_bytes(path: Path) -> bytes:
@@ -502,9 +517,10 @@ def restore_backup(src: Path, dest: Path) -> int:
     return done
 
 
-def set_aside(path: Path, folder: str) -> Path | None:
+def set_aside(path: Path, folder: str, move: bool = True) -> Path | None:
     """Move a file, as it is on disk, into backups/<folder>/ with a time-stamped name (a damaged file that is
-    replaced is kept there, never deleted). Returns where it went, or None when there was no file."""
+    replaced is kept there, never deleted). With `move=False` it is copied, so the file stays where it is until its
+    replacement is written. Returns where it went, or None when there was no file."""
     path = Path(path)
     if not path.is_file():
         return None
@@ -515,7 +531,10 @@ def set_aside(path: Path, folder: str) -> Path | None:
         n += 1
         dest = dest.with_name(f"{path.stem}.{stamp}-{n}{path.suffix}")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    path.replace(dest)
+    if move:
+        path.replace(dest)
+    else:
+        _write_atomic(dest, path.read_bytes())
     try:
         os.chmod(dest, 0o600)                  # a damaged file may hold your data in plain text
     except OSError:
@@ -580,6 +599,9 @@ def _usable(name: str, data: bytes) -> str:
     return ""
 
 
+RESTORE_TEST = "restore_test"     # the label of the copies Check backups makes: housekeeping keeps only the newest one
+
+
 def restore_test() -> dict:
     """Back up the data files, restore that backup into a throwaway folder, and
     compare every restored file with the live data. Then try to decrypt every
@@ -592,7 +614,7 @@ def restore_test() -> dict:
     if state() != "ok":
         raise VaultError("Protection is off on this Mac, so there are no encrypted backups to test.")
     live = {p.name: read_bytes(p) for p in data_files() if Path(p).is_file()}
-    backup = make_backup("restore_test")
+    backup = make_backup(RESTORE_TEST)
     scratch = Path(tempfile.mkdtemp(prefix="jobhelper-restore-"))
     files = []
     try:

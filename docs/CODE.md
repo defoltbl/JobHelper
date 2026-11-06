@@ -466,6 +466,16 @@ two steps: `run.py --reuse-profile`, then `status.py sync --summary`. Each step 
 `weekly_jobhelper.log` in the data folder. A step that fails is written in the log, and the next
 step still runs.
 
+The weekly run and the window never change the job list at the same time. `store.RunLock` is a
+file lock (`.jobs.lock` in the data folder). `WeeklyRun` waits up to `WeeklyRun.WAIT` seconds for
+it. If the lock does not come free, the run writes a line in the log and stops with
+`WeeklyRun.BUSY_CODE`. The window takes the lock before a search, a scan or a new score, and lets
+it go when the run ends. `store.save_jobs` holds the lock while it writes (`RunLock.holding()`).
+A change in the window holds it from its first read to its last write (`api_base._holding_jobs`).
+While another process holds the lock, both refuse with `store.RunLock.BUSY`. The commands `run.py`
+and `status.py` hold the lock for their whole run (`RunLock.command`). Commands that change no job
+(`status._changes_jobs`) do not take it.
+
 At each start, `schedule.refresh()` compares the LaunchAgent with `schedule.command()`. If an older
 version or a different place of the app wrote it, the function writes it again with the same day
 and time. When `JOBHELPER_HOME` chooses another data folder, the function does nothing and the
@@ -550,7 +560,8 @@ The button calls `Bridge.fixProblem`. That slot refuses during a run. Then it ca
 - `repair_statuses` makes a backup and calls `store.repair_statuses`. The command
   `python status.py repair-statuses` uses the same function.
 - `restore_data` finds the newest backup copy that opens with `vault.newest_good_copy`. It moves
-  the damaged file into `backups/damaged` with `vault.set_aside`. Then it writes the copy back.
+  a copy of the damaged file into `backups/damaged` with `vault.set_aside(..., move=False)`. Then it
+  writes the good copy over the file. If that write fails, the damaged file stays in its place.
 
 No message of the check tells the person to type a command. A test reads the strings of
 `health`, `vault` and `agent2_search` to make sure.

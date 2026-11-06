@@ -548,3 +548,13 @@ def test_a_private_write_leaves_no_temporary_file_and_no_wider_mode(isolate_data
     with pytest.raises(OSError):
         vault._write_atomic(target, b"newer")
     assert not tmp.exists() and target.read_bytes() == b"new"
+
+
+def test_a_saved_file_and_its_folder_reach_the_disk_before_the_save_returns(isolate_data, monkeypatch):
+    """#75: a power cut right after a save could leave an empty file: the bytes were never synced."""
+    synced = []
+    real_fsync = os.fsync
+    monkeypatch.setattr(vault.os, "fsync", lambda fd: synced.append(os.path.isdir(f"/dev/fd/{fd}")) or real_fsync(fd))
+    vault.write_plain(isolate_data / "signed.json", b"{}")
+    assert (isolate_data / "signed.json").read_bytes() == b"{}"
+    assert synced == [False, True], "the file first, then the folder that names it"

@@ -17,6 +17,7 @@ import sys
 from typing import Any, Callable
 
 from . import agent1_cv, agent4_tracker, followup, store, trouble
+from .api_base import _holding_jobs
 
 
 class Desktop:
@@ -83,9 +84,11 @@ class JobEditor:
     def __init__(self) -> None:
         self.live: list[dict[str, Any]] | None = None
 
+    @_holding_jobs()
     def change(self, job_id: str, fn: Callable[[list, dict], Any], render: bool = True) -> dict[str, Any]:
         """Apply `fn(jobs, job)` to the saved job and save. `fn` returns a result dict or None (= ok).
-        `render` also writes the Excel files, for edits that change what they show."""
+        `render` also writes the Excel files, for edits that change what they show. Refused while the weekly run works
+        on the list (store.RunLock): the edit would be lost under the run's copy."""
         jobs = store.load_jobs()
         j = store.find(jobs, job_id)
         if not j:

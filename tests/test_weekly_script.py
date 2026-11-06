@@ -84,6 +84,56 @@ def test_weekly_run_writes_each_step_into_its_log_and_goes_on_after_a_failure(tm
     assert log.read_text(encoding="utf-8").startswith(text)                    # added to, never written over
 
 
+def test_the_weekly_run_waits_for_the_window_and_never_writes_over_its_jobs(tmp_path, jobs_held_elsewhere):
+    """#72: the weekly run and the open window each loaded the job list, worked for minutes and wrote it all back."""
+    from jobhelper import api_core, store
+    ran = []
+    log = tmp_path / "weekly.log"
+    assert weekly.WeeklyRun(log, [("job search", lambda: ran.append(1) or 0)], wait=0.3).run() == weekly.WeeklyRun.BUSY_CODE
+    assert ran == [] and "did not start" in log.read_text(encoding="utf-8")
+    with pytest.raises(store.JobsBusy):
+        store.save_jobs([])                                                     # nothing written over the other's changes
+    assert api_core.JobEditor().change("any", lambda jobs, j: None) == {"ok": False, "msg": store.RunLock.BUSY}
+    jobs_held_elsewhere.kill()
+    jobs_held_elsewhere.wait()
+    assert weekly.WeeklyRun(tmp_path / "w2.log", [("job search", lambda: 0)], wait=0).run() == 0
+    store.save_jobs([])                                                         # free again: written
+
+
+def test_the_lock_is_one_per_process_so_the_window_s_own_edits_go_on(isolate_data):
+    from jobhelper import store
+    assert store.RunLock.path().parent == isolate_data
+    with store.RunLock.holding():                                               # a run
+        store.save_jobs([])                                                     # and an edit inside it
+        assert store.RunLock._held == 1
+    assert store.RunLock._held == 0 and store.RunLock._file is None
+
+
+def test_a_disk_without_file_locks_still_saves_and_leaks_no_file(isolate_data, monkeypatch):
+    """A volume that answers flock with ENOLCK cannot be shared by two processes: the lock counts as free there."""
+    import errno
+    from jobhelper import store
+    opened = []
+    real_fdopen = store.os.fdopen
+    monkeypatch.setattr(store.os, "fdopen", lambda *a, **k: opened.append(real_fdopen(*a, **k)) or opened[-1])
+    monkeypatch.setattr(store.fcntl, "flock", lambda f, how: (_ for _ in ()).throw(OSError(errno.ENOLCK, "no locks")))
+    store.save_jobs([])
+    assert opened and all(f.closed for f in opened) and store.RunLock._held == 0
+
+
+def test_a_long_wait_never_blocks_the_window_s_threads(jobs_held_elsewhere):
+    """The weekly run's wait sleeps outside the guard, so another thread of the same process can still ask the lock."""
+    import threading
+    import time
+    from jobhelper import store
+    waiting = threading.Thread(target=store.RunLock.take, args=(1.5,), daemon=True)
+    waiting.start()
+    start = time.monotonic()
+    assert store.RunLock.take() is False
+    assert time.monotonic() - start < 1.0, "answered at once, not after the other thread's wait"
+    waiting.join()
+
+
 def test_the_default_steps_are_the_search_then_the_mail(monkeypatch):
     seen = []
     for name in ("run", "status"):
@@ -123,3 +173,25 @@ def test_sync_takes_its_period_from_options(monkeypatch):
                         ({"scan_days": "soon"}, 120), ({"scan_days": -3}, 120)):
         monkeypatch.setattr(config, "ui_settings", lambda saved=saved: saved)
         assert config.scan_days() == days
+
+
+def test_a_command_that_changes_jobs_waits_for_no_other_run_and_a_read_still_works(jobs_held_elsewhere, monkeypatch, capsys):
+    """#72: python run.py or status.py while the window searched wrote the list over the window's, or stopped half-way."""
+    import run
+    import status
+    from jobhelper import store
+    monkeypatch.setattr("sys.argv", ["status.py", "update", "nw1", "waiting"])
+    assert status.main() == 1 and store.RunLock.COMMAND_BUSY in capsys.readouterr().out
+    monkeypatch.setattr("sys.argv", ["run.py", "--skip-search"])
+    assert run.main() == 1 and store.RunLock.COMMAND_BUSY in capsys.readouterr().out
+    assert not config.JOBS_JSON.exists(), "nothing written"
+    for argv in (["list"], ["usage"], ["security", "status"]):
+        monkeypatch.setattr("sys.argv", ["status.py", *argv])
+        assert status.main() == 0, f"{argv}: a command that changes no job still runs"
+        assert store.RunLock.COMMAND_BUSY not in capsys.readouterr().out
+
+
+def test_a_command_inside_the_weekly_run_holds_the_same_lock(isolate_data):
+    from jobhelper import store
+    with store.RunLock.holding():                                               # the weekly run
+        assert store.RunLock.command(lambda: 7) == 7                            # its step, run.py's main

@@ -333,6 +333,25 @@ data/                your data; only the *.example.* files are in git
 - **The weekly run is one LaunchAgent for the whole Mac, outside every data home.** With `JOBHELPER_HOME` set
   (`home.overridden()`), `schedule` neither reads nor writes it (`schedule.problem`): before, a check on a sandbox
   home pointed the real weekly run at the sandbox at start-up, and saving Weekly run there made a real one.
+- **Only one process changes the job list at a time** (`store.RunLock`, an `fcntl` lock on `.jobs.lock`). The weekly
+  run waits for it (`WeeklyRun.WAIT`, sleeping outside the lock's guard) and gives up with `BUSY_CODE`; the window takes
+  it before each search, scan and rescore (`_claim_jobs`) and lets it go in `_set_running(False)`. `save_jobs` holds it
+  for the write (`RunLock.holding()`, raising `JobsBusy`); a change in the window holds it from its first read to its
+  last write with `api_base._holding_jobs` (JobEditor.change, restore, repair, bring back, Trash, reminders, the
+  assistant's Undo and Add), which turns `JobsBusy` into the usual refusal. The lock is per process, so the window's own
+  saves inside its run go on; a disk without file locks counts as unshared. `run.py` and every `status.py` command
+  that changes jobs hold it for their whole run (`RunLock.command`; `status._changes_jobs` says which), so a long run is
+  never stopped half-way by a refused save.
+- **A Keychain that does not answer is not "no check".** `integrity.changed_titles()` gives `integrity.NOT_CHECKED`
+  on `VaultError`, so the Account card and the start-up check say so and a search is refused. `ensure_baseline()` never
+  signs a new list while a signed list is on the disk, even a damaged one, or when the Keychain lost its mark: that
+  would approve a changed file (a damaged list shows every file as not signed, for the person to approve). The signed list is written with `vault.write_plain` (whole or not at all).
+- **Every write of a data file reaches the disk before the app goes on:** `vault._write_atomic` flushes and syncs
+  the file, then the folder after `os.replace`. A restore copies the damaged file aside (`set_aside(..., move=False)`)
+  and writes over it only after that, so a failed write leaves it in place.
+- **Test copies of Check backups are pruned on their own** (`housekeeping.TEST_COPY`, from `vault.RESTORE_TEST`): the
+  newest one is kept, and they never count toward **Keep backups**, which keeps the newest real backups (0 keeps all).
+- **One missing file in My details keeps the others** (`details.load` checks each file row on its own).
 - **Word files and PDFs hide text from `git grep`.** The first privacy check missed a real CV in
   `tests/fixtures/*.docx` because the text is zipped. `scripts/push_check.py` opens them, and the
   pre-push hook runs it on every push. The repository will be public.

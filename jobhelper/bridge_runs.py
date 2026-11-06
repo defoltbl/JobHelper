@@ -14,7 +14,7 @@ from pathlib import Path
 from PySide6.QtCore import QMetaObject, Qt, Slot
 
 from . import (agent1_cv, agent2_search, agent3_letters, agent4_tracker, agent5_responses, api_system, config, email_client, job_sources, letters, notify, store,
-               trouble, usage)
+               integrity, trouble, usage)
 
 
 class RunCancelled(BaseException):
@@ -27,6 +27,14 @@ class RunCancelled(BaseException):
 
 class RunSlots:
     """Mixed into `qt_bridge.Bridge`; uses its signals, `_api`, `_set_running` and the run's own state."""
+
+    def _claim_jobs(self):
+        """The job list's lock for this run (store.RunLock): None, or the refusal while the weekly run holds it. The run's
+        end gives it back (Bridge._set_running)."""
+        if not store.RunLock.take():
+            return {"ok": False, "msg": store.RunLock.BUSY}
+        self._holds_jobs = True
+        return None
 
     @staticmethod
     def _no_claude(conn):
@@ -48,6 +56,8 @@ class RunSlots:
             return {"ok": False, "msg": "Add your CV first (open Account).", "fix": "cv"}
         if conn.get("vault") == "locked":
             return {"ok": False, "msg": "Your data is encrypted and its key is missing (open Account).", "fix": "vault"}
+        if conn.get("changed_files") == [integrity.NOT_CHECKED]:
+            return {"ok": False, "fix": "integrity", "msg": integrity.NOT_CHECKED_SAY}
         if conn.get("changed_files"):
             return {"ok": False, "fix": "integrity",
                     "msg": "Changed outside the app: %s. Review and approve in Account." % ", ".join(conn["changed_files"])}
@@ -57,6 +67,9 @@ class RunSlots:
         self._stop.clear()
         self._resume.clear()
         self._partial = None
+        busy = self._claim_jobs()
+        if busy:
+            return busy
         self._set_running(True)
         threading.Thread(target=self._pipeline, args=(dict(opts or {}),), daemon=True).start()
         return {"ok": True}
@@ -81,6 +94,9 @@ class RunSlots:
         self._stop.clear()
         self._resume.clear()
         self._partial = None
+        busy = self._claim_jobs()
+        if busy:
+            return busy
         self._set_running(True)
         threading.Thread(target=self._scan, args=(days,), daemon=True).start()
         return {"ok": True}
@@ -126,6 +142,9 @@ class RunSlots:
         self._stop.clear()
         self._resume.clear()
         self._partial = None
+        busy = self._claim_jobs()
+        if busy:
+            return busy
         self._set_running(True)
         threading.Thread(target=self._rescore, daemon=True).start()
         return {"ok": True}
@@ -301,8 +320,8 @@ class RunSlots:
     # ── workers (emit signals; QML animates the robots live) ────
     def _pipeline(self, opts):
         jobs = None
-        before = usage.total_cost()
         try:
+            before = usage.total_cost()            # inside the try: the finally gives the job list back
             o = self._api.options()
             o.update(opts or {})
 
@@ -384,8 +403,8 @@ class RunSlots:
 
     def _scan(self, days=None):
         jobs = None
-        before = usage.total_cost()
         try:
+            before = usage.total_cost()            # inside the try: the finally gives the job list back
             self.agentChanged.emit("a5", "running", "")
             self.logChanged.emit("Reading inbox (read-only)…")
             jobs = store.load_jobs()

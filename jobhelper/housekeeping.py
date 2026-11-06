@@ -46,11 +46,18 @@ def backup_entries() -> list[Path]:
     return sorted(entries, key=_age_key, reverse=True)
 
 
+TEST_COPY = vault.RESTORE_TEST + "_"   # the copies Check backups makes to prove a restore works: not real backups (#73)
+
+
 def prune_backups(keep: int = DEFAULT_KEEP, dry_run: bool = False) -> list[str]:
-    """Delete all but the newest `keep` backups (0 = keep everything). Returns the names removed."""
+    """Delete all but the newest `keep` real backups, and all but the newest copy that Check backups made: a test copy
+    never pushes out a real backup (#73). 0 keeps everything, test copies too. Returns the names removed."""
     if keep <= 0:
         return []
-    gone = backup_entries()[keep:]
+    entries = backup_entries()
+    real = [p for p in entries if not p.name.startswith(TEST_COPY)]
+    tests = [p for p in entries if p.name.startswith(TEST_COPY)]
+    gone = real[keep:] + tests[1:]
     if not dry_run:
         for path in gone:
             if path.is_dir():

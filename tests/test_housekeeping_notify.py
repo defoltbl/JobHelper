@@ -81,6 +81,21 @@ def test_only_the_newest_backups_are_kept(isolate_data):
     assert sorted(p.name for p in vault.backups_dir().iterdir()) == sorted(names[4:])
 
 
+def test_test_copies_of_check_backups_never_push_out_a_real_backup(isolate_data):
+    """#73: each Check backups left a full copy, and only the newest 10 of all were kept."""
+    root = vault.backups_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    real = ["backup_20261001_120000", "backup_20261002_120000"]
+    tests = [f"{vault.RESTORE_TEST}_202610{d:02d}_120000" for d in range(3, 9)]
+    for name in real + tests:
+        (root / name).mkdir()
+        (root / name / "jobs.json.enc").write_bytes(b"x")
+    removed = housekeeping.prune_backups(keep=2)
+    left = sorted(p.name for p in root.iterdir())
+    assert left == sorted(real + [tests[-1]]), "both real backups stay, and the newest test copy"
+    assert sorted(removed) == sorted(tests[:-1])
+
+
 def test_dry_run_and_keep_all_delete_nothing(isolate_data):
     names = _backups(5)
     assert len(housekeeping.prune_backups(keep=2, dry_run=True)) == 3

@@ -74,7 +74,9 @@ def _settings() -> str:
 
 
 def _rules() -> str:
-    changed = [f["title"] for f in integrity.problems()]
+    changed = integrity.changed_titles()
+    if changed == [integrity.NOT_CHECKED]:       # nothing to approve: the check itself could not run
+        return integrity.NOT_CHECKED_SAY
     return ("Changed outside the app: " + ", ".join(changed) + ". Approve them in the Account card if you made the change."
             ) if changed else ""
 

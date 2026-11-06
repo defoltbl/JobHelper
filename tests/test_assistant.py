@@ -1384,6 +1384,18 @@ def test_jobs_degrees_salary_and_files_are_checked_row_by_row(tmp_path):
     assert "twice" in details.check({**FULL, "files": [{"path": str(paper)}, {"path": str(paper)}]})[1]["msg"]
 
 
+def test_one_file_gone_from_the_disk_keeps_the_others_in_my_details(isolate, tmp_path):
+    """#75: a missing file made the whole files list read as empty, and the next Save wrote it so."""
+    from jobhelper import config
+    kept, gone = tmp_path / "diploma.pdf", tmp_path / "reference.pdf"
+    kept.write_bytes(b"%PDF diploma")
+    gone.write_bytes(b"%PDF reference")
+    assert details.save({**MINE, "files": [{"label": "Diploma", "path": str(kept)}, {"label": "Reference", "path": str(gone)}]})["ok"]
+    gone.unlink()
+    assert details.load()["files"] == [{"label": "Diploma", "path": str(kept)}], "the file still there stays listed"
+    assert config.MY_DETAILS.load()["files"][1]["label"] == "Reference", "the saved list is unchanged until you save"
+
+
 def test_what_a_form_is_given_from_the_lists():
     assert [j["employer"] for j in details.jobs(FULL)] == ["Northwind", "Evening School", "Old Mill"], "the current jobs first"
     assert details.salary_text(FULL) == "60 000 CZK gross per month" and details.salary_text(MINE) == ""
@@ -1738,6 +1750,22 @@ def test_not_interested_and_a_running_search(isolate, monkeypatch):
     assert api.assistant_confirm(api.assistant_talk("I am not interested in northwind")["pending"])["can_undo"]
     api.live = store.load_jobs()                # something to take back, while a search runs: refused too
     assert "is running" in api.assistant_undo()["msg"]
+
+
+def test_a_take_back_or_an_added_posting_waits_for_no_weekly_run(isolate, monkeypatch):
+    """#72: while the weekly run worked on the list, Undo and Add wrote it, and the run's save came after."""
+    store.save_jobs([_job()])
+    api = ui_api.Api()
+    _decision(monkeypatch, "", {"name": "not_interested", "args": {"job": "nw1"}})
+    assert api.assistant_confirm(api.assistant_talk("I am not interested in northwind")["pending"])["can_undo"]
+    record = {"title": "Data Analyst", "company": "Fabrikam", "url": "https://jobs.example/9", "match_score": 70}
+    with monkeypatch.context() as busy:
+        busy.setattr(store.RunLock, "take", classmethod(lambda cls, wait=0.0: False))      # another process holds the list
+        assert api.assistant_undo() == {"ok": False, "action": "say", "msg": store.RunLock.BUSY}
+        assert api._talk._add_job(record) == (False, store.RunLock.BUSY, None)
+    jobs = store.load_jobs()
+    assert store.find(jobs, "nw1")["status"] == store.NOT_INTERESTED and len(jobs) == 1, "nothing was written"
+    assert api.assistant_undo()["ok"] and store.find(store.load_jobs(), "nw1")["status"] == "found", "still there to take back"
 
 
 def test_what_you_tell_it_to_remember_is_kept_between_sessions(isolate, monkeypatch):

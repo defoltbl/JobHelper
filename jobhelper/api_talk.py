@@ -11,6 +11,7 @@ from typing import Any
 
 from . import (agent1_cv, agent3_letters, agent4_tracker, answer_memory, assistant, assistant_brain, assistant_notes, chrome,
     config, db, details, form_answers, form_choices, form_fill, insights, planner, salary, store)
+from .api_base import _holding_jobs
 
 _PLAIN = re.compile(r"\b(?:but|skip|except|without|only|not|don't|do not|leave|and)\b")
 NO_JOB = "That job is not in the list any more."
@@ -454,6 +455,7 @@ class TalkService:
             answer_memory.remember(question, answer, job.get("company", ""))
         return self._job_changed(done, "The answer is changed and kept with the job.", back)
 
+    @_holding_jobs(refused=lambda: (False, store.RunLock.BUSY, None))
     def _add_job(self, record) -> tuple[bool, str, dict[str, Any] | None]:
         """Put a posting that was read from the browser into New Jobs, as the lead the app scored."""
         if not isinstance(record, dict) or not str(record.get("title") or "").strip() or not str(record.get("url") or "").lower().startswith(("http://", "https://")):
@@ -474,6 +476,7 @@ class TalkService:
         agent4_tracker.render_all(jobs)
         return True, f"Added {job['title']} at {job['company']} to New Jobs with a score of {job['match_score']}.", {"kind": "added", "id": job["id"], "what": f"{job['title']} at {job['company']}"}
 
+    @_holding_jobs(refused=lambda: {"ok": False, "action": "say", "msg": store.RunLock.BUSY})
     def assistant_undo(self):
         """Take back what the last yes did: the job as it was before, a removed lead restored, a letter's old text, an added posting removed."""
         steps = self._undo

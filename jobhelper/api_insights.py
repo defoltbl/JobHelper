@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import os
 
-from .api_base import _guarded
+from .api_base import _guarded, _holding_jobs
 from . import (agent1_cv, agent2_search, agent4_tracker, summary, compare, config, db, insights, keywords, salary, store)
 
 
@@ -43,6 +43,7 @@ class InsightsService:
                 for r in data["rows"]]
         return {"when": data["when"], "total": data["total"], "rows": rows}
 
+    @_holding_jobs()
     def bring_back(self, index):
         """Put a filtered-out posting into New Jobs; the next search run scores it like any other."""
         data = agent2_search.load_dropped()
