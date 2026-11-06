@@ -9,6 +9,7 @@ temporary folder), walks through the screens and saves one picture per screen to
 Nothing of yours is read, and Claude is never asked.
 """
 import os
+import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -132,6 +133,10 @@ def test_guide_shots(ui, monkeypatch):
                "key_skills": ["Python", "FastAPI", "SQL"]}
     monkeypatch.setattr(agent1_cv, "load_profile", lambda: dict(profile))
     monkeypatch.setattr(api_core.CvSource, "text", lambda self: CV)
+    letters = Path(tempfile.mkdtemp()) / "My letters"                        # the folder name the pictures show
+    letters.mkdir()
+    monkeypatch.setattr(config, "MY_LETTERS_DIR", letters)
+    monkeypatch.setattr(config, "COVER_LETTERS_DIR", letters)
     monkeypatch.setattr(ui_api.Api, "threshold", lambda self: 50)
     monkeypatch.setattr(ui_api.Api, "old_format_letter", lambda self, j: False)      # the stand-in files are not real letters
     monkeypatch.setattr(ui_api.Api, "usage_info", lambda self: {"five_hour_used": 34, "five_hour_resets": "", "seven_day_used": 12, "seven_day_resets": "",
@@ -404,14 +409,14 @@ def test_guide_shots(ui, monkeypatch):
         api.save_about_you({"salary_target": 0, "salary_currency": "CZK",
                             "salary_by_role": [{"role": "support", "amount": 42000}],
                             "about_right_to_work": "Full right to work in Czechia", "about_start": "within two weeks",
-                            "about_jobs": [{"job": "Junior developer, Riverside Labs",
-                                            "notes": "I wrote the import service in Python with FastAPI, added its tests, and fixed about thirty tickets."},
-                                           {"job": "Tutor, Evening Code School", "notes": "I teach Python basics to two groups of ten adults each week."}],
+                            # the jobs are the ones the CV names (one here): its note is written under it
+                            "about_jobs": [{"job": "Intern developer, Example Labs", "from": "Intern developer, Example Labs",
+                                            "notes": "I wrote the import service in Python with FastAPI, added its tests, and fixed about thirty tickets."}],
                             "about_experience": "A chess club website in Django, for a club of forty members."})
         ui.js("aboutDialog.show()")
         ui.wait(600)
         shot("32_about_you")
-        scroll("aboutDialog", "noJobs", 110)
+        scroll("aboutDialog", "usesWork", 60)          # from the title of More about your work
         shot("35_about_you_work")
         ui.js("aboutDialog.close()")
         ui.wait(350)

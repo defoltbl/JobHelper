@@ -42,7 +42,7 @@ class OptionsService:
         """What the About you window shows: the saved values, and what the app says about them (about_you.AboutYou)."""
         from . import about_you, details
         o = self.options()
-        page = about_you.AboutYou(o).page(details.load(), agent1_cv.seniority())
+        page = about_you.AboutYou(o).page(details.load(), agent1_cv.seniority(), self._cv.text())
         return {**{k: o.get(k) for k in about_you.KEYS}, **page, "currencies": list(salary.CURRENCIES)}
 
     def work_notes_size(self, jobs, general):

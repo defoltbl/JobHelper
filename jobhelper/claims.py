@@ -86,6 +86,9 @@ _WORD = re.compile(r"[A-Za-z][A-Za-z0-9+#]*")
 _DATES = re.compile(r"\b(?:19|20)\d{2}\s*[–—-]\s*(?:[A-Za-z]{3,9}\.?\s+)?(?:(?:19|20)\d{2}|present|now|today|current)\b"
                     r"|\([^()]*\b(?:19|20)\d{2}\b[^()]*\)", re.IGNORECASE)
 _BULLET = re.compile(r"^[-–—•·*▪◦]")
+# a month just before the dates' year ("…, Jan 2022 – Mar 2023"): part of the dates, never of the job's name
+_MONTH_END = re.compile(r"[\s,(]*\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|"
+                        r"august|september|october|november|december)\.?\s*$", re.IGNORECASE)
 # Between a job's title and its employer: "Developer – Contoso", "Developer, Contoso", "Developer | Contoso"
 _SEPARATOR = re.compile(r"\s[–—|-]\s|,\s")
 # Study, not work: a section of it, a place of it, or a degree as the first word ("BSc, Computer Science – …").
@@ -210,6 +213,19 @@ class EmployerCheck:
             elif line and raw and raw[-1][0]:
                 raw[-1][1].append(line)
         return [(head, body) for head, body in raw if head]
+
+    @classmethod
+    def job_names(cls, cv_text: str) -> list[str]:
+        """The jobs a CV names, in its order, as "title, employer" ("Junior Developer, Northwind Parcel"): the headings of
+        its positions without their dates. None when the CV names its jobs some other way (see the class)."""
+        names = []
+        for head, _body in cls._read(cv_text or ""):
+            dates = _DATES.search(head)
+            before = (_MONTH_END.sub("", head[:dates.start()]) if dates else head).strip(" ,–—|-(")   # only before real dates
+            name = ", ".join(p.strip(" ,–—|-") for p in _SEPARATOR.split(before, maxsplit=1) if p.strip(" ,–—|-"))
+            if name and name not in names:
+                names.append(name)
+        return names
 
     @staticmethod
     def _position(head: str, body: list[str], cv_text: str, heads: str) -> _Position:

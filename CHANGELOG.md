@@ -7,6 +7,9 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **About you:** a figure you changed for a kind of role has its own **Save figures** button. Before, only **Save** at the bottom of the window saved it.
+- **About you:** the boxes under **More about your work** are the jobs that your master CV names. You can rename a box or remove a job, and bring a removed job back.
+- **About you:** each part says why to fill it in and where the app uses it.
 - **Email scan:** the dates sent to the mail server are in English, whatever language your Mac uses.
 - **Email scan:** an older email no longer moves an interview date that a newer email set.
 - **Email scan:** an email without a number of its own is no longer filed twice by two scans. Such an email that is already filed is read once more after the update.

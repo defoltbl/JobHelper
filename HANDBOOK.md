@@ -499,6 +499,11 @@ data/                your data; only the *.example.* files are in git
 - **A field is private by its name, its words or its autocomplete value** (`form_fill._private`), and the review of a
   form asks the same function with what the REVIEW script reports (label, `name`, `autocomplete`), so a value the
   planner leaves alone never goes to Claude in a review.
+- **The work-note boxes are the master CV's jobs** (`claims.EmployerCheck.job_names`, else My details; `AboutYou.job_boxes`).
+  A saved note keeps the name the CV gave its job (`from`), so a box you renamed keeps its notes and a removed job
+  (`removed`) does not come back; a note from before has no `from` and matches by its name. The "why and where" lines
+  of the window are `AboutYou.USES`, said once. The figures for kinds of role have their own Save (`savePay`), which
+  saves only `salary_by_role` and the currency.
 - **Mail dates and ids** (#74): a day sent to the mail server goes through `email_client.imap_date` (English month
   names, never the Mac's locale); a mail without a Message-ID gets `_stable_id` (sender, date, subject and the start of
   the body), never its number in the folder; a date an email puts on a job keeps `mail_at` (`agent5_responses._arrival`,
