@@ -137,7 +137,7 @@ Rectangle {
         Flow {
             Layout.fillWidth: true; spacing: 6
             Repeater {
-                model: [ win.cityEN(optsData.where) || "No city yet",
+                model: [ bridge.cityShown(optsData.where || "") || "No city yet",
                          (optsData.all_languages === true) ? "All languages" : "English only" ]
                        .concat(optsData.source_names || [])        // the sources a search reads (job_sources.SourceChoice)
                        .concat([

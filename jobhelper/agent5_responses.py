@@ -295,6 +295,7 @@ _RULE_STAGES = [
 ]
 
 
+MIN_PASTED = 20          # a pasted reply shorter than this is too short to read
 MAX_PASTED = 8000        # a pasted reply longer than this is a whole page, not a message
 
 
@@ -324,7 +325,7 @@ def add_pasted_reply(jobs: list[dict[str, Any]], job_id: str, text: str, use_mod
     job = store.find(jobs, job_id)
     if not job:
         return {"ok": False, "msg": "That job is not in the list any more."}
-    if len(text) < 20:
+    if len(text) < MIN_PASTED:
         return {"ok": False, "msg": "Paste the whole message: that is too short to read."}
     if len(text) > MAX_PASTED:
         return {"ok": False, "msg": f"That is {len(text)} characters. Paste only the message itself, not the whole page "

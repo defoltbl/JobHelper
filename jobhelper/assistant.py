@@ -12,6 +12,7 @@ from typing import Any
 from .form_answers import MAX_ANSWER, MAX_QUESTION, unfilled
 
 MAX_REQUEST = 300
+MAX_JOB_FIND = 80          # what you type to find a job by its company or title (the window's job list): a name, not a text
 EMPTY = "Write what you need, or press one of the buttons."
 TOO_LONG = f"That is longer than {MAX_REQUEST} characters. Say it in a sentence, for example: fill in the form."
 GREETING = "Hi! Open an application form in your browser, then ask me to fill it in."

@@ -25,8 +25,10 @@ def test_the_limits_come_from_the_module_that_checks_them():
 
 def test_the_choices_a_list_offers_are_the_ones_the_check_accepts():
     choices = Api().limits()["choices"]
+    from jobhelper import places, prefilter
     assert choices == {"event_kinds": list(planner.KINDS), "ats": list(scrapers_ats.ATS_NAMES),
-                       "models": list(OptionsService.MODELS), "text_sizes": list(config.TEXT_SIZES)}
+                       "models": list(OptionsService.MODELS), "text_sizes": list(config.TEXT_SIZES),
+                       "cities": list(places.SUGGESTED_CITIES), "roles": list(prefilter.ROLE_SUGGESTIONS)}
 
 
 def test_no_dialog_keeps_its_own_copy_of_a_list_the_back_end_checks():

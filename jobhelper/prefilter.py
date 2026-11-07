@@ -166,3 +166,31 @@ def apply(jobs: list[dict[str, Any]], cv_text: str, check_level: bool = True, ro
         else:
             job.pop("prefilter", None)
     return marked
+
+
+# the kinds of role Options suggests as you type, and the words a typed search role is checked against: a role must
+# share one of them (or name a profession of FIELDS), which refuses gibberish and most typos (#61: the window kept these)
+ROLE_SUGGESTIONS = (
+    "junior", "medior", "middle", "senior", "entry level", "graduate", "intern", "trainee",
+    "software developer", "software engineer", "backend developer", "frontend developer",
+    "full stack developer", "python developer", "java developer", "javascript developer",
+    "c# developer", "golang developer", "web developer", "mobile developer", "android developer",
+    "ios developer", "data scientist", "data analyst", "data engineer", "machine learning engineer",
+    "ai engineer", "qa engineer", "test engineer", "automation engineer", "devops engineer",
+    "site reliability engineer", "cloud engineer", "it support", "help desk", "service desk",
+    "system administrator", "business analyst", "product manager", "ux designer")
+_ROLE_WORD = re.compile(r"[a-z0-9+#]+")
+ROLE_WORDS = frozenset(w for r in ROLE_SUGGESTIONS for w in _ROLE_WORD.findall(r)) | frozenset("""
+    react node typescript php ruby rust kotlin swift sql database db security network networking infrastructure platform
+    sre scrum project program manager consultant specialist architect lead apprentice helpdesk admin administrator
+    fullstack ml llm nlp genai api rest microservices embedded firmware hardware linux windows aws azure gcp kubernetes
+    docker spring django flask fastapi analytics analyst bi etl warehouse quant developer engineer programmer coder
+    tester sdet support desk service it ai qa qe ux ui web mobile cloud data prague praha czech czechia republic english
+    speaking remote hybrid onsite junior senior medior middle entry graduate intern trainee level scientist machine
+    learning frontend backend software android ios golang go java javascript python csharp automation devops
+    reliability designer business product system systems""".split())
+
+
+def looks_like_role(text: str) -> bool:
+    """Whether a typed search role shares a word with the role words (ROLE_WORDS)."""
+    return any(w in ROLE_WORDS for w in _ROLE_WORD.findall(str(text or "").lower()))

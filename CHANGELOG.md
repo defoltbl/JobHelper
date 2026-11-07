@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Account:** setting up the job email says the same about a wrong address or password as the check when you save it. A password with letters such as é is refused at once, as the save refused it.
 - **Text boxes:** a click anywhere in the frame of a notes, letter or answer box puts the cursor in it, and the Tab key moves to the next field. Before, the lower part of the frame did nothing, and Tab typed a tab character. In the boxes for a pasted posting and a pasted reply, the text scrolls with the cursor.
 - **Options:** the **Country** field says how many characters it takes when it is full. So does the role under **A different figure for** in About you.
 - **Options:** a long search role, skip word or keyword wraps onto more lines. Before, its end was cut off.

@@ -699,9 +699,13 @@ The window never touches a file. Every action goes through three layers:
 Long work (a search, a scan, a rewrite) runs in a thread and answers through a signal.
 
 The window keeps no copy of a limit. `bridge.limits()` gives the length that each typed text may
-have, and the range of each number box in Options. It also gives the hour and minute of the weekly run. It also gives the choices of four lists: the kinds
-of a date, the career-site systems, the Claude models and the text sizes. Each number and each list
-comes from the module that checks it, so the window and the check always agree.
+have, and the range of each number box in Options. It also gives the hour and minute of the weekly run. It gives the choices of six lists.
+They are the kinds of a date, the career-site systems, the Claude models and the text sizes. They are
+also the cities and the kinds of role that Options suggests. It also gives the limits of a pasted
+posting and a pasted reply, and the score caps that the hints name. Each number and each list comes
+from the module that checks it, so the window and the check always agree. The window also asks the
+back end's own checks through slots. They check an email address, a mail password and another
+alphabet. They also check a search role, and give the English name of a city.
 
 ### The back end: a facade over services
 

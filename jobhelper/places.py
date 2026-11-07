@@ -203,6 +203,24 @@ def _named(names, text: str) -> bool:
     return any(re.search(_name_pattern(n), text) for n in names)
 
 
+# the cities Options suggests as you type (any other city may be typed)
+SUGGESTED_CITIES = ("Prague", "Brno", "Ostrava", "Plzeň", "Olomouc", "Liberec", "Bratislava", "Košice", "Vienna", "Graz", "Linz",
+                    "Berlin", "Munich", "Hamburg", "Frankfurt", "Cologne", "Warsaw", "Kraków", "Wrocław", "Gdańsk", "Poznań",
+                    "Budapest", "Bucharest", "Sofia", "Amsterdam", "Rotterdam", "The Hague", "Brussels", "Luxembourg", "Dublin",
+                    "Paris", "Lyon", "Madrid", "Barcelona", "Lisbon", "Porto", "Milan", "Rome", "Zurich", "Geneva",
+                    "Copenhagen", "Stockholm", "Gothenburg", "Helsinki", "Oslo", "Tallinn", "Riga", "Vilnius", "Ljubljana",
+                    "Zagreb", "Athens", "Remote")
+# a city saved in its own language, as the window shows it (#61: the window kept two copies of this)
+_CITY_SHOWN = {"praha": "Prague", "plzeň": "Pilsen", "plzen": "Pilsen", "české budějovice": "Budweis", "wien": "Vienna",
+               "münchen": "Munich", "köln": "Cologne", "warszawa": "Warsaw", "kraków": "Kraków"}
+
+
+def city_shown(name: str) -> str:
+    """A city as the window shows it: in English where it was saved in its own language ("Praha" is "Prague")."""
+    text = str(name or "")
+    return _CITY_SHOWN.get(text.lower(), text)
+
+
 def plain(text: str) -> str:
     """Lower case without accents: "Kraków" and "krakow", "München" and "munchen" compare equal."""
     return textfmt.fold(text).strip()

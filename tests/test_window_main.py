@@ -394,25 +394,57 @@ def test_both_themes_render_without_warnings(ui):
     assert ui.warnings == []
 
 
-# ── input validation helpers ────────────────────────────────────────────────
+# ── input validation: asked from the back end, never copied (#61) ─────────
 @pytest.mark.parametrize("code, expected", [
-    ('isEmail("you@gmail.com")', True),
-    ('isEmail("you@gmail")', False),
-    ('isEmail("you gmail.com")', False),
-    ('isAppPassword("abcd efgh ijkl mnop")', True),
-    ('isAppPassword("abcdefgh1jklmnop")', False),
-    ('isAppPassword("short")', False),
+    ('bridge.addressProblem("you@gmail.com") === ""', True),
+    ('bridge.addressProblem("you@gmail") === ""', False),
+    ('bridge.addressProblem("you gmail.com") === ""', False),
+    ('bridge.passwordProblem("you@gmail.com", "imap.gmail.com", "abcd efgh ijkl mnop") === ""', True),
+    ('bridge.passwordProblem("you@gmail.com", "imap.gmail.com", "abcdefgh1jklmnop") === ""', False),
+    ('bridge.passwordProblem("you@gmail.com", "imap.gmail.com", "short") === ""', False),
+    ('bridge.passwordProblem("you@example.org", "imap.example.org", "heslo-éčř-2026") === ""', False),     # as Save refuses it
+    ('bridge.passwordProblem("you@example.org", "imap.example.org", "   ") === ""', False),
+    ('bridge.passwordProblem("you@example.org", "imap.example.org", "plain-ascii-2026") === ""', True),
     ('hasNonLatin("привет")', True),
     ('hasNonLatin("エンジニア")', True),
     ('hasNonLatin("Plzeň developer")', False),
-    ('looksLikeRole("junior python developer")', True),
-    ('looksLikeRole("asdfgh qwerty")', False),
-    ('cityEN("Praha")', "Prague"),
-    ('cityEN("")', ""),
-    ('cityEN("Berlin")', "Berlin"),
+    ('bridge.knownRole("junior python developer")', True),
+    ('bridge.knownRole("asdfgh qwerty")', False),
+    ('bridge.cityShown("Praha")', "Prague"),
+    ('bridge.cityShown("")', ""),
+    ('bridge.cityShown("Berlin")', "Berlin"),
 ])
 def test_validators(ui, code, expected):
     assert ui.js(code) == expected
+
+
+def test_the_window_keeps_no_copy_of_a_back_end_rule():
+    """#61: the window kept its own role words, alphabet check, address and password shapes and city names; a copy
+    drifted once (a career-site name the window allowed and Save dropped)."""
+    from jobhelper import places, prefilter
+    window = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "ui_qt").glob("*.qml"))
+    for copy in ("roleVocab", "looksLikeRole", "isEmail", "isAppPassword", "cityEN", "cityDisplay", "euCities", "roleSuggestions",
+                 '"praha": "Prague"', "[a-z]{16}", "぀-ヿ"):
+        assert copy not in window, copy
+    choices = ui_api.Api().limits()["choices"]
+    assert choices["cities"] == list(places.SUGGESTED_CITIES) and choices["roles"] == list(prefilter.ROLE_SUGGESTIONS)
+
+
+def test_the_window_s_numbers_are_the_back_end_s(ui):
+    """#71: the window kept its own paste and reply limits, the length of the assistant's job search, and the score caps
+    its hints name."""
+    from jobhelper import agent3_letters, agent5_responses, assistant
+    from jobhelper.api_documents import DocumentsService
+    assert ui.js("detailDialog.pasteMin") == DocumentsService.MIN_PASTED and ui.js("detailDialog.pasteMax") == DocumentsService.MAX_PASTED, \
+        "the limits the paste check uses"
+    assert ui.js("detailDialog.replyMin") == agent5_responses.MIN_PASTED and ui.js("detailDialog.replyMax") == agent5_responses.MAX_PASTED
+    assert ui.js("assistantDialog.maxJobFind") == assistant.MAX_JOB_FIND
+    assert ui.js("win.limits.score_caps.other_field") == agent3_letters.OTHER_FIELD_CAP
+    assert ui.js("win.limits.score_caps.unwanted") == agent3_letters.UNWANTED_CAP
+    assert ui.js("win.limits.score_caps.no_text") == agent3_letters.NO_TEXT_CAP
+    window = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "ui_qt").glob("*.qml"))
+    for kept in ("pasteMax: 20000", "replyMax: 8000", "length < 20)", "maxJobFind: 80", "scores 40 at most", "scored 20 at most", "kept at 40 or below"):
+        assert kept not in window, kept
 
 
 # ── job detail, follow-up, stop ─────────────────────────────────────────────

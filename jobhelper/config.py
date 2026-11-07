@@ -414,6 +414,7 @@ def search_country() -> str:
 
 
 MAX_EXPERIENCE_NOTES = 4000
+PASTED_POSTING = (200, 20000)       # a posting's text pasted in the job window: the shortest and the longest taken
 
 
 def experience_notes() -> str:

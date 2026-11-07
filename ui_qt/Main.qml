@@ -19,26 +19,7 @@ ApplicationWindow {
     readonly property var limits: bridge.limits()
     property string beltPath: "M70,200 H840 Q915,200 915,315 Q915,430 840,430 H150"
 
-    // autocomplete suggestion pools
-    readonly property var euCities: [
-        "Prague", "Brno", "Ostrava", "Plzeň", "Olomouc", "Liberec", "Bratislava", "Košice",
-        "Vienna", "Graz", "Linz", "Berlin", "Munich", "Hamburg", "Frankfurt", "Cologne",
-        "Warsaw", "Kraków", "Wrocław", "Gdańsk", "Poznań", "Budapest", "Bucharest", "Sofia",
-        "Amsterdam", "Rotterdam", "The Hague", "Brussels", "Luxembourg", "Dublin", "Paris",
-        "Lyon", "Madrid", "Barcelona", "Lisbon", "Porto", "Milan", "Rome", "Zurich", "Geneva",
-        "Copenhagen", "Stockholm", "Gothenburg", "Helsinki", "Oslo", "Tallinn", "Riga", "Vilnius",
-        "Ljubljana", "Zagreb", "Athens", "Remote"
-    ]
-    readonly property var roleSuggestions: [
-        "junior", "medior", "middle", "senior", "entry level", "graduate", "intern", "trainee",
-        "software developer", "software engineer", "backend developer", "frontend developer",
-        "full stack developer", "python developer", "java developer", "javascript developer",
-        "c# developer", "golang developer", "web developer", "mobile developer", "android developer",
-        "ios developer", "data scientist", "data analyst", "data engineer", "machine learning engineer",
-        "ai engineer", "qa engineer", "test engineer", "automation engineer", "devops engineer",
-        "site reliability engineer", "cloud engineer", "it support", "help desk", "service desk",
-        "system administrator", "business analyst", "product manager", "ux designer"
-    ]
+    // the suggestion lists (cities, kinds of role) come from the back end: win.limits.choices
 
     // ── live data (reassigned wholesale so bindings refresh) ──
     property var connData: ({})
@@ -163,45 +144,8 @@ ApplicationWindow {
         for (var i = 0; i < all.length; i++) if (plainWords(all[i]).indexOf(q) >= 0) return true;
         return false;
     }
-    function hasNonLatin(s) {
-        return /[぀-ヿ㐀-鿿가-힯Ѐ-ӿͰ-Ͽ؀-ۿ֐-׿฀-๿ऀ-ॿ]/.test(s || "");
-    }
-    // known job-role / tech vocabulary — an added role must share a word with it,
-    // which rejects gibberish ("апаввар", "asdfgh") and most typos.
-    readonly property var roleVocab: {
-        var v = {};
-        function add(arr) {
-            for (var i = 0; i < arr.length; i++) {
-                var ws = ("" + arr[i]).toLowerCase().split(/[^a-z0-9+#]+/);
-                for (var j = 0; j < ws.length; j++) if (ws[j]) v[ws[j]] = true;
-            }
-        }
-        add(roleSuggestions);
-        add(["react", "node", "typescript", "php", "ruby", "rust", "kotlin", "swift", "sql", "database", "db",
-             "security", "network", "networking", "infrastructure", "platform", "sre", "scrum", "project", "program",
-             "manager", "consultant", "specialist", "architect", "lead", "apprentice", "helpdesk", "admin", "administrator",
-             "fullstack", "ml", "llm", "nlp", "genai", "api", "rest", "microservices", "embedded", "firmware", "hardware",
-             "linux", "windows", "aws", "azure", "gcp", "kubernetes", "docker", "spring", "django", "flask", "fastapi",
-             "analytics", "analyst", "bi", "etl", "warehouse", "quant", "developer", "engineer", "programmer", "coder",
-             "tester", "sdet", "support", "desk", "service", "it", "ai", "qa", "qe", "ux", "ui", "web", "mobile", "cloud", "data",
-             "prague", "praha", "czech", "czechia", "republic", "english", "speaking", "remote", "hybrid", "onsite",
-             "junior", "senior", "medior", "middle", "entry", "graduate", "intern", "trainee", "level", "scientist",
-             "machine", "learning", "frontend", "backend", "software", "android", "ios", "golang", "go", "java", "javascript",
-             "python", "csharp", "automation", "devops", "reliability", "designer", "business", "product", "system", "systems"]);
-        return v;
-    }
-    function looksLikeRole(s) {
-        var words = ("" + s).toLowerCase().split(/[^a-z0-9+#]+/).filter(function (w) { return w.length > 0; });
-        return words.some(function (w) { return roleVocab[w] === true; });
-    }
-    function isEmail(s) { return /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test((s || "").trim()); }
-    function cleanPw(s) { return (s || "").replace(/\s+/g, ""); }
-    function isAppPassword(s) { return /^[a-z]{16}$/i.test(cleanPw(s)); }   // Gmail app password = 16 letters
-    function cityEN(c) {
-        var m = { "praha": "Prague", "plzeň": "Pilsen", "plzen": "Pilsen", "wien": "Vienna",
-                  "münchen": "Munich", "köln": "Cologne", "warszawa": "Warsaw" };
-        return m[(c || "").toLowerCase()] || c || "";
-    }
+    // the back end's own checks, asked so the window keeps no copy (#61)
+    function hasNonLatin(s) { return bridge.hasNonLatin(String(s || "")); }
     function resetRobots() { [a1, a2, a3, a4, a5].forEach(function (r) { r.active = false; r.done = false; r.count = ""; }); }
     function setAgent(key, status, info) {
         var m = { a1: a1, a2: a2, a3: a3, a4: a4, a5: a5 };
