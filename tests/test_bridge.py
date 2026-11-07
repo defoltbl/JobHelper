@@ -16,7 +16,7 @@ READY = {"claude": True, "plan": "pro", "claude_email": "me@example.com", "paid_
 @pytest.fixture
 def bridge(qapp, isolate_data, monkeypatch):
     conn = dict(READY)
-    monkeypatch.setattr(ui_api.Api, "connections", lambda self: dict(conn))
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self, sign_in=None: dict(conn))
     monkeypatch.setattr(config, "MODEL", config.MODEL)
     monkeypatch.setattr(config, "MIN_LEAD_SCORE", config.MIN_LEAD_SCORE)
     b = qt_bridge.Bridge()
@@ -80,7 +80,7 @@ def test_a_sign_in_that_could_not_be_checked_is_no_fault_of_the_start_up_check(b
     out = bridge.selfCheckFor({"claude": False})
     assert "Claude" in names(out) and "not signed in" in next(c["problem"] for c in out["checks"] if c["name"] == "Claude")
     sent = []
-    monkeypatch.setattr(ui_api.Api, "connections", lambda self: (_ for _ in ()).throw(RuntimeError("broken")))
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self, sign_in=None: (_ for _ in ()).throw(RuntimeError("broken")))
     monkeypatch.setattr(qt_bridge.threading, "Thread", lambda target=None, daemon=None: type("T", (), {"start": lambda self: target()})())
     bridge.connectionsReady.connect(sent.append)
     bridge.checkConnections()
@@ -948,7 +948,7 @@ def test_a_used_up_limit_is_not_noted_as_a_problem(bridge, monkeypatch):
     from jobhelper import llm, trouble
     noted = []
     monkeypatch.setattr(trouble, "note", lambda where, error: noted.append(where))
-    monkeypatch.setattr(ui_api.Api, "connections", lambda self: {"claude": True})
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self, sign_in=None: {"claude": True})
     monkeypatch.setattr(llm, "ask", lambda *a, **k: (_ for _ in ()).throw(llm.LimitReached("Claude's 5-hour limit is used up.")))
     bridge._ping_usage()
     assert noted == []
@@ -962,7 +962,7 @@ def test_refresh_asks_claude_at_once_also_while_a_limit_holds(bridge, monkeypatc
     import time
     from jobhelper import llm, usage
     asked = []
-    monkeypatch.setattr(ui_api.Api, "connections", lambda self: {"claude": True})
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self, sign_in=None: {"claude": True})
     monkeypatch.setattr(llm, "ask", lambda *a, **k: asked.append(k.get("force")) or "ok")
     usage.record({"input_tokens": 1, "output_tokens": 1, "cost_usd": 0.0, "rate_limit_info": {"unifiedWindows": {}}}, tag="usage_ping")
     usage.note_limit(time.time() + 3600, "You've hit your weekly limit · resets 9am")
@@ -1058,3 +1058,62 @@ def test_the_end_of_a_search_names_a_source_it_could_not_read(bridge, monkeypatc
     bridge._set_running(True)
     bridge._pipeline({})
     assert events[-1][2].endswith("Not read this time: careers (Contoso).")
+def test_a_run_start_uses_a_recent_sign_in_answer_instead_of_asking_claude(qapp, isolate_data, monkeypatch):
+    """#80: Run search asked `claude auth status` on the window's thread, so a slow Claude stopped the window."""
+    import subprocess
+    import time as clock
+    from jobhelper import api_system
+    asked = []
+
+    def status(*a, **kw):
+        asked.append(1)
+        return subprocess.CompletedProcess([], 0, stdout='{"loggedIn": true, "subscriptionType": "pro", "email": "me@example.com"}')
+    monkeypatch.setattr(api_system, "_claude_auth_status", status)
+
+    class Now:                                                  # the background check, run here at once
+        def __init__(self, target=None, args=(), daemon=None):
+            self.target = target
+
+        def start(self):
+            self.target()
+    monkeypatch.setattr(qt_bridge.threading, "Thread", Now)
+    b = qt_bridge.Bridge()
+    b.checkConnections()
+    assert asked == [1] and b._recent_sign_in() == {"claude": True, "plan": "pro", "claude_email": "me@example.com"}
+    conn = b._api.connections(sign_in=b._recent_sign_in())
+    assert asked == [1] and conn["claude"] is True and conn["claude_email"] == "me@example.com", "not asked again"
+    seen_at, answer = b._sign_in
+    b._sign_in = (seen_at - api_system.SIGN_IN_FRESH - 1, answer)
+    assert b._recent_sign_in() is None, "an old answer is asked again"
+    b._sign_in = (clock.monotonic(), answer)
+    monkeypatch.setattr(qt_bridge.sys, "platform", "darwin")      # Sign in works on a Mac only
+    monkeypatch.setattr(qt_bridge.subprocess, "Popen", lambda *a, **kw: None)
+    monkeypatch.setattr(qt_bridge.ClaudeCli, "of_the_sdk", classmethod(lambda cls: type("C", (), {"login_script": lambda self: []})()))
+    b.claudeLogin()
+    assert b._recent_sign_in() is None, "another account may sign in: the next run start asks"
+    passed = []
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self, sign_in=None: passed.append(sign_in) or {"claude": False, "claude_msg": "x"})
+    b._sign_in = (clock.monotonic(), answer)
+    b.runSearch({"where": "Brno"})
+    assert passed == [answer], "the run start hands the recent answer on"
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self, sign_in=None: {"claude": False, "claude_unsure": True})
+    b.checkConnections()
+    assert b._recent_sign_in() is None, "a check that does not know the sign-in drops the stored answer"
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self, sign_in=None: b.claudeLogin() and dict(answer))
+    b.checkConnections()                                         # Sign in is pressed while this check runs
+    assert b._recent_sign_in() is None, "the answer of a check from before the new sign-in is not kept"
+
+
+def test_a_sign_in_answer_that_is_not_signed_in_still_asks_claude_and_checks_the_rest(isolate_data, monkeypatch):
+    import subprocess
+    from jobhelper import api_system, integrity
+    asked = []
+    monkeypatch.setattr(api_system, "_claude_auth_status", lambda *a, **k: asked.append(1) or subprocess.CompletedProcess([], 0, stdout='{"loggedIn": false}'))
+    monkeypatch.setattr(integrity, "changed_titles", lambda: ["CV rules"])
+    api = ui_api.Api()
+    for given in ({"claude": False}, {}, None):
+        conn = api.connections(sign_in=given)
+        assert conn["claude"] is False and conn["changed_files"] == ["CV rules"], given
+    assert len(asked) == 3
+    conn = api.connections(sign_in={"claude": True, "plan": "pro", "claude_email": "me@example.com"})
+    assert len(asked) == 3 and conn["changed_files"] == ["CV rules"] and "cv" in conn, "only the Claude question is saved"

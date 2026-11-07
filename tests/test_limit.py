@@ -353,7 +353,7 @@ def test_command_line_run_saves_what_it_scored_when_claude_stops_answering(isola
 # ── the app: pause, wait, resume ────────────────────────────────────────────
 @pytest.fixture
 def bridge(qapp, isolate_data, monkeypatch):
-    monkeypatch.setattr(ui_api.Api, "connections", lambda self: {"claude": True, "cv": "cv.docx", "vault": "ok", "changed_files": []})
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self, sign_in=None: {"claude": True, "cv": "cv.docx", "vault": "ok", "changed_files": []})
     monkeypatch.setattr(qt_bridge.Bridge, "LIMIT_POLL_SECONDS", 0.03)
     monkeypatch.setattr(agent1_cv, "load_profile", lambda current_only=False: {"seniority": "junior", "search_queries": ["dev"]})
     monkeypatch.setattr(agent1_cv, "find_cv", lambda: None)

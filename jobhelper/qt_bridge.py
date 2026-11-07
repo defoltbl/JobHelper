@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -73,6 +74,8 @@ class Bridge(RunSlots, JobSlots, QObject):
         self._quiet = quiet
         self._api = Api()
         self._running = False
+        self._sign_in = None                    # (when, answer) of the last signed-in connection check, for run starts
+        self._sign_ins = 0                      # how many times Sign in was pressed: a check from before one is not kept
         self._stop = threading.Event()
         self._resume = threading.Event()
         self._paused = False
@@ -265,22 +268,34 @@ class Bridge(RunSlots, JobSlots, QObject):
             return {"ok": False, "msg": "Signing in from the app works on a Mac only."}
         try:
             subprocess.Popen(ClaudeCli.of_the_sdk().login_script())
+            self._sign_in, self._sign_ins = None, self._sign_ins + 1     # another account may come back: ask again
             return {"ok": True}
         except FileNotFoundError as e:
             return {"ok": False, "msg": str(e) if str(e) == claude_cli.MISSING else "Terminal could not be opened."}
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "msg": str(e)}
 
+    def _recent_sign_in(self):
+        """The last check's signed-in answer while it is younger than api_system.SIGN_IN_FRESH, else None: a run start
+        then need not ask the Claude program on the window's thread (#80)."""
+        seen = self._sign_in
+        return seen[1] if seen and time.monotonic() - seen[0] < api_system.SIGN_IN_FRESH else None
+
     @Slot()
     def checkConnections(self):
         """Check Claude / email / CV off the UI thread (the Claude check runs
         the CLI), then emit connectionsReady so animations never stall."""
+        round_ = self._sign_ins
+
         def work():
             try:
                 info = self._api.connections()
             except Exception as e:  # noqa: BLE001 - nothing could be checked: Claude's sign-in is not known
                 trouble.note("the connection check", e)
                 info = {"claude_unsure": True, "claude_msg": api_system.UNSURE}
+            if round_ == self._sign_ins:       # a sign-in started meanwhile: this answer may be of the old account
+                self._sign_in = (time.monotonic(), {k: info.get(k) for k in api_system.SIGN_IN_KEYS}) \
+                    if info.get("claude") is True else None
             # The start-up check too: it reads every job, which costs the window a frame or two. As text,
             # because an answer sent from another thread arrives only when its values are plain ones.
             try:

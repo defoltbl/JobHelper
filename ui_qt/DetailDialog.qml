@@ -25,11 +25,15 @@ Dialog {
     property bool confirmClose: false
     property string closeNote: ""
     property string confirmAction: ""     // the button that was asked about once ("apply", "dismiss")
-    // A button that closes this window with text still unsaved asks once, as the ✕ does.
+    // A button that closes this window with text still unsaved asks once, as the ✕ does. The press that asks starts
+    // the decision pause, so the second click of a double-click is not taken as "discard" (#81).
     function mayLeave(action, label) {
-        if (pending.length > 0 && confirmAction !== action) {
+        if (pending.length === 0) return true;
+        if (decisionPaused) return false;
+        if (confirmAction !== action) {
             confirmAction = action; confirmClose = false;
             closeNote = "Not saved yet: " + pending.join(", ") + ". Save it, or press " + label + " once more to discard it.";
+            decided();
             return false;
         }
         return true;
@@ -86,11 +90,15 @@ Dialog {
             close(); win.countsData = bridge.counts(); win.refreshOpenView(); }
         else ticker.text = (r && r.msg) ? r.msg : "Couldn't remove that job.";
     }
-    function tryClose() {                 // the ✕ and, with unsaved text, the Esc key: ask once
-        if (pending.length > 0 && !confirmClose) {
-            confirmClose = true; confirmAction = "";
-            closeNote = "Not saved yet: " + pending.join(", ") + ". Save it, or close once more to discard it.";
-            return;
+    function tryClose() {                 // the ✕ and, with unsaved text, the Esc key: ask once, then a pause (#81)
+        if (pending.length > 0) {
+            if (decisionPaused) return;   // the second click of a double-click: not "discard"
+            if (!confirmClose) {
+                confirmClose = true; confirmAction = "";
+                closeNote = "Not saved yet: " + pending.join(", ") + ". Save it, or close once more to discard it.";
+                decided();
+                return;
+            }
         }
         close();
     }

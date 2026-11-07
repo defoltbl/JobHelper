@@ -491,11 +491,15 @@ data/                your data; only the *.example.* files are in git
   message of Write; the CV and the letter share one `hold`, and the later failure is the one kept.
 - **"Not known" is not "signed out"** (`SystemService.connections`: `claude_unsure`, `claude_msg`): a `claude auth status`
   that times out or cannot be run says so, a run is refused without offering Account, the start-up check leaves Claude
-  out (`selfCheckFor`), and the welcome card offers **Check again**. The check still runs on the window's thread when a
-  run starts (up to 8 s).
+  out (`selfCheckFor`), and the welcome card offers **Check again** (busy, `checkingAgain`, until the answer). A run start
+  passes the last signed-in answer of the background check (`Bridge._recent_sign_in`, younger than
+  `api_system.SIGN_IN_FRESH`) as `connections(sign_in=...)`, so it does not ask the Claude program on the window's thread
+  (#80); everything else is checked again. A check that says not signed in or not known drops the answer, and so does
+  Sign in (with a counter, so a check that started before it does not bring the old account back).
 - **A decision in the job window turns its buttons off for `decisionPause` (700 ms)** (DetailDialog `decisionPaused`, only
   after a decision that was taken): in a review round the next job opens at once, and the second click of a double-click
-  decided it too.
+  decided it too. The press that asks before discarding unsaved text (`mayLeave`, `tryClose`) starts the same pause, so
+  a double-click never asks and discards at once (#81).
 - **Consent is never the model's** (`form_fill.CONSENT_WORDS`, one list for the planner and the page scripts): "I agree",
   agree to terms or to the use of data, accept terms, acknowledge, authorize, certify, "I confirm/declare", a background
   check, a privacy policy, newsletters, job alerts, "keep my data on file", also in Czech, German, Spanish and French. It

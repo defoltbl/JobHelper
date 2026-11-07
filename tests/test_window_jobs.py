@@ -609,7 +609,7 @@ def test_insights_are_not_prepared_while_the_welcome_screen_is_up(ui, monkeypatc
 
 def test_the_start_up_check_comes_with_the_connection_check(ui, monkeypatch):
     """Both are done off the window's thread; the window only shows the result."""
-    monkeypatch.setattr(ui_api.Api, "connections", lambda self: {"claude": True})
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self, sign_in=None: {"claude": True})
     monkeypatch.setattr(ui_api.Api, "self_check", lambda self, signed_in=None: {"ok": True, "problems": [], "asked": signed_in})
     got = []
     ui.bridge.connectionsReady.connect(got.append)

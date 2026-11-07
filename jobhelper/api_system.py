@@ -22,6 +22,8 @@ def _claude_auth_status():
 
 
 SIGN_IN = "Log in to Claude first (open Account)."
+SIGN_IN_FRESH = 600         # seconds a signed-in answer of the Claude program is good for a run start (#80)
+SIGN_IN_KEYS = ("claude", "plan", "claude_email")     # what of connections() such an answer is
 UNSURE = "Claude did not answer the sign-in check, so it is not known whether you are signed in. Try again in a moment."
 
 
@@ -52,9 +54,9 @@ class SystemService:
         return {"ok": True}
 
     # ── read: status / data ─────────────────────────────────────
-    def connections(self):
-        """What is set up. `claude_unsure`: the sign-in could not be checked (Claude was slow or could not be asked),
-        which is not the same as signed out; `claude_msg` says what to do when `claude` is not True."""
+    @staticmethod
+    def _ask_claude() -> tuple[bool, str, str, bool]:
+        """(signed in, plan, e-mail, unsure) as the Claude program says it; unsure when it could not be asked."""
         claude, plan, claude_email, unsure = False, "", "", False
         try:
             out = _claude_auth_status()
@@ -70,6 +72,18 @@ class SystemService:
         except (subprocess.TimeoutExpired, OSError) as e:
             unsure = True
             trouble.note("the Claude sign-in check", e)
+        return claude, plan, claude_email, unsure
+
+    def connections(self, sign_in=None):
+        """What is set up. `claude_unsure`: the sign-in could not be checked (Claude was slow or could not be asked),
+        which is not the same as signed out; `claude_msg` says what to do when `claude` is not True. `sign_in`: a recent
+        signed-in answer ({claude, plan, claude_email}) to use instead of asking the Claude program, which can take
+        seconds (#80: a run start on the window's thread); everything else is checked again."""
+        if sign_in and sign_in.get("claude") is True:
+            claude, plan, claude_email = (True, *(str(sign_in.get(k) or "") for k in SIGN_IN_KEYS[1:]))
+            unsure = False
+        else:
+            claude, plan, claude_email, unsure = self._ask_claude()
         cv = agent1_cv.find_cv()
         changed = integrity.changed_titles()        # a check that could not run stops a run too, never "nothing changed"
         return {"vault": vault.state(), "changed_files": changed, "pdf": pdf.available(),

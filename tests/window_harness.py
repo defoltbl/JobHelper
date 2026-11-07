@@ -282,7 +282,7 @@ def loaded_window(tmp_path_factory):
     }.items():
         mp.setattr(config, name, value)
     conn = dict(READY)
-    mp.setattr(ui_api.Api, "connections", lambda self: dict(conn))
+    mp.setattr(ui_api.Api, "connections", lambda self, sign_in=None: dict(conn))
     mp.setattr(qt_bridge.Bridge, "_ping_usage", lambda self: self.usageReady.emit())   # no Claude call
     sent = []
     mp.setattr(notify, "send", lambda message, subtitle="": sent.append((message, subtitle)) or True)   # no real notification

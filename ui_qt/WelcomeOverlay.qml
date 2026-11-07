@@ -70,6 +70,7 @@ Item {
     readonly property bool ready: connData.claude === true && hasCv && connData.paid_api !== true && protectedOk
     // the sign-in check got no answer: asking again comes before signing in
     readonly property bool offersCheckAgain: connData.claude_unsure === true && !waitingLogin
+    property bool checkingAgain: false        // Check again is asking: no second check until the answer comes (#85)
     // what is still missing, in words: "Needed before the line can run: your master CV."
     function neededText() {
         if (connData.paid_api === true) return "A paid Claude key is set on this Mac. Remove it, then start the app again.";
@@ -109,7 +110,7 @@ Item {
     onPhaseChanged: if (phase === "card") { emailDraft = connData.email_addr || ""; keySink.forceActiveFocus(); }
     Connections { target: win; function onConnCheckedChanged() { welcome.advance(); } }
     Connections { target: bridge
-        function onConnectionsReady(info) { if (info.claude === true) welcome.waitingLogin = false; }
+        function onConnectionsReady(info) { welcome.checkingAgain = false; if (info.claude === true) welcome.waitingLogin = false; }
         function onEmailTested(r) {
             welcome.testLeft -= 1; welcome.testBad = welcome.testBad || !(r && r.ok);
             welcome.testNote = (welcome.testNote !== "" ? welcome.testNote + " " : "") + ((r && r.msg) || "");
@@ -256,7 +257,8 @@ Item {
                     SmallButton { visible: connData.claude === true; text: "Switch"
                         onClicked: { bridge.claudeLogin(); } }
                     PillButton { objectName: "claudeCheckAgain"; visible: welcome.offersCheckAgain
-                        text: "Check again"; onClicked: bridge.checkConnections() }       // not known is not signed out: ask again first
+                        text: welcome.checkingAgain ? "Checking…" : "Check again"; enabled: !welcome.checkingAgain
+                        onClicked: { welcome.checkingAgain = true; bridge.checkConnections(); } }  // not known is not signed out: ask again first
                     PillButton { visible: connData.claude !== true; primaryStyle: connData.claude_unsure !== true
                         text: welcome.waitingLogin ? "Waiting…" : "Sign in with Claude"; enabled: !welcome.waitingLogin
                         onClicked: { var r = bridge.claudeLogin(); if (r && r.ok) welcome.waitingLogin = true; } }

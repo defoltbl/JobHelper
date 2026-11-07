@@ -335,7 +335,7 @@ Table 2.3 lists problems while setting up, and what to do.
 | What you see | Cause | What to do |
 |---|---|---|
 | **Claude account** stays red after you sign in | The sign-in was done in another browser profile, or was cancelled | Select **Sign in with Claude** again |
-| **Claude account** says that Claude did not answer the sign-in check | Claude was slow or could not be asked. This does not mean that you are signed out | Select **Check again**. Sign in only when the row then says that you are not signed in |
+| **Claude account** says that Claude did not answer the sign-in check | Claude was slow or could not be asked. This does not mean that you are signed out | Select **Check again**. The button says **Checking…** until Claude answers. Sign in only when the row then says that you are not signed in |
 | "A paid API key is set" | A paid Claude key, or another setting that bills a paid account, is set on this Mac | Ask whoever set up the app to remove it, then start the app again. The app never bills you per use |
 | "The mail server refused this address and password" | The normal password was used where an app password is needed, the app password was cancelled, or it belongs to another address | Create an app password for this address and enter that one |
 | "The app does not know this provider" | The address is at a company or a small provider | Enter its IMAP server in the third field |
@@ -779,7 +779,8 @@ Table 6.4 lists the buttons at the bottom of the job window.
 
 > **Note**
 > If you typed something in this window and did not save it, the ✕, the Esc key, **Mark
-> applied** and **Not interested** all ask once before the text is discarded.
+> applied** and **Not interested** all ask once before the text is discarded. A second press
+> counts only after a short pause, so a double-click does not discard the text.
 
 ### Next steps
 
