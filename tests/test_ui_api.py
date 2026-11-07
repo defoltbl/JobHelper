@@ -1231,6 +1231,21 @@ def test_a_letter_template_is_made_from_the_head_of_the_cv(isolate_data, tmp_pat
     assert cover_letter.template_head("Alex Novak" + "x" * 5000 + two) == [], "a very long first line: read short, no name"
 
 
+@pytest.mark.parametrize("cv, problem", [
+    ("CURRICULUM VITAE\nAlex Novak\nalex@example.com · +420 600 000 000", "NO_NAME"),
+    ("", "NO_NAME"),
+    ("Alex Novak\nDeveloper\nalex@example.com\nPROFILE", "FEW_CONTACTS"),
+    ("Alex Novak\nDeveloper\nPROFILE", "FEW_CONTACTS"),
+    ("Alex Novak\nDeveloper\nalex@example.com · +420 600 000 000", ""),
+])
+def test_the_head_of_a_cv_says_why_it_makes_no_letter_template(cv, problem):
+    """#64: with no template the app wrote the plain letter, and Edit letter stayed hidden with no reason."""
+    from jobhelper import cover_letter
+    head = cover_letter.LetterHead(cv)
+    assert head.problem == (getattr(cover_letter.LetterHead, problem) if problem else "")
+    assert (head.lines == []) == bool(problem) and cover_letter.template_head(cv) == head.lines
+
+
 
 def test_a_mailbox_test_that_cannot_reach_the_server_says_why(monkeypatch):
     """Last full check (F2): the mailbox Test said one generic text for every server it could not reach."""

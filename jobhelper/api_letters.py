@@ -33,6 +33,24 @@ class LettersService:
         except Exception:  # noqa: BLE001 - not a letter built from the template
             return False
 
+    _TEMPLATE_GONE = ("Edit letter is not offered: your letter template is missing. The start-up check of the app "
+                      "tells you what to do.")
+    _NO_TEMPLATE = ("Edit letter is not offered: this letter was written without a letter template. The app makes one "
+                    "from the top of your CV when it writes the next letter, and you can edit that letter.")
+
+    def edit_missing(self, j) -> str:
+        """Why Edit letter is not offered for a letter the app wrote without a template ('' when that is not the case):
+        the CV's top gives no head (LetterHead says what to add), the template went missing, or none was made yet (#64)."""
+        if not (bool(j) and agent3_letters._generated_letter(j)) or config.LETTER_TEMPLATE.exists():
+            return ""
+        from . import integrity
+        if integrity.state_of("letter_template") == "missing":
+            return self._TEMPLATE_GONE
+        cv_text = self._cv.text()
+        if not cv_text.strip():
+            return ""                                    # no CV: the start screen says so
+        return cover_letter.LetterHead(cv_text).problem or self._NO_TEMPLATE     # never hidden without a word
+
     def old_format_letter(self, j) -> bool:
         """A Word letter the app wrote, but in an earlier layout: it opens in Word, not in the editor here."""
         return bool(j) and agent3_letters._generated_letter(j) and self.letter_path(j).is_file() \

@@ -121,6 +121,27 @@ def test_letter_is_offered_for_editing_only_when_the_app_wrote_it(api):
     assert api.rewrite_paragraph("own", PARAS, 0)["ok"] is False
 
 
+def test_the_job_window_says_why_edit_letter_is_not_offered(api, monkeypatch):
+    """#64: a letter the app wrote with no template (the CV's top gave no head) had no Edit letter, and no word why."""
+    from jobhelper import integrity
+    store.save_jobs([_lead_with_docs(), store.new_job(id="own", title="Dev", company="B", status="waiting", source="manual",
+                                                      cover_letter_file="Letter_lead.docx")])
+    assert api.job_detail("lead")["letter_no_edit"] == "", "a template: Edit letter is there"
+    config.LETTER_TEMPLATE.unlink()
+    detail = api.job_detail("lead")
+    assert detail["letter_editable"] is False and detail["letter_no_edit"] == cover_letter.LetterHead.FEW_CONTACTS   # CV: no contacts
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "CURRICULUM VITAE\nalex@example.com · +420 600 000 000")
+    assert api.job_detail("lead")["letter_no_edit"] == cover_letter.LetterHead.NO_NAME
+    assert api.job_detail("own")["letter_no_edit"] == "", "your own letter is never edited here: nothing to explain"
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "")
+    assert api.job_detail("lead")["letter_no_edit"] == "", "no CV at all: the start screen says so"
+    monkeypatch.setattr(integrity, "state_of", lambda name: "missing" if name == "letter_template" else "")
+    assert "your letter template is missing" in api.job_detail("lead")["letter_no_edit"], "a template that went missing"
+    monkeypatch.setattr(integrity, "state_of", lambda name: "absent")
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: "Alex Novak\nDeveloper\nalex@example.com · +420 600 000 000")
+    assert "written without a letter template" in api.job_detail("lead")["letter_no_edit"], "a good head, no template yet: still a word"
+
+
 def test_an_old_text_letter_is_not_offered_for_editing(api):
     """A letter from an early version that exists only as a .md file opens, but cannot be edited in the app."""
     _lead_with_docs()

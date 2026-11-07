@@ -255,7 +255,7 @@ def _keep_template(cv_text: str) -> None:
     letter, as before."""
     from . import integrity
     path = config.LETTER_TEMPLATE
-    state = next((f["state"] for f in integrity.check() if f["name"] == "letter_template"), "")
+    state = integrity.state_of("letter_template")
     try:
         if path.exists():
             current = cover_letter.app_made_head(path)

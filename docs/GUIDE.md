@@ -865,6 +865,12 @@ If you do not have a letter template, the app makes one from the top of your CV.
 name, what you call yourself, your contacts and your city. **Edit letter** then works for each
 letter that the app writes.
 
+The app cannot make a template when the first line of your CV is not your name. It also needs
+two ways to contact you at the top of your CV. Without a template, the app writes a plain letter.
+The job window then tells you why **Edit letter** is not there. It also tells you what to add to
+your CV. You can edit the next letter that the app writes. If your own letter template is
+missing, the job window tells you so, and the start-up check tells you what to do.
+
 The app also checks that the letter keeps each piece of work with the job where you did it. If
 your CV puts the REST API at one employer, the letter must not put it at another. When a draft
 does this, Claude writes it again. If the problem stays, the job window shows it so you can

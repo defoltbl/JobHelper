@@ -135,6 +135,7 @@ class JobsService:
             "is_dismissed": j["status"] == store.NOT_INTERESTED,
             "letter_editable": self._app.editable_letter(j),
             "letter_old_format": self._app.old_format_letter(j),
+            "letter_no_edit": self._app.edit_missing(j),
             "event": dict(j.get("event") or {}),
             "thanks_due": planner.thanks_due(j),
             "apply_steps": list(j.get("apply_steps") or []),

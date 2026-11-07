@@ -110,8 +110,10 @@ def test_a_change_outside_the_app_is_detected(files, name, change):
 
 def test_a_deleted_file_is_reported_missing(files):
     integrity.approve()
+    assert integrity.state_of("letter_template") == "ok"
     config.LETTER_TEMPLATE.unlink()
-    assert _states()["letter_template"] == "missing"
+    assert _states()["letter_template"] == "missing" and integrity.state_of("letter_template") == "missing"
+    assert integrity.state_of("no such file") == ""
 
 
 def test_swapping_the_master_cv_for_another_file_is_detected(files):

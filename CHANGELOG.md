@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Job window:** when the app cannot make a letter template from the top of your CV, the job window says why **Edit letter** is not offered and what to do.
 - **Cover letters:** a letter that says you worked at an employer that neither your CV nor the posting names is sent back to Claude once. If the name stays, the job window names it.
 - **Cover letters:** a technology named after a wish, as in "eager to learn Spark, having built Kafka pipelines", is checked like any other claim. "My interest in …", "a team where we use …" and "I lead with …" no longer raise a false alarm.
 - **Assistant:** when Chrome stops answering just after a choice in a form, the report names that field for you to check.

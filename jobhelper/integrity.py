@@ -114,6 +114,11 @@ def check() -> list[dict]:
     return out
 
 
+def state_of(name: str) -> str:
+    """The state of one protected file, as check() gives it ('' when the check is off or the name is not protected)."""
+    return next((f["state"] for f in check() if f["name"] == name), "")
+
+
 def problems() -> list[dict]:
     return [f for f in check() if f["state"] in ("changed", "missing", "untracked")]
 

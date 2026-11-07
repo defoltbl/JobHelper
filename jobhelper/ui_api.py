@@ -225,6 +225,7 @@ class Api:
     letter_path = _Via("_letters")
     editable_letter = _Via("_letters")
     old_format_letter = _Via("_letters")
+    edit_missing = _Via("_letters")
     letter_for_edit = _Via("_letters")
     save_letter = _Via("_letters")
     rewrite_paragraph = _Via("_letters")

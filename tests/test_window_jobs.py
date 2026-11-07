@@ -12,7 +12,7 @@ pytestmark = pytest.mark.xdist_group("test_window_jobs")
 
 from PySide6.QtCore import QMetaObject, QObject, QPointF  # noqa: E402
 
-from jobhelper import api_core, config, store, ui_api  # noqa: E402
+from jobhelper import api_core, config, cover_letter, store, ui_api  # noqa: E402
 from tests.conftest import ROOT  # noqa: E402
 from tests.window_harness import (Ui, _border_with_focus, _open, _open_job, _until, _until_closed, _until_open, _until_shown, _until_true, qml_source)  # noqa: E402
 
@@ -197,6 +197,13 @@ def test_application_only_cards_are_hidden_for_a_new_job_and_nothing_overflows(u
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(cv_left_out=[], letter_misplaced=[]), render=False)
     ui.js("detailDialog.refresh()")
     assert ui.find("letterInvented").property("visible") is False
+    assert ui.find("letterNoEdit").property("visible") is False
+    monkeypatch.setattr(ui_api.Api, "edit_missing", lambda self, j: cover_letter.LetterHead.NO_NAME)
+    ui.js("detailDialog.refresh()")
+    no_edit = ui.find("letterNoEdit")
+    assert no_edit.property("visible") is True and no_edit.property("text") == cover_letter.LetterHead.NO_NAME   # #64: why, in full
+    monkeypatch.setattr(ui_api.Api, "edit_missing", lambda self, j: "")
+    ui.js("detailDialog.refresh()")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_invented=["Contoso Labs"]), render=False)
     ui.js("detailDialog.refresh()")
     invented = ui.find("letterInvented")
