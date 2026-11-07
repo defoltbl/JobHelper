@@ -98,7 +98,7 @@ class LettersService:
             draft.replace(path)
         finally:
             draft.unlink(missing_ok=True)
-        warnings = cover_letter.letter_warnings(texts, self._cv.text(), j.get("company", ""))
+        warnings = cover_letter.letter_warnings(texts, self._cv.text(), j.get("company", ""), j.get("description") or "")
         made = pdf.to_pdf(path)
         if made and pdf.page_count(made) > 1:
             warnings.append("The letter is now longer than one page.")

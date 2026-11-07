@@ -95,9 +95,10 @@ def rules_with_facts(cv_text: str = "") -> str:
             + config.facts_block(cv_text))
 
 
-def unverified_terms(master_text: str) -> list[str]:
-    """The CV's "never claim" list plus the letter instruction's "Anything else (...)" list."""
-    terms = cv_tailor.unverified_terms(master_text)
+def unverified_terms(master_text: str, posting: str = "") -> list[str]:
+    """The CV's "never claim" list (with the posting's skills the CV does not show) plus the letter instruction's
+    "Anything else (...)" list."""
+    terms = cv_tailor.unverified_terms(master_text, posting)
     path = config.LETTER_INSTRUCTION
     if path.exists():
         m = re.search(r"Anything else \(([^)]*)\)", path.read_text(encoding="utf-8"))
@@ -402,7 +403,7 @@ def rewrite_paragraph(job: dict[str, Any], cv_text: str, paragraphs: list[str], 
     Nothing is saved here: the caller shows it to the user first."""
     if not 0 <= index < len(paragraphs):
         raise ValueError("That paragraph does not exist.")
-    unverified, first_name = unverified_terms(cv_text), candidate_first_name(cv_text)
+    unverified, first_name = unverified_terms(cv_text, job.get("description") or ""), candidate_first_name(cv_text)
     employers = claims.EmployerCheck(cv_text)
     letter = "\n".join(f"{n}. {p}" for n, p in enumerate(paragraphs, 1))
     words = len(paragraphs[index].split())
@@ -491,7 +492,7 @@ def checked_plain(letter: str, job: dict[str, Any], cv_text: str) -> str:
     # only a short line of greeting or closing is the frame: "Dear Hiring Team, I ran Kubernetes …" is checked as body
     frame = lambda b: len(b.split()) <= FRAME_WORDS and not re.search(r"\d", b) and bool(_FRAME.match(b))  # noqa: E731
     body = [b for b in blocks if not frame(b)]
-    checked = iter(enforce(body, unverified_terms(cv_text)))
+    checked = iter(enforce(body, unverified_terms(cv_text, job.get("description") or "")))
     out = [b if frame(b) else next(checked) for b in blocks]
     kept = [b for b in out if b.strip() and not frame(b)]
     words = sum(len(b.split()) for b in kept)
@@ -533,7 +534,7 @@ def paragraph_problems(text: str, unverified: list[str], first_name: str = "",
     return problems
 
 
-def letter_warnings(paragraphs: list[str], cv_text: str, company: str = "") -> list[str]:
+def letter_warnings(paragraphs: list[str], cv_text: str, company: str = "", posting: str = "") -> list[str]:
     """What a hand-edited letter no longer follows (shown to the user, never blocking)."""
     out = []
     words = sum(len(p.split()) for p in paragraphs)
@@ -541,7 +542,7 @@ def letter_warnings(paragraphs: list[str], cv_text: str, company: str = "") -> l
         out.append(f"The letter is short: {words} words (the usual range is {MIN_WORDS}-{MAX_WORDS}).")
     if words > MAX_WORDS:
         out.append(f"The letter is long: {words} words (the usual range is {MIN_WORDS}-{MAX_WORDS}); it may not fit on one page.")
-    unverified, first_name, employers = unverified_terms(cv_text), candidate_first_name(cv_text), claims.EmployerCheck(cv_text)
+    unverified, first_name, employers = unverified_terms(cv_text, posting), candidate_first_name(cv_text), claims.EmployerCheck(cv_text)
     for n, p in enumerate(paragraphs, 1):
         out += [f"Paragraph {n}: {x}" for x in paragraph_problems(p, unverified, first_name, employers, company)]
     return out
@@ -602,7 +603,7 @@ def _adapted_cv_text(job: dict[str, Any]) -> str:
 def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
     """Create the cover letter for `job`; returns the file name in LETTERS_DIR."""
     template = config.LETTER_TEMPLATE
-    unverified = unverified_terms(cv_text)
+    unverified = unverified_terms(cv_text, job.get("description") or "")
     first_name = candidate_first_name(cv_text)
     adapted = _adapted_cv_text(job)
     adapted_block = (f"\nPROFILE and KEY SKILLS of the CV adapted for this same application "

@@ -67,6 +67,22 @@ def test_a_claim_outside_the_cv_is_sent_back_once_and_then_flagged(monkeypatch):
     assert items[0]["check"] == "Mentions Kubernetes as experience, which is not in your CV."
 
 
+def test_an_answer_that_claims_a_skill_of_the_posting_is_sent_back_and_then_flagged(monkeypatch):
+    """#78: the answers knew only the fixed list; a skill the posting asks for and the CV lacks is checked too."""
+    prompts = []
+
+    def ask(prompt, **kw):
+        prompts.append(prompt)
+        return _reply(("I scheduled Airflow pipelines every night.", ""))
+    monkeypatch.setattr(llm, "ask_json", ask)
+    items = form_answers.generate({**JOB, "description": "You will schedule jobs with Airflow."}, CV, ["Describe your scheduling work."])
+    assert len(prompts) == 2 and "Airflow" in prompts[1]
+    assert "Airflow" in items[0]["check"]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"answer": "I scheduled Airflow pipelines every night."})
+    again = form_answers.rewrite({**JOB, "description": "You will schedule jobs with Airflow."}, CV, "Q?", "An answer.", "shorter")
+    assert "Airflow" in again["check"], "a rewrite is checked against the posting too"
+
+
 def test_a_figure_claude_invents_is_sent_back_once_and_then_flagged(monkeypatch):
     """The prompt said never to invent numbers, but nothing checked: an answer could claim '40% faster' for an employer."""
     prompts = []

@@ -263,3 +263,32 @@ def test_the_invented_employer_set(sentence, employer):
 @pytest.mark.parametrize("sentence, term", _CLAIMS)
 def test_the_claim_set(sentence, term):
     assert ClaimCheck(["Kafka", "Spark"]).claimed_in(sentence) == term, sentence
+
+
+
+# ── #78: the posting's own skills, and work done with any verb ──────────────
+def test_the_posting_s_skills_your_cv_lacks_are_claimable_unless_they_are_ordinary_words(isolate_data):
+    from jobhelper import keywords
+    posting = "We use Airflow, Snowflake, Excel, Swift and REST APIs. German and Go are a plus. Kubernetes too."
+    assert keywords.claimable_missing(posting, "I use Snowflake.") == ["Airflow", "Kubernetes"]
+    assert keywords.names_of("Kubernetes") == ["Kubernetes", "k8s"] and keywords.names_of("JavaScript") == ["JavaScript"]
+    from jobhelper import cv_tailor
+    assert "Airflow" in cv_tailor.unverified_terms("Python", posting) and "Airflow" not in cv_tailor.unverified_terms("Python")
+    assert "k8s" in cv_tailor.unverified_terms("Python", posting), "another spelling of a missing skill is looked for too"
+
+
+@pytest.mark.parametrize("sentence, done", [
+    ("I scheduled the jobs every night.", True), ("We reconciled the accounts.", True), ("I gave first aid.", True),
+    ("I recently migrated the jobs.", True), ("I have been using it daily.", True), ("I'm running it at home.", True),
+    ("I troubleshot the errors.", True),
+    ("I did not use it.", False), ("I noticed your team uses it.", False), ("I reached out to your team.", False),
+    ("I completed a course.", False), ("I'm looking forward to it.", False), ("I am learning it.", False),
+    ("The team migrated last year.", False),
+])
+def test_work_done_is_any_first_person_verb_in_the_past_tense(sentence, done):
+    assert claims._done(sentence) is done
+
+
+def test_a_digit_inside_a_name_is_no_figure():
+    assert claims.unbacked_figures("I run k8s on S3 and EC2 with Python3.") == []
+    assert claims.unbacked_figures("It made the build 10x faster.") == ["10"]

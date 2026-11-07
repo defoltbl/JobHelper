@@ -23,7 +23,7 @@ from typing import Any
 from lxml import etree
 
 from .word_document import P, R, Paragraph, WordDocument, set_run_text, text_of
-from . import claims, config, llm, pdf, store
+from . import claims, config, keywords, llm, pdf, store
 from .claims import mentions
 
 # Technologies the master does not contain (instruction, section 4). Used when
@@ -114,10 +114,17 @@ def instruction_sections(path: Path, numbers: tuple[str, ...], cv_text: str, fal
     return ("## " + "\n## ".join(k.strip() for k in keep)) if keep else fallback
 
 
-def unverified_terms(master_text: str) -> list[str]:
+def unverified_terms(master_text: str, posting: str = "") -> list[str]:
     """Technologies that must not be claimed: the instruction's "never claim"
-    list (or the default one), minus anything the master really contains."""
+    list (or the default one), minus anything the master really contains, and the
+    skills the posting asks for that neither the master nor your own notes show
+    (keywords.claimable_missing, #78): the fixed list alone let a letter claim any
+    tool a posting named."""
     terms = list(DEFAULT_UNVERIFIED)
+    missing = keywords.claimable_missing(posting, master_text + "\n" + config.experience_notes()) if posting else []
+    for term in (spelt for name in missing for spelt in keywords.names_of(name)):
+        if term.lower() not in (t.lower() for t in terms):
+            terms.append(term)
     path = config.CV_INSTRUCTION
     if path.exists():
         m = re.search(r"Not in the master[^:]*:\s*(.+?)\.\s", path.read_text(encoding="utf-8"))
@@ -628,7 +635,7 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
     master_profile = text_of(sec["profile"]) if sec["profile"] is not None else ""
     m_rows = [text_of(p) for p in sec["rows"]]
     shape = MasterSkills(m_rows)
-    unverified = unverified_terms(cv_text)
+    unverified = unverified_terms(cv_text, job.get("description") or "")
     backed = cv_text + "\n" + config.experience_notes()          # everything the person wrote about their own work
 
     description = (job.get("description") or "").strip()[:POSTING_SHOWN] or "(No description was available.)"

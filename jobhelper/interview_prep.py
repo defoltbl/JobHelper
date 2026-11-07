@@ -207,7 +207,7 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
     """Questions and answers for this job. `notes` is what the person wrote about their work
     beyond the CV: true, so it counts like the CV. Raises ValueError if the reply is unusable."""
     notes = (notes or "").strip()
-    unverified = cover_letter.unverified_terms(cv_text + "\n" + notes)
+    unverified = cover_letter.unverified_terms(cv_text + "\n" + notes, job.get("description") or "")
     first_name = cover_letter.candidate_first_name(cv_text)
     mail_lines = "\n".join(f"- {m.get('stage', '')}: {m.get('summary', '')}" for m in (emails or [])[:6]) or "(nothing yet)"
     feedback, prep = "", Preparation({})
@@ -519,7 +519,8 @@ def parts(prep: dict[str, Any]) -> list[dict[str, str]]:
     return out
 
 
-def apply_parts(prep: dict[str, Any], edited: list[dict[str, Any]], cv_text: str = "", notes: str = "") -> tuple[dict[str, Any], str]:
+def apply_parts(prep: dict[str, Any], edited: list[dict[str, Any]], cv_text: str = "", notes: str = "",
+                posting: str = "") -> tuple[dict[str, Any], str]:
     """The preparation with the user's edits put in. Returns (new preparation, '') or
     (the old one untouched, what is wrong). Nothing is cut silently: text that is too long is refused."""
     import copy
@@ -553,6 +554,6 @@ def apply_parts(prep: dict[str, Any], edited: list[dict[str, Any]], cv_text: str
                 return prep, f"“{label[:70]}” is empty. Write it, or leave the draft as it was."
             new[section][int(index)][field] = text
     if cv_text.strip():                                   # without the CV nothing can be judged: the checks stay as they were
-        Preparation(new).mark(cover_letter.unverified_terms(cv_text + "\n" + (notes or "")))
+        Preparation(new).mark(cover_letter.unverified_terms(cv_text + "\n" + (notes or ""), posting))   # as generate checks it
     new["edited"] = date.today().isoformat()
     return new, ""

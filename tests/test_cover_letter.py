@@ -252,7 +252,7 @@ def test_a_rewrite_with_a_real_problem_and_moved_work_is_refused(isolate_data, m
                           "Junior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built an internal REST API in Django.\n"
     bad = body[2].rstrip() + " At Fabrikam I built internal REST APIs and deployed Kubernetes daily."
     monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: {"paragraph": bad})
-    monkeypatch.setattr(cover_letter, "unverified_terms", lambda cv_text: ["Kubernetes"])
+    monkeypatch.setattr(cover_letter, "unverified_terms", lambda cv_text, posting="": ["Kubernetes"])
     job = store.new_job(id="r2", title="Administrator", company="Acme", description="We run Linux servers.")
     with pytest.raises(ValueError, match="Kubernetes"):
         cover_letter.rewrite_paragraph(job, cv, list(body), 2)
@@ -323,7 +323,7 @@ def test_a_rewrite_that_states_the_posting_s_words_as_experience_is_sent_back(is
 
 
 def test_the_plain_letter_gets_the_claim_rules_of_the_template_letter(isolate_data, monkeypatch):
-    monkeypatch.setattr(cover_letter, "unverified_terms", lambda cv_text: ["Kubernetes"])
+    monkeypatch.setattr(cover_letter, "unverified_terms", lambda cv_text, posting="": ["Kubernetes"])
     cv = "Alex Novak\nJunior Developer – Northwind Parcel, Brno (2024 – present): built tools in Python.\n"
     filler = "I like clear code and short, readable tests that other people can follow. " * 15
     letter = ("Dear Hiring Team,\n\nI build tools in Python. I deployed Kubernetes clusters daily.\n\n"
@@ -342,3 +342,12 @@ def test_the_plain_letter_gets_the_claim_rules_of_the_template_letter(isolate_da
         cover_letter.checked_plain("Dear Hiring Team,\n\nThank you.\n\nBest,\nAlex", job, cv)
     with pytest.raises(ValueError, match="words"):
         cover_letter.checked_plain("Dear Hiring Team,\n\n" + filler * 3 + "\n\nYours sincerely,", job, cv)
+
+
+
+def test_a_hand_edited_letter_is_warned_about_the_posting_s_skills_too(isolate_data):
+    """#78: the warnings of a save knew only the fixed list; letter_warnings now gets the posting."""
+    posting = "We schedule our jobs with Airflow."
+    said = ["I scheduled Airflow pipelines every night."]
+    assert any("Airflow" in w for w in cover_letter.letter_warnings(said, _master_text(), "Acme", posting))
+    assert not any("Airflow" in w for w in cover_letter.letter_warnings(said, _master_text(), "Acme"))

@@ -767,8 +767,9 @@ Figure 6.2 shows the score and the keywords.
 | **Not in your CV** | The posting asks for it and your CV does not show it. Something to learn, or something you know and forgot to write down |
 
 > **Note**
-> The app never adds a **Not in your CV** word to an adapted CV. If you really have that
-> skill, add it to your master CV, or describe it under **More about your work** in **About you**.
+> The app never adds a **Not in your CV** word to an adapted CV. Your cover letter and your
+> form answers also do not say that you used it. If you really have that skill, add it to your
+> master CV, or describe it under **More about your work** in **About you**.
 
 ### The buttons at the bottom
 

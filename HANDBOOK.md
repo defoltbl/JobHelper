@@ -463,7 +463,20 @@ data/                your data; only the *.example.* files are in git
 - **The window is taken down before the bridge** when the app closes (`app_qt.shut_down`), or every binding
   that calls the bridge prints an error on the way out.
 - **One claim check for every text in the person's voice** (`claims.ClaimCheck`): the letter, the form answers and
-  the interview preparation ask it; only the interview allows the honest bridge ("I have not used X"). In the
+  the interview preparation ask it; only the interview allows the honest bridge ("I have not used X"). Its terms are
+  the never-claim list plus the posting's skills that the CV and the notes do not show (`keywords.claimable_missing`,
+  #78, with their other spellings, `keywords.names_of`: "k8s", "M365", only spellings unlike a word, `_UNLIKE_A_WORD`; names that are also ordinary words,
+  `keywords._ORDINARY`: "Excel", "Swift", "Go", "REST", "PLC", "Agile", and spoken languages are left out, because the
+  check is case blind). A claim is CLAIM's wording, any first-person verb in the past tense, or ongoing work ("I have
+  been using", "I'm running"), an adverb allowed before it (`claims._DONE`; not `_NOT_DONE`: noticed, reached out,
+  completed a course, joined, "I'm looking forward", "I did not"). A digit right after a letter ("k8s", "S3") is no
+  figure in the text checked (`claims.STATED`; a source still backs with any digit, `FIGURE`). Measured read-only on 53 real letters with their job: 0 letters flagged before, 8 after:
+  7 "Troubleshooting" and 1 "Microsoft 365", neither named by the CV or the notes (true claims by the rule). Open
+  question for the owner: a soft skill such as troubleshooting is now as strict as a tool, and a sentence that keeps
+  it after the retry is cut without a word.
+  The golden set `tests/fixtures/letter_evals.json` (invented people in four professions, every case labelled) runs in
+  `tests/test_letter_evals.py`: change a prompt or a claim rule only with it passing in every profession, and add a
+  case for each false alarm or missed claim; never change a label to make a run pass. In the
   preparation, `Preparation.voice()` is the one list that is both sent back to the model and marked for the user:
   a part added to the sheet goes into that list, or it is checked in one place only.
 - **A figure Claude writes must come from somewhere** (`claims.unbacked_figures`, sources from

@@ -605,6 +605,16 @@ def test_parts_follow_the_order_of_the_sheet():
     assert interview_prep.parts({"questions": FULL["questions"]})[0]["key"] == "questions.0.answer"      # an older, smaller preparation
 
 
+def test_an_edited_answer_is_checked_against_the_posting_as_the_first_draft_was():
+    """#78: generate checked the posting's skills, a hand edit only the fixed list."""
+    prep = _saved()
+    edit = [{"key": "questions.0.answer", "text": "I scheduled Airflow pipelines every night."}]
+    new, problem = interview_prep.apply_parts(prep, edit, CV, "", "You will schedule jobs with Airflow.")
+    assert problem == "" and "Airflow" in new["questions"][0].get("check", "")
+    plain, _ = interview_prep.apply_parts(prep, edit, CV)
+    assert "Airflow" not in plain["questions"][0].get("check", "")
+
+
 def test_edits_are_put_in_and_everything_else_is_kept():
     prep = _saved()
     new, problem = interview_prep.apply_parts(prep, [
