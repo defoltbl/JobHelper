@@ -459,6 +459,10 @@ Dialog {
                         text: "Check your cover letter before you send it. It says you have done something with " + (detailDialog.job.letter_check || []).join(", ")
                               + ", which " + ((detailDialog.job.letter_check || []).length === 1 ? "is a term" : "are terms")
                               + " of the posting that your own CV does not mention. Keep it only if it is true of you; Edit letter lets you change the sentence." }
+                    // why Edit letter is not offered for a letter the app wrote, and what to add to the CV (#64)
+                    Text { objectName: "letterNoEdit"; visible: (detailDialog.job.letter_no_edit || "") !== ""
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.warn; font.pixelSize: 12
+                        text: detailDialog.job.letter_no_edit || "" }
                     // a skill the adapted CV had to leave out to fit on one page (never cut without a word)
                     Text { objectName: "cvLeftOut"; visible: (detailDialog.job.cv_left_out || []).length > 0
                         Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true

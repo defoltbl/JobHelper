@@ -243,25 +243,44 @@ _NOT_A_NAME = re.compile(r"\b(cv|curriculum|vitae|resume|résumé|lebenslauf|pro
                          r"education|about|objective|personal|details)\b", re.IGNORECASE)
 
 
-def template_head(cv_text: str) -> list[str]:
-    """The four head lines of a letter template from the top of a CV: name, what you call yourself, and two lines of
-    contacts ([] when the CV's top gives no clear name or not two kinds of contact: then the plain letter is written).
+class LetterHead:
+    """The head of a letter template, read from the top of a CV: name, what you call yourself, and two lines of contacts.
     Only the first eight lines are read, so a figure further down ("10 000 000 rows") is never a phone number; a year
-    run ("2019 - 2021") is no phone either; and nothing is guessed (no city from the search settings)."""
-    head = [_CONTROL.sub("", " ".join(line.split()))[:200] for line in (cv_text or "").splitlines()[:40] if line.strip()][:8]
-    name = head[0] if head else ""
-    if not name or len(name) > 60 or len(name.split()) > 4 or re.search(r"[@\d|,:]", name) or _NOT_A_NAME.search(name):
-        return []
-    top = "\n".join(head)
-    email = re.search(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", top)
-    phone = next((m.group(0).strip() for m in re.finditer(r"\+?\d[\d ()-]{7,}\d", top)
-                  if (m.group(0).startswith("+") or len(re.sub(r"\D", "", m.group(0))) >= 9) and not _YEARS.match(m.group(0).strip())), "")
-    links = "  ·  ".join(dict.fromkeys(re.findall(r"(?:linkedin\.com/in/|github\.com/)[\w-]+", top)[:2]))
-    contacts = [x for x in (email.group(0) if email else "", phone, links) if x]
-    if len(contacts) < 2:
-        return []                               # one kind of contact: the head has no second line without a guess
-    lines = [contacts[0], "  ·  ".join(contacts[1:])] if len(contacts) == 2 else ["  ·  ".join(contacts[:2]), contacts[2]]
-    return [name, own_title("\n".join(head)) or "Applicant", *lines]
+    run ("2019 - 2021") is no phone either; and nothing is guessed (no city from the search settings). When the top
+    gives no clear name or not two kinds of contact there is no head (`lines` is []), and `problem` says why and what to
+    add to the CV: the job window shows it where Edit letter would be (#64)."""
+
+    NO_NAME = ("Edit letter is not offered: the app makes your letter template from the top of your CV, and the first "
+               "line of your CV is not a clear name. Put your name alone on the first line of your CV. You can then edit "
+               "the next letter that the app writes.")
+    FEW_CONTACTS = ("Edit letter is not offered: the app makes your letter template from the top of your CV, and the top "
+                    "of your CV does not give two ways to contact you. Near your name, add two of these: an email, a "
+                    "phone number, a LinkedIn or GitHub link. You can then edit the next letter that the app writes.")
+
+    def __init__(self, cv_text: str) -> None:
+        head = [_CONTROL.sub("", " ".join(line.split()))[:200] for line in (cv_text or "").splitlines()[:40] if line.strip()][:8]
+        self.lines: list[str] = []
+        self.problem = ""
+        name = head[0] if head else ""
+        if not name or len(name) > 60 or len(name.split()) > 4 or re.search(r"[@\d|,:]", name) or _NOT_A_NAME.search(name):
+            self.problem = self.NO_NAME
+            return
+        top = "\n".join(head)
+        email = re.search(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", top)
+        phone = next((m.group(0).strip() for m in re.finditer(r"\+?\d[\d ()-]{7,}\d", top)
+                      if (m.group(0).startswith("+") or len(re.sub(r"\D", "", m.group(0))) >= 9) and not _YEARS.match(m.group(0).strip())), "")
+        links = "  ·  ".join(dict.fromkeys(re.findall(r"(?:linkedin\.com/in/|github\.com/)[\w-]+", top)[:2]))
+        contacts = [x for x in (email.group(0) if email else "", phone, links) if x]
+        if len(contacts) < 2:
+            self.problem = self.FEW_CONTACTS      # one kind of contact: the head has no second line without a guess
+            return
+        lines = [contacts[0], "  ·  ".join(contacts[1:])] if len(contacts) == 2 else ["  ·  ".join(contacts[:2]), contacts[2]]
+        self.lines = [name, own_title(top) or "Applicant", *lines]
+
+
+def template_head(cv_text: str) -> list[str]:
+    """The four head lines of a letter template from the top of a CV ([] when there are none: see LetterHead)."""
+    return LetterHead(cv_text).lines
 
 
 def make_template(cv_text: str, path) -> bool:
