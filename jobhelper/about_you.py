@@ -8,7 +8,7 @@ per job, which become one text that interviews, form answers and the claim check
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from . import claims, config, details, filters, places, salary
@@ -146,6 +146,11 @@ class AboutYou:
                 f"Work permit for {country}", "Need visa sponsorship"]
 
     @staticmethod
+    def date_example(today: date | None = None) -> str:
+        """A start date to show as an example: a month from today, so it is never one that has passed (#79)."""
+        return ((today or date.today()) + timedelta(days=30)).isoformat()
+
+    @staticmethod
     def start_preview(text: str, today: date | None = None) -> dict[str, Any]:
         """What forms will get for "You can start": {ok, text}. The date is worked out by the same rule the assistant uses."""
         from . import form_fill
@@ -157,7 +162,7 @@ class AboutYou:
             return {"ok": False, "text": f"“{words}” has passed. Write a date from today on, or a time from now (two weeks, "
                                          "one month)."}
         if day is None:
-            return {"ok": False, "text": f"Forms cannot get a date from “{words}”. Write a date (2026-11-01) or a time "
+            return {"ok": False, "text": f"Forms cannot get a date from “{words}”. Write a date ({AboutYou.date_example(today)}) or a time "
                                          "from now (two weeks, one month), or leave it to forms to ask."}
         when = f"{day.day} {day:%B %Y}"
         return {"ok": True, "text": f"Forms get: {when}" + (" (worked out from your words: check it in each form)" if worked else "")}
@@ -185,6 +190,7 @@ class AboutYou:
     def page(self, my_details: dict[str, Any], seniority: str = "junior", cv_text: str = "") -> dict[str, Any]:
         """Everything the window needs besides the plain values."""
         return {"right_choices": self.right_to_work_choices(), "start": self.start_preview(str(self._o.get("about_start") or "")),
+                "date_example": self.date_example(),
                 "estimates": self.salary_estimates(self.roles(), seniority),
                 **self.job_boxes(my_details, cv_text), "general": self.notes.general,
                 "max_notes": WorkNotes.MAX_TOTAL, "max_job_name": WorkNotes.MAX_JOB_NAME, "uses": dict(self.USES),

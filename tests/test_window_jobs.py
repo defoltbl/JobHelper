@@ -242,7 +242,7 @@ def test_filtered_out_list_opens_from_the_last_run_card(ui):
          "group": "too many years", "reason": "Asks for 6+ years of experience."}])
     ui.bridge._api.note_run(filtered=2)
     ui.js("lastRunData = bridge.lastRun()")
-    ui.wait(100)
+    _until_true(ui, lambda: ui.js("lastRunData.filtered") == 2)                   # a state, never a fixed pause (#79)
     source = qml_source()
     assert 'lastRunData.filtered + " · see why ›"' in source and "win.openView(modelData.view)" in source
     ui.js('openView("skip")')
@@ -302,7 +302,7 @@ def test_help_has_a_what_changed_tab(ui):
     _open(ui, dialog, 450)
     assert ui.js("helpDialog.tab") == "how" and ui.js("helpDialog.changes.length") >= 2
     ui.js('helpDialog.tab = "new"')
-    ui.wait(150)
+    _until_true(ui, lambda: bool(ui.js("helpDialog.changes[0].date")))
     first = ui.js("helpDialog.changes[0].date")
     assert (first == "Unreleased" or "2026" in first) and "<b>" in ui.js("helpDialog.changes.map(c => c.items.join(' ')).join(' ')")
     ui.js('helpDialog.tab = "how"; helpDialog.close()')
@@ -347,7 +347,7 @@ def test_thank_you_card_appears_after_the_interview_day(ui, monkeypatch):
     assert ui.find("thanksCard").property("visible") is True and ui.find("evCalendar").property("visible") is True
     assert ui.js("bridge.exportEvent(detailDialog.job.id).ok") is True and opened[-1].endswith(".ics")
     ui.js("detailDialog.thanks = bridge.thanksDraft(detailDialog.job.id)")
-    ui.wait(100)
+    _until_true(ui, lambda: "Thank you" in ui.find("thanksBody").property("text"))
     body = ui.find("thanksBody").property("text")
     assert "Thank you for the interview about the QA Engineer position" in body and "Beta" in body
     assert ui.js("bridge.markThanked(detailDialog.job.id)") is True
@@ -453,11 +453,11 @@ def test_start_up_check_still_runs_when_the_sign_in_check_is_slow(ui):
     the self-check must still run when the answer arrives later."""
     ui.js('healthRan = false; healthData = { ok: true, checks: [], problems: 0, message: "" }; connChecked = true')
     ui.bridge.connectionsReady.emit(dict(ui.conn))
-    ui.wait(150)
-    assert ui.js("healthRan") is True and ui.js("healthData.checks.length") > 5
+    _until_true(ui, lambda: ui.js("healthRan") is True)
+    assert ui.js("healthData.checks.length") > 5
     ui.js('healthData = { ok: true, checks: [], problems: 0, message: "" }')
     ui.bridge.connectionsReady.emit(dict(ui.conn))                       # clean and already run: not repeated on every recheck
-    ui.wait(150)
+    ui.wait(150)                                                         # a pause that proves something does NOT happen
     assert ui.js("healthData.checks.length") == 0
     assert ui.warnings == []
 
@@ -537,7 +537,6 @@ def test_without_a_city_the_search_does_not_start_and_options_open(ui):
     start = ui.bridge.options()
     ui.bridge.saveOptions({**start, "where": ""})
     ui.js("optsData = bridge.options()")
-    ui.wait(100)
     assert ui.js('bridge.cityShown(optsData.where || "") || "No city yet"') == "No city yet"
     ui.js("startRun()")
     _until_open(ui, "optDialog")
@@ -596,7 +595,7 @@ def test_insights_are_not_prepared_while_the_welcome_screen_is_up(ui, monkeypatc
     was = welcome.property("shown")
     welcome.setProperty("shown", True)
     ui.js("reloadAll()")
-    ui.wait(1100)
+    ui.wait(1100)                                                        # a pause that proves something does NOT happen
     assert calls == []
     welcome.setProperty("shown", False)
     ui.wait(300)

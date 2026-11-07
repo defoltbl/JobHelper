@@ -1843,3 +1843,40 @@ def test_the_master_cv_button_waits_while_a_cv_is_read(ui):
     finally:
         ui.js("welcome.cvBusy = false; welcome.cvErr = ''")
     assert ui.warnings == []
+
+
+def test_resume_and_a_switch_are_reached_with_the_keyboard_and_look_like_the_other_buttons(ui):
+    """#79: Resume took only a mouse click and looked pale in its own way; a switch showed no focus outline."""
+    from PySide6.QtCore import Qt
+    resume = ui.find("resumeButton")
+    try:
+        ui.js("win.paused = true; win.canResume = false")
+        assert resume.property("activeFocusOnTab") is False, "Tab passes a button that cannot be used yet"
+        assert abs(resume.property("opacity") - ui.js("theme.disabledOpacity")) < 0.01, "one paleness for every button"
+        ui.js("win.canResume = true")
+        assert resume.property("activeFocusOnTab") is True
+        resume.forceActiveFocus(Qt.TabFocusReason)
+        _until_true(ui, lambda: resume.property("activeFocus") is True)
+        assert resume.property("opacity") == 1 and ui.js("resumeBtn.border.width", resume) == 2, "the focus outline"
+    finally:
+        ui.js("win.paused = false; win.canResume = false")
+    sched = ui.find("schedDialog")
+    ui.js("schedData = ({ enabled: false, weekday: 1, hour: 9, minute: 0, label: '' })")
+    _open(ui, sched, 450)
+    try:
+        switch = ui.find("schedSwitch")
+        switch.forceActiveFocus(Qt.TabFocusReason)
+        _until_true(ui, lambda: switch.property("visualFocus") is True)
+        assert ui.js("indicator.border.width", switch) == 2
+    finally:
+        ui.js("confirmClose = true; close()", sched)
+        _until_closed(ui, sched)
+    assert ui.warnings == []
+
+
+def test_no_window_title_carries_an_emoji():
+    """#79: the Weekly run title began with a calendar emoji."""
+    import re
+    titles = re.findall(r'DialogTitle \{ text: "([^"]*)"', "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "ui_qt").glob("*.qml")))
+    emoji = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F]")             # pictures, not punctuation such as – or ·
+    assert titles and not [t for t in titles if emoji.search(t)], [t for t in titles if emoji.search(t)]

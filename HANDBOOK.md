@@ -353,6 +353,9 @@ data/                your data; only the *.example.* files are in git
 - **Options checks the career sites before it saves anything** (`OptionsService.companies_problem`, the same
   `_companies_checked` as `save_companies`), so a refused site leaves Options unsaved (#67). A chosen master CV is read
   in a thread (`Bridge.chooseMasterCV` → `cvSet`). A scan's error names its own mailbox (`email_client.mail_host_of`).
+- **The suite guards itself** (#79): it does not start when the data folder is a real one (`pytest_sessionstart`),
+  `webbrowser` raises in every test, and a browser-engine test that cannot start fails on CI (`CI` set) instead of
+  being skipped. A fixed pause stays only where it proves that something does NOT happen, and says so.
 - **An answer sent from a worker thread must carry plain values.** The start-up check travels inside the
   connection answer as text (`info.health`, JSON) and the window parses it.
 - **Where the data is, is decided once, when `config` is imported.** `config.DATA_DIR` comes from

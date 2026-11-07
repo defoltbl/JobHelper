@@ -464,13 +464,22 @@ def test_requests_are_checked_before_anything_is_done(isolate):
 
 
 # ── filling in, end to end (Chrome replaced by a real browser engine on a local page) ──
+def _engine_did_not_start(done):
+    """Skip where the browser engine cannot run (a Mac without it), but fail on CI, where it always runs: a skip there
+    hid a broken test page once (#79)."""
+    said = f"the browser engine did not start here: {done.stderr[-200:]}"
+    if os.environ.get("CI"):
+        pytest.fail(said)
+    pytest.skip(said)
+
+
 def _in_page(*scripts, page="plain.html"):
     done = subprocess.run([sys.executable, str(FIXTURES / "run_in_page.py"), str(FIXTURES / "forms" / page)],
                           input=json.dumps(list(scripts)), capture_output=True, text=True, timeout=120,
                           env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
     assert "Traceback" not in done.stderr, done.stderr[-1500:]       # the test area itself is broken: that is a failure, not a skip
     if done.returncode != 0:
-        pytest.skip(f"the browser engine did not start here: {done.stderr[-200:]}")
+        _engine_did_not_start(done)
     return json.loads(done.stdout)
 
 
@@ -696,7 +705,7 @@ def _area(page, **more):
                           capture_output=True, text=True, timeout=180, env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
     assert "Traceback" not in done.stderr, done.stderr[-1500:]       # the test area itself is broken: that is a failure, not a skip
     if done.returncode != 0:
-        pytest.skip(f"the browser engine did not start here: {done.stderr[-200:]}")
+        _engine_did_not_start(done)
     out = json.loads(done.stdout)
     assert out["sent"] is False and out["clicked"] is False, "whatever the form, it is never sent and its button is never pressed"
     out["left"] = {i["label"]: i["why"] for i in out["result"].get("left", [])}

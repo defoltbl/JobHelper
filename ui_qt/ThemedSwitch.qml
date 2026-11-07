@@ -13,7 +13,9 @@ Switch {
     indicator: Rectangle {
         width: 42; height: 24; radius: 12
         color: sw.checked ? theme.accent : theme.inset
-        border.color: sw.checked ? theme.accent : theme.line; border.width: 1
+        // a switch reached with Tab shows it, as the buttons do (#79)
+        border.color: sw.visualFocus ? (sw.checked ? theme.ink : theme.accent) : (sw.checked ? theme.accent : theme.line)
+        border.width: sw.visualFocus ? 2 : 1
         Behavior on color { ColorAnimation { duration: 120 } }
         Rectangle {
             width: 18; height: 18; radius: 9; y: 3

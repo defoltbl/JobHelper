@@ -201,3 +201,20 @@ def test_one_rule_says_when_two_kinds_of_role_are_the_same_line():
     assert OptionsService.pay_key("Python  Developer ") == OptionsService.pay_key("python developer")
     assert "already in the list" in service.pay_problem("Python  Developer", 30000, ["python developer"])
     assert OptionsService.own_figure(58000, "CZK") == 58000 and OptionsService.own_figure(58000, "EUR") == 2300
+
+
+def test_the_example_date_is_never_one_that_has_passed():
+    """#79: the About you example said 2026-11-01, a date that has passed."""
+    from datetime import date, timedelta
+    from jobhelper import about_you
+    today = date(2027, 3, 1)
+    assert about_you.AboutYou.date_example(today) == (today + timedelta(days=30)).isoformat()
+    said = about_you.AboutYou.start_preview("whenever you like", today)["text"]
+    assert "2026-11-01" not in said and about_you.AboutYou.date_example(today) in said
+
+
+
+def test_the_window_gets_the_example_date():
+    """The About you hint shows page()'s date_example: a renamed key would leave "A date ()" unseen."""
+    from jobhelper import about_you
+    assert AboutYou({}).page(details.empty(), "junior", CV)["date_example"] == about_you.AboutYou.date_example()
