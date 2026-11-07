@@ -404,7 +404,7 @@ def test_the_command_line_refuses_the_paid_api_too(isolate_data, monkeypatch, ca
 def test_only_web_links_and_plain_file_names_are_opened(isolate_data, monkeypatch):
     from jobhelper import config, ui_api
     opened = []
-    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(str(target)))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(str(target)) or True)
     config.ensure_dirs()
     (config.LETTERS_DIR / "L.docx").write_bytes(b"x")
     (config.DATA_DIR / "secret.docx").write_bytes(b"x")

@@ -175,7 +175,7 @@ Dialog {
         if (what === "cv" || what === "letter") {
             var d = bridge.jobDetail(id), name = d ? d[what] : "";
             if (!name) { say("bot", "This job has no " + (what === "cv" ? "CV" : "letter") + " from the app.", true); return; }
-            bridge.openDoc(d[what + "_pdf"] === true ? what + "_pdf" : what, name); return;
+            win.openDoc(d[what + "_pdf"] === true ? what + "_pdf" : what, name); return;
         }
         detailDialog.show(id);
     }

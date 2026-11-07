@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any, Callable
 
 from . import agent1_cv, agent4_tracker, followup, store, trouble
@@ -23,16 +24,20 @@ from .api_base import _holding_jobs
 class Desktop:
     """Opens what the person asked to see. A failure is noted, never raised: the window says it."""
 
-    def open(self, path) -> None:
+    def open(self, path) -> bool:
+        """Open a file, folder or page in its own app; whether it opened (#79: a failure was swallowed and the window
+        said nothing). On a Mac `open` hands the file over and ends at once, with an exit code when no app takes it."""
         try:
             if sys.platform == "darwin":
-                subprocess.Popen(["open", str(path)])
-            elif os.name == "nt":
+                return subprocess.run(["open", str(path)], capture_output=True, timeout=15).returncode == 0
+            if os.name == "nt":
                 os.startfile(str(path))  # type: ignore[attr-defined]
-            else:
-                subprocess.Popen(["xdg-open", str(path)])
-        except Exception as e:  # noqa: BLE001 - the window says "couldn't open"; the reason is kept
-            trouble.note("opening a file or folder", e)
+                return True
+            subprocess.Popen(["xdg-open", str(path)])
+            return True
+        except Exception as e:  # noqa: BLE001 - the window says "couldn't open"; the reason is kept, without the folder
+            trouble.note("opening a file or folder", f"{type(e).__name__} for {Path(str(path)).name}")
+            return False
 
     def reveal(self, path) -> None:
         """Show a file in its folder (selected in Finder), so it is easy to drag into a form."""

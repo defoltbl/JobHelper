@@ -344,6 +344,12 @@ data/                your data; only the *.example.* files are in git
 - **A one-line field that stops at its limit says so with `AtLimit`** (#70: the field's own maximumLength, from
   `win.limits`). A chip is a `Chip`: as wide as its text, never wider than its row, so a long one wraps (Options roles,
   `TagEditor`, `ChipFlow`). Later: the "takes up to N characters" sentence is still built in several windows.
+- **Nothing slow runs on the window's thread, and nothing is opened silently** (#79): the letter save and the single PDF
+  (LibreOffice) answer through `letterSaved` / `pdfReady` (`JobSlots._in_background`, a fault in words and its kind in
+  the log). `Desktop.open` returns whether the file opened (`open` runs to its end), and `open_doc`/`open_excel` say why
+  not (the folder, preparation, insights and settings openers still ignore it: issue #104). An action that asks Claude
+  for one job or changes the list asks `Bridge._busy_with_run` first. Moving many
+  stale documents writes the Excel files once (`shelve_docs(render=False)`).
 - **Options checks the career sites before it saves anything** (`OptionsService.companies_problem`, the same
   `_companies_checked` as `save_companies`), so a refused site leaves Options unsaved (#67). A chosen master CV is read
   in a thread (`Bridge.chooseMasterCV` → `cvSet`). A scan's error names its own mailbox (`email_client.mail_host_of`).

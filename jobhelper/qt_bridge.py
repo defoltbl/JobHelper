@@ -54,6 +54,8 @@ class Bridge(RunSlots, JobSlots, QObject):
     usageReady = Signal()                 # fresh usage numbers are available
     connectionsReady = Signal("QVariantMap")   # result of checkConnections()
     cvSet = Signal("QVariantMap")              # a chosen master CV was checked and set (or why not)
+    letterSaved = Signal("QVariantMap")        # an edited letter was saved, with its PDF (or why not)
+    pdfReady = Signal("QVariantMap")           # the single PDF of a letter and a CV was made and opened (or why not)
     limitChanged = Signal("QVariantMap")       # paused on Claude's limit / may resume / resumed
     paragraphReady = Signal("QVariantMap")     # a rewritten letter paragraph (or why it failed)
     prepReady = Signal("QVariantMap")          # interview preparation finished (or why it failed)
@@ -257,13 +259,13 @@ class Bridge(RunSlots, JobSlots, QObject):
     def applyJob(self, job_id):
         return bool(self._api.apply_job(job_id).get("ok"))
 
-    @Slot(str, str)
+    @Slot(str, str, result="QVariantMap")
     def openDoc(self, kind, name):
-        self._api.open_doc(kind, name)
+        return self._api.open_doc(kind, name)
 
-    @Slot(str)
+    @Slot(str, result="QVariantMap")
     def openExcel(self, which):
-        self._api.open_excel(which)
+        return self._api.open_excel(which)
 
     @Slot(str, result="QVariantMap")
     def openUrl(self, job_id):
@@ -336,6 +338,13 @@ class Bridge(RunSlots, JobSlots, QObject):
             return {"ok": False, "msg": str(e) if str(e) == claude_cli.MISSING else "Terminal could not be opened."}
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "msg": str(e)}
+
+    def _busy_with_run(self, what):
+        """The refusal of an action that asks Claude or changes the job list while a search or scan runs, or None (#79):
+        the run would write its copy of the list over it, and both would spend the same Claude limit. The other way round
+        (a run started while such an action is still busy) needs no refusal: the action's change goes through
+        JobEditor.change, which also applies it to the run's own copy (`live`)."""
+        return {"ok": False, "msg": f"A search or scan is running. {what} when it has finished."} if self._running else None
 
     def _recent_sign_in(self):
         """The last check's signed-in answer while it is younger than api_system.SIGN_IN_FRESH, else None: a run start

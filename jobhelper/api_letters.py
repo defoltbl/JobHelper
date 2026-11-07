@@ -151,7 +151,8 @@ class LettersService:
         out = pdf.combine(parts, config.DATA_DIR / "combined" / f"{stem}.pdf")
         if out is None:
             return {"ok": False, "msg": "The two PDF files could not be joined."}
-        self._desktop.open(out)
+        if not self._desktop.open(out):
+            return {"ok": False, "msg": f"The single PDF was made ({out.name}), but it could not be opened."}
         return {"ok": True, "file": out.name, "pages": pdf.page_count(out)}
 
     def my_letters(self):

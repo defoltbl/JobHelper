@@ -27,8 +27,9 @@ class JobSlots:
 
     @Slot(str, result="QVariantMap")
     def unshelveDocs(self, job_id):
-        if self._running:
-            return {"ok": False, "msg": "A search or scan is running. Put the documents back when it has finished."}
+        busy = self._busy_with_run("Put the documents back")
+        if busy:
+            return busy
         return self._api.unshelve_docs(job_id)
 
     @Slot(int, result="QVariantMap")
@@ -40,8 +41,9 @@ class JobSlots:
 
     @Slot(int, int, result="QVariantMap")
     def tidyShelf(self, days, expected):
-        if self._running:
-            return {"ok": False, "msg": "A search or scan is running. Remove old copies when it has finished."}
+        busy = self._busy_with_run("Remove old copies")
+        if busy:
+            return busy
         try:
             return self._api.tidy_shelf(days, expected)
         except Exception as e:  # noqa: BLE001
@@ -53,8 +55,9 @@ class JobSlots:
 
     @Slot(str, result="QVariantMap")
     def unshelveLast(self, batch):
-        if self._running:
-            return {"ok": False, "msg": "A search or scan is running. Put the documents back when it has finished."}
+        busy = self._busy_with_run("Put the documents back")
+        if busy:
+            return busy
         return self._api.unshelve_last(batch)
 
     @Slot(result="QVariantList")
@@ -63,8 +66,9 @@ class JobSlots:
 
     @Slot(int, result="QVariantMap")
     def shelveAllDocs(self, expected):
-        if self._running:
-            return {"ok": False, "msg": "A search or scan is running. Move the documents when it has finished."}
+        busy = self._busy_with_run("Move the documents")
+        if busy:
+            return busy
         return self._api.shelve_all_docs(expected)
 
     @Slot(result="QVariantMap")
@@ -94,7 +98,7 @@ class JobSlots:
 
     @Slot(str, str, result="QVariantMap")
     def mergeJobs(self, keep_id, drop_id):
-        return self._api.merge_jobs(keep_id, drop_id)
+        return self._busy_with_run("Merge the jobs") or self._api.merge_jobs(keep_id, drop_id)
 
     @Slot(str, str, result="QVariantMap")
     def keepSeparate(self, a_id, b_id):
@@ -301,9 +305,24 @@ class JobSlots:
     def applyStep(self, job_id, step):
         return self._api.apply_step(job_id, step)
 
-    @Slot(str, result="QVariantMap")
+    @Slot(str)
     def combinedPdf(self, job_id):
-        return self._api.combined_pdf(job_id)
+        """Make the single PDF of the letter and the CV in the background (it runs LibreOffice, #79); the answer
+        arrives as pdfReady."""
+        self._in_background("pdfReady", job_id, lambda: self._api.combined_pdf(job_id),
+                            "Couldn't make the single PDF.", "making the single PDF")
+
+    def _in_background(self, signal, job_id, work, failed, doing):
+        """Run `work` off the window's thread and send its answer (with job_id) as `signal`; a fault becomes `failed`
+        in words, and its kind goes to the log of problems."""
+        def run():
+            try:
+                result = work()
+            except Exception as e:  # noqa: BLE001 - the window must always get an answer
+                trouble.note(doing, e)                       # trouble cleans the text of a fault before it keeps it
+                result = {"ok": False, "msg": failed}
+            self._post(signal, {**result, "job_id": job_id})
+        threading.Thread(target=run, daemon=True).start()
 
     @Slot(str, result="QVariantMap")
     def exportEvent(self, job_id):
@@ -328,6 +347,11 @@ class JobSlots:
     @Slot(str, str)
     def draftAnswers(self, job_id, questions_text):
         """Runs in the background (it asks Claude); the answer arrives as answersReady."""
+        busy = self._busy_with_run("Draft the answers")
+        if busy:
+            self._post("answersReady", {**busy, "job_id": job_id})
+            return
+
         def work():
             try:
                 result = self._api.make_form_answers(job_id, questions_text)
@@ -499,8 +523,9 @@ class JobSlots:
     @Slot(str, result="QVariantMap")
     def fixProblem(self, action):
         """The button on the start-up check's line: repair the statuses, or restore a damaged file from a backup."""
-        if self._running:
-            return {"ok": False, "msg": "A search or scan is running. Try again when it has finished."}
+        busy = self._busy_with_run("Try again")
+        if busy:
+            return busy
         return self._api.fix_problem(action)
 
     @Slot(result=str)
@@ -548,6 +573,11 @@ class JobSlots:
     @Slot(str)
     def prepareInterview(self, job_id):
         """Runs in the background (it asks Claude); the answer arrives as prepReady."""
+        busy = self._busy_with_run("Prepare for the interview")
+        if busy:
+            self._post("prepReady", {**busy, "job_id": job_id})
+            return
+
         def work():
             try:
                 result = self._api.make_interview_prep(job_id)
@@ -593,14 +623,22 @@ class JobSlots:
     def letterForEdit(self, job_id):
         return self._api.letter_for_edit(job_id)
 
-    @Slot(str, "QVariantList", result="QVariantMap")
+    @Slot(str, "QVariantList")
     def saveLetter(self, job_id, paragraphs):
-        return self._api.save_letter(job_id, [str(p) for p in (paragraphs or [])])
+        """Save an edited letter in the background: it writes the Word file and runs LibreOffice for its PDF (#79). The
+        answer arrives as letterSaved."""
+        texts = [str(p) for p in (paragraphs or [])]
+        self._in_background("letterSaved", job_id, lambda: self._api.save_letter(job_id, texts),
+                            "The letter could not be saved.", "saving a letter")
 
     @Slot(str, "QVariantList", int, str)
     def rewriteParagraph(self, job_id, paragraphs, index, hint):
         """Runs in the background (it asks Claude); the answer arrives as paragraphReady."""
         texts = [str(p) for p in (paragraphs or [])]
+        busy = self._busy_with_run("Rewrite the paragraph")
+        if busy:
+            self._post("paragraphReady", {**busy, "index": int(index), "job_id": job_id})
+            return
 
         def work():
             try:
@@ -633,8 +671,9 @@ class JobSlots:
         """Make a full backup ("backup"), check that backups restore ("check") or save a readable copy
         into a folder ("export"). In the background; the answer arrives as storageDone: {action, ok, msg}."""
         def work():
-            if self._running:
-                result = {"ok": False, "msg": "A search or scan is running. Do this when it has finished."}
+            busy = self._busy_with_run("Do this")
+            if busy:
+                result = busy
             else:
                 try:
                     result = {"backup": self._api.backup_all, "check": self._api.backup_check,
@@ -652,8 +691,9 @@ class JobSlots:
 
     @Slot(str, str, result="QVariantMap")
     def refileResponse(self, msg_id, job_id):
-        if self._running:
-            return {"ok": False, "msg": "A search or scan is running. File the reply when it has finished."}
+        busy = self._busy_with_run("File the reply")
+        if busy:
+            return busy
         try:
             return self._api.refile_response(msg_id, job_id)
         except Exception as e:  # noqa: BLE001 - the window must always get an answer

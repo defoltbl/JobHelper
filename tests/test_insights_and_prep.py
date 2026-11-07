@@ -385,7 +385,7 @@ def test_sheet_file_name_and_date_line():
 def test_api_writes_and_opens_both_documents(isolate_data, monkeypatch):
     config.ensure_dirs()
     opened, shown = [], []
-    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(target))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(target) or True)
     monkeypatch.setattr(api_core.Desktop, "reveal", lambda self, target: shown.append(target))
     store.save_jobs([store.new_job(id="a", title="ML Engineer", company="BRIGHTLINE", status="interview"), store.new_job(id="b", title="T", company="C", status="waiting")])
     api = ui_api.Api()

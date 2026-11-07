@@ -745,7 +745,7 @@ def test_a_search_saves_what_it_filtered_out_and_counts_it(bridge, monkeypatch):
     assert [(r["group"], r["title"]) for r in saved["rows"]] == [("skip word", "Intern"), ("already applied", "QA Engineer")]
     assert bridge.lastRun()["filtered"] == 2
     opened = []
-    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(target))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(target) or True)
     assert bridge.openFiltered(0) == {"ok": True} and opened == ["https://example.com/i"]
     assert bridge.openFiltered(1) == {"ok": False}
 
@@ -1179,3 +1179,56 @@ def test_a_cv_choice_whose_thread_cannot_start_leaves_the_next_one_free(bridge, 
         started[0]()
     assert answers and answers[0][0] == "cvSet" and answers[0][1]["ok"] is False, "an answer comes even when the work dies"
     assert bridge.chooseMasterCV(str(tmp_path / "c.docx")) is True
+
+
+@pytest.mark.parametrize("call, signal", [
+    (lambda b: b.rescoreJob("j1"), "rescoreReady"),
+    (lambda b: b.writeDocuments("j1"), "docsReady"),
+    (lambda b: b.draftAnswers("j1", "Why us?"), "answersReady"),
+    (lambda b: b.prepareInterview("j1"), "prepReady"),
+    (lambda b: b.rewriteParagraph("j1", ["a"] * 5, 1, ""), "paragraphReady"),
+])
+def test_an_action_that_asks_claude_waits_for_no_run(bridge, monkeypatch, call, signal):
+    """#79: Score again, Write documents, the answers, the preparation and a rewrite were not refused during a run."""
+    started, answers = _no_thread(monkeypatch), []
+    monkeypatch.setattr(qt_bridge.Bridge, "_post", lambda self, name, value: answers.append((name, value)))
+    bridge._running = True
+    try:
+        call(bridge)
+    finally:
+        bridge._running = False
+    assert started == [] and answers and answers[0][0] == signal
+    assert answers[0][1]["ok"] is False and "search or scan is running" in answers[0][1]["msg"] and answers[0][1]["job_id"] == "j1"
+
+
+def test_merging_jobs_waits_for_no_run(bridge, monkeypatch):
+    merged = []
+    monkeypatch.setattr(ui_api.Api, "merge_jobs", lambda self, a, b: merged.append((a, b)) or {"ok": True})
+    bridge._running = True
+    try:
+        assert "search or scan is running" in bridge.mergeJobs("a", "b")["msg"] and merged == []
+    finally:
+        bridge._running = False
+    assert bridge.mergeJobs("a", "b") == {"ok": True}
+
+
+def test_a_letter_save_and_the_single_pdf_answer_from_the_background(bridge, monkeypatch):
+    """#79: saving a letter and making the single PDF ran LibreOffice on the window's thread, and a failed save raised."""
+    from jobhelper import trouble
+
+    class Now:
+        def __init__(self, target=None, args=(), daemon=None):
+            self.target = target
+
+        def start(self):
+            self.target()
+    monkeypatch.setattr(qt_bridge.threading, "Thread", Now)
+    answers, noted = [], []
+    monkeypatch.setattr(qt_bridge.Bridge, "_post", lambda self, name, value: answers.append((name, value)))
+    monkeypatch.setattr(trouble, "note", lambda *a, **k: noted.append(a))
+    monkeypatch.setattr(ui_api.Api, "save_letter", lambda self, job_id, texts: (_ for _ in ()).throw(OSError("disk full")))
+    bridge.saveLetter("j1", ["a"] * 5)
+    assert answers[-1] == ("letterSaved", {"ok": False, "msg": "The letter could not be saved.", "job_id": "j1"}) and noted
+    monkeypatch.setattr(ui_api.Api, "combined_pdf", lambda self, job_id: {"ok": True, "file": "both.pdf", "pages": 3})
+    bridge.combinedPdf("j1")
+    assert answers[-1] == ("pdfReady", {"ok": True, "file": "both.pdf", "pages": 3, "job_id": "j1"})

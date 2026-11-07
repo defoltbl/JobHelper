@@ -84,19 +84,19 @@ def test_apply_job_unknown_id(api):
 
 def test_open_doc_prefers_docx_and_reports_missing(api, monkeypatch):
     opened = []
-    monkeypatch.setattr(api_core.Desktop, "open", lambda self, path: opened.append(path))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, path: opened.append(path) or True)
     config.ensure_dirs()
     (config.LETTERS_DIR / "letter.md").write_text("x", encoding="utf-8")
     (config.LETTERS_DIR / "letter.docx").write_bytes(b"x")
     assert api.open_doc("letter", "letter.md") == {"ok": True}
     assert opened == [config.LETTERS_DIR / "letter.docx"]
-    assert api.open_doc("letter", "missing.md") == {"ok": False}
-    assert api.open_doc("unknown-kind", "letter.md") == {"ok": False}
+    assert api.open_doc("letter", "missing.md")["ok"] is False and api.open_doc("letter", "missing.md")["msg"]       # said in words (#79)
+    assert api.open_doc("unknown-kind", "letter.md")["ok"] is False
 
 
 def test_open_url_needs_a_link(api, monkeypatch):
     opened = []
-    monkeypatch.setattr(api_core.Desktop, "open", lambda self, path: opened.append(path))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, path: opened.append(path) or True)
     _seed(store.new_job(id="with", url="https://example.com/job"), store.new_job(id="without"))
     assert api.open_url("with")["ok"] and opened == ["https://example.com/job"]
     assert api.open_url("without") == {"ok": False}
@@ -185,10 +185,10 @@ def test_job_detail_reports_existing_pdf_copies(api):
 
 def test_open_doc_pdf_only_opens_an_existing_pdf(api, monkeypatch):
     opened = []
-    monkeypatch.setattr(api_core.Desktop, "open", lambda self, path: opened.append(path.name))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, path: opened.append(path.name) or True)
     config.ensure_dirs()
     (config.TAILORED_CV_DIR / "cv.docx").write_bytes(b"x")
-    assert api.open_doc("cv_pdf", "cv.docx") == {"ok": False}
+    assert api.open_doc("cv_pdf", "cv.docx")["ok"] is False
     (config.TAILORED_CV_DIR / "cv.pdf").write_bytes(b"x")
     assert api.open_doc("cv_pdf", "cv.docx") == {"ok": True}
     assert api.open_doc("cv", "cv.docx") == {"ok": True}
@@ -500,11 +500,11 @@ def test_one_job_that_cannot_be_moved_does_not_stop_the_others(api, monkeypatch)
     store.save_jobs([_with_docs("a", 30), _with_docs("b", 20)])
     real = api_documents.DocumentsService.shelve_docs
     monkeypatch.setattr(api_documents.DocumentsService, "shelve_docs",
-                        lambda self, job_id, batch="": {"ok": False, "msg": "no"} if job_id == "a" else real(self, job_id, batch))
+                        lambda self, job_id, batch="", render=True: {"ok": False, "msg": "no"} if job_id == "a" else real(self, job_id, batch, render))
     got = api.shelve_all_docs(2)
     assert got["ok"] is True and got["jobs"] == 1 and got["files"] == 2
     assert got["failed"] == [{"title": "Dev", "company": "Co a", "why": "no"}]             # each one that failed, with its own reason
-    monkeypatch.setattr(api_documents.DocumentsService, "shelve_docs", lambda self, job_id, batch="": {"ok": False})
+    monkeypatch.setattr(api_documents.DocumentsService, "shelve_docs", lambda self, job_id, batch="", render=True: {"ok": False})
     nothing = api.shelve_all_docs()
     assert nothing["ok"] is False and nothing["msg"] == "Couldn't move the documents."
     assert nothing["failed"] == [{"title": "Dev", "company": "Co a", "why": "Couldn't move the documents."}]
@@ -1267,3 +1267,56 @@ def test_the_career_sites_are_checked_before_anything_is_saved(api):
     assert api.companies_problem([good]) == ""
     assert api.save_companies([good, {"name": "Bad", "ats": "", "token": "x"}])["msg"] == api.companies_problem([good, {"name": "Bad", "ats": "", "token": "x"}]), \
         "the check and the save say the same"
+
+
+def test_moving_stale_documents_writes_the_excel_files_once(api, monkeypatch):
+    """#79: moving the documents of many jobs wrote both Excel files once for every job."""
+    from jobhelper import agent4_tracker
+    config.ensure_dirs()
+    api.save_options({"threshold": 50})
+    store.save_jobs([_with_docs("a", 30), _with_docs("b", 20), _with_docs("c", 10)])
+    written = []
+    monkeypatch.setattr(agent4_tracker, "render_all", lambda jobs: written.append(len(jobs)))
+    got = api.shelve_all_docs(3)
+    assert got["ok"] is True and got["jobs"] == 3 and written == [3], written
+
+
+def test_a_file_that_no_app_opens_is_said(api, monkeypatch):
+    """#79: opening a document swallowed a failure: the window said nothing."""
+    import subprocess
+    from jobhelper import api_core
+    monkeypatch.setattr(api_core.Desktop, "open", api_core.Desktop.real_open)                 # the real one, with `open` faked
+    monkeypatch.setattr(api_core.sys, "platform", "darwin")
+    monkeypatch.setattr(api_core.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1))
+    config.ensure_dirs()
+    (config.LETTERS_DIR / "L.docx").write_bytes(b"x")
+    got = api.open_doc("letter", "L.docx")
+    assert got["ok"] is False and "could not be opened" in got["msg"]
+    monkeypatch.setattr(api_core.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0))
+    assert api.open_doc("letter", "L.docx") == {"ok": True}
+    assert api.open_excel("leads")["ok"] is False and api.open_excel("leads")["msg"], "a table not made yet is said too"
+
+
+def test_opening_says_when_the_open_program_fails_or_hangs(monkeypatch):
+    """#79: Desktop.open swallowed every failure."""
+    import subprocess
+    from jobhelper import api_core, trouble
+    noted = []
+    monkeypatch.setattr(trouble, "note", lambda doing, what: noted.append(str(what)))
+    monkeypatch.setattr(api_core.sys, "platform", "darwin")
+    desk = api_core.Desktop()
+    monkeypatch.setattr(api_core.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1))
+    assert api_core.Desktop.real_open(desk, "/somewhere/L.docx") is False
+    monkeypatch.setattr(api_core.subprocess, "run", lambda cmd, **kw: (_ for _ in ()).throw(subprocess.TimeoutExpired(cmd, 15)))
+    assert api_core.Desktop.real_open(desk, "/somewhere/private/L.docx") is False
+    assert noted == ["TimeoutExpired for L.docx"], "the kind and the file name, never the folder"
+    monkeypatch.setattr(api_core.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0))
+    assert api_core.Desktop.real_open(desk, "/somewhere/L.docx") is True
+
+
+def test_a_posting_the_browser_does_not_open_is_said(api, monkeypatch):
+    from jobhelper import api_core
+    store.save_jobs([store.new_job(id="web", title="T", company="C", url="https://example.com/job")])
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: False)
+    got = api.open_url("web")
+    assert got["ok"] is False and "could not open" in got["msg"]

@@ -339,7 +339,7 @@ def test_bring_back_button_in_the_filtered_out_list(ui):
 # ── calendar file, thank-you note, answers, the last 7 days ─────────────────
 def test_thank_you_card_appears_after_the_interview_day(ui, monkeypatch):
     opened = []
-    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(str(target)))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(str(target)) or True)
     today = date.today().isoformat()
     _open_job(ui)
     assert ui.find("thanksCard").property("visible") is False and ui.find("evCalendar").property("visible") is False
@@ -465,7 +465,7 @@ def test_start_up_check_still_runs_when_the_sign_in_check_is_slow(ui):
 # ── apply checklist, one PDF, search in Answers ─────────────────────────────
 def test_apply_checklist_ticks_steps_and_marks_applied(ui, monkeypatch):
     opened = []
-    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(str(target)))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(str(target)) or True)
     monkeypatch.setattr(ui_api.Api, "combined_pdf", lambda self, job_id: {"ok": True, "file": "both.pdf", "pages": 3})
     monkeypatch.setattr(ui_api.Api, "can_combine", lambda self, j: bool(j.get("tailored_cv_file")))
     for folder, name in ((config.TAILORED_CV_DIR, "cv_lead.docx"), (config.LETTERS_DIR, "L_lead.docx")):
@@ -478,7 +478,8 @@ def test_apply_checklist_ticks_steps_and_marks_applied(ui, monkeypatch):
     assert ui.find("applyCount").property("text").startswith("0 of 5 done")
     ui.js('detailDialog.doStep("posting"); detailDialog.doStep("cv"); detailDialog.doStep("combined")')
     assert opened[0] == "https://example.com/job" and "cv_lead." in opened[1]
-    assert ui.js("detailDialog.stepsDone") == 3 and ui.js("detailDialog.job.apply_steps.join(',')") == "posting,cv,combined"
+    _until_true(ui, lambda: ui.js("detailDialog.stepsDone") == 3)                 # the single PDF is made in the background
+    assert ui.js("detailDialog.job.apply_steps.join(',')") == "posting,cv,combined"
     ui.js('detailDialog.doStep("answers")')
     _until_open(ui, "formDialog")
     assert ui.find("formDialog").property("opened") is True and ui.js("formDialog.jobId") == "lead"
@@ -507,7 +508,9 @@ def test_a_failed_step_is_not_ticked(ui, monkeypatch):
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="cv_lead.docx", url="", apply_steps=[]), render=False)
     _open_job(ui, "lead")
     ui.js('detailDialog.doStep("combined"); detailDialog.doStep("posting")')      # no single PDF, and this job has no link
+    _until_true(ui, lambda: ui.js("detailDialog.pdfBusy") is False)              # the answer about the PDF came
     assert ui.js("detailDialog.stepsDone") == 0 and ui.js("(detailDialog.job.apply_steps || []).length") == 0
+    assert "could not be joined" in ui.js("ticker.text")
     ui.js("detailDialog.close()")
     _until_closed(ui, "detailDialog")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(tailored_cv_file="", apply_steps=[]), render=False)
@@ -516,7 +519,7 @@ def test_a_failed_step_is_not_ticked(ui, monkeypatch):
 
 def test_about_you_shows_your_own_letters_folder(ui, monkeypatch):
     opened = []
-    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(target))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: opened.append(target) or True)
     config.COVER_LETTERS_DIR.mkdir(parents=True, exist_ok=True)
     (config.COVER_LETTERS_DIR / "Alex_Novak_CoverLetter_Acme.docx").write_bytes(b"mine")
     ui.js("aboutDialog.show()")
@@ -1074,7 +1077,8 @@ def test_letter_editor_explains_wrong_steps(ui, monkeypatch):
     ui.js("letterDialog.busyIndex = 2; letterDialog.tryClose()")
     assert "still rewriting paragraph 3" in err.property("text") and dialog.property("visible") is True
     ui.js("letterDialog.busyIndex = -1; letterDialog.save()")
-    assert saved and saved[0][1] == "Second one, changed."
+    _until_true(ui, lambda: bool(saved) and ui.js("letterDialog.saving") is False)    # saved in the background (#79)
+    assert saved[0][1] == "Second one, changed."
     assert ui.find("hintField").property("maximumLength") == 300
     ui.js('hintField.text = "' + "h" * 300 + '"; hintField.textEdited()')
     assert ui.find("hintFull").property("visible") is True and ui.find("hintFull").property("text") == "Up to 300 characters."
@@ -1476,4 +1480,19 @@ def test_typed_form_questions_and_a_typed_request_are_not_lost_on_close(ui):
     assert about.property("opened") is True and ui.js("aboutDialog.confirmClose") is True, "Cancel asks once, as ✕ does"
     ui.js("aboutCancelBtn.clicked()", about)
     _until_closed(ui, "aboutDialog")
+    assert ui.warnings == []
+
+
+def test_a_pdf_answer_for_another_job_is_not_this_one_s(ui):
+    """#79: the single PDF is made in the background; its answer is for the job it was asked for."""
+    _open_job(ui, "lead")
+    try:
+        ui.js("detailDialog.pdfBusy = true; detailDialog.pdfJob = 'other'")
+        ui.js("detailDialog.pdfMade({ ok: true, pages: 2, job_id: 'not-asked' })")
+        assert ui.js("detailDialog.pdfBusy") is True, "an answer nobody asked for changes nothing"
+        ui.js("detailDialog.pdfMade({ ok: false, msg: 'No.', job_id: 'other' })")
+        assert ui.js("detailDialog.pdfBusy") is False
+    finally:
+        ui.js("detailDialog.pdfBusy = false; detailDialog.pdfJob = ''; detailDialog.close()")
+        _until_closed(ui, "detailDialog")
     assert ui.warnings == []
