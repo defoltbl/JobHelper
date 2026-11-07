@@ -431,3 +431,47 @@ def test_a_plain_list_sent_back_twice_in_rows_is_put_together_again(isolate_data
     row = texts[texts.index("KEY SKILLS") + 1]
     assert texts[texts.index("KEY SKILLS") + 2] == "EXPERIENCE", "one row, as in the master"
     assert row.startswith("Django, Flask, PostgreSQL, Git") and set(PLAIN_SKILLS.split(", ")) <= set(row.split(", "))
+
+
+def test_a_profile_sentence_about_working_independently_is_sent_back_then_named(isolate_data, monkeypatch):
+    """#62: only the prompt kept a "works independently" sentence out of a CV whose master profile has none."""
+    profile, rows, _ = _example_content()
+    plain = docx.Document(str(MASTER))                        # the example master, without its own such words
+    for paragraph in plain.paragraphs:
+        for run in paragraph.runs:
+            run.text = cv_tailor._INDEPENDENT.sub("carefully", run.text)
+    master = isolate_data / "master_plain.docx"
+    plain.save(str(master))
+    cv_text = "\n".join(p.text for p in docx.Document(str(master)).paragraphs)
+    master_profile = cv_tailor.text_of(cv_tailor.sections(cv_tailor.WordDocument(master).body)["profile"])
+    assert master_profile and not cv_tailor._INDEPENDENT.search(master_profile), "this master has no such sentence"
+    added = profile.rstrip() + " Works independently and needs no hand-holding."
+    prompts = []
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or {"profile": added, "skills": rows, "role_short": "Admin"})
+    job = store.new_job(id="j1", title="Administrator", company="Acme", description="We value people who work on their own.")
+    cv_tailor.tailor(job, cv_text, master)
+    assert len(prompts) == 2 and "no sentence about working independently" in prompts[1], "sent back once"
+    assert cv_tailor.INDEPENDENT_NOTE in job["cv_check"], "then named in the job window, like the other CV checks"
+    calm = cv_tailor._INDEPENDENT.sub("carefully", profile)                    # an answer without such a sentence
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: {"profile": calm, "skills": rows, "role_short": "Admin"})
+    job = store.new_job(id="j2", title="Administrator", company="Acme", description="")
+    cv_tailor.tailor(job, cv_text, master)
+    assert "working independently" not in job.get("cv_check", [])
+    assert cv_tailor.independence_unbacked("I work independently.", "A self-starter who works on her own.") == [], \
+        "a master profile that has one allows it"
+    assert cv_tailor.independence_unbacked("Built an independent test suite. Works autonomously.", "") == ["Works autonomously."]
+    for fine in ("Developed autonomous vehicles software.", "Ran services on their own servers.", "Built independent workflows.",
+                 "Independently verified the results.", "A self-motivated learner.", "Led work without supervision of the vendor.",
+                 "Works on her own projects at weekends.", "Operating on their own servers.", "Work independently verified data.",
+                 "Works independently of the CRM."):
+        assert cv_tailor.independence_unbacked(fine, "") == [], f"not about the person's way of working: {fine}"
+    for said in ("Able to work independently.", "Works without close supervision.", "A self-starter.", "Operates autonomously.",
+                 "Works well independently.", "Works effectively and independently.", "Works without direct supervision.",
+                 "Works with minimal supervision.", "Happy to work on my own."):
+        assert cv_tailor.independence_unbacked(said, "") == [said], said
+    answers, asked = iter([added, calm]), []                                   # first draft has it, the second does not
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: asked.append(1) or {"profile": next(answers), "skills": rows, "role_short": "Admin"})
+    job = store.new_job(id="j3", title="Administrator", company="Acme", description="")
+    cv_tailor.tailor(job, cv_text, master)
+    assert len(asked) == 2, "one retry"
+    assert cv_tailor.INDEPENDENT_NOTE not in job.get("cv_check", []), "put right on the retry: no note"

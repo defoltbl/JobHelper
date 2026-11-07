@@ -835,7 +835,8 @@ Sometimes the job window shows an amber line with a few terms. The line says **C
 adapted CV before you send it** or **Check your cover letter before you send it**. Most terms
 come from the posting. The adapted CV states them as your experience, but your own CV does not
 mention them. For the adapted CV, the line can also name a company, a technology or a figure
-that your own CV does not give. In a letter, the line marks only a sentence that says you did it, not a sentence
+that your own CV does not give. It can also say *working independently*. This means that the adapted CV says that you work on
+your own, but your own CV does not say it. In a letter, the line marks only a sentence that says you did it, not a sentence
 about the role. The app already asked Claude once to remove these terms. A term that is left
 can still be a fair word for work that you did. So you decide. Keep the term only if it is
 true. If it is not true, edit the Word file. You can also add what you really did under **More

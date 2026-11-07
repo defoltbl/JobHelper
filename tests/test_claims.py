@@ -200,9 +200,18 @@ def test_titles_and_places_that_once_hid_a_job_or_made_one():
                    "Master 2 Informatique – Example (2014 – 2016)", "Software Engineering, Example University (2014 – 2018)",
                    "Data Science – Charles University (2018 – 2020)", "Doctor of Philosophy – Example University (2010 – 2014)",
                    "Student – Example Polytechnic (2020 – 2024)", "MA History – Example University (2010 – 2012)",
-                   "Teacher Training Course, University of X (2015 – 2016)", "Data Analyst Bootcamp, Example Academy (2020 – 2021)"):
+                   "Teacher Training Course, University of X (2015 – 2016)", "Data Analyst Bootcamp, Example Academy (2020 – 2021)",
+                   # #66: study stays study next to the new job nouns
+                   "Music Performance – Example Conservatory (2012 – 2016)", "Fellowship Programme – Example University (2018 – 2019)",
+                   "Student – Example University (2016 – 2020)", "PhD Physics – Example University (2014 – 2018)"):
         assert head(degree) == 0, degree
     for job in ("Self-employed Photographer, Contoso (2019 – 2021)", "Master Data Engineer – Contoso (2020 – 2022)",
                 "Intern – Fabrikam Academy (2021 – 2022)", "Teacher – International School of Prague (2018 – 2020)",
-                "Physics Teacher, Example Gymnasium (2018 – 2020)"):
+                "Physics Teacher, Example Gymnasium (2018 – 2020)",
+                # #66: job nouns at a place of study that once read as study
+                "Pianist – Example Conservatory (2016 – 2018)", "Postdoc – Example University (2019 – 2021)",
+                "Research Fellow – Example Institute (2021 – 2023)", "Dean – Example Faculty (2015 – 2020)",
+                "Working Student – Example University (2020 – 2022)", "Postdoctoral Researcher, Example University (2019 – 2021)",
+                # accepted on purpose: a bare position at a school or university is a job
+                "Fellow – Example University (2019 – 2020)", "Director, Example School (2015 – 2020)", "Secretary – Example School (2012 – 2014)"):
         assert head(job) > 0, job

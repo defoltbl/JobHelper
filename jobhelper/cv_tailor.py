@@ -217,6 +217,25 @@ def profile_problems(profile: str, job: dict[str, Any], cv_text: str) -> tuple[l
     return figures, unknown_skill_terms(inner, own)
 
 
+# a sentence about the person's way of working on their own: the rules allow one only when the master's PROFILE has one
+# (#62). A work verb before the words, so "autonomous vehicles", "on their own servers" or "independently verified" are
+# no such sentence. shortcut: other wordings ("minimal guidance", "self-sufficient") are not caught; add them when seen
+_INDEPENDENT = re.compile(r"\b(?:work(?:s|ed|ing)?|operat(?:e|es|ed|ing)|function(?:s|ed|ing)?)\s+(?:\w+\s+(?:and\s+)?){0,2}?"
+                          r"(?:independently|autonomously|on\s+(?:my|his|her|their)\s+own(?=\s*(?:[,.;]|and\b|$))|"
+                          r"without\s+(?:close\s+|direct\s+)?supervision|with\s+minimal\s+supervision)\b(?!\s+of\b)(?!\s+\w+ed\b)|"
+                          r"\bself[- ]starter\b|\bindependent\s+worker\b", re.IGNORECASE)
+INDEPENDENT_NOTE = "working independently"         # how the job window names such a sentence (cv_check)
+
+
+def independence_unbacked(profile: str, master_profile: str) -> list[str]:
+    """The PROFILE's sentences about working independently when the master's PROFILE has none ([] when it has one).
+    Only the master's PROFILE counts, as the adaptation rule says: what a job did is not how the person describes
+    themselves."""
+    if _INDEPENDENT.search(master_profile or ""):
+        return []
+    return [s for s in claims.sentences(profile) if _INDEPENDENT.search(s)]
+
+
 def _after_first_word(sentence: str, rest: str) -> str:
     """`rest` (the sentence without its interests) without the sentence's first word, which is capital for being first."""
     words = rest.split()
@@ -634,6 +653,8 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
                      for phrase in borrowed_claims(profile, description, backed)]
         problems += [f"PROFILE states the figure {f}, which none of the candidate's sources gives. Use only the figures the CV "
                      "or the notes give." for f in profile_problems(profile, job, cv_text)[0]]     # names are only noted, below
+        problems += [f"PROFILE says '{s}', but the master PROFILE has no sentence about {INDEPENDENT_NOTE}. Leave it out."
+                     for s in independence_unbacked(profile, master_profile)]
         if not problems:
             break
         feedback = "\nYour previous draft was rejected. Fix these problems:\n" + \
@@ -654,7 +675,8 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
     # with any name the CV and the notes do not give.
     # a kept figure first, so the cap of eight hides a figure last; then the posting's words, then names
     left = list(dict.fromkeys([f"the figure {f}" for f in figures] + borrowed_claims(profile, description, backed)
-                              + profile_problems(profile, job, cv_text)[1]))
+                              + profile_problems(profile, job, cv_text)[1]
+                              + ([INDEPENDENT_NOTE] if independence_unbacked(profile, master_profile) else [])))
     if left:
         job["cv_check"] = left[:8]
     else:
