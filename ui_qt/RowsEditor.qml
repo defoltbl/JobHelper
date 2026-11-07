@@ -2,6 +2,7 @@
 // A list of rows of text fields that can grow: one row per job, one per degree. It only edits the
 // ListModel it is given and says when something changed; what is wrong comes from outside (`problem`).
 import QtQuick
+import "tabkeys.js" as TabKeys
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Shapes
@@ -65,6 +66,7 @@ ColumnLayout {
                             Layout.fillWidth: true; implicitHeight: Math.max(64, contentHeight + 16); wrapMode: TextEdit.Wrap
                             color: theme.ink; font.pixelSize: 12; selectByMouse: true
                             placeholderText: modelData.hint || ""; placeholderTextColor: theme.faint
+                            Keys.onPressed: (event) => TabKeys.moveOn(areaBox, event)      // Tab moves on, as in every such box
                             Component.onCompleted: text = ed.store.get(card.row)[modelData.key] || ""
                             background: Rectangle { radius: 7; color: theme.surface; border.width: 1
                                 border.color: ed.problem.field === card.where + "." + modelData.key || areaBox.text.length > modelData.most ? theme.crit

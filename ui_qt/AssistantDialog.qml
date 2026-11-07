@@ -820,7 +820,7 @@ Dialog {
                                 Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
                                     border.color: aBox.text.length > win.limits.answer ? theme.crit : (aBox.activeFocus ? theme.accent : theme.line)
                                     implicitHeight: Math.max(64, aBox.implicitHeight + 16)
-                                    TextEdit { id: aBox; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap; selectByMouse: true
+                                    BoxEdit { id: aBox
                                         color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                                         text: model.answer
                                         onTextChanged: if (activeFocus) assistantDialog.setAnswer(index, "answer", text)

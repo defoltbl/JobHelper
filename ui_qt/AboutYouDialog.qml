@@ -273,6 +273,8 @@ Dialog {
                                 SmallButton { objectName: "payAdd"; text: "+ Add"; onClicked: aboutDialog.addPay() } } }
                         Text { objectName: "payErr"; visible: aboutDialog.payErr !== ""; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12
                             wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true; text: aboutDialog.payErr }
+                        AtLimit { id: payRoleFull; objectName: "payRoleFull"; field: payRole; name: "A kind of role"
+                            Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12 }
                         // the figures you gave: each can be changed where it stands, or removed
                         ColumnLayout { objectName: "payRows"; visible: payModel.count > 0; Layout.fillWidth: true; Layout.leftMargin: 14
                             Layout.rightMargin: 12; Layout.bottomMargin: 10; spacing: 6
@@ -388,8 +390,8 @@ Dialog {
                                     border.color: win.hasNonLatin(boxEdit.text) || (aboutDialog.notesSize > aboutDialog.notesMax && boxEdit.text !== "") ? theme.crit
                                                   : (boxEdit.activeFocus ? theme.accent : theme.line)
                                     implicitHeight: Math.max(70, boxEdit.implicitHeight + 16)
-                                    TextEdit { id: boxEdit; objectName: "boxNotes_" + index; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap
-                                        selectByMouse: true; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent; text: model.notes
+                                    BoxEdit { id: boxEdit; objectName: "boxNotes_" + index
+                                        color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent; text: model.notes
                                         onTextChanged: if (text !== model.notes) { boxModel.setProperty(index, "notes", text); aboutDialog.err = ""; aboutDialog.removeAsked = -1; aboutDialog.notesTick++; }
                                         Text { visible: boxEdit.text === ""; width: parent.width; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 12
                                             text: "e.g. I was in a team of four. I wrote the import service in Python, added its tests, and fixed about thirty tickets." } } }
@@ -403,8 +405,8 @@ Dialog {
                                 border.color: aboutDialog.notesSize > aboutDialog.notesMax || win.hasNonLatin(generalField.text) ? theme.crit
                                               : (generalField.activeFocus ? theme.accent : theme.line)
                                 implicitHeight: Math.max(70, generalField.implicitHeight + 16)
-                                TextEdit { id: generalField; objectName: "generalField"; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap
-                                    selectByMouse: true; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
+                                BoxEdit { id: generalField; objectName: "generalField"
+                                    color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                                     onTextChanged: { if (activeFocus) aboutDialog.err = ""; aboutDialog.notesTick++; } } }
                             Text { objectName: "notesCount"; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; font.pixelSize: 11
                                 color: aboutDialog.notesSize > aboutDialog.notesMax ? theme.crit : theme.faint

@@ -130,8 +130,8 @@ Dialog {
                             border.color: pEdit.text.trim() === "" ? theme.crit : (pEdit.activeFocus ? theme.accent : theme.line)
                             implicitHeight: Math.max(44, pEdit.implicitHeight + 20)
                             opacity: letterDialog.busyIndex === index ? 0.5 : 1
-                            TextEdit { id: pEdit; x: 10; y: 10; width: parent.width - 20
-                                text: model.body; wrapMode: TextEdit.Wrap; selectByMouse: true
+                            BoxEdit { id: pEdit; pad: 10
+                                text: model.body
                                 readOnly: letterDialog.busyIndex === index
                                 color: theme.ink; font.pixelSize: 13; selectionColor: theme.accent
                                 onTextChanged: if (text !== letterDialog.texts[index]) letterDialog.setText(index, text) }

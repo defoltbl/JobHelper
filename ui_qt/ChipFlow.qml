@@ -13,7 +13,6 @@ Flow {
     property color fill: theme.inset
     Layout.fillWidth: true; spacing: 6
     Repeater { model: cf.items
-        Rectangle { height: 24; radius: 12; width: cfT.implicitWidth + 18; color: cf.fill
-            border.color: Qt.rgba(cf.tone.r, cf.tone.g, cf.tone.b, 0.45); border.width: 1
-            Text { id: cfT; anchors.centerIn: parent; text: modelData; color: cf.tone; font.pixelSize: 11; font.bold: true } } }
+        Chip { label: modelData; tone: cf.tone; fill: cf.fill; bold: true; padX: 9
+            edge: Qt.rgba(cf.tone.r, cf.tone.g, cf.tone.b, 0.45) } }
 }

@@ -331,6 +331,13 @@ data/                your data; only the *.example.* files are in git
   first child of each scroll area (it also covers the space under short content); a test fails for a window without one.
   A list (`ListView`) beside a field needs `FocusCatcher { z: 2 }` over its rows: the rows take the press, so a
   catcher under them never sees it. It passes the press on, so rows and scrolling work as before.
+- **Every box a person types more lines into is a `BoxEdit`** (#69): it fills its frame, so a click anywhere in the
+  frame lands in the text, and Tab / Shift+Tab move on (`tabkeys.js`; a `TextEdit` types a tab). In a Flickable it
+  gets `flick`, so the cursor stays in view. A test fails for an editable `TextEdit`, or a `TextArea` without
+  `TabKeys.moveOn`, anywhere else.
+- **A one-line field that stops at its limit says so with `AtLimit`** (#70: the field's own maximumLength, from
+  `win.limits`). A chip is a `Chip`: as wide as its text, never wider than its row, so a long one wraps (Options roles,
+  `TagEditor`, `ChipFlow`). Later: the "takes up to N characters" sentence is still built in several windows.
 - **An answer sent from a worker thread must carry plain values.** The start-up check travels inside the
   connection answer as text (`info.health`, JSON) and the window parses it.
 - **Where the data is, is decided once, when `config` is imported.** `config.DATA_DIR` comes from

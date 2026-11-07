@@ -141,7 +141,8 @@ The figures show the real window of the app, filled with **invented** people and
 > A window that holds text you did not save never closes without a question. The ✕, the Esc
 > key and **Cancel** ask once. Press one again to discard the changes. While Claude is still working in a
 > window, it waits until the work is done. A button that you cannot use at the moment is pale.
-> The Tab key also reaches the ✕ of each window. Press Space to close the window.
+> The Tab key also reaches the ✕ of each window. Press Space to close the window. In a box for
+> more lines of text, such as notes or a letter, Tab also goes to the next field.
 
 This guide is for people who use the app. The technical documentation, [CODE.md](CODE.md),
 is for people who work with the code. It covers the installation, the command line, the

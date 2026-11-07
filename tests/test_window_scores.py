@@ -3,6 +3,7 @@
 Its tests share one window and follow on from each other, so they run on one worker in this order (see
 tests/window_harness.py). The other window test files run beside it, each with a window of its own."""
 
+import json
 import pytest
 
 pytest.importorskip("PySide6")
@@ -1122,4 +1123,60 @@ def test_about_you_says_a_wrong_number_before_it_is_changed_unseen(ui):
         ui.js("salarySpin.contentItem.text = '0'; salarySpin.value = 0; payAmount.value = 0; payRole.text = ''", about)
         ui.js("aboutDialog.confirmClose = true; aboutDialog.close()")
         _until_closed(ui, "aboutDialog")
+    assert ui.warnings == []
+
+
+def test_a_text_box_fills_its_frame_and_tab_moves_on(ui):
+    """#69: the frame of a notes box was taller than its text, a click low in it did nothing, and Tab typed a tab."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    _open_job(ui, "app")
+    try:
+        frame = ui.js("cnNotes.parent.height")
+        assert ui.js("cnNotes.height") >= frame - 2 * ui.js("cnNotes.pad") - 1, "the text fills the frame, so a click anywhere lands in it"
+        ui.js("cnNotes.text = 'They pay monthly.'; cnNotes.forceActiveFocus(); cnNotes.cursorPosition = cnNotes.length")
+        expected = ui.js("cnNotes.nextItemInFocusChain(true)")
+        QTest.keyClick(ui.win, Qt.Key_Tab)
+        _until_true(ui, lambda: ui.js("cnNotes.activeFocus") is False)
+        assert ui.js("cnNotes.text") == "They pay monthly.", "no tab character typed"
+        assert ui.js("win.activeFocusItem") == expected, "the focus went to the next field"
+        QTest.keyClick(ui.win, Qt.Key_Backtab, Qt.ShiftModifier)
+        _until_true(ui, lambda: ui.js("cnNotes.activeFocus") is True)
+    finally:
+        ui.js("cnNotes.text = ''; detailDialog.confirmClose = true; detailDialog.close()")
+        _until_closed(ui, "detailDialog")
+    assert ui.warnings == []
+
+
+def test_every_text_box_a_person_types_in_is_a_box_edit():
+    """#69: one shared box for every multi-line text, so none of them types a tab or leaves a dead area."""
+    import re
+    editable = []
+    for path in sorted((ROOT / "ui_qt").glob("*.qml")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for at, line in enumerate(lines):
+            if re.search(r"\bTextEdit\s*\{", line) and path.name != "BoxEdit.qml":
+                block = " ".join(lines[at:at + 4])
+                if "readOnly: true" not in block:
+                    editable.append(f"{path.name}:{at + 1}")
+            if re.search(r"\bTextArea\s*\{", line):                      # a Controls TextArea types a tab too
+                block = "\n".join(lines[at:at + 12])
+                if "TabKeys.moveOn(" not in block and "readOnly: true" not in block:
+                    editable.append(f"{path.name}:{at + 1}")
+    assert editable == [], editable
+
+
+def test_the_cursor_stays_in_view_in_a_box_that_scrolls(ui):
+    """#69: typing or pasting past the bottom of the reply box left the cursor out of sight."""
+    _open_job(ui, "app")
+    try:
+        ui.js("detailDialog.replyOpen = true")
+        _until_true(ui, lambda: ui.js("replyText.visible") is True)
+        ui.js("replyText.forceActiveFocus(); replyText.text = Array(40).fill('A line of the message').join('\\n'); replyText.cursorPosition = replyText.length")
+        _until_true(ui, lambda: ui.js("replyFlick.contentY") > 0)
+        flick = json.loads(ui.js("JSON.stringify({ y: replyFlick.contentY, h: replyFlick.height, cy: replyText.cursorRectangle.y, ch: replyText.cursorRectangle.height })"))
+        assert flick["y"] <= flick["cy"] and flick["cy"] + flick["ch"] <= flick["y"] + flick["h"] + 0.5, flick
+    finally:
+        ui.js("replyText.text = ''; detailDialog.replyOpen = false; detailDialog.confirmClose = true; detailDialog.close()")
+        _until_closed(ui, "detailDialog")
     assert ui.warnings == []
