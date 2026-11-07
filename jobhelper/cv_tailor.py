@@ -637,7 +637,7 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
         data = llm.ask_json(PROMPT.format(
             rules=load_rules(cv_text), cv_text=cv_text[:12000],
             master_rows="\n".join(f"- {r}" for r in m_rows) or "(none)",
-            title=job["title"], company=job["company"], location=job.get("location", ""),
+            **llm.posting_parts(job),
             description=llm.untrusted("posting", description), feedback=feedback, max_profile=MAX_PROFILE_CHARS,
             min_rows=shape.limits[0], max_rows=shape.limits[1], rows_budget=sum(len(r) for r in m_rows) + 60,
             rows_shape=shape.shape_rule(),

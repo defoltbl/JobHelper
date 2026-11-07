@@ -9,7 +9,8 @@ import time
 from datetime import date, datetime
 
 from .api_base import _guarded, _stem
-from . import (agent2_search, form_fill, agent3_letters, textfmt, config, db, followup, keywords, merge, pdf, planner, salary, store, vault)
+from . import (agent2_search, form_fill, agent3_letters, textfmt, config, cover_letter, db, followup, keywords, merge, pdf, planner, salary,
+               store, vault)
 
 
 class JobsService:
@@ -147,10 +148,10 @@ class JobsService:
             "can_compare": self._app.comparable(j),
             "can_write_docs": self._app.can_write_documents(j) == "",
             "cv_check": [str(x) for x in (j.get("cv_check") or [])][:8] if j.get("tailored_cv_file") else [],
-            "letter_check": [str(x) for x in (j.get("letter_check") or [])][:8] if j.get("cover_letter_file") else [],
-            "letter_figures": [str(x) for x in (j.get("letter_figures") or [])][:8] if j.get("cover_letter_file") else [],
-            "letter_misplaced": [str(x) for x in (j.get("letter_misplaced") or [])][:8] if j.get("cover_letter_file") else [],
-            "letter_invented": [str(x) for x in (j.get("letter_invented") or [])][:8] if j.get("cover_letter_file") else [],
+            "letter_check": [str(x) for x in (j.get("letter_check") or [])][:cover_letter.LetterNotes.MOST] if j.get("cover_letter_file") else [],
+            "letter_figures": [str(x) for x in (j.get("letter_figures") or [])][:cover_letter.LetterNotes.MOST] if j.get("cover_letter_file") else [],
+            "letter_misplaced": [str(x) for x in (j.get("letter_misplaced") or [])][:cover_letter.LetterNotes.MOST] if j.get("cover_letter_file") else [],
+            "letter_invented": [str(x) for x in (j.get("letter_invented") or [])][:cover_letter.LetterNotes.MOST] if j.get("cover_letter_file") else [],
             "cv_left_out": [str(x) for x in (j.get("cv_left_out") or [])][:8] if j.get("tailored_cv_file") else [],
             "has_prep": bool((j.get("interview_prep") or {}).get("questions")),
             "prep_edited": bool((j.get("interview_prep") or {}).get("edited")),

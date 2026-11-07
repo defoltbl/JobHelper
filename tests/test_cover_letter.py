@@ -288,3 +288,57 @@ def test_a_letter_that_names_an_employer_no_source_gives_is_sent_back_then_named
             "I am grateful for Ms. Novak's time.", "I worked for Dr. Smith's lab as a volunteer.")
     for sentence in fine:
         assert check.invented(sentence, "Acme", "Our client Tailspin needs a parser.") == [], sentence
+
+
+
+# ── #78: what a letter may still be after its one retry, and the plain letter ──
+def test_a_letter_that_stays_too_short_or_too_long_is_not_saved(isolate_data, monkeypatch):
+    title, body, _ = _example()
+    monkeypatch.setattr(config, "LETTER_TEMPLATE", TEMPLATE)
+    short = [" ".join(p.split()[:12]) + "." for p in body]
+    long = [p + " " + p + " " + p for p in body]
+    for wrong, said in ((short, "(?i)too short"), (long, "(?i)too long for one page")):
+        prompts = []
+        monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or {"title_line": title, "paragraphs": wrong, "role_short": "Admin"})
+        job = store.new_job(id="w1", title="Administrator", company="Acme", description="We run Linux servers.")
+        with pytest.raises(ValueError, match=said):
+            cover_letter.write(job, _master_text(), MASTER)
+        assert len(prompts) == 2 and not list(config.LETTERS_DIR.glob("*.docx")), "sent back once, then nothing saved"
+
+
+def test_a_rewrite_that_states_the_posting_s_words_as_experience_is_sent_back(isolate_data, monkeypatch):
+    title, body, _ = _example()
+    posting = "You will run quarterly zebra migrations and tune walrus pipelines for our platform."
+    borrowed, fine = body[2].rstrip() + " I ran zebra migrations every quarter.", body[2]
+    prompts, answers = [], [{"paragraph": borrowed}, {"paragraph": fine}]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or answers[len(prompts) - 1])
+    job = store.new_job(id="r3", title="Administrator", company="Acme", description=posting)
+    assert cover_letter.rewrite_paragraph(job, _master_text(), list(body), 2) == fine
+    assert len(prompts) == 2 and "It presents 'zebra migrations' as the candidate's own experience" in prompts[1]
+    mine = list(body)
+    mine[0] = body[0] + " I ran zebra migrations at my last job."      # you wrote it yourself: it is yours
+    prompts.clear()
+    answers[:] = [{"paragraph": borrowed}]
+    assert cover_letter.rewrite_paragraph(job, _master_text(), mine, 2) == borrowed and len(prompts) == 1
+
+
+def test_the_plain_letter_gets_the_claim_rules_of_the_template_letter(isolate_data, monkeypatch):
+    monkeypatch.setattr(cover_letter, "unverified_terms", lambda cv_text: ["Kubernetes"])
+    cv = "Alex Novak\nJunior Developer – Northwind Parcel, Brno (2024 – present): built tools in Python.\n"
+    filler = "I like clear code and short, readable tests that other people can follow. " * 15
+    letter = ("Dear Hiring Team,\n\nI build tools in Python. I deployed Kubernetes clusters daily.\n\n"
+              "My work saved 37 hours a week. At Contoso Labs I built the billing service.\n\n" + filler + "\n\nYours sincerely,")
+    job = store.new_job(id="p1", title="Developer", company="Acme", description="We run Kubernetes.")
+    out = cover_letter.checked_plain(letter, job, cv)
+    assert "Kubernetes" not in out and out.startswith("Dear Hiring Team,") and out.endswith("Yours sincerely,")
+    assert "I build tools in Python." in out
+    assert job["letter_figures"] == ["37"] and job["letter_invented"] == ["Contoso Labs"], "named like the template letter's"
+    with pytest.raises(ValueError, match="nothing was saved"):
+        cover_letter.checked_plain("Dear Hiring Team,\n\nI deployed Kubernetes daily.\n\nYours sincerely,", job, cv)
+    # a greeting line that carries the claim is body, not frame; a letter of greeting and closing only is not saved
+    out = cover_letter.checked_plain("Dear Hiring Team, I deployed Kubernetes daily.\n\n" + filler + "\n\nBest,\nAlex", job, cv)
+    assert "Kubernetes" not in out
+    with pytest.raises(ValueError, match="words"):
+        cover_letter.checked_plain("Dear Hiring Team,\n\nThank you.\n\nBest,\nAlex", job, cv)
+    with pytest.raises(ValueError, match="words"):
+        cover_letter.checked_plain("Dear Hiring Team,\n\n" + filler * 3 + "\n\nYours sincerely,", job, cv)

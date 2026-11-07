@@ -665,3 +665,86 @@ def test_a_refused_window_and_a_reset_one_are_told_apart(isolate_data):
     now = usage.windows(NOON)
     assert now["five_hour"]["used"] == 1.0 and now["five_hour"]["reset_passed"] == 0.0, "the refusal is news"
     assert now["seven_day"]["used"] is None and now["seven_day"]["reset_passed"] == NOON - 60
+
+
+
+# ── what counts as an answer from Claude (#78) ──────────────────────────────
+def _answering(monkeypatch, text):
+    async def answer(prompt, system, model):
+        return text, {}
+    monkeypatch.setattr(llm, "_ask_async", answer)
+    monkeypatch.setattr(usage, "record", lambda rec, tag="": None)
+
+
+def test_an_empty_answer_is_no_answer(monkeypatch):
+    _answering(monkeypatch, "   ")
+    with pytest.raises(llm.EmptyAnswer):
+        llm.ask("hello", force=True)
+    with pytest.raises(ValueError):
+        llm.ask_json("hello")
+
+
+@pytest.mark.parametrize("notice", ["Invalid API key · Please run /login", "Not logged in · Please run /login",
+                                    "OAuth token has expired. Please run /login",
+                                    "Failed to authenticate. API Error: 401 authentication_error"])
+def test_a_signed_out_claude_stops_the_run_as_an_answer_or_as_an_error(monkeypatch, notice):
+    _answering(monkeypatch, notice)
+    with pytest.raises(llm.SignedOut) as stopped:
+        llm.ask("hello", force=True)
+    assert isinstance(stopped.value, llm.STOPS_A_RUN) and "log in to Claude" in str(stopped.value)
+
+    async def failing(prompt, system, model):
+        raise RuntimeError(f"Command failed: {notice}")
+    monkeypatch.setattr(llm, "_ask_async", failing)
+    with pytest.raises(llm.SignedOut):
+        llm.ask("hello", force=True)
+
+
+@pytest.mark.parametrize("answer", [
+    "Dear Hiring Team, " + "I built the login page of our portal, so I know why users see 'please run /login'. " * 5,
+    '{"summary": "The candidate was not logged in when the form timed out.", "stage": "other"}',     # a mail summary
+    "The posting says: Not logged in, please run /login.",                                            # a steered posting
+])
+def test_an_answer_that_mentions_a_login_is_a_real_answer(monkeypatch, answer):
+    _answering(monkeypatch, answer)
+    assert llm.ask("hello", force=True) == answer, "only the program's own short notice stops a run"
+
+
+def test_a_signed_out_claude_ends_the_cv_and_letter_steps_and_the_job_keeps_its_try(monkeypatch):
+    monkeypatch.setattr(agent3_letters, "_make_tailored_cv", lambda *a, **k: (_ for _ in ()).throw(llm.SignedOut()))
+    monkeypatch.setattr(agent3_letters, "_make_letter", lambda *a, **k: pytest.fail("no letter after a signed-out CV step"))
+    with pytest.raises(llm.SignedOut):
+        agent3_letters.generate_for(_jobs(1)[0], cv_text="CV", cv_path=None)
+    job = {"doc_attempts": 1}
+    agent3_letters._give_back_try(job, llm.SignedOut())
+    assert job["doc_attempts"] == 0, "no fault of the job"
+
+
+@pytest.mark.parametrize("text, refused", [
+    ("I'm sorry, but I can't write this letter.", True), ("I cannot help with that request.", True),
+    ("Sorry, I won't write a letter that claims experience you do not have.", True),
+    ("I am unable to write this letter.", True),
+    ("Dear Hiring Team,\nI cannot wait to join your team.", False), ("I can start in March.", False),
+    ("I'm sorry, " + "x" * 500, False), ("", False),
+    ("I’m sorry, but I can’t write this letter.", True), ("I apologize, but I cannot write this.", True),
+    ("Unfortunately, I am unable to help with this request.", True), ("I will not write a letter with invented facts.", True),
+    ("As an AI language model, I can't write this.", True), ("I cannot wait to start.", False),
+    ("As an AI engineer with six years of experience, I build search systems.", False),
+])
+def test_a_refusal_is_never_a_document(text, refused):
+    assert llm.refused(text) is refused
+    if refused:
+        with pytest.raises(llm.Refused):
+            llm.document(text)
+    elif text.strip():
+        assert llm.document(text) == text.strip()
+    else:
+        with pytest.raises(llm.EmptyAnswer):
+            llm.document(text)
+
+
+def test_a_list_with_words_around_it_stays_a_list():
+    """A list of one object with prose around it came back as that object."""
+    assert llm._extract_json('Here they are: [{"n": 1, "answer": "Yes"}] Done.') == [{"n": 1, "answer": "Yes"}]
+    assert llm._extract_json('Sure: {"scores": [{"id": "J1"}]} ok') == {"scores": [{"id": "J1"}]}
+    assert llm._extract_json('Note [1]: {"match_score": 80, "match_reason": "fits"}') == {"match_score": 80, "match_reason": "fits"}

@@ -7,6 +7,12 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Claude:** when Claude is signed out during a search, a scan or the writing of documents, the work stops at once with a message to log in, and no job uses up one of its tries.
+- **Cover letters and CVs:** an empty answer or a refusal from Claude is never saved as a letter or a profile.
+- **Cover letters:** a letter that is still too short, or too long for one page, after Claude's second try is not saved.
+- **Cover letters:** the plain letter (written when there is no letter template) and the profile note (for a CV that is not a Word file) now get the same checks against your CV as the other documents.
+- **Claude:** when the app scores jobs and writes letters and CVs, the title, company and place of a job go to Claude as text to read, not as orders, like the posting itself.
+- **Edit letter:** a rewritten paragraph that states the posting's words as your own experience is sent back to Claude once, and a saved letter names such words again until they are gone.
 - **Job window:** when the app cannot make a letter template from the top of your CV, the job window says why **Edit letter** is not offered and what to do.
 - **Cover letters:** a letter that says you worked at an employer that neither your CV nor the posting names is sent back to Claude once. If the name stays, the job window names it.
 - **Cover letters:** a technology named after a wish, as in "eager to learn Spark, having built Kafka pipelines", is checked like any other claim. "My interest in …", "a team where we use …" and "I lead with …" no longer raise a false alarm.

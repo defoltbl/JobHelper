@@ -193,7 +193,14 @@ data/                your data; only the *.example.* files are in git
   Claude only inside `llm.untrusted` tags, and each system prompt that receives them says `llm.POSTING_RULE` (the tags
   the text cannot close, also nested ones). The reply window shows mail and Claude's words as `Text.PlainText`. Every
   mail connection uses `email_client.tls_context`; every Claude call has `llm.CALL_TIMEOUT`. A timeout ends a scan, a
-  scoring run or a writing run (`llm.STOPS_A_RUN`); the work done is saved first. The usage limit pauses a run
+  scoring run or a writing run (`llm.STOPS_A_RUN`); the work done is saved first. So does a signed-out Claude
+  (`llm.SignedOut`, from the program's error, or from its notice when the whole answer opens with it and is at most
+  `SIGNED_OUT_LONGEST` characters: a mail summary that mentions "not logged in" never stops a scan); it gives the
+  job's try back like the limit (#78). An empty answer is `llm.EmptyAnswer` (the assistant still says "Claude gave no
+  answer"); text saved as a document in the person's name passes `llm.document` (no empty answer, no short refusal,
+  `llm.refused`, curly apostrophes too, not "I cannot wait"). Of the two JSON spans the longer one that parses wins:
+  "[{…}]" in words is the list, "Note [1]: {…}" the object. A job's title, company and place go in fenced like its
+  text (`llm.posting_parts`). The usage limit pauses a run
   instead. A timeout while writing uses one of the job's two tries (`agent3_letters._give_back_try`), so a job whose
   call always hangs cannot hold every run; the limit gives the try back. Still open (a later PR, owner's decision 23
   Oct): Claude's stage alone moves an application; a check of the email's own words is designed separately. The same
@@ -652,6 +659,7 @@ After every batch of changes, without being asked:
 | A remote job tied to one country is kept only for your country and the countries you add, also with "Anywhere in the world" | Such a job asks you to live in that country or to have the right to work there. "Anywhere" adds only jobs for whole parts of the world ("Remote – APAC"). One rule, `places.RemoteReach`, for the search, Options and the window. |
 | The app knows every country, each with its part of the world | An unknown name was read as "no place": "Remote, South Korea" passed as open to anyone. Codes that are also US state codes (IL, ID, MA …) count as the country for someone who searches there; "City, DE" stays Germany. |
 | Duplicates are removed after all other filters | The copy kept as the duplicate's winner could then be dropped (in Czech, too old), and the other copy was lost with the reason "duplicate". |
+| The plain letter and the profile note follow the claim rules too | `cover_letter.checked_plain` cuts a sentence that claims what the CV does not show (`enforce`) and names the rest (`LetterNotes`); only a short greeting or closing line (`FRAME_WORDS`, no digits) skips the check, and a body outside `PLAIN_WORDS` is not saved; the profile note goes through `cv_tailor.enforce`. `agent3_letters.posting_fields` fences the posting for every prompt there. One `LetterNotes` sets letter_check, letter_figures, letter_misplaced and letter_invented for the written letter, a save and the plain letter (#78). |
 | The rule files and the letter template are optional | Without them the built-in rules are used, and a letter template is made from the head of the CV (`cover_letter.make_template`, marked APP_MADE and brought up to date when the CV's contacts change; a template of your own is never touched, and one that went missing is not replaced). The plain letter is left only when the CV's head gives no name or contacts; `cover_letter.LetterHead.problem` then says which, and the job window shows it where Edit letter would be (#64). |
 | A search role the app does not know is asked about once, not refused | The words it knows grew up with software jobs. |
 | No Windows or Linux version | Not wanted. |

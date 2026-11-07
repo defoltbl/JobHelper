@@ -38,6 +38,13 @@ def untrusted(label: str, text: str) -> str:
     return f"<{label}>\n{clean}\n</{label}>"
 
 
+def posting_parts(job: dict[str, Any]) -> dict[str, str]:
+    """The title, company and location of a job for a prompt: copied from a job site like its text, so each goes in
+    inside <posting> tags as data, never as the app's own words (#78). A part the job does not have stays empty."""
+    parts = {key: " ".join(str(job.get(key) or "").split())[:300] for key in ("title", "company", "location")}
+    return {key: untrusted("posting", text) if text else "" for key, text in parts.items()}
+
+
 def options_for(system: str | None, model: str) -> ClaudeAgentOptions:
     """How the Claude program is asked: no tools, and its own empty working folder."""
     return ClaudeAgentOptions(
@@ -129,8 +136,57 @@ _LIMIT_TEXT = re.compile(r"hit your [a-z -]*limit|usage limit|limit reached|rate
 _RESET_TEXT = re.compile(r"resets\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", re.IGNORECASE)
 
 
-# What ends a whole run, not one job: Claude's limit, and Claude not answering at all (each next call would wait as long).
-STOPS_A_RUN = (LimitReached, CallTimedOut)
+class SignedOut(RuntimeError):
+    """The Claude program is signed out: every next call would fail the same way, so a run stops at once (#78)."""
+
+    def __init__(self) -> None:
+        super().__init__("Claude is signed out, so the work stopped. Open Account, log in to Claude, then start again.")
+
+
+class EmptyAnswer(ValueError):
+    """Claude answered with no text: never a letter, a score or an answer (#78)."""
+
+    def __init__(self) -> None:
+        super().__init__("Claude gave an empty answer.")
+
+
+class Refused(ValueError):
+    """Claude declined to write the text ("I'm sorry, I can't …"): never saved as a document (#78)."""
+
+    def __init__(self, text: str) -> None:
+        super().__init__("Claude declined to write it: " + " ".join(text.split())[:160])
+
+
+# What ends a whole run, not one job: Claude's limit, Claude not answering at all (each next call would wait as long), and
+# a signed-out Claude program (each next call would fail the same way).
+STOPS_A_RUN = (LimitReached, CallTimedOut, SignedOut)
+
+# What the Claude program says, as an error or as its whole answer, when it is not signed in.
+_SIGNED_OUT = re.compile(r"failed to authenticate|not logged in|please run /login|invalid api key|oauth token (?:has )?expired|authentication_error",
+                         re.IGNORECASE)
+# An answer is the program's notice only when it is short and opens with it: a mail summary or a posting that mentions
+# "not logged in" is a real answer, and must never stop a run (#78).
+SIGNED_OUT_LONGEST = 120
+# The opening of an answer that declines the task. Only a short answer counts: a letter or a profile is never this short.
+_REFUSAL = re.compile(r"^\W*(?:I['’]?m sorry|I am sorry|sorry|I apologi[sz]e|unfortunately|as an AI (?:language model|assistant)|I can(?:not|['’]t)(?!\s+wait)|"
+                      r"I won['’]?t|I will not|I(?:['’]m| am) (?:not able|unable))\b", re.IGNORECASE)
+REFUSAL_LONGEST = 400
+
+
+def refused(text: str) -> bool:
+    """True when the whole answer is a short refusal ("I'm sorry, but I can't write this letter.")."""
+    text = str(text or "").strip()
+    return len(text) <= REFUSAL_LONGEST and bool(_REFUSAL.match(text))
+
+
+def document(text: str) -> str:
+    """Text Claude wrote to be saved as a document in the person's name: empty or a refusal raises (#78)."""
+    text = str(text or "").strip()
+    if not text:
+        raise EmptyAnswer()
+    if refused(text):
+        raise Refused(text)
+    return text
 
 
 def reset_time_from(message: str, now: float | None = None) -> float:
@@ -177,6 +233,8 @@ def ask(prompt: str, system: str | None = None, model: str | None = None, tag: s
     except TimeoutError as e:
         raise CallTimedOut() from e
     except Exception as e:  # noqa: BLE001
+        if _SIGNED_OUT.search(str(e)):
+            raise SignedOut() from e
         if _LIMIT_TEXT.search(str(e)):
             until = reset_time_from(str(e)) or (time.time() + 30 * 60)
             usage.note_limit(until, str(e)[:300])
@@ -188,6 +246,10 @@ def ask(prompt: str, system: str | None = None, model: str | None = None, tag: s
     except Exception as e:  # noqa: BLE001 - the answer is here: keeping count of it must never lose it
         from . import trouble
         trouble.note("noting a call to Claude in the usage counters", e)
+    if len(text.strip()) <= SIGNED_OUT_LONGEST and _SIGNED_OUT.match(text.strip()):
+        raise SignedOut()                         # the program's own notice came back as the answer
+    if not text.strip():
+        raise EmptyAnswer()
     return text
 
 
@@ -210,13 +272,17 @@ def _extract_json(raw: str) -> Any:
         return json.loads(raw)
     except json.JSONDecodeError:
         pass
-    # Fall back to the widest {...} or [...] span.
+    # Fall back to the widest {...} or [...] span that parses, the longer of the two: "[{...}]" with words around it is
+    # the list, not its first object, and "Note [1]: {...}" is the object (#78).
+    found = []
     for open_c, close_c in (("{", "}"), ("[", "]")):
         start = raw.find(open_c)
         end = raw.rfind(close_c)
         if start != -1 and end > start:
             try:
-                return json.loads(raw[start : end + 1])
+                found.append((end - start, json.loads(raw[start : end + 1])))
             except json.JSONDecodeError:
                 continue
+    if found:
+        return max(found, key=lambda pair: pair[0])[1]
     raise ValueError(f"Could not parse JSON from model reply:\n{raw[:500]}")
