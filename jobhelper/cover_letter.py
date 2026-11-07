@@ -154,6 +154,17 @@ def fits_one_page(paragraphs: list[str]) -> bool:
     return sum(len(p.split()) for p in paragraphs) <= MAX_WORDS and sum(len(p) for p in paragraphs) <= MAX_CHARS
 
 
+def length_problems(paragraphs: list[str]) -> list[str]:
+    """The letter's length rule: at least MIN_WORDS, and on one page. A draft is sent back with it; a letter still
+    breaking it after the retry is not saved (#78)."""
+    words = sum(len(p.split()) for p in paragraphs)
+    if words < MIN_WORDS:
+        return [f"Too short: {words} words; write {MIN_WORDS}-{MAX_WORDS}."]
+    if not fits_one_page(paragraphs):
+        return [f"Too long for one page: {words} words; write {MIN_WORDS}-{MAX_WORDS}."]
+    return []
+
+
 def content_problems(paragraphs: list[str], unverified: list[str], first_name: str = "") -> list[str]:
     """Why this draft can't be used as is (empty list = fine)."""
     problems = []
@@ -162,11 +173,7 @@ def content_problems(paragraphs: list[str], unverified: list[str], first_name: s
                         "first person (I, my); never use the candidate's name or he/his in the body.")
     if len(paragraphs) != BODY_PARAGRAPHS:
         problems.append(f"The letter has {len(paragraphs)} paragraphs; it must have exactly {BODY_PARAGRAPHS}.")
-    words = sum(len(p.split()) for p in paragraphs)
-    if words < MIN_WORDS:
-        problems.append(f"Too short: {words} words; write {MIN_WORDS}-{MAX_WORDS}.")
-    if not fits_one_page(paragraphs):
-        problems.append(f"Too long for one page: {words} words; write {MIN_WORDS}-{MAX_WORDS}.")
+    problems += length_problems(paragraphs)
     check = ClaimCheck(unverified)
     for n, para in enumerate(paragraphs, 1):
         for kind, what, s in _issues(para, check):
@@ -404,7 +411,7 @@ def rewrite_paragraph(job: dict[str, Any], cv_text: str, paragraphs: list[str], 
     feedback, text = "", ""
     for attempt in range(2):
         data = llm.ask_json(REWRITE_PROMPT.format(
-            rules=rules_with_facts(cv_text), cv_text=cv_text[:12000], title=job.get("title", ""), company=job.get("company", ""),
+            rules=rules_with_facts(cv_text), cv_text=cv_text[:12000], **llm.posting_parts(job),
             description=llm.untrusted("posting", (job.get("description") or "").strip()[:3000] or "(No description was available.)"),
             letter=letter, number=index + 1, words=words, max_words=most,
             hint=hint_line, feedback=feedback), system=SYSTEM, tag="agent3_letters")
@@ -412,6 +419,8 @@ def rewrite_paragraph(job: dict[str, Any], cv_text: str, paragraphs: list[str], 
         problems = paragraph_problems(text, unverified, first_name) + _rewrite_length(text, most, paragraphs, index)
         figures = claims.unbacked_figures(text, *figure_sources(job, cv_text, own=(*paragraphs, hint)), brackets_ok=False)
         problems = figure_problems(figures, "It") + problems           # your letter and your hint are yours: their figures count
+        backed = cv_text + "\n" + config.experience_notes() + "\n" + "\n".join((*paragraphs, hint))   # your letter and hint are yours
+        problems += borrowed_problems([text], (job.get("description") or "").strip()[:POSTING_SHOWN], backed, "It") if text else []
         misplaced = misplaced_problems(text, employers, "It", job.get("company", "")) if text else []
         if not problems and (not misplaced or attempt == 1):
             return text                     # work at the wrong employer is sent back once, then shown when you save
@@ -430,6 +439,69 @@ def _rewrite_length(text: str, most: int, paragraphs: list[str], index: int) -> 
     if not fits_one_page(after) and sum(map(len, after)) > sum(map(len, paragraphs)):
         return ["With this paragraph the letter no longer fits on one page; write it shorter."]
     return []
+
+
+def borrowed_problems(paragraphs: list[str], description: str, backed: str, what: str = "The letter") -> list[str]:
+    """Terms of the posting stated as the candidate's own experience (borrowed_claims), in the words a draft is sent back
+    with: the letter and a rewritten paragraph say the same (#78)."""
+    return [f"{what} presents '{phrase}' as the candidate's own experience, but those are the posting's words: nothing in the "
+            "master CV speaks of it. Say what the candidate really did, and name this only as part of the role or as something "
+            "the candidate wants to work with." for phrase in borrowed_claims(paragraphs, description, backed)]
+
+
+class LetterNotes:
+    """What a finished letter is still named for in the job window, each in its own line: terms of the posting stated as
+    the candidate's experience (letter_check), figures no source gives, work at the wrong employer, an employer no source
+    names. One place for the letter as written, the letter as saved after an edit, and the plain letter (#78)."""
+
+    MOST = 8                       # names shown for each kind of note
+
+    def __init__(self, job: dict[str, Any], paragraphs: list[str], cv_text: str,
+                 employers: claims.EmployerCheck | None = None) -> None:
+        text = "\n".join(paragraphs)
+        employers = employers or claims.EmployerCheck(cv_text)
+        backed = cv_text + "\n" + config.experience_notes()          # everything the person wrote about their own work
+        description = (job.get("description") or "").strip()[:POSTING_SHOWN]
+        self._found = {
+            "letter_check": borrowed_claims(paragraphs, description, backed),
+            "letter_figures": claims.unbacked_figures(text, *figure_sources(job, cv_text), brackets_ok=False),
+            "letter_misplaced": employers.misplaced(text, job.get("company", "")),
+            "letter_invented": employers.invented(text, job.get("company", ""), job.get("description", "")),
+        }
+
+    def put_on(self, job: dict[str, Any]) -> None:
+        """Name what is found on the job; a kind with nothing found leaves no note (the one of an earlier version goes)."""
+        for key, found in self._found.items():
+            if found:
+                job[key] = found[:self.MOST]
+            else:
+                job.pop(key, None)
+
+
+_FRAME = re.compile(r"(?:dear\b|yours\b|kind regards|best regards|best wishes|regards\b|sincerely|best,|thank you)", re.IGNORECASE)
+FRAME_WORDS = 5                 # "Dear Ms Jana Novak," and "Yours sincerely," are frame; a longer line is checked
+PLAIN_WORDS = (150, 450)        # the plain letter's body: its prompt asks 250-320 words, and the check may cut some
+
+
+def checked_plain(letter: str, job: dict[str, Any], cv_text: str) -> str:
+    """The plain letter (written when there is no letter template) under the same claim rules as the template letter:
+    a sentence that admits a gap or claims what the CV does not show is cut, and what is left to name goes on the job
+    (LetterNotes). The greeting and the closing stay as they are (#78)."""
+    blocks = [b.strip() for b in re.split(r"\n\s*\n|\n", letter) if b.strip()]
+    # only a short line of greeting or closing is the frame: "Dear Hiring Team, I ran Kubernetes …" is checked as body
+    frame = lambda b: len(b.split()) <= FRAME_WORDS and not re.search(r"\d", b) and bool(_FRAME.match(b))  # noqa: E731
+    body = [b for b in blocks if not frame(b)]
+    checked = iter(enforce(body, unverified_terms(cv_text)))
+    out = [b if frame(b) else next(checked) for b in blocks]
+    kept = [b for b in out if b.strip() and not frame(b)]
+    words = sum(len(b.split()) for b in kept)
+    if not kept:
+        raise ValueError("Every sentence of the letter claimed what your CV does not show, so nothing was saved.")
+    if not PLAIN_WORDS[0] <= words <= PLAIN_WORDS[1]:
+        raise ValueError(f"The plain letter had {words} words after the check (it needs {PLAIN_WORDS[0]}-{PLAIN_WORDS[1]}), "
+                         "so nothing was saved.")
+    LetterNotes(job, kept, cv_text).put_on(job)
+    return "\n\n".join(b for b in out if b.strip())
 
 
 def invented_problems(text: str, employers: claims.EmployerCheck, company: str = "", posting: str = "") -> list[str]:
@@ -543,7 +615,7 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
     for _attempt in range(2):
         data = llm.ask_json(PROMPT.format(
             rules=rules_with_facts(cv_text), cv_text=cv_text[:12000], adapted=adapted_block,
-            title=job["title"], company=job["company"], location=job.get("location", ""),
+            **llm.posting_parts(job),
             description=llm.untrusted("posting", description), feedback=feedback, n=BODY_PARAGRAPHS,
             min_words=MIN_WORDS + 10, max_words=MAX_WORDS - 10,
         ), system=SYSTEM, tag="agent3_letters")
@@ -553,9 +625,7 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
         title_line = clean(str(data.get("title_line", "")))
         role_short = str(data.get("role_short", ""))
         problems = content_problems(paragraphs, unverified, first_name)
-        problems += [f"The letter presents '{phrase}' as the candidate's own experience, but those are the posting's words: nothing in the "
-                     "master CV speaks of it. Say what the candidate really did, and name this only as part of the role or as something "
-                     "the candidate wants to work with." for phrase in borrowed_claims(paragraphs, description, backed)]
+        problems += borrowed_problems(paragraphs, description, backed)
         problems += figure_problems(claims.unbacked_figures("\n".join(paragraphs), *figure_sources(job, cv_text), brackets_ok=False))
         problems += misplaced_problems("\n".join(paragraphs), employers, company=job.get("company", ""))
         problems += invented_problems("\n".join(paragraphs), employers, job.get("company", ""), job.get("description", ""))
@@ -567,32 +637,15 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
         raise ValueError(f"The model returned {len(paragraphs)} paragraphs instead of {BODY_PARAGRAPHS}.")
     if third_person(paragraphs, first_name):
         raise ValueError("The letter was written in the third person twice; nothing was saved.")
+    wrong = length_problems(paragraphs)           # sent back once already: never saved the wrong length (#78)
+    if wrong:
+        raise ValueError(f"Claude wrote the letter at the wrong length twice ({wrong[0]}). Nothing was saved.")
     paragraphs = enforce(paragraphs, unverified)
     if any(not p for p in paragraphs):
         raise ValueError("A paragraph was empty after removing unbacked claims.")
     # What is still stated as experience in the posting's words is not cut out (it can be fair wording for what the CV
-    # does show): it is put in front of the person, next to the same note about the adapted CV.
-    # work still given to the wrong employer is shown in its own line: the person knows where each piece of work was done
-    misplaced = employers.misplaced("\n".join(paragraphs), job.get("company", ""))
-    if misplaced:
-        job["letter_misplaced"] = misplaced[:8]
-    else:
-        job.pop("letter_misplaced", None)
-    invented = employers.invented("\n".join(paragraphs), job.get("company", ""), job.get("description", ""))   # as a save reads it
-    if invented:
-        job["letter_invented"] = invented[:8]
-    else:
-        job.pop("letter_invented", None)
-    left = borrowed_claims(paragraphs, description, backed)
-    if left:
-        job["letter_check"] = left[:8]
-    else:
-        job.pop("letter_check", None)
-    figures = claims.unbacked_figures("\n".join(paragraphs), *figure_sources(job, cv_text), brackets_ok=False)   # the final text
-    if figures:
-        job["letter_figures"] = figures[:8]
-    else:
-        job.pop("letter_figures", None)
+    # does show), nor is a figure, work at the wrong employer or an unknown employer: each is put in front of the person.
+    LetterNotes(job, paragraphs, cv_text, employers).put_on(job)
     # The line under the name says who writes: your own title, as your CV has it. Only a CV without such a line gets the role.
     title_line = own_title(cv_text) or title_line or re.sub(r"\s*\(.*?\)", "", job["title"]).strip()
 

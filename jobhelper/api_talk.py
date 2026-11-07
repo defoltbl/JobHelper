@@ -10,7 +10,7 @@ from datetime import date
 from typing import Any
 
 from . import (agent1_cv, agent3_letters, agent4_tracker, answer_memory, assistant, assistant_brain, assistant_notes, chrome,
-    config, db, details, form_answers, form_choices, form_fill, insights, planner, salary, store)
+    config, db, details, form_answers, form_choices, form_fill, insights, llm, planner, salary, store)
 from .api_base import _holding_jobs
 
 _PLAIN = re.compile(r"\b(?:but|skip|except|without|only|not|don't|do not|leave|and)\b")
@@ -223,6 +223,8 @@ class TalkService:
             return {"ok": False, "action": "say", "msg": f"No message from {job.get('company', '')} is filed under this application, so there is nothing to reply to. Scan your email first."}
         try:
             text = assistant_brain.reply(job, message, how, self._cv.name())
+        except llm.EmptyAnswer:
+            text = ""
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
             return {"ok": False, "action": "say", "msg": f"I could not ask Claude: {str(e) or type(e).__name__}"}
         if not text:
@@ -302,6 +304,8 @@ class TalkService:
     def _said(self, make) -> dict[str, Any]:
         try:
             said = make()
+        except llm.EmptyAnswer:
+            said = ""
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
             return {"ok": False, "action": "say", "msg": f"I could not ask Claude: {str(e) or type(e).__name__}"}
         return {"ok": True, "action": "say", "say": said} if said else {"ok": False, "action": "say", "msg": "Claude gave no answer. Ask again in other words."}

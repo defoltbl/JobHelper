@@ -2416,6 +2416,7 @@ Table 20.2 lists problems with searching and scoring.
 | The usage card says **0% left** | Claude refused a call for a used-up limit | Wait for the time shown, then select **refresh** |
 | "The letter could not be written: …" in a job's window, or "The CV could not be written: …" after you write the documents | Writing the document failed. The line says why, for example what Claude answered | Put right what the line names. Then select **Write CV and letter** or **Write what is missing** in the job's window |
 | "Claude did not answer within 5 minutes" | Claude or the connection stopped answering. The search ended, and what was done is kept. If the CV of a job was written before the stop, the app keeps it | Try again later. If a job still has no documents after two stops, open it and select **Write CV and letter** (or **Write what is missing**) |
+| "Claude is signed out, so the work stopped" | The Claude program is not signed in now. The search ended, and what was done is kept | Open **Account** and log in to Claude. Then start the search again |
 
 ### Replies
 

@@ -8,7 +8,7 @@ import os
 
 from datetime import date
 
-from . import agent3_letters, claims, config, cover_letter, pdf, store, vault
+from . import agent3_letters, config, cover_letter, pdf, store, vault
 from .api_base import _guarded, _stem
 
 
@@ -102,16 +102,11 @@ class LettersService:
         made = pdf.to_pdf(path)
         if made and pdf.page_count(made) > 1:
             warnings.append("The letter is now longer than one page.")
-        figures = claims.unbacked_figures("\n".join(texts), *cover_letter.figure_sources(j, self._cv.text()), brackets_ok=False)
-        employers = claims.EmployerCheck(self._cv.text())
-        misplaced = employers.misplaced("\n".join(texts), j.get("company", ""))
-        invented = employers.invented("\n".join(texts), j.get("company", ""), j.get("description", ""))
+        notes = cover_letter.LetterNotes(j, texts, self._cv.text())
 
         def saved(all_jobs, job):
             job["last_update"] = date.today().isoformat()
-            job["letter_figures"] = figures[:8]                 # what you just saved, so a figure you removed is no longer named
-            job["letter_misplaced"] = misplaced[:8]             # the same for work at the wrong employer
-            job["letter_invented"] = invented[:8]               # and for an employer no source names
+            notes.put_on(job)          # what you just saved: a figure, an employer or a term you took out is no longer named
         self._editor.change(job_id, saved, render=False)
         return {"ok": True, "warnings": warnings, "words": sum(len(t.split()) for t in texts)}
 

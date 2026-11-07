@@ -284,7 +284,7 @@ def test_saving_the_letter_names_only_the_figures_it_still_has(api):
     assert api.save_letter("lead", invented)["ok"] is True
     assert store.find(store.load_jobs(), "lead")["letter_figures"] == ["37"]
     assert api.save_letter("lead", PARAS)["ok"] is True                                   # the sentence is gone: so is the line
-    assert store.find(store.load_jobs(), "lead")["letter_figures"] == []
+    assert store.find(store.load_jobs(), "lead").get("letter_figures", []) == []
 
 
 def test_saving_the_letter_names_work_at_the_wrong_employer_until_it_is_gone(api, monkeypatch):
@@ -297,10 +297,10 @@ def test_saving_the_letter_names_work_at_the_wrong_employer_until_it_is_gone(api
     assert api.save_letter("lead", moved)["ok"] is True
     assert store.find(store.load_jobs(), "lead")["letter_misplaced"] == ["'REST', 'APIs' at Fabrikam Labs"]
     assert api.save_letter("lead", PARAS)["ok"] is True                                   # corrected: the line goes
-    assert store.find(store.load_jobs(), "lead")["letter_misplaced"] == []
+    assert store.find(store.load_jobs(), "lead").get("letter_misplaced", []) == []
     store.save_jobs([dict(_lead_with_docs(), company="Fabrikam Labs")])                    # written to them: no note
     assert api.save_letter("lead", moved)["ok"] is True
-    assert store.find(store.load_jobs(), "lead")["letter_misplaced"] == []
+    assert store.find(store.load_jobs(), "lead").get("letter_misplaced", []) == []
 
 
 def test_saving_the_letter_names_an_employer_no_source_gives_until_it_is_gone(api, monkeypatch):
@@ -312,12 +312,23 @@ def test_saving_the_letter_names_an_employer_no_source_gives_until_it_is_gone(ap
     assert store.find(store.load_jobs(), "lead")["letter_invented"] == ["Contoso Labs"]
     assert api.job_detail("lead")["letter_invented"] == ["Contoso Labs"]
     assert api.save_letter("lead", PARAS)["ok"] is True                                   # corrected: the line goes
-    assert store.find(store.load_jobs(), "lead")["letter_invented"] == []
+    assert store.find(store.load_jobs(), "lead").get("letter_invented", []) == []
 
 
 def test_the_detail_names_no_invented_employer_without_a_letter(api):
     store.save_jobs([dict(_lead_with_docs(), cover_letter_file="", letter_invented=["Contoso Labs"])])
     assert api.job_detail("lead")["letter_invented"] == [], "an old note of a letter that is gone is not shown"
+
+
+def test_saving_the_letter_names_the_posting_s_words_until_they_are_gone(api):
+    """#78: a save named figures and employers again, but a term of the posting stated as yours stayed as the first draft left it."""
+    store.save_jobs([dict(_lead_with_docs(), description="You will run quarterly zebra migrations for our platform.")])
+    borrowed = list(PARAS)
+    borrowed[1] = PARAS[1] + " I ran zebra migrations every quarter."
+    assert api.save_letter("lead", borrowed)["ok"] is True
+    assert store.find(store.load_jobs(), "lead")["letter_check"] == ["zebra migrations"]
+    assert api.save_letter("lead", PARAS)["ok"] is True
+    assert "letter_check" not in store.find(store.load_jobs(), "lead")
 
 
 def test_a_rewrite_may_use_your_figures_but_not_invent_one(api, monkeypatch):

@@ -206,6 +206,13 @@ def _save_tailored_cv(job: dict[str, Any], new_profile: str, template_path=None)
     return md_path.name
 
 
+def posting_fields(job: dict[str, Any], profile: str, limit: int) -> dict[str, str]:
+    """A posting as every prompt here takes it: its text inside <posting> tags, as data (llm.POSTING_RULE) – also for a
+    single job's documents, whose posting went in bare before (#78)."""
+    return dict(profile=profile, **llm.posting_parts(job),
+                description=llm.untrusted("posting", (job.get("description") or "").strip()[:limit] or NO_DESCRIPTION))
+
+
 def _make_tailored_cv(job: dict[str, Any], cv_text: str, cv_path, fields: dict[str, Any]) -> str:
     """Create the adapted CV for one job and return its file name ('' if none).
 
@@ -217,9 +224,13 @@ def _make_tailored_cv(job: dict[str, Any], cv_text: str, cv_path, fields: dict[s
     if cv_path and str(cv_path).lower().endswith(".docx") and cv_tailor.adaptable(cv_path):
         name = cv_tailor.tailor(job, cv_text, cv_path)
     else:
-        new_profile = llm.ask(TAILOR_PROFILE_PROMPT.format(cv_text=cv_text[:12000], **fields),
-                              system=TAILOR_PROFILE_SYSTEM, tag="agent3_letters").strip()
-        name = _save_tailored_cv(job, new_profile, template_path=None) if new_profile else ""
+        new_profile = llm.document(llm.ask(TAILOR_PROFILE_PROMPT.format(cv_text=cv_text[:12000], **fields),
+                                           system=TAILOR_PROFILE_SYSTEM, tag="agent3_letters"))
+        if cv_text.strip():               # the Word CV's profile rule: nothing the CV does not show (#78)
+            new_profile = cv_tailor.enforce(new_profile, [], cv_tailor.unverified_terms(cv_text), cv_text)[0]
+            if not new_profile.strip():
+                raise ValueError("Every sentence of the profile claimed what your CV does not show, so nothing was saved.")
+        name = _save_tailored_cv(job, new_profile, template_path=None)
     if name and previous and previous != name:      # the superseded file the app wrote: kept in the backup, then removed
         for old in (config.TAILORED_CV_DIR / previous, (config.TAILORED_CV_DIR / previous).with_suffix(".pdf")):
             _retire(old)
@@ -285,8 +296,10 @@ def _make_letter(job: dict[str, Any], cv_text: str, cv_path, fields: dict[str, A
     if cv_text.strip() and config.LETTER_TEMPLATE.exists():
         name = cover_letter.write(job, cv_text, cv_path)
     else:
-        letter = llm.ask(LETTER_PROMPT.format(**fields), system=LETTER_SYSTEM, tag="agent3_letters").strip()
-        name = _save_letter(job, letter, cv_text=cv_text) if letter else ""
+        letter = llm.document(llm.ask(LETTER_PROMPT.format(**fields), system=LETTER_SYSTEM, tag="agent3_letters"))
+        if cv_text.strip():               # the plain letter gets the template letter's claim rules too (#78)
+            letter = cover_letter.checked_plain(letter, job, cv_text)
+        name = _save_letter(job, letter, cv_text=cv_text)
     if name and previous and previous != name:       # drop the superseded generated files
         base = config.LETTERS_DIR / previous
         for old in {base, base.with_suffix(".docx"), base.with_suffix(".md"), base.with_suffix(".pdf")}:
@@ -401,8 +414,7 @@ class Scorer:
 
     def fields(self, job: dict[str, Any], limit: int = ONE_TEXT) -> dict[str, str]:
         """A posting as the prompts take it."""
-        return dict(profile=self.blurb, title=job.get("title", ""), company=job.get("company", ""), location=job.get("location", ""),
-                    description=llm.untrusted("posting", (job.get("description") or "").strip()[:limit] or NO_DESCRIPTION))
+        return posting_fields(job, self.blurb, limit)
 
     def score(self, chunk: list[dict[str, Any]], record) -> list[dict[str, Any]]:
         """Score these postings; returns the ones that got no usable score."""
@@ -521,11 +533,8 @@ def generate_for(job: dict[str, Any], cv_text: str = "", cv_path=None,
     """Generate a cover letter and/or tailored CV for ONE job on demand
     (ignores scoring/skip rules). Used by `status.py retailor`."""
     from datetime import date as _date
-    description = (job.get("description") or "").strip()[:Scorer.ONE_TEXT] or NO_DESCRIPTION
     # the profile here is the start of the CV itself (a single job's documents need no CV analysis)
-    fields = dict(title=job["title"], company=job["company"],
-                  location=job.get("location", ""), description=description,
-                  profile=(cv_text[:1500] if cv_text else "(see attached CV)"))
+    fields = posting_fields(job, cv_text[:1500] if cv_text else "(see attached CV)", Scorer.ONE_TEXT)
     done = {"letter": False, "cv": False}
 
     # The CV comes first: the letter is written to match the adapted CV.
@@ -580,9 +589,9 @@ def failed_note(what: str, why) -> str:
 
 
 def _give_back_try(job, stop):
-    """Claude's limit is no fault of the job, so it keeps its try; a call that hangs every time uses its tries up,
+    """Claude's limit (or a signed-out Claude) is no fault of the job, so it keeps its try; a call that hangs every time uses its tries up,
     or it would hold every run for CALL_TIMEOUT and keep the jobs after it waiting."""
-    if isinstance(stop, llm.LimitReached):
+    if isinstance(stop, (llm.LimitReached, llm.SignedOut)):        # signed out: no fault of the job either (#78)
         job["doc_attempts"] -= 1
 
 
