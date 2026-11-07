@@ -722,6 +722,8 @@ Dialog {
                     optDialog.optErr = optDialog.firstProblem();
                     if (optDialog.optErr !== "") return;
                     var all = optDialog.collect();
+                    var sitesBad = bridge.companiesProblem(all.companies);      // before anything is saved: all or nothing
+                    if (sitesBad !== "") { optDialog.optErr = sitesBad; return; }
                     var saved = bridge.saveOptions(all.options);
                     if (!(saved && saved.ok)) { optDialog.optErr = (saved && saved.msg) || "The Options could not be saved."; return; }
                     var sites = bridge.saveCompanies(all.companies);

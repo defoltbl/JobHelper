@@ -329,8 +329,21 @@ class OptionsService:
             trouble.note("reading the career-site list", e)
         return []
 
+    def companies_problem(self, companies) -> str:
+        """'' or why the career sites would not all be saved, as save_companies would say it, with nothing written: Options
+        asks it before it saves anything, so a refused site leaves the Options unsaved too (#67)."""
+        return self._companies_checked(companies)[1]
+
     def save_companies(self, companies):
         config.ensure_dirs()
+        clean, said = self._companies_checked(companies)
+        (config.DATA_DIR / "companies.json").write_text(
+            json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
+        integrity.approve(["companies"])          # changed through the app: trusted
+        return {"ok": False, "count": len(clean), "msg": said} if said else {"ok": True, "count": len(clean)}
+
+    def _companies_checked(self, companies) -> tuple[list[dict], str]:
+        """(the career sites that would be kept, '' or what would be left out and why)."""
         # The token becomes part of an address the app asks (https://<token>.recruitee.com …): only a plain slug is kept,
         # so nothing typed or pasted here can send a request anywhere else. The window checks the same as you type.
         given = companies if isinstance(companies, (list, tuple)) else []
@@ -342,9 +355,6 @@ class OptionsService:
                 for c in given if usable(c)]
         wrong = [c for c in given if not usable(c)]
         clean = kept[:self.MAX_COMPANIES]
-        (config.DATA_DIR / "companies.json").write_text(
-            json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
-        integrity.approve(["companies"])          # changed through the app: trusted
         # never "saved" while a company was left out without a word: each one left out is named
         said = []
         if wrong:
@@ -353,4 +363,4 @@ class OptionsService:
             said.append(f"Not saved: {names}{more}. Its short name or site is not one the app can ask. Remove it, then add it again.")
         if len(kept) > self.MAX_COMPANIES:
             said.append(f"The list holds up to {self.MAX_COMPANIES} career sites; the last {len(kept) - self.MAX_COMPANIES} were not saved.")
-        return {"ok": False, "count": len(clean), "msg": " ".join(said)} if said else {"ok": True, "count": len(clean)}
+        return clean, " ".join(said)

@@ -1767,3 +1767,69 @@ def test_a_field_at_its_limit_says_so(ui):
         ui.js("payRole.text = ''; confirmClose = true; close()", about)
         _until_closed(ui, "aboutDialog")
     assert ui.warnings == []
+
+
+def test_options_save_nothing_when_a_career_site_is_refused(ui, monkeypatch):
+    """#67: Options saved the options before the career sites; a refused site left the options saved anyway."""
+    saved = []
+    monkeypatch.setattr(ui_api.Api, "save_options", lambda self, o: saved.append(o) or {"ok": True})
+    monkeypatch.setattr(ui_api.Api, "companies_problem", lambda self, c: "Not saved: Bad. Its short name or site is not one the app can ask.")
+    dialog = ui.find("optDialog")
+    _open(ui, dialog, 450)
+    try:
+        ui.js("cityCombo.editText = 'Prague'", dialog)
+        ui.js("optSaveBtn.clicked()", dialog)
+        assert saved == [] and ui.js("optErr", dialog).startswith("Not saved: Bad."), ui.js("optErr", dialog)
+        assert dialog.property("opened") is True
+    finally:
+        ui.js("optErr = ''; confirmClose = true; close()", dialog)
+        _until_closed(ui, dialog)
+    assert ui.warnings == []
+
+
+def test_about_you_says_the_size_of_the_notes_once_and_a_put_right_line_goes(ui):
+    """#67: Save said "too long together" twice, and its line about a red figure stayed after the figure was put right."""
+    about = ui.find("aboutDialog")
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    try:
+        most = ui.js("aboutDialog.notesMax", about)
+        ui.js(f"generalField.text = '{'x' * (most + 5)}'", about)
+        ui.js("aboutDialog.save()", about)
+        err = ui.js("aboutDialog.err", about)
+        assert "too long together" in err and "characters too long" not in err, "the footer points to the count, it does not repeat it"
+        assert "5 characters too long together" in ui.find("notesCount").property("text"), "the count says the number"
+        ui.js("generalField.text = ''", about)
+        ui.js("payModel.append({ role: 'support', amount: 0 })", about)          # a line with no figure: refused by its rule
+        ui.js("aboutDialog.save()", about)
+        assert "needs a change" in ui.js("aboutDialog.err", about)
+        ui.js("payModel.setProperty(payModel.count - 1, 'amount', 30000)", about)  # put right where it stands
+        _until_true(ui, lambda: ui.js("aboutDialog.err", about) == "")
+        ui.js("payModel.setProperty(payModel.count - 1, 'amount', 0)", about)
+        ui.js("aboutDialog.save()", about)                                       # refused again, then the window closes
+        assert "needs a change" in ui.js("aboutDialog.err", about)
+        ui.js("payModel.clear(); confirmClose = true; close()", about)
+        _until_closed(ui, "aboutDialog")
+        ui.js("aboutDialog.show()")
+        _until_open(ui, "aboutDialog")
+        ui.js("generalField.text = 'I wrote the tests.'", about)               # an edit on a fresh look: no old fault said
+        assert ui.js("aboutDialog.err", about) == ""
+    finally:
+        ui.js("payModel.clear(); generalField.text = ''; aboutDialog.err = ''; confirmClose = true; close()", about)
+        _until_closed(ui, "aboutDialog")
+    assert ui.warnings == []
+
+
+def test_the_master_cv_button_waits_while_a_cv_is_read(ui):
+    """#67: a CV is read in the background; meanwhile its button says so and a second choice is not taken."""
+    try:
+        ui.js("welcome.cvBusy = true")
+        button = [b for b in ui.seen("welcome") if b.property("text") == "Reading…"]
+        assert button and button[0].property("enabled") is False
+        ui.js("win.applyCv('file:///nowhere/other.docx')")
+        assert ui.js("ticker.text").startswith("Still reading the CV you chose"), "a second choice is not taken"
+        ui.js("win.cvSet({ ok: false, msg: 'That file is empty. Choose the file of your CV.' })")
+        assert ui.js("welcome.cvBusy") is False and ui.js("welcome.cvErr").startswith("That file is empty")
+    finally:
+        ui.js("welcome.cvBusy = false; welcome.cvErr = ''")
+    assert ui.warnings == []

@@ -445,7 +445,7 @@ class RunSlots:
             self._save_partial(jobs)                             # statuses changed by the replies read so far are kept
             if not email_client.network_fault(e):
                 trouble.note("the email scan", type(e).__name__)  # a fault of the app or the disk: its kind written down; a network fault is said
-            said = email_client.scan_problem(e, config.imap_host(1))
+            said = email_client.scan_problem(e, email_client.mail_host_of(e))
             self.runFinished.emit("scan", said if email_client.untrusted(e) else "Email scan failed. " + said)
         finally:
             self._set_running(False)

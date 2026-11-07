@@ -181,6 +181,24 @@ def network_fault(error: BaseException) -> bool:
         isinstance(error, OSError) and error.errno in (errno.ENETUNREACH, errno.EHOSTUNREACH, errno.ENETDOWN, errno.EHOSTDOWN))
 
 
+def _read_box(box: dict, number: int, since: str, all_folders: bool) -> "Fetched":
+    """One mailbox read; an error that leaves it carries the server it was about (`mail_host`), so what the scan says
+    names that mailbox's server, not always the first one's (#67)."""
+    try:
+        return read_mailbox(box["user"], box["password"], since, all_folders, host=box.get("host", ""))
+    except Exception as e:
+        try:
+            e.mail_host = box.get("host", "") or config.imap_host(number)
+        except AttributeError:                  # an error that takes no attribute: the caller falls back to the first server
+            pass
+        raise
+
+
+def mail_host_of(error: BaseException) -> str:
+    """The server of the mailbox an error of a scan came from (the first mailbox's when it is not known)."""
+    return str(getattr(error, "mail_host", "") or config.imap_host(1))
+
+
 def scan_problem(error: BaseException, host: str) -> str:
     """What to say when an email scan fails: the cause in words, never "check your connection" for every fault."""
     import socket
@@ -404,12 +422,12 @@ def fetch_recent(lookback_days: int | None = None, all_folders: bool | None = No
     since = imap_date(datetime.now() - timedelta(days=days))
     if all_folders is None:
         all_folders = config.ui_settings().get("scan_all_folders") is True
-    main = read_mailbox(boxes[0]["user"], boxes[0]["password"], since, all_folders, host=boxes[0].get("host", ""))
+    main = _read_box(boxes[0], 1, since, all_folders)
     out, warnings = list(main.messages), list(main.warnings)
     seen = {m["msg_id"] for m in out}
     for box in boxes[1:]:
         try:
-            extra = read_mailbox(box["user"], box["password"], since, all_folders, host=box.get("host", ""))
+            extra = _read_box(box, 2, since, all_folders)
         except imaplib.IMAP4.error:
             warnings.append(f"Couldn't sign in to {box['user']}: check its password in the Account card.")
             continue

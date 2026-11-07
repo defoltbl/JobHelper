@@ -226,7 +226,8 @@ copies. To get PDF copies, install LibreOffice from libreoffice.org, then select
 
 1. On the **Master CV** row, select the **Change…** button.
 2. Pick your CV file.
-3. The row shows the file name and turns green.
+3. The row shows the file name and turns green. While the app reads the file, the button says
+   **Reading…**.
 
 If the file is of another type, empty, damaged, larger than 20 MB or a scan without text, the
 row says so in red. The app then keeps
@@ -2025,7 +2026,8 @@ Some companies publish their openings on their own career site. To read one dire
    the system. The short name has only letters, digits, - and _.
 3. Select **Add**.
 
-If a career site cannot be saved, **Save** says so and Options stays open.
+If a career site cannot be saved, **Save** says so and Options stays open. Then nothing in Options
+is saved, so you can put the site right and save once more.
 
 ### Matching and follow-up
 

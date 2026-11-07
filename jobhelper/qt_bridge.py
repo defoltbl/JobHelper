@@ -53,6 +53,7 @@ class Bridge(RunSlots, JobSlots, QObject):
     progressChanged = Signal(str, int, int)   # agent key, done, total (within its stage)
     usageReady = Signal()                 # fresh usage numbers are available
     connectionsReady = Signal("QVariantMap")   # result of checkConnections()
+    cvSet = Signal("QVariantMap")              # a chosen master CV was checked and set (or why not)
     limitChanged = Signal("QVariantMap")       # paused on Claude's limit / may resume / resumed
     paragraphReady = Signal("QVariantMap")     # a rewritten letter paragraph (or why it failed)
     prepReady = Signal("QVariantMap")          # interview preparation finished (or why it failed)
@@ -76,6 +77,7 @@ class Bridge(RunSlots, JobSlots, QObject):
         self._running = False
         self._sign_in = None                    # (when, answer) of the last signed-in connection check, for run starts
         self._sign_ins = 0                      # how many times Sign in was pressed: a check from before one is not kept
+        self._cv_choosing = threading.Lock()    # one master CV is read and set at a time
         self._stop = threading.Event()
         self._resume = threading.Event()
         self._paused = False
@@ -229,15 +231,26 @@ class Bridge(RunSlots, JobSlots, QObject):
     def companies(self):
         return self._api.companies()
 
-    @Slot("QVariantList", result="QVariantMap")
-    def saveCompanies(self, companies):
+    @staticmethod
+    def _company_rows(companies):
+        """The window's list of career sites as plain dicts; a row that cannot be read is kept as a name, so the check
+        names it as not saved instead of dropping it silently."""
         clean = []
         for c in (companies or []):
             try:
                 clean.append(c if isinstance(c, dict) else {"name": c["name"], "ats": c["ats"], "token": c["token"]})
             except Exception:  # noqa: BLE001 - a row that cannot be read is named as not saved, never dropped silently
                 clean.append({"name": str(c)[:40]})
-        return self._api.save_companies(clean)
+        return clean
+
+    @Slot("QVariantList", result="QVariantMap")
+    def saveCompanies(self, companies):
+        return self._api.save_companies(self._company_rows(companies))
+
+    @Slot("QVariantList", result=str)
+    def companiesProblem(self, companies):
+        """'' or why the career sites would not all be saved, with nothing written (#67: Options asks before it saves)."""
+        return self._api.companies_problem(self._company_rows(companies))
 
     # ── actions ─────────────────────────────────────────────────
     @Slot(str, result=bool)
@@ -257,9 +270,32 @@ class Bridge(RunSlots, JobSlots, QObject):
         return self._api.open_url(job_id)
 
     # ── connection management (write to the right places) ───────
-    @Slot(str, result="QVariantMap")
-    def setMasterCV(self, path):
-        """Copy a chosen CV file into data/cv/ as the master CV."""
+    @Slot(str, result=bool)
+    def chooseMasterCV(self, path):
+        """Make a chosen file the master CV off the window's thread: reading a large PDF to check it can take seconds
+        (#67). The answer arrives as cvSet. False, and nothing started, while a CV chosen before is still being read:
+        two at once would leave the master to whichever ends last."""
+        if not self._cv_choosing.acquire(blocking=False):
+            return False
+
+        def work():                          # an answer always comes, and the lock always goes, whatever happens
+            result = {"ok": False, "msg": "Couldn't set that file as your CV."}
+            try:
+                result = self._set_master_cv(path)
+            finally:
+                try:
+                    self._post("cvSet", result)
+                finally:
+                    self._cv_choosing.release()
+        try:
+            threading.Thread(target=work, daemon=True).start()
+        except BaseException:
+            self._cv_choosing.release()      # no thread: nothing is reading, so the next choice is taken
+            raise
+        return True
+
+    def _set_master_cv(self, path):
+        """Copy a chosen CV file into data/cv/ as the master CV, after checking it can be read ({ok, name} or {ok, msg})."""
         try:
             p = path
             if p.startswith("file://"):
@@ -282,7 +318,8 @@ class Bridge(RunSlots, JobSlots, QObject):
             agent1_cv.remember_cv(dest.name)      # this one is the master, even if another CV in the folder sorts before it
             integrity.approve(["master_cv"])      # chosen through the app: trusted
             return {"ok": True, "name": src.name}
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001 - said in words; its kind goes to the log of problems (it runs in a thread)
+            trouble.note("choosing the master CV", type(e).__name__)
             return {"ok": False, "msg": "Couldn't set that file as your CV."}
 
     @Slot(result="QVariantMap")

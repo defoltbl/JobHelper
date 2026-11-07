@@ -393,26 +393,26 @@ def _cv_file(path, words=CV_WORDS):
 
 def test_set_master_cv_copies_the_file(bridge, tmp_path):
     src = _cv_file(tmp_path / "outside" / "My CV.docx")
-    result = bridge.setMasterCV("file://" + str(src).replace(" ", "%20"))
+    result = bridge._set_master_cv("file://" + str(src).replace(" ", "%20"))
     assert result == {"ok": True, "name": "My CV.docx"}
     assert (config.CV_DIR / "My CV.docx").read_bytes() == src.read_bytes()
-    assert bridge.setMasterCV(str(config.CV_DIR / "My CV.docx")) == {"ok": True, "name": "My CV.docx"}
+    assert bridge._set_master_cv(str(config.CV_DIR / "My CV.docx")) == {"ok": True, "name": "My CV.docx"}
 
 
 def test_a_damaged_or_empty_cv_is_refused_and_an_old_one_is_kept(bridge, tmp_path):
     """Hands-on check F1: an 8-byte broken.docx and an empty PDF were taken as your CV with a green tick."""
     broken = tmp_path / "broken.docx"
     broken.write_bytes(b"not docx")
-    assert "cannot be read" in bridge.setMasterCV(str(broken))["msg"]
+    assert "cannot be read" in bridge._set_master_cv(str(broken))["msg"]
     empty = tmp_path / "empty.pdf"
     empty.write_bytes(b"")
-    assert "empty" in bridge.setMasterCV(str(empty))["msg"]
+    assert "empty" in bridge._set_master_cv(str(empty))["msg"]
     thin = _cv_file(tmp_path / "thin.docx", "Mara")
-    assert "almost no text" in bridge.setMasterCV(str(thin))["msg"]
+    assert "almost no text" in bridge._set_master_cv(str(thin))["msg"]
     first = _cv_file(tmp_path / "a" / "Mara_CV.docx")
-    assert bridge.setMasterCV(str(first))["ok"] is True
+    assert bridge._set_master_cv(str(first))["ok"] is True
     second = _cv_file(tmp_path / "b" / "Mara_CV.docx", CV_WORDS + " Also speaks Czech.")
-    assert bridge.setMasterCV(str(second))["ok"] is True
+    assert bridge._set_master_cv(str(second))["ok"] is True
     kept = list((vault.backups_dir() / "cv_versions").glob("*"))
     assert kept, "the CV of the same name was kept before it was replaced"
 
@@ -420,8 +420,8 @@ def test_a_damaged_or_empty_cv_is_refused_and_an_old_one_is_kept(bridge, tmp_pat
 def test_set_master_cv_rejects_bad_files(bridge, tmp_path):
     picture = tmp_path / "photo.png"
     picture.write_bytes(b"x")
-    assert bridge.setMasterCV(str(picture))["ok"] is False
-    missing = bridge.setMasterCV(str(tmp_path / "nope.docx"))
+    assert bridge._set_master_cv(str(picture))["ok"] is False
+    missing = bridge._set_master_cv(str(tmp_path / "nope.docx"))
     assert missing == {"ok": False, "msg": "File not found."}
 
 
@@ -471,7 +471,7 @@ def test_run_search_refuses_files_changed_outside_the_app(bridge, monkeypatch):
 def test_choosing_a_cv_in_the_app_counts_as_approved(bridge, tmp_path):
     integrity.approve()
     src = _cv_file(tmp_path / "outside" / "cv.docx")
-    assert bridge.setMasterCV(str(src))["ok"] is True
+    assert bridge._set_master_cv(str(src))["ok"] is True
     assert integrity.problems() == []
 
 
@@ -1117,3 +1117,65 @@ def test_a_sign_in_answer_that_is_not_signed_in_still_asks_claude_and_checks_the
     assert len(asked) == 3
     conn = api.connections(sign_in={"claude": True, "plan": "pro", "claude_email": "me@example.com"})
     assert len(asked) == 3 and conn["changed_files"] == ["CV rules"] and "cv" in conn, "only the Claude question is saved"
+
+
+def test_a_chosen_cv_is_read_off_the_window_s_thread(bridge, monkeypatch, tmp_path):
+    """#67: choosing a master CV read a PDF of up to 20 MB on the window's thread, so the window stopped."""
+    started, answers = [], []
+
+    class Later:                                              # the work runs when the test says, not inside the slot
+        def __init__(self, target=None, args=(), daemon=None):
+            self.target = target
+
+        def start(self):
+            started.append(self.target)
+    monkeypatch.setattr(qt_bridge.threading, "Thread", Later)
+    monkeypatch.setattr(qt_bridge.Bridge, "_post", lambda self, name, value: answers.append((name, value)))
+    assert bridge.chooseMasterCV(str(tmp_path / "nope.docx")) is True
+    assert answers == [] and len(started) == 1, "the slot returns at once"
+    assert bridge.chooseMasterCV(str(tmp_path / "other.docx")) is False and len(started) == 1, "one CV at a time"
+    started[0]()
+    assert answers[0][0] == "cvSet" and answers[0][1]["ok"] is False
+    assert bridge.chooseMasterCV(str(tmp_path / "other.docx")) is True, "free again once the first is done"
+
+
+def test_a_scan_that_fails_names_the_server_of_its_own_mailbox(bridge, monkeypatch):
+    """#67: the window named the first mailbox's server also when the second one failed."""
+    import socket
+    from jobhelper import email_client
+    monkeypatch.setattr(config, "imap_host", lambda box=1: "imap.first.example" if box == 1 else "imap.second.example")
+    monkeypatch.setattr(email_client, "read_mailbox", lambda *a, **k: (_ for _ in ()).throw(socket.gaierror("no such name")))
+    with pytest.raises(socket.gaierror) as failed:
+        email_client._read_box({"user": "two@example.org", "password": "x", "host": ""}, 2, "01-Jan-2026", False)
+    assert email_client.mail_host_of(failed.value) == "imap.second.example"
+    assert "imap.second.example" in email_client.scan_problem(failed.value, email_client.mail_host_of(failed.value))
+    assert email_client.mail_host_of(ValueError("x")) == "imap.first.example", "not known: the first mailbox's"
+
+
+def test_a_cv_choice_whose_thread_cannot_start_leaves_the_next_one_free(bridge, monkeypatch, tmp_path):
+    class Refused:
+        def __init__(self, target=None, args=(), daemon=None):
+            pass
+
+        def start(self):
+            raise RuntimeError("can't start new thread")
+    monkeypatch.setattr(qt_bridge.threading, "Thread", Refused)
+    with pytest.raises(RuntimeError):
+        bridge.chooseMasterCV(str(tmp_path / "a.docx"))
+    started = []
+
+    class Later:
+        def __init__(self, target=None, args=(), daemon=None):
+            started.append(target)
+
+        def start(self):
+            pass
+    monkeypatch.setattr(qt_bridge.threading, "Thread", Later)
+    assert bridge.chooseMasterCV(str(tmp_path / "b.docx")) is True, "the lock was given back"
+    answers = []
+    monkeypatch.setattr(qt_bridge.Bridge, "_set_master_cv", lambda self, path: (_ for _ in ()).throw(KeyboardInterrupt()))
+    monkeypatch.setattr(qt_bridge.Bridge, "_post", lambda self, name, value: answers.append((name, value)))
+    with pytest.raises(KeyboardInterrupt):
+        started[0]()
+    assert answers and answers[0][0] == "cvSet" and answers[0][1]["ok"] is False, "an answer comes even when the work dies"
+    assert bridge.chooseMasterCV(str(tmp_path / "c.docx")) is True

@@ -233,6 +233,7 @@ ApplicationWindow {
             win.connChecked = true;
         }
         function onUsageReady() { win.usageData = bridge.usageInfo(); win.usageBusy = false; bridge.refreshWidget(); }   // the widget too, at once
+        function onCvSet(r) { win.cvSet(r); }
     }
     // When a limit's reset time passes, the card asks again (one small question to Claude): what is used after a reset is
     // not known, because Claude Code shares the subscription. While the app window is shown it looks every minute and
@@ -432,8 +433,12 @@ ApplicationWindow {
     // Covers the app at launch (splash → card) and reopens from the account
     // chip. Sign-in itself belongs to the Claude CLI; this only starts it and
     // reacts when the connection checks turn green.
-    function applyCv(url) {
-        var r = bridge.setMasterCV(url);
+    function applyCv(url) {                // read and checked off the window's thread: the answer comes as onCvSet
+        if (welcome.cvBusy || !bridge.chooseMasterCV(url)) { ticker.text = "Still reading the CV you chose. Choose again when it is done."; return; }
+        welcome.cvErr = ""; welcome.cvBusy = true; ticker.text = "Reading your CV…";
+    }
+    function cvSet(r) {
+        welcome.cvBusy = false;
         welcome.cvErr = (r && r.ok) ? "" : (r && r.msg ? r.msg : "Couldn't set that file as your CV.");
         ticker.text = (r && r.ok) ? ("✓ Master CV updated – " + r.name) : welcome.cvErr;
         bridge.checkConnections();

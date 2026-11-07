@@ -128,6 +128,7 @@ class Api:
     save_options = _Via("_settings")
     companies = _Via("_settings")
     save_companies = _Via("_settings")
+    companies_problem = _Via("_settings")
 
     # ── The lists, one job, hand edits, small actions (JobsService) ──
     show_in_folder = _Via("_joblist")
