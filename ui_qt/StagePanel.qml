@@ -59,7 +59,14 @@ Rectangle {
                 implicitHeight: 34; implicitWidth: resumeRow.implicitWidth + 28; radius: 10
                 // a darker blue than the robots' own: the white label needs it to read
                 color: win.canResume ? (resumeMa.containsMouse ? Qt.lighter(theme.resume, 1.12) : theme.resume) : theme.inset
-                border.width: 1; border.color: win.canResume ? win.clearOf(theme.line) : theme.line
+                // reached with Tab and pressed with Space or Return like every button, with the same outline (#79)
+                activeFocusOnTab: win.canResume                               // Tab passes it while it cannot be used
+                Keys.onSpacePressed: if (win.canResume) bridge.resumeRun()
+                Keys.onReturnPressed: if (win.canResume) bridge.resumeRun()
+                Keys.onEnterPressed: if (win.canResume) bridge.resumeRun()
+                opacity: win.canResume ? 1 : theme.disabledOpacity           // one paleness for every button that cannot be used now
+                border.width: activeFocus ? 2 : 1
+                border.color: activeFocus ? theme.accent : (win.canResume ? win.clearOf(theme.line) : theme.line)
                 scale: resumeMa.pressed && win.canResume ? 0.96 : 1
                 Behavior on color { ColorAnimation { duration: win.motion } }
                 Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }

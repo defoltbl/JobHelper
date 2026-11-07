@@ -348,7 +348,7 @@ Dialog {
                         ColumnLayout { Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 10; Layout.bottomMargin: 10; spacing: 6
                             Text { text: "You can start"; color: theme.ink; font.pixelSize: 13 }
                             Text { objectName: "usesStart"; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
-                                text: "A date (2026-11-01) or a time from now (two weeks, one month). " + ((aboutDialog.info.uses || {}).start || "") }
+                                text: (aboutDialog.info.date_example ? "A date (" + aboutDialog.info.date_example + ")" : "A date") + " or a time from now (two weeks, one month). " + ((aboutDialog.info.uses || {}).start || "") }
                             TextField { id: startField; objectName: "startField"; Layout.fillWidth: true; implicitHeight: 30
                                 placeholderText: "e.g. within two weeks"; placeholderTextColor: theme.faint
                                 color: theme.ink; font.pixelSize: 12; selectByMouse: true; maximumLength: win.limits.options.about_start

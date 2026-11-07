@@ -7,6 +7,9 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Keyboard:** the **Resume** button is reached with Tab and pressed with Space or Return, and a switch shows an outline when Tab reaches it. **Resume** looks as pale as any other button that cannot be used yet.
+- **About you:** the example date under **You can start** is always a date to come.
+- **Weekly run:** its window title has no picture in front of it.
 - **Letters:** saving an edited letter and making one PDF of the letter and the CV happen in the background, so the window does not stop. A letter that cannot be saved says so.
 - **Documents:** a document or an Excel table that cannot be opened says so. Before, nothing happened.
 - **Job window:** while a search or a scan runs, these actions are refused with a message: **Score again**, writing the documents and merging two jobs. So are form answers, interview preparation and **Rewrite this paragraph**.
