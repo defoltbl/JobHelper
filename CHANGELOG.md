@@ -7,6 +7,9 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Job window:** a fast double-click on the close button, **Mark applied** or **Not interested** no longer discards your unsaved text. The second press counts only after a short pause.
+- **Account:** **Check again** says **Checking…** and takes no new click until Claude answers.
+- **Search:** a search or a new score starts without a wait for the Claude sign-in check when the app checked it in the last 10 minutes.
 - **Search:** when no job source can be read (for example, with no internet), the search stops and says so. Before, it said that it found nothing.
 - **Search:** a source that cannot be read is named at the end of the search, and **Filtered out** keeps the postings it had before from that source.
 - **Search:** a company's career site that cannot be read is named in the log of the run. Before, it gave no postings and no word.

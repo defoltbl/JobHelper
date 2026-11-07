@@ -102,6 +102,22 @@ def test_a_sign_in_check_with_no_answer_is_not_shown_as_signed_out(ui):
     assert ui.warnings == []
 
 
+def test_check_again_shows_it_is_checking_and_takes_one_click(ui):
+    """#85: Check again gave no sign of work, so repeated clicks started several sign-in checks at once."""
+    unsure = "Claude did not answer the sign-in check."
+    ui.win.setProperty("connData", {**READY, "claude": False, "claude_unsure": True, "claude_msg": unsure})
+    try:
+        button = ui.find("claudeCheckAgain")
+        assert button.property("text") == "Check again" and button.property("enabled") is True
+        ui.js("clicked()", button)
+        assert button.property("text") == "Checking…" and button.property("enabled") is False, "busy until the answer comes"
+        _until_true(ui, lambda: ui.find("welcome").property("checkingAgain") is False)                    # the answer ends it
+    finally:
+        ui.js("welcome.checkingAgain = false")
+        ui.win.setProperty("connData", dict(READY))
+    assert ui.warnings == []
+
+
 def test_the_welcome_card_names_the_paid_setting_that_is_set(ui):
     """Check of #87: the card always said "Unset ANTHROPIC_API_KEY", also when another setting was the cause."""
     try:
@@ -1172,12 +1188,18 @@ def test_closing_buttons_ask_once_before_they_discard_unsaved_text(ui, monkeypat
     _until_open(ui, "detailDialog")
     note = ui.find("closeNote")
     ui.js('cnNotes.text = "They pay monthly."')
-    ui.js("detailDialog.markApplied()")
-    assert done == [] and ui.find("detailDialog").property("opened") is True
+    ui.js("detailDialog.markApplied(); detailDialog.markApplied()")              # a double-click: asks, and the second click is not taken (#81)
+    assert done == [] and ui.find("detailDialog").property("opened") is True and ui.js("detailDialog.decisionPaused") is True
     assert note.property("text") == "Not saved yet: the notes about the company. Save it, or press Mark applied once more to discard it."
-    ui.js("detailDialog.notInterested()")                       # another button: asked about again, by its own name
+    assert ui.find("applyBottom").property("enabled") is False, "the button looks off for that moment"
+    assert ui.js("detailDialog.mayLeave('step1', 'Next')") is False, "Next waits out the pause while text is unsaved"
+    ui.js("cnNotes.text = ''")                                    # the typed text taken back: nothing unsaved
+    assert ui.js("detailDialog.pending.length") == 0 and ui.js("detailDialog.mayLeave('step1', 'Next')") is True, \
+        "with nothing unsaved the pause holds nothing back"
+    ui.js("cnNotes.text = 'They pay monthly.'; detailDialog.confirmAction = 'apply'")
+    ui.js("detailDialog.decisionPaused = false; detailDialog.notInterested()")    # after the pause: another button is asked about by its own name
     assert done == [] and "press Not interested once more" in note.property("text")
-    ui.js("detailDialog.notInterested()")                       # the second press of the same button goes ahead
+    ui.js("detailDialog.decisionPaused = false; detailDialog.notInterested()")    # the second press of the same button goes ahead
     _until_closed(ui, "detailDialog")
     assert done == [("dismiss", "lead")] and ui.find("detailDialog").property("opened") is False
     ui.js('detailDialog.show("lead")')

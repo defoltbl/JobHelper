@@ -65,7 +65,7 @@ def test_a_signature_that_is_not_hex_counts_as_none(files):
 def test_a_run_says_the_files_were_not_checked_and_asks_for_no_approval(files, monkeypatch, qapp):
     from jobhelper import qt_bridge
     conn = {"claude": True, "cv": "cv.docx", "paid_api": False, "changed_files": [integrity.NOT_CHECKED]}
-    monkeypatch.setattr(ui_api.Api, "connections", lambda self: dict(conn))
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self, sign_in=None: dict(conn))
     refused = qt_bridge.Bridge().runSearch({"where": "Brno"})
     assert refused == {"ok": False, "fix": "integrity", "msg": integrity.NOT_CHECKED_SAY}
 

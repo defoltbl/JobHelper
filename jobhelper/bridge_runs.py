@@ -47,7 +47,7 @@ class RunSlots:
     def runSearch(self, opts):
         if self._running:
             return {"ok": False, "msg": "A run is already in progress."}
-        conn = self._api.connections()
+        conn = self._api.connections(sign_in=self._recent_sign_in())     # no Claude question on the window's thread
         if conn.get("paid_api"):
             return {"ok": False, "msg": f"Unset {config.paid_setting_named()} to use your subscription."}
         if not conn.get("claude"):
@@ -132,7 +132,7 @@ class RunSlots:
         and pauses on the limit like a search."""
         if self._running:
             return {"ok": False, "msg": "A run is already in progress."}
-        conn = self._api.connections()
+        conn = self._api.connections(sign_in=self._recent_sign_in())     # no Claude question on the window's thread
         if conn.get("paid_api"):
             return {"ok": False, "msg": f"Unset {config.paid_setting_named()} to use your subscription."}
         if not conn.get("claude"):

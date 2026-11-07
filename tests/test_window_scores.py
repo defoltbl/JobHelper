@@ -610,16 +610,16 @@ def test_the_job_window_asks_before_closing_with_unsaved_text(ui):
     assert ui.js("detailDialog.pending.length") == 0
     ui.js('evNote.text = "bring the laptop"; replyText.text = "Dear Alex, thank you for your time today."')
     assert ui.js("detailDialog.pending.join('|')") == "the pasted reply|the date to remember"
-    ui.js("detailDialog.confirmClose = false; detailDialog.tryClose()")
-    assert "the pasted reply, the date to remember" in note.property("text") and dialog.property("opened") is True
-    ui.js("detailDialog.tryClose()")                                                                    # the second time closes and discards
-    ui.wait(350)
-    assert dialog.property("opened") is False
+    ui.js("detailDialog.confirmClose = false; detailDialog.decisionPaused = false; detailDialog.tryClose(); detailDialog.tryClose()")
+    assert "the pasted reply, the date to remember" in note.property("text") and dialog.property("opened") is True, \
+        "a quick second ✕ (a double-click) is not taken as discard (#81)"
+    ui.js("detailDialog.decisionPaused = false; detailDialog.tryClose()")                              # the second time, after the pause, discards
+    _until_closed(ui, "detailDialog")
     _open_job(ui, "app")                                                                                # opened again: clean
     assert ui.js("detailDialog.pending.length") == 0 and ui.js("detailDialog.closeNote") == "" and ui.js("replyText.text") == ""
-    ui.js("detailDialog.tryClose()")
-    ui.wait(350)
-    assert dialog.property("opened") is False
+    ui.js("detailDialog.decided(); detailDialog.tryClose()")              # nothing unsaved: ✕ closes at once, also right after a decision
+    _until_closed(ui, "detailDialog")
+    ui.js("detailDialog.decisionPaused = false")
     ui.bridge._api.save_company_notes("Beta", {"contact": "", "salary": "", "asked": "", "notes": ""})
     _open_job(ui, "lead")                                                                               # a new job has none of those fields filled
     assert ui.js("detailDialog.pending.length") == 0
