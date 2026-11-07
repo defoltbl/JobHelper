@@ -120,7 +120,7 @@ def api(isolate_data, monkeypatch):
     config.ensure_dirs()
     api = ui_api.Api()
     api.opened = []
-    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: api.opened.append(target))
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: api.opened.append(target) or True)
     return api
 
 

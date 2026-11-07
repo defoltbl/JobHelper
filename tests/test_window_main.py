@@ -871,7 +871,17 @@ def test_letter_editor_edits_rewrites_and_saves(ui, monkeypatch):
     assert ui.js("letterDialog.dirty") is True and "rewritten" in ui.js("letterDialog.info")
     assert cover_letter.read_letter(config.LETTERS_DIR / "L.docx")["paragraphs"][3] == paras[3]     # nothing saved yet
 
+    import threading
+    gate, real_save = threading.Event(), ui_api.Api.save_letter
+    monkeypatch.setattr(ui_api.Api, "save_letter",                               # held back until the test lets it go
+                        lambda self, job_id, texts: gate.wait(10) and getattr(self, real_save._service).save_letter(job_id, texts))
     ui.js("letterDialog.save()")
+    assert ui.find("letterSave").property("text") == "Saving…" and ui.find("letterSave").property("enabled") is False, "busy while it saves"
+    ui.js("letterDialog.tryClose()")
+    assert "still being saved" in ui.js("letterDialog.err") and ui.find("letterDialog").property("visible") is True
+    assert ui.js("letterDialog.holdsWork") is True and ui.js("letterDialog.closePolicy") == 0, "Esc does not close it during a save"
+    gate.set()
+    _until_true(ui, lambda: ui.js("letterDialog.saving") is False)              # saved in the background (#79)
     assert ui.js("letterDialog.err") == "" and ui.js("letterDialog.dirty") is False
     assert cover_letter.read_letter(config.LETTERS_DIR / "L.docx")["paragraphs"][3] == "I would like to bring the same drive to this team."
     ui.js('letterDialog.setText(0, ""); letterDialog.save()')

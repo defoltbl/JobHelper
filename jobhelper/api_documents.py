@@ -8,7 +8,7 @@ from . import agent1_cv
 import os
 from datetime import date, datetime, timedelta
 
-from . import agent2_search, agent3_letters, config, housekeeping, llm, store, textfmt, vault
+from . import agent2_search, agent3_letters, agent4_tracker, config, housekeeping, llm, store, textfmt, vault
 from .api_base import _guarded, _holding_jobs
 
 
@@ -153,13 +153,14 @@ class DocumentsService:
         done, files, failed = 0, 0, []
         batch = datetime.now().strftime("%Y%m%d_%H%M%S_%f")          # one name for all of them, so they can be put back together
         for row in rows:
-            got = self.shelve_docs(row["id"], batch)
+            got = self.shelve_docs(row["id"], batch, render=False)    # the Excel files once, below, not once per job (#79)
             if got.get("ok"):
                 done, files = done + 1, files + int(got.get("moved") or 0)
             else:
                 failed.append({"title": row["title"], "company": row["company"], "why": got.get("msg") or "Couldn't move the documents."})
         if not done:
             return {"ok": False, "msg": "Couldn't move the documents.", "failed": failed}
+        agent4_tracker.render_all(store.load_jobs())
         return {"ok": True, "jobs": done, "files": files, "failed": failed}
 
     def set_description(self, job_id, text):
@@ -201,7 +202,7 @@ class DocumentsService:
     SHELF = "below_your_limit"        # the folder in backups/ that documents below your limit go to
     UNDO_DAYS = 7                     # how long New Jobs offers to put the last moved batch back
 
-    def shelve_docs(self, job_id, batch=""):
+    def shelve_docs(self, job_id, batch="", render=True):
         """Move the letter and CV the app wrote for a new job into an encrypted backup (never a letter of your own).
         The job stays in the list; documents are written again only if its score reaches your limit.
         What was moved is noted on the job (`shelved`), so unshelve_docs can put it back."""
@@ -241,7 +242,7 @@ class DocumentsService:
                 j["status"] = "found"
             j["apply_steps"] = []
             j["last_update"] = date.today().isoformat()
-        result = self._editor.change(job_id, go)
+        result = self._editor.change(job_id, go, render=render)
         return {"ok": True, "moved": moved.get("n", 0)} if result.get("ok") else {"ok": False, "msg": result.get("msg") or "Couldn't move the documents."}
 
     @staticmethod

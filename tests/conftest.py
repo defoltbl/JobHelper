@@ -103,7 +103,8 @@ def safe_environment(tmp_path_factory, monkeypatch):
     import types
 
     from jobhelper import api_core, api_system  # noqa: F401
-    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: None)   # never open a real file, folder or web page
+    monkeypatch.setattr(api_core.Desktop, "real_open", api_core.Desktop.open, raising=False)    # for a test that fakes `open` itself
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: True)   # never open a real file, folder or web page
     monkeypatch.setattr(api_core.Desktop, "reveal", lambda self, target: None)  # nor a real Finder window
     from jobhelper import agent2_search
     for name in config.PAID_SETTINGS:                                               # the app refuses to ask with one set; tests set them on purpose

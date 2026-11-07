@@ -728,6 +728,11 @@ this job (Table 6.1).
 | If the form takes one file | **Make one PDF** | Makes one PDF with the letter first and the CV after it |
 | Answers for this job's form | **Form answers** | Drafts answers for the application form (section 7) |
 
+While a search or a scan runs, the job window does not start some actions: **Score again**,
+writing the documents and merging two jobs. It also does not start form answers, interview
+preparation or a paragraph rewrite. A red line tells you to try again when the run is done.
+**Make one PDF** is grey while the app makes the file.
+
 **Show in folder** on a line selects that file in Finder, so that you can drag it into an
 application form.
 
@@ -887,7 +892,7 @@ Table 7.1 lists the controls of the letter editor.
 | **For a rewrite** | An optional hint for the rewrite |
 | **Open in Word** | Opens the file in Word instead |
 | **Undo my changes** | Puts back the text as it was when you opened the editor |
-| **Save** | Writes the paragraphs into the letter. The head, date, greeting, signature, fonts and layout stay as they are |
+| **Save** | Writes the paragraphs into the letter. The head, date, greeting, signature, fonts and layout stay as they are. While the app writes the letter and its PDF, the button says **Saving…** |
 | **Close**, the **✕** or the Esc key | Closes the editor. With unsaved changes they ask once |
 
 > **Note**

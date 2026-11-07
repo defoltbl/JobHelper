@@ -427,7 +427,7 @@ def test_damaged_options_fall_back_to_defaults_and_leave_a_note(isolate_data):
 def test_options_says_when_macos_has_the_notifications_turned_off(app_library, monkeypatch):
     opened = []
     api = ui_api.Api()
-    monkeypatch.setattr(api._system._desktop, "open", lambda target: opened.append(target))
+    monkeypatch.setattr(api._system._desktop, "open", lambda target: opened.append(target) or True)
     app_library.allowed = 0
     assert api.notification_permission() == "off"
     assert api.open_notification_settings() == {"ok": True} and opened == ["x-apple.systempreferences:com.apple.Notifications-Settings.extension"]

@@ -87,7 +87,7 @@ Dialog {
         DialogFooter {
             Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                 text: "Left: words that were replaced are struck through. Right: new words are bold." }
-            SmallButton { text: "Open the adapted CV"; onClicked: bridge.openDoc("cv", compareDialog.data.file || "") }
+            SmallButton { text: "Open the adapted CV"; onClicked: win.openDoc("cv", compareDialog.data.file || "") }
             PillButton { primaryStyle: true; text: "Close"; onClicked: compareDialog.close() }
         }
     }

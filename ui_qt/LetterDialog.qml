@@ -10,7 +10,7 @@ import QtQuick.Effects
 Dialog {
     id: letterDialog; objectName: "letterDialog"
     modal: true; anchors.centerIn: parent
-    readonly property bool holdsWork: dirty || busyIndex >= 0      // unsaved changes, or Claude rewriting a paragraph
+    readonly property bool holdsWork: dirty || busyIndex >= 0 || saving      // unsaved changes, Claude rewriting, or a save on its way
     closePolicy: holdsWork ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits ...
     Shortcut { sequence: "Escape"; enabled: letterDialog.holdsWork && win.onTop(letterDialog)   // ... nor do nothing
                onActivated: letterDialog.tryClose() }
@@ -39,7 +39,7 @@ Dialog {
         meta = d; original = d.paragraphs.slice(); texts = d.paragraphs.slice();
         paraModel.clear();
         for (var i = 0; i < texts.length; i++) paraModel.append({ body: texts[i] });
-        busyIndex = -1; err = ""; warnings = []; info = ""; hintField.text = ""; confirmClose = false;
+        busyIndex = -1; saving = false; err = ""; warnings = []; info = ""; hintField.text = ""; confirmClose = false;
         letterFlick.contentY = 0;
         open();
     }
@@ -53,6 +53,7 @@ Dialog {
     }
     function tryClose() {
         if (busyIndex >= 0) { info = ""; err = "Claude is still rewriting paragraph " + (busyIndex + 1) + ". Wait for it, then close."; return; }
+        if (saving) { info = ""; err = "The letter is still being saved. Wait for it, then close."; return; }
         if (dirty && !confirmClose) {
             confirmClose = true; info = "";
             err = "You changed the letter and did not save it. Press Save, or Close once more to discard the changes.";
@@ -72,14 +73,21 @@ Dialog {
         err = ""; info = ""; confirmClose = false;
         var empty = emptyOnes();
         if (empty !== "") { err = "Paragraph " + empty + (empty.indexOf("and") > 0 ? " are" : " is") + " empty. A letter needs all " + texts.length + " paragraphs."; return; }
-        var r = bridge.saveLetter(meta.id, texts);
-        if (!r || !r.ok) { err = (r && r.msg) ? r.msg : "The letter could not be saved."; return; }
-        original = texts.slice(); warnings = r.warnings || [];
+        saving = true; savedTexts = texts.slice(); info = "Saving the letter and its PDF…";
+        bridge.saveLetter(meta.id, texts);                  // in the background (LibreOffice): the answer is onLetterSaved (#79)
+    }
+    property bool saving: false
+    property var savedTexts: []
+    function letterSaved(r) {
+        saving = false;
+        if (!r || !r.ok) { info = ""; err = (r && r.msg) ? r.msg : "The letter could not be saved."; return; }
+        err = ""; original = savedTexts.slice(); warnings = r.warnings || [];       // a "still saving" line is over too
         info = warnings.length === 0 ? "Saved. The Word file and the PDF are updated."
                                      : "Saved, with the notes below. The Word file and the PDF are updated.";
         detailDialog.refresh();
     }
     Connections { target: bridge
+        function onLetterSaved(res) { if (letterDialog.visible && res.job_id === letterDialog.meta.id) letterDialog.letterSaved(res); }
         function onParagraphReady(res) {
             if (!letterDialog.visible || res.job_id !== letterDialog.meta.id) return;
             letterDialog.busyIndex = -1;
@@ -163,16 +171,16 @@ Dialog {
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         DialogFooter {
-            SmallButton { text: "Open in Word"; onClicked: bridge.openDoc("letter", detailDialog.job.letter || "") }
-            SmallButton { text: "Undo my changes"; enabled: letterDialog.dirty && letterDialog.busyIndex < 0
+            SmallButton { text: "Open in Word"; onClicked: win.openDoc("letter", detailDialog.job.letter || "") }
+            SmallButton { text: "Undo my changes"; enabled: letterDialog.dirty && letterDialog.busyIndex < 0 && !letterDialog.saving
                 onClicked: { letterDialog.texts = letterDialog.original.slice();
                              for (var i = 0; i < letterDialog.original.length; i++) paraModel.setProperty(i, "body", letterDialog.original[i]);
                              letterDialog.err = ""; letterDialog.info = ""; } }
             Item { Layout.fillWidth: true }
             Text { visible: letterDialog.dirty; text: "not saved"; color: theme.warn; font.pixelSize: 11; font.bold: true }
             SmallButton { objectName: "letterClose"; text: "Close"; onClicked: letterDialog.tryClose() }
-            PillButton { objectName: "letterSave"; primaryStyle: true; text: "Save"
-                enabled: letterDialog.dirty && letterDialog.busyIndex < 0; onClicked: letterDialog.save() }
+            PillButton { objectName: "letterSave"; primaryStyle: true; text: letterDialog.saving ? "Saving…" : "Save"
+                enabled: letterDialog.dirty && letterDialog.busyIndex < 0 && !letterDialog.saving; onClicked: letterDialog.save() }
         }
     }
 }

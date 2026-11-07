@@ -4,6 +4,7 @@ Part of the window's back end: the facade `ui_api.Api` hands calls to this servi
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import time
 from datetime import date, datetime
 
@@ -275,26 +276,29 @@ class JobsService:
         want_pdf = kind.endswith("_pdf")
         base = {"letter": config.LETTERS_DIR, "cv": config.TAILORED_CV_DIR}.get(kind.replace("_pdf", ""))
         if not base or not name or os.path.basename(str(name)) != str(name):     # a file of that folder, never a path
-            return {"ok": False}
+            return {"ok": False, "msg": "That file is not there any more."}
         p = base / name
         docx = p.with_suffix(".pdf" if want_pdf else ".docx")
         target = docx if docx.exists() or want_pdf else p
         if target.exists():
-            self._desktop.open(target)
-            return {"ok": True}
+            return self._open_file(target)
         own = config.COVER_LETTERS_DIR / os.path.basename(name)   # a letter you wrote yourself
         if kind == "letter" and own.is_file():
-            self._desktop.open(own)
-            return {"ok": True}
-        return {"ok": False}
+            return self._open_file(own)
+        return {"ok": False, "msg": "That file is not there any more."}
 
     def open_excel(self, which):
         p = {"leads": config.NEW_JOBS_EXCEL, "apps": config.EXCEL_PATH,
              "report": config.RESPONSES_REPORT}.get(which)
         if p and p.exists():
-            self._desktop.open(p)
+            return self._open_file(p)
+        return {"ok": False, "msg": "That table is not there yet: it is made by the next search or scan."}
+
+    def _open_file(self, path):
+        """{ok} of opening a file, with what to do when no app took it."""
+        if self._desktop.open(path):
             return {"ok": True}
-        return {"ok": False}
+        return {"ok": False, "msg": f"{Path(path).name} could not be opened. Check that an app for this kind of file is installed."}
 
     def open_url(self, job_id):
         """Open a lead's job posting in the default browser (to go apply)."""
@@ -303,7 +307,8 @@ class JobsService:
         url = address.url
         if not address.is_web or address.refused:              # a job board hands this over: only a web page, never a Russian site
             return {"ok": False}
-        self._desktop.open(url)
+        if not self._desktop.open(url):
+            return {"ok": False, "msg": "The browser could not open the posting. Open it from the job's link yourself."}
         self.note_opened(job_id)                                # the form you fill in next is most likely this job's
         return {"ok": True, "url": url}
 

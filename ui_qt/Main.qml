@@ -145,6 +145,9 @@ ApplicationWindow {
         return false;
     }
     // the back end's own checks, asked so the window keeps no copy (#61)
+    // a file opened in its own app: a failure is said, never swallowed (#79)
+    function openDoc(kind, name) { var r = bridge.openDoc(kind, name || ""); if (!(r && r.ok)) ticker.text = (r && r.msg) || "Couldn't open that file."; }
+    function openExcel(which) { var r = bridge.openExcel(which); if (!(r && r.ok)) ticker.text = (r && r.msg) || "Couldn't open that table."; }
     function hasNonLatin(s) { return bridge.hasNonLatin(String(s || "")); }
     function resetRobots() { [a1, a2, a3, a4, a5].forEach(function (r) { r.active = false; r.done = false; r.count = ""; }); }
     function setAgent(key, status, info) {

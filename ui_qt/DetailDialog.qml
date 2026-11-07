@@ -149,10 +149,21 @@ Dialog {
         for (var i = 0; i < applySteps.length; i++) if (done.indexOf(applySteps[i].key) >= 0) n++;
         return n;
     }
-    function onePdf() {
-        var r = bridge.combinedPdf(job.id);
+    // the single PDF is made in the background (LibreOffice can take seconds): its answer comes as onPdfReady (#79)
+    property bool pdfBusy: false
+    property bool pdfForStep: false       // asked by the application steps: the step is ticked once the PDF opened
+    property string pdfJob: ""            // the job the PDF is made for: an answer for another job is not this one's
+    function onePdf(forStep) {
+        if (pdfBusy) return;
+        pdfBusy = true; pdfForStep = forStep === true; pdfJob = job.id; ticker.text = "Making one PDF with the letter and the CV…";
+        bridge.combinedPdf(job.id);
+    }
+    function pdfMade(r) {
+        if (!r || r.job_id !== pdfJob) return;
+        pdfBusy = false; pdfJob = "";             // a late copy of the same answer changes nothing
         ticker.text = (r && r.ok) ? "Opened one PDF with the letter and the CV (" + r.pages + " pages)." : ((r && r.msg) || "Couldn't make the single PDF.");
-        return !!(r && r.ok);
+        if (r.ok && pdfForStep) { bridge.applyStep(r.job_id, "combined"); if (r.job_id === job.id) refresh(); }   // on the job it was made for
+        pdfForStep = false;
     }
     function showFile(kind) {       // select the file in Finder, ready to drag into an application form
         var r = bridge.showInFolder(kind, job.id);
@@ -161,9 +172,9 @@ Dialog {
     function doStep(key) {
         var ok = true;
         if (key === "posting") { var r = bridge.openUrl(job.id); ok = !!(r && r.ok); ticker.text = ok ? "Opened the job posting in your browser." : "No link for this job."; }
-        else if (key === "cv") bridge.openDoc(job.cv_pdf === true ? "cv_pdf" : "cv", job.cv);
-        else if (key === "letter") bridge.openDoc(job.letter_pdf === true ? "letter_pdf" : "letter", job.letter);
-        else if (key === "combined") ok = onePdf();
+        else if (key === "cv") win.openDoc(job.cv_pdf === true ? "cv_pdf" : "cv", job.cv);
+        else if (key === "letter") win.openDoc(job.letter_pdf === true ? "letter_pdf" : "letter", job.letter);
+        else if (key === "combined") { onePdf(true); return; }          // ticked when the PDF opened (pdfMade)
         else if (key === "answers") { formDialog.show(job.id); return; }      // ticked there, once an answer is drafted or copied
         if (ok) { bridge.applyStep(job.id, key); refresh(); }
     }
@@ -236,6 +247,7 @@ Dialog {
         docsBusy = true; docsJob = job.id;
         bridge.writeDocuments(job.id);
     }
+    Connections { target: bridge; function onPdfReady(r) { detailDialog.pdfMade(r); } }
     Connections { target: bridge
         function onDocsReady(res) {
             if (res.job_id !== detailDialog.docsJob) return;
@@ -474,7 +486,8 @@ Dialog {
                             SmallButton { visible: modelData.key === "cv" || modelData.key === "letter"
                                                || (modelData.key === "combined" && parent.ticked)
                                 text: "Show in folder"; onClicked: detailDialog.showFile(modelData.key) }
-                            SmallButton { text: modelData.button; onClicked: detailDialog.doStep(modelData.key) }
+                            SmallButton { text: modelData.button; onClicked: detailDialog.doStep(modelData.key)
+                                enabled: !(modelData.key === "combined" && detailDialog.pdfBusy) }       // grey while the PDF is made
                         }
                     }
                     RowLayout { Layout.fillWidth: true; spacing: 10
@@ -913,14 +926,14 @@ Dialog {
             SmallButton { visible: !!detailDialog.job.url; text: "Open posting ↗"
                 onClicked: { var r = bridge.openUrl(detailDialog.job.id);
                              ticker.text = (r && r.ok) ? "Opened the job posting in your browser." : "No link for this job."; } }
-            SmallButton { visible: !!detailDialog.job.cv; text: "CV"; onClicked: bridge.openDoc("cv", detailDialog.job.cv) }
-            SmallButton { visible: detailDialog.job.cv_pdf === true; text: "CV PDF"; onClicked: bridge.openDoc("cv_pdf", detailDialog.job.cv) }
-            SmallButton { visible: !!detailDialog.job.letter; text: "Letter"; onClicked: bridge.openDoc("letter", detailDialog.job.letter) }
-            SmallButton { visible: detailDialog.job.letter_pdf === true; text: "Letter PDF"; onClicked: bridge.openDoc("letter_pdf", detailDialog.job.letter) }
+            SmallButton { visible: !!detailDialog.job.cv; text: "CV"; onClicked: win.openDoc("cv", detailDialog.job.cv) }
+            SmallButton { visible: detailDialog.job.cv_pdf === true; text: "CV PDF"; onClicked: win.openDoc("cv_pdf", detailDialog.job.cv) }
+            SmallButton { visible: !!detailDialog.job.letter; text: "Letter"; onClicked: win.openDoc("letter", detailDialog.job.letter) }
+            SmallButton { visible: detailDialog.job.letter_pdf === true; text: "Letter PDF"; onClicked: win.openDoc("letter_pdf", detailDialog.job.letter) }
             SmallButton { objectName: "showCv"; visible: !!detailDialog.job.cv && detailDialog.job.is_lead !== true; text: "CV in folder"; onClicked: detailDialog.showFile("cv") }
             SmallButton { objectName: "showLetter"; visible: !!detailDialog.job.letter && detailDialog.job.is_lead !== true; text: "Letter in folder"; onClicked: detailDialog.showFile("letter") }
             SmallButton { objectName: "onePdf"; visible: detailDialog.job.can_combine === true; text: "One PDF"
-                onClicked: detailDialog.onePdf() }
+                enabled: !detailDialog.pdfBusy; onClicked: detailDialog.onePdf() }
             SmallButton { objectName: "compareCv"; visible: detailDialog.job.can_compare === true; text: "Compare CV"
                 onClicked: compareDialog.show(detailDialog.job.id) }
             SmallButton { objectName: "editLetter"; visible: detailDialog.job.letter_editable === true; text: "Edit letter"

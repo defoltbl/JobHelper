@@ -154,7 +154,7 @@ Dialog {
                     tableDialog.confirmRescore = false;
                     if (win.startRescore()) tableDialog.close();
                 } }
-            SmallButton { text: "open Excel"; visible: tableDialog.excelKey !== ""; onClicked: bridge.openExcel(tableDialog.excelKey) }
+            SmallButton { text: "open Excel"; visible: tableDialog.excelKey !== ""; onClicked: win.openExcel(tableDialog.excelKey) }
             CloseButton { onClicked: tableDialog.close() }
         }
         // search · filter · sort
@@ -287,7 +287,7 @@ Dialog {
                                     var r = bridge.openUrl(modelData.arg);
                                     ticker.text = (r && r.ok) ? "Opened the job posting in your browser." : "No link for this job.";
                                 } else {
-                                    bridge.openDoc(modelData.kind, modelData.arg);
+                                    win.openDoc(modelData.kind, modelData.arg);
                                 }
                             }
                         }

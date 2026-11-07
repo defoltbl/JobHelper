@@ -87,8 +87,9 @@ class RunSlots:
         return self._start_scan(days)
 
     def _start_scan(self, days):
-        if self._running:
-            return {"ok": False, "msg": "A search or scan is running. Start this one when it has finished."}
+        busy = self._busy_with_run("Start this one")
+        if busy:
+            return busy
         if not config.has_imap():
             return {"ok": False, "msg": "Set up your job email first (open Account).", "fix": "email"}
         self._stop.clear()
@@ -104,6 +105,11 @@ class RunSlots:
     @Slot(str)
     def rescoreJob(self, job_id):
         """Score one job again in the background (one Claude call); the answer arrives as rescoreReady."""
+        busy = self._busy_with_run("Score it again")
+        if busy:
+            self._post("rescoreReady", {**busy, "job_id": job_id})
+            return
+
         def work():
             try:
                 result = self._api.rescore_one(job_id)
@@ -116,6 +122,11 @@ class RunSlots:
     @Slot(str)
     def writeDocuments(self, job_id):
         """Write the CV and the letter of one job in the background; the answer arrives as docsReady."""
+        busy = self._busy_with_run("Write the documents")
+        if busy:
+            self._post("docsReady", {**busy, "job_id": job_id})
+            return
+
         def work():
             try:
                 result = self._api.write_documents(job_id)

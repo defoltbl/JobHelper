@@ -7,6 +7,10 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Letters:** saving an edited letter and making one PDF of the letter and the CV happen in the background, so the window does not stop. A letter that cannot be saved says so.
+- **Documents:** a document or an Excel table that cannot be opened says so. Before, nothing happened.
+- **Job window:** while a search or a scan runs, these actions are refused with a message: **Score again**, writing the documents and merging two jobs. So are form answers, interview preparation and **Rewrite this paragraph**.
+- **Job window:** a posting the browser cannot open says so.
 - **Options:** when a career site cannot be saved, nothing in Options is saved. Before, the other options were already saved.
 - **Master CV:** a chosen CV is read in the background, and its button says **Reading…** meanwhile. A second one cannot be chosen until then. Before, the window could stop while a large PDF was read.
 - **Email scan:** an error names the server of the mailbox that failed. Before, it could name the server of the main mailbox.
