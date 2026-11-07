@@ -186,6 +186,7 @@ class FormFillRun:
             values, chosen, open_ones = maker.make(self._todo["choose"])
         except chrome.ChromeError as e:
             self._filled += maker.chosen          # pressed before Chrome stopped answering: the report names them all
+            self._left += maker.unsure            # and the one being chosen then, to be checked (#82)
             raise Stop(str(e)) from e
         self._fill += values
         self._filled += chosen
@@ -359,9 +360,12 @@ class FormChoices:
     """The choices of one form: lists and number fields, menus the page draws itself, radio buttons, and text
     fields whose answer is guessed. Settled from your details, your earlier answers, or one call to Claude."""
 
+    UNSURE = "Chrome stopped answering just after the app chose “{pick}” here. Check that the field shows it."
+
     def __init__(self, url: str, mine: dict[str, Any], job, cv) -> None:
         self._url, self._mine, self._job, self._cv = url, mine, job, cv
         self.chosen: list[dict[str, Any]] = []     # what was pressed so far, also when a later step fails
+        self.unsure: list[dict[str, Any]] = []     # a choice being made when Chrome stopped answering: it may have taken
 
     def make(self, choices: list[dict[str, Any]]) -> tuple[list[dict], list[dict], list[dict]]:
         """Decide and make the choices of a form. Returns (values for plain lists and number fields, to be
@@ -407,7 +411,11 @@ class FormChoices:
             elif c["kind"] in ("select", "number", "text"):
                 to_fill.append({"n": c["n"], "label": c["label"], "value": pick, "kind": "choice", "check": form_choices.CHECK})
             elif c["kind"] == "radio":
-                done = form_fill.choose_answer(chrome.run(form_fill.choose_script("radio", c["n"], c["options"].index(pick), url)))
+                try:
+                    done = form_fill.choose_answer(chrome.run(form_fill.choose_script("radio", c["n"], c["options"].index(pick), url)))
+                except chrome.ChromeError:
+                    self.unsure.append({"label": c["label"], "why": self.UNSURE.format(pick=pick)})     # #82: in the report
+                    raise
                 (chosen if done["ok"] else left).append({"label": c["label"], "value": pick, "kind": "choice", "check": form_choices.CHECK}
                                                         if done["ok"] else {"label": c["label"], "why": "The page did not take the choice. Choose it yourself."})
             else:
@@ -416,6 +424,8 @@ class FormChoices:
                 try:
                     done = form_fill.choose_answer(chrome.run(form_fill.choose_script("pick", c["n"], same[0], url))) if same else {"ok": False}
                 except chrome.ChromeError:
+                    if same:
+                        self.unsure.append({"label": c["label"], "why": self.UNSURE.format(pick=pick)})  # #82: in the report
                     self._close(c)                   # never left open on the page when Chrome stops answering
                     raise
                 if not done["ok"]:

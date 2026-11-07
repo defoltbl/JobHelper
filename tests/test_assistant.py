@@ -917,6 +917,32 @@ def test_choices_made_before_chrome_stops_answering_are_still_reported(isolate, 
     assert out["ok"] is True and out["stopped"] == chrome.NO_ANSWER
     assert [f["label"] for f in out["filled"]] == ["Country", "Do you need sponsorship?"], "what was chosen is named"
     assert steps[-1] == ("close", 4, False), "the menu Chrome stopped in is closed again"
+    unsure = [x for x in out["left"] if x["label"] == "Colour"]
+    assert unsure and "“Blue”" in unsure[0]["why"] and "Check" in unsure[0]["why"], \
+        "#82: the choice Chrome stopped in may have taken: it is in the report, to be checked"
+
+
+def test_a_radio_choice_chrome_stopped_in_is_in_the_report_to_be_checked(isolate, monkeypatch):
+    """#82: the radio path, as the menu path above: the choice Chrome stopped in may have taken."""
+    store.save_jobs([_job()])
+    details.save(MINE)
+    monkeypatch.setattr(chrome, "pause", lambda seconds: None)
+    monkeypatch.setattr(chrome, "active_tab", lambda: {"url": "https://careers.northwind.example/jobs/42", "title": "Junior Analyst - Northwind"})
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: {"choices": [{"n": 2, "answer": "No"}]})
+    fields = [_field("Country", kind="menu", n=1), _field("Do you need sponsorship?", kind="radio", n=2, options=["Yes", "No"])]
+
+    def run(script):
+        if script == form_fill.READ:
+            return json.dumps({"url": "https://careers.northwind.example/jobs/42", "title": "t", "fields": fields, "frames": [], "boxes": 0})
+        action, n, _arg, _url = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
+        if action == "radio":
+            raise chrome.ChromeError(chrome.NO_ANSWER)
+        return json.dumps({"options": ["Germany", "Czech Republic"]} if action == "options" else {"ok": True})
+    monkeypatch.setattr(chrome, "run", run)
+    out = ui_api.Api().assistant_fill("nw1")
+    assert out["stopped"] == chrome.NO_ANSWER
+    unsure = [x for x in out["left"] if x["label"] == "Do you need sponsorship?"]
+    assert unsure and "“No”" in unsure[0]["why"] and "Check" in unsure[0]["why"]
 
 
 def test_a_country_is_found_in_a_list_however_it_is_spelt():

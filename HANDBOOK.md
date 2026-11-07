@@ -496,9 +496,21 @@ data/                your data; only the *.example.* files are in git
   is left goes to `letter_misplaced` (its own amber line, refreshed when you save the letter); a rewrite is sent back
   once, then given. Measured before it shipped on 74 real letters: the first version flagged 33, this one 0 (it
   reads 2 of the owner's jobs; a degree word late in a title, "(Pre-Diploma Practice)", once hid one).
-  Not caught: a duration ("over the past year"), a claim no position names ("used Docker daily"), an employer the model
-  invented, and a job whose noun is not in `claims._JOB_WORDS` (#66 added the nouns at places of study: pianist,
+  An employer the model invented is `EmployerCheck.invented` (#63): a first-person sentence of work "at" a name, "for" a
+  name only after a word of employment (worked, interned, intern …), "with" a name only with a legal ending (Ltd, Inc;
+  not Labs or Group), the name followed by punctuation or a linking word. A name is known when the whole name, or its
+  first word that is not a generic word (`_GENERIC`: software, cloud, systems …), is in the CV, the company or the
+  posting; forms of address, weekdays and months are no name. Sent back once, then `letter_invented`, its own line in
+  the job window. Measured on 74 real letters: 0 flagged (the first version flagged "Ms" twice); a fixed labelled set
+  of sentences in tests/test_claims.py must stay as labelled. Not caught: a name in lowercase, the second of two names
+  ("at Contoso and Globex"), and "my work at X" (no first-person claim verb). Still not caught: a duration ("over the
+  past year"), a claim no position names ("used Docker daily"), and a job whose noun is not in `claims._JOB_WORDS` (#66 added the nouns at places of study: pianist,
   postdoc, fellow, dean, director …, and the phrase "working student" in `_JOB_PHRASES`; "student" alone stays study).
+- **The claim rules read a wish, a team and an interest more closely** (#82): a wish also ends at ", having / after /
+  since / while" and "having built" claims; "where we use / run / have …" (present tense only) describes a team, so
+  "a team where we built" still claims, "lead with / by" is a manner, and
+  "my interest in Kafka" owns no Kafka (`_INTEREST`). Measured on 74 real letters: the same one sentence flagged before
+  and after. A choice Chrome stopped in the middle of is in the form report to be checked (`FormChoices.unsure`).
 - **A profile sentence about working independently needs one in the master profile** (#62:
   `cv_tailor.independence_unbacked`, `_INDEPENDENT`, `INDEPENDENT_NOTE`): a work verb before "independently",
   "autonomously", "on my own" or "without supervision" (not "… of"), or "self-starter", so "autonomous vehicles" is no

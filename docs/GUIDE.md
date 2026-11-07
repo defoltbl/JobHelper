@@ -853,6 +853,10 @@ The line **It puts work at an employer where your CV does not show it** names wo
 example "'REST' at Fabrikam". Select **Edit letter** and keep each piece of work with
 the job where you did it.
 
+The line **It says that you worked at …, but your CV does not name it** names an employer.
+Neither your CV nor the posting gives that name. The app already asked Claude once to remove
+it. Select **Edit letter** and name only employers from your CV.
+
 ### The cover letter
 
 The letter is written to the company, about this role, from the facts in your CV.

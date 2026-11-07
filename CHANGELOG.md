@@ -7,6 +7,9 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Cover letters:** a letter that says you worked at an employer that neither your CV nor the posting names is sent back to Claude once. If the name stays, the job window names it.
+- **Cover letters:** a technology named after a wish, as in "eager to learn Spark, having built Kafka pipelines", is checked like any other claim. "My interest in …", "a team where we use …" and "I lead with …" no longer raise a false alarm.
+- **Assistant:** when Chrome stops answering just after a choice in a form, the report names that field for you to check.
 - **Adapted CV:** when the profile of your own CV does not say that you work independently, Claude is asked once to leave such a sentence out, and one that stays is named in the job window.
 - **Cover letters:** a job such as "Pianist – Example Conservatory" or "Working Student – Example University" is no longer taken for study, so work at it is checked like work at any other job.
 - **Keyboard:** the **Resume** button is reached with Tab and pressed with Space or Return, and a switch shows an outline when Tab reaches it. **Resume** looks as pale as any other button that cannot be used yet.
