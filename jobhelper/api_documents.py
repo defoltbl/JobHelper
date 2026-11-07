@@ -113,7 +113,7 @@ class DocumentsService:
         return self._editor.change(job_id, go)
 
     # ── what a score rests on, and documents left over from a higher score ──
-    MIN_PASTED, MAX_PASTED = 200, 20000
+    MIN_PASTED, MAX_PASTED = config.PASTED_POSTING
 
     def threshold(self) -> int:
         try:

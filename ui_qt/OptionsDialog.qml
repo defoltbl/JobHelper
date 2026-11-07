@@ -55,7 +55,7 @@ Dialog {
             if (rolesModel.get(i).text.toLowerCase() === t.toLowerCase()) { roleErr = "That role is already in the list."; return false; }
         // a role the app does not know is not wrong (the list of words it knows grew up with software jobs):
         // it is asked about once, so a typo is caught, and added on the second press
-        if (!win.looksLikeRole(t) && !bridge.knownRole(t) && pendingRole.toLowerCase() !== t.toLowerCase()) {
+        if (!bridge.knownRole(t) && pendingRole.toLowerCase() !== t.toLowerCase()) {
             pendingRole = t;
             roleErr = "“" + t + "” is not a role the app knows. Check the spelling, then press Add again to search for it anyway.";
             return false;
@@ -82,13 +82,6 @@ Dialog {
                 && companiesModel.get(i).ats === ats) { coBlame.say("That company is already in the list.", "token"); return false; }
         companiesModel.append({ name: (name || "").trim() || tok, ats: ats, token: tok });
         return true;
-    }
-    // show the city in English even if it was saved in its native form
-    function cityDisplay(c) {
-        var m = { "praha": "Prague", "plzeň": "Pilsen", "plzen": "Pilsen",
-                  "české budějovice": "Budweis", "wien": "Vienna", "münchen": "Munich",
-                  "köln": "Cologne", "warszawa": "Warsaw", "kraków": "Kraków" };
-        return m[(c || "").toLowerCase()] || c || "";
     }
     property string loaded: ""            // everything in the window as it was when it opened, to tell if it changed
     property bool confirmClose: false
@@ -270,7 +263,7 @@ Dialog {
     onClosed: { confirmClose = false; loaded = ""; confirmTidy = false; }
     function load() {
         var o = win.optsData;
-        cityCombo.editText = cityDisplay(o.where);
+        cityCombo.editText = bridge.cityShown(o.where || "");       // in English, also when saved in its own language
         countryField.text = o.country || "";
         pickedSources = (o.sources || []).slice();
         remoteWhere = o.remote_where === "world" ? "world" : "country";
@@ -349,7 +342,7 @@ Dialog {
                     Card {
                         SRow { label: win.limits.labels.where
                             ThemedCombo { id: cityCombo; objectName: "cityCombo"; editable: true; plainText: true
-                                implicitWidth: 200; model: win.euCities
+                                implicitWidth: 200; model: win.limits.choices.cities
                                 onEditTextChanged: optDialog.recheck() } }
                         Sep {}
                         // which postings of a company's career site, and which remote jobs, count as "here"
@@ -431,7 +424,7 @@ Dialog {
                         SRow { label: win.limits.labels.queries; hint: "in English"
                             RowLayout { spacing: 6
                                 AutoField { id: roleField; objectName: "roleField"; implicitWidth: 180; wrong: optDialog.roleErr !== ""
-                                    placeholder: "e.g. junior data scientist"; suggestions: win.roleSuggestions
+                                    placeholder: "e.g. junior data scientist"; suggestions: win.limits.choices.roles
                                     onEdited: { optDialog.roleErr = ""; optDialog.recheck(); }
                                     onAdd: function (v) { if (optDialog.addRole(v)) roleField.text = ""; } }
                                 SmallButton { text: "+ Add"; primaryStyle: true
@@ -458,7 +451,7 @@ Dialog {
                         Sep {}
                         TagEditor { id: wantedTags; objectName: "wantedTags"; chipTone: theme.good
                             onTagCountChanged: optDialog.recheck(); onTypedChanged: optDialog.recheck()
-                            label: win.limits.labels.wanted_roles; hint: "the score measures fit for these · another field scores 40 at most"
+                            label: win.limits.labels.wanted_roles; hint: "the score measures fit for these · another field scores " + win.limits.score_caps.other_field + " at most"
                             placeholder: "e.g. backend developer" }
                         // which professions the free first look takes as yours: read from the roles above as you type them, or picked here
                         ColumnLayout { id: fieldsBox; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12; spacing: 8
@@ -491,7 +484,7 @@ Dialog {
                         Sep {}
                         TagEditor { id: unwantedTags; objectName: "unwantedTags"; chipTone: theme.crit
                             onTagCountChanged: optDialog.recheck(); onTypedChanged: optDialog.recheck()
-                            label: win.limits.labels.unwanted_roles; hint: "a title that names one is skipped before scoring · otherwise scored 20 at most"
+                            label: win.limits.labels.unwanted_roles; hint: "a title that names one is skipped before scoring · otherwise scored " + win.limits.score_caps.unwanted + " at most"
                             placeholder: "e.g. economist" }
                         Sep {}
                         TagEditor { id: levelTags; objectName: "levelTags"; chipTone: theme.warn

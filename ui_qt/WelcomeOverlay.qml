@@ -18,7 +18,7 @@ Item {
     property bool editEmail: false
     property string hostDraft: ""         // the IMAP server, typed for a provider the app does not know
     // the server is asked for only when the address does not tell it (its own flag: a field's `visible` also depends on what is around it)
-    readonly property bool needsServer: win.isEmail(emailDraft) && bridge.mailServer(emailDraft, "").known !== true
+    readonly property bool needsServer: bridge.addressProblem(emailDraft) === "" && bridge.mailServer(emailDraft, "").known !== true
     property bool testBusy: false         // the saved mailboxes are being tried
     property int testLeft: 0
     property string testNote: ""
@@ -91,16 +91,15 @@ Item {
     function finish() { shown = false; waitingLogin = false; editEmail = false; }
     function saveEmail() {
         emailErr = "";
-        if (!win.isEmail(emailDraft)) { emailBlame.say("Enter a valid email address (e.g. you@gmail.com).", "address"); shake.restart(); return; }
+        var addressBad = bridge.addressProblem(emailDraft);
+        if (addressBad !== "") { emailBlame.say(addressBad, "address"); shake.restart(); return; }
         if (editBox === 2 && emailDraft.trim().toLowerCase() === (connData.email_addr || "").toLowerCase()) {
             emailBlame.say("That is already your main job email. Enter a different address.", "address"); shake.restart(); return; }
         var server = bridge.mailServer(emailDraft, needsServer ? hostDraft : "");
         if (server.problem) { emailBlame.say(server.problem, server.about); shake.restart(); return; }
         if (!server.host) { emailBlame.say("Enter this provider's IMAP server, for example imap." + emailDraft.trim().split("@").pop() + ".", "server"); shake.restart(); return; }
-        if (pwDraft !== "" && server.gmail === true && !win.isAppPassword(pwDraft)) {
-            emailBlame.say("A Google App Password is 16 letters (no digits). Check for typos.", "password"); shake.restart(); return; }
-        if (pwDraft !== "" && win.hasNonLatin(pwDraft)) {
-            emailBlame.say("A mail server takes only English letters, digits and symbols in a password here.", "password"); shake.restart(); return; }
+        var pwBad = pwDraft !== "" ? bridge.passwordProblem(emailDraft, server.host, pwDraft) : "";        // the save checks the same
+        if (pwBad !== "") { emailBlame.say(pwBad, "password"); shake.restart(); return; }
         var known = editBox === 2 ? connData.email2 === true : connData.email === true;
         if (!known && pwDraft === "") { emailBlame.say("Enter the password for this mailbox.", "password"); shake.restart(); return; }
         if (emailBusy) return;
@@ -347,7 +346,7 @@ Item {
                             Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                                 objectName: "mailHint"
                                 readonly property var server: bridge.mailServer(welcome.emailDraft, welcome.needsServer ? welcome.hostDraft : "")
-                                text: !win.isEmail(welcome.emailDraft) ? "Most providers want a separate app password for a program, not the one you sign in with."
+                                text: bridge.addressProblem(welcome.emailDraft) !== "" ? "Most providers want a separate app password for a program, not the one you sign in with."
                                       : server.problem ? server.problem : server.hint }
                             SmallButton { text: "Cancel"; enabled: !welcome.emailBusy
                                 onClicked: { welcome.editEmail = false; welcome.emailErr = ""; keySink.forceActiveFocus(); } }

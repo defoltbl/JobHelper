@@ -535,7 +535,7 @@ def test_without_a_city_the_search_does_not_start_and_options_open(ui):
     ui.bridge.saveOptions({**start, "where": ""})
     ui.js("optsData = bridge.options()")
     ui.wait(100)
-    assert ui.js('cityEN(optsData.where) || "No city yet"') == "No city yet"
+    assert ui.js('bridge.cityShown(optsData.where || "") || "No city yet"') == "No city yet"
     ui.js("startRun()")
     _until_open(ui, "optDialog")
     assert ui.win.property("appRunning") is False                                 # nothing was started

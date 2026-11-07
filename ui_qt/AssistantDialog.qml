@@ -42,7 +42,7 @@ Dialog {
     property var jobs: []                 // what the list shows: all open jobs, or those that match what was typed
     property var allJobs: []
     property string jobFindErr: ""
-    readonly property int maxJobFind: 80
+    readonly property int maxJobFind: win.limits.job_find
     // Typing part of a company or a title narrows the list; when one job is left, it is chosen and its full name shown.
     function findJob(typed) {
         var words = String(typed || "").toLowerCase().split(/\s+/).filter(function (w) { return w !== ""; }), kept = [], was = jobId;

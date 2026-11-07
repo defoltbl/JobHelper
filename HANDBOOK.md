@@ -260,9 +260,15 @@ data/                your data; only the *.example.* files are in git
   through `Api.limits()` (`win.limits` in QML) or with the data of a dialog (`columns` of My details, `max_part`
   of a preparation). The ranges of the Options' number boxes come the same way (`numbers`, `shelf_days`,
   `look_back`), and the weekly run's hour and minute (`schedule`, from `schedule.HOURS`/`MINUTES`), and every limited box shows `TooLong.qml` while its text is over. The lists the back end checks come
-  as `choices` (`planner.KINDS`, `scrapers_ats.ATS_NAMES`, `OptionsService.MODELS`, `config.TEXT_SIZES`). A new limit
+  as `choices` (`planner.KINDS`, `scrapers_ats.ATS_NAMES`, `OptionsService.MODELS`, `config.TEXT_SIZES`, and the
+  suggestions `places.SUGGESTED_CITIES`, `prefilter.ROLE_SUGGESTIONS`). So do the paste and reply limits, the
+  assistant's job search (`assistant.MAX_JOB_FIND`) and the score caps the hints name (`score_caps`, #71). A new limit
   or list goes into the owner and into that map; `tests/test_window_limits.py` keeps numbers and lists out of the
-  dialogs. Suggestion pools that nothing checks (`euCities`, `roleSuggestions`) may stay in `Main.qml`.
+  dialogs.
+- **The window asks the back end's checks, never copies them** (#61): a typed address (`bridge.addressProblem`), a
+  mail password (`passwordProblem`, `mailhosts.password_problem`), another alphabet (`hasNonLatin`,
+  `textfmt.has_non_latin`), a search role (`knownRole`: a profession of `prefilter.FIELDS` or a word of
+  `prefilter.ROLE_WORDS`) and a city's English name (`cityShown`, `places.city_shown`). A test fails for a copy.
 - **A form's limits and its "[to fill in]" rule are `form_answers`'s** (`MAX_QUESTION`, `MAX_ANSWER`, `unfilled`): the
   assistant and the answer memory ask it. A phone code is chosen only by `form_fill.code_option`, and a date of
   My details ("03/2023") is read only by `form_fill.RowDate`, whatever kind of field or menu the page has.

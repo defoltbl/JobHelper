@@ -177,10 +177,9 @@ def test_the_window_and_the_back_end_name_the_same_scripts_as_not_latin():
     from pathlib import Path
     from jobhelper import textfmt
     main = (Path(__file__).resolve().parent.parent / "ui_qt" / "Main.qml").read_text(encoding="utf-8")
-    pattern = re.search(r"function hasNonLatin\(s\) \{\s*return /\[(.+?)\]/", main).group(1)
-    window = [f"{ord(a):04x}-{ord(b):04x}" for a, b in re.findall(r"(.)-(.)", pattern)]
-    back = [f"{ord(a):04x}-{ord(b):04x}" for a, b in (r.split("-") for r in textfmt.NON_LATIN_RANGES)]
-    assert window == back
+    # #61: the window asks the back end instead of keeping its own copy of the ranges
+    assert re.search(r"function hasNonLatin\(s\) \{ return bridge\.hasNonLatin\(", main)
+    assert not any(r.split("-")[0] in main for r in textfmt.NON_LATIN_RANGES)
 
 
 def test_a_form_answer_backed_only_by_a_job_note_is_not_marked(isolate_data, monkeypatch):

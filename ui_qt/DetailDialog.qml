@@ -171,8 +171,8 @@ Dialog {
     // the posting's text, pasted by hand when the app could not read it
     property bool pasteOpen: false
     property string pasteErr: ""
-    readonly property int pasteMin: 200
-    readonly property int pasteMax: 20000
+    readonly property int pasteMin: win.limits.paste[0]          // the back end's limits (#71)
+    readonly property int pasteMax: win.limits.paste[1]
     function savePasted() {
         pasteErr = "";
         var n = pastedText.text.trim().length;
@@ -268,7 +268,8 @@ Dialog {
         } }
     property bool notesBad: false         // the line under the company notes is a problem, not a confirmation
     readonly property int notesMax: win.limits.company_notes.notes
-    readonly property int replyMax: 8000
+    readonly property int replyMin: win.limits.reply[0]
+    readonly property int replyMax: win.limits.reply[1]
     // a single-line field stops taking letters at its limit: say so instead of going silent
     function full(field, what) { return field.text.length >= field.maximumLength ? what + " takes up to " + field.maximumLength + " characters." : ""; }
     property var thanks: ({})
@@ -291,7 +292,7 @@ Dialog {
     }
     function fileReply() {
         replyErr = ""; replyInfo = "";
-        if (replyText.text.trim().length < 20) { replyErr = "Paste the whole message: that is too short to read."; return; }
+        if (replyText.text.trim().length < replyMin) { replyErr = "Paste the whole message: that is too short to read."; return; }
         if (replyText.text.length > replyMax) {
             replyErr = "That is " + replyText.text.length + " characters. Paste only the message itself, not the whole page (up to " + replyMax + ").";
             return;
@@ -536,7 +537,7 @@ Dialog {
                     RowLayout { objectName: "basisRow"; visible: detailDialog.job.can_paste_text === true; Layout.fillWidth: true; spacing: 10
                         Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.warn; font.pixelSize: 12
                             text: detailDialog.job.basis === "title"
-                                  ? "The app could not read this posting, so the score rests on the title alone and is kept at 40 or below."
+                                  ? "The app could not read this posting, so the score rests on the title alone and is kept at " + win.limits.score_caps.no_text + " or below."
                                   : "The app got only a short summary of this posting, so the score rests on little text." }
                         SmallButton { objectName: "rereadPosting"; visible: !!detailDialog.job.url && !detailDialog.pasteOpen; text: "Read it again"
                             enabled: !detailDialog.scoreBusy; onClicked: detailDialog.readAgain() }

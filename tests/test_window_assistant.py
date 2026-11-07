@@ -890,7 +890,7 @@ def test_a_suggestion_can_be_chosen_with_the_keyboard(ui):
         assert "junior qa tester" in roles().split("|")
     finally:
         ui.js("roleField.text = ''; optDialog.roleErr = ''")
-        ui.js("roleField.suggestions = Qt.binding(function () { return win.roleSuggestions; })")
+        ui.js("roleField.suggestions = Qt.binding(function () { return win.limits.choices.roles; })")
     ui.js("optDialog.close()"); _until_closed(ui, "optDialog")
 
 

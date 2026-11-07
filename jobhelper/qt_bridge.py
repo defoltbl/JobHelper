@@ -148,9 +148,34 @@ class Bridge(RunSlots, JobSlots, QObject):
 
     @Slot(str, result=bool)
     def knownRole(self, text):
-        """True if a search role names a profession the app knows (any of them, not only software)."""
+        """True if a search role names a profession the app knows (any of them, not only software), or shares a word
+        with the role words (prefilter.looks_like_role): the one check of a typed role."""
         from . import prefilter
-        return bool(prefilter.fields_of([str(text or "")]))
+        return bool(prefilter.fields_of([str(text or "")])) or prefilter.looks_like_role(str(text or ""))
+
+    # ── the back end's own checks, asked by the window so it never keeps a copy (#61) ──
+    @Slot(str, result=str)
+    def addressProblem(self, text):
+        """'' or what is wrong with a typed email address."""
+        return _address_problem(text)
+
+    @Slot(str, str, str, result=str)
+    def passwordProblem(self, address, host, password):
+        """'' or what is wrong with a typed mail password, before any server is asked (mailhosts.password_problem)."""
+        from . import mailhosts
+        return mailhosts.password_problem(address, host, password)
+
+    @Slot(str, result=bool)
+    def hasNonLatin(self, text):
+        """Whether a text has letters of another alphabet than the Latin one (textfmt.has_non_latin)."""
+        from . import textfmt
+        return textfmt.has_non_latin(text)
+
+    @Slot(str, result=str)
+    def cityShown(self, name):
+        """A city as the window shows it, in English where it was saved in its own language (places.city_shown)."""
+        from . import places
+        return places.city_shown(name)
 
     @Slot(result="QVariantMap")
     def aboutYou(self):
