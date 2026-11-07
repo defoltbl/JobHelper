@@ -196,6 +196,16 @@ def test_application_only_cards_are_hidden_for_a_new_job_and_nothing_overflows(u
     assert "which your own CV does not mention" not in left_out.property("text") + misplaced.property("text"), "each note its own words"
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(cv_left_out=[], letter_misplaced=[]), render=False)
     ui.js("detailDialog.refresh()")
+    assert ui.find("letterInvented").property("visible") is False
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_invented=["Contoso Labs"]), render=False)
+    ui.js("detailDialog.refresh()")
+    invented = ui.find("letterInvented")
+    assert invented.property("visible") is True and "worked at Contoso Labs, but your CV does not name it." in invented.property("text")
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_invented=["Contoso Labs", "Globex"]), render=False)
+    ui.js("detailDialog.refresh()")
+    assert "Contoso Labs; Globex, but your CV does not name them." in ui.find("letterInvented").property("text")
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_invented=[]), render=False)
+    ui.js("detailDialog.refresh()")
     planner.save_company_notes("Acme", {"contact": "Jana"})                      # notes kept from an earlier application
     ui.js("detailDialog.refresh()")
     assert ui.find("notesCard").property("visible") is True and ui.find("eventCard").property("visible") is False

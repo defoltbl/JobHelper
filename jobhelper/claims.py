@@ -18,14 +18,21 @@ GAP = re.compile(
 # A forward-looking wish: naming a technology this way is not a claim.
 WISH = re.compile(r"\b(would like|would love|keen|look(ing)? forward|want to|eager|hope to|"
                   r"excited to|wish to|aim to|motivated to)\b", re.IGNORECASE)
-# Where a wish ends: the next "I" or "we" (a new claim may start there), "but", or a semicolon.
-_WISH_END = r".*?(?=\b(?:I|I've|I'm|[Ww]e|but)\b|;|$)"
+# A clause that describes a team as it works now ("a team where we use Kafka"), not the candidate's own work: present
+# tense only, so "a team where we built Kafka pipelines" is still a claim (#82).
+_TEAM_CLAUSE = re.compile(r"\bwhere\s+we\s+(?:use|run|work|build|deploy|manage|have|are|love|value)\b[^.;,]*", re.IGNORECASE)
+# Where a wish ends: the next "I" or "we" (a new claim may start there), "but", a semicolon, or a clause about what was
+# done ("eager to learn Spark, having built Kafka pipelines": #82).
+_WISH_END = r".*?(?=\b(?:I|I've|I'm|[Ww]e|but)\b|;|,\s*(?:having|after|since|while)\b|$)"
 # Wording that claims hands-on experience.
+# "lead with" / "lead by" is a manner, not leading a project (#82). A team clause ("a team where we use Kafka") is taken
+# out before this is asked (_TEAM_CLAUSE).
 CLAIM = re.compile(
     r"\b(I|I've|we)\s+(have\s+|also\s+|regularly\s+|currently\s+)*(work(ed)?|use[ds]?|built|build|"
     r"deploy(ed)?|ran|run|administer(ed)?|manage[ds]?|configure[ds]?|operate[ds]?|maintain(ed)?|"
-    r"wrote|written|set up|automate[ds]?|implemented?|develop(ed)?|lead|led|design(ed)?|create[ds]?|"
+    r"wrote|written|set up|automate[ds]?|implemented?|develop(ed)?|lead(?!\s+(?:with|by)\b)|led|design(ed)?|create[ds]?|"
     r"deliver(ed)?|migrate[ds]?|own(ed)?)\b|"
+    r"\bhaving\s+(?:built|used|worked|deployed|run|written|developed|designed|created|maintained|led|delivered|migrated)\b|"
     r"\b(experience(d)? (with|in)|hands-on|proficient|skilled|familiar with|expertise|background in|"
     r"knowledge of|my work with)\b", re.IGNORECASE)
 # An honest bridge names the missing thing on purpose (in an interview that is the right answer).
@@ -36,9 +43,11 @@ FIRST_PERSON = re.compile(r"\b(?:I|my|me|I'm|I've)\b")
 
 
 def unwished(sentence: str, wish: re.Pattern = WISH) -> str:
-    """The sentence without its wishes: from each wish word to where the wish ends. "I have used Kafka and would like
-    to learn Spark" keeps "I have used Kafka and"; a wish elsewhere in a sentence never hides a claim."""
-    return re.sub(f"(?:{wish.pattern}){_WISH_END}", " ", sentence, flags=(wish.flags & re.IGNORECASE) | re.DOTALL)
+    """The sentence without its wishes and without a clause about a team as it works now: from each wish word to where
+    the wish ends. "I have used Kafka and would like to learn Spark" keeps "I have used Kafka and"; a wish elsewhere in a
+    sentence never hides a claim."""
+    kept = re.sub(f"(?:{wish.pattern}){_WISH_END}", " ", sentence, flags=(wish.flags & re.IGNORECASE) | re.DOTALL)
+    return _TEAM_CLAUSE.sub(" ", kept)
 
 
 def sentences(text: str) -> list[str]:
@@ -50,9 +59,14 @@ def mentions(text: str, term: str) -> bool:
     return bool(re.search(rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])", text or "", re.IGNORECASE))
 
 
+_INTEREST = re.compile(r"\b(?:interests?|passion|curiosity|enthusiasm|wish|goal|plans?|aim|hope)\b", re.IGNORECASE)
+
+
 def _owned(text: str, term: str) -> bool:
-    """Whether `text` speaks of `term` as the person's own: "my Kafka pipelines", "our streaming Kafka cluster"."""
-    return bool(re.search(rf"\b(?:my|our)\s+(?:[\w-]+\s+){{0,2}}{re.escape(term)}(?![A-Za-z0-9])", text, re.IGNORECASE))
+    """Whether `text` speaks of `term` as the person's own: "my Kafka pipelines", "our streaming Kafka cluster". "My
+    interest in Kafka" owns an interest, not Kafka (#82)."""
+    return any(not _INTEREST.search(found.group(1)) for found in
+               re.finditer(rf"\b(?:my|our)\s+((?:[\w-]+\s+){{0,2}}){re.escape(term)}(?![A-Za-z0-9])", text, re.IGNORECASE))
 
 
 def names_candidate(text: str, first_name: str) -> bool:
@@ -173,6 +187,7 @@ class EmployerCheck:
     judged: the check stays quiet rather than guess."""
 
     def __init__(self, cv_text: str) -> None:
+        self._cv_low = (cv_text or "").lower()
         raw = self._read(cv_text or "")
         heads = " ".join(head for head, _body in raw)
         self._positions = self._merged([self._position(head, body, cv_text or "", heads) for head, body in raw])
@@ -258,6 +273,48 @@ class EmployerCheck:
         # a word in the headings of two employers ("Brno", "Labs") names neither of them
         shared = {n for p in out for q in out if q is not p for n in p.names if n in q.names}
         return [_Position(tuple(n for n in p.names if n not in shared), p.words, p.named_work) for p in out]
+
+    # "I built the API at Contoso Labs", "I worked for Contoso": a name after "at", after "for" only right after a word of
+    # employment (so "a tool for Slack" is no employer), after "with" only with a legal ending ("with Contoso Ltd"). It is
+    # followed by punctuation or a word that ends the name, so "for Kubernetes clusters" is none either.
+    _AT_NAME = re.compile(r"(?:\b[Aa]t|\b(?:work(?:ed|ing)?|interned|intern|internship|consulted|freelanced|contracted)\s+for|\b[Ww]ith)\s+"
+                          r"((?:[A-Z][\w&'.-]*)(?:\s+(?:[A-Z][\w&'.-]*|&|of))*)"
+                          r"(?=\s*(?:[,.;:)]|$)|\s+(?:as|on|in|where|from|until|during|and|to|for|with|since|before|after|while|I|we)\b)")
+    _LEGAL = frozenset("ltd limited inc corp corporation llc plc gmbh ag sa s.r.o a.s".split())
+    # words of a name that say nothing about which company it is: they never clear a name by themselves
+    _GENERIC = frozenset("""software data cloud systems system solutions services service technologies technology tech digital
+        group labs lab consulting global international company partners studio studios""".split())
+    _NOT_A_NAME = frozenset("""i the a an my our your this that these mr mrs ms miss dr prof sir madam hiring team monday tuesday
+        wednesday thursday friday saturday sunday january february march april may june july august september october
+        november december christmas easter""".split())
+
+    def invented(self, text: str, company: str = "", posting: str = "") -> list[str]:
+        """Employers a first-person sentence places the candidate at or works for ("I built the API at Contoso Labs") that
+        neither the CV, the company written to nor the posting names (#63): a name the model made up. [] when none. A name
+        counts as known when the whole of it is in one of them, or its first telling word is ("Initech Software" is not
+        cleared by "software"). Not caught: a lowercase name, a list of two names, "my work at X"."""
+        known = " ".join((self._cv_low, (company or "").lower(), (posting or "").lower()))
+
+        def named(words: str) -> bool:
+            return bool(re.search(rf"(?<![a-z0-9]){re.escape(words.lower())}(?![a-z0-9])", known))
+        out: list[str] = []
+        for sentence in sentences(text):
+            sentence = sentence[:500]             # a sentence is never longer; a pasted run-on text is not read to its end
+            if not FIRST_PERSON.search(sentence) or not (CLAIM.search(unwished(sentence)) or re.search(r"\b(?:was|were|interned)\b", sentence)):
+                continue                        # only where the candidate says they did something there
+            for found in self._AT_NAME.finditer(sentence):
+                name = found.group(1).rstrip(".")
+                words = [w for w in re.findall(r"[A-Za-z0-9][\w&'.-]*", name) if w.lower().strip(".") not in self._LEGAL]
+                if found.group(0).lower().startswith("with") and not any(w.lower().strip(".") in self._LEGAL for w in name.split()):
+                    continue                    # "with Docker": a tool, not a company, unless the name has a legal ending
+                if not words or words[0].lower() in self._NOT_A_NAME:
+                    continue
+                telling = [w for w in words if w.lower() not in self._GENERIC and len(w) >= 3]
+                if named(" ".join(words)) or (telling and named(telling[0])):
+                    continue                    # the whole name, or its first telling word, is in a source ("EY", "Northwind")
+                if name not in out:
+                    out.append(name)
+        return out
 
     def misplaced(self, text: str, company: str = "") -> list[str]:
         """For each sentence that names one employer and the work the CV names under another one, a note such as

@@ -1,4 +1,6 @@
 """One claim check for every text written in the person's voice (jobhelper/claims.py)."""
+import pytest
+
 from jobhelper import claims, cover_letter, cv_tailor, interview_prep
 from jobhelper.claims import ClaimCheck
 
@@ -215,3 +217,49 @@ def test_titles_and_places_that_once_hid_a_job_or_made_one():
                 # accepted on purpose: a bare position at a school or university is a job
                 "Fellow – Example University (2019 – 2020)", "Director, Example School (2015 – 2020)", "Secretary – Example School (2012 – 2014)"):
         assert head(job) > 0, job
+
+
+def test_a_claim_after_a_wish_is_still_one_and_words_about_a_team_or_an_interest_claim_nothing():
+    """#82: a wish hid "having built Kafka pipelines"; "I lead with", "my interest in" and "where we use" raised false alarms."""
+    check = ClaimCheck(["Kafka", "Spark"])
+    assert check.claimed_in("I am eager to learn Spark, having built Kafka pipelines.") == "Kafka", "the wish ends at the clause"
+    assert check.claimed_in("I am eager to learn Spark, after I built Kafka pipelines.") == "Kafka"
+    assert check.claimed_in("I am eager to learn Spark and Kafka.") == "", "a wish alone claims nothing"
+    for fine in ("I lead with curiosity, and the Kafka stack you describe sounds right.",
+                 "My interest in Kafka grew from your talks.", "I would join a team where we use Kafka every day.",
+                 "Our wish is to try Spark."):
+        assert check.claimed_in(fine) == "", fine
+    for claim in ("I lead the Kafka migration.", "My Kafka pipelines run every night.", "We use Kafka at work.",
+                  "Having built Spark jobs, I know the pitfalls."):
+        assert check.claimed_in(claim) != "", claim
+
+
+
+# a fixed labelled set (#63, #82): each sentence with what the checks must say. The bar: every one as labelled.
+_INVENTED = [   # (sentence, the employer that must be named, or "" for none)
+    ("I built the billing service at Contoso Labs.", "Contoso Labs"), ("I worked for Initech Software as a tester.", "Initech Software"),
+    ("I interned at Globex Cloud during my studies.", "Globex Cloud"), ("As an intern for Fabrikam Ltd, I wrote tests.", "Fabrikam Ltd"),
+    ("I worked with Litware Inc on payments.", "Litware Inc"), ("At Tailspin Toys I led the release work.", "Tailspin Toys"),
+    ("I built a tool for Slack.", ""), ("I wrote Terraform for AWS Lambda.", ""), ("I worked at EY on audits.", ""),
+    ("I built the API at Northwind Parcel.", ""), ("I worked with Docker Labs images.", ""), ("I would love to work at Contoso Labs.", ""),
+    ("I built tools for Kubernetes clusters.", ""), ("I am grateful for Ms. Novak's time.", ""), ("I worked at Christmas on the release.", ""),
+    ("I built software at Northwind.", ""),
+]
+_CLAIMS = [   # (sentence, the technology claimed, or "" for none)
+    ("I am eager to learn Spark, having built Kafka pipelines.", "Kafka"), ("I am keen to learn Spark, since I built Kafka pipelines.", "Kafka"),
+    ("I am eager to learn Spark, while I run Kafka clusters.", "Kafka"), ("I am proud that we built the Kafka pipeline.", "Kafka"),
+    ("I joined a team where we built Kafka pipelines.", "Kafka"), ("My interest in Spark and my Kafka pipelines both grew.", "Kafka"),
+    ("I lead the Kafka migration.", "Kafka"), ("I would join a team where we use Kafka.", ""), ("My interest in Kafka grew.", ""),
+    ("I lead with curiosity, and the Kafka stack sounds right.", ""), ("I am eager to learn Kafka.", ""),
+]
+
+
+@pytest.mark.parametrize("sentence, employer", _INVENTED)
+def test_the_invented_employer_set(sentence, employer):
+    cv = "Junior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built tools.\nAuditor – EY, Prague (2020 – 2022): audits.\n"
+    assert claims.EmployerCheck(cv).invented(sentence, "Acme", "We run Linux servers.") == ([employer] if employer else []), sentence
+
+
+@pytest.mark.parametrize("sentence, term", _CLAIMS)
+def test_the_claim_set(sentence, term):
+    assert ClaimCheck(["Kafka", "Spark"]).claimed_in(sentence) == term, sentence

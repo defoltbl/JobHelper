@@ -5,7 +5,7 @@ from pathlib import Path
 import docx
 import pytest
 
-from jobhelper import config, cover_letter, llm, store
+from jobhelper import claims, config, cover_letter, llm, store
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = ROOT / "tests" / "fixtures" / "letter_example_deutscheborse.docx"      # never your own template in data/
@@ -256,3 +256,35 @@ def test_a_rewrite_with_a_real_problem_and_moved_work_is_refused(isolate_data, m
     job = store.new_job(id="r2", title="Administrator", company="Acme", description="We run Linux servers.")
     with pytest.raises(ValueError, match="Kubernetes"):
         cover_letter.rewrite_paragraph(job, cv, list(body), 2)
+
+
+def test_a_letter_that_names_an_employer_no_source_gives_is_sent_back_then_named(isolate_data, monkeypatch):
+    """#63: the employer check caught work at the wrong employer of the CV, not an employer the model made up."""
+    title, body, _ = _example()
+    monkeypatch.setattr(config, "LETTER_TEMPLATE", TEMPLATE)
+    cv = _master_text()
+    assert "Contoso" not in cv and "Litware" not in cv
+    made_up = list(body)
+    made_up[2] = body[2].rstrip() + " At Contoso Labs I built the billing service."
+    prompts, answers = [], [{"title_line": title, "paragraphs": made_up, "role_short": "Admin"},
+                            {"title_line": title, "paragraphs": body, "role_short": "Admin"}]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or answers[min(len(prompts) - 1, 1)])
+    job = store.new_job(id="i1", title="Administrator", company="Acme", description="We run Linux servers.")
+    cover_letter.write(job, cv, MASTER)
+    assert len(prompts) == 2 and "places the candidate at Contoso Labs" in prompts[1] and "letter_invented" not in job, "sent back once"
+    prompts.clear()
+    answers[1] = answers[0]                                   # the model insists: the person is told
+    job = store.new_job(id="i2", title="Administrator", company="Acme", description="We run Linux servers.")
+    cover_letter.write(job, cv, MASTER)
+    assert job["letter_invented"] == ["Contoso Labs"], "a line of its own in the job window"
+    check = claims.EmployerCheck(cv + "\nIT Intern – Northwind Parcel, Brno (2023 – 2024): scripts.\n")
+    flagged = ("I built the API at Contoso Labs.", "As an intern for Fabrikam Ltd, I wrote tests.", "I worked with Litware Inc on payments.",
+               "At Contoso Labs I built the billing service.")
+    for sentence in flagged:
+        assert check.invented(sentence, "Acme", "We run Linux servers.") != [], sentence
+    fine = ("I built the API at Northwind Parcel.", "I want to build tools at Acme.", "I built tools for Kubernetes clusters.",
+            "I worked with Docker every day.", "I worked at Christmas on the release.", "I would love to work at Tailspin.",
+            "I built a parser for Tailspin, our client.", "Contoso Labs builds great tools.",
+            "I am grateful for Ms. Novak's time.", "I worked for Dr. Smith's lab as a volunteer.")
+    for sentence in fine:
+        assert check.invented(sentence, "Acme", "Our client Tailspin needs a parser.") == [], sentence

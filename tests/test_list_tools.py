@@ -282,6 +282,23 @@ def test_saving_the_letter_names_work_at_the_wrong_employer_until_it_is_gone(api
     assert store.find(store.load_jobs(), "lead")["letter_misplaced"] == []
 
 
+def test_saving_the_letter_names_an_employer_no_source_gives_until_it_is_gone(api, monkeypatch):
+    monkeypatch.setattr(api._letters._cv, "text", lambda: "Junior Developer – Northwind Parcel (2024 – present): built tools.\n")
+    store.save_jobs([_lead_with_docs()])
+    invented = list(PARAS)
+    invented[1] = PARAS[1] + " At Contoso Labs I built internal tools."
+    assert api.save_letter("lead", invented)["ok"] is True
+    assert store.find(store.load_jobs(), "lead")["letter_invented"] == ["Contoso Labs"]
+    assert api.job_detail("lead")["letter_invented"] == ["Contoso Labs"]
+    assert api.save_letter("lead", PARAS)["ok"] is True                                   # corrected: the line goes
+    assert store.find(store.load_jobs(), "lead")["letter_invented"] == []
+
+
+def test_the_detail_names_no_invented_employer_without_a_letter(api):
+    store.save_jobs([dict(_lead_with_docs(), cover_letter_file="", letter_invented=["Contoso Labs"])])
+    assert api.job_detail("lead")["letter_invented"] == [], "an old note of a letter that is gone is not shown"
+
+
 def test_a_rewrite_may_use_your_figures_but_not_invent_one(api, monkeypatch):
     store.save_jobs([_lead_with_docs()])
     calls = []

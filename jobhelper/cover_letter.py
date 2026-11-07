@@ -413,6 +413,13 @@ def _rewrite_length(text: str, most: int, paragraphs: list[str], index: int) -> 
     return []
 
 
+def invented_problems(text: str, employers: claims.EmployerCheck, company: str = "", posting: str = "") -> list[str]:
+    """An employer the letter places the candidate at that no source names (claims.EmployerCheck.invented), in the words a
+    draft is sent back with (#63)."""
+    return [f"The letter places the candidate at {name}, but neither the CV nor the posting names it. Name only employers "
+            "the CV gives." for name in employers.invented(text, company, posting)]
+
+
 def misplaced_problems(text: str, employers: claims.EmployerCheck, what: str = "The letter", company: str = "") -> list[str]:
     """Work given to the wrong employer (claims.EmployerCheck), in the words a draft is sent back with."""
     return [f"{what} puts {where}, but the CV names that work only under another position. Keep each piece of work "
@@ -532,6 +539,7 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
                      "the candidate wants to work with." for phrase in borrowed_claims(paragraphs, description, backed)]
         problems += figure_problems(claims.unbacked_figures("\n".join(paragraphs), *figure_sources(job, cv_text), brackets_ok=False))
         problems += misplaced_problems("\n".join(paragraphs), employers, company=job.get("company", ""))
+        problems += invented_problems("\n".join(paragraphs), employers, job.get("company", ""), job.get("description", ""))
         if not problems:
             break
         feedback = claims.rejected(problems, "draft")
@@ -551,6 +559,11 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
         job["letter_misplaced"] = misplaced[:8]
     else:
         job.pop("letter_misplaced", None)
+    invented = employers.invented("\n".join(paragraphs), job.get("company", ""), job.get("description", ""))   # as a save reads it
+    if invented:
+        job["letter_invented"] = invented[:8]
+    else:
+        job.pop("letter_invented", None)
     left = borrowed_claims(paragraphs, description, backed)
     if left:
         job["letter_check"] = left[:8]

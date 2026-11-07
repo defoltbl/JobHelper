@@ -470,6 +470,12 @@ Dialog {
                         text: "Check your cover letter before you send it. It puts work at an employer where your CV does not show it: "
                               + (detailDialog.job.letter_misplaced || []).join("; ")
                               + ". Keep each piece of work with the job where you did it; Edit letter lets you change the sentence." }
+                    // an employer the letter names that neither your CV nor the posting gives: its own line (#63)
+                    Text { objectName: "letterInvented"; visible: (detailDialog.job.letter_invented || []).length > 0
+                        Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true
+                        readonly property var names: detailDialog.job.letter_invented || []
+                        text: "Check your cover letter before you send it. It says that you worked at " + names.join("; ")
+                              + ", but your CV does not name " + (names.length > 1 ? "them" : "it") + ". Edit letter lets you change the sentence." }
                     Text { objectName: "letterFigures"; visible: (detailDialog.job.letter_figures || []).length > 0
                         Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true
                         text: "Check the figures in your cover letter: " + (detailDialog.job.letter_figures || []).join(", ")
