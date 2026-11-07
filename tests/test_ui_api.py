@@ -1255,3 +1255,15 @@ def test_a_change_of_the_job_list_waits_for_no_weekly_run(jobs_held_elsewhere, c
     before = config.JOBS_JSON.read_bytes()
     assert call(ui_api.Api()) == refused
     assert config.JOBS_JSON.read_bytes() == before
+
+
+def test_the_career_sites_are_checked_before_anything_is_saved(api):
+    """#67: Options saved the options, then refused a career site: the window said so but the options were already saved."""
+    good = {"name": "Proton", "ats": "greenhouse", "token": "proton"}
+    api.save_companies([good])
+    before = (config.DATA_DIR / "companies.json").read_bytes()
+    said = api.companies_problem([good, {"name": "Bad", "ats": "recruitee", "token": "evil.example/x#"}])
+    assert said.startswith("Not saved: Bad.") and (config.DATA_DIR / "companies.json").read_bytes() == before, "nothing written"
+    assert api.companies_problem([good]) == ""
+    assert api.save_companies([good, {"name": "Bad", "ats": "", "token": "x"}])["msg"] == api.companies_problem([good, {"name": "Bad", "ats": "", "token": "x"}]), \
+        "the check and the save say the same"

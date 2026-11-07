@@ -344,6 +344,9 @@ data/                your data; only the *.example.* files are in git
 - **A one-line field that stops at its limit says so with `AtLimit`** (#70: the field's own maximumLength, from
   `win.limits`). A chip is a `Chip`: as wide as its text, never wider than its row, so a long one wraps (Options roles,
   `TagEditor`, `ChipFlow`). Later: the "takes up to N characters" sentence is still built in several windows.
+- **Options checks the career sites before it saves anything** (`OptionsService.companies_problem`, the same
+  `_companies_checked` as `save_companies`), so a refused site leaves Options unsaved (#67). A chosen master CV is read
+  in a thread (`Bridge.chooseMasterCV` → `cvSet`). A scan's error names its own mailbox (`email_client.mail_host_of`).
 - **An answer sent from a worker thread must carry plain values.** The start-up check travels inside the
   connection answer as text (`info.health`, JSON) and the window parses it.
 - **Where the data is, is decided once, when `config` is imported.** `config.DATA_DIR` comes from

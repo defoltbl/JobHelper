@@ -63,6 +63,7 @@ Item {
     Blame { id: emailBlame }
     property alias emailErr: emailBlame.text   // emailBlame.box: "address", "server" or "password"
     property string cvErr: ""
+    property bool cvBusy: false               // a chosen CV is being read and checked
     property real cover: shown ? 1 : 0
     readonly property bool hasCv: (connData.cv || "") !== ""
     readonly property var changedFiles: connData.changed_files || []
@@ -364,7 +365,7 @@ Item {
                     sub: welcome.cvErr !== "" ? welcome.cvErr
                        : drop.containsDrag ? "Drop it to use this file."
                        : welcome.hasCv ? connData.cv : "Drop a .docx, .pdf or .txt file here, or choose a file."
-                    SmallButton { text: welcome.hasCv ? "Change…" : "Choose…"; onClicked: cvDialog.open() }
+                    SmallButton { text: welcome.cvBusy ? "Reading…" : (welcome.hasCv ? "Change…" : "Choose…"); enabled: !welcome.cvBusy; onClicked: cvDialog.open() }
                 }
 
                 // 4 · Data protection (encryption + tamper check)

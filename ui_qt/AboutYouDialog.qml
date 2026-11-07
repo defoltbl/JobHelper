@@ -36,6 +36,14 @@ Dialog {
         if (!numberFault) return;
         var w = numberProblem(); numberFault = w !== ""; aboutBlame.say(w, "");
     }
+    // the same for a fault Save named: put right, its line goes; another one left, the line names that one (#67)
+    property bool problemSaid: false
+    function recheckProblem() {
+        if (!problemSaid) return;
+        var p = problem(); problemSaid = p.text !== ""; aboutBlame.say(p.text, p.box);
+    }
+    onPayTickChanged: recheckProblem()
+    onNotesTickChanged: recheckProblem()      // after a box's own "err = ''": a fault Save named that is still there stays said
     property bool confirmClose: false
     property string loaded: ""            // what was there when the window opened, to know whether anything changed
     property var start: ({ ok: true, text: "" })
@@ -49,6 +57,7 @@ Dialog {
 
     function show() { open(); }
     function load() {
+        problemSaid = false;                  // a new look: no fault of an earlier Save is said again
         info = bridge.aboutYou();
         myLetters = bridge.myLetters();
         salarySpin.value = info.salary_target || 0;
@@ -168,7 +177,7 @@ Dialog {
         }
         if (win.hasNonLatin(rightField.text) || win.hasNonLatin(startField.text))        // each box in other letters turns red
             return fault("Write the right to work and the start in English (Latin letters): they go into English letters and forms.", "latin");
-        if (notesSize > notesMax) return fault("The notes about your work are " + (notesSize - notesMax) + " characters too long together. Shorten some, then save.");
+        if (notesSize > notesMax) return fault("The notes about your work are too long together: the count under them says by how much. Shorten some, then save.");   // the number is said once, there
         if (win.hasNonLatin(generalField.text)) return fault("Write the notes about your work in English (Latin letters): they are used for English interviews and forms.");
         for (var j = 0; j < boxModel.count; j++) if (win.hasNonLatin(boxModel.get(j).notes))
             return fault("Write the note on “" + boxModel.get(j).job + "” in English (Latin letters).");
@@ -191,6 +200,7 @@ Dialog {
         aboutSink.forceActiveFocus();     // finish any field that is still being edited
         err = ""; confirmClose = false;
         var p = problem();
+        problemSaid = p.text !== "";
         if (p.text !== "") { aboutBlame.say(p.text, p.box); return; }
         var saved = bridge.saveAboutYou(collect());
         if (!(saved && saved.ok)) { err = (saved && saved.msg) || "About you could not be saved."; return; }

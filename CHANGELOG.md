@@ -7,6 +7,10 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Options:** when a career site cannot be saved, nothing in Options is saved. Before, the other options were already saved.
+- **Master CV:** a chosen CV is read in the background, and its button says **Reading…** meanwhile. A second one cannot be chosen until then. Before, the window could stop while a large PDF was read.
+- **Email scan:** an error names the server of the mailbox that failed. Before, it could name the server of the main mailbox.
+- **About you:** when the notes are too long together, the red line at the bottom points to the count under them instead of repeating it. A red line about a figure goes once the figure is put right.
 - **Account:** setting up the job email says the same about a wrong address or password as the check when you save it. A password with letters such as é is refused at once, as the save refused it.
 - **Text boxes:** a click anywhere in the frame of a notes, letter or answer box puts the cursor in it, and the Tab key moves to the next field. Before, the lower part of the frame did nothing, and Tab typed a tab character. In the boxes for a pasted posting and a pasted reply, the text scrolls with the cursor.
 - **Options:** the **Country** field says how many characters it takes when it is full. So does the role under **A different figure for** in About you.
