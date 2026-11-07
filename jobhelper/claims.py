@@ -110,10 +110,13 @@ _DEGREE = re.compile(r"^(?:(?:bsc|msc|ba|ma|phd|mba|bachelor\w*|degree|diploma)\
                      r"master(?:[’']?s)?(?:\s+(?:of|in|degree|programme|program|\d)\b|[’']s\b))", re.IGNORECASE)
 # The nouns of a job in the title part: with one of them, a school or an academy is an employer ("Teacher – International
 # School"); a field of study ("Software Engineering", "Data Science") has none. A closed list on purpose.
-# shortcut: a job whose noun is not here ("Pianist – Example Conservatory") is read as study; add the noun when one is seen
+# shortcut: a job whose noun is not here is read as study; add the noun when one is seen (#66 added the ones at places
+# of study: pianist, postdoc, fellow, dean, … and "working student", a phrase, since "student" alone is study)
 _JOB_WORDS = frozenset("""intern trainee assistant developer engineer programmer analyst manager consultant specialist
     administrator architect designer tester coordinator technician head lead teacher tutor lecturer professor instructor
-    trainer coach researcher scientist librarian nurse counsellor counselor officer clerk receptionist""".split())
+    trainer coach researcher scientist librarian nurse counsellor counselor officer clerk receptionist
+    pianist musician accompanist organist singer postdoc postdoctoral fellow dean director curator secretary""".split())
+_JOB_PHRASES = re.compile(r"\bworking\s+student\b", re.IGNORECASE)
 # Words of a job title, not of an employer: a position is named by its employer, never by "Junior" or "Developer".
 _ROLE_WORDS = frozenset("""junior senior lead principal staff chief head intern internship trainee student assistant associate
     developer engineer programmer analyst manager consultant specialist administrator architect designer tester officer
@@ -183,7 +186,8 @@ class EmployerCheck:
         dates = _DATES.search(line[:160])
         before = line[:dates.start()] if dates else ""
         title = _SEPARATOR.split(before, maxsplit=1)[0] if dates else ""
-        job = any(w.lower() in _JOB_WORDS for w in _TITLE_WORD.findall(title)) and not _COURSE.search(title)
+        job = (any(w.lower() in _JOB_WORDS for w in _TITLE_WORD.findall(title)) or bool(_JOB_PHRASES.search(title))) \
+            and not _COURSE.search(title)
         if (not dates or _BULLET.match(line) or not _SEPARATOR.search(before)
                 or (_STUDY_PLACE.search(before) and not job) or _DEGREE.match(line)):
             return 0

@@ -7,6 +7,8 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Adapted CV:** when the profile of your own CV does not say that you work independently, Claude is asked once to leave such a sentence out, and one that stays is named in the job window.
+- **Cover letters:** a job such as "Pianist – Example Conservatory" or "Working Student – Example University" is no longer taken for study, so work at it is checked like work at any other job.
 - **Keyboard:** the **Resume** button is reached with Tab and pressed with Space or Return, and a switch shows an outline when Tab reaches it. **Resume** looks as pale as any other button that cannot be used yet.
 - **About you:** the example date under **You can start** is always a date to come.
 - **Weekly run:** its window title has no picture in front of it.
