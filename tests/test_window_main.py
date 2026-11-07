@@ -3,6 +3,7 @@
 Its tests share one window and follow on from each other, so they run on one worker in this order (see
 tests/window_harness.py). The other window test files run beside it, each with a window of its own."""
 
+import json
 import re
 
 import pytest
@@ -1675,4 +1676,62 @@ def test_the_weekly_run_close_question_is_never_hidden_by_a_wrong_time(ui):
         ui.js("confirmClose = true; close()", sched)
         _until_closed(ui, sched)
         ui.js("schedData = bridge.weeklySchedule()")
+    assert ui.warnings == []
+
+
+@pytest.mark.parametrize("size", [(940, 620), (2560, 1400)])
+def test_a_long_search_role_wraps_inside_the_window(ui, size):
+    """#70: a long role chip was clipped at the edge of Options instead of wrapping."""
+    dialog = ui.find("optDialog")
+    width, height = ui.win.width(), ui.win.height()
+    ui.win.setWidth(size[0]); ui.win.setHeight(size[1])
+    _open(ui, dialog, 450)
+    try:
+        long = "Senior principal data platform engineer for machine learning infrastructure, analytics and reporting tools"
+        ui.js(f"rolesModel.append({{ text: '{long}' }})", dialog)
+        _until_true(ui, lambda: ui.js("rolesModel.count", dialog) >= 1)
+        _until_true(ui, lambda: ui.js("rolesFlow.width", dialog) > 0)
+        chip = ui.js("var c = rolesFlow.children[rolesModel.count - 1]; var t = c.children.filter(function (k) { return k.objectName === 'chipText'; })[0]; "
+                     "JSON.stringify({ w: c.width, row: rolesFlow.width, h: c.height, th: t.implicitHeight, lines: t.lineCount, natural: t.text === '" + long + "' })", dialog)
+        chip = json.loads(chip)
+        assert chip["natural"] is True, chip
+        assert chip["w"] <= chip["row"] + 0.5, f"the chip stays inside its row: {chip}"
+        assert chip["th"] <= chip["h"], f"every line of it is shown: {chip}"
+        assert chip["lines"] >= 2 and chip["h"] > 24, f"the long role wraps, and its chip grows to hold its lines: {chip}"
+        ui.js(f"skipTags.setAll(['{long.lower()}'])", dialog)                  # a skip word saved before: the same Chip
+        _until_true(ui, lambda: ui.js("skipTags.chipRow.width", dialog) > 0)
+        tag = json.loads(ui.js("var c = skipTags.chipRow.children[0]; JSON.stringify({ w: c.width, row: skipTags.chipRow.width, h: c.height })", dialog))
+        assert tag["w"] <= tag["row"] + 0.5 and tag["h"] > 24, f"a long skip word wraps inside its row too: {tag}"
+    finally:
+        ui.js("rolesModel.remove(rolesModel.count - 1); skipTags.setAll(optsData.skip_words || []); confirmClose = true; close()", dialog)
+        _until_closed(ui, dialog)
+        ui.win.setWidth(width); ui.win.setHeight(height)
+    assert ui.warnings == []
+
+
+def test_a_field_at_its_limit_says_so(ui):
+    """#70: Country and the role of a different figure stopped taking letters without a word."""
+    dialog = ui.find("optDialog")
+    _open(ui, dialog, 450)
+    try:
+        most = ui.js("countryField.maximumLength", dialog)
+        ui.js(f"countryField.text = '{'x' * (most - 1)}'", dialog)
+        assert ui.js("countryFull.visible", dialog) is False
+        ui.js(f"countryField.text = '{'x' * most}'", dialog)
+        assert ui.js("countryFull.visible", dialog) is True and f"takes up to {most} characters" in ui.js("countryFull.text", dialog)
+    finally:
+        ui.js("countryField.text = ''; confirmClose = true; close()", dialog)
+        _until_closed(ui, dialog)
+    about = ui.find("aboutDialog")
+    ui.js("aboutDialog.show()")
+    _until_open(ui, "aboutDialog")
+    try:
+        most = ui.js("payRole.maximumLength", about)
+        ui.js(f"payRole.text = '{'r' * most}'", about)
+        assert ui.js("payRoleFull.visible", about) is True and f"takes up to {most} characters" in ui.js("payRoleFull.text", about)
+        ui.js("payRole.text = 'support'", about)
+        assert ui.js("payRoleFull.visible", about) is False
+    finally:
+        ui.js("payRole.text = ''; confirmClose = true; close()", about)
+        _until_closed(ui, "aboutDialog")
     assert ui.warnings == []

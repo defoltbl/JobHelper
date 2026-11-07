@@ -547,8 +547,8 @@ Dialog {
                         Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1; implicitHeight: 130; clip: true
                             border.color: detailDialog.pasteErr !== "" || pastedText.text.length > detailDialog.pasteMax ? theme.crit
                                           : (pastedText.activeFocus ? theme.accent : theme.line)
-                            Flickable { anchors.fill: parent; anchors.margins: 8; contentHeight: pastedText.implicitHeight; clip: true
-                                TextEdit { id: pastedText; objectName: "pastedText"; width: parent.width; wrapMode: TextEdit.Wrap; selectByMouse: true
+                            Flickable { id: pasteFlick; anchors.fill: parent; anchors.margins: 8; contentHeight: pastedText.implicitHeight; clip: true
+                                BoxEdit { id: pastedText; objectName: "pastedText"; pad: 0; height: Math.max(implicitHeight, pasteFlick.height); flick: pasteFlick
                                     color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                                     onTextChanged: if (activeFocus) detailDialog.pasteErr = ""
                                     Text { visible: pastedText.text === ""; width: parent.width; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 12
@@ -754,8 +754,8 @@ Dialog {
                         Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
                             border.color: replyText.text.length > detailDialog.replyMax ? theme.crit : (replyText.activeFocus ? theme.accent : theme.line)
                             implicitHeight: 110; clip: true
-                            Flickable { anchors.fill: parent; anchors.margins: 8; contentHeight: replyText.implicitHeight; clip: true
-                                TextEdit { id: replyText; objectName: "replyText"; width: parent.width; wrapMode: TextEdit.Wrap; selectByMouse: true
+                            Flickable { id: replyFlick; anchors.fill: parent; anchors.margins: 8; contentHeight: replyText.implicitHeight; clip: true
+                                BoxEdit { id: replyText; objectName: "replyText"; pad: 0; height: Math.max(implicitHeight, replyFlick.height); flick: replyFlick
                                     color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                                     Text { visible: replyText.text === ""; text: "Paste the message text here"; color: theme.faint; font.pixelSize: 12 } } } }
                         RowLayout { Layout.fillWidth: true
@@ -796,7 +796,7 @@ Dialog {
                     Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
                         border.color: cnNotes.text.length > detailDialog.notesMax ? theme.crit : (cnNotes.activeFocus ? theme.accent : theme.line)
                         implicitHeight: Math.max(54, cnNotes.implicitHeight + 16)
-                        TextEdit { id: cnNotes; objectName: "cnNotes"; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap; selectByMouse: true
+                        BoxEdit { id: cnNotes; objectName: "cnNotes"
                             color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                             onTextChanged: if (activeFocus) { detailDialog.notesInfo = ""; detailDialog.notesBad = false; }
                             Text { visible: cnNotes.text === ""; text: "Anything else worth remembering"; color: theme.faint; font.pixelSize: 12 } } }

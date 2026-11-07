@@ -7,6 +7,9 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Text boxes:** a click anywhere in the frame of a notes, letter or answer box puts the cursor in it, and the Tab key moves to the next field. Before, the lower part of the frame did nothing, and Tab typed a tab character. In the boxes for a pasted posting and a pasted reply, the text scrolls with the cursor.
+- **Options:** the **Country** field says how many characters it takes when it is full. So does the role under **A different figure for** in About you.
+- **Options:** a long search role, skip word or keyword wraps onto more lines. Before, its end was cut off.
 - **Job window:** a fast double-click on the close button, **Mark applied** or **Not interested** no longer discards your unsaved text. The second press counts only after a short pause.
 - **Account:** **Check again** says **Checking…** and takes no new click until Claude answers.
 - **Search:** a search or a new score starts without a wait for the Claude sign-in check when the app checked it in the last 10 minutes.

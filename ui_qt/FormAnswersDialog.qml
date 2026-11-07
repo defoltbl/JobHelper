@@ -157,8 +157,8 @@ Dialog {
                         border.color: (formDialog.err !== "" && fmQuestions.text.trim() === "") || (fmQuestions.text.trim() !== "" && formDialog.checked.problem !== "")
                               ? theme.crit : (fmQuestions.activeFocus ? theme.accent : theme.line)
                         implicitHeight: Math.max(96, fmQuestions.implicitHeight + 16)
-                        TextEdit { id: fmQuestions; objectName: "fmQuestions"; x: 8; y: 8; width: parent.width - 16
-                            wrapMode: TextEdit.Wrap; selectByMouse: true; color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
+                        BoxEdit { id: fmQuestions; objectName: "fmQuestions"
+                            color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                             readOnly: formDialog.busy
                             onTextChanged: { formDialog.recheck(); if (activeFocus) { formDialog.err = ""; formDialog.note = ""; } }
                             Text { visible: fmQuestions.text === ""; color: theme.faint; font.pixelSize: 12
@@ -202,7 +202,7 @@ Dialog {
                             Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
                                 border.color: fmAns.text.length > formDialog.maxAnswer ? theme.crit : (fmAns.activeFocus ? theme.accent : theme.line)
                                 implicitHeight: Math.max(52, fmAns.implicitHeight + 16)
-                                TextEdit { id: fmAns; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap; selectByMouse: true
+                                BoxEdit { id: fmAns
                                     color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                                     Component.onCompleted: text = model.answer
                                     onTextChanged: if (activeFocus) { fmModel.setProperty(index, "answer", text); formDialog.dirty = true

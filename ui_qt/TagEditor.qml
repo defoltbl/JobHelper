@@ -16,6 +16,7 @@ ColumnLayout {
     ListModel { id: teModel }
     function setAll(arr) { teModel.clear(); for (var i = 0; i < (arr || []).length; i++) teModel.append({ text: "" + arr[i] }); err = ""; teField.text = ""; }
     readonly property int tagCount: teModel.count
+    readonly property Item chipRow: teFlow                     // the row of chips (a test measures them)
     readonly property string typed: teField.text.trim()      // typed into the box and not added to the list (yet)
     function all() { var out = []; for (var i = 0; i < teModel.count; i++) out.push("" + teModel.get(i).text); return out; }
     function add(txt) {
@@ -43,18 +44,10 @@ ColumnLayout {
             SmallButton { text: "+ Add"; primaryStyle: true; onClicked: { if (te.add(teField.text)) teField.text = ""; } } } }
     Text { visible: te.err !== ""; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.topMargin: 2
         wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true; text: te.err }
-    Flow {
+    Flow { id: teFlow
         Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12
         spacing: 6; visible: teModel.count > 0
         Repeater { model: teModel
-            Rectangle {
-                radius: 999; color: theme.inset; border.color: theme.line; border.width: 1
-                implicitHeight: 24; implicitWidth: teChip.width + 16
-                Row { id: teChip; anchors.centerIn: parent; spacing: 5
-                    Text { text: model.text; color: te.chipTone; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                    Text { text: "✕"; color: theme.faint; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter
-                        MouseArea { anchors.fill: parent; anchors.margins: -4; cursorShape: Qt.PointingHandCursor
-                            onClicked: teModel.remove(index) } } }
-            } }
+            Chip { label: model.text; tone: te.chipTone; removable: true; onRemove: teModel.remove(index) } }
     }
 }

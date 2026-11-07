@@ -116,7 +116,7 @@ Dialog {
                         Rectangle { Layout.fillWidth: true; radius: 8; color: theme.inset; border.width: 1
                             border.color: parent.over || parent.listSays !== "" ? theme.crit : (peText.activeFocus ? theme.accent : theme.line)
                             implicitHeight: Math.max(44, peText.implicitHeight + 16)
-                            TextEdit { id: peText; x: 8; y: 8; width: parent.width - 16; wrapMode: TextEdit.Wrap; selectByMouse: true
+                            BoxEdit { id: peText
                                 color: theme.ink; font.pixelSize: 12; selectionColor: theme.accent
                                 Component.onCompleted: text = model.text
                                 onTextChanged: if (activeFocus) { peModel.setProperty(index, "text", text); prepEditDialog.dirty = true

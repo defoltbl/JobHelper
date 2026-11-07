@@ -364,6 +364,8 @@ Dialog {
                                 background: Rectangle { radius: 8; color: theme.surface; border.width: 1
                                     border.color: optDialog.countryProblem(countryField.text) !== "" ? theme.crit
                                                   : (countryField.activeFocus ? theme.accent : theme.line) } } }
+                        AtLimit { id: countryFull; objectName: "countryFull"; field: countryField; name: (win.limits.labels || {}).country || "Country"
+                            Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12 }
                         Sep {}
                         // which remote jobs a search keeps, from any source (places.RemoteReach)
                         SRow { label: "Remote jobs"; hint: "from any source · which places they must be open to" }
@@ -437,19 +439,11 @@ Dialog {
                         Text { visible: optDialog.roleErr !== ""; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.topMargin: 2
                             wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11; font.bold: true; text: optDialog.roleErr }
                         // chips
-                        Flow {
+                        Flow { id: rolesFlow
                             Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12; Layout.bottomMargin: 12
                             spacing: 6; visible: rolesModel.count > 0
                             Repeater { model: rolesModel
-                                Rectangle {
-                                    radius: 999; color: theme.inset; border.color: theme.line; border.width: 1
-                                    implicitHeight: 24; implicitWidth: chipRow.width + 16
-                                    Row { id: chipRow; anchors.centerIn: parent; spacing: 5
-                                        Text { text: model.text; color: theme.ink; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                                        Text { text: "✕"; color: theme.faint; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter
-                                            MouseArea { anchors.fill: parent; anchors.margins: -4; cursorShape: Qt.PointingHandCursor
-                                                onClicked: rolesModel.remove(index) } } }
-                                } }
+                                Chip { objectName: "roleChip_" + index; label: model.text; removable: true; onRemove: rolesModel.remove(index) } }
                         }
                         Sep {}
                         TagEditor { id: skipTags; objectName: "skipTags"; chipTone: theme.crit
