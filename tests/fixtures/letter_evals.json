@@ -1,0 +1,351 @@
+{
+ "about": "The golden set of the letter checks (#78): invented people, postings and letter sentences, each labelled with what the checks must say. Run before a change to a prompt or to a claim rule ships: tests/test_letter_evals.py. Add a case for every false alarm or missed claim found; never change a label to make a run pass.",
+ "people": {
+  "developer": {
+   "cv": "Alex Novak\nJunior Developer\nalex@example.com · +420 600 000 000\nEXPERIENCE\nJunior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built an internal REST API in Django and Python; wrote tests with pytest.\nIT Intern – Fabrikam Labs, Brno (2023 – 2024): maintained Python scripts for data imports.\nSKILLS\nPython, Django, PostgreSQL, Git, Docker\n",
+   "posting": "We build data platforms with Python, Kafka, Terraform and Kubernetes. You will run quarterly zebra migrations. Experience with Airflow and Snowflake is a plus. Troubleshooting in production is part of the role. Node.js is a plus.",
+   "company": "Acme Data"
+  },
+  "accountant": {
+   "cv": "Jana Example\nJunior Accountant\njana@example.com · +420 600 000 001\nEXPERIENCE\nJunior Accountant – Litware Finance s.r.o., Prague (2024 – present): processed about 300 supplier invoices a month in SAP, prepared weekly payment runs and reconciled supplier statements.\n",
+   "posting": "You will post invoices with the correct tax codes and cost centers, keep the vendor master data up to date and work in SAP and Xero. Knowledge of IFRS is a plus. Good Excel skills; German is a plus.",
+   "company": "Tailspin Holdings"
+  },
+  "carer": {
+   "cv": "Mara Example\nCare Assistant\nmara@example.com · +420 600 000 002\nEXPERIENCE\nCare Assistant – Sunrise Home, Brno (2022 – present): helped residents with daily care and meals; holds a First aid certificate.\n",
+   "posting": "We look for a carer with First aid, CPR and Medication administration experience for our day centre.",
+   "company": "Wingtip Care"
+  },
+  "engineer": {
+   "cv": "Petr Example\nMechanical Design Engineer\npetr@example.com · +420 600 000 003\nEXPERIENCE\nDesign Engineer – Contoso Machines a.s., Ostrava (2021 – present): designed welded frames in SolidWorks and prepared technical drawings.\n",
+   "posting": "You will design parts in CATIA and SolidWorks, lead FMEA sessions and apply GD&T on technical drawings. Experience with REST interfaces to the line control is a plus.",
+   "company": "Fabrikam Motors"
+  }
+ },
+ "cases": [
+  {
+   "id": "dev-clean",
+   "person": "developer",
+   "text": "At Northwind Parcel I built an internal REST API in Django.",
+   "expect": {}
+  },
+  {
+   "id": "dev-claims-posting-tool",
+   "person": "developer",
+   "text": "I scheduled Airflow pipelines every night.",
+   "expect": {
+    "claimed": [
+     "Airflow"
+    ]
+   }
+  },
+  {
+   "id": "dev-claims-posting-tool-2",
+   "person": "developer",
+   "text": "I built dashboards on Snowflake for the sales team.",
+   "expect": {
+    "claimed": [
+     "Snowflake"
+    ]
+   }
+  },
+  {
+   "id": "dev-wish-only",
+   "person": "developer",
+   "text": "I am eager to learn Airflow and Kafka.",
+   "expect": {}
+  },
+  {
+   "id": "dev-role-words",
+   "person": "developer",
+   "text": "Your team builds data platforms with Kafka and Terraform.",
+   "expect": {}
+  },
+  {
+   "id": "dev-never-claim-list",
+   "person": "developer",
+   "text": "I deployed services on Kubernetes.",
+   "expect": {
+    "claimed": [
+     "Kubernetes"
+    ]
+   }
+  },
+  {
+   "id": "dev-figure",
+   "person": "developer",
+   "text": "My tests cut the release time by 40%.",
+   "expect": {
+    "figures": [
+     "40"
+    ]
+   }
+  },
+  {
+   "id": "dev-misplaced",
+   "person": "developer",
+   "text": "At Fabrikam Labs I built internal REST APIs.",
+   "expect": {
+    "misplaced": [
+     "Fabrikam Labs"
+    ]
+   }
+  },
+  {
+   "id": "dev-invented",
+   "person": "developer",
+   "text": "At Contoso Labs I built the billing service.",
+   "expect": {
+    "invented": [
+     "Contoso Labs"
+    ]
+   }
+  },
+  {
+   "id": "dev-borrowed",
+   "person": "developer",
+   "text": "I ran zebra migrations every quarter.",
+   "expect": {
+    "borrowed": [
+     "zebra migrations"
+    ]
+   }
+  },
+  {
+   "id": "acc-clean",
+   "person": "accountant",
+   "text": "I processed about 300 supplier invoices a month in SAP.",
+   "expect": {}
+  },
+  {
+   "id": "acc-borrowed",
+   "person": "accountant",
+   "text": "I assign tax codes and cost centers to every invoice.",
+   "expect": {
+    "borrowed": [
+     "tax codes",
+     "cost centers"
+    ]
+   }
+  },
+  {
+   "id": "acc-claims-posting-tool",
+   "person": "accountant",
+   "text": "I reconciled the supplier accounts in Xero.",
+   "expect": {
+    "claimed": [
+     "Xero"
+    ]
+   }
+  },
+  {
+   "id": "acc-wish-only",
+   "person": "accountant",
+   "text": "I would like to deepen my knowledge of IFRS.",
+   "expect": {}
+  },
+  {
+   "id": "care-clean",
+   "person": "carer",
+   "text": "I helped residents with daily care and meals, and I hold a First aid certificate.",
+   "expect": {}
+  },
+  {
+   "id": "care-claims-posting-skill",
+   "person": "carer",
+   "text": "I gave CPR during an emergency at the home.",
+   "expect": {
+    "claimed": [
+     "CPR"
+    ]
+   }
+  },
+  {
+   "id": "eng-clean",
+   "person": "engineer",
+   "text": "I designed welded frames in SolidWorks and prepared technical drawings.",
+   "expect": {}
+  },
+  {
+   "id": "eng-claims-posting-tool",
+   "person": "engineer",
+   "text": "I modelled the gearbox housing in CATIA.",
+   "expect": {
+    "claimed": [
+     "CATIA"
+    ]
+   }
+  },
+  {
+   "id": "eng-wish-only",
+   "person": "engineer",
+   "text": "I am keen to lead FMEA sessions in your team.",
+   "expect": {}
+  },
+  {
+   "id": "dev-adverb-claim",
+   "person": "developer",
+   "text": "I recently migrated our nightly jobs to Airflow.",
+   "expect": {
+    "claimed": [
+     "Airflow"
+    ]
+   }
+  },
+  {
+   "id": "dev-ongoing-claim",
+   "person": "developer",
+   "text": "I have been using Snowflake every day.",
+   "expect": {
+    "claimed": [
+     "Snowflake"
+    ]
+   }
+  },
+  {
+   "id": "dev-other-spelling",
+   "person": "developer",
+   "text": "I'm running k8s at home for my side projects.",
+   "expect": {
+    "claimed": [
+     "k8s"
+    ]
+   }
+  },
+  {
+   "id": "dev-irregular-verb",
+   "person": "developer",
+   "text": "I troubleshot Terraform state errors.",
+   "expect": {
+    "claimed": [
+     "Terraform"
+    ]
+   }
+  },
+  {
+   "id": "dev-real-letter-pattern",
+   "person": "developer",
+   "text": "I traced the fault through the logs, the kind of troubleshooting I like.",
+   "expect": {
+    "claimed": [
+     "Troubleshooting"
+    ]
+   }
+  },
+  {
+   "id": "acc-other-verb",
+   "person": "accountant",
+   "text": "I prepared IFRS reports for the group.",
+   "expect": {
+    "claimed": [
+     "IFRS"
+    ]
+   }
+  },
+  {
+   "id": "care-other-verb",
+   "person": "carer",
+   "text": "I handled medication administration on the night shift.",
+   "expect": {
+    "claimed": [
+     "Medication administration"
+    ],
+    "borrowed": [
+     "medication administration"
+    ]
+   }
+  },
+  {
+   "id": "eng-we-claim",
+   "person": "engineer",
+   "text": "We introduced GD&T on every drawing.",
+   "expect": {
+    "claimed": [
+     "GD&T"
+    ]
+   }
+  },
+  {
+   "id": "dev-honest-no",
+   "person": "developer",
+   "text": "I did not use Kafka in production.",
+   "expect": {}
+  },
+  {
+   "id": "dev-reached-out",
+   "person": "developer",
+   "text": "I reached out to your Kafka team at the meetup.",
+   "expect": {}
+  },
+  {
+   "id": "dev-noticed",
+   "person": "developer",
+   "text": "I noticed that your team moved to Airflow.",
+   "expect": {}
+  },
+  {
+   "id": "dev-course",
+   "person": "developer",
+   "text": "I completed a Kafka course last spring.",
+   "expect": {}
+  },
+  {
+   "id": "dev-looking-forward",
+   "person": "developer",
+   "text": "I'm looking forward to working with Terraform.",
+   "expect": {}
+  },
+  {
+   "id": "acc-ordinary-word",
+   "person": "accountant",
+   "text": "I excel at keeping supplier accounts tidy.",
+   "expect": {}
+  },
+  {
+   "id": "acc-spoken-language",
+   "person": "accountant",
+   "text": "I speak German with suppliers every week.",
+   "expect": {}
+  },
+  {
+   "id": "eng-rest-of",
+   "person": "engineer",
+   "text": "I designed the rest of the frame in SolidWorks.",
+   "expect": {}
+  },
+  {
+   "id": "care-impressed",
+   "person": "carer",
+   "text": "I was impressed by your CPR training programme.",
+   "expect": {}
+  },
+  {
+   "id": "dev-application-line",
+   "person": "developer",
+   "text": "I submitted my application for the Kafka Engineer role.",
+   "expect": {}
+  },
+  {
+   "id": "dev-attaching-cv",
+   "person": "developer",
+   "text": "I am attaching my CV for the Kafka position.",
+   "expect": {}
+  },
+  {
+   "id": "dev-alias-ordinary-word",
+   "person": "developer",
+   "text": "I improved each node in the network graph.",
+   "expect": {}
+  },
+  {
+   "id": "dev-canonical-still-claimed",
+   "person": "developer",
+   "text": "I built Node.js services for the billing team.",
+   "expect": {
+    "claimed": [
+     "Node.js"
+    ]
+   }
+  }
+ ]
+}

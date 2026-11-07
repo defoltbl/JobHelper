@@ -227,7 +227,7 @@ def _make_tailored_cv(job: dict[str, Any], cv_text: str, cv_path, fields: dict[s
         new_profile = llm.document(llm.ask(TAILOR_PROFILE_PROMPT.format(cv_text=cv_text[:12000], **fields),
                                            system=TAILOR_PROFILE_SYSTEM, tag="agent3_letters"))
         if cv_text.strip():               # the Word CV's profile rule: nothing the CV does not show (#78)
-            new_profile = cv_tailor.enforce(new_profile, [], cv_tailor.unverified_terms(cv_text), cv_text)[0]
+            new_profile = cv_tailor.enforce(new_profile, [], cv_tailor.unverified_terms(cv_text, job.get("description") or ""), cv_text)[0]
             if not new_profile.strip():
                 raise ValueError("Every sentence of the profile claimed what your CV does not show, so nothing was saved.")
         name = _save_tailored_cv(job, new_profile, template_path=None)

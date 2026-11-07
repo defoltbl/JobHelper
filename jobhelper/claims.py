@@ -35,6 +35,34 @@ CLAIM = re.compile(
     r"\bhaving\s+(?:built|used|worked|deployed|run|written|developed|designed|created|maintained|led|delivered|migrated)\b|"
     r"\b(experience(d)? (with|in)|hands-on|proficient|skilled|familiar with|expertise|background in|"
     r"knowledge of|my work with)\b", re.IGNORECASE)
+# Work done, said with any verb in the past tense ("I scheduled", "we reconciled", "I gave CPR"): CLAIM's verbs are a fixed
+# list, and a letter can claim a tool with any other (#78). Verbs of seeing, wanting, learning about or joining are no
+# claim of the work itself (_NOT_DONE).
+_DONE = re.compile(r"\b(?:I|I've|we)\s+(?:have\s+|also\s+|then\s+|once\s+|\w+ly\s+)*"
+                   r"([a-z]{3,}ed|gave|made|wrote|drew|drove|held|kept|taught|sold|brought|fed|ran|led|built|done|troubleshot|"
+                   r"cut|put)\b"
+                   r"|\b(?:I'm|I am|I've been|I have been|we're|we've been|we have been)\s+(?:\w+ly\s+)?([a-z]{2,}ing)\b",
+                   re.IGNORECASE)
+_NOT_DONE = frozenset({"noticed", "noted", "learned", "learnt", "heard", "saw", "wanted", "hoped", "liked", "loved", "enjoyed",
+                       "applied", "decided", "discovered", "realised", "realized", "followed", "watched", "admired",
+                       "appreciated", "considered", "wondered", "mentioned", "attended", "researched", "studied", "started",
+                       "joined", "talked", "asked", "felt", "believed", "expected", "missed", "lacked", "visited", "needed",
+                       "interested", "excited", "impressed", "pleased", "delighted", "inspired", "intrigued", "reached",
+                       "discussed", "reviewed", "contacted", "confirmed", "graduated", "completed", "trained", "explored",
+                       "subscribed", "registered", "signed", "presented",
+                       # the letter's own frame: "I submitted my application for the Kafka Engineer role"
+                       "submitted", "attached", "received", "spotted", "stumbled", "enclosed", "forwarded", "sent",
+                       "submitting", "attaching", "enclosing", "responding", "addressing", "contacting", "sending",
+                       # what someone is doing now that is no work done: "I'm looking forward to", "I'm learning Kafka"
+                       "looking", "hoping", "learning", "planning", "applying", "writing", "reaching", "studying", "going",
+                       "trying", "wondering", "thinking", "considering", "following", "reading", "keen", "eager"})
+
+
+def _done(sentence: str) -> bool:
+    """Whether the sentence says, in the first person and the past tense, that work was done (_DONE, not _NOT_DONE)."""
+    return any((m.group(1) or m.group(2)).lower() not in _NOT_DONE for m in _DONE.finditer(sentence))
+
+
 # An honest bridge names the missing thing on purpose (in an interview that is the right answer).
 HONEST = re.compile(r"\b(have not|haven't|do not have|don't have|not (?:yet )?(?:used|worked)|"
                     r"no (?:(?:professional|production|hands-on|commercial|prior|direct) )?experience|"
@@ -87,7 +115,7 @@ class ClaimCheck:
         if honest_ok and HONEST.search(sentence):
             return ""
         said = unwished(sentence)
-        claims_any = bool(CLAIM.search(said))
+        claims_any = bool(CLAIM.search(said)) or _done(said)
         return next((term for term in self.terms if mentions(said, term) and (claims_any or _owned(said, term))), "")
 
     def unbacked(self, text: str, honest_ok: bool = False) -> str:
@@ -338,6 +366,9 @@ class EmployerCheck:
 
 # A figure, with its thousands groups ("60 000", "60,000", "60.000") read as one number.
 FIGURE = re.compile(r"(?<![\d.,])\d{1,3}(?:[ \u00a0\u202f,.]\d{3})+(?!\d)(?:[.,]\d{1,2}(?!\d))?|\d+(?:[.,]\d+)*")
+# In the text checked, a digit right after a letter is part of a name ("k8s", "S3", "EC2", "Python3"), not a figure it
+# states (#78); "10x" stays one. Sources are read with FIGURE as before: whatever digit they hold backs that figure.
+STATED = re.compile(r"(?<![\d.,A-Za-z])\d{1,3}(?:[ \u00a0\u202f,.]\d{3})+(?!\d)(?:[.,]\d{1,2}(?!\d))?|(?<![A-Za-z\d])\d+(?:[.,]\d+)*")
 # A figure used as an amount of something: "5 years", "40%", "1,200 users", "3x" – a claim, not a reference ("situation 3").
 _UNIT = (r"\s*\+?\s*(?:years?|yrs|months?|weeks?|days?|hours?|%|per ?cent|users|customers|clients|people|persons?|developers|"
          r"engineers|employees|members|teams?|projects|countries|languages|times|million|thousand|k\b|x\b)")
@@ -405,7 +436,7 @@ def unbacked_figures(text: str, sources=(), references=(), brackets_ok: bool = T
         if _amount(body, figure):                         # an amount you claim: only a whole figure of your own backs it
             return whole in own
         return whole in own_parts or whole in quoted_parts or (len(parts) > 2 and all(p in own_parts | quoted_parts for p in parts))
-    return [f for f in dict.fromkeys(FIGURE.findall(body)) if not backed(f)]
+    return [f for f in dict.fromkeys(STATED.findall(body)) if not backed(f)]
 
 
 def rejected(problems: list[str], what: str = "version") -> str:

@@ -154,6 +154,32 @@ def read_ahead(texts: list[str], pause: float = 0.004) -> int:
     return done
 
 
+SPOKEN = ("English", "Czech", "German", "French")          # spoken languages: a skill of another kind than a tool
+# Names a case-blind search finds in ordinary sentences ("I excel at", "a swift reply", "I go"): never a claim to look for
+# by name alone. The single letters and the other _STRICT names need their context; these are English words as well.
+_ORDINARY = frozenset({*_STRICT, "React", "Swift", "Express", "Spark", "Rust", "Ruby", "Oracle", "Excel", "Flask", "Angular",
+                       "Git", "Illustrator", "Blender", "Barista", "Forklift", "Confluence", "Intercom", "Workday",
+                       "REST", "RAG", "PLC", "Agile", "Networking", "Interpreting", *SPOKEN})   # "the rest of", "Acme plc"
+
+
+def claimable_missing(description: str, have: str) -> list[str]:
+    """The skills the posting asks for that `have` (the CV and your own notes) does not show, and that a claim check may
+    look for by name: what a letter or an answer must not claim as done (#78). Names that are also ordinary words and
+    spoken languages are left out (_ORDINARY)."""
+    return [k for k in compare(description, have)["missing"] if k not in _ORDINARY]
+
+
+# A spelling a case-blind search will not find in an ordinary sentence: a digit, a capital after the first letter or a
+# sign ("k8s", "TCP/IP", "M365", "SEM"). "Node", "unit tests" or "wireframes" are ordinary words (#78).
+_UNLIKE_A_WORD = re.compile(r"\d|.[A-Z]|[^A-Za-z\s]")
+
+
+def names_of(name: str) -> list[str]:
+    """A skill's name and its other spellings ("Kubernetes", "k8s"), so a claim check finds it however the letter writes
+    it (#78). A spelling under three letters ("JS") or one that is also an ordinary word (_UNLIKE_A_WORD) is left out."""
+    return [name, *(s for s in VOCABULARY.get(name, []) if len(s) >= 3 and _UNLIKE_A_WORD.search(s))]
+
+
 def compare(description: str, cv_text: str) -> dict[str, list[str]]:
     """Split what the posting asks for into what the CV shows and what it does not."""
     wanted = extract(description)

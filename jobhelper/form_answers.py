@@ -155,7 +155,7 @@ def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str
     if not questions:
         raise ValueError("Paste at least one question from the form.")
     notes = (notes or "").strip()
-    unverified = cover_letter.unverified_terms(cv_text + "\n" + notes)
+    unverified = cover_letter.unverified_terms(cv_text + "\n" + notes, job.get("description") or "")
     first_name = cover_letter.candidate_first_name(cv_text)
     numbered = "\n".join(f"{n}. {q}" for n, q in enumerate(questions, 1))
     known = cover_letter.figure_sources(job, cv_text, own=(notes, _salary_line(job)))
@@ -233,8 +233,8 @@ def rewrite(job: dict[str, Any], cv_text: str, question: str, answer: str, how: 
     flagged_before = set(_invented(str(answer), known, str(question)))        # an earlier answer backs only what it may
     alone, with_old = _invented(new, known, str(question)), set(_invented(new, known, str(question), str(answer)))
     figures = [f for f in alone if f in flagged_before or f in with_old]
-    return {"answer": new, "check": " ".join(x for x in (_unbacked_check(new, cover_letter.unverified_terms(cv_text + "\n" + (notes or ""))),
-                                                        _figures_check(figures)) if x)}
+    unverified = cover_letter.unverified_terms(cv_text + "\n" + (notes or ""), job.get("description") or "")
+    return {"answer": new, "check": " ".join(x for x in (_unbacked_check(new, unverified), _figures_check(figures)) if x)}
 
 
 def _clean(data: Any, questions: list[str]) -> list[dict[str, str]]:
