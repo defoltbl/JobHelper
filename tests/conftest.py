@@ -52,6 +52,11 @@ def data_changes(before: dict, after: dict) -> list[str]:
 
 
 def pytest_sessionstart(session):
+    # the first line of defence: the run does not start at all when the data folder is a real one (#79)
+    from jobhelper import config
+    for real in _real_data_folders():
+        if real.resolve() in (config.DATA_DIR.resolve(), *config.DATA_DIR.resolve().parents):
+            pytest.exit(f"The tests would use your own data folder ({real.name}): JOBHELPER_HOME is not a test folder.", 2)
     session.config.stash_data_before = _data_snapshot()
 
 
@@ -106,6 +111,12 @@ def safe_environment(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(api_core.Desktop, "real_open", api_core.Desktop.open, raising=False)    # for a test that fakes `open` itself
     monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: True)   # never open a real file, folder or web page
     monkeypatch.setattr(api_core.Desktop, "reveal", lambda self, target: None)  # nor a real Finder window
+    import webbrowser
+
+    def no_browser(*args, **kwargs):
+        raise AssertionError("A test tried to open a real web browser.")
+    for name in ("open", "open_new", "open_new_tab"):                             # nor a browser through a library (#79)
+        monkeypatch.setattr(webbrowser, name, no_browser)
     from jobhelper import agent2_search
     for name in config.PAID_SETTINGS:                                               # the app refuses to ask with one set; tests set them on purpose
         monkeypatch.delenv(name, raising=False)

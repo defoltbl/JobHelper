@@ -1,6 +1,8 @@
 """How the suite itself runs: on every core, with the window tests kept together in their order."""
 import re
 
+import pytest
+
 from tests.conftest import ROOT
 
 
@@ -22,3 +24,30 @@ def test_the_package_that_runs_them_is_locked_with_its_hash():
     for name in ("pytest-xdist", "execnet"):
         assert re.search(rf"^{name}==[\d.]+ \\\n    --hash=sha256:[0-9a-f]{{64}}$", lock, re.MULTILINE), name
     assert "pytest-xdist" in (ROOT / "requirements.txt").read_text(encoding="utf-8")
+
+
+def test_no_test_can_open_a_real_web_browser():
+    """#79: webbrowser was not patched, so a library could open a real browser from a test."""
+    import webbrowser
+    with pytest.raises(AssertionError, match="real web browser"):
+        webbrowser.open("https://example.com")
+
+
+def test_the_run_does_not_start_on_your_own_data_folder(monkeypatch, tmp_path):
+    """#79: nothing checked at the start that the data folder is not the real one."""
+    from jobhelper import config
+    from tests import conftest
+    exits = []
+    monkeypatch.setattr(conftest.pytest, "exit", lambda msg, code=None: exits.append(msg))
+    monkeypatch.setattr(conftest, "_real_data_folders", lambda: [tmp_path / "real"])
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "real" / "data")
+
+    class Session:
+        config = type("Config", (), {})()
+    monkeypatch.setattr(conftest, "_data_snapshot", lambda: {})
+    conftest.pytest_sessionstart(Session)
+    assert exits and "your own data folder" in exits[0]
+    exits.clear()
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "test-home" / "data")
+    conftest.pytest_sessionstart(Session)
+    assert exits == []

@@ -74,7 +74,7 @@ def test_weekly_run_writes_each_step_into_its_log_and_goes_on_after_a_failure(tm
 
     log = tmp_path / "logs" / "weekly.log"
     code = weekly.WeeklyRun(log, [("job search", search), ("broken", broken), ("email analysis", scan)],
-                            now=lambda: datetime(2026, 10, 19, 9, 0)).run()
+                            now=lambda: datetime(2026, 10, 19, 9, 0)).run()      # a fixed clock: this date never passes (#79)
     text = log.read_text(encoding="utf-8")
     assert done == ["search", "scan"] and code == 2
     assert text.startswith("===== weekly JobHelper 2026-10-19 09:00 =====")

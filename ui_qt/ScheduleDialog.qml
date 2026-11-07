@@ -66,7 +66,7 @@ Dialog {
     contentItem: ColumnLayout {
         spacing: 0
         DialogHeader {
-            DialogTitle { text: "🗓️  Weekly run" }
+            DialogTitle { text: "Weekly run" }
             CloseButton { onClicked: schedDialog.tryClose() } }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         ColumnLayout {
