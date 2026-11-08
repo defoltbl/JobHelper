@@ -219,11 +219,42 @@ def borrowed_claims(paragraphs: list[str], description: str, backed: str) -> lis
     return found
 
 
+GAP_CUT = "a sentence that said what you lack"
+
+
+def _cut_reason(sentence: str, check: ClaimCheck) -> str:
+    """Why `enforce` takes this sentence out, in the words the job window shows ('' to keep it): a claim the CV does not
+    back, or a gap the letter admits. One decision for the cut and for the note about it (#113)."""
+    if claims.GAP.search(sentence):
+        return GAP_CUT
+    term = check.claimed_in(sentence)
+    return f"a sentence about {term}" if term else ""
+
+
+def cut_claims(paragraphs: list[str], unverified: list[str]) -> list[str]:
+    """What `enforce` takes out, once each ("a sentence about Kubernetes"): named in the job window, so a cut is never
+    silent (owner's decision on #113)."""
+    check, found = ClaimCheck(unverified), []
+    for para in paragraphs:
+        for sentence in claims.sentences(para):
+            reason = _cut_reason(sentence, check)
+            if reason and reason.lower() not in (f.lower() for f in found):
+                found.append(reason)
+    return found
+
+
+def note_cut(job: dict[str, Any], cut: list[str]) -> None:
+    """Put what was cut on the job (`letter_cut`), or take an older note away when nothing was."""
+    if cut:
+        job["letter_cut"] = cut[:NOTES_SHOWN]
+    else:
+        job.pop("letter_cut", None)
+
+
 def enforce(paragraphs: list[str], unverified: list[str]) -> list[str]:
     """Last line of defence: drop sentences that admit a gap or claim unbacked experience."""
     check = ClaimCheck(unverified)
-    return [" ".join(s for s in claims.sentences(para) if not claims.GAP.search(s) and not check.claimed_in(s))
-            for para in paragraphs]
+    return [" ".join(s for s in claims.sentences(para) if not _cut_reason(s, check)) for para in paragraphs]
 
 
 # ── docx ─────────────────────────────────────────────────────────────────────
@@ -528,7 +559,9 @@ def checked_plain(letter: str, job: dict[str, Any], cv_text: str) -> str:
     blocks, framed = _letter_blocks(letter)
     frame = lambda b: b in framed        # noqa: E731
     body = [b for b in blocks if not frame(b)]
-    checked = iter(enforce(body, unverified_terms(cv_text, job.get("description") or "")))
+    unverified = unverified_terms(cv_text, job.get("description") or "")
+    cut = cut_claims(body, unverified)
+    checked = iter(enforce(body, unverified))
     out = [b if frame(b) else next(checked) for b in blocks]
     kept = [b for b in out if b.strip() and not frame(b)]
     words = sum(len(b.split()) for b in kept)
@@ -538,6 +571,7 @@ def checked_plain(letter: str, job: dict[str, Any], cv_text: str) -> str:
         raise ValueError(f"The plain letter had {words} words after the check (it needs {PLAIN_WORDS[0]}-{PLAIN_WORDS[1]}), "
                          "so nothing was saved.")
     LetterNotes(job, kept, cv_text).put_on(job)
+    note_cut(job, cut)
     return "\n\n".join(b for b in out if b.strip())
 
 
@@ -677,12 +711,14 @@ def write(job: dict[str, Any], cv_text: str, master_path=None) -> str:
     wrong = length_problems(paragraphs)           # sent back once already: never saved the wrong length (#78)
     if wrong:
         raise ValueError(f"Claude wrote the letter at the wrong length twice ({wrong[0]}). Nothing was saved.")
+    cut = cut_claims(paragraphs, unverified)
     paragraphs = enforce(paragraphs, unverified)
     if any(not p for p in paragraphs):
         raise ValueError("A paragraph was empty after removing unbacked claims.")
     # What is still stated as experience in the posting's words is not cut out (it can be fair wording for what the CV
     # does show), nor is a figure, work at the wrong employer or an unknown employer: each is put in front of the person.
     LetterNotes(job, paragraphs, cv_text, employers).put_on(job)
+    note_cut(job, cut)
     # The line under the name says who writes: your own title, as your CV has it. Only a CV without such a line gets the role.
     title_line = own_title(cv_text) or title_line or re.sub(r"\s*\(.*?\)", "", job["title"]).strip()
 

@@ -107,6 +107,7 @@ class LettersService:
         def saved(all_jobs, job):
             job["last_update"] = date.today().isoformat()
             notes.put_on(job)          # what you just saved: a figure, an employer or a term you took out is no longer named
+            cover_letter.note_cut(job, [])        # your own edit replaces the draft the app cut
         self._editor.change(job_id, saved, render=False)
         return {"ok": True, "warnings": warnings, "words": sum(len(t.split()) for t in texts)}
 

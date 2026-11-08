@@ -858,6 +858,11 @@ The line **It says that you worked at …, but your CV does not name it** names 
 Neither your CV nor the posting gives that name. The app already asked Claude once to remove
 it. Select **Edit letter** and name only employers from your CV.
 
+The line **The app took out of your cover letter: …** names each sentence that the app
+removed. A sentence about a skill that your CV and your notes do not show is removed. A sentence
+that says what you lack is removed too. If a skill is true of you, add it under **More about
+your work** in **About you**. The next letter can then say it.
+
 ### The cover letter
 
 The letter is written to the company, about this role, from the facts in your CV.

@@ -474,6 +474,11 @@ Dialog {
                         text: "Check your cover letter before you send it. It puts work at an employer where your CV does not show it: "
                               + (detailDialog.job.letter_misplaced || []).join("; ")
                               + ". Keep each piece of work with the job where you did it; Edit letter lets you change the sentence." }
+                    // a sentence the app took out of the letter because your CV and notes do not show it (#113): never silent
+                    Text { objectName: "letterCut"; visible: (detailDialog.job.letter_cut || []).length > 0
+                        Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true
+                        text: "The app took out of your cover letter: " + (detailDialog.job.letter_cut || []).join("; ")
+                              + ". A letter never claims what your CV and your notes do not show, and never names what you lack. If a skill is true of you, add it under More about your work in About you, and the next letter can say it." }
                     // an employer the letter names that neither your CV nor the posting gives: its own line (#63)
                     Text { objectName: "letterInvented"; visible: (detailDialog.job.letter_invented || []).length > 0
                         Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true

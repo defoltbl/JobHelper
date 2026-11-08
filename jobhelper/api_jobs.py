@@ -152,6 +152,7 @@ class JobsService:
             "letter_figures": [str(x) for x in (j.get("letter_figures") or [])][:cover_letter.LetterNotes.MOST] if j.get("cover_letter_file") else [],
             "letter_misplaced": [str(x) for x in (j.get("letter_misplaced") or [])][:cover_letter.LetterNotes.MOST] if j.get("cover_letter_file") else [],
             "letter_invented": [str(x) for x in (j.get("letter_invented") or [])][:cover_letter.LetterNotes.MOST] if j.get("cover_letter_file") else [],
+            "letter_cut": [str(x) for x in (j.get("letter_cut") or [])][:cover_letter.LetterNotes.MOST] if j.get("cover_letter_file") else [],
             "cv_left_out": [str(x) for x in (j.get("cv_left_out") or [])][:cv_tailor.NOTES_SHOWN] if j.get("tailored_cv_file") else [],
             "has_prep": bool((j.get("interview_prep") or {}).get("questions")),
             "prep_edited": bool((j.get("interview_prep") or {}).get("edited")),
