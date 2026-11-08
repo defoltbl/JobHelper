@@ -154,6 +154,8 @@ class TalkService:
             return "Only a lead in New Jobs can be marked not interested. For an application, set its status instead."
         if name == "set_date":
             return planner.check_event(args["day"], args.get("time", ""), args.get("kind", "interview"))[1]
+        if name == "remember":
+            return assistant_notes.problem(args.get("note"))     # never asked, then refused on your yes
         return ""
 
     def _ask(self, actions: list[dict[str, Any]], jobs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -167,8 +169,8 @@ class TalkService:
         for action in actions:
             if action["name"] in ("rewrite_letter", "rewrite_answer"):
                 return {"ok": False, "action": "say", "msg": "A rewrite is shown to you before it is saved, so ask for it on its own, not together with other changes."}
-            job = store.find(jobs, action["args"]["job"])
-            if not job:
+            job = store.find(jobs, action["args"]["job"]) if "job" in action["args"] else None
+            if "job" in assistant_brain.ACTIONS[action["name"]][0] and not job:
                 return {"ok": False, "action": "say", "msg": NO_JOB}
             problem = self._ready(action, job)
             if problem:
@@ -203,12 +205,6 @@ class TalkService:
                                                             [r for r in db.all_responses() if r.get("job_id") == job["id"]]))
         if name == "advice":
             return self._said(lambda: assistant_brain.advice(self._results()))
-        if name == "remember":
-            kept = assistant_notes.remember(args["note"])
-            if not kept.get("ok"):
-                return {"ok": False, "action": "say", "msg": kept.get("msg") or "That could not be kept."}
-            return {"ok": True, "action": "say", "notes_changed": True,
-                    "say": f"I {'already knew' if kept.get('known') else 'will remember'}: {args['note']}. It shapes my answers; to change what a search finds, use Options."}
         if name == "forget_note":
             gone = assistant_notes.forget(args["number"])
             return {"ok": True, "action": "say", "notes_changed": True, "say": f"Forgotten: {gone['text']}."} if gone.get("ok") \
@@ -371,7 +367,8 @@ class TalkService:
                 if undo:                            # nothing done this time: what could be taken back before still can
                     self._undo = undo
                 done = (" Before that: " + " ".join(said)) if said else ""
-                return {"ok": False, "action": "say", "msg": words + done, "changed": bool(said), "can_undo": bool(undo)}
+                return {"ok": False, "action": "say", "msg": words + done, "changed": bool(said), "can_undo": bool(undo),
+                        "notes_changed": self._noted(steps[:len(said)])}
             said.append(words)
             last_job = str((step.get("args") or {}).get("job") or last_job)
             if back:
@@ -379,13 +376,30 @@ class TalkService:
         self._undo = undo
         text = " ".join(said)
         self._turn("bot", text)
-        return {"ok": True, "action": "done", "say": text, "job_id": last_job, "changed": True, "can_undo": bool(undo)}
+        return {"ok": True, "action": "done", "say": text, "job_id": last_job, "changed": True, "can_undo": bool(undo),
+                "notes_changed": self._noted(steps)}
+
+    @staticmethod
+    def _noted(done: list) -> bool:
+        """Whether a note was kept among the steps done: the window then shows the new list."""
+        return any(isinstance(step, dict) and step.get("name") == "remember" for step in done)
+
+    @staticmethod
+    def _yes_remember(args: dict[str, Any]) -> tuple[bool, str, dict[str, Any] | None]:
+        """A note you said yes to (#120: never kept without your yes, it shapes every later answer)."""
+        kept = assistant_notes.remember(str(args.get("note") or ""))
+        if not kept.get("ok"):
+            return False, kept.get("msg") or "That could not be kept.", None
+        return True, (f"I {'already knew' if kept.get('known') else 'will remember'}: {args['note']}. It shapes my answers; "
+                      "to change what a search finds, use Options."), None
 
     def _do(self, step: dict[str, Any]) -> tuple[bool, str, dict[str, Any] | None]:
         """One agreed step: (did it work, what to say, how to take it back)."""
         name, args = step.get("name"), step.get("args") if isinstance(step.get("args"), dict) else {}
         if name == "add_job":
             return self._add_job(args.get("record"))
+        if name == "remember":
+            return self._yes_remember(args)
         jobs = store.load_jobs()
         job = store.find(jobs, str(args.get("job") or ""))
         if not job:
