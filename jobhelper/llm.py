@@ -38,11 +38,21 @@ def untrusted(label: str, text: str) -> str:
     return f"<{label}>\n{clean}\n</{label}>"
 
 
-def posting_parts(job: dict[str, Any]) -> dict[str, str]:
+_OWN_TAG = re.compile(r"<\s*/?\s*(?:" + "|".join(PAGE_LABELS) + r"|email)\b[^>]*>", re.IGNORECASE)
+
+
+def unfence(text: str) -> str:
+    """An answer without the app's own fence tags: a model that copies "<posting>Acme</posting>" from a prompt must not
+    put the tags into a reply draft, a form answer or a job's company (#111)."""
+    return _OWN_TAG.sub("", str(text or ""))
+
+
+def posting_parts(job: dict[str, Any] | None, missing: str = "") -> dict[str, str]:
     """The title, company and location of a job for a prompt: copied from a job site like its text, so each goes in
-    inside <posting> tags as data, never as the app's own words (#78). A part the job does not have stays empty."""
-    parts = {key: " ".join(str(job.get(key) or "").split())[:300] for key in ("title", "company", "location")}
-    return {key: untrusted("posting", text) if text else "" for key, text in parts.items()}
+    inside <posting> tags as data, never as the app's own words (#78, #111). A part the job does not have is `missing`
+    (the prompt's own words, such as "not stated"), outside the tags."""
+    parts = {key: " ".join(str((job or {}).get(key) or "").split())[:300] for key in ("title", "company", "location")}
+    return {key: untrusted("posting", text) if text else missing for key, text in parts.items()}
 
 
 def options_for(system: str | None, model: str) -> ClaudeAgentOptions:
@@ -246,6 +256,7 @@ def ask(prompt: str, system: str | None = None, model: str | None = None, tag: s
     except Exception as e:  # noqa: BLE001 - the answer is here: keeping count of it must never lose it
         from . import trouble
         trouble.note("noting a call to Claude in the usage counters", e)
+    text = unfence(text)                          # one place for every answer, the JSON ones too
     if len(text.strip()) <= SIGNED_OUT_LONGEST and _SIGNED_OUT.match(text.strip()):
         raise SignedOut()                         # the program's own notice came back as the answer
     if not text.strip():

@@ -213,8 +213,7 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
     feedback, prep = "", Preparation({})
     for _attempt in range(2):
         data = llm.ask_json(PROMPT.format(
-            cv_text=cv_text[:12000], title=job.get("title", ""), company=job.get("company", ""),
-            location=job.get("location", ""),
+            cv_text=cv_text[:12000], **llm.posting_parts(job),
             description=llm.untrusted("posting", (job.get("description") or "").strip()[:4000] or "(No posting text was saved; use the title and the CV.)"),
             emails=mail_lines, feedback=feedback, n=QUESTIONS, hr=HR_QUESTIONS, tech=QUESTIONS - HR_QUESTIONS,
             facts=config.facts_block(cv_text),

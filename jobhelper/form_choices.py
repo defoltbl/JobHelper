@@ -150,8 +150,7 @@ def decide(choices: list[dict[str, Any]], cv_text: str, mine: dict[str, str], jo
             lines.append(f"{c['n']}. {c['label']}\n   options: " + " | ".join(str(o) for o in c["options"][:60] if str(o).strip()))
     facts = facts_block(cv_text, mine, job)
     data = llm.ask_json(PROMPT.format(cv_text=cv_text[:12000], facts=facts,
-                                      title=(job or {}).get("title", "not stated"), company=(job or {}).get("company", "not stated"),
-                                      location=(job or {}).get("location", "not stated"), fields=llm.untrusted("questions", "\n".join(lines))),
+                                      **llm.posting_parts(job, "not stated"), fields=llm.untrusted("questions", "\n".join(lines))),
                         system=SYSTEM, tag="form_answers")
     by_n = {c["n"]: c for c in todo}
     backing = _norm(cv_text + "\n" + facts)

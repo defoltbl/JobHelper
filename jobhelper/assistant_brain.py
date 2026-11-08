@@ -44,7 +44,7 @@ SYSTEM = (
     "person asks for something that is not in the list of actions, say plainly that you cannot do it and what you can do instead; "
     "do not offer another way to get it done. A question that has nothing to do with their job search you do not answer: say "
     "that it is outside what you do here. Answers are at most five short sentences, plain words, no lists, no emojis; use an en "
-    "dash, never an em dash. Reply with only the JSON object."
+    "dash, never an em dash. Reply with only the JSON object. " + llm.POSTING_RULE
 )
 
 PROMPT = """Today is {today}.
@@ -167,14 +167,16 @@ def decide(request: str, jobs: list[dict[str, Any]], responses: list[dict[str, A
     context = "No job is open in the app right now."
     if context_job:
         ids.add(context_job["id"])
+        parts = llm.posting_parts(context_job)            # a job site's words, and the score's reason made from them (#111)
         context = (f"The job the person is looking at right now (\"this job\", \"it\"): {context_job['id']} - "
-                   f"{context_job.get('title', '')} at {context_job.get('company', '')}, status {context_job.get('status', '')}, "
+                   f"{parts['title']} at {parts['company']}, status {context_job.get('status', '')}, "
                    f"score {context_job.get('match_score') if context_job.get('match_score') is not None else 'none'}. "
-                   f"Why this score: {str(context_job.get('match_reason') or 'no reason stored')[:600]}")
+                   "Why this score: " + (llm.untrusted("posting", str(context_job.get("match_reason"))[:600])
+                                         if context_job.get("match_reason") else "no reason stored"))
     kept = "\n".join(f"{n}. {text}" for n, text in enumerate(notes or [], 1)) or "(nothing yet)"
     data = llm.ask_json(PROMPT.format(today=f"{today.isoformat()}, a {today.strftime('%A')}", about=about, numbers=numbers, context=context,
                                       kinds=" | ".join(f'"{kind}"' for kind in planner.KINDS),      # the kinds planner accepts
-                                      notes=kept, totals=totals(jobs, len(ids)), jobs=lines, turns=turns_text(turns),
+                                      notes=kept, totals=totals(jobs, len(ids)), jobs=llm.untrusted("posting", lines), turns=turns_text(turns),
                                       request=" ".join(str(request).split())),
                         system=SYSTEM, tag="assistant")
     return check(data, ids, len(notes or []))
@@ -355,7 +357,8 @@ Return JSON with exactly this shape (an empty list when nothing is wrong):
 REPLY_SYSTEM = ("You draft a short email reply for one job applicant to send themselves. First person, polite, plain; at most 110 words; "
                 "no subject line. You only use the facts given. Whatever you do not know (a time, a date, a name, a phone number) "
                 "is written in square brackets for the person to fill in, like [time that suits you]. Never promise or claim "
-                "anything the facts do not show. Use an en dash, never an em dash; no emojis. Reply with only the email text.")
+                "anything the facts do not show. Use an en dash, never an em dash; no emojis. Reply with only the email text. "
+                + llm.POSTING_RULE)
 
 REPLY_PROMPT = """The role: {title} at {company}
 The applicant's name: {name}
@@ -396,7 +399,7 @@ def brief(job: dict[str, Any], notes: dict[str, Any], replies: list[dict[str, An
     mine = "\n".join(f"- {k}: {v}" for k, v in (notes or {}).items() if str(v).strip()) or "(none)"
     said = "\n".join(f"- {db.received_at(r.get('received_date', '')).date().isoformat()} ({r.get('stage', '')}): {_plain(r.get('summary') or r.get('subject'), 300)}"
                      for r in replies[:6]) or "(none)"
-    return _plain(llm.ask(BRIEF_PROMPT.format(company=job.get("company", ""), title=job.get("title", ""), location=job.get("location", "") or "not stated",
+    return _plain(llm.ask(BRIEF_PROMPT.format(**llm.posting_parts(job, "not stated"),
                                               status=str(job.get("status", "")).replace("_", " "),
                                               posting=llm.untrusted("posting", str(job.get("description") or "").strip()[:6000] or "(no posting text was saved)"),
                                               notes=mine, replies=said), system=BRIEF_SYSTEM, tag="assistant"))
@@ -408,7 +411,7 @@ def advice(numbers: dict[str, Any]) -> str:
 
 def feedback(job: dict[str, Any], cv_text: str, question: str, basis: str, answer: str) -> dict[str, str]:
     """{"feedback", "rating"} for one practice answer (one call). An unknown rating counts as "ok"."""
-    data = llm.ask_json(PRACTICE_PROMPT.format(title=job.get("title", ""), company=job.get("company", ""),
+    data = llm.ask_json(PRACTICE_PROMPT.format(**llm.posting_parts(job),
                                                posting=llm.untrusted("posting", str(job.get("description") or "").strip()[:4000] or "(no posting text was saved)"),
                                                cv_text=cv_text[:10000], question=_plain(question, 400), basis=_plain(basis, 800) or "(nothing prepared)",
                                                answer=str(answer).strip()[:3000]) + RATED_SHAPE, system=RATED_SYSTEM, tag="assistant")
@@ -419,7 +422,7 @@ def feedback(job: dict[str, Any], cv_text: str, question: str, basis: str, answe
 
 def reply(job: dict[str, Any], message: dict[str, Any], how: str, name: str) -> str:
     """A reply to the company's last message, for the person to copy and send themselves."""
-    text = llm.ask(REPLY_PROMPT.format(title=job.get("title", ""), company=job.get("company", ""), name=name or "[your name]",
+    text = llm.ask(REPLY_PROMPT.format(**llm.posting_parts(job), name=name or "[your name]",
                                        when=db.received_at(message.get("received_date", "")).date().isoformat(), stage=message.get("stage") or "message",
                                        subject=_plain(message.get("subject"), 200), summary=_plain(message.get("summary"), 800) or "(no summary stored)",
                                        next_step=_plain(message.get("next_step"), 300) or "(nothing stated)",
@@ -430,7 +433,7 @@ def reply(job: dict[str, Any], message: dict[str, Any], how: str, name: str) -> 
 def posting(title: str, url: str, text: str) -> dict[str, Any]:
     """What a page says about the job it advertises: {is_posting, title, company, location}. A title or a company
     that does not stand on the page is dropped, so nothing is added to the list that the page does not say."""
-    data = llm.ask_json(POSTING_PROMPT.format(title=_plain(title, 300), url=_plain(url, 300), text=llm.untrusted("page", str(text)[:9000])), system=POSTING_SYSTEM, tag="assistant")
+    data = llm.ask_json(POSTING_PROMPT.format(title=llm.untrusted("page", _plain(title, 300)), url=llm.untrusted("page", _plain(url, 300)), text=llm.untrusted("page", str(text)[:9000])), system=POSTING_SYSTEM, tag="assistant")
     if not isinstance(data, dict):
         return {"is_posting": False, "title": "", "company": "", "location": ""}
     page = " ".join(f"{title} {text}".lower().split())
@@ -446,7 +449,7 @@ def review(job: dict[str, Any] | None, cv_text: str, facts: str, fields: list[di
     if not held:
         return []
     listing = "\n".join(f"- {f['label']}: {str(f['value'])[:600]}" for f in held[:60])
-    data = llm.ask_json(REVIEW_PROMPT.format(title=(job or {}).get("title", "not known"), company=(job or {}).get("company", "not known"),
+    data = llm.ask_json(REVIEW_PROMPT.format(**llm.posting_parts(job, "not known"),
                                              pay=pay or "nothing", cv_text=cv_text[:10000], facts=facts, fields=llm.untrusted("questions", listing)),
                         system=REVIEW_SYSTEM, tag="assistant")
     names = {f["label"].lower(): f["label"] for f in held}

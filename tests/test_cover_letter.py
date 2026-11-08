@@ -351,3 +351,30 @@ def test_a_hand_edited_letter_is_warned_about_the_posting_s_skills_too(isolate_d
     said = ["I scheduled Airflow pipelines every night."]
     assert any("Airflow" in w for w in cover_letter.letter_warnings(said, _master_text(), "Acme", posting))
     assert not any("Airflow" in w for w in cover_letter.letter_warnings(said, _master_text(), "Acme"))
+
+
+def test_a_plain_letter_wrapped_over_lines_is_checked_paragraph_by_paragraph(isolate_data, monkeypatch):
+    """#111: every line was a block of its own, so a sentence wrapped over two lines was checked in halves."""
+    monkeypatch.setattr(cover_letter, "unverified_terms", lambda cv_text, posting="": ["Kubernetes"])
+    cv = "Alex Novak\nJunior Developer – Northwind Parcel, Brno (2024 – present): built tools in Python.\n"
+    filler = "I like clear code and short, readable tests that other people\ncan follow. " * 15
+    letter = ("Dear Hiring Team,\n\nI build tools in Python, and I deployed\nKubernetes clusters daily.\n\n" + filler
+              + "\n\nYours sincerely,")
+    out = cover_letter.checked_plain(letter, store.new_job(id="w", title="Dev", company="Acme"), cv)
+    assert "Kubernetes" not in out and "deployed" not in out, "the whole wrapped sentence is the claim, and it goes"
+    assert out.count("\n\n") == 2 and "people can follow" in out, "one block per paragraph (the claiming one is gone), its lines joined"
+
+
+
+def test_a_greeting_or_closing_next_to_the_body_stays_the_letter_s_frame(isolate_data, monkeypatch):
+    """#111: split on blank lines only, "Dear Team,\nI ran Kubernetes." was one block, and its cut took the greeting."""
+    monkeypatch.setattr(cover_letter, "unverified_terms", lambda cv_text, posting="": ["Kubernetes"])
+    cv = "Alex Novak\nJunior Developer – Northwind Parcel, Brno (2024 – present): built tools in Python.\n"
+    filler = "I like clear code and short, readable tests that other people can follow. " * 15
+    job = store.new_job(id="g", title="Dev", company="Acme")
+    out = cover_letter.checked_plain("Dear Hiring Team,\nI deployed Kubernetes clusters daily.\n\n" + filler
+                                     + "\n\nYours sincerely,\nAlex Novak\n+420 600 000 000", job, cv)
+    assert out.startswith("Dear Hiring Team,") and "Kubernetes" not in out
+    assert out.endswith("Yours sincerely,\n\nAlex Novak\n\n+420 600 000 000"), "the signature after the closing is no body"
+    blocks, framed = cover_letter._letter_blocks("Dear Hiring Team,\nBody text here.\n\nBest,\nAlex")
+    assert blocks == ["Dear Hiring Team,", "Body text here.", "Best,", "Alex"] and framed == {"Dear Hiring Team,", "Best,", "Alex"}

@@ -201,6 +201,7 @@ def _as_experience(sentence: str) -> str:
 
 
 POSTING_SHOWN = 5000                   # how much of a posting the CV and letter prompts show (and their figure checks read)
+NOTES_SHOWN = 8            # names each note of the job window shows (the CV's and the letter's alike)
 
 
 def figure_sources(job: dict[str, Any], cv_text: str, own=(), references=()) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -685,7 +686,7 @@ def tailor(job: dict[str, Any], cv_text: str, master_path) -> str:
                               + profile_problems(profile, job, cv_text)[1]
                               + ([INDEPENDENT_NOTE] if independence_unbacked(profile, master_profile) else [])))
     if left:
-        job["cv_check"] = left[:8]
+        job["cv_check"] = left[:NOTES_SHOWN]
     else:
         job.pop("cv_check", None)
     # Still too long after the retry: drop trailing items from the longest rows.
