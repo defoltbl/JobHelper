@@ -150,7 +150,8 @@ def main() -> int:
     def page_state() -> dict:
         """The page's fields as STATE reads them, waited for: right after the app changed the page, the engine can answer
         nothing for a moment, and one such empty answer failed a test at random (#65)."""
-        deadline, tries = time.monotonic() + STATE_TOTAL, 0
+        began = time.monotonic()
+        deadline, tries = began + STATE_TOTAL, 0
         while time.monotonic() < deadline:    # a total time: an engine that gives no answer at all cannot hold it longer
             tries += 1
             if blanks:                  # the test's empty answer, in place of the page's
@@ -167,7 +168,8 @@ def main() -> int:
                 except json.JSONDecodeError:
                     pass
             pause(STATE_WAIT)
-        raise RuntimeError(f"The page gave no state in {STATE_TOTAL:.0f} seconds ({tries} tries): its engine stopped answering.")
+        raise RuntimeError(f"The page gave no state in {STATE_TOTAL:.0f} seconds ({tries} tries, "
+                           f"{time.monotonic() - began:.1f} s waited): its engine stopped answering.")
 
     started = []
 
