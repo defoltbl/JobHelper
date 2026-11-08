@@ -627,7 +627,8 @@ Table 6.5 gives the rules these steps keep. `tests/test_assistant.py` checks eac
 A test area also tries the whole request. `tests/fixtures/fill_in_browser.py` serves the forms
 in `tests/fixtures/forms/` from this machine. It opens one form in a browser engine and runs the
 same code as the window. Prepared answers replace Claude, and the data is in a temporary folder.
-The area waits for the state of the page that it reads. It does the work one time for each page.
+The area waits for the state of the page that it reads, for 10 seconds at most. It does the work one time for each page.
+When the browser engine stops answering, the area stops in one minute and says why.
 The area has these forms:
 
 - a plain form

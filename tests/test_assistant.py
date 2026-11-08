@@ -713,6 +713,26 @@ def _area(page, **more):
     return out
 
 
+def _area_raw(page, **more):
+    """The test area's process as it ended: (return code, stderr, seconds)."""
+    import time
+    started = time.monotonic()
+    done = subprocess.run([sys.executable, str(FIXTURES / "fill_in_browser.py"), page], input=json.dumps({**AREA, **more}),
+                          capture_output=True, text=True, timeout=180, env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
+    return done.returncode, done.stderr, time.monotonic() - started
+
+
+def test_area_an_engine_that_stops_answering_fails_fast_and_says_so():
+    """#65 again: each state read waited its full 20 s when the engine gave no answer at all, 40 times over, and the
+    watchdog could not end the waits inside it: a stuck test held its process for many minutes."""
+    code, said, took = _area_raw("components.html", silent_states=True)
+    if "engine stopped answering" not in said and code != 0 and "Traceback" not in said:
+        _engine_did_not_start(subprocess.CompletedProcess([], code, "", said))
+    assert "engine stopped answering" in said and took < 40, (code, took, said[-300:])
+    code, said, took = _area_raw("components.html", hang=True, area_most=3)
+    assert code == 3 and "gave no answer in time" in said and took < 30, (code, took, said[-300:])
+
+
 def test_area_waits_for_the_page_state_it_reads():
     """#65: one test of this area failed now and then with an empty page state (JSONDecodeError), a different one each
     run: the area read the page once and took an empty answer for its state. It now waits for the state."""
