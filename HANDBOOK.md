@@ -200,7 +200,12 @@ data/                your data; only the *.example.* files are in git
   answer"); text saved as a document in the person's name passes `llm.document` (no empty answer, no short refusal,
   `llm.refused`, curly apostrophes too, not "I cannot wait"). Of the two JSON spans the longer one that parses wins:
   "[{…}]" in words is the list, "Note [1]: {…}" the object. A job's title, company and place go in fenced like its
-  text (`llm.posting_parts`). The usage limit pauses a run
+  text in every prompt (`llm.posting_parts`, with the prompt's own word for a part that is missing; #111), and each
+  system prompt that gets them says `llm.POSTING_RULE` (the reply draft and the reply scan too). A test steers the
+  title of every prompt builder (the assistant's action prompt too: its job list and the open job are fenced) and finds
+  nothing of it outside the tags. `llm.unfence` takes the app's own tags out of every answer in `llm.ask`, so a tag
+  Claude copies back never reaches a reply draft, a form answer or a job's company. The notes of the job window show at most
+  `cv_tailor.NOTES_SHOWN` names each. The usage limit pauses a run
   instead. A timeout while writing uses one of the job's two tries (`agent3_letters._give_back_try`), so a job whose
   call always hangs cannot hold every run; the limit gives the try back. Still open (a later PR, owner's decision 23
   Oct): Claude's stage alone moves an application; a check of the email's own words is designed separately. The same

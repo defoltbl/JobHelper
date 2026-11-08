@@ -162,8 +162,7 @@ def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str
     feedback, items = "", []
     for _attempt in range(2):
         data = llm.ask_json(PROMPT.format(
-            cv_text=_with_notes(cv_text, notes), title=job.get("title", ""), company=job.get("company", ""),
-            location=job.get("location", ""),
+            cv_text=_with_notes(cv_text, notes), **llm.posting_parts(job),
             description=llm.untrusted("posting", (job.get("description") or "").strip()[:4000] or "(No posting text was saved; use the title and the CV.)"),
             facts=config.facts_block(cv_text), salary=_salary_line(job), questions=llm.untrusted("questions", numbered), feedback=feedback),
             system=SYSTEM, tag="form_answers")
@@ -224,7 +223,7 @@ def rewrite(job: dict[str, Any], cv_text: str, question: str, answer: str, how: 
     if not str(answer or "").strip():
         raise ValueError("There is no answer to rewrite yet. Draft it first.")
     data = llm.ask_json(REWRITE_PROMPT.format(
-        cv_text=_with_notes(cv_text, notes), title=job.get("title", ""), company=job.get("company", ""), question=llm.untrusted("questions", str(question).strip()[:MAX_QUESTION]),
+        cv_text=_with_notes(cv_text, notes), **llm.posting_parts(job), question=llm.untrusted("questions", str(question).strip()[:MAX_QUESTION]),
         answer=str(answer).strip()[:MAX_ANSWER], how=" ".join(str(how).split())[:300]), system=SYSTEM, tag="form_answers")
     new = cover_letter.clean(str((data or {}).get("answer", "") if isinstance(data, dict) else "")).strip()[:MAX_ANSWER]
     if not new:

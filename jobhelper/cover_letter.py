@@ -20,7 +20,7 @@ from lxml import etree
 
 from . import claims, config, cv_tailor, llm, store
 from .claims import ClaimCheck
-from .cv_tailor import POSTING_SHOWN, clean, figure_sources
+from .cv_tailor import NOTES_SHOWN, POSTING_SHOWN, clean, figure_sources
 from .word_document import P as _P, T as _T, XML_SPACE, Paragraph, WordDocument, text_of as _text
 
 BODY_PARAGRAPHS = 5
@@ -455,7 +455,7 @@ class LetterNotes:
     the candidate's experience (letter_check), figures no source gives, work at the wrong employer, an employer no source
     names. One place for the letter as written, the letter as saved after an edit, and the plain letter (#78)."""
 
-    MOST = 8                       # names shown for each kind of note
+    MOST = NOTES_SHOWN             # names shown for each kind of note
 
     def __init__(self, job: dict[str, Any], paragraphs: list[str], cv_text: str,
                  employers: claims.EmployerCheck | None = None) -> None:
@@ -484,19 +484,52 @@ FRAME_WORDS = 5                 # "Dear Ms Jana Novak," and "Yours sincerely," a
 PLAIN_WORDS = (150, 450)        # the plain letter's body: its prompt asks 250-320 words, and the check may cut some
 
 
+def _frame_line(line: str) -> bool:
+    """A short line of greeting or closing ("Dear Hiring Team,", "Yours sincerely,"): "Dear Hiring Team, I ran …" is not."""
+    return len(line.split()) <= FRAME_WORDS and not re.search(r"\d", line) and bool(_FRAME.match(line))
+
+
+def _letter_blocks(letter: str) -> tuple[list[str], set[str]]:
+    """The plain letter in blocks, and which of them are its frame. Paragraphs end at a blank line when the letter has
+    them, and a paragraph wrapped over lines is one block (#111); a greeting or closing line at a paragraph's start or end
+    is a block of its own, and every line after the closing is the signature (a name, a phone)."""
+    parts = re.split(r"\n\s*\n", letter) if re.search(r"\n\s*\n", letter) else letter.split("\n")
+    blocks, framed, signing = [], set(), False
+    for part in parts:
+        lines = [" ".join(line.split()) for line in part.split("\n") if line.strip()]
+        head = []
+        while lines and (signing or _frame_line(lines[0])):
+            signing = signing or not lines[0].lower().startswith("dear")
+            head.append(lines.pop(0))
+        tail = []
+        while lines and _frame_line(lines[-1]):
+            tail.insert(0, lines.pop())
+        for line in head:
+            blocks.append(line)
+            framed.add(line)
+        if lines:
+            if signing:                                   # after the closing: the signature, never body
+                framed.add(" ".join(lines))
+            blocks.append(" ".join(lines))
+        for line in tail:
+            blocks.append(line)
+            framed.add(line)
+            signing = signing or not line.lower().startswith("dear")
+    return blocks, framed
+
+
 def checked_plain(letter: str, job: dict[str, Any], cv_text: str) -> str:
     """The plain letter (written when there is no letter template) under the same claim rules as the template letter:
     a sentence that admits a gap or claims what the CV does not show is cut, and what is left to name goes on the job
     (LetterNotes). The greeting and the closing stay as they are (#78)."""
-    blocks = [b.strip() for b in re.split(r"\n\s*\n|\n", letter) if b.strip()]
-    # only a short line of greeting or closing is the frame: "Dear Hiring Team, I ran Kubernetes …" is checked as body
-    frame = lambda b: len(b.split()) <= FRAME_WORDS and not re.search(r"\d", b) and bool(_FRAME.match(b))  # noqa: E731
+    blocks, framed = _letter_blocks(letter)
+    frame = lambda b: b in framed        # noqa: E731
     body = [b for b in blocks if not frame(b)]
     checked = iter(enforce(body, unverified_terms(cv_text, job.get("description") or "")))
     out = [b if frame(b) else next(checked) for b in blocks]
     kept = [b for b in out if b.strip() and not frame(b)]
     words = sum(len(b.split()) for b in kept)
-    if not kept:
+    if body and not kept:          # there was a body, and the check took all of it
         raise ValueError("Every sentence of the letter claimed what your CV does not show, so nothing was saved.")
     if not PLAIN_WORDS[0] <= words <= PLAIN_WORDS[1]:
         raise ValueError(f"The plain letter had {words} words after the check (it needs {PLAIN_WORDS[0]}-{PLAIN_WORDS[1]}), "

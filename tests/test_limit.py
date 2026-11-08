@@ -729,6 +729,7 @@ def test_a_signed_out_claude_ends_the_cv_and_letter_steps_and_the_job_keeps_its_
     ("I’m sorry, but I can’t write this letter.", True), ("I apologize, but I cannot write this.", True),
     ("Unfortunately, I am unable to help with this request.", True), ("I will not write a letter with invented facts.", True),
     ("As an AI language model, I can't write this.", True), ("I cannot wait to start.", False),
+    ("As an AI assistant, I won't invent your experience.", True), ("As an AI-powered team, you need careful testers.", False),
     ("As an AI engineer with six years of experience, I build search systems.", False),
 ])
 def test_a_refusal_is_never_a_document(text, refused):

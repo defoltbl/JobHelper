@@ -7,6 +7,8 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Claude:** the title, company and place of a job now go to Claude as text to read, not as orders. This holds in every prompt, including form answers, the interview preparation, the assistant and the reply scan.
+- **Cover letters:** a plain letter whose paragraphs are wrapped over several lines is checked paragraph by paragraph, not line by line.
 - **Window:** when no app opens the letters folder, a calendar file, the interview documents, a filtered-out posting or System Settings, the window says so and what to do. Before, it said nothing or said they were opened.
 - **Cover letters, CVs, form answers and interview preparation:** a skill that the posting asks for and that neither your CV nor **More about your work** shows is no longer claimed as your experience. Before, only a fixed list of technologies was checked.
 - **Cover letters and answers:** work stated with any verb in the past tense ("I scheduled …", "I reconciled …") or as ongoing work ("I have been using …") is checked as a claim, not only with verbs such as "built" or "used". Another spelling of a skill, such as "k8s" or "M365", is checked too.
