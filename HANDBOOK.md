@@ -323,7 +323,8 @@ data/                your data; only the *.example.* files are in git
 - **A reply moves an application only through `email_client.status_after`**: forward only, a rejection
   from any status. The scan, the progress check and filing a reply by hand all ask it.
 - **Every call to Claude goes through `llm.ask`,** which refuses while `ANTHROPIC_API_KEY` is set, or another setting
-  that bills a paid account (`config.PAID_SETTINGS`: a token, another address, Bedrock, Vertex).
+  that bills a paid account (`config.PAID_SETTINGS`: a token, another address, Bedrock, Vertex). A base URL that is
+  only Anthropic's own address (`config.OWN_ADDRESS`) moves nothing, so it does not count (#93).
   Do not add a second way to ask.
 - **A CV's sections are found by their headings, whatever they are called** (`cv_tailor.sections`):
   never by a fixed list of names, or another person's CV loses a section.

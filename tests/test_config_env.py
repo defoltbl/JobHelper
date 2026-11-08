@@ -241,3 +241,12 @@ def test_a_message_about_the_paid_api_names_the_setting_that_is_set(monkeypatch)
     assert config.paid_setting_named() == "ANTHROPIC_API_KEY", "none set: the usual one is named"
     monkeypatch.setenv("CLAUDE_CODE_USE_BEDROCK", "1")
     assert config.paid_setting_named() == "CLAUDE_CODE_USE_BEDROCK"
+
+
+@pytest.mark.parametrize("value, paid", [("https://api.anthropic.com", False), ("https://api.anthropic.com/", False),
+                                         (" HTTPS://API.ANTHROPIC.COM ", False), ("https://proxy.example.com", True),
+                                         ("https://api.anthropic.com.example.com", True)])
+def test_a_base_url_counts_as_paid_only_when_it_leads_elsewhere(monkeypatch, value, paid):
+    """#93: ANTHROPIC_BASE_URL refused every run, also when it named Anthropic's own address."""
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", value)
+    assert config.using_paid_api() is paid and (config.paid_setting() == "ANTHROPIC_BASE_URL") is paid

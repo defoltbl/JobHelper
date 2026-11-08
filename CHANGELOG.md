@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Claude:** the app no longer refuses to run when `ANTHROPIC_BASE_URL` is set only to Anthropic's own address.
 - **Job window:** when the app takes a sentence out of a cover letter because your CV and notes do not show its skill, the job window names that skill and says where to add it if it is true.
 - **Assistant:** when you ask it to remember something, it asks first and keeps the note only when you select **Yes, do it**.
 - **Claude:** a very long answer or posting with many spaces no longer slows the app down while it takes the app's own tags out of it.
