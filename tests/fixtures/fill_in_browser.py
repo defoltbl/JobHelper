@@ -31,6 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 FORMS = Path(__file__).resolve().parent / "forms"
 
+STATE_TRIES, STATE_WAIT = 40, 0.25      # how long the page may take to give its state: 10 seconds in all (#65)
 STATE = r"""
 (function () {
   var out = {};
@@ -140,10 +141,34 @@ def main() -> int:
     chrome.pause = pause
     chrome.active_tab = lambda: {"url": page.url().toString(), "title": page.title()}
 
+    blanks = [True] * int(setup.get("blank_states", 0))     # for a test: the page first answers nothing this many times
+
+    def page_state() -> dict:
+        """The page's fields as STATE reads them, waited for: right after the app changed the page, the engine can answer
+        nothing for a moment, and one such empty answer failed a test at random (#65)."""
+        for _try in range(STATE_TRIES):
+            if blanks:                  # the test's empty answer, in place of the page's
+                blanks.pop()
+                said = ""
+            else:
+                said = run(STATE)
+            if said:
+                try:
+                    return {**json.loads(said), "tries": _try + 1}
+                except json.JSONDecodeError:
+                    pass
+            pause(STATE_WAIT)
+        raise RuntimeError(f"The page gave no state in {STATE_TRIES} tries.")
+
+    started = []
+
     def work_on_page(ok: bool) -> None:
+        if started:                     # a frame or a later load fires loadFinished again: the work is done once (#65)
+            return
         if not ok:
             app.exit(2)
             return
+        started.append(True)
 
         def go():
             api = ui_api.Api()
@@ -162,9 +187,9 @@ def main() -> int:
                 learned = api.assistant_learn()
                 from jobhelper import answer_memory
                 learned["remembered"] = answer_memory.count()
-            state = json.loads(run(STATE))
+            state = page_state()
             out = {"reviewed": reviewed, "learned": learned, "watch": [before, api.assistant_watch()], "result": result, "state": state["fields"], "kept": state["kept"], "sent": state["sent"], "clicked": state["clicked"], "asked": asked,
-                   "chosen": chosen, "menus": state["menus"], "opened": state["opened"]}
+                   "chosen": chosen, "menus": state["menus"], "opened": state["opened"], "state_tries": state["tries"]}
             if picture:                              # the page as a PDF: it can be drawn without a screen
                 loop = QEventLoop()
                 page.printToPdf(lambda data: (Path(picture).write_bytes(bytes(data)), loop.quit()))

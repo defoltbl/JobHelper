@@ -713,6 +713,14 @@ def _area(page, **more):
     return out
 
 
+def test_area_waits_for_the_page_state_it_reads():
+    """#65: one test of this area failed now and then with an empty page state (JSONDecodeError), a different one each
+    run: the area read the page once and took an empty answer for its state. It now waits for the state."""
+    out = _area("components.html", blank_states=3)
+    assert out["state_tries"] == 4, "three empty answers waited through, the fourth read is the page's"
+    assert out["kept"]["c1"] == "Alex" and out["state"]["c1"] == "Alex"
+
+
 def test_area_a_form_built_from_components_believes_what_was_written():
     """Pages built with a component library keep each value themselves and undo anything that did not arrive like typing;
     their lists are menus that hold nothing until they are opened."""
