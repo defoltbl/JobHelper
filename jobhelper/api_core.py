@@ -39,6 +39,27 @@ class Desktop:
             trouble.note("opening a file or folder", f"{type(e).__name__} for {Path(str(path)).name}")
             return False
 
+    POSTING_FAILED = "The browser could not open the posting. Open it from the job's link yourself."
+
+    def opened(self, target, failed: str = "") -> dict:
+        """{ok} of opening `target`, with what to say when nothing opened (#104): `failed`, or a plain line for a folder or
+        a file. Every opener of the window answers with this, so none ignores a failure."""
+        if self.open(target):
+            return {"ok": True}
+        name = Path(str(target)).name
+        return {"ok": False, "msg": failed or (f"The folder {name} could not be opened in Finder." if Path(str(target)).is_dir()
+                                               else f"{name} could not be opened. Check that an app for this kind of file is installed.")}
+
+    def open_posting(self, url) -> dict:
+        """Open a job posting's link: only a web page, and never a site the app refuses (form_fill.PageAddress), for a job
+        of the list and a filtered-out one alike (#104). {ok: False} without a word when there is no such link; the
+        window then says there is none."""
+        from .form_fill import PageAddress      # here: form_fill depends on much of the app
+        address = PageAddress(str(url or ""))
+        if not address.is_web or address.refused:
+            return {"ok": False}
+        return {**self.opened(address.url, self.POSTING_FAILED), "url": address.url}
+
     def reveal(self, path) -> None:
         """Show a file in its folder (selected in Finder), so it is easy to drag into a form."""
         try:

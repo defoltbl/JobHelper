@@ -537,9 +537,9 @@ class JobSlots:
     def testNotification(self):
         return self._api.test_notification()
 
-    @Slot()
+    @Slot(result="QVariantMap")
     def openNotificationSettings(self):
-        self._api.open_notification_settings()
+        return self._api.open_notification_settings()
 
     @Slot(result="QVariantList")
     def changelog(self):

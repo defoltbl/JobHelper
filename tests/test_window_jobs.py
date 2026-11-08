@@ -544,10 +544,33 @@ def test_about_you_shows_your_own_letters_folder(ui, monkeypatch):
     assert ui.js("aboutDialog.myLetters.count") == 1 and ui.js("aboutDialog.myLetters.name") == config.COVER_LETTERS_DIR.name
     assert ui.find("myLettersOpen").property("text") == "Open folder"
     assert ui.js("bridge.openMyLetters().ok") is True and opened == [config.COVER_LETTERS_DIR]
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: False)        # #104: Finder did not open it
+    ui.js('ticker.text = ""')
+    QMetaObject.invokeMethod(ui.find("myLettersOpen"), "clicked")
+    _until_true(ui, lambda: "could not be opened in Finder" in ui.js("ticker.text"))
     ui.js("close()", ui.find("aboutDialog"))
     _until_closed(ui, "aboutDialog")
     (config.COVER_LETTERS_DIR / "Alex_Novak_CoverLetter_Acme.docx").unlink()
     assert ui.warnings == []
+
+
+def test_a_posting_or_system_settings_that_did_not_open_is_said_in_the_window(ui, monkeypatch):
+    """#104: the window said "No link for this job." when the browser refused a link that was there, and nothing at all
+    when System Settings did not open."""
+    _open_job(ui, "lead")
+    monkeypatch.setattr(ui_api.Api, "open_url", lambda self, job_id: {"ok": False, "msg": api_core.Desktop.POSTING_FAILED})
+    ui.js('ticker.text = ""; detailDialog.doStep("posting")')
+    _until_true(ui, lambda: ui.js("ticker.text") == api_core.Desktop.POSTING_FAILED)
+    ui.js("detailDialog.close()")
+    _until_closed(ui, "detailDialog")
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: False)
+    ui.js("optDialog.open()")
+    _until_open(ui, "optDialog")
+    ui.js('ticker.text = ""')
+    QMetaObject.invokeMethod(ui.find("notifySettings"), "clicked")
+    _until_true(ui, lambda: "System Settings could not be opened" in ui.js("ticker.text"))
+    ui.js("optDialog.close()")
+    _until_closed(ui, "optDialog")
 
 
 def test_without_a_city_the_search_does_not_start_and_options_open(ui):

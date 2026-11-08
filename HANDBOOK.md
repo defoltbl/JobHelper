@@ -353,8 +353,9 @@ data/                your data; only the *.example.* files are in git
   `TagEditor`, `ChipFlow`). Later: the "takes up to N characters" sentence is still built in several windows.
 - **Nothing slow runs on the window's thread, and nothing is opened silently** (#79): the letter save and the single PDF
   (LibreOffice) answer through `letterSaved` / `pdfReady` (`JobSlots._in_background`, a fault in words and its kind in
-  the log). `Desktop.open` returns whether the file opened (`open` runs to its end), and `open_doc`/`open_excel` say why
-  not (the folder, preparation, insights and settings openers still ignore it: issue #104). An action that asks Claude
+  the log). `Desktop.open` returns whether the file opened (`open` runs to its end), and every opener answers with
+  `Desktop.opened` ({ok}, or the reason in words: a folder, a file, or the caller's own line such as
+  `Desktop.POSTING_FAILED`), so none ignores a failure (#104). `open_doc` opens only `JobsService._DOCUMENT_KINDS`. An action that asks Claude
   for one job or changes the list asks `Bridge._busy_with_run` first. Moving many
   stale documents writes the Excel files once (`shelve_docs(render=False)`).
 - **Options checks the career sites before it saves anything** (`OptionsService.companies_problem`, the same

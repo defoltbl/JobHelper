@@ -81,11 +81,8 @@ class InsightsService:
     def open_filtered(self, index):
         rows = agent2_search.load_dropped()["rows"]
         index = list_position(index, len(rows))
-        url = str(rows[index].get("url") or "") if index >= 0 else ""
-        if not url.startswith(("http://", "https://")):
-            return {"ok": False}
-        self._desktop.open(url)
-        return {"ok": True}
+        said = self._desktop.open_posting(rows[index].get("url") if index >= 0 else "")
+        return {k: v for k, v in said.items() if k != "url"}
 
     # ── master CV next to an adapted one ────────────────────────
     def comparable(self, j) -> bool:

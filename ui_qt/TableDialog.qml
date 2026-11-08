@@ -282,10 +282,10 @@ Dialog {
                                     if (bb && bb.ok) { win.countsData = bridge.counts(); win.refreshOpenView(); }
                                 } else if (modelData.kind === "skiplink") {
                                     var o = bridge.openFiltered(modelData.arg);
-                                    ticker.text = (o && o.ok) ? "Opened the job posting in your browser." : "No link for this posting.";
+                                    ticker.text = (o && o.ok) ? "Opened the job posting in your browser." : ((o && o.msg) || "No link for this posting.");
                                 } else if (modelData.kind === "url") {
                                     var r = bridge.openUrl(modelData.arg);
-                                    ticker.text = (r && r.ok) ? "Opened the job posting in your browser." : "No link for this job.";
+                                    ticker.text = (r && r.ok) ? "Opened the job posting in your browser." : ((r && r.msg) || "No link for this job.");
                                 } else {
                                     win.openDoc(modelData.kind, modelData.arg);
                                 }

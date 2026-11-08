@@ -171,7 +171,7 @@ Dialog {
         say("you", "No", false); say("bot", "Left as it was.", false);
     }
     function openThing(id, what) {
-        if (what === "posting") { var r = bridge.openUrl(id); if (!(r && r.ok)) say("bot", "There is no link saved for this job.", true); return; }
+        if (what === "posting") { var r = bridge.openUrl(id); if (!(r && r.ok)) say("bot", (r && r.msg) || "There is no link saved for this job.", true); return; }
         if (what === "cv" || what === "letter") {
             var d = bridge.jobDetail(id), name = d ? d[what] : "";
             if (!name) { say("bot", "This job has no " + (what === "cv" ? "CV" : "letter") + " from the app.", true); return; }

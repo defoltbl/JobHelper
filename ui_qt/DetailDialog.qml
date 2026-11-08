@@ -171,7 +171,7 @@ Dialog {
     }
     function doStep(key) {
         var ok = true;
-        if (key === "posting") { var r = bridge.openUrl(job.id); ok = !!(r && r.ok); ticker.text = ok ? "Opened the job posting in your browser." : "No link for this job."; }
+        if (key === "posting") { var r = bridge.openUrl(job.id); ok = !!(r && r.ok); ticker.text = ok ? "Opened the job posting in your browser." : ((r && r.msg) || "No link for this job."); }
         else if (key === "cv") win.openDoc(job.cv_pdf === true ? "cv_pdf" : "cv", job.cv);
         else if (key === "letter") win.openDoc(job.letter_pdf === true ? "letter_pdf" : "letter", job.letter);
         else if (key === "combined") { onePdf(true); return; }          // ticked when the PDF opened (pdfMade)
@@ -935,7 +935,7 @@ Dialog {
             Flow { objectName: "detailDocs"; Layout.fillWidth: true; Layout.minimumWidth: 120; spacing: 6
             SmallButton { visible: !!detailDialog.job.url; text: "Open posting ↗"
                 onClicked: { var r = bridge.openUrl(detailDialog.job.id);
-                             ticker.text = (r && r.ok) ? "Opened the job posting in your browser." : "No link for this job."; } }
+                             ticker.text = (r && r.ok) ? "Opened the job posting in your browser." : ((r && r.msg) || "No link for this job."); } }
             SmallButton { visible: !!detailDialog.job.cv; text: "CV"; onClicked: win.openDoc("cv", detailDialog.job.cv) }
             SmallButton { visible: detailDialog.job.cv_pdf === true; text: "CV PDF"; onClicked: win.openDoc("cv_pdf", detailDialog.job.cv) }
             SmallButton { visible: !!detailDialog.job.letter; text: "Letter"; onClicked: win.openDoc("letter", detailDialog.job.letter) }
