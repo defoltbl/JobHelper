@@ -378,6 +378,24 @@ def test_the_app_s_own_tags_never_come_back_in_an_answer(monkeypatch):
         assert llm.unfence(f"a{form}b") == "ab", form
 
 
+def test_the_tag_filter_stays_fast_on_a_long_steered_text():
+    """#120: "<" and a long run of spaces made the tag search slow down with the square of the length (8,000 spaces took
+    seconds), and every answer passes it; the way in and the way out also used two patterns."""
+    import time
+    from jobhelper import llm
+    nested = "<po" * 6_000 + "<posting>" + "sting>" * 6_000
+    for steered in ("<" + " " * 100_000 + "<posting" * 2_000 + " text", nested, "<" + " " * 50_000 + "<posting " + "a" * 50_000):
+        started = time.monotonic()
+        llm.unfence(steered), llm.untrusted("posting", steered)
+        assert time.monotonic() - started < 1.0, steered[:20]
+    assert "<" not in llm.unfence(nested) and "posting>" not in llm.unfence(nested), "past the passes, every bracket goes"
+    # the speed may cost no form of the tag (review of #120): long spaces, long attributes, a "<" inside
+    for form in ("<" + " " * 20 + "/posting>", "<posting " + "a" * 300 + ">", "<posting a<b>", "< / talk >"):
+        assert llm.unfence(f"x{form}y") == "xy", form
+    assert "<posting.x>" in llm.unfence("a<posting.x>b") and "<posting.x>" in llm.untrusted("posting", "a<posting.x>b"), \
+        "the way in and the way out agree"
+
+
 def test_a_tag_inside_a_json_answer_is_taken_out(monkeypatch):
     from jobhelper import llm, usage
 

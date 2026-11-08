@@ -210,11 +210,12 @@ data/                your data; only the *.example.* files are in git
   text in every prompt (`llm.posting_parts`, with the prompt's own word for a part that is missing; #111), and each
   system prompt that gets them says `llm.POSTING_RULE` (the reply draft and the reply scan too). A test steers the
   title of every prompt builder (the assistant's action prompt too: its job list and the open job are fenced) and finds
-  nothing of it outside the tags. `llm.unfence` takes the app's own tags (`llm.OWN_TAGS`; never an address such as `<email@…>`) out of every answer in
-  `llm.ask`, so a tag
-  Claude copies back never reaches a reply draft, a form answer or a job's company. The assistant's saved notes and the
-  talk so far go in as data too (`<notes>`, `<talk>`, said in its system prompt, #117). The notes of the job window show at most
-  `cv_tailor.NOTES_SHOWN` names each. The usage limit pauses a run
+  nothing of it outside the tags. `llm.unfence` takes the app's own tags (`llm.OWN_TAGS`; never an address such as
+  `<email@…>`) out of every answer in `llm.ask`, so a tag Claude copies back never reaches a reply draft, a form answer
+  or a job's company. One pattern (`llm._tags`) serves the way in and the way out: one run of spaces before the
+  label keeps it linear on any text, and past `TAG_PASSES` nested pieces every bracket goes (#120). The
+  assistant's saved notes and the talk so far go in as data too (`<notes>`, `<talk>`, said in its system prompt, #117).
+  The notes of the job window show at most `cv_tailor.NOTES_SHOWN` names each. The usage limit pauses a run
   instead. A timeout while writing uses one of the job's two tries (`agent3_letters._give_back_try`), so a job whose
   call always hangs cannot hold every run; the limit gives the try back. Still open (a later PR, owner's decision 23
   Oct): Claude's stage alone moves an application; a check of the email's own words is designed separately. The same
