@@ -494,27 +494,30 @@ def _letter_blocks(letter: str) -> tuple[list[str], set[str]]:
     them, and a paragraph wrapped over lines is one block (#111); a greeting or closing line at a paragraph's start or end
     is a block of its own, and every line after the closing is the signature (a name, a phone)."""
     parts = re.split(r"\n\s*\n", letter) if re.search(r"\n\s*\n", letter) else letter.split("\n")
-    blocks, framed, signing = [], set(), False
-    for part in parts:
-        lines = [" ".join(line.split()) for line in part.split("\n") if line.strip()]
-        head = []
-        while lines and (signing or _frame_line(lines[0])):
-            signing = signing or not lines[0].lower().startswith("dear")
-            head.append(lines.pop(0))
+    lines_of = [[" ".join(line.split()) for line in part.split("\n") if line.strip()] for part in parts]
+    closings = [(p, n) for p, lines in enumerate(lines_of) for n, line in enumerate(lines)
+                if _frame_line(line) and not line.lower().startswith("dear")]
+    last = closings[-1] if closings else (len(lines_of), 0)   # only the last closing starts the signature (#117)
+    blocks, framed = [], set()
+    for p, lines in enumerate(lines_of):
+        if (p, 0) >= last:                                # the closing and everything after it: never body
+            for line in lines:
+                blocks.append(line)
+                framed.add(line)
+            continue
+        cut = len(lines) if p != last[0] else last[1]     # the paragraph that holds the closing ends its body there
+        body, after = lines[:cut], lines[cut:]
+        while body and _frame_line(body[0]):
+            blocks.append(body[0])
+            framed.add(body.pop(0))
         tail = []
-        while lines and _frame_line(lines[-1]):
-            tail.insert(0, lines.pop())
-        for line in head:
+        while body and _frame_line(body[-1]):
+            tail.insert(0, body.pop())
+        if body:
+            blocks.append(" ".join(body))
+        for line in (*tail, *after):
             blocks.append(line)
             framed.add(line)
-        if lines:
-            if signing:                                   # after the closing: the signature, never body
-                framed.add(" ".join(lines))
-            blocks.append(" ".join(lines))
-        for line in tail:
-            blocks.append(line)
-            framed.add(line)
-            signing = signing or not line.lower().startswith("dear")
     return blocks, framed
 
 

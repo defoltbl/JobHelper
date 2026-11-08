@@ -38,13 +38,21 @@ def untrusted(label: str, text: str) -> str:
     return f"<{label}>\n{clean}\n</{label}>"
 
 
-_OWN_TAG = re.compile(r"<\s*/?\s*(?:" + "|".join(PAGE_LABELS) + r"|email)\b[^>]*>", re.IGNORECASE)
+# Every label the app puts text inside (untrusted): the page labels, a mail, and the assistant's notes and talk (#117).
+OWN_TAGS = (*PAGE_LABELS, "email", "notes", "talk")
+# one of those tags in any form ("<posting>", "</posting >", "<posting/>", "<posting-x>"), never an address such as
+# <email@example.com>: what follows the label is a space, "/", "-" or the end of the tag
+_OWN_TAG = re.compile(r"<\s*/?\s*(?:" + "|".join(OWN_TAGS) + r")(?=[\s/>-])[^>]*>", re.IGNORECASE)
 
 
 def unfence(text: str) -> str:
     """An answer without the app's own fence tags: a model that copies "<posting>Acme</posting>" from a prompt must not
-    put the tags into a reply draft, a form answer or a job's company (#111)."""
-    return _OWN_TAG.sub("", str(text or ""))
+    put the tags into a reply draft, a form answer or a job's company (#111). Until none is left: "<po<posting>sting>"
+    would form one again after one pass (#117)."""
+    text = str(text or "")
+    while _OWN_TAG.search(text):
+        text = _OWN_TAG.sub("", text)
+    return text
 
 
 def posting_parts(job: dict[str, Any] | None, missing: str = "") -> dict[str, str]:

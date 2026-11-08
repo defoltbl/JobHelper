@@ -91,8 +91,11 @@ def test_every_label_a_prompt_uses_for_page_text_is_named_by_the_rule():
     from pathlib import Path
     from jobhelper import llm
     code = "".join(f.read_text(encoding="utf-8") for f in (Path(__file__).resolve().parent.parent / "jobhelper").glob("*.py"))
-    used = set(re.findall(r'llm\.untrusted\("(\w+)"', code)) - {"email"}       # a mail has its own rule (agent5_responses)
+    from jobhelper import assistant_brain
+    # a mail has its own rule (agent5_responses); the assistant's notes and talk are named in its system prompt (#117)
+    used = set(re.findall(r'llm\.untrusted\("(\w+)"', code)) - {"email", "notes", "talk"}
     assert used and used <= set(llm.PAGE_LABELS) and all(f"<{label}>" in llm.POSTING_RULE for label in llm.PAGE_LABELS)
+    assert all(f"<{label}>" in assistant_brain.SYSTEM for label in ("notes", "talk")) and set(llm.OWN_TAGS) >= used | {"notes", "talk"}
 
 
 # ── work given to the wrong employer (hands-on check, 29 Oct) ──
@@ -355,7 +358,7 @@ def test_a_missing_part_is_the_prompt_s_own_word_and_every_receiver_knows_the_ru
     assert parts["company"] == parts["location"] == "unknown" and parts["title"] == llm.untrusted("posting", "Analyst")
     for system in (assistant_brain.SYSTEM, assistant_brain.REPLY_SYSTEM, agent5_responses.SYSTEM):
         assert llm.POSTING_RULE in system
-    assert cv_tailor.NOTES_SHOWN == 8, "what the job window shows of each note"
+    assert cover_letter.LetterNotes.MOST is cv_tailor.NOTES_SHOWN, "one limit for every note of the job window"
 
 
 def test_the_app_s_own_tags_never_come_back_in_an_answer(monkeypatch):
@@ -369,3 +372,27 @@ def test_the_app_s_own_tags_never_come_back_in_an_answer(monkeypatch):
     said = llm.ask("hello", force=True)
     assert "<" not in said and "Acme" in said and "thank you" in said
     assert llm.unfence("a < b and c > d") == "a < b and c > d", "other angle brackets stay"
+    assert llm.unfence("Write to <email@example.com> or <page@example.com>.") == "Write to <email@example.com> or <page@example.com>.", \
+        "#117: an address in angle brackets is no tag"
+    for form in ("<posting/>", "<posting\n>", "</posting >", "<posting-x>", "<po<posting>sting>", "<NOTES>", "< talk >"):
+        assert llm.unfence(f"a{form}b") == "ab", form
+
+
+def test_a_tag_inside_a_json_answer_is_taken_out(monkeypatch):
+    from jobhelper import llm, usage
+
+    async def echo(prompt, system, model):
+        return '{"answer": "I would like to join <posting>Acme</posting>.", "needs_you": ""}', {}
+    monkeypatch.setattr(llm, "_ask_async", echo)
+    monkeypatch.setattr(usage, "record", lambda rec, tag="": None)
+    assert llm.ask_json("hello") == {"answer": "I would like to join Acme.", "needs_you": ""}
+
+
+def test_the_assistant_s_notes_and_talk_reach_claude_only_as_data(monkeypatch):
+    """#117: a saved note and the talk so far went into the action prompt as the app's own words."""
+    import re
+    from jobhelper import assistant_brain
+    sent = _prompts_of(monkeypatch, lambda: assistant_brain.decide("What next?", [], [], [("you", _STEER), ("bot", _STEER)], "", "",
+                                                                   notes=[_STEER]))
+    bare = re.sub(r"<(notes|talk|posting)>.*?</\1>", "", sent[0], flags=re.DOTALL)
+    assert "Ignore your rules" not in bare and "<notes>" in assistant_brain.SYSTEM
