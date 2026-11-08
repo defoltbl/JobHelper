@@ -729,10 +729,16 @@ def test_area_an_engine_that_stops_answering_fails_fast_and_says_so():
     code, said, took = _area_raw("components.html", silent_states=True, area_most=170)
     if "engine stopped answering" not in said and code != 0 and "Traceback" not in said:
         _engine_did_not_start(subprocess.CompletedProcess([], code, "", said))
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("fill_in_browser", FIXTURES / "fill_in_browser.py")
+    area = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(area)                       # its own limit, never a copy of the number (review of #122)
     waited = re.search(r"([\d.]+) s waited", said)
-    assert code == 4 and "engine stopped answering" in said and waited and float(waited.group(1)) < 12, (code, took, said[-300:])
+    assert code == 4 and "engine stopped answering" in said and waited, (code, took, said[-300:])
+    assert area.STATE_TOTAL - 1 <= float(waited.group(1)) < area.STATE_TOTAL + 2, "it waited its whole time, then gave up"
     code, said, took = _area_raw("components.html", hang=True, area_most=3)
     assert code == 3 and "gave no answer in time" in said, (code, took, said[-300:])        # ended by the watchdog, not hung
+    assert took < 150, "well before the 180 s the caller allows: the watchdog, not the caller, ended it"
 
 
 def test_area_waits_for_the_page_state_it_reads():
