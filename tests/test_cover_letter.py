@@ -378,3 +378,14 @@ def test_a_greeting_or_closing_next_to_the_body_stays_the_letter_s_frame(isolate
     assert out.endswith("Yours sincerely,\n\nAlex Novak\n\n+420 600 000 000"), "the signature after the closing is no body"
     blocks, framed = cover_letter._letter_blocks("Dear Hiring Team,\nBody text here.\n\nBest,\nAlex")
     assert blocks == ["Dear Hiring Team,", "Body text here.", "Best,", "Alex"] and framed == {"Dear Hiring Team,", "Best,", "Alex"}
+
+
+
+def test_a_thank_you_line_in_the_middle_does_not_end_the_checked_body(isolate_data, monkeypatch):
+    """#117: a short "Thank you." line in the middle made every later paragraph a signature that was never checked."""
+    monkeypatch.setattr(cover_letter, "unverified_terms", lambda cv_text, posting="": ["Kubernetes"])
+    cv = "Alex Novak\nJunior Developer – Northwind Parcel, Brno (2024 – present): built tools in Python.\n"
+    filler = "I like clear code and short, readable tests that other people can follow. " * 15
+    out = cover_letter.checked_plain("Dear Hiring Team,\n\n" + filler + "\n\nThank you.\n\nI deployed Kubernetes clusters daily.\n\n"
+                                     "Yours sincerely,\nAlex Novak", store.new_job(id="t", title="Dev", company="Acme"), cv)
+    assert "Kubernetes" not in out and out.endswith("Yours sincerely,\n\nAlex Novak")
