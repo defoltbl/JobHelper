@@ -198,6 +198,14 @@ def test_application_only_cards_are_hidden_for_a_new_job_and_nothing_overflows(u
     ui.js("detailDialog.refresh()")
     assert ui.find("letterInvented").property("visible") is False
     assert ui.find("letterNoEdit").property("visible") is False
+    assert ui.find("letterCut").property("visible") is False
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_cut=["a sentence about Kubernetes", "a sentence that said what you lack"]), render=False)
+    ui.js("detailDialog.refresh()")
+    cut = ui.find("letterCut")
+    assert cut.property("visible") is True and "out of your cover letter: a sentence about Kubernetes; a sentence that said" in cut.property("text") \
+        and "More about your work" in cut.property("text"), "#113: a cut is never silent"
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_cut=[]), render=False)
+    ui.js("detailDialog.refresh()")
     monkeypatch.setattr(ui_api.Api, "edit_missing", lambda self, j: cover_letter.LetterHead.NO_NAME)
     ui.js("detailDialog.refresh()")
     no_edit = ui.find("letterNoEdit")

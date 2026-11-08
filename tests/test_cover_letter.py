@@ -389,3 +389,32 @@ def test_a_thank_you_line_in_the_middle_does_not_end_the_checked_body(isolate_da
     out = cover_letter.checked_plain("Dear Hiring Team,\n\n" + filler + "\n\nThank you.\n\nI deployed Kubernetes clusters daily.\n\n"
                                      "Yours sincerely,\nAlex Novak", store.new_job(id="t", title="Dev", company="Acme"), cv)
     assert "Kubernetes" not in out and out.endswith("Yours sincerely,\n\nAlex Novak")
+
+
+def test_a_sentence_the_letter_loses_is_named_in_the_job_window(isolate_data, monkeypatch):
+    """#113 (owner's decision): a claim Claude kept after its second try was cut without a word."""
+    title, body, _ = _example()
+    monkeypatch.setattr(config, "LETTER_TEMPLATE", TEMPLATE)
+    monkeypatch.setattr(cover_letter, "unverified_terms", lambda cv_text, posting="": ["Kubernetes"])
+    claimed = list(body)
+    claimed[2] = body[2].rstrip() + " I deployed Kubernetes clusters daily."
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: {"title_line": title, "paragraphs": claimed, "role_short": "Admin"})
+    job = store.new_job(id="c1", title="Administrator", company="Acme", description="We run Linux servers.")
+    name = cover_letter.write(job, _master_text(), MASTER)
+    assert job["letter_cut"] == ["a sentence about Kubernetes"]
+    assert "I deployed Kubernetes clusters daily" not in "\n".join(p.text for p in docx.Document(str(config.LETTERS_DIR / name)).paragraphs)
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: {"title_line": title, "paragraphs": body, "role_short": "Admin"})
+    cover_letter.write(job, _master_text(), MASTER)
+    assert "letter_cut" not in job, "a letter written again without the claim leaves no old note"
+    cv = "Alex Novak\nJunior Developer – Northwind Parcel, Brno (2024 – present): built tools in Python.\n"
+    filler = "I like clear code and short, readable tests that other people can follow. " * 15
+    plain = store.new_job(id="c2", title="Dev", company="Acme")
+    cover_letter.checked_plain("Dear Hiring Team,\n\nI deployed Kubernetes clusters daily.\n\n" + filler + "\n\nYours sincerely,", plain, cv)
+    assert plain["letter_cut"] == ["a sentence about Kubernetes"], "the plain letter says it too"
+    # review of #113: a sentence that admits a gap is cut too, and was cut without a word; each reason once; at most a few
+    lacking = ["I have no experience with Docker. I build tools in Python.", "I have no experience with Docker either."]
+    assert cover_letter.cut_claims(lacking, ["Kubernetes"]) == [cover_letter.GAP_CUT]
+    many = [f"I deployed Tool{n} daily." for n in range(12)]
+    job = store.new_job(id="c3", title="Dev", company="Acme")
+    cover_letter.note_cut(job, cover_letter.cut_claims(many, [f"Tool{n}" for n in range(12)]))
+    assert len(job["letter_cut"]) == cover_letter.LetterNotes.MOST

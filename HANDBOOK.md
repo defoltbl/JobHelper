@@ -487,9 +487,10 @@ data/                your data; only the *.example.* files are in git
   been using", "I'm running"), an adverb allowed before it (`claims._DONE`; not `_NOT_DONE`: noticed, reached out,
   completed a course, joined, "I'm looking forward", "I did not"). A digit right after a letter ("k8s", "S3") is no
   figure in the text checked (`claims.STATED`; a source still backs with any digit, `FIGURE`). Measured read-only on 53 real letters with their job: 0 letters flagged before, 8 after:
-  7 "Troubleshooting" and 1 "Microsoft 365", neither named by the CV or the notes (true claims by the rule). Open
-  question for the owner: a soft skill such as troubleshooting is now as strict as a tool, and a sentence that keeps
-  it after the retry is cut without a word.
+  7 "Troubleshooting" and 1 "Microsoft 365", neither named by the CV or the notes (true claims by the rule). Owner's decision
+  (8 Nov, #113): a soft skill such as troubleshooting stays as strict as a tool, and a sentence cut after the retry
+  is named in the job window (`cover_letter.cut_claims` / `note_cut` → `letter_cut`, one decision per sentence in
+  `_cut_reason`, also for a sentence that admits a gap), pointing to More about your work.
   The golden set `tests/fixtures/letter_evals.json` (invented people in four professions, every case labelled) runs in
   `tests/test_letter_evals.py`: change a prompt or a claim rule only with it passing in every profession, and add a
   case for each false alarm or missed claim; never change a label to make a run pass. In the

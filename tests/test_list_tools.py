@@ -315,6 +315,16 @@ def test_saving_the_letter_names_an_employer_no_source_gives_until_it_is_gone(ap
     assert store.find(store.load_jobs(), "lead").get("letter_invented", []) == []
 
 
+def test_a_cut_note_is_shown_with_its_letter_and_goes_when_you_save_your_own_edit(api):
+    """#113: the job window names what the app cut from the letter; your own saved edit replaces that draft."""
+    store.save_jobs([dict(_lead_with_docs(), letter_cut=["a sentence about Kubernetes"])])
+    assert api.job_detail("lead")["letter_cut"] == ["a sentence about Kubernetes"]
+    assert api.save_letter("lead", PARAS)["ok"] is True
+    assert "letter_cut" not in store.find(store.load_jobs(), "lead") and api.job_detail("lead")["letter_cut"] == []
+    store.save_jobs([dict(_lead_with_docs(), cover_letter_file="", letter_cut=["a sentence about Kubernetes"])])
+    assert api.job_detail("lead")["letter_cut"] == [], "no letter: no note"
+
+
 def test_the_detail_names_no_invented_employer_without_a_letter(api):
     store.save_jobs([dict(_lead_with_docs(), cover_letter_file="", letter_invented=["Contoso Labs"])])
     assert api.job_detail("lead")["letter_invented"] == [], "an old note of a letter that is gone is not shown"
