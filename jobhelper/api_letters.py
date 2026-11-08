@@ -167,8 +167,9 @@ class LettersService:
         out = pdf.combine(parts, config.DATA_DIR / "combined" / f"{stem}.pdf")
         if out is None:
             return {"ok": False, "msg": "The two PDF files could not be joined."}
-        if not self._desktop.open(out):
-            return {"ok": False, "msg": f"The single PDF was made ({out.name}), but it could not be opened."}
+        said = self._desktop.opened(out, f"The single PDF was made ({out.name}), but it could not be opened.")
+        if not said["ok"]:
+            return said
         return {"ok": True, "file": out.name, "pages": pdf.page_count(out)}
 
     def my_letters(self):
@@ -186,5 +187,4 @@ class LettersService:
             folder.mkdir(parents=True, exist_ok=True)
         except OSError:
             return {"ok": False}
-        self._desktop.open(folder)
-        return {"ok": True}
+        return self._desktop.opened(folder)

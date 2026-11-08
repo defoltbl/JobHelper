@@ -438,7 +438,7 @@ Dialog {
                             SmallButton { objectName: "myLettersOpen"; text: "Open folder"
                                 onClicked: { var r = bridge.openMyLetters();
                                     ticker.text = (r && r.ok) ? "Put letters you wrote yourself there, named like Name_CoverLetter_Company.docx."
-                                                              : "Couldn't open the folder."; } } }
+                                                              : ((r && r.msg) || "Couldn't open the folder."); } } }
                     }
                 }
                 Item { Layout.preferredHeight: 4 }

@@ -630,7 +630,8 @@ Dialog {
                                 font.pixelSize: 11; font.bold: true
                                 text: "macOS does not show JobHelper's notifications. Turn them on in System Settings → Notifications → JobHelper." }
                             SmallButton { objectName: "notifySettings"; text: "Open System Settings"
-                                onClicked: bridge.openNotificationSettings() } }
+                                onClicked: { var r = bridge.openNotificationSettings();
+                                             if (!(r && r.ok)) ticker.text = (r && r.msg) || "Couldn't open System Settings."; } } }
                         Sep {}
                         SRow { label: win.limits.labels.keep_backups; hint: "newest ones kept, older deleted · 0 = keep all"
                             ThemedSpin { id: keepSpin; onEdited: optDialog.recheck(); objectName: "keepSpin"; from: win.limits.numbers.keep_backups[0]; to: win.limits.numbers.keep_backups[1]; value: 10 } }

@@ -9,7 +9,7 @@ import time
 from datetime import date, datetime
 
 from .api_base import _guarded, _stem
-from . import (agent2_search, form_fill, agent3_letters, textfmt, config, cover_letter, db, followup, keywords, merge, pdf, planner, salary,
+from . import (agent2_search, agent3_letters, textfmt, config, cover_letter, db, followup, keywords, merge, pdf, planner, salary,
                store, vault)
 
 
@@ -275,45 +275,38 @@ class JobsService:
         result = self._editor.change(job_id, go, render=False)
         return {"ok": bool(result.get("ok"))}
 
+    _DOCUMENT_KINDS = (".docx", ".pdf", ".md")   # what the app writes for a job: Word, its PDF, the plain letter and profile note
+
     def open_doc(self, kind, name):
         want_pdf = kind.endswith("_pdf")
         base = {"letter": config.LETTERS_DIR, "cv": config.TAILORED_CV_DIR}.get(kind.replace("_pdf", ""))
-        if not base or not name or os.path.basename(str(name)) != str(name):     # a file of that folder, never a path
+        if not base or not name or os.path.basename(str(name)) != str(name) \
+                or Path(str(name)).suffix.lower() not in self._DOCUMENT_KINDS:       # a document of that folder, never a path (#104)
             return {"ok": False, "msg": "That file is not there any more."}
         p = base / name
         docx = p.with_suffix(".pdf" if want_pdf else ".docx")
         target = docx if docx.exists() or want_pdf else p
         if target.exists():
-            return self._open_file(target)
+            return self._desktop.opened(target)
         own = config.COVER_LETTERS_DIR / os.path.basename(name)   # a letter you wrote yourself
         if kind == "letter" and own.is_file():
-            return self._open_file(own)
+            return self._desktop.opened(own)
         return {"ok": False, "msg": "That file is not there any more."}
 
     def open_excel(self, which):
         p = {"leads": config.NEW_JOBS_EXCEL, "apps": config.EXCEL_PATH,
              "report": config.RESPONSES_REPORT}.get(which)
         if p and p.exists():
-            return self._open_file(p)
+            return self._desktop.opened(p)
         return {"ok": False, "msg": "That table is not there yet: it is made by the next search or scan."}
-
-    def _open_file(self, path):
-        """{ok} of opening a file, with what to do when no app took it."""
-        if self._desktop.open(path):
-            return {"ok": True}
-        return {"ok": False, "msg": f"{Path(path).name} could not be opened. Check that an app for this kind of file is installed."}
 
     def open_url(self, job_id):
         """Open a lead's job posting in the default browser (to go apply)."""
         job = store.find(store.load_jobs(), job_id)
-        address = form_fill.PageAddress((job or {}).get("url", ""))
-        url = address.url
-        if not address.is_web or address.refused:              # a job board hands this over: only a web page, never a Russian site
-            return {"ok": False}
-        if not self._desktop.open(url):
-            return {"ok": False, "msg": "The browser could not open the posting. Open it from the job's link yourself."}
-        self.note_opened(job_id)                                # the form you fill in next is most likely this job's
-        return {"ok": True, "url": url}
+        said = self._desktop.open_posting((job or {}).get("url", ""))   # a job board hands it over: a web page, never a refused site
+        if said["ok"]:
+            self.note_opened(job_id)                            # the form you fill in next is most likely this job's
+        return said
 
     OPENED_FOR = 2 * 3600       # how long an opened posting says which form is in front (seconds)
 

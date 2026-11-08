@@ -418,7 +418,42 @@ def test_only_web_links_and_plain_file_names_are_opened(isolate_data, monkeypatc
     assert api.open_doc("letter", "L.docx")["ok"] is True
     assert api.open_doc("letter", "../secret.docx")["ok"] is False and api.open_doc("letter", str(config.DATA_DIR / "secret.docx"))["ok"] is False
     assert opened == ["https://example.com/job", str(config.LETTERS_DIR / "L.docx")]
+    for kind in (".sh", ".app", ".command", ""):                   # #104: only the app's own kinds of document
+        (config.LETTERS_DIR / f"run{kind}").write_bytes(b"x")
+        assert api.open_doc("letter", f"run{kind}")["ok"] is False, kind
+    assert opened == ["https://example.com/job", str(config.LETTERS_DIR / "L.docx")], "nothing else was handed to an app"
 
+
+def test_every_opener_says_when_nothing_opened(isolate_data, monkeypatch):
+    """#104: documents and tables said it; the letters folder, the calendar file, the interview documents, a filtered
+    posting and System Settings answered "ok" when no app took them."""
+    from datetime import date, timedelta
+    from jobhelper import agent2_search, config, ui_api
+    from tests.test_insights_and_prep import FULL
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: False)
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a", title="ML Engineer", company="Brightline", status="interview", url="https://example.com/job")])
+    agent2_search.save_dropped([{"title": "A", "company": "C", "url": "https://example.com/a", "group": "closed", "reason": "R."},
+                                {"title": "R", "company": "C", "url": "https://jobs.example.ru/1", "group": "closed", "reason": "R."},
+                                {"title": "B", "company": "C", "url": "http://", "group": "closed", "reason": "R."}])
+    api = ui_api.Api()
+    api.set_event("a", (date.today() + timedelta(days=3)).isoformat(), "09:15", "interview", "Office")
+    api.editor.change("a", lambda jobs, j: j.__setitem__("interview_prep", dict(FULL, made="2026-10-08", checks=[])), render=False)
+    said = {"letters folder": api.open_my_letters(), "calendar": api.export_event("a"), "documents": api.prep_document("a"),
+            "posting": api.open_url("a"),
+            "filtered posting": api.open_filtered(0), "settings": api.open_notification_settings()}
+    for what, answer in said.items():
+        assert answer["ok"] is False and answer["msg"], what
+    assert "could not be opened in Finder" in said["letters folder"]["msg"]
+    assert said["calendar"]["file"].endswith(".ics") and "saved" in said["calendar"]["msg"], "the file is there: it says where"
+    assert "Show in folder" in said["documents"]["msg"] and said["documents"]["files"], "written, not opened"
+    assert said["filtered posting"]["msg"] == api_core.Desktop.POSTING_FAILED and "System Settings" in said["settings"]["msg"]
+    assert said["posting"]["msg"] == api_core.Desktop.POSTING_FAILED
+    tried = []
+    monkeypatch.setattr(api_core.Desktop, "open", lambda self, target: tried.append(target) or True)
+    assert api.open_filtered(1) == {"ok": False} and api.open_filtered(2) == {"ok": False} and tried == [], \
+        "a filtered-out posting follows the posting rule: never a refused site, never a bare scheme"
+    assert api.open_notification_settings() == {"ok": True}
 
 def test_a_reply_that_is_not_an_object_does_not_end_the_scan(isolate_data, monkeypatch):
     from jobhelper import agent5_responses, email_client, llm

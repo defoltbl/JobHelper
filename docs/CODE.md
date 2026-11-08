@@ -720,7 +720,7 @@ one job, and parts are joined by composition, not by inheritance. Table 6.7 list
 | Part | File | What it owns |
 |---|---|---|
 | `Api` (the facade) | `ui_api.py` | The list of all calls the window can make. Each call goes to one service |
-| `Desktop`, `CvSource`, `JobEditor` | `api_core.py` | Opening a file, the CV text, and safe hand edits to the job list (also during a run) |
+| `Desktop`, `CvSource`, `JobEditor` | `api_core.py` | Opening a file and what to say when it does not open. The CV text. Safe hand edits to the job list, also during a run |
 | `SystemService` | `api_system.py` | The sign-in, Claude usage, the log of small problems, backups, the start-up check |
 | `OptionsService` | `api_options.py` | Options and the career-site list, and the figures read from them |
 | `JobsService` | `api_jobs.py` | The lists, one job in full, hand edits, and the posting last opened |

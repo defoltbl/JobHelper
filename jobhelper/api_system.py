@@ -50,8 +50,8 @@ class SystemService:
 
     def open_notification_settings(self):
         """System Settings at its Notifications page, where JobHelper's notifications are turned on."""
-        self._desktop.open(self._NOTIFICATION_SETTINGS)
-        return {"ok": True}
+        return self._desktop.opened(self._NOTIFICATION_SETTINGS, "System Settings could not be opened. Open it yourself, "
+                                                                  "then Notifications → JobHelper.")
 
     # ── read: status / data ─────────────────────────────────────
     @staticmethod

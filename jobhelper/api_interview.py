@@ -59,8 +59,9 @@ class InterviewService:
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / (store.slugify(f"{j.get('company', '')} {j['event'].get('kind', '')} {j['event']['date']}") + ".ics")
         path.write_text(text, encoding="utf-8", newline="")
-        self._desktop.open(path)
-        return {"ok": True, "file": path.name}
+        said = self._desktop.opened(path, f"The calendar file {path.name} was saved in the calendar folder of your data, "
+                                          "but no app opened it. Check that Calendar is set to open .ics files.")
+        return {**said, "file": path.name}
 
     # ── a thank-you note after an interview ─────────────────────
     def thanks_draft(self, job_id):
@@ -210,8 +211,11 @@ class InterviewService:
         if reveal:
             self._desktop.reveal(paths[0])                  # one Finder window, with both files side by side
         else:
-            for path in paths:
-                self._desktop.open(path)
+            shut = [path.name for path in paths if not self._desktop.opened(path)["ok"]]
+            if shut:                                         # written, but no app took them: never a silent "Opened" (#104)
+                return {"ok": False, "file": paths[0].name, "files": [path.name for path in paths],
+                        "msg": f"The documents are written, but {' and '.join(shut)} could not be opened. "
+                               "Select Show in folder to find them."}
         return {"ok": True, "file": paths[0].name, "files": [path.name for path in paths]}
 
     @_guarded(str)
