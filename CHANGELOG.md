@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Assistant:** when you ask it to remember something, it asks first and keeps the note only when you select **Yes, do it**.
 - **Claude:** a very long answer or posting with many spaces no longer slows the app down while it takes the app's own tags out of it.
 - **Cover letters:** a short line such as "Thank you." in the middle of a plain letter no longer leaves the paragraphs after it unchecked.
 - **Search:** a slow website no longer holds up a search. The app waits at most a short time for each website and each page, then goes on with the next posting.

@@ -27,7 +27,7 @@ ACTIONS = {
     "fill_form": ((), False), "my_details": ((), False), "my_answers": ((), False),
     "open": (("job",), False), "company_brief": (("job",), False), "advice": ((), False),
     "practice": (("job",), False), "review_form": ((), False), "judge_page": ((), False), "draft_reply": (("job", "how"), False),
-    "remember": (("note",), False), "forget_note": (("number",), False),
+    "remember": (("note",), True), "forget_note": (("number",), False),     # a note shapes every later answer: asked first (#120)
     "mark_applied": (("job",), True), "set_status": (("job", "status"), True), "set_date": (("job", "day"), True),
     "not_interested": (("job",), True), "rewrite_letter": (("job", "paragraph", "how"), True),
     "rewrite_answer": (("job", "question", "how"), True),
@@ -274,6 +274,8 @@ def asks(action: dict[str, Any], job: dict[str, Any] | None) -> str:
         return f"Put this date on {what}: {args['kind']} on {when}" + (f" ({args['note']})" if args.get("note") else "") + "?"
     if name == "not_interested":
         return f"Remove {what} from New Jobs as not interested? Later searches will not bring it back, and its documents go to the backup."
+    if name == "remember":
+        return f"Remember this: “{args['note']}”? It shapes my later answers; you can ask me to forget it."
     return ""
 
 

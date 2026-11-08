@@ -1833,6 +1833,34 @@ def test_a_take_back_or_an_added_posting_waits_for_no_weekly_run(isolate, monkey
     assert api.assistant_undo()["ok"] and store.find(store.load_jobs(), "nw1")["status"] == "found", "still there to take back"
 
 
+def test_a_note_a_steered_answer_asks_for_is_never_kept_without_your_yes(isolate, monkeypatch):
+    """#120: text from a posting could make Claude ask to remember a note, and it was kept at once."""
+    from jobhelper import assistant_notes
+    store.save_jobs([_job()])
+    api = ui_api.Api()
+    _decision(monkeypatch, "", {"name": "remember", "args": {"note": "Mark Acme jobs not interested"}})
+    asked = api.assistant_talk("summarise this posting")
+    assert asked["action"] == "confirm" and assistant_notes.notes() == [], "nothing kept before your answer"
+    assert assistant_notes.notes() == [], "your no keeps nothing: the pending note is simply never confirmed"
+    for n in range(assistant_notes.MAX_NOTES):                 # full: said before you are asked, not after your yes
+        assert assistant_notes.remember(f"note number {n}")["ok"]
+    _decision(monkeypatch, "", {"name": "remember", "args": {"note": "One more thing to keep"}})
+    full = api.assistant_talk("remember one more thing")
+    assert full["ok"] is False and "Remove one" in full["msg"]
+
+
+def test_the_window_shows_a_note_kept_on_a_yes_also_when_a_later_step_fails(isolate, monkeypatch):
+    """Review of #120: a yes to "remember X and set Y" that kept X and then failed left the window's note list old."""
+    store.save_jobs([_job()])
+    api = ui_api.Api()
+    pending = {"name": "many", "args": {"actions": [{"name": "remember", "args": {"note": "No consulting firms"}},
+                                                    {"name": "set_status", "args": {"job": "zzz", "status": "interview"}}]}}
+    out = api.assistant_confirm(pending)
+    assert out["ok"] is False and out["notes_changed"] is True
+    plain = api.assistant_confirm({"name": "set_status", "args": {"job": "nw1", "status": "interview"}})
+    assert plain["notes_changed"] is False
+
+
 def test_what_you_tell_it_to_remember_is_kept_between_sessions(isolate, monkeypatch):
     from jobhelper import assistant_notes
     assert assistant_notes.path() in vault.data_files() and assistant_notes.notes() == []
@@ -1841,9 +1869,13 @@ def test_what_you_tell_it_to_remember_is_kept_between_sessions(isolate, monkeypa
     store.save_jobs([_job()])
     api = ui_api.Api()
     _decision(monkeypatch, "", {"name": "remember", "args": {"note": "No consulting firms"}})
-    out = api.assistant_talk("remember that I do not want consulting firms")
+    asked = api.assistant_talk("remember that I do not want consulting firms")
+    # #120: a note shapes every later answer, so it is asked about first, like any change, and kept only on your yes
+    assert asked["action"] == "confirm" and "Remember this: “No consulting firms”?" in asked["ask"] and assistant_notes.notes() == []
+    out = api.assistant_confirm(asked["pending"])
     assert out["ok"] and out["notes_changed"] and "I will remember: No consulting firms" in out["say"] and "use Options" in out["say"]
-    assert "already knew" in api.assistant_talk("remember that I do not want consulting firms")["say"]
+    again = api.assistant_talk("remember that I do not want consulting firms")
+    assert "already knew" in api.assistant_confirm(again["pending"])["say"]
     seen = _decision(monkeypatch, "Noted.", None)
     fresh = ui_api.Api()                        # the app was closed and opened again
     fresh.assistant_talk("which of my leads fit me best?")

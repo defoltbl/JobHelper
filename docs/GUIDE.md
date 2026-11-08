@@ -1429,7 +1429,7 @@ Table 10.1 shows what you can ask for.
 | Advice | *What do my results say?* | What works and what does not, from the numbers of your own applications |
 | To fill in a form, with exceptions | *Fill it in but skip the salary* | It fills in the form and leaves out what you named |
 | Several things at once | *Mark it applied and remind me to follow up in ten days* | One question lists every step; see the next task |
-| To remember something | *Remember that I do not want consulting firms* | Kept for later talks; see below |
+| To remember something | *Remember that I do not want consulting firms* | It asks first. Kept for later talks; see below |
 | A posting in your browser | *Is this posting worth applying to?* | It is scored against your CV and can be added to **New Jobs**; see below |
 | A reply to a company | *Answer Quillon that Tuesday suits me* | A draft to copy; see below |
 | To practise | *Let us practise the interview for Quillon* | See the task below |
@@ -1457,10 +1457,11 @@ last yes only, and is not offered while a search or a scan is running.
 
 ### Tell the assistant what to remember
 
-Say *remember that I do not want consulting firms*, and the assistant keeps the note. It uses
-your notes in all later answers, also after you close the app. It also remembers the last turns
-of a talk. The **My details** page lists the notes under **What you asked me to remember**.
-Select **Forget** to remove one. **New talk** on the **Ask** page puts away the earlier talk.
+Say *remember that I do not want consulting firms*. The assistant asks first: select **Yes, do
+it** to keep the note. It uses your notes in all later answers, also after you close the app.
+It also remembers the last turns of a talk. The **My details** page lists the notes under
+**What you asked me to remember**. Select **Forget** to remove one, or ask the assistant to
+forget it. **New talk** on the **Ask** page puts away the earlier talk.
 
 > **Note**
 > A note shapes what the assistant says. It does not change what a search finds or how a

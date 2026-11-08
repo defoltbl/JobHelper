@@ -49,6 +49,17 @@ class AssistantNotes:
     def notes(self) -> list[dict[str, str]]:
         return [{"text": n["text"], "when": str(n.get("when") or "")} for n in self._read()["notes"]]
 
+    FULL = f"I keep up to {MAX_NOTES} notes. Remove one on the My details page first."
+
+    def problem(self, text: Any) -> str:
+        """'' or why this note cannot be kept now: its words, or no room for a new one. Asked before you are asked about
+        it (#120), and again when it is kept."""
+        words = " ".join(str(text or "").split())
+        notes = self._read()["notes"]
+        if check(text) or any(n["text"].lower() == words.lower() for n in notes):
+            return check(text)
+        return self.FULL if len(notes) >= MAX_NOTES else ""
+
     def remember(self, text: Any) -> dict[str, Any]:
         problem = check(text)
         if problem:
@@ -58,7 +69,7 @@ class AssistantNotes:
         if any(n["text"].lower() == words.lower() for n in data["notes"]):
             return {"ok": True, "known": True}
         if len(data["notes"]) >= MAX_NOTES:
-            return {"ok": False, "msg": f"I keep up to {MAX_NOTES} notes. Remove one on the My details page first."}
+            return {"ok": False, "msg": self.FULL}
         data["notes"].append({"text": words, "when": date.today().isoformat()})
         self._write(data)
         return {"ok": True, "known": False}
@@ -102,6 +113,10 @@ def notes() -> list[dict[str, str]]:
 
 def remember(text: Any) -> dict[str, Any]:
     return NOTES.remember(text)
+
+
+def problem(text: Any) -> str:
+    return NOTES.problem(text)
 
 
 def forget(number: Any) -> dict[str, Any]:
