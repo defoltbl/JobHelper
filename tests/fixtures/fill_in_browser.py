@@ -180,6 +180,8 @@ def main() -> int:
         started.append(True)
 
         def go():
+            if silent:                  # the test of a silent engine reads only the state: no form work before it to wait for
+                page_state()
             api = ui_api.Api()
             if setup.get("opened"):
                 api.open_url = None

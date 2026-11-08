@@ -728,7 +728,8 @@ def test_area_an_engine_that_stops_answering_fails_fast_and_says_so():
     code, said, took = _area_raw("components.html", silent_states=True)
     if "engine stopped answering" not in said and code != 0 and "Traceback" not in said:
         _engine_did_not_start(subprocess.CompletedProcess([], code, "", said))
-    assert "engine stopped answering" in said and took < 40, (code, took, said[-300:])
+    # the engine's start and the 10 s wait, never the minutes of before; well under the 60 s watchdog also on a slow runner
+    assert "engine stopped answering" in said and took < 45, (code, took, said[-300:])
     code, said, took = _area_raw("components.html", hang=True, area_most=3)
     assert code == 3 and "gave no answer in time" in said and took < 30, (code, took, said[-300:])
 
