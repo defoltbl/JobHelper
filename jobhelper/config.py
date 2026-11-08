@@ -146,9 +146,16 @@ def using_paid_api() -> bool:
     return bool(paid_setting())
 
 
+OWN_ADDRESS = "https://api.anthropic.com"   # the subscription's own address: a base URL set to it moves nothing (#93)
+
+
 def paid_setting() -> str:
-    """The first setting that would bill the paid API ('' = none): the one a message names."""
-    return next((name for name in PAID_SETTINGS if os.getenv(name)), "")
+    """The first setting that would bill the paid API ('' = none): the one a message names. A base URL that is only
+    Anthropic's own address does not count; any other address does."""
+    def paid(name: str) -> bool:
+        value = os.getenv(name) or ""
+        return bool(value) and not (name == "ANTHROPIC_BASE_URL" and value.strip().rstrip("/").lower() == OWN_ADDRESS)
+    return next((name for name in PAID_SETTINGS if paid(name)), "")
 
 
 def paid_setting_named() -> str:
