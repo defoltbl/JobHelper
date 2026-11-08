@@ -123,6 +123,8 @@ def safe_environment(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(agent2_search, "real_refetch_description", agent2_search.refetch_description, raising=False)  # for a test that fakes the readers
     monkeypatch.setattr(agent2_search, "refetch_description", lambda job: "")     # never read a real job board
     monkeypatch.setattr(agent2_search, "posting_closed", lambda job: None)        # nor ask one whether a posting is still open
+    from jobhelper import web
+    web.forget_lookups()                                                            # each test looks names up afresh
     from jobhelper import email_client
     monkeypatch.setattr(email_client, "real_try_login", email_client.try_login, raising=False)    # for a test that fakes _open itself
     monkeypatch.setattr(email_client, "try_login", lambda user, password, timeout=8.0, host="": {"ok": True, "msg": ""})   # never a real mail server

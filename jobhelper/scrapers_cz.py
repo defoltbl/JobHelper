@@ -13,14 +13,13 @@ from __future__ import annotations
 import json
 import re
 import time
-import unicodedata
 from typing import Any, Callable
 from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
-from . import store, web
+from . import store, textfmt, web
 
 _HEADERS = web.headers("cs,en;q=0.9")
 _TIMEOUT = 25
@@ -33,7 +32,7 @@ _CITY_MAP = {"prague": "praha", "pilsen": "plzen", "budweis": "ceske-budejovice"
 def _slug(text: str) -> str:
     text = text.strip().lower()
     text = _CITY_MAP.get(text, text)
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    text = textfmt.fold(text)
     text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
     return text or "praha"
 
@@ -45,10 +44,10 @@ def _get(url: str, params: dict[str, Any] | None = None) -> requests.Response:
     return resp
 
 
-def _read_link(url: str) -> requests.Response:
-    """A page a posting links to (its own page, its script): only a public address, each redirect checked
-    (web.public_get), never this Mac or the local network (#76)."""
-    resp = web.public_get(url, headers=_HEADERS, timeout=_TIMEOUT)
+def _read_link(url: str) -> web.Page:
+    """A page a posting links to (its own page, its script): only a public address, each redirect checked, never this
+    Mac or the local network (#76), and at most web.MAX_PAGE bytes within web.FETCH_TOTAL (#98)."""
+    resp = web.public_page(url, headers=_HEADERS, timeout=_TIMEOUT)
     if resp is None:
         raise requests.ConnectionError("The link does not lead to a page on the public internet.")
     resp.raise_for_status()

@@ -108,7 +108,12 @@ def has_non_latin(text) -> bool:
     return bool(_NON_LATIN.search(str(text or "")))
 
 
+def plain_letters(text) -> str:
+    """The text without accents, its case kept ("Projektový Manažer" → "Projektovy Manazer"): for a file name."""
+    return unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore").decode()
+
+
 def fold(text) -> str:
     """Lower case without accents ("Projektový Manažer" → "projektovy manazer"): how words are compared when the
-    accents may or may not be typed."""
-    return unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore").decode().lower()
+    accents may or may not be typed. The one accent fold of the app (#98)."""
+    return plain_letters(text).lower()

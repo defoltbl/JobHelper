@@ -1,6 +1,6 @@
 import pytest
 
-from jobhelper import scrapers_cz
+from jobhelper import scrapers_cz, web
 
 
 def test_parse_jobs_cz(jobs_cz_html):
@@ -284,6 +284,91 @@ def test_only_a_public_address_is_read(names):
         assert not web.public_address(private), private
 
 
+def test_a_slow_name_lookup_is_given_up_and_a_known_name_is_not_asked_again(monkeypatch, names):
+    """#98: each hop of each link asked the name server with no time limit, so a slow one could stall a search."""
+    import time
+    asked, real = [], web.socket.getaddrinfo
+
+    def counted(host, port, *a, **k):
+        asked.append(host)
+        return real(host, port, *a, **k)
+    monkeypatch.setattr(web.socket, "getaddrinfo", counted)
+    assert web.public_address("https://careers.example.com/a") and web.public_address("https://careers.example.com/b")
+    assert asked == ["careers.example.com"], "one lookup for the name, then its answer is used again"
+    web.forget_lookups()
+    assert web.public_address("https://careers.example.com/c") and len(asked) == 2, "a new search asks afresh"
+    monkeypatch.setattr(web, "LOOKUP_TIMEOUT", 0.2)
+    monkeypatch.setattr(web.socket, "getaddrinfo", lambda *a, **k: time.sleep(2) or real(*a, **k))
+    started = time.monotonic()
+    assert web.public_address("https://slow.example.com/") is False and time.monotonic() - started < 1.5
+
+
+def test_a_name_that_cannot_be_looked_up_costs_one_wait_and_an_answer_is_kept_only_briefly(monkeypatch, names):
+    """Review of #98: a dead name server cost a full wait for every link, and a kept answer made a name that changes its
+    address (DNS rebinding) a sure thing for a quarter of an hour."""
+    import time
+    asked = []
+
+    def hung(host, port, *a, **k):
+        asked.append(host)
+        time.sleep(2)
+        return []
+    monkeypatch.setattr(web, "LOOKUP_TIMEOUT", 0.2)
+    monkeypatch.setattr(web.socket, "getaddrinfo", hung)
+    started = time.monotonic()
+    assert not web.public_address("https://dead.example.com/a") and not web.public_address("https://dead.example.com/b")
+    assert asked == ["dead.example.com"] and time.monotonic() - started < 1.0, "the second link does not wait again"
+    assert web.LOOKUP_KEPT <= 30, "an answer is kept for the redirects of one link, not for long"
+
+
+def test_a_page_s_address_after_its_redirects_and_its_guessed_character_set(monkeypatch, names):
+    """Review of #98: the jobs.cz widget path asked page.url, which web.Page did not have, so a short posting ended the
+    detail pass; a page with no character set must still read in windows-1250."""
+    calls = []
+    page = b"<html><head><title>Analyst | Acme</title></head><body><main>Short.</main></body></html>"
+    monkeypatch.setattr(web.requests, "get", lambda url, **kw: _Stream(page))
+    monkeypatch.setattr(scrapers_cz, "_fetch_widget", lambda html, url: calls.append(url) or ("", ""))
+    scrapers_cz._fetch_detail("https://careers.example.com/rpd/123")
+    assert calls == ["https://careers.example.com/rpd/123"]
+    text = ("<html><body><p>Účetní – příliš žluťoučký kůň úpěl ďábelské ódy, přesně podle zadání.</p></body></html>"
+            ).encode("cp1250")
+    monkeypatch.setattr(web.requests, "get", lambda url, **kw: _Stream(text, kind="text/html"))     # no charset named
+    assert "Účetní" in web.public_page("https://careers.example.com/cz").text
+
+
+def test_a_page_that_sends_slowly_is_not_read_for_ever(monkeypatch, names):
+    """#98: each read had a time limit, but a page that sent a little at a time could keep a fetch open for long."""
+    import requests
+    import time
+    from jobhelper import scrapers_page
+
+    class Dripping(_Stream):
+        def iter_content(self, size):
+            for _ in range(50):
+                time.sleep(0.02)
+                yield b"<p>"
+    monkeypatch.setattr(web, "FETCH_TOTAL", 0.1)
+    monkeypatch.setattr(web.requests, "get", lambda url, **kw: Dripping())
+    with pytest.raises(requests.Timeout):
+        web.public_page("https://careers.example.com/slow")
+    assert scrapers_page.posting_text("https://careers.example.com/slow") == "", "the search goes on without that page"
+
+
+def test_a_search_looks_its_names_up_afresh(monkeypatch):
+    from jobhelper import agent2_search, job_sources
+    forgot = []
+    monkeypatch.setattr(web, "forget_lookups", lambda: forgot.append(1))
+    monkeypatch.setattr(agent2_search.job_sources, "sources_for", lambda *a, **k: [job_sources.Board("fake", lambda q, w, n: [])])
+    assert agent2_search.search(["python"], where="Prague") == [] and forgot == [1]
+
+
+def test_one_accent_fold_for_the_whole_app():
+    from jobhelper import cv_tailor, email_client, textfmt
+    assert textfmt.plain_letters("Projektový Manažer") == "Projektovy Manazer" and textfmt.fold("ČSOB") == "csob"
+    assert scrapers_cz._slug("Ústí nad Labem") == "usti-nad-labem" and email_client.norm_company("ČSOB (KBC)") == email_client.norm_company("CSOB")
+    assert cv_tailor._camel("Účetní analytik") == "UcetniAnalytik"
+
+
 def test_a_redirect_never_takes_the_reader_to_a_private_address(monkeypatch, names):
     """#76: requests followed every redirect of a posting's link, also to this Mac or the local network."""
     from jobhelper import scrapers_page
@@ -337,7 +422,7 @@ def test_a_posting_page_is_read_with_care(monkeypatch, names):
     assert len(asked) == 5                                                              # those were never asked for
     endless = _Stream(pieces=[b"x" * 1_000_000] * 50)
     answers = [endless]
-    assert scrapers_page.posting_text("https://careers.example.com/big") == "" and endless.read <= scrapers_page._MAX_PAGE + 1_000_000
+    assert scrapers_page.posting_text("https://careers.example.com/big") == "" and endless.read <= web.MAX_PAGE + 1_000_000
 
     def down(url, **kw):
         raise scrapers_page.requests.ConnectionError("down")

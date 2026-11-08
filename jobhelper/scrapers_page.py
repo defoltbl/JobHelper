@@ -19,7 +19,6 @@ from . import web
 
 _HEADERS = web.headers(accept="text/html,application/xhtml+xml")
 _TIMEOUT = 20
-_MAX_PAGE = 3_000_000      # bytes of a page that are looked at
 _MAX_TEXT = 6000           # like the other boards
 
 
@@ -71,18 +70,9 @@ def posting_text(url: str) -> str:
     """Read a posting's own page and return its published text ('' if it has none or cannot be read). The link comes
     from a job board: it and every redirect must be a public address (web.public_address), never a blind request."""
     try:
-        resp = web.public_get(url, headers=_HEADERS, timeout=_TIMEOUT, stream=True)
-        if resp is None:
+        page = web.public_page(url, headers=_HEADERS, timeout=_TIMEOUT)
+        if page is None or page.status != 200 or "html" not in page.kind:
             return ""
-        with resp:
-            kind = (resp.headers.get("Content-Type") or "").lower()
-            if resp.status_code != 200 or "html" not in kind:
-                return ""
-            body = b""
-            for chunk in resp.iter_content(65536):
-                body += chunk
-                if len(body) >= _MAX_PAGE:
-                    break
-            return parse_posting(body.decode(resp.encoding, errors="replace") if "charset=" in kind else body)
+        return parse_posting(page.text if "charset=" in page.kind else page.body)
     except (requests.RequestException, ValueError, LookupError):      # LookupError: a page that names an encoding nobody knows
         return ""
