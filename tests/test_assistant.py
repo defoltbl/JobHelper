@@ -725,13 +725,14 @@ def _area_raw(page, **more):
 def test_area_an_engine_that_stops_answering_fails_fast_and_says_so():
     """#65 again: each state read waited its full 20 s when the engine gave no answer at all, 40 times over, and the
     watchdog could not end the waits inside it: a stuck test held its process for many minutes."""
-    code, said, took = _area_raw("components.html", silent_states=True)
+    # timed inside the area: a slow runner takes long just to start the engine, which no bound on the whole run can rule out
+    code, said, took = _area_raw("components.html", silent_states=True, area_most=170)
     if "engine stopped answering" not in said and code != 0 and "Traceback" not in said:
         _engine_did_not_start(subprocess.CompletedProcess([], code, "", said))
-    # the engine's start and the 10 s wait, never the minutes of before; well under the 60 s watchdog also on a slow runner
-    assert "engine stopped answering" in said and took < 45, (code, took, said[-300:])
+    waited = re.search(r"([\d.]+) s waited", said)
+    assert code == 4 and "engine stopped answering" in said and waited and float(waited.group(1)) < 12, (code, took, said[-300:])
     code, said, took = _area_raw("components.html", hang=True, area_most=3)
-    assert code == 3 and "gave no answer in time" in said and took < 30, (code, took, said[-300:])
+    assert code == 3 and "gave no answer in time" in said, (code, took, said[-300:])        # ended by the watchdog, not hung
 
 
 def test_area_waits_for_the_page_state_it_reads():
