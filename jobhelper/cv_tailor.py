@@ -16,14 +16,13 @@ import math
 import re
 import shutil
 import tempfile
-import unicodedata
 from pathlib import Path
 from typing import Any
 
 from lxml import etree
 
 from .word_document import P, R, Paragraph, WordDocument, set_run_text, text_of
-from . import claims, config, keywords, llm, pdf, store
+from . import claims, config, keywords, llm, pdf, store, textfmt
 from .claims import mentions
 
 # Technologies the master does not contain (instruction, section 4). Used when
@@ -573,7 +572,7 @@ def verify(master_path, out_path) -> list[str]:
 
 # ── file name ────────────────────────────────────────────────────────────────
 def _camel(text: str, max_words: int = 3) -> str:
-    ascii_ = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    ascii_ = textfmt.plain_letters(text)
     words = re.findall(r"[A-Za-z0-9]+", ascii_)[:max_words]
     return "".join(w if w.isupper() else w[:1].upper() + w[1:] for w in words)
 

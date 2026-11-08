@@ -152,6 +152,13 @@ data/                your data; only the *.example.* files are in git
   `scrapers_page` (any other page: only the copy it publishes for search engines). A link from a board is read only
   when it and every redirect are on the public internet (`web.public_get`: `public_address` for each hop, redirects
   followed by hand; `scrapers_cz._get` and `scrapers_page` use it): never this Mac or the local network. A page whose server names no character set is given to the parser as bytes.
+  A name lookup has `web.LOOKUP_TIMEOUT`, in a daemon thread of its own (a hung one never holds up the app's end); an
+  answer is kept only `LOOKUP_KEPT` = 10 s, for the redirects of one link (longer would make a name that changes its
+  address a sure thing), a failure `LOOKUP_FAILED_KEPT` (a dead name server costs one wait); each search starts
+  afresh (`web.forget_lookups`). A linked page is read by `web.public_page`, at most `MAX_PAGE` bytes within
+  `FETCH_TOTAL` seconds in all, checked every `READ_PIECE` bytes (#98); `web.Page.url` is its address after the
+  redirects, and a body with no character set is read as requests guesses it. Left on purpose: the checked address is not pinned in the request (the app reads pages for
+  one person only), and a proxy set in the environment is still used. `textfmt.fold` is the one accent fold.
 - **A source that fails is never "nothing found"** (#76): `agent2_search._collect` names it in the log and in
   `failed` (a career site of many through `JobSource.failures()`); with no answer at all it raises `SourcesDown`.
   `take_in(failed=...)` then keeps the earlier Filtered out rows of those sources only, never one now in the job

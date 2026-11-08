@@ -20,7 +20,7 @@ from typing import Any, Callable
 
 import requests
 
-from . import config, email_client, filters, job_sources, language, salary, scrapers_intl, store, textfmt, trouble
+from . import config, email_client, filters, job_sources, language, salary, scrapers_intl, store, textfmt, trouble, web
 
 _clean = textfmt.strip_tags          # text from a board, without its HTML
 
@@ -633,7 +633,8 @@ def search(
     max_years: int | None = None,
     failed: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Run each query against every active provider; return de-duped records.
+    """Run each query against every active provider; return de-duped records. Host names are looked up afresh for each
+    search (web.forget_lookups).
 
     progress(done, total), if given, is called before each provider/query request.
 
@@ -649,6 +650,7 @@ def search(
     """
     if not str(where or "").strip():
         raise RuntimeError("No city to search in. Choose one in the app's Options.")
+    web.forget_lookups()                                             # names answer afresh for each search (#98)
     placement = filters.Placement.for_search(where)                  # where this search is, read from Options once
     sources = job_sources.sources_for(source, max_age_days=max_age_days, country=placement.home)
     for names, served in job_sources.left_out(source, placement.home):

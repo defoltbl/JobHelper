@@ -11,13 +11,12 @@ import hashlib
 import imaplib
 import re
 import ssl
-import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.header import decode_header
 from typing import Any, Callable
 
-from . import config, store, trouble
+from . import config, store, textfmt, trouble
 
 # Map an extracted stage → an application status. Never move a job backwards
 # (except "rejected", which can apply from any stage).
@@ -491,7 +490,7 @@ def norm_company(company: str) -> str:
     tokens (e.g. "HP Inc." -> "hp", "NN Group" -> "nn"). Accents, brackets,
     spacing and the usual legal suffixes are ignored, so "Valeo" and
     "Valeo s.r.o.", or "CSOB" and "ČSOB (KBC)", collapse together."""
-    text = unicodedata.normalize("NFKD", company or "").encode("ascii", "ignore").decode().lower()
+    text = textfmt.fold(company)
     text = re.sub(r"\([^)]*\)", " ", text)            # "ČSOB (KBC)" is the same company as "CSOB"
     # dotted Czech legal forms would otherwise survive as loose letters
     text = re.sub(r"\bs\.\s*r\.\s*o\.?", " sro ", text)
