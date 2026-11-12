@@ -94,6 +94,10 @@ def options_for(system: str | None, model: str) -> ClaudeAgentOptions:
         mcp_servers={},
         extra_args={"strict-mcp-config": None},
         env={"ENABLE_CLAUDEAI_MCP_SERVERS": "false"},
+        # no settings file at all (the SDK's isolation): the person's ~/.claude/settings.json could hold an `env` block or
+        # an `apiKeyHelper` that moves the program to a paid key, and hooks that would run on the app's questions (#93);
+        # the subscription's sign-in is kept by the program itself, not in a settings file, and still works
+        setting_sources=[],
     )
 
 

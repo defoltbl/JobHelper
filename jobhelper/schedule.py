@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import config, home
+from . import config, home, trouble
 
 LABEL = "com.jobhelper.weeklyscan"
 PLIST = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
@@ -123,4 +123,4 @@ def write_schedule(enabled: bool, weekday: int, hour: int, minute: int) -> dict:
             PLIST.unlink()
         return {"ok": True, **read_schedule()}
     except Exception as e:  # noqa: BLE001
-        return {"ok": False, "msg": str(e)}
+        return {"ok": False, "msg": trouble.said(e)}

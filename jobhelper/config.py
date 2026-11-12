@@ -137,8 +137,16 @@ def has_imap() -> bool:
     return bool(IMAP_USER and IMAP_PASSWORD)
 
 
-# Settings that make the Claude program bill an API account (or a cloud's) instead of the subscription (#87).
-PAID_SETTINGS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX")
+# Settings that move the Claude program off the subscription to a paid account (#87; from Claude Code's documentation, checked
+# 12 Nov 2026, #93): an API key or token, another address, a cloud provider's switch or key, an Anthropic profile or
+# federation rule. The program's own settings files are not read at all (llm.options_for: setting_sources).
+# A base URL that is only Anthropic's own address does not count (OWN_ADDRESS).
+PAID_SETTINGS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
+                 "CLAUDE_CODE_USE_MANTLE", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_ANTHROPIC_AWS", "AWS_BEARER_TOKEN_BEDROCK",
+                 "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_AUTH_TOKEN", "ANTHROPIC_AWS_API_KEY", "ANTHROPIC_PROFILE",
+                 "ANTHROPIC_FEDERATION_RULE_ID",
+                 # switches the bundled Claude program knows besides the documented ones
+                 "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD", "CLAUDE_CODE_USE_GATEWAY")
 
 
 def using_paid_api() -> bool:

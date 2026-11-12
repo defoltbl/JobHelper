@@ -10,7 +10,7 @@ from datetime import date
 from typing import Any
 
 from . import (agent1_cv, agent3_letters, agent4_tracker, answer_memory, assistant, assistant_brain, assistant_notes, chrome,
-    config, db, details, form_answers, form_choices, form_fill, insights, llm, planner, salary, store)
+    config, db, details, form_answers, form_choices, form_fill, insights, llm, planner, salary, store, trouble)
 from .api_base import _holding_jobs
 
 _PLAIN = re.compile(r"\b(?:but|skip|except|without|only|not|don't|do not|leave|and)\b")
@@ -110,7 +110,7 @@ class TalkService:
             return assistant_brain.decide(words, jobs, db.all_responses(), self._talk(), assistant.ABOUT, self._numbers(),
                                           store.find(jobs, job_id) if job_id else None, notes=kept), None
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
-            return None, {"ok": False, "action": "say", "msg": f"I could not ask Claude: {str(e) or type(e).__name__}"}
+            return None, {"ok": False, "action": "say", "msg": f"I could not ask Claude: {trouble.said(e)}"}
 
     @staticmethod
     def _rows(jobs: list[dict], shown: list[str]) -> list[dict]:
@@ -222,7 +222,7 @@ class TalkService:
         except llm.EmptyAnswer:
             text = ""
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
-            return {"ok": False, "action": "say", "msg": f"I could not ask Claude: {str(e) or type(e).__name__}"}
+            return {"ok": False, "action": "say", "msg": f"I could not ask Claude: {trouble.said(e)}"}
         if not text:
             return {"ok": False, "action": "say", "msg": "Claude gave no draft. Ask again in other words."}
         return {"ok": True, "action": "draft", "copy": text, "preview": text,
@@ -291,7 +291,7 @@ class TalkService:
         except _Said:
             raise
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
-            raise _Said(f"I could not ask Claude: {str(e) or type(e).__name__}") from e
+            raise _Said(f"I could not ask Claude: {trouble.said(e)}") from e
         if not stats["scored"]:
             raise _Said("Claude gave no usable score for this posting. Try again in a moment.")
         job.pop("score_before", None)
@@ -303,7 +303,7 @@ class TalkService:
         except llm.EmptyAnswer:
             said = ""
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
-            return {"ok": False, "action": "say", "msg": f"I could not ask Claude: {str(e) or type(e).__name__}"}
+            return {"ok": False, "action": "say", "msg": f"I could not ask Claude: {trouble.said(e)}"}
         return {"ok": True, "action": "say", "say": said} if said else {"ok": False, "action": "say", "msg": "Claude gave no answer. Ask again in other words."}
 
     def _results(self) -> dict[str, Any]:
@@ -344,7 +344,7 @@ class TalkService:
         try:
             new = form_answers.rewrite(job, cv_text, found[0]["question"], found[0]["answer"], args["how"], config.experience_notes())
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
-            return {"ok": False, "action": "say", "msg": f"The answer could not be rewritten: {str(e) or type(e).__name__}"}
+            return {"ok": False, "action": "say", "msg": f"The answer could not be rewritten: {trouble.said(e)}"}
         return {"ok": True, "action": "confirm", "say": "", "preview": new["answer"] + (f"\n\nCheck: {new['check']}" if new["check"] else ""),
                 "ask": f"Replace the answer to “{found[0]['question'][:80]}” with this version?",
                 "pending": {"name": "save_answer", "args": {"job": job["id"], "question": found[0]["question"], "answer": new["answer"]}}}
@@ -570,7 +570,7 @@ class TalkService:
         try:
             made = assistant_brain.feedback(job, cv_text, question, known.get(str(question), ""), answer)
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
-            return {"ok": False, "action": "practice_feedback", "msg": f"I could not ask Claude: {str(e) or type(e).__name__}"}
+            return {"ok": False, "action": "practice_feedback", "msg": f"I could not ask Claude: {trouble.said(e)}"}
         if not made["feedback"]:
             return {"ok": False, "action": "practice_feedback", "msg": "Claude gave no answer. Try that one again."}
         today, asked = date.today().isoformat(), str(question)[:300]

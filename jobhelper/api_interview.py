@@ -5,7 +5,7 @@ from __future__ import annotations
 
 
 
-from . import (agent1_cv, answer_memory, cv_tailor, form_answers, prep_doc, config, db, interview_prep, planner, store, vault)
+from . import (trouble, agent1_cv, answer_memory, cv_tailor, form_answers, prep_doc, config, db, interview_prep, planner, store, vault)
 from .api_base import _guarded, _holding_jobs
 
 
@@ -105,7 +105,7 @@ class InterviewService:
         try:
             items = form_answers.generate(j, cv_text, questions, config.experience_notes())
         except Exception as e:  # noqa: BLE001 - shown to the user as the reason
-            return {"ok": False, "msg": str(e)}
+            return {"ok": False, "msg": trouble.said(e)}
         kept = {"made": form_answers.stamp(), "items": items}
         # saved through _change: the call took a while, so re-read instead of writing an old copy back
         saved = self._editor.change(job_id, lambda jobs, job: job.__setitem__("form_answers", kept), render=False)
@@ -158,7 +158,7 @@ class InterviewService:
         try:
             prep = interview_prep.generate(j, cv_text, emails, config.experience_notes())
         except Exception as e:  # noqa: BLE001 - shown to the user as the reason
-            return {"ok": False, "msg": str(e)}
+            return {"ok": False, "msg": trouble.said(e)}
         # saved through _change: the call took a while, so re-read instead of writing an old copy back
         return {"ok": bool(self._editor.change(job_id, lambda jobs, job: job.__setitem__("interview_prep", prep),
                                         render=False).get("ok"))}
@@ -207,7 +207,7 @@ class InterviewService:
             paths = [prep_doc.build(j, j["interview_prep"], self._prep_file(j, audience), contact, audience)
                      for audience in prep_doc.AUDIENCES]
         except Exception as e:  # noqa: BLE001 - shown to the user as the reason
-            return {"ok": False, "msg": f"The documents could not be written ({e})."}
+            return {"ok": False, "msg": f"The documents could not be written ({trouble.said(e)})."}
         if reveal:
             self._desktop.reveal(paths[0])                  # one Finder window, with both files side by side
         else:

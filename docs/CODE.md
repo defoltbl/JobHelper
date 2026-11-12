@@ -42,7 +42,7 @@ Six rules shape the whole code base, and every change must keep them (Table 1.1)
 
 | Rule | What it means in the code |
 |---|---|
-| The subscription, never the paid API | `llm.ask` refuses to run while `ANTHROPIC_API_KEY` or another setting in `config.PAID_SETTINGS` is set. No code path calls the API directly |
+| The subscription, never the paid API | `llm.ask` refuses to run while `ANTHROPIC_API_KEY` or another setting in `config.PAID_SETTINGS` is set. The Claude program reads no settings file of the person. No code path calls the API directly |
 | The mailbox is read-only | Folders are opened read-only and messages are fetched with `PEEK`. Nothing sends, deletes, moves or marks mail |
 | Nothing is claimed that the CV does not show | Every written text is checked in plain code against the CV after the model wrote it |
 | The person's own letters are never changed | Only letters the app wrote may be replaced or moved |
