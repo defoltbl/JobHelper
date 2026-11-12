@@ -45,6 +45,12 @@ def scrub(text) -> str:
     return text
 
 
+def said(error: BaseException) -> str:
+    """An error's own text for the window, scrubbed (`scrub`: no address query, no key or password the app holds), or
+    its kind when it has no text. Every handler that shows an error's text asks this (#93)."""
+    return scrub(str(error)) or type(error).__name__
+
+
 def _safe(text: str) -> str:
     """Scrubbed (`scrub`) and on one line."""
     return re.sub(r"\s+", " ", scrub(text)).strip()[:_MAX_LINE]

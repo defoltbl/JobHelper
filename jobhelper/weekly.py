@@ -15,6 +15,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from . import trouble
+
 FLAG = "--weekly"
 LOG_NAME = "weekly_jobhelper.log"
 
@@ -31,6 +33,21 @@ def command_step(module_name: str, args: list[str]) -> Callable[[], int]:
         finally:
             sys.argv = saved
     return step
+
+
+class ScrubbedLog:
+    """The weekly run's log as a file: every line a step prints or raises passes `trouble.scrub` first, so the log never
+    keeps a key or an address's query (#93)."""
+
+    def __init__(self, raw) -> None:
+        self._raw = raw
+
+    def write(self, text: str) -> int:
+        self._raw.write(trouble.scrub(text))
+        return len(text)
+
+    def flush(self) -> None:
+        self._raw.flush()
 
 
 class WeeklyRun:
@@ -56,9 +73,13 @@ class WeeklyRun:
     def run(self) -> int:
         """Run every step; 0 when all of them ended well, else the code of the last one that did not. The steps hold the
         job list's lock (store.RunLock): the run waits while the window works on the list, and never writes over it."""
-        from . import store
         self._log.parent.mkdir(parents=True, exist_ok=True)
-        with self._log.open("a", encoding="utf-8") as out, redirect_stdout(out), redirect_stderr(out):
+        with self._log.open("a", encoding="utf-8") as raw:
+            return self._logged(ScrubbedLog(raw))
+
+    def _logged(self, out) -> int:
+        from . import store
+        with redirect_stdout(out), redirect_stderr(out):
             print(f"===== weekly JobHelper {self._now():%Y-%m-%d %H:%M} =====", flush=True)
             if not store.RunLock.take(self._wait):
                 print("The app was working on your jobs for the whole wait, so this week's run did not start. "
@@ -78,7 +99,7 @@ class WeeklyRun:
             try:
                 code = step()
             except Exception:  # noqa: BLE001 - the log says what went wrong; the next step still runs
-                traceback.print_exc(file=out)
+                out.write(traceback.format_exc())
                 code = 1
             if code:
                 print(f"({title} ended with code {code})", flush=True)

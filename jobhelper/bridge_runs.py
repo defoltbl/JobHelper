@@ -114,7 +114,7 @@ class RunSlots:
             try:
                 result = self._api.rescore_one(job_id)
             except Exception as e:  # noqa: BLE001 - the window must always get an answer
-                result = {"ok": False, "msg": str(e) or type(e).__name__}
+                result = {"ok": False, "msg": trouble.said(e)}
             result["job_id"] = job_id
             self._post("rescoreReady", result)
         threading.Thread(target=work, daemon=True).start()
@@ -132,7 +132,7 @@ class RunSlots:
                 result = self._api.write_documents(job_id)
             except Exception as e:  # noqa: BLE001 - the window must always get an answer
                 trouble.note("writing the documents of one job", e)
-                result = {"ok": False, "msg": str(e) or type(e).__name__}
+                result = {"ok": False, "msg": trouble.said(e)}
             result["job_id"] = job_id
             self._post("docsReady", result)
         threading.Thread(target=work, daemon=True).start()
@@ -192,7 +192,7 @@ class RunSlots:
             self.runFinished.emit("rescore", "Stopped. The jobs scored before that keep their new score.")
         except Exception as e:  # noqa: BLE001
             self._save_partial(jobs)
-            self.runFinished.emit("rescore", "Couldn't finish scoring again: %s" % (str(e) or type(e).__name__))
+            self.runFinished.emit("rescore", "Couldn't finish scoring again: %s" % trouble.said(e))
         finally:
             self._api.live = None
             self._set_running(False)
@@ -451,7 +451,7 @@ class RunSlots:
             self.runFinished.emit("scan", "Couldn't sign in to your email – check its password in the Account card.")
         except RuntimeError as e:
             self._save_partial(jobs)
-            self.runFinished.emit("scan", str(e))
+            self.runFinished.emit("scan", trouble.said(e))
         except Exception as e:  # noqa: BLE001
             self._save_partial(jobs)                             # statuses changed by the replies read so far are kept
             if not email_client.network_fault(e):

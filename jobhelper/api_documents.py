@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from . import agent1_cv
+from . import agent1_cv, trouble
 
 import os
 from datetime import date, datetime, timedelta
@@ -42,7 +42,7 @@ class DocumentsService:
         try:
             stats = agent3_letters.rescore(jobs, ids, profile, self._cv.text())
         except Exception as e:  # noqa: BLE001 - shown to the user as the reason (the limit, no connection)
-            return {"ok": False, "msg": str(e)}
+            return {"ok": False, "msg": trouble.said(e)}
         if not stats["scored"]:
             return {"ok": False, "msg": "Claude gave no usable score. Try again in a moment."}
         fresh = store.find(jobs, job_id)
@@ -82,12 +82,12 @@ class DocumentsService:
             cv_path = agent1_cv.find_cv()
             done = agent3_letters.generate_for(work, self._cv.text(), cv_path)
         except llm.CallTimedOut as e:   # the CV may be made before the letter stopped: it is kept, not paid for twice
-            stopped = str(e)
+            stopped = trouble.said(e)
             done = {"cv": work.get("tailored_cv_file") != j.get("tailored_cv_file"), "letter": False}
             if not done["cv"]:
                 return {"ok": False, "msg": stopped}
         except Exception as e:  # noqa: BLE001 - shown to the person as the reason (the limit, no connection)
-            return {"ok": False, "msg": str(e) or "The documents could not be written."}
+            return {"ok": False, "msg": trouble.said(e)}
         why = work.get("hold", "")                      # what could not be written this time, and why
         if not done["cv"] and not done["letter"]:
             return {"ok": False, "msg": why or "Nothing could be written this time. Try again in a moment."}
@@ -286,7 +286,7 @@ class DocumentsService:
             try:
                 contents = [(source, target, vault.read_bytes(source)) for source, target in plan]
             except Exception as e:  # noqa: BLE001 - a damaged backup: say so, change nothing
-                return {"ok": False, "msg": f"A backup copy could not be read ({e}), so nothing was put back."}
+                return {"ok": False, "msg": f"A backup copy could not be read ({trouble.said(e)}), so nothing was put back."}
             for source, target, data in contents:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)

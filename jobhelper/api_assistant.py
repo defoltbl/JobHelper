@@ -38,7 +38,7 @@ class AssistantService:
         try:
             found = details.lists_from_cv(self._cv.text())
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
-            return {"ok": False, "msg": f"I could not read them from your CV: {str(e) or type(e).__name__}"}
+            return {"ok": False, "msg": f"I could not read them from your CV: {trouble.said(e)}"}
         if not found["experience"] and not found["education"] and not found.get("languages"):
             return {"ok": False, "msg": "I found no jobs or degrees written in your CV in a way I can copy. Add them by hand."}
         spoken = len(found.get("languages") or [])
@@ -84,7 +84,7 @@ class AssistantService:
         try:
             item = form_answers.generate(general, cv_text, [question], notes)[0]
         except Exception as e:  # noqa: BLE001 - said to the person as the reason
-            return {"ok": False, "field": "answer", "msg": f"The answer could not be drafted: {str(e) or type(e).__name__}"}
+            return {"ok": False, "field": "answer", "msg": f"The answer could not be drafted: {trouble.said(e)}"}
         return {"ok": True, "question": question, "answer": item["answer"], "check": item["check"],
                 "say": "Drafted from your CV. Read it, make it yours, then save."}
 
@@ -130,7 +130,7 @@ class AssistantService:
         try:
             chrome.open_tab(url)
         except chrome.ChromeError as e:
-            return {"ok": False, "msg": str(e)}
+            return {"ok": False, "msg": trouble.said(e)}   # a ChromeError can name a page address
         ready = False
         for wait in (1.0, 1.0, 1.5, 2.0, 2.5):          # the page gets time to load; a slow one is left to a second request
             chrome.pause(wait)
@@ -190,7 +190,7 @@ class AssistantService:
         try:
             now = form_fill.values_answer(chrome.run(form_fill.values_script([i["n"] for i in last["items"]], last["url"])))
         except chrome.ChromeError as e:
-            return {"ok": False, "msg": str(e)}
+            return {"ok": False, "msg": trouble.said(e)}   # a ChromeError can name a page address
         if not now:
             return {"ok": False, "msg": "The form is not in front any more, so I cannot see what you changed. Go back to it and ask again."}
         learned = []
@@ -267,7 +267,7 @@ class AssistantService:
         try:
             found = assistant_brain.review(job, cv_text, self._app.facts(job), [f for f in fields if not f["private"]], self._app.pay(job))
         except Exception as e:  # noqa: BLE001 - the plain checks are still reported
-            return [], f" Claude could not read it against your CV ({str(e) or type(e).__name__}), so only the plain checks were made."
+            return [], f" Claude could not read it against your CV ({trouble.said(e)}), so only the plain checks were made."
         return [p for p in found if p["field"] not in seen], ""
 
     def assistant_fill(self, job_id="", skip=None):

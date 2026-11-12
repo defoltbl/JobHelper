@@ -337,7 +337,7 @@ class Bridge(RunSlots, JobSlots, QObject):
         except FileNotFoundError as e:
             return {"ok": False, "msg": str(e) if str(e) == claude_cli.MISSING else "Terminal could not be opened."}
         except Exception as e:  # noqa: BLE001
-            return {"ok": False, "msg": str(e)}
+            return {"ok": False, "msg": trouble.said(e)}
 
     def _busy_with_run(self, what):
         """The refusal of an action that asks Claude or changes the job list while a search or scan runs, or None (#79):

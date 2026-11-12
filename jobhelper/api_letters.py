@@ -8,7 +8,7 @@ import os
 
 from datetime import date
 
-from . import agent3_letters, config, cover_letter, pdf, store, vault
+from . import agent3_letters, config, cover_letter, pdf, store, vault, trouble
 from .api_base import _guarded, _stem
 
 
@@ -124,7 +124,7 @@ class LettersService:
             return {"ok": True, "index": int(index),
                     "paragraph": cover_letter.rewrite_paragraph(j, cv_text, texts, int(index), hint or "")}
         except Exception as e:  # noqa: BLE001 - shown to the user as the reason
-            return {"ok": False, "msg": str(e)}
+            return {"ok": False, "msg": trouble.said(e)}
 
     # ── letter and CV in one PDF ────────────────────────────────
     def _pdf_parts(self, j, make: bool = False):

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import agent1_cv, config, db, integrity, store, vault
+from . import agent1_cv, config, db, integrity, store, trouble, vault
 
 
 # What the window can do about a problem, by a button on the start-up check's line.
@@ -19,7 +19,7 @@ def _check(name: str, fn) -> dict[str, Any]:
     try:
         found = fn() or ""
     except Exception as e:  # noqa: BLE001 - a crashing check is itself a finding
-        found = f"The check itself failed ({type(e).__name__}: {e})."
+        found = f"The check itself failed ({type(e).__name__}: {trouble.said(e)})."
     problem, action = found if isinstance(found, tuple) else (found, "")
     return {"name": name, "ok": not problem, "problem": problem, "action": action}
 

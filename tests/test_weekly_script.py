@@ -195,3 +195,20 @@ def test_a_command_inside_the_weekly_run_holds_the_same_lock(isolate_data):
     from jobhelper import store
     with store.RunLock.holding():                                               # the weekly run
         assert store.RunLock.command(lambda: 7) == 7                            # its step, run.py's main
+
+
+def test_the_weekly_log_never_keeps_a_key_or_an_address_query(tmp_path, monkeypatch):
+    """#93: a step's traceback went into the log as it was; a key in an error or an address's query stood there."""
+    monkeypatch.setattr(config, "JOOBLE_API_KEY", "fakekey-fakekey-fake")
+
+    def broken():
+        raise RuntimeError("GET https://jooble.example/api/fakekey-fakekey-fake?token=abc failed")
+
+    def chatty():                       # a step that prints an error itself (agent3_letters does)
+        print("  ! letter failed: key fakekey-fakekey-fake rejected at https://x.example/a?q=secret")
+        return 0
+    log = tmp_path / "w.log"
+    weekly.WeeklyRun(log, [("broken", broken), ("chatty", chatty)]).run()
+    text = log.read_text(encoding="utf-8")
+    assert "RuntimeError" in text and "fakekey-fakekey-fake" not in text and "token=abc" not in text and "q=secret" not in text
+    assert "letter failed: key [hidden] rejected" in text

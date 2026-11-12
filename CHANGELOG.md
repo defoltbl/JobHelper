@@ -7,6 +7,9 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Claude:** the app also refuses to run while a setting for Microsoft Foundry, Bedrock's Mantle endpoint, Claude Platform on AWS, a Bedrock key, an Anthropic profile or another setting that moves the program to a paid account is set.
+- **Claude:** the Claude program the app starts no longer reads your own Claude settings files.
+- **Security:** an error's text shown in the window or kept in the log of the weekly run never holds a key or the query part of an address.
 - **Claude:** the app no longer refuses to run when `ANTHROPIC_BASE_URL` is set only to Anthropic's own address.
 - **Job window:** when the app takes a sentence out of a cover letter because your CV and notes do not show its skill, the job window names that skill and says where to add it if it is true.
 - **Assistant:** when you ask it to remember something, it asks first and keeps the note only when you select **Yes, do it**.

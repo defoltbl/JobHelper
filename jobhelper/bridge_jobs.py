@@ -37,7 +37,7 @@ class JobSlots:
         try:
             return self._api.shelf_status(days)
         except Exception as e:  # noqa: BLE001 - Options must open whatever the backup folder looks like
-            return {"ok": False, "msg": str(e) or type(e).__name__}
+            return {"ok": False, "msg": trouble.said(e)}
 
     @Slot(int, int, result="QVariantMap")
     def tidyShelf(self, days, expected):
@@ -47,7 +47,7 @@ class JobSlots:
         try:
             return self._api.tidy_shelf(days, expected)
         except Exception as e:  # noqa: BLE001
-            return {"ok": False, "msg": str(e) or type(e).__name__}
+            return {"ok": False, "msg": trouble.said(e)}
 
     @Slot(result="QVariantMap")
     def lastShelved(self):
@@ -249,7 +249,7 @@ class JobSlots:
             config.remove_imap2()
             return {"ok": True}
         except Exception as e:  # noqa: BLE001
-            return {"ok": False, "msg": str(e)}
+            return {"ok": False, "msg": trouble.said(e)}
 
     @Slot(str, str, str, str, str, result="QVariantMap")
     def setEvent(self, job_id, day, time_text, kind, note):
@@ -284,7 +284,7 @@ class JobSlots:
             try:
                 result = self._api.add_reply(job_id, text)
             except Exception as e:  # noqa: BLE001 - the window must always get an answer
-                result = {"ok": False, "msg": str(e) or type(e).__name__}
+                result = {"ok": False, "msg": trouble.said(e)}
             result["job_id"] = job_id
             self._post("replyReady", result)
         threading.Thread(target=work, daemon=True).start()
@@ -356,7 +356,7 @@ class JobSlots:
             try:
                 result = self._api.make_form_answers(job_id, questions_text)
             except Exception as e:  # noqa: BLE001 - the window must always get an answer
-                result = {"ok": False, "msg": str(e) or type(e).__name__}
+                result = {"ok": False, "msg": trouble.said(e)}
             result["job_id"] = job_id
             self._post("answersReady", result)
         threading.Thread(target=work, daemon=True).start()
@@ -401,7 +401,7 @@ class JobSlots:
                                                   progress=lambda words: self._post("assistantProgress", {"text": str(words)}))
             except Exception as e:  # noqa: BLE001 - the window must always get an answer
                 trouble.note("the assistant's request", e)
-                result = {"ok": False, "action": "none", "msg": str(e) or type(e).__name__}
+                result = {"ok": False, "action": "none", "msg": trouble.said(e)}
             self._post("assistantReady", result)
         threading.Thread(target=work, daemon=True).start()
 
@@ -421,7 +421,7 @@ class JobSlots:
                               job_id, (self._details(arg) or {}).get("question", ""), (self._details(arg) or {}).get("answer", ""))}[what]()
             except Exception as e:  # noqa: BLE001 - the window must always get an answer
                 trouble.note(f"the assistant's request ({what})", e)
-                result = {"ok": False, "msg": str(e) or type(e).__name__}
+                result = {"ok": False, "msg": trouble.said(e)}
             result.setdefault("action", what)
             if what in ("files", "learn", "forget", "cv_lists", "draft"):
                 result["action"] = what
@@ -582,7 +582,7 @@ class JobSlots:
             try:
                 result = self._api.make_interview_prep(job_id)
             except Exception as e:  # noqa: BLE001 - the window must always get an answer
-                result = {"ok": False, "msg": str(e) or type(e).__name__}
+                result = {"ok": False, "msg": trouble.said(e)}
             result["job_id"] = job_id
             self._post("prepReady", result)
         threading.Thread(target=work, daemon=True).start()
@@ -644,7 +644,7 @@ class JobSlots:
             try:
                 result = self._api.rewrite_paragraph(job_id, texts, index, hint)
             except Exception as e:  # noqa: BLE001 - the window must always get an answer
-                result = {"ok": False, "msg": str(e) or type(e).__name__}
+                result = {"ok": False, "msg": trouble.said(e)}
             result.setdefault("index", int(index))
             result["job_id"] = job_id
             self._post("paragraphReady", result)

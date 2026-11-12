@@ -437,7 +437,6 @@ def test_save_companies_tolerates_odd_rows(bridge):
     assert result["ok"] is False and "Not saved: 42, None" in result["msg"], "an odd row is named, never dropped silently"
 
 
-
 def test_save_email_writes_to_env(bridge, tmp_path, monkeypatch):
     monkeypatch.setattr(config, "ENV_PATH", tmp_path / ".env")
     for name in ("IMAP_USER", "IMAP_PASSWORD"):
@@ -547,7 +546,6 @@ def test_a_folder_a_scan_could_not_read_is_named_at_its_end(bridge, monkeypatch)
                         agent5_responses.ScanStats(scanned=3, asked=1))
     bridge._scan(30)
     assert events[-1][2].endswith("· 0 new."), "the next scan does not repeat an old warning"
-
 
 
 def test_a_scan_refused_by_an_untrusted_certificate_says_so(bridge, monkeypatch):
@@ -1232,3 +1230,31 @@ def test_a_letter_save_and_the_single_pdf_answer_from_the_background(bridge, mon
     monkeypatch.setattr(ui_api.Api, "combined_pdf", lambda self, job_id: {"ok": True, "file": "both.pdf", "pages": 3})
     bridge.combinedPdf("j1")
     assert answers[-1] == ("pdfReady", {"ok": True, "file": "both.pdf", "pages": 3, "job_id": "j1"})
+
+
+def test_an_error_s_text_reaches_the_window_scrubbed(monkeypatch):
+    """#93: the bridge put an error's raw text on screen; now every handler asks trouble.said."""
+    from jobhelper import config, trouble
+    monkeypatch.setattr(config, "JOOBLE_API_KEY", "fakekey-fakekey-fake")
+    assert trouble.said(RuntimeError("bad key fakekey-fakekey-fake at https://x.example/a?q=1")) == "bad key [hidden] at https://x.example/a"
+    assert trouble.said(RuntimeError()) == "RuntimeError"
+
+
+def test_no_module_keeps_its_own_copy_of_the_error_text_rule():
+    """Review of #93: the old expression stood outside the files the first guard read (form_run)."""
+    import re
+    from pathlib import Path
+    for path in Path(__file__).resolve().parent.parent.joinpath("jobhelper").glob("*.py"):
+        if path.name != "trouble.py":
+            assert not re.search(r"str\(e\) or type\(e\)\.__name__", path.read_text(encoding="utf-8")), path.name
+
+
+def test_scoring_one_job_again_shows_its_error_scrubbed(isolate_data, monkeypatch):
+    """Review of #93: the rescore of one job returned the raw text of a Claude or network error."""
+    from jobhelper import agent3_letters, config, store, ui_api
+    monkeypatch.setattr(config, "JOOBLE_API_KEY", "fakekey-fakekey-fake")
+    store.save_jobs([store.new_job(id="r1", title="Dev", company="Acme", status="found", match_score=50)])
+    monkeypatch.setattr(agent3_letters, "rescore", lambda *a, **k: (_ for _ in ()).throw(
+        RuntimeError("bad fakekey-fakekey-fake at https://x.example/a?q=secret")))
+    said = ui_api.Api().rescore_one("r1")
+    assert said["ok"] is False and "[hidden]" in said["msg"] and "q=secret" not in said["msg"]

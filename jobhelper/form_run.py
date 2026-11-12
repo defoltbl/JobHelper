@@ -316,7 +316,7 @@ class FormFillRun:
         try:
             drafted = form_answers.generate(job, cv_text, fresh, config.experience_notes())
         except Exception as e:  # noqa: BLE001 - said to the person as the reason; the details are still filled in
-            return kept, f"The answers could not be drafted: {str(e) or type(e).__name__}"
+            return kept, f"The answers could not be drafted: {trouble.said(e)}"
         new = {i["question"].lower(): i for i in drafted}
 
         def keep(jobs, j):          # may run twice (the running search's copy): the result is the same
@@ -400,7 +400,7 @@ class FormChoices:
                 try:
                     picks.update(form_choices.decide(open_ones, cv_text, mine, job))
                 except Exception as e:  # noqa: BLE001 - said to the person as the reason; the rest of the form is still filled in
-                    why = f"The choice could not be made: {str(e) or type(e).__name__}"
+                    why = f"The choice could not be made: {trouble.said(e)}"
         for c in choices:
             pick = picks.get(c["n"], "")
             if not pick:

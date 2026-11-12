@@ -250,3 +250,18 @@ def test_a_base_url_counts_as_paid_only_when_it_leads_elsewhere(monkeypatch, val
     """#93: ANTHROPIC_BASE_URL refused every run, also when it named Anthropic's own address."""
     monkeypatch.setenv("ANTHROPIC_BASE_URL", value)
     assert config.using_paid_api() is paid and (config.paid_setting() == "ANTHROPIC_BASE_URL") is paid
+
+
+@pytest.mark.parametrize("name", ["CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_MANTLE", "CLAUDE_CODE_USE_ANTHROPIC_AWS",
+                                  "AWS_BEARER_TOKEN_BEDROCK", "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_PROFILE"])
+def test_today_s_paid_settings_refuse_the_run(monkeypatch, name):
+    """#93: Foundry, Mantle, Claude Platform on AWS, a Bedrock bearer token and an Anthropic profile billed a paid account
+    while the app thought it ran on the subscription."""
+    monkeypatch.setenv(name, "1")
+    assert config.using_paid_api() and config.paid_setting() == name
+
+
+def test_the_claude_program_reads_none_of_the_person_s_own_settings():
+    """#93: unset, the program read ~/.claude/settings.json, whose env block or apiKeyHelper could move it to a paid key."""
+    from jobhelper import llm
+    assert llm.options_for("system", "haiku").setting_sources == []                 # the SDK's isolation: no settings file
