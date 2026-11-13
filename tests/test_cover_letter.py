@@ -271,7 +271,7 @@ def test_a_letter_that_names_an_employer_no_source_gives_is_sent_back_then_named
     monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or answers[min(len(prompts) - 1, 1)])
     job = store.new_job(id="i1", title="Administrator", company="Acme", description="We run Linux servers.")
     cover_letter.write(job, cv, MASTER)
-    assert len(prompts) == 2 and "places the candidate at Contoso Labs" in prompts[1] and "letter_invented" not in job, "sent back once"
+    assert len(prompts) == 2 and "places the candidate at \u201cContoso Labs\u201d" in prompts[1] and "letter_invented" not in job, "sent back once"
     prompts.clear()
     answers[1] = answers[0]                                   # the model insists: the person is told
     job = store.new_job(id="i2", title="Administrator", company="Acme", description="We run Linux servers.")

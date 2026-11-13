@@ -578,8 +578,15 @@ def checked_plain(letter: str, job: dict[str, Any], cv_text: str) -> str:
 def invented_problems(text: str, employers: claims.EmployerCheck, company: str = "", posting: str = "") -> list[str]:
     """An employer the letter places the candidate at that no source names (claims.EmployerCheck.invented), in the words a
     draft is sent back with (#63)."""
-    return [f"The letter places the candidate at {name}, but neither the CV nor the posting names it. Name only employers "
-            "the CV gives." for name in employers.invented(text, company, posting)]
+    return [f"The letter places the candidate at \u201c{_quoted(name)}\u201d, but neither the CV nor the posting names it. Name "
+            "only employers the CV gives." for name in employers.invented(text, company, posting)]
+
+
+def _quoted(name: str, most: int = 80) -> str:
+    """A name found in the model's text, as data inside an instruction to it: one line, and short (a long run is cut here,
+    never in the check that found it)."""
+    flat = " ".join(name.split())
+    return flat if len(flat) <= most else flat[:most] + "…"
 
 
 def misplaced_problems(text: str, employers: claims.EmployerCheck, what: str = "The letter", company: str = "") -> list[str]:

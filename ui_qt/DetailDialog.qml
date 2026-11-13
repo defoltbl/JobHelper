@@ -483,8 +483,8 @@ Dialog {
                     Text { objectName: "letterInvented"; visible: (detailDialog.job.letter_invented || []).length > 0
                         Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true
                         readonly property var names: detailDialog.job.letter_invented || []
-                        text: "Check your cover letter before you send it. It says that you worked at " + names.join("; ")
-                              + ", but your CV does not name " + (names.length > 1 ? "them" : "it") + ". Edit letter lets you change the sentence." }
+                        text: "Check your cover letter before you send it. It names " + names.join("; ")
+                              + " as a place of your work, but your CV does not name " + (names.length > 1 ? "them" : "it") + ". Edit letter lets you change the sentence." }
                     Text { objectName: "letterFigures"; visible: (detailDialog.job.letter_figures || []).length > 0
                         Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true
                         text: "Check the figures in your cover letter: " + (detailDialog.job.letter_figures || []).join(", ")

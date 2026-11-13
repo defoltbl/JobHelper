@@ -7,6 +7,10 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Job window:** the warning about an employer that your CV does not name has new words: "It names … as a place of your work, but your CV does not name it."
+- **Cover letters:** the check for an employer that your CV does not name finds more invented names: one in lowercase that ends in a firm word ("at contoso labs"), the second of two names, "my work at …" and a name after a time word ("I was at Wingtip Toys last year"). Before, these passed.
+- **Cover letters:** the same check no longer warns about "at Scale", "at Home" and other ordinary words, nor about an event or a job interview ("I spoke at PyCon Prague", "I interviewed at Globex"). Before, it named them as employers.
+- **Cover letters:** a wish such as "I would love to join a team where we use Kafka" is no longer checked as a claim of Kafka. A claim after it ("but I built Kafka pipelines") still is. Before, the wish was flagged.
 - **Job list:** edits made at the same time, for example a hand edit while a search runs, are no longer lost. Before, one could write the list over the other.
 - **Job list:** when the lock file of the job list cannot be opened (no permission, a read-only disk), the app names the file and the reason. Before, it showed an error or said that another process was busy.
 - **Account:** when the Keychain does not answer, the **Data protection** row says that the files were not checked and offers **Check again** (it says **Checking…** until the answer). Before, it offered **Approve** and **See what changed** for files that nobody had checked.

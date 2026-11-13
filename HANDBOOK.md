@@ -551,19 +551,29 @@ data/                your data; only the *.example.* files are in git
   is left goes to `letter_misplaced` (its own amber line, refreshed when you save the letter); a rewrite is sent back
   once, then given. Measured before it shipped on 74 real letters: the first version flagged 33, this one 0 (it
   reads 2 of the owner's jobs; a degree word late in a title, "(Pre-Diploma Practice)", once hid one).
-  An employer the model invented is `EmployerCheck.invented` (#63): a first-person sentence of work "at" a name, "for" a
-  name only after a word of employment (worked, interned, intern …), "with" a name only with a legal ending (Ltd, Inc;
-  not Labs or Group), the name followed by punctuation or a linking word. A name is known when the whole name, or its
-  first word that is not a generic word (`_GENERIC`: software, cloud, systems …), is in the CV, the company or the
-  posting; forms of address, weekdays and months are no name. Sent back once, then `letter_invented`, its own line in
-  the job window. Measured on 74 real letters: 0 flagged (the first version flagged "Ms" twice); a fixed labelled set
-  of sentences in tests/test_claims.py must stay as labelled. Not caught: a name in lowercase, the second of two names
-  ("at Contoso and Globex"), and "my work at X" (no first-person claim verb). Still not caught: a duration ("over the
+  An employer the model invented is `EmployerCheck.invented` (#63, #109): a first-person sentence of work "at" a name, "for" a
+  name only after a word of employment (worked, interned, intern ...), "with" a name only with a legal ending (Ltd, Inc;
+  not Labs or Group), the name followed by punctuation, a linking word or a time word ("last year", a number). Also
+  caught: the second of two names ("at Contoso Labs and Globex Labs"), "my work / time at X", a lowercase name that ends in a
+  firm or workplace word (`_WORKPLACE`: "at contoso labs"), and a name after character 500. A name is known when the
+  whole name, or its first word that is not a generic word (`_GENERIC`: software, cloud, systems ...), is in the CV, the
+  company or the posting. No name: forms of address, weekdays, months, events ("PyCon Prague"), idioms ("at Scale",
+  `_AT_IDIOMS`), a one-word name the CV or the posting writes in lowercase (never the letter itself: the model would
+  clear the name it made up), a place right after a visit ("I interviewed / spoke / presented at X"), and what a wish
+  names; "at Contoso's" is Contoso. Sent back once, then
+  `letter_invented`, its own line in the job window ("It names X as a place of your work, but your CV does not name it").
+  Measured read-only on 53 real letters (13 Nov): 0 flagged before and after #109, and no other letter warning
+  changed. A fixed labelled set of sentences in tests/test_claims.py must stay as labelled. Not caught (the list is in the
+  docstring of `invented`; owner, 13 Nov: first person only): a lowercase name that ends in a field of work ("at globex
+  audit"; two strict expected failures in the golden set), the middle names of a list of three, a lowercase name after
+  "my work at", "we built ... at X". Known false alarm: "my time at" an event whose name has no event word ("My time at
+  PyCon Prague was fun"). Still not caught: a duration ("over the
   past year"), a claim no position names ("used Docker daily"), and a job whose noun is not in `claims._JOB_WORDS` (#66 added the nouns at places of study: pianist,
   postdoc, fellow, dean, director …, and the phrase "working student" in `_JOB_PHRASES`; "student" alone stays study).
 - **The claim rules read a wish, a team and an interest more closely** (#82): a wish also ends at ", having / after /
   since / while" and "having built" claims; "where we use / run / have …" (present tense only) describes a team, so
-  "a team where we built" still claims, "lead with / by" is a manner, and
+  "a team where we built" still claims (the team clause ends at "I" or "but", and is cut before the wish: "I would love to
+  join a team where we use Kafka" claims nothing, #109), "lead with / by" is a manner, and
   "my interest in Kafka" owns no Kafka (`_INTEREST`). Measured on 74 real letters: the same one sentence flagged before
   and after. A choice Chrome stopped in the middle of is in the form report to be checked (`FormChoices.unsure`).
 - **A profile sentence about working independently needs one in the master profile** (#62:

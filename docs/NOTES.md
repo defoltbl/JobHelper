@@ -89,8 +89,9 @@ A few decisions worth highlighting, each with the problem that led to it.
 - PDFs are made with LibreOffice; without it only the Word files are written.
 - A letter or CV is checked against the master CV and your notes, so a posting far from your
   experience gives a short, plain letter. The checks are plain code and do not catch everything: a
-  duration ("over the past year"), a claim that names no job ("used Docker daily") and an employer
-  the model invented are not caught. Read each letter before you send it.
+  duration ("over the past year") and a claim that names no job ("used Docker daily") are not caught,
+  and an employer the model invented is caught only when a sentence about you names it ("I built the API
+  at Contoso Labs"). Read each letter before you send it.
 
 **The assistant**
 

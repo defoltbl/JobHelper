@@ -11,6 +11,8 @@ from jobhelper import claims, cover_letter, store
 
 SET = json.loads((Path(__file__).parent / "fixtures" / "letter_evals.json").read_text(encoding="utf-8"))
 KINDS = ("claimed", "borrowed", "figures", "misplaced", "invented")
+CASES = [c for c in SET["cases"] if "gap" not in c]          # a known gap runs on its own, as a strict expected failure
+GAPS = [c for c in SET["cases"] if "gap" in c]
 
 
 def said(case: dict) -> dict[str, list[str]]:
@@ -30,12 +32,13 @@ def test_the_golden_set_is_well_formed():
     ids = [c["id"] for c in SET["cases"]]
     assert len(ids) == len(set(ids)) and len(ids) >= 15
     assert all(c["person"] in SET["people"] and set(c["expect"]) <= set(KINDS) for c in SET["cases"])
+    assert all(len(c["gap"]) > 40 for c in GAPS), "a known gap says why it is missed"
     assert {c["person"] for c in SET["cases"]} == set(SET["people"]), "every profession has its cases"
 
 
 def test_the_letter_checks_meet_the_golden_set(isolate_data):
     wrong, by_person = [], defaultdict(lambda: [0, 0])
-    for case in SET["cases"]:
+    for case in CASES:
         expected = {k: case["expect"].get(k, []) for k in KINDS}
         got = said(case)
         ok = {k: sorted(v) for k, v in got.items()} == {k: sorted(v) for k, v in expected.items()}
@@ -51,3 +54,23 @@ def test_the_letter_checks_meet_the_golden_set(isolate_data):
 def test_a_clean_case_raises_nothing(isolate_data, case):
     """Read on their own, so a false alarm names its case."""
     assert not any(said(case).values()), case["text"]
+
+
+def test_the_invented_employer_check_recall_and_false_alarms(isolate_data):
+    """The `invented` kind on its own (#109): of the cases that must name an employer, how many it names exactly; of the
+    ones that must not, how many it still flags. A gain in one must not hide a loss in the other."""
+    should = [c for c in CASES if c["expect"].get("invented")]
+    clean = [c for c in CASES if not c["expect"].get("invented")]
+    missed = [c["id"] for c in should if sorted(said(c)["invented"]) != sorted(c["expect"]["invented"])]
+    false_alarms = [c["id"] for c in clean if said(c)["invented"]]
+    print(f"invented: recall {len(should) - len(missed)}/{len(should)}, false alarms {len(false_alarms)}/{len(clean)}")
+    assert not missed, f"missed or wrong: {missed}"
+    assert not false_alarms, f"false alarms: {false_alarms}"
+
+
+@pytest.mark.parametrize("case", GAPS, ids=lambda c: c["id"])
+@pytest.mark.xfail(strict=True, reason="a known gap of the checks (the case's 'gap' says why)")
+def test_a_known_gap_is_still_missed(isolate_data, case):
+    """When a change catches a known gap, this fails: take its "gap" off so it joins the bar."""
+    expected = {k: case["expect"].get(k, []) for k in KINDS}
+    assert {k: sorted(v) for k, v in said(case).items()} == {k: sorted(v) for k, v in expected.items()}
