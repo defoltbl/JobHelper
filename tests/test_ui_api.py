@@ -1151,6 +1151,23 @@ def test_restore_of_something_else_is_refused(api):
     assert api.restore_data("profile")["ok"] is False
 
 
+def test_repair_and_restore_wait_for_the_windows_own_run(api):
+    """#96: RunLock lets its own process in, so a repair or a restore went ahead under the window's running search, whose
+    save at its end wrote the run's older copy over it."""
+    _seed(store.new_job(id="a", title="Dev", company="Acme", status="maybe"))
+    _copy_in_backups("jobs.json", json.dumps([store.new_job(id="old", title="QA", company="Beta")]).encode(), age=300)
+    before = config.JOBS_JSON.read_bytes()
+    api.live = store.load_jobs()                                   # what a running search holds
+    for call, what in ((api.repair_statuses, "Repair the statuses"), (lambda: api.restore_data("jobs"), "Restore the backup"),
+                       (lambda: api.fix_problem("restore_replies"), "Restore the backup")):
+        assert call() == {"ok": False, "msg": f"A search or scan is running. {what} when it has finished."}
+    assert config.JOBS_JSON.read_bytes() == before, "nothing was written"
+    assert not list(vault.backups_dir().glob("before_status_repair_*")) and not (vault.backups_dir() / vault.DAMAGED).exists()
+    api.live = None
+    assert api.fix_problem("repair_statuses")["fixed"] == 1
+    assert api.restore_data("jobs")["ok"] is True
+
+
 def test_a_country_must_be_known_unless_it_was_saved_before(api):
     from jobhelper import config
     assert "is not a country the app knows" in api.save_options({**api.options(), "where": "Berlin", "country": "Narnia"})["msg"]

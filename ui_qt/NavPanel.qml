@@ -112,6 +112,7 @@ Rectangle {
                             : connData.claude !== true && connData.claude_unsure !== true ? "Sign in to Claude"
                             : (connData.cv || "") === "" ? "Add your master CV"
                             : connData.vault === "locked" ? "Encryption key missing"
+                            : welcome.changesUnchecked ? "Files not checked"
                             : welcome.changedFiles.length > 0 ? "Files changed, review"
                             : ((connData.plan ? connData.plan.charAt(0).toUpperCase() + connData.plan.slice(1) + " plan" : "Subscription")
                                + (connData.email === true ? " · email on" : " · email off")) }

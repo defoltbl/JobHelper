@@ -143,3 +143,26 @@ def test_take_in_adds_a_search_the_same_way_every_time(isolate_data, monkeypatch
     assert took == {"found": 1, "added": 1, "skipped": 0, "known": 1, "closed": 1}
     assert [j["id"] for j in jobs] == ["old", "new"] and dropped[0]["group"] == "already applied"
     assert agent2_search.load_dropped()["total"] == 1                                         # the Filtered out list is saved
+
+
+def test_help_and_a_wrong_option_answer_while_another_process_holds_the_list(jobs_held_elsewhere, monkeypatch, capsys):
+    """#96: --help and a typo were refused as busy while the window or the weekly run held the job list."""
+    for argv, code, where, text in ((["--help"], 0, "out", "Skip Agent 2"),
+                                    (["--treshold", "70"], 2, "err", "unrecognized arguments: --treshold")):
+        monkeypatch.setattr("sys.argv", ["run.py", *argv])
+        with pytest.raises(SystemExit) as stop:
+            run.main()
+        said = capsys.readouterr()
+        assert stop.value.code == code and text in getattr(said, where), argv
+        assert store.RunLock.COMMAND_BUSY not in said.out + said.err and store.RunLock._held == 0
+
+
+def test_the_pipeline_still_runs_holding_the_job_list(cli, monkeypatch):
+    held = []
+
+    def process(jobs, profile, **kw):
+        held.append(store.RunLock._held)
+        return {"scored": 0, "letters": 0, "tailored_cvs": 0, "skipped": 0}
+    monkeypatch.setattr(agent3_letters, "process", process)
+    cli("--skip-search")
+    assert held == [1] and store.RunLock._held == 0

@@ -2352,7 +2352,10 @@ your master CV are signed. If one of them is changed outside the app, the next r
 3. Select **Approve** if the change is yours. Otherwise put the file back as it was.
 
 If the Keychain does not answer, the **Data protection** row says that the protected files were
-not checked. A search does not start until the Keychain answers again.
+not checked. The row shows this in the warning colour. It has no **Approve** button and no
+**See what changed** button, because the app cannot compare the files. Select **Check again**.
+The button says **Checking…** until the Keychain answers. A search does not start until the
+Keychain answers again.
 
 > **Note**
 > The app keeps the text of each file as it was when you approved it. For a file approved
@@ -2405,6 +2408,7 @@ Table 20.1 lists problems with starting and signing in.
 | "Your job list is damaged" | The file of the job list cannot be read | Select **Restore from backup** on the red line |
 | A button does nothing | A required row of the Account card is red | Open the **Account** chip and make the rows green |
 | "A paid API key is set" | A paid Claude key, or another setting that bills a paid account, is set on this Mac | Ask whoever set up the app to remove it, then start the app again |
+| **Data protection** says that the files were not checked | The Keychain did not answer, so the app could not compare the files | Select **Check again**. The button says **Checking…** until the Keychain answers |
 | **Sign-in not checked** on the Account chip | Claude did not answer when the app asked who is signed in. This does not mean that you are signed out | Open the **Account** card and select **Check again** |
 
 ### Searching and scoring

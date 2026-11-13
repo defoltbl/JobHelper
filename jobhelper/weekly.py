@@ -82,6 +82,9 @@ class WeeklyRun:
         with redirect_stdout(out), redirect_stderr(out):
             print(f"===== weekly JobHelper {self._now():%Y-%m-%d %H:%M} =====", flush=True)
             if not store.RunLock.take(self._wait):
+                if store.RunLock.fault():
+                    print(store.RunLock.fault() + " This week's run did not start.", flush=True)
+                    return self.BUSY_CODE
                 print("The app was working on your jobs for the whole wait, so this week's run did not start. "
                       "It runs again next week, or start a search in the app.", flush=True)
                 return self.BUSY_CODE

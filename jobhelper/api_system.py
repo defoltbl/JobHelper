@@ -76,7 +76,8 @@ class SystemService:
 
     def connections(self, sign_in=None):
         """What is set up. `claude_unsure`: the sign-in could not be checked (Claude was slow or could not be asked),
-        which is not the same as signed out; `claude_msg` says what to do when `claude` is not True. `sign_in`: a recent
+        which is not the same as signed out; `claude_msg` says what to do when `claude` is not True. `changes_unchecked`:
+        the protected files could not be checked (nothing to approve), `changes_msg` says so. `sign_in`: a recent
         signed-in answer ({claude, plan, claude_email}) to use instead of asking the Claude program, which can take
         seconds (#80: a run start on the window's thread); everything else is checked again."""
         if sign_in and sign_in.get("claude") is True:
@@ -86,7 +87,9 @@ class SystemService:
             claude, plan, claude_email, unsure = self._ask_claude()
         cv = agent1_cv.find_cv()
         changed = integrity.changed_titles()        # a check that could not run stops a run too, never "nothing changed"
+        unchecked = integrity.not_checked(changed)  # then the window offers Check again, never Approve
         return {"vault": vault.state(), "changed_files": changed, "pdf": pdf.available(),
+                "changes_unchecked": unchecked, "changes_msg": integrity.NOT_CHECKED_CARD if unchecked else "",
                 "claude": claude, "plan": plan if claude else "",
                 "claude_unsure": unsure, "claude_msg": "" if claude else (UNSURE if unsure else SIGN_IN),
                 "claude_email": claude_email if claude else "",
@@ -136,9 +139,19 @@ class SystemService:
             return {"ok": False, "msg": "The app has no fix for this problem. Select Show all to read what to do."}
         return fix()
 
+    def _refused_during_run(self, what):
+        """The refusal while a search, scan or scoring run of this window holds its own copy of the job list (`live`), or
+        None: RunLock lets the run's own process in, and the run's save at its end would write its copy over the fix."""
+        if self._editor.live is None:
+            return None
+        return {"ok": False, "msg": f"A search or scan is running. {what} when it has finished."}
+
     @_holding_jobs()
     def repair_statuses(self):
         """Give every job whose status the app does not know a status it knows. A backup is made first."""
+        refused = self._refused_during_run("Repair the statuses")
+        if refused:
+            return refused
         try:
             jobs = store.load_jobs()
         except Exception as e:  # noqa: BLE001 - shown as the reason
@@ -163,6 +176,9 @@ class SystemService:
     def restore_data(self, kind):
         """Put back the newest backup copy of the job list or the replies database that opens. The damaged
         file is moved into the backups (folder vault.DAMAGED), never deleted."""
+        refused = self._refused_during_run("Restore the backup")
+        if refused:
+            return refused
         if kind not in self._RESTORABLE:
             return {"ok": False, "msg": "Only the job list and the replies database can be restored here."}
         attr, what = self._RESTORABLE[kind]

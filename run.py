@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""JobHelper — run the full 4-agent pipeline.
+"""JobHelper – run the full 4-agent pipeline.
 
     python run.py                 # analyze CV → search your city (Options, or --where) → letters → Excel
     python run.py --where Brno    # search a different city
@@ -17,11 +17,14 @@ from jobhelper import (agent1_cv, agent2_search, agent3_letters, agent4_tracker,
 
 
 def main() -> int:
-    """The pipeline, holding the job list's lock (store.RunLock) from start to end."""
-    return store.RunLock.command(_pipeline)
+    """Read the arguments, then run the pipeline holding the job list's lock (store.RunLock) from start to end. --help
+    and a wrong option end in argparse before the lock, so they still answer while another process holds it."""
+    saved = config.ui_settings()
+    args = _parser(saved).parse_args()
+    return store.RunLock.command(lambda: _pipeline(args, saved))
 
 
-def _pipeline() -> int:
+def _parser(saved: dict) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the JobHelper pipeline.")
     parser.add_argument("--where", default="", help="City to search in (default: the city saved in the app's Options)")
     parser.add_argument("--source", default="czech",
@@ -44,12 +47,13 @@ def _pipeline() -> int:
     parser.add_argument("--skip-search", action="store_true", help="Skip Agent 2 (re-score existing jobs only)")
     # Options saved in the desktop app are the defaults here too, so the weekly
     # scheduled run searches the same way as the Run search button.
-    saved = config.ui_settings()
     known = {"where", "source", "include_remote", "threshold", "per_query",
              "all_languages", "max_age_days"}
     parser.set_defaults(**{k: v for k, v in saved.items() if k in known})
-    args = parser.parse_args()
+    return parser
 
+
+def _pipeline(args: argparse.Namespace, saved: dict) -> int:
     config.ensure_dirs()
     config.apply_ui_settings(saved)
     try:
@@ -113,7 +117,7 @@ def _pipeline() -> int:
         # been rejected by. Different roles at the same company are kept.
         took = agent2_search.take_in(jobs, new_jobs, english_only=settings.english_only, dropped=filtered, failed=failed)
         added = took["added"]
-        msg = f"   found {took['found']} listings — {added} new, {took['skipped']} already tracked"
+        msg = f"   found {took['found']} listings – {added} new, {took['skipped']} already tracked"
         if took["closed"]:
             msg += f"; {took['closed']} earlier ones no longer accept applications"
         if took["known"]:

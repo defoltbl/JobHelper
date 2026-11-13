@@ -15,6 +15,7 @@ from .api_base import _holding_jobs
 
 _PLAIN = re.compile(r"\b(?:but|skip|except|without|only|not|don't|do not|leave|and)\b")
 NO_JOB = "That job is not in the list any more."
+RUN_GOING = "A search or scan is running. Ask me again when it has finished."
 
 
 class _Said(Exception):
@@ -356,7 +357,7 @@ class TalkService:
         if not isinstance(pending, dict) or not isinstance(pending.get("args"), dict):
             return {"ok": False, "action": "say", "msg": "There is nothing waiting for your yes."}
         if self._editor.live is not None and pending.get("name") in ("many", "add_job"):
-            return {"ok": False, "action": "say", "msg": "A search or scan is running. Ask me again when it has finished."}
+            return {"ok": False, "action": "say", "msg": RUN_GOING}
         steps = pending["args"].get("actions") if pending.get("name") == "many" else [pending]
         if not isinstance(steps, list) or not 1 <= len(steps) <= assistant_brain.MAX_ACTIONS:
             return {"ok": False, "action": "say", "msg": "That is not something I can do on a yes."}
@@ -473,9 +474,12 @@ class TalkService:
             answer_memory.remember(question, answer, job.get("company", ""))
         return self._job_changed(done, "The answer is changed and kept with the job.", back)
 
-    @_holding_jobs(refused=lambda: (False, store.RunLock.BUSY, None))
+    @_holding_jobs(refused=lambda: (False, store.RunLock.refusal(), None))
     def _add_job(self, record) -> tuple[bool, str, dict[str, Any] | None]:
-        """Put a posting that was read from the browser into New Jobs, as the lead the app scored."""
+        """Put a posting that was read from the browser into New Jobs, as the lead the app scored. Inside the list's section,
+        so a run that starts meanwhile either reads the list after this write or is seen here (#96)."""
+        if self._editor.live is not None:          # the run's copy would write the list back without the posting
+            return False, RUN_GOING, None
         if not isinstance(record, dict) or not str(record.get("title") or "").strip() or not str(record.get("url") or "").lower().startswith(("http://", "https://")):
             return False, "That posting cannot be added: it has no title or no address.", None
         if not isinstance(record.get("match_score"), int) or not 0 <= record["match_score"] <= 100:
@@ -494,41 +498,57 @@ class TalkService:
         agent4_tracker.render_all(jobs)
         return True, f"Added {job['title']} at {job['company']} to New Jobs with a score of {job['match_score']}.", {"kind": "added", "id": job["id"], "what": f"{job['title']} at {job['company']}"}
 
-    @_holding_jobs(refused=lambda: {"ok": False, "action": "say", "msg": store.RunLock.BUSY})
     def assistant_undo(self):
-        """Take back what the last yes did: the job as it was before, a removed lead restored, a letter's old text, an added posting removed."""
+        """Take back what the last yes did: the job as it was before, a removed lead restored, a letter's old text, an added posting removed.
+        Each step holds the job list only for its own change (#96): a letter's step makes its PDF outside, so the window's
+        other edits never wait for it."""
         steps = self._undo
         if not steps:
             return {"ok": False, "action": "say", "msg": "There is nothing to take back."}
         if self._editor.live is not None:
             return {"ok": False, "action": "say", "msg": "A search or scan is running. Take it back in the job's own window, or ask me again when it has finished."}
+        if not store.RunLock.take():             # the process's claim only: the window's own edits go on meanwhile
+            return {"ok": False, "action": "say", "msg": store.RunLock.refusal()}
         said = []
-        for step in reversed(steps):
-            if step["kind"] == "dismissed":
-                ok = bool(self._app.restore_job(step["id"]).get("ok"))
-            elif step["kind"] == "letter":
-                ok = bool(self._app.save_letter(step["id"], step["paragraphs"]).get("ok"))
-            else:
-                jobs = store.load_jobs()
-                if step["kind"] == "added":
-                    kept = [j for j in jobs if j["id"] != step["id"] or j.get("status") != "found" or j.get("cover_letter_file") or j.get("tailored_cv_file")]
-                    ok = len(kept) < len(jobs)       # only while it is still the bare lead that was added
-                    jobs = kept
+        try:
+            for step in reversed(steps):
+                if step["kind"] == "dismissed":
+                    ok = bool(self._app.restore_job(step["id"]).get("ok"))
+                elif step["kind"] == "letter":
+                    ok = bool(self._app.save_letter(step["id"], step["paragraphs"]).get("ok"))
                 else:
-                    index = next((i for i, j in enumerate(jobs) if j["id"] == step["job"]["id"]), -1)
-                    ok = index >= 0
-                    if ok:
-                        jobs[index] = step["job"]
-                        have = {j["id"] for j in jobs}
-                        jobs += [j for j in step["gone"] if j["id"] not in have]
-                if ok:
-                    store.save_jobs(jobs)
-                    agent4_tracker.render_all(jobs)
-            said.append(f"{step['what']} is as it was before." if ok else f"{step['what']} could not be put back: it changed in the meantime.")
+                    ok = self._put_back(step)
+                said.append(f"{step['what']} is as it was before." if ok else f"{step['what']} could not be put back: it changed in the meantime.")
+        finally:
+            store.RunLock.release()
         self._undo = []
         text = " ".join(said)
         self._turn("bot", text)
         return {"ok": True, "action": "done", "say": text, "changed": True, "can_undo": False}
+
+    @_holding_jobs(refused=False)
+    def _put_back(self, step) -> bool:
+        """One undo step that changes the list itself (an added posting, a job and the jobs that went with it): whether it
+        was put back. One section of the list (store.RunLock.holding), so another thread's edit never lands in between,
+        and a run that started during an earlier step is seen here: its copy would write the old list back (#96)."""
+        if self._editor.live is not None:
+            return False
+        jobs = store.load_jobs()
+        if step["kind"] == "added":
+            kept = [j for j in jobs if j["id"] != step["id"] or j.get("status") != "found" or j.get("cover_letter_file") or j.get("tailored_cv_file")]
+            ok = len(kept) < len(jobs)       # only while it is still the bare lead that was added
+            jobs = kept
+        else:
+            index = next((i for i, j in enumerate(jobs) if j["id"] == step["job"]["id"]), -1)
+            ok = index >= 0
+            if ok:
+                jobs[index] = step["job"]
+                have = {j["id"] for j in jobs}
+                jobs += [j for j in step["gone"] if j["id"] not in have]
+        if ok:
+            store.save_jobs(jobs)
+            agent4_tracker.render_all(jobs)
+        return ok
 
     # ── practising an interview ─────────────────────────────────
     def assistant_practice(self, job_id):
