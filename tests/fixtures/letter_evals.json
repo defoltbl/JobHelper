@@ -1,5 +1,5 @@
 {
- "about": "The golden set of the letter checks (#78): invented people, postings and letter sentences, each labelled with what the checks must say. Run before a change to a prompt or to a claim rule ships: tests/test_letter_evals.py. Add a case for every false alarm or missed claim found; never change a label to make a run pass.",
+ "about": "The golden set of the letter checks (#78): invented people, postings and letter sentences, each labelled with what the checks must say. Run before a change to a prompt or to a claim rule ships: tests/test_letter_evals.py. Add a case for every false alarm or missed claim found; never change a label to make a run pass. The inv-* cases were written before the #109 rules, but many of their sentences are also development rows in tests/test_claims.py, so their recall is a development number, not a held-out one; a fresh held-out batch should come from another writer. A case with \"gap\" is a known miss: it keeps its true label and runs as a strict expected failure, so a fix shows at once.",
  "people": {
   "developer": {
    "cv": "Alex Novak\nJunior Developer\nalex@example.com · +420 600 000 000\nEXPERIENCE\nJunior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built an internal REST API in Django and Python; wrote tests with pytest.\nIT Intern – Fabrikam Labs, Brno (2023 – 2024): maintained Python scripts for data imports.\nSKILLS\nPython, Django, PostgreSQL, Git, Docker\n",
@@ -346,6 +346,314 @@
      "Node.js"
     ]
    }
+  },
+  {
+   "id": "inv-dev-lowercase-name",
+   "person": "developer",
+   "text": "I built the API at contoso labs.",
+   "expect": {
+    "invented": [
+     "contoso labs"
+    ]
+   }
+  },
+  {
+   "id": "inv-dev-two-names",
+   "person": "developer",
+   "text": "I worked at Contoso Labs and Globex Labs.",
+   "expect": {
+    "invented": [
+     "Contoso Labs",
+     "Globex Labs"
+    ]
+   }
+  },
+  {
+   "id": "inv-dev-my-work-at",
+   "person": "developer",
+   "text": "My work at Adventure Works taught me to read logs with care.",
+   "expect": {
+    "invented": [
+     "Adventure Works"
+    ]
+   }
+  },
+  {
+   "id": "inv-dev-name-then-last-year",
+   "person": "developer",
+   "text": "I was at Wingtip Toys last year.",
+   "expect": {
+    "invented": [
+     "Wingtip Toys"
+    ]
+   }
+  },
+  {
+   "id": "inv-dev-name-then-year",
+   "person": "developer",
+   "text": "I was at Globex Health in 2023.",
+   "expect": {
+    "invented": [
+     "Globex Health"
+    ]
+   }
+  },
+  {
+   "id": "inv-dev-name-after-500-chars",
+   "person": "developer",
+   "text": "I kept the import scripts tidy and I wrote clear notes for the team and I helped colleagues when they were stuck and I reviewed small changes with care and I asked questions whenever a task was unclear and I learned the habits of a calm team and I tried to leave every folder cleaner than I found it and I shared what I learned in short talks and I kept learning from people around me and I made a habit of asking for feedback after each small task and I wrote down what went well and what did not and later I worked at Litware Systems.",
+   "expect": {
+    "invented": [
+     "Litware Systems"
+    ]
+   }
+  },
+  {
+   "id": "inv-dev-worked-for-intern",
+   "person": "developer",
+   "text": "I interned for Tailspin Software during my studies.",
+   "expect": {
+    "invented": [
+     "Tailspin Software"
+    ]
+   }
+  },
+  {
+   "id": "inv-acc-lowercase-name",
+   "person": "accountant",
+   "text": "I prepared monthly reports at globex audit.",
+   "expect": {
+    "invented": [
+     "globex audit"
+    ]
+   },
+   "gap": "Known gap (#109): a lowercase name that ends in a field of work, not a firm or a place, cannot be told from \"good at internal audit\" without a dictionary. The label stays true; claims.EmployerCheck.invented says it is not caught."
+  },
+  {
+   "id": "inv-acc-firm-not-in-cv",
+   "person": "accountant",
+   "text": "I trained as an auditor at Adventure Works Accounting.",
+   "expect": {
+    "invented": [
+     "Adventure Works Accounting"
+    ]
+   }
+  },
+  {
+   "id": "inv-acc-name-then-year",
+   "person": "accountant",
+   "text": "I was at Fabrikam Audit in 2024.",
+   "expect": {
+    "invented": [
+     "Fabrikam Audit"
+    ]
+   }
+  },
+  {
+   "id": "inv-acc-my-time-at",
+   "person": "accountant",
+   "text": "My time at Globex Partners taught me to be precise.",
+   "expect": {
+    "invented": [
+     "Globex Partners"
+    ]
+   }
+  },
+  {
+   "id": "inv-care-volunteer-home",
+   "person": "carer",
+   "text": "I volunteered at Globex Care Home last summer.",
+   "expect": {
+    "invented": [
+     "Globex Care Home"
+    ]
+   }
+  },
+  {
+   "id": "inv-care-hospital",
+   "person": "carer",
+   "text": "I worked at Fabrikam Hospital during my training.",
+   "expect": {
+    "invented": [
+     "Fabrikam Hospital"
+    ]
+   }
+  },
+  {
+   "id": "inv-care-lowercase-day-centre",
+   "person": "carer",
+   "text": "I was at tailspin day centre in 2022.",
+   "expect": {
+    "invented": [
+     "tailspin day centre"
+    ]
+   }
+  },
+  {
+   "id": "inv-care-two-names",
+   "person": "carer",
+   "text": "I worked at Litware Care and Adventure Works Hospice.",
+   "expect": {
+    "invented": [
+     "Litware Care",
+     "Adventure Works Hospice"
+    ]
+   }
+  },
+  {
+   "id": "inv-eng-firm",
+   "person": "engineer",
+   "text": "I designed brackets at Tailspin Engineering.",
+   "expect": {
+    "invented": [
+     "Tailspin Engineering"
+    ]
+   }
+  },
+  {
+   "id": "inv-eng-lowercase-name",
+   "person": "engineer",
+   "text": "I worked at globex tooling for a long time.",
+   "expect": {
+    "invented": [
+     "globex tooling"
+    ]
+   },
+   "gap": "Known gap (#109): a lowercase name that ends in a field of work, not a firm or a place, cannot be told from \"good at internal audit\" without a dictionary. The label stays true; claims.EmployerCheck.invented says it is not caught."
+  },
+  {
+   "id": "inv-eng-name-then-year",
+   "person": "engineer",
+   "text": "I was at Litware Machines in 2021.",
+   "expect": {
+    "invented": [
+     "Litware Machines"
+    ]
+   }
+  },
+  {
+   "id": "inv-eng-my-work-at",
+   "person": "engineer",
+   "text": "My work at Wingtip Welding taught me to check every drawing twice.",
+   "expect": {
+    "invented": [
+     "Wingtip Welding"
+    ]
+   }
+  },
+  {
+   "id": "inv-dev-at-scale",
+   "person": "developer",
+   "text": "I built tools at Scale.",
+   "expect": {}
+  },
+  {
+   "id": "inv-dev-at-home",
+   "person": "developer",
+   "text": "I built the API at Home.",
+   "expect": {}
+  },
+  {
+   "id": "inv-dev-at-christmas",
+   "person": "developer",
+   "text": "I worked at Christmas.",
+   "expect": {}
+  },
+  {
+   "id": "inv-dev-at-night-in-city",
+   "person": "developer",
+   "text": "I worked in Brno at night.",
+   "expect": {}
+  },
+  {
+   "id": "inv-dev-at-least",
+   "person": "developer",
+   "text": "I worked at least most days of the week.",
+   "expect": {}
+  },
+  {
+   "id": "inv-dev-at-a-startup",
+   "person": "developer",
+   "text": "I worked at a startup.",
+   "expect": {}
+  },
+  {
+   "id": "inv-dev-at-the-weekend",
+   "person": "developer",
+   "text": "I worked at the weekend.",
+   "expect": {}
+  },
+  {
+   "id": "inv-dev-at-work",
+   "person": "developer",
+   "text": "I wrote tests at work.",
+   "expect": {}
+  },
+  {
+   "id": "inv-dev-event-attended",
+   "person": "developer",
+   "text": "I was at Contoso's event last spring.",
+   "expect": {}
+  },
+  {
+   "id": "inv-dev-spoke-at-event",
+   "person": "developer",
+   "text": "I spoke at PyCon Prague.",
+   "expect": {}
+  },
+  {
+   "id": "inv-dev-known-name-lowercase",
+   "person": "developer",
+   "text": "I built the API at northwind parcel.",
+   "expect": {}
+  },
+  {
+   "id": "inv-acc-at-home",
+   "person": "accountant",
+   "text": "I worked at home during the winter.",
+   "expect": {}
+  },
+  {
+   "id": "inv-acc-spoke-at-fair",
+   "person": "accountant",
+   "text": "I spoke at the Prague Finance Fair.",
+   "expect": {}
+  },
+  {
+   "id": "inv-acc-known-name-lowercase",
+   "person": "accountant",
+   "text": "I worked at litware finance in Prague.",
+   "expect": {}
+  },
+  {
+   "id": "inv-care-night-shift",
+   "person": "carer",
+   "text": "I worked at night and at the weekend.",
+   "expect": {}
+  },
+  {
+   "id": "inv-care-attended-expo",
+   "person": "carer",
+   "text": "I was at Care Expo Brno last year.",
+   "expect": {}
+  },
+  {
+   "id": "inv-eng-spoke-at-fair",
+   "person": "engineer",
+   "text": "I presented at the Brno Engineering Fair.",
+   "expect": {}
+  },
+  {
+   "id": "inv-eng-known-name-lowercase",
+   "person": "engineer",
+   "text": "I designed welded frames at contoso machines.",
+   "expect": {}
+  },
+  {
+   "id": "inv-eng-at-scale",
+   "person": "engineer",
+   "text": "I worked at scale on large assemblies.",
+   "expect": {}
   }
  ]
 }

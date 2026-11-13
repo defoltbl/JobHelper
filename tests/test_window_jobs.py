@@ -215,10 +215,11 @@ def test_application_only_cards_are_hidden_for_a_new_job_and_nothing_overflows(u
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_invented=["Contoso Labs"]), render=False)
     ui.js("detailDialog.refresh()")
     invented = ui.find("letterInvented")
-    assert invented.property("visible") is True and "worked at Contoso Labs, but your CV does not name it." in invented.property("text")
+    assert invented.property("visible") is True and "It names Contoso Labs as a place of your work, but your CV does not name it." in invented.property("text") \
+        and "worked at" not in invented.property("text"), "neutral words: the check also catches 'my work at' and 'I was at'"
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_invented=["Contoso Labs", "Globex"]), render=False)
     ui.js("detailDialog.refresh()")
-    assert "Contoso Labs; Globex, but your CV does not name them." in ui.find("letterInvented").property("text")
+    assert "It names Contoso Labs; Globex as a place of your work, but your CV does not name them." in ui.find("letterInvented").property("text")
     ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_invented=[]), render=False)
     ui.js("detailDialog.refresh()")
     planner.save_company_notes("Acme", {"contact": "Jana"})                      # notes kept from an earlier application

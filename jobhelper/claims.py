@@ -19,8 +19,10 @@ GAP = re.compile(
 WISH = re.compile(r"\b(would like|would love|keen|look(ing)? forward|want to|eager|hope to|"
                   r"excited to|wish to|aim to|motivated to)\b", re.IGNORECASE)
 # A clause that describes a team as it works now ("a team where we use Kafka"), not the candidate's own work: present
-# tense only, so "a team where we built Kafka pipelines" is still a claim (#82).
-_TEAM_CLAUSE = re.compile(r"\bwhere\s+we\s+(?:use|run|work|build|deploy|manage|have|are|love|value)\b[^.;,]*", re.IGNORECASE)
+# tense only, so "a team where we built Kafka pipelines" is still a claim (#82). It ends at the next "I" or "but" (a
+# claim may start there) as well as at a stop.
+_TEAM_CLAUSE = re.compile(r"\bwhere\s+we\s+(?:use|run|work|build|deploy|manage|have|are|love|value)\b"
+                          r"(?:(?!\b(?:I|but)\b)[^.;,])*", re.IGNORECASE)
 # Where a wish ends: the next "I" or "we" (a new claim may start there), "but", a semicolon, or a clause about what was
 # done ("eager to learn Spark, having built Kafka pipelines": #82).
 _WISH_END = r".*?(?=\b(?:I|I've|I'm|[Ww]e|but)\b|;|,\s*(?:having|after|since|while)\b|$)"
@@ -73,9 +75,10 @@ FIRST_PERSON = re.compile(r"\b(?:I|my|me|I'm|I've)\b")
 def unwished(sentence: str, wish: re.Pattern = WISH) -> str:
     """The sentence without its wishes and without a clause about a team as it works now: from each wish word to where
     the wish ends. "I have used Kafka and would like to learn Spark" keeps "I have used Kafka and"; a wish elsewhere in a
-    sentence never hides a claim."""
-    kept = re.sub(f"(?:{wish.pattern}){_WISH_END}", " ", sentence, flags=(wish.flags & re.IGNORECASE) | re.DOTALL)
-    return _TEAM_CLAUSE.sub(" ", kept)
+    sentence never hides a claim. The team clause goes first: a wish ends at its "we" and would leave "we use Kafka"
+    without its "where" (#109)."""
+    kept = _TEAM_CLAUSE.sub(" ", sentence)
+    return re.sub(f"(?:{wish.pattern}){_WISH_END}", " ", kept, flags=(wish.flags & re.IGNORECASE) | re.DOTALL)
 
 
 def sentences(text: str) -> list[str]:
@@ -215,7 +218,7 @@ class EmployerCheck:
     judged: the check stays quiet rather than guess."""
 
     def __init__(self, cv_text: str) -> None:
-        self._cv_low = (cv_text or "").lower()
+        self._cv = cv_text or ""
         raw = self._read(cv_text or "")
         heads = " ".join(head for head, _body in raw)
         self._positions = self._merged([self._position(head, body, cv_text or "", heads) for head, body in raw])
@@ -305,44 +308,112 @@ class EmployerCheck:
     # "I built the API at Contoso Labs", "I worked for Contoso": a name after "at", after "for" only right after a word of
     # employment (so "a tool for Slack" is no employer), after "with" only with a legal ending ("with Contoso Ltd"). It is
     # followed by punctuation or a word that ends the name, so "for Kubernetes clusters" is none either.
-    _AT_NAME = re.compile(r"(?:\b[Aa]t|\b(?:work(?:ed|ing)?|interned|intern|internship|consulted|freelanced|contracted)\s+for|\b[Ww]ith)\s+"
-                          r"((?:[A-Z][\w&'.-]*)(?:\s+(?:[A-Z][\w&'.-]*|&|of))*)"
-                          r"(?=\s*(?:[,.;:)]|$)|\s+(?:as|on|in|where|from|until|during|and|to|for|with|since|before|after|while|I|we)\b)")
+    _INTRO = r"(?:\b[Aa]t|\b(?:work(?:ed|ing)?|interned|intern|internship|consulted|freelanced|contracted)\s+for|\b[Ww]ith)\s+"
+    # capitalised words; "At" or "With" starts the next name and never continues this one (so a run of them stays linear)
+    _CAPITALS = r"(?:(?!(?:At|With)\b)[A-Z][\w&'.-]*)(?:\s+(?:(?!(?:At|With)\b)[A-Z][\w&'.-]*|&|of))*"
+    _ENDS = ("as on in at where from until during and to for with since before after while last this next every each over "
+             "that which who when because but so I we")
+    _END = rf"\s*(?:[,.;:)]|$)|\s+(?:{'|'.join(_ENDS.split())})\b|\s+\d"      # "… at Wingtip Toys last year", "… in 2023"
+    # a lowercase name ("at contoso labs") has no capital to start it: lowercase words up to a word that ends a name or a
+    # determiner, so "at a startup" and "at the weekend" give none
+    _LOWER = rf"(?!(?:{'|'.join((_ENDS + ' of or a an the my our your his her their its').split())})\b)[a-z][\w&'-]*"
+    _NAME = rf"(?:(?P<capital>{_CAPITALS})(?={_END})|(?P<lower>{_LOWER}(?:\s+{_LOWER})*))"
+    _AT_NAME = re.compile(_INTRO + _NAME)
+    _AND_NAME = re.compile(r"\s+and\s+" + _NAME)                                # "at Contoso Labs and Globex Labs"
+    # "My work at Contoso Labs taught me …": the phrase itself says the candidate worked there, and a verb may follow the
+    # name. The nouns are the ones that mean a time employed; "my talk at PyCon" is no job.
+    _MY_TIME_AT = re.compile(rf"\b[Mm]y\s+(?:[a-z]+\s+)?(?:work|time|years?|months?|role|job|internship|placement|stint)"
+                             rf"\s+at\s+(?P<capital>{_CAPITALS})(?={_END}|\s+[a-z])")
+    # being somewhere, said without a verb of work: "I was at Wingtip Toys", "I spent two years at …", "I trained at …"
+    _THERE = re.compile(r"\b(?:was|were|interned|trained|spent)\b")
+    # a visit, not work: "I interviewed at Globex", "I spoke at PyCon" – the verb right before "at", so "I presented the
+    # results at Contoso Labs" is still work. A place after a visit is never read as an employer; the rest of the sentence
+    # is ("I interviewed at Globex, and I tested apps at Contoso Labs" names Contoso Labs).
+    _VISITED = re.compile(r"\b(?:interviewed|visited|spoke|presented|applied|exhibited|competed)\s+$")
     _LEGAL = frozenset("ltd limited inc corp corporation llc plc gmbh ag sa s.r.o a.s".split())
     # words of a name that say nothing about which company it is: they never clear a name by themselves
     _GENERIC = frozenset("""software data cloud systems system solutions services service technologies technology tech digital
         group labs lab consulting global international company partners studio studios""".split())
+    # A lowercase name counts only when it ends in a word for a firm or a place of work: a closed list on purpose, as a
+    # field of work ("good at corporate finance", "at personal care") also follows "at" without a capital. So
+    # "at globex audit" is not caught.
+    _WORKPLACE = frozenset("labs lab works industries holdings partners associates hospital clinic hospice centre center "
+                           "pharmacy agency bank".split())
     _NOT_A_NAME = frozenset("""i the a an my our your this that these mr mrs ms miss dr prof sir madam hiring team monday tuesday
         wednesday thursday friday saturday sunday january february march april may june july august september october
         november december christmas easter""".split())
+    # "at" with a bare noun is an English idiom, not a place ("at scale", "at home"): a closed set of phrases. A one-word
+    # name is also ordinary when the text, the CV, the company or the posting writes it in lowercase.
+    _AT_IDIOMS = frozenset("""home work school night scale least last first once times heart hand risk length large ease best
+        worst most all random sea speed pace present noon midnight dawn dusk lunch weekends""".split())
+    # a name with one of these names an event: being at one is no job ("I was at Contoso Expo last year")
+    _EVENTS = frozenset("expo fair conference summit meetup hackathon festival congress convention forum".split())
 
     def invented(self, text: str, company: str = "", posting: str = "") -> list[str]:
-        """Employers a first-person sentence places the candidate at or works for ("I built the API at Contoso Labs") that
-        neither the CV, the company written to nor the posting names (#63): a name the model made up. [] when none. A name
-        counts as known when the whole of it is in one of them, or its first telling word is ("Initech Software" is not
-        cleared by "software"). Not caught: a lowercase name, a list of two names, "my work at X"."""
-        known = " ".join((self._cv_low, (company or "").lower(), (posting or "").lower()))
+        """Employers a first-person sentence places the candidate at or works for ("I built the API at Contoso Labs", "my
+        time at Globex Partners") that neither the CV, the company written to nor the posting names (#63): a name the model
+        made up. [] when none. A name counts as known when the whole of it is in one of them, or its first telling word is
+        ("Initech Software" is not cleared by "software"). What a wish names is no claim. Not caught: a lowercase name that
+        ends in a field of work, not a firm or a place ("at globex audit"); the middle names of a list of three ("at A, B and
+        C" names A only); a lowercase name after "my work at"; "we built … at X" (first person only). A false alarm left:
+        "my time at" an event without an event word ("My time at PyCon Prague was fun")."""
+        known = " ".join((self._cv.lower(), (company or "").lower(), (posting or "").lower()))
+        # the sources' words only: the model's own text never clears a name it made up ("quality … at Quality")
+        lowercase = {w for w in _WORD.findall(" ".join((self._cv, company or "", posting or ""))) if w.islower()}
 
-        def named(words: str) -> bool:
-            return bool(re.search(rf"(?<![a-z0-9]){re.escape(words.lower())}(?![a-z0-9])", known))
-        out: list[str] = []
+        known_words = set(re.findall(r"[a-z0-9]+", known))
+
+        def named(words: str) -> bool:      # each piece of the name a word of the sources first: one search per name is slow
+            phrase = words.lower()
+            return set(re.findall(r"[a-z0-9]+", phrase)) <= known_words and \
+                bool(re.search(rf"(?<![a-z0-9]){re.escape(phrase)}(?![a-z0-9])", known))
+        out: dict[str, None] = {}
+        seen: set[str] = set()
         for sentence in sentences(text):
-            sentence = sentence[:500]             # a sentence is never longer; a pasted run-on text is not read to its end
-            if not FIRST_PERSON.search(sentence) or not (CLAIM.search(unwished(sentence)) or re.search(r"\b(?:was|were|interned)\b", sentence)):
-                continue                        # only where the candidate says they did something there
-            for found in self._AT_NAME.finditer(sentence):
-                name = found.group(1).rstrip(".")
+            for name in self._names_in(unwished(sentence)):
+                name = re.sub(r"['’]s$", "", name)          # "at Contoso's" is Contoso
+                if name in seen:
+                    continue
+                seen.add(name)
                 words = [w for w in re.findall(r"[A-Za-z0-9][\w&'.-]*", name) if w.lower().strip(".") not in self._LEGAL]
-                if found.group(0).lower().startswith("with") and not any(w.lower().strip(".") in self._LEGAL for w in name.split()):
-                    continue                    # "with Docker": a tool, not a company, unless the name has a legal ending
-                if not words or words[0].lower() in self._NOT_A_NAME:
+                if self._ordinary(words, lowercase):
                     continue
                 telling = [w for w in words if w.lower() not in self._GENERIC and len(w) >= 3]
                 if named(" ".join(words)) or (telling and named(telling[0])):
                     continue                    # the whole name, or its first telling word, is in a source ("EY", "Northwind")
-                if name not in out:
-                    out.append(name)
-        return out
+                out[name] = None
+        return list(out)
+
+    def _names_in(self, said: str):
+        """The names a sentence (its wishes cut) places the candidate at: after "at" or "worked for" only where it says
+        they did something ("I built", "I was"), each name of "at A and B", and after "my work at" ("My" opens a sentence too)."""
+        yield from (m.group("capital").rstrip(".") for m in self._MY_TIME_AT.finditer(said))
+        if not FIRST_PERSON.search(said) or not (CLAIM.search(said) or _done(said) or self._THERE.search(said)):
+            return
+        for found in self._AT_NAME.finditer(said):
+            if self._VISITED.search(said[max(0, found.start() - 20):found.start()]):
+                continue                                             # "I interviewed at Globex": a visit
+            legal_only = found.group(0).lower().startswith("with")   # "with Docker": a tool, unless "with Contoso Ltd"
+            more = found
+            while more:
+                name = self._name(more)
+                if name and not (legal_only and not any(w.lower().strip(".") in self._LEGAL for w in name.split())):
+                    yield name
+                more = self._AND_NAME.match(said, more.end())
+
+    def _name(self, found: re.Match) -> str:
+        """The name a match holds: its capitalised words, or lowercase words that end in a legal or workplace word."""
+        if found.group("capital"):
+            return found.group("capital").rstrip(".")
+        words = found.group("lower").split()
+        return " ".join(words) if len(words) >= 2 and (words[-1] in self._LEGAL or words[-1] in self._WORKPLACE) else ""
+
+    def _ordinary(self, words: list[str], lowercase: set[str]) -> bool:
+        """Whether a name's words are no employer's: a title, a day, an idiom ("at Scale"), a word the sources write in
+        lowercase (`lowercase`: the words of the CV, the company and the posting written so), or an event."""
+        if not words or words[0].lower() in self._NOT_A_NAME or any(w.lower() in self._EVENTS for w in words):
+            return True
+        return len(words) == 1 and (words[0].lower() in self._AT_IDIOMS or words[0].lower() in lowercase)
 
     def misplaced(self, text: str, company: str = "") -> list[str]:
         """For each sentence that names one employer and the work the CV names under another one, a note such as
