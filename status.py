@@ -105,7 +105,7 @@ def cmd_retailor(args) -> int:
                    and isinstance(j.get("match_score"), int) and j["match_score"] >= config.DEFAULT_THRESHOLD
                    and (args.all or not j.get("cover_letter_file") or not j.get("tailored_cv_file"))]
         if not targets:
-            print("Nothing to do — every qualifying lead already has a letter + tailored CV.")
+            print("Nothing to do – every qualifying lead already has a letter + tailored CV.")
             return 0
 
     stopped = ""
@@ -203,7 +203,7 @@ def cmd_sync(args) -> int:
         print("No jobs tracked yet. Run: python run.py")
         return 0
     days = args.days or config.scan_days()
-    print(f"Reading inbox ({config.IMAP_USER}), last {days} days — read-only, nothing is sent or deleted …")
+    print(f"Reading inbox ({config.IMAP_USER}), last {days} days – read-only, nothing is sent or deleted …")
     stats = scan_inbox(jobs, days)
     pruned = agent5_responses.after_scan(jobs)         # leads now applied to are dropped
     if pruned:
@@ -236,7 +236,7 @@ def cmd_sync(args) -> int:
 def cmd_responses(args) -> int:
     jobs = store.load_jobs()
     if args.scan:
-        print(f"Reading inbox ({config.IMAP_USER}) — read-only …")
+        print(f"Reading inbox ({config.IMAP_USER}) – read-only …")
         stats = scan_inbox(jobs, args.days or config.scan_days())
         agent5_responses.annotate_progress(jobs)
         store.save_jobs(jobs)
@@ -287,7 +287,7 @@ def cmd_prune(_args) -> int:
     agent4_tracker.render_all(jobs)
     print(f"Removed {len(removed)} lead(s) from new_jobs you've already applied to:")
     for j in removed:
-        print(f"   {j['company']} — {j['title']}")
+        print(f"   {j['company']} – {j['title']}")
     return 0
 
 
@@ -445,6 +445,14 @@ def _changes_jobs(args) -> bool:
     return True
 
 
+def _protected(args) -> int:
+    """A command that changes the data, run under the job list's lock: vault.protect_all first, as it may encrypt the
+    job list and the data files in place (a command that only reads them leaves that to the next writer)."""
+    if args.cmd != "security":                     # its own protect action calls it
+        vault.protect_all()
+    return args.func(args)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="JobHelper status tools.")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -510,11 +518,9 @@ def main() -> int:
     args = parser.parse_args()
     from jobhelper import vault
     try:
-        if args.cmd != "security":
-            vault.protect_all()
         if not _changes_jobs(args):
             return args.func(args)
-        return store.RunLock.command(lambda: args.func(args))      # never stopped half-way by a refused save
+        return store.RunLock.command(lambda: _protected(args))     # never stopped half-way by a refused save
     except Stopped as stop:
         return stop.code
     except vault.VaultError as e:

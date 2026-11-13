@@ -402,9 +402,22 @@ data/                your data; only the *.example.* files are in git
   assistant's Undo and Add), which turns `JobsBusy` into the usual refusal. The lock is per process, so the window's own
   saves inside its run go on; a disk without file locks counts as unshared. `run.py` and every `status.py` command
   that changes jobs hold it for their whole run (`RunLock.command`; `status._changes_jobs` says which), so a long run is
-  never stopped half-way by a refused save.
+  never stopped half-way by a refused save. A lock file that cannot be opened is refused with `RunLock.CANNOT_OPEN`
+  (`RunLock.fault()`), never an exception; tell the person `RunLock.refusal()` (the reason, or BUSY), never BUSY
+  itself. `run.py` reads its options before it takes the lock (`--help` answers at once). A run start that raises must
+  give the lock and the running state back: use `RunSlots._begin_run`, never a bare `Thread.start`.
+  `vault.protect_all` writes `jobs.json`, so call it only inside the lock and only for a command that changes data
+  (`status._changes_jobs`). `repair_statuses` and `restore_data` refuse during the window's own run.
+- **Two threads of the window share one process, and the process lock does not keep them apart.** `RunLock.holding()`
+  takes the per-process section lock `_edit` first, then the claim (`take()`, no wait), so every window change and
+  every `save_jobs` is one section. Never call Claude, make a PDF, use the network or wait for another thread inside a
+  section: the window's other edits wait for it. A long action that makes several changes (the assistant's Undo) holds
+  only the claim (`take()`) and lets each change take its own section; a step that writes the disk list itself checks
+  `live` again inside its section (a run may have started since). A run keeps its claim through `take()` only and
+  never holds `_edit`, so a hand edit waits for one short section, not for the run; the run's workers read the list
+  and publish `live` inside one section. Lock order: `_edit`, `_guard`, flock.
 - **A Keychain that does not answer is not "no check".** `integrity.changed_titles()` gives `integrity.NOT_CHECKED`
-  on `VaultError`, so the Account card and the start-up check say so and a search is refused. `ensure_baseline()` never
+  on `VaultError`, so the Account card and the start-up check say so and a search is refused. The card's Data protection row shows `integrity.NOT_CHECKED_CARD` (`connections()["changes_unchecked"]`, `["changes_msg"]`; `integrity.not_checked(titles)` tells the case) in the warning colour with a **Check again** pill (busy until the answer), and offers no Approve or See what changed for files that were not checked. `ensure_baseline()` never
   signs a new list while a signed list is on the disk, even a damaged one, or when the Keychain lost its mark: that
   would approve a changed file (a damaged list shows every file as not signed, for the person to approve). The signed list is written with `vault.write_plain` (whole or not at all).
 - **Every write of a data file reaches the disk before the app goes on:** `vault._write_atomic` flushes and syncs

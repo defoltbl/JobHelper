@@ -480,6 +480,40 @@ While another process holds the lock, both refuse with `store.RunLock.BUSY`. The
 and `status.py` hold the lock for their whole run (`RunLock.command`). Commands that change no job
 (`status._changes_jobs`) do not take it.
 
+Two threads of the app can also write the list at once: a hand edit, a background worker and the
+run's worker. For this reason `RunLock` has a section lock for each process (`_edit`, an `RLock`).
+`RunLock.holding()` takes `_edit` first. Then it takes the claim of the process with `take()`, which
+never waits. Every change in the window (`@_holding_jobs`, `JobEditor.change` with its edit of the
+run's `live` copy) and every `store.save_jobs` is one such section. A run keeps its claim only
+through `take()` and never holds `_edit`. Thus a hand edit during a run waits for one short section,
+never for the run. Inside a section, do not call Claude, do not use the network and do not wait for
+another thread. The lock order is `_edit`, then `_guard`, then the flock.
+
+The run workers (`_rescore`, `_pipeline`, `_scan` in `bridge_runs`) read the list and publish `live`
+inside one `RunLock.holding()` section. Thus no hand edit falls between the read and the publish.
+
+If the lock file cannot be opened (no permission, a read-only disk, a link in its place), `RunLock`
+refuses with `RunLock.CANNOT_OPEN`. The text names the file and the reason of the system. Read it
+with `RunLock.fault()`. `take()` returns False at once. `holding()` raises `JobsBusy` with this
+text, `command()` prints it and the default refusal of `_holding_jobs` shows it. No exception
+reaches the person. A caller that must give its own refusal uses `RunLock.refusal()`. It gives this
+text, or `BUSY` when another process holds the lock (`bridge_runs._claim_jobs`, `weekly.py`, the
+refusals in `api_talk`). The assistant's Undo holds only the claim of the process (`take()`). Each
+of its steps takes its own section, so the PDF of a letter never makes another edit wait.
+
+`run.py` reads its options before it takes the lock. For this reason `--help` and a mistyped option
+answer at once, also while another process holds the lock. `status.py` calls `vault.protect_all`
+inside the lock, and only for a command that changes the data. A command that only reads does not
+encrypt files and does not take the lock. In the window, `RunSlots._begin_run` takes the lock and
+sets the running state. If the worker thread cannot start, it gives both back and shows "The run
+could not start". `repair_statuses` and `restore_data` refuse to work while the window's own
+search, scan or new score runs.
+
+When the Keychain does not answer, `integrity.changed_titles()` gives `integrity.NOT_CHECKED`.
+`integrity.not_checked(titles)` tests for this case. `SystemService.connections()` then sets
+`changes_unchecked` and `changes_msg` (the text `integrity.NOT_CHECKED_CARD`). The Data protection
+row shows that text with a **Check again** button, and not **Approve** or **See what changed**.
+
 At each start, `schedule.refresh()` compares the LaunchAgent with `schedule.command()`. If an older
 version or a different place of the app wrote it, the function writes it again with the same day
 and time. When `JOBHELPER_HOME` chooses another data folder, the function does nothing and the

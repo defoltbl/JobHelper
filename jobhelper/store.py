@@ -23,7 +23,7 @@ STATUSES = [
     "found",        # discovered by Agent 2 (a lead)
     "letter_ready", # cover letter written by Agent 3 (a lead)
     "not_interested",  # a lead you dismissed: hidden, and never brought back by a later search
-    "waiting",      # you applied — awaiting a response
+    "waiting",      # you applied – awaiting a response
     "interview",    # invited to interview / next stage
     "offer",        # offer received
     "rejected",     # turned down
@@ -51,21 +51,29 @@ def applied_on_import(job: dict[str, Any]) -> bool:
 
 
 class JobsBusy(RuntimeError):
-    """Another process is working on the job list: writing now would put an older copy over its changes."""
+    """Another process is working on the job list, or the lock's own file cannot be opened so that cannot be known:
+    writing now could put an older copy over its changes."""
 
 
 class RunLock:
     """One lock on the job list between processes – the open window and the weekly run (#72). A process that works on
     the list for minutes (a search, a scan, the weekly run) holds it, so another process never writes an older copy of
     the list over its changes. It is held per process: the window's own hand edits during its own search go on, as
-    `JobEditor.live` keeps them; another process's writes wait or are refused with BUSY."""
+    `JobEditor.live` keeps them; another process's writes wait or are refused with BUSY. Inside the process, `holding()`
+    is also one section at a time (#96): two threads never read, change and write the list over each other. A run holds
+    only the process's claim (`take()`), never the section, so a hand edit waits for one save at most, never for the
+    run. Nothing inside a section asks Claude or the network, or waits for another thread."""
 
     BUSY = "The weekly run is working on your jobs right now. Try again when it has finished."
     COMMAND_BUSY = ("✗ The app is working on your jobs right now (a search, a scan or the weekly run). Nothing was "
                     "changed. Run this again when it has finished.")
+    CANNOT_OPEN = ("The lock file of your job list ({name} in the app's data folder) cannot be opened: {why}. Nothing "
+                   "was changed.")
     _held = 0                        # how many holders in this process
     _file = None
     _guard = threading.Lock()
+    _edit = threading.RLock()        # one holding() section at a time in this process; its own thread may nest one
+    _last = threading.local()        # per thread: why its last take() failed, when it was not another process
 
     @staticmethod
     def path():
@@ -73,23 +81,39 @@ class RunLock:
 
     @classmethod
     def take(cls, wait: float = 0.0) -> bool:
-        """Hold the lock (waiting up to `wait` seconds for another process to let it go). False when it stays busy."""
+        """Hold the lock (waiting up to `wait` seconds for another process to let it go). False when it stays busy, and
+        at once when its file cannot be opened (`fault()` says why; waiting does not mend that)."""
         deadline = time.monotonic() + max(0.0, wait)
         while not cls._try_once():
             left = deadline - time.monotonic()
-            if left <= 0:
+            if left <= 0 or cls.fault():
                 return False
             time.sleep(min(2.0, max(0.05, left)))           # never while holding _guard: the window's threads go on
         return True
 
     @classmethod
+    def fault(cls) -> str:
+        """Why this thread's last take() failed when the lock file could not be opened; "" otherwise."""
+        return getattr(cls._last, "fault", "")
+
+    @classmethod
+    def refusal(cls) -> str:
+        """What to tell the person after this thread's take() failed: why the lock file cannot be opened, else BUSY."""
+        return cls.fault() or cls.BUSY
+
+    @classmethod
     def _try_once(cls) -> bool:
+        cls._last.fault = ""
         with cls._guard:
             if cls._held:
                 cls._held += 1
                 return True
-            config.ensure_dirs()
-            f = os.fdopen(os.open(cls.path(), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600), "r+")   # never through a link
+            try:                     # O_NOFOLLOW: never through a link; os.fdopen closes the descriptor when it fails
+                config.ensure_dirs()
+                f = os.fdopen(os.open(cls.path(), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600), "r+")
+            except OSError as e:     # a link in its place (ELOOP), no right to it (EACCES), a read-only disk (EROFS):
+                cls._last.fault = cls.CANNOT_OPEN.format(name=cls.path().name, why=e.strerror or type(e).__name__)
+                return False         # refused, as another process may hold the lock all the same
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
@@ -117,7 +141,8 @@ class RunLock:
         """A command (run.py, status.py) that holds the lock for its whole run, so a save half-way through is never
         refused and the work lost. In the weekly run the lock is already held by the same process. 1 while busy."""
         if not cls.take():
-            print(cls.COMMAND_BUSY)
+            fault = cls.fault()
+            print("✗ " + fault if fault else cls.COMMAND_BUSY)
             return 1
         try:
             return fn()
@@ -127,14 +152,15 @@ class RunLock:
     @classmethod
     @contextmanager
     def holding(cls):
-        """Hold the lock for one change of the list (read, change, write), so another process never starts in between.
-        Raises JobsBusy while another process holds it."""
-        if not cls.take():
-            raise JobsBusy(cls.BUSY)
-        try:
-            yield
-        finally:
-            cls.release()
+        """Hold the lock for one change of the list (read, change, write), so neither another process nor another thread
+        of this one starts in between. Raises JobsBusy while another process holds it, or with `fault()`."""
+        with cls._edit:              # first, then the claim: take() with no wait never sleeps while holding _edit
+            if not cls.take():
+                raise JobsBusy(cls.refusal())
+            try:
+                yield
+            finally:
+                cls.release()
 
 
 def load_jobs() -> list[dict[str, Any]]:

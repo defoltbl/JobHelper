@@ -236,3 +236,32 @@ def test_a_scan_whose_save_fails_does_not_say_it_was_saved(isolate_data, monkeyp
     _run(monkeypatch, "responses", "--scan")
     out = capsys.readouterr().out
     assert "could not be saved (OSError)" in out and "is saved" not in out and "private-data" not in out
+
+
+def test_a_command_that_changes_jobs_protects_the_data_inside_the_lock(isolate_data, monkeypatch, capsys):
+    """#96: protect_all may encrypt jobs.json in place, so it ran outside the lock while another process held the list."""
+    from jobhelper import vault
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a1", title="QA Engineer", company="Acme", status="found")])
+    held = []
+    monkeypatch.setattr(vault, "protect_all", lambda: held.append(store.RunLock._held) or {"state": "off"})
+    assert _run(monkeypatch, "update", "a1", "waiting") == 0
+    assert held == [1] and store.RunLock._held == 0
+
+
+def test_a_changing_command_refused_as_busy_leaves_the_data_files_alone(jobs_held_elsewhere, monkeypatch, capsys):
+    from jobhelper import vault
+    called = []
+    monkeypatch.setattr(vault, "protect_all", lambda: called.append(1) or {"state": "off"})
+    assert _run(monkeypatch, "update", "a1", "waiting") == 1
+    assert store.RunLock.COMMAND_BUSY in capsys.readouterr().out and called == []
+
+
+def test_a_command_that_only_reads_takes_no_lock_and_rewrites_no_data_file(isolate_data, monkeypatch, capsys):
+    from jobhelper import vault
+    taken, protected = [], []
+    monkeypatch.setattr(store.RunLock, "take", classmethod(lambda cls, wait=0.0: taken.append(1) or True))
+    monkeypatch.setattr(vault, "protect_all", lambda: protected.append(1) or {"state": "off"})
+    for argv in (["list"], ["usage"], ["followups"], ["security", "status"]):
+        assert _run(monkeypatch, *argv) == 0, argv
+    assert taken == [] and protected == []

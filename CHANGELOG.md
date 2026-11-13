@@ -7,6 +7,13 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Job list:** edits made at the same time, for example a hand edit while a search runs, are no longer lost. Before, one could write the list over the other.
+- **Job list:** when the lock file of the job list cannot be opened (no permission, a read-only disk), the app names the file and the reason. Before, it showed an error or said that another process was busy.
+- **Account:** when the Keychain does not answer, the **Data protection** row says that the files were not checked and offers **Check again** (it says **Checking…** until the answer). Before, it offered **Approve** and **See what changed** for files that nobody had checked.
+- **Search:** when a search, a scan or a new score cannot start, the window says "The run could not start" and what to do, and the job list is free again. Before, the window stayed on "running".
+- **Start-up check:** **Repair** and **Restore from backup** are refused with a message while a search, a scan or a new score runs.
+- **Commands:** `python run.py --help` and a mistyped option answer at once, also while the window or the weekly run works on the job list.
+- **Commands:** the `status.py` commands that only read (list, usage, follow-ups, PDF, security status) no longer encrypt the data files and no longer wait for the job list.
 - **Claude:** the app also refuses to run while a setting for Microsoft Foundry, Bedrock's Mantle endpoint, Claude Platform on AWS, a Bedrock key, an Anthropic profile or another setting that moves the program to a paid account is set.
 - **Claude:** the Claude program the app starts no longer reads your own Claude settings files.
 - **Security:** an error's text shown in the window or kept in the log of the weekly run never holds a key or the query part of an address.

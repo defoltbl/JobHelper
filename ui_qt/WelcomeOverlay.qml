@@ -68,6 +68,8 @@ Item {
     readonly property bool hasCv: (connData.cv || "") !== ""
     readonly property var changedFiles: connData.changed_files || []
     readonly property bool protectedOk: connData.vault !== "locked" && changedFiles.length === 0
+    // the files could not be checked (the Keychain did not answer): nothing to see or approve, only to check again
+    readonly property bool changesUnchecked: connData.changes_unchecked === true
     readonly property bool ready: connData.claude === true && hasCv && connData.paid_api !== true && protectedOk
     // the sign-in check got no answer: asking again comes before signing in
     readonly property bool offersCheckAgain: connData.claude_unsure === true && !waitingLogin
@@ -370,25 +372,30 @@ Item {
 
                 // 4 · Data protection (encryption + tamper check)
                 StepRow {
-                    order: 3; label: "4"; title: "Data protection"
+                    objectName: "protectionRow"; order: 3; label: "4"; title: "Data protection"
                     ok: connData.vault === "ok" && welcome.changedFiles.length === 0
-                    subColor: welcome.protectedOk ? theme.soft : theme.crit
+                    subColor: welcome.protectedOk ? theme.soft : (welcome.changesUnchecked && connData.vault !== "locked" ? theme.warn : theme.crit)
                     sub: connData.vault === "locked"
                             ? "Your data is encrypted but its key is not in the Keychain. Paste your recovery key below."
+                       : welcome.changesUnchecked ? connData.changes_msg
                        : welcome.changedFiles.length > 0
                             ? ("Changed outside the app: " + welcome.changedFiles.join(", ") + ". Check them, then approve.")
                        : connData.vault === "ok" ? "Encrypted on disk · key and mailbox password in your Keychain"
                        : "Off: no Keychain on this system, files are stored plain."
-                    SmallButton { objectName: "seeChanges"; visible: welcome.changedFiles.length > 0 && connData.vault === "ok"
+                    SmallButton { objectName: "seeChanges"; visible: welcome.changedFiles.length > 0 && connData.vault === "ok" && !welcome.changesUnchecked
                         text: welcome.changes.length > 0 ? "Hide changes" : "See what changed"
                         onClicked: welcome.changes = welcome.changes.length > 0 ? [] : bridge.whatChanged() }
-                    SmallButton { visible: welcome.changedFiles.length > 0 && connData.vault === "ok"; primaryStyle: true
+                    SmallButton { objectName: "approveChanges"; visible: welcome.changedFiles.length > 0 && connData.vault === "ok" && !welcome.changesUnchecked
+                        primaryStyle: true
                         text: "Approve"; onClicked: { bridge.approveChanges(); welcome.changes = []; bridge.checkConnections(); } }
+                    PillButton { objectName: "protectionCheckAgain"; visible: welcome.changesUnchecked && connData.vault !== "locked"
+                        text: welcome.checkingAgain ? "Checking…" : "Check again"; enabled: !welcome.checkingAgain
+                        onClicked: { welcome.checkingAgain = true; bridge.checkConnections(); } }  // a check that never ran is not approved: ask again
                     SmallButton { objectName: "keyShow"; visible: connData.vault === "ok" && welcome.changedFiles.length === 0
                         text: welcome.keyText !== "" ? "Hide key" : "Recovery key"; onClicked: welcome.toggleKey() }
                 }
                 // what is different in each changed file, so that approving is not done blind
-                ColumnLayout { objectName: "changesPanel"; visible: welcome.changes.length > 0 && welcome.changedFiles.length > 0
+                ColumnLayout { objectName: "changesPanel"; visible: welcome.changes.length > 0 && welcome.changedFiles.length > 0 && !welcome.changesUnchecked
                     Layout.fillWidth: true; Layout.leftMargin: 38; spacing: 8
                     Repeater { model: welcome.changes
                         ColumnLayout { Layout.fillWidth: true; spacing: 2

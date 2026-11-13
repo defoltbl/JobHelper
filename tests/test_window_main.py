@@ -152,6 +152,42 @@ def test_changed_files_block_start_until_approved(ui, monkeypatch):
     assert welcome.property("protectedOk") is True and ui.warnings == []
 
 
+def test_files_that_were_not_checked_offer_check_again_and_never_approve(ui, monkeypatch):
+    """#96: when the Keychain gave no answer, the row offered See what changed and Approve for a check that never ran."""
+    from jobhelper import integrity
+    unchecked = {**READY, "changed_files": [integrity.NOT_CHECKED], "changes_unchecked": True,
+                 "changes_msg": integrity.NOT_CHECKED_CARD}
+    asked = []
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self, sign_in=None: asked.append(1) or dict(unchecked))
+    welcome = ui.find("welcome")
+    ui.js("welcome.openCard()")
+    try:
+        _until_true(ui, lambda: welcome.property("changesUnchecked") is True)
+        _until_shown(ui, "protectionCheckAgain")
+        _until_true(ui, lambda: ui.find("accountNote").property("text") == "Files not checked")   # the chip says the same
+        assert ui.find("approveChanges").property("visible") is False and ui.find("seeChanges").property("visible") is False
+        assert welcome.property("protectedOk") is False, "a check that could not run still stops a run"
+        row = ui.find("protectionRow")
+        assert row.property("sub") == integrity.NOT_CHECKED_CARD and integrity.NOT_CHECKED not in row.property("sub")
+        assert row.property("subColor").name() == ui.js("theme.warn.toString()"), "not known is a warning, not a fault"
+        button, before = ui.find("protectionCheckAgain"), len(asked)
+        assert button.property("text") == "Check again" and button.property("enabled") is True
+        ui.js("clicked()", button)
+        assert button.property("text") == "Checking…" and button.property("enabled") is False, "busy until the answer comes"
+        _until_true(ui, lambda: len(asked) > before and welcome.property("checkingAgain") is False)   # asked, and the answer ends it
+        # a real change stays as it was: approve after a look
+        ui.win.setProperty("connData", {**READY, "changed_files": ["CV rules"], "changes_unchecked": False, "changes_msg": ""})
+        _until_shown(ui, "approveChanges")
+        assert ui.find("seeChanges").property("visible") is True and ui.find("protectionCheckAgain").property("visible") is False
+        assert row.property("sub").startswith("Changed outside the app: CV rules")
+        _until_true(ui, lambda: ui.find("accountNote").property("text") == "Files changed, review")
+    finally:
+        ui.js("welcome.checkingAgain = false; welcome.finish()")
+        ui.win.setProperty("connData", dict(READY))
+        _until_true(ui, lambda: ui.find("welcome").property("visible") is False)
+    assert ui.warnings == []
+
+
 def test_plain_storage_without_keychain_does_not_block(ui):
     welcome = ui.find("welcome")
     ui.win.setProperty("connData", {**READY, "vault": "off"})

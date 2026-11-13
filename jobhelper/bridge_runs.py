@@ -32,9 +32,24 @@ class RunSlots:
         """The job list's lock for this run (store.RunLock): None, or the refusal while the weekly run holds it. The run's
         end gives it back (Bridge._set_running)."""
         if not store.RunLock.take():
-            return {"ok": False, "msg": store.RunLock.BUSY}
+            return {"ok": False, "msg": store.RunLock.refusal()}
         self._holds_jobs = True
         return None
+
+    def _begin_run(self, target, *args):
+        """Take the job list, mark the run and start its worker `target(*args)`: {ok: True}, or the refusal. A worker that
+        could not start (macOS refused a new thread) gives the lock and the running state back, or both stayed taken."""
+        busy = self._claim_jobs()
+        if busy:
+            return busy
+        self._set_running(True)
+        try:
+            threading.Thread(target=target, args=args, daemon=True).start()
+        except Exception as e:  # noqa: BLE001 - nothing runs, so nothing may stay held
+            trouble.note("starting a run", e)
+            self._set_running(False)
+            return {"ok": False, "msg": f"The run could not start: {trouble.said(e)}. Close some apps, then try again."}
+        return {"ok": True}
 
     @staticmethod
     def _no_claude(conn):
@@ -56,7 +71,7 @@ class RunSlots:
             return {"ok": False, "msg": "Add your CV first (open Account).", "fix": "cv"}
         if conn.get("vault") == "locked":
             return {"ok": False, "msg": "Your data is encrypted and its key is missing (open Account).", "fix": "vault"}
-        if conn.get("changed_files") == [integrity.NOT_CHECKED]:
+        if integrity.not_checked(conn.get("changed_files")):
             return {"ok": False, "fix": "integrity", "msg": integrity.NOT_CHECKED_SAY}
         if conn.get("changed_files"):
             return {"ok": False, "fix": "integrity",
@@ -67,12 +82,7 @@ class RunSlots:
         self._stop.clear()
         self._resume.clear()
         self._partial = None
-        busy = self._claim_jobs()
-        if busy:
-            return busy
-        self._set_running(True)
-        threading.Thread(target=self._pipeline, args=(dict(opts or {}),), daemon=True).start()
-        return {"ok": True}
+        return self._begin_run(self._pipeline, dict(opts or {}))
 
     @Slot(result="QVariantMap")
     def scanEmail(self):
@@ -95,12 +105,7 @@ class RunSlots:
         self._stop.clear()
         self._resume.clear()
         self._partial = None
-        busy = self._claim_jobs()
-        if busy:
-            return busy
-        self._set_running(True)
-        threading.Thread(target=self._scan, args=(days,), daemon=True).start()
-        return {"ok": True}
+        return self._begin_run(self._scan, days)
 
     @Slot(str)
     def rescoreJob(self, job_id):
@@ -153,19 +158,15 @@ class RunSlots:
         self._stop.clear()
         self._resume.clear()
         self._partial = None
-        busy = self._claim_jobs()
-        if busy:
-            return busy
-        self._set_running(True)
-        threading.Thread(target=self._rescore, daemon=True).start()
-        return {"ok": True}
+        return self._begin_run(self._rescore)
 
     def _rescore(self):
         jobs = None
         try:
             self.agentChanged.emit("a3", "running", "")
             profile = agent1_cv.load_profile() or {}
-            jobs = self._partial = self._api.live = store.load_jobs()
+            with store.RunLock.holding():               # a hand edit between this read and `live` would be lost
+                jobs = self._partial = self._api.live = store.load_jobs()
             ids = [j["id"] for j in jobs if j.get("status") in store.LEAD_STATUSES and j.get("match_score") is not None]
             self.logChanged.emit("Scoring %d new jobs again…" % len(ids))
 
@@ -344,8 +345,9 @@ class RunSlots:
             seniority = agent1_cv.level_of(profile)
             self.agentChanged.emit("a1", "done", seniority)
 
-            jobs = self._partial = self._api.live = store.load_jobs()
-            agent2_search.prune_applied_leads(jobs)
+            with store.RunLock.holding():               # a hand edit between this read and `live` would be lost
+                jobs = self._partial = self._api.live = store.load_jobs()
+                agent2_search.prune_applied_leads(jobs)
             self._checkpoint()
 
             self.agentChanged.emit("a2", "running", "")
@@ -423,10 +425,10 @@ class RunSlots:
             before = usage.total_cost()            # inside the try: the finally gives the job list back
             self.agentChanged.emit("a5", "running", "")
             self.logChanged.emit("Reading inbox (read-only)…")
-            jobs = store.load_jobs()
+            with store.RunLock.holding():               # a hand edit between this read and `live` would be lost
+                jobs = self._partial = self._api.live = store.load_jobs()
             days = int(days or config.scan_days())
             self.logChanged.emit("Reading inbox (read-only), last %d days…" % days)
-            self._partial = self._api.live = jobs
             stats = agent5_responses.process_inbox(jobs, lookback_days=days,
                                                    progress=lambda d, t: self._tick("a5", d, t),
                                                    on_limit=self._on_limit)

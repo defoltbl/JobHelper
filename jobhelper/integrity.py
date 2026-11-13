@@ -84,8 +84,15 @@ def _save(files: dict) -> None:
 
 # what the window lists when the check itself could not run: a run stops as for a changed file, and nothing is approved
 NOT_CHECKED = "Protected files (not checked: the Keychain did not answer)"
-NOT_CHECKED_SAY = ("The protected files could not be checked, because the Keychain did not answer. A search starts only "
-                   "when it answers again. Open the Account card to check again.")
+NOT_CHECKED_CARD = ("The protected files could not be checked, because the Keychain did not answer. A search starts only "
+                    "when it answers again.")             # the Account card's own words: its Check again is beside them
+NOT_CHECKED_SAY = NOT_CHECKED_CARD + " Open the Account card to check again."
+
+
+def not_checked(titles: list[str]) -> bool:
+    """Whether `changed_titles()` answered that the check could not run: nothing is known to have changed, so there is
+    nothing to see or approve, only to check again."""
+    return titles == [NOT_CHECKED]
 
 
 def active() -> bool:

@@ -1022,6 +1022,28 @@ def test_the_end_of_a_run_gives_the_job_list_back(bridge, monkeypatch):
     assert other.stdout.strip() == "free", "the weekly run can take it now"
 
 
+@pytest.mark.parametrize("start, worker", [(lambda b: b.runSearch({"where": "Brno"}), "_pipeline"),
+                                           (lambda b: b.scanEmailBack(60), "_scan"), (lambda b: b.rescoreAll(), "_rescore")])
+def test_a_run_whose_worker_cannot_start_gives_the_job_list_back(bridge, monkeypatch, start, worker):
+    """#96: a start that raised ("can't start new thread") kept the job list's lock and left the window "running"."""
+    class Refused:
+        def __init__(self, target=None, args=(), daemon=None):
+            pass
+
+        def start(self):
+            raise RuntimeError("can't start new thread")
+    monkeypatch.setattr(qt_bridge.threading, "Thread", Refused)
+    monkeypatch.setattr(config, "has_imap", lambda: True)
+    monkeypatch.setattr(ui_api.Api, "rescore_ids", lambda self: ["j1"])
+    result = start(bridge)
+    assert result == {"ok": False, "msg": "The run could not start: can't start new thread. Close some apps, then try again."}
+    assert bridge.running is False and store.RunLock._held == 0
+    assert store.RunLock.take() is True, "the job list is free"
+    store.RunLock.release()
+    started = _no_thread(monkeypatch)
+    assert start(bridge) == {"ok": True} and started == [worker], "the next start works"
+
+
 def test_a_run_that_breaks_at_its_first_line_still_gives_the_job_list_back(bridge, monkeypatch):
     _no_thread(monkeypatch)
     monkeypatch.setattr(config, "has_imap", lambda: True)

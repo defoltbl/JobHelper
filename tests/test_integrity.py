@@ -85,6 +85,19 @@ def test_a_keychain_that_does_not_answer_stops_a_run_instead_of_switching_the_ch
     assert ui_api.Api().connections()["changed_files"] == [integrity.NOT_CHECKED]
 
 
+def test_the_window_is_told_when_the_files_were_not_checked_and_only_then(files, monkeypatch):
+    """#96: the Account card offered Approve for a check that never ran; the back end now says which case it is."""
+    monkeypatch.setattr(api_system, "_claude_auth_status", lambda: (_ for _ in ()).throw(FileNotFoundError()))
+    monkeypatch.setattr(integrity, "changed_titles", lambda: [integrity.NOT_CHECKED])
+    conn = ui_api.Api().connections()
+    assert conn["changes_unchecked"] is True and conn["changes_msg"] == integrity.NOT_CHECKED_CARD
+    assert "Account card" not in conn["changes_msg"], "the card itself is open: its words point to its own Check again"
+    for titles in ([], ["CV rules"], [integrity.NOT_CHECKED, "CV rules"]):
+        monkeypatch.setattr(integrity, "changed_titles", lambda titles=titles: list(titles))
+        conn = ui_api.Api().connections()
+        assert conn["changes_unchecked"] is False and conn["changes_msg"] == "", titles
+
+
 def test_the_signed_list_is_written_whole_or_not_at_all(files, monkeypatch):
     """#75: integrity._save wrote the file in place; a stop half-way left half a list."""
     integrity.ensure_baseline()
