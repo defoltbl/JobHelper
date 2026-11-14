@@ -7,6 +7,15 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Form assistant:** more fields that you cannot see or reach are left empty: a box cut away or hidden by its parent, far to the side, very small, nearly see-through, covered by something else, switched off, a box that cannot be clicked, or inside a hidden frame. A see-through box that fades in within about 2 seconds is still filled. Before, only a box outside the page or fully see-through was left out.
+- **Form assistant:** a page in a right-to-left language that scrolls sideways keeps its fields. Before, real fields at its left edge were taken for traps.
+- **Form assistant:** the assistant checks each field again just before it writes into it. A page can no longer trick it into filling another field. A page that is still loading gets its own message. Before, the message said that the tab changed.
+- **Form assistant:** a box that fades out and ends see-through is no longer taken for a box that fades in.
+- **Form assistant:** menus that a page draws itself are read and closed again, also while the page is greyed out under them. Before, the assistant could not use them while they were open.
+- **Form assistant:** a hidden file field with no button and no label to open it is left to you, with the reason that the page takes files through its own buttons.
+- **Form assistant:** after a stop, the report also names a field that may hold text, so that you can look at it. Before, such a field was not named.
+- **Form assistant:** a file attached or a choice made before a fault is still reported as filled. Before, the answer was "I could not fill in the form".
+- **Form assistant:** when Chrome stops answering or the tab changes while a field is checked again, the reason says that the field could not be checked. Before, it said that the page threw the value away.
 - **Form assistant:** in a review, a payment card number, an IBAN or a US social security number stays private in any field, whatever the field is called. Before, an IBAN or a social security number went to Claude from a "Notes" box.
 - **Form assistant:** a card number is found with spaces, new lines, tabs, dashes, dots or other signs between the groups, and inside a sentence. A number may mix gaps ("4111-1111 1111-1111"). A social security number may use any kind of dash. A list of dates or years ("2019-2021 2021-2023") is not taken for a card.
 - **Form assistant:** more fields are left to you: a password or secret on its own ("Passphrase", "Heslo", "Kennwort", "Client secret") and a key or a code that is a secret ("API key", "SMS code", "Access code").

@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Application form</title>
+<style>
+  body { font: 13px sans-serif; margin: 8px; }
+  p { margin: 6px 0; }
+  label { display: block; }
+  input { width: 300px; }
+</style></head>
+<body>
+<!-- More robot traps a person cannot see (#91), beside real fields that look a little like them. Every box named hp... stays empty. -->
+<h1>Junior Tester</h1><p>Join Vantor in Brno.</p>
+<form id="f" action="/never-sent" onsubmit="window.sent = true; return false;">
+  <p><label for="fn">First name</label><input id="fn" name="first_name"></p>
+  <p><label for="ln">Last name</label><input id="ln" name="last_name"></p>
+  <!-- see-through only together: 0.3 inside 0.3 -->
+  <div style="opacity: 0.3"><p style="opacity: 0.3"><label for="hp_product">Phone</label><input id="hp_product" type="tel" name="phone_check"></p></div>
+  <!-- clip-path shapes that leave nothing: a circle and an ellipse of no radius, a polygon on one line -->
+  <p><label for="hp_circle">LinkedIn</label><input id="hp_circle" type="url" name="homepage" style="clip-path: circle(0)"></p>
+  <p><label for="hp_ellipse">Email</label><input id="hp_ellipse" type="email" name="email_check" style="clip-path: ellipse(0 40%)"></p>
+  <p><label for="hp_line">City</label><input id="hp_line" name="city_check" style="clip-path: polygon(0 0, 100% 100%, 50% 50%)"></p>
+  <!-- a round clip that keeps the whole box -->
+  <p><label for="em">Email</label><input id="em" type="email" name="email" style="clip-path: circle(80%)"></p>
+  <p><label for="city">City</label><input id="city" name="city"></p>
+  <!-- a label of another field, and a big block of words, drawn over a box -->
+  <p style="position: relative"><label for="hp_foreign">Phone</label><input id="hp_foreign" type="tel" name="phone_other"><label for="city" style="position: absolute; left: 0; bottom: 0; width: 310px; height: 22px; background: #fff">City</label></p>
+  <p style="position: relative; margin-bottom: 12px"><label for="hp_words">Website</label><input id="hp_words" type="url" name="website"><span style="position: absolute; left: 0; top: 0; width: 320px; height: 40px; background: #fff">Tell us about yourself in the box below.</span></p>
+  <p><label for="breaks">Mobile phone</label><input id="breaks" type="tel" name="phone_alt"></p>
+  <!-- a list's own "Select..." drawn over its small search box -->
+  <div style="width: 300px; border: 1px solid #999"><div style="position: relative; height: 22px"><div style="position: absolute; left: 0; top: 2px">Select...</div><div><input id="team" role="combobox" aria-autocomplete="list" aria-label="Team" style="width: 4px; height: 18px; border: 0; padding: 0"></div></div></div>
+  <!-- a same-site frame nobody sees -->
+  <iframe id="faint_frame" style="opacity: 0; width: 340px; height: 60px; border: 0" srcdoc="<label for='hp_frame'>Phone</label><input id='hp_frame' type='tel' name='phone_frame'>"></iframe>
+  <!-- a file field with nothing to open it by -->
+  <div><input type="file" id="hp_file" name="resume" style="display: none"></div>
+  <button type="submit" id="send">Submit application</button>
+</form>
+<script>
+  document.getElementById('send').addEventListener('click', function (e) { e.preventDefault(); window.clicked = true; });
+</script>
+</body></html>

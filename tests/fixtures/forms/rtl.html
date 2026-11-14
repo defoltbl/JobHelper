@@ -1,0 +1,30 @@
+<!doctype html>
+<html dir="rtl"><head><meta charset="utf-8"><title>Junior Analyst - Fabrikam Careers</title>
+<style>
+  body { font: 13px sans-serif; margin: 0; }
+  #wide { width: 1300px; height: 400px; position: relative; }
+  input { width: 200px; }
+</style></head>
+<body>
+<!-- A right-to-left page wider than the window: it starts on the right and scrolls to negative numbers. The person has
+     scrolled it to its left end, and scrolled a right-to-left box inside it to its left end too. -->
+<form id="f" action="/never-sent" onsubmit="window.sent = true; return false;">
+  <div id="wide">
+    <div style="position: absolute; left: 0; top: 20px"><label for="fn">First name</label><input id="fn" name="first_name"></div>
+    <div id="box" style="position: absolute; left: 0; top: 100px; width: 300px; height: 90px; overflow: auto">
+      <div style="width: 1200px; height: 60px; position: relative"><div style="position: absolute; left: 0; top: 0"><label for="ln">Last name</label><input id="ln" name="last_name"></div></div>
+    </div>
+    <div style="position: absolute; right: 0; top: 20px"><label for="em">Email</label><input id="em" type="email" name="email"></div>
+  </div>
+  <!-- traps: right of where the page starts (it cannot scroll there), and screens away to its left -->
+  <div style="position: absolute; right: -9999px; top: 250px"><label for="hp1">Phone</label><input id="hp1" type="tel" name="phone_check"></div>
+  <div style="position: absolute; left: -9999px; top: 300px"><label for="hp2">City</label><input id="hp2" name="city_check"></div>
+  <button type="submit" id="send">Submit application</button>
+</form>
+<script>
+  var box = document.getElementById('box');
+  box.scrollLeft = -2000;                                                     // its left end (a right-to-left box scrolls to negative numbers)
+  window.scrollBy(document.getElementById('fn').getBoundingClientRect().left - 10, 0);   // the page's left end, where the first name is
+  document.getElementById('send').addEventListener('click', function (e) { e.preventDefault(); window.clicked = true; });
+</script>
+</body></html>

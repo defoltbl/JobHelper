@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Application form</title>
+<style>
+  body { font: 13px sans-serif; margin: 8px; }
+  section { width: 400px; margin: 8px 0; }
+  .zone { width: 300px; height: 60px; border: 1px dashed #999; }
+</style></head>
+<body>
+<!-- Hidden file fields a person opens by pressing something the page draws that is no button or label (#91). Every one is
+     attached, except the last: it has nothing to press near it. -->
+<h1>Junior Tester</h1><p>Join Vantor in Brno.</p>
+<form id="f" action="/never-sent" onsubmit="window.sent = true; return false;">
+  <p><label for="fn">First name</label> <input id="fn" name="first_name"></p>
+  <!-- a react-dropzone zone: the zone itself is pressed, it has no label or button -->
+  <section><div class="zone" tabindex="0" role="presentation"><input type="file" id="drop" name="resume" style="display: none"><p>Drag files here</p></div></section>
+  <!-- a span the keyboard reaches -->
+  <section><input type="file" id="by_span" name="cover" style="display: none"><span tabindex="0">Upload your cover letter</span></section>
+  <!-- a link with no address -->
+  <section><input type="file" id="by_link" name="portfolio" style="display: none"><a>Choose a portfolio</a></section>
+  <!-- a box with a click of its own -->
+  <section><input type="file" id="by_click" name="transcript" style="display: none"><div onclick="this.previousElementSibling.click()">Add a transcript</div></section>
+  <!-- an "Attach" link beside four nested wrappers -->
+  <section><div><div><div><div><input type="file" id="far" name="references" style="display: none"></div></div></div></div><a href="#attach">Attach</a></section>
+  <!-- nothing to press near it -->
+  <section><div><input type="file" id="none" name="other" style="display: none"></div></section>
+  <button type="submit" id="send">Submit application</button>
+</form>
+</body></html>
