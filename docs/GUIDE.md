@@ -1345,7 +1345,7 @@ Table 9.4 shows what happens to each kind of field.
 | Any other file field (a photo, a passport, a transcript). Also a file larger than 4 MB, or a type of file that the field does not take | Leaves it to you, with the reason |
 | A file field, when the assistant does not know which job the form is for | Leaves it to you. Choose the job, then ask again: a CV written for another company is worse than none |
 | A password | Leaves it to you |
-| Date of birth, gender, origin, citizenship, health, tax numbers, payment details, a PIN or a one-time code | Leaves them to you, also in Czech and German forms |
+| Date of birth, gender, origin, citizenship, health, tax numbers, payment details, a PIN, a secret key or a one-time code | Leaves them to you, also in Czech and German forms. A card number, an IBAN or a social security number typed in any field is not sent to Claude in a review |
 | A field that asks you to agree or to confirm: terms, your data, a background check, a newsletter, job alerts | Leaves it to you: you agree, not the assistant |
 | A field about another person (**Referee phone**, **Next of kin name**), an employer's address, or **Current salary** | Your own name, contacts, address and the salary you ask for never go there. A field about another person and an employer's address are left to you. For **Current salary**, the assistant may offer words from your CV, marked for checking |
 | **Current employer** when no job in **My details** is marked **I work here now** | Leaves it to you and says why. An old job is never given as the current one. **Current or most recent employer** gets the first job in your list in **My details** |
