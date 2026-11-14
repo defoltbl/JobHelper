@@ -186,7 +186,6 @@ def keyword_stats(jobs: list[dict[str, Any]], queries: list[str], threshold: int
     return out
 
 
-_LANGUAGES = {"English", "Czech", "German", "French"}
 # asked for everywhere, but not something to "learn" from a list
 _SOFT = {"Troubleshooting", "Agile", "Scrum", "Jira", "Confluence", "Excel", "Office 365", "Networking",
          "Project management", "MS Office", "PowerPoint", "B2B", "Driving licence"}
@@ -204,7 +203,7 @@ def skill_gaps(jobs: list[dict[str, Any]], cv_text: str, limit: int = 15) -> dic
         close = (j.get("match_score") or 0) >= 30 or j.get("status") in store.APPLICATION_STATUSES
         relevant += close
         for k in wanted - have:
-            if k in _LANGUAGES:
+            if k in keywords.SPOKEN:
                 languages[k] += 1
             elif k not in _SOFT:
                 asked[k] += 1
@@ -215,7 +214,7 @@ def skill_gaps(jobs: list[dict[str, Any]], cv_text: str, limit: int = 15) -> dic
     rows.sort(key=lambda r: (-r["relevant"], -r["postings"], r["skill"]))
     return {"postings": len(postings), "relevant": relevant, "skills": rows[:limit],
             "languages": [{"language": k, "postings": n} for k, n in languages.most_common()],
-            "in_cv": sorted(have - _LANGUAGES)}
+            "in_cv": sorted(have.difference(keywords.SPOKEN))}
 
 
 # ── trends: what happened week by week ──────────────────────────────────────
@@ -330,7 +329,7 @@ def low_score_reasons(jobs: list[dict[str, Any]], cv_text: str = "", threshold: 
         if not hit:
             counts[LOW_OTHER] += 1
         for word in set(keywords.extract(reason)):
-            if word not in have and word not in _LANGUAGES and word not in _SOFT:
+            if word not in have and word not in keywords.SPOKEN and word not in _SOFT:
                 tech[word] = tech.get(word, 0) + 1
     rows = [{"reason": name, "jobs": n, "share": round(100 * n / len(low)) if low else 0}
             for name, n in counts.items() if n]

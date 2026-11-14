@@ -18,7 +18,7 @@ from typing import Any
 
 from lxml import etree
 
-from . import claims, config, cv_tailor, llm, store
+from . import claims, config, cv_tailor, keywords, llm, store
 from .claims import ClaimCheck
 from .cv_tailor import NOTES_SHOWN, POSTING_SHOWN, clean, figure_sources
 from .word_document import P as _P, T as _T, XML_SPACE, Paragraph, WordDocument, text_of as _text
@@ -95,10 +95,19 @@ def rules_with_facts(cv_text: str = "") -> str:
             + config.facts_block(cv_text))
 
 
+# The language the letter, the form answers and the interview preparation are written in: a text in it shows it, so it
+# is never a missing language, also when the CV does not name it (#113).
+WRITTEN_IN = "English"
+
+
 def unverified_terms(master_text: str, posting: str = "") -> list[str]:
-    """The CV's "never claim" list (with the posting's skills the CV does not show) plus the letter instruction's
-    "Anything else (...)" list."""
+    """The CV's "never claim" list (with the posting's skills the CV does not show), the spoken languages neither the CV
+    nor your own notes show (claims.ClaimCheck judges them by their level only, #113) except WRITTEN_IN, and the letter
+    instruction's "Anything else (...)" list. The languages are not in cv_tailor's list: its enforce takes out every
+    skill line that names a term, and the adapted CV must keep its language lines."""
     terms = cv_tailor.unverified_terms(master_text, posting)
+    terms += [t for t in keywords.spoken_missing(master_text + "\n" + config.experience_notes())
+              if t not in terms and t != WRITTEN_IN]
     path = config.LETTER_INSTRUCTION
     if path.exists():
         m = re.search(r"Anything else \(([^)]*)\)", path.read_text(encoding="utf-8"))

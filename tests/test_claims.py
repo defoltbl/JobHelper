@@ -320,7 +320,8 @@ def test_a_visit_a_possessive_or_an_event_is_no_invented_employer():
     for sentence in ("I interviewed at Globex Labs last year.", "I spoke at Contoso Expo in May.",
                      "I built APIs at Northwind's last year.", "I built APIs at Northwind\u2019s office."):
         assert check.invented(sentence) == [], sentence
-    assert check.invented("I tested the apps at Globex Labs's office in 2023.") == []      # possessive + a noun: no name read
+    assert check.invented("I tested the apps at Globex Labs's office in 2023.") == ["Globex Labs"]   # a place of work (#113)
+    assert check.invented("I tested the apps at Globex Labs's booth in 2023.") == []      # possessive + another noun: no name read
     assert check.invented("I tested the apps at Globex Labs's last year.") == ["Globex Labs"]
     assert check.invented("I interviewed at Globex Labs, and I tested apps at Contoso Labs.") == ["Contoso Labs"]
     assert check.invented("I volunteered at Globex Hospital in 2021.") == ["Globex Hospital"], "volunteering is work"
@@ -377,9 +378,274 @@ def test_work_done_is_any_first_person_verb_in_the_past_tense(sentence, done):
     assert claims._done(sentence) is done
 
 
+# ── #113: the verb and what it acts on, a second verb, and a sentence without "I" ──
+_VERBS = [   # (sentence, the technology claimed, or "" for none)
+    # a verb of learning or of the letter's frame is work when it acts on work
+    ("I trained the team on Terraform.", "Terraform"), ("I trained colleagues on Kafka last spring.", "Kafka"),
+    ("I completed a Kafka migration.", "Kafka"), ("I reviewed Terraform modules every week.", "Terraform"),
+    ("I submitted Spark jobs to the cluster.", "Spark"), ("I spotted Kafka lag before it grew.", "Kafka"),
+    # a second verb of the same clause
+    ("I sent Kafka events and built consumers.", "Kafka"), ("I attended the course, then ran CPR drills.", "CPR"),
+    ("I attended the course and then ran CPR drills.", "CPR"), ("I studied Kafka and we built consumers.", "Kafka"),
+    ("I sent Kafka events and Spark jobs and built consumers.", "Kafka"),
+    ("I completed a course, then deployed Kafka at work.", "Kafka"),
+    # a sentence that opens with its verb is the candidate's own (owner's decision on #113)
+    ("Built pipelines in Kafka.", "Kafka"), ("Led a team on Terraform", "Terraform"), ("Reconciled Xero ledgers.", "Xero"),
+    ("Recently migrated the jobs to Spark.", "Spark"), ("Built, tested and shipped Kafka consumers.", "Kafka"),
+    ("Completed a Kafka migration in two weeks.", "Kafka"),
+    # learning, the application and the posting are no work
+    ("I finished a workshop on Terraform.", ""), ("I completed an online Kafka course.", ""), ("I trained in Terraform last year.", ""),
+    ("I trained on Kafka at a bootcamp.", ""), ("I earned a Terraform certificate.", ""), ("I passed the Kafka exam.", ""),
+    ("I completed a module on Spark.", ""), ("I finished a Kafka certification.", ""),
+    ("I submitted my application for the Kafka Engineer role.", ""), ("I read the advert for your Kafka position.", ""),
+    ("I reviewed your Kafka documentation.", ""), ("I spotted your vacancy for a Spark developer.", ""),
+    ("I spotted that your team uses Kafka.", ""), ("I completed the form about Kafka.", ""), ("I attended a Kafka meetup.", ""),
+    # a new subject after "and" does the work, not the candidate
+    ("I read up on Kafka while the team built consumers.", ""), ("I studied Kafka, and my colleagues deployed it.", ""),
+    ("I noticed Kafka in your stack and liked it.", ""),
+    # an opening word that is no verb of work: a feeling, a place, the letter, a name
+    ("Present day work at your firm runs on Kafka.", ""), ("Interested in Kafka.", ""), ("Inspired by your Kubernetes talk.", ""),
+    ("Based in Prague, your team runs Kafka.", ""), ("Attached is my CV with notes on Spark.", ""),
+    ("Looking forward to Kafka work.", ""), ("Excited to learn Spark.", ""), ("Dear Ms Novak, your Kafka team impressed me.", ""),
+    ("Ahmed built the Kafka stack you run.", ""), ("Alfred, your CTO, spoke about Kafka.", ""), ("Indeed, Kafka fits your stack.", ""),
+    ("Detailed below are some Spark ideas.", ""), ("Fascinated by Kafka since school.", ""), ("Located near your Kafka office.", ""),
+    # "applied" acts on a method or a tool as work; with no object, or for a job, it is applying
+    ("I applied Terraform modules to the staging stack.", "Terraform"), ("Applied Spark to the churn data.", "Spark"),
+    ("I then applied Xero rules to the ledgers.", "Xero"), ("I applied for your Kafka position.", ""),
+    ("I applied in March to the Spark team.", ""), ("I applied yesterday for the Spark engineer job.", ""),
+    ("I applied to your company for a Kafka role.", ""), ("I applied, and Kafka is on your stack.", ""),
+    # a participle and a preposition that describe the employer, its product or its posting are no work done
+    ("Designed for small clinics, your booking app runs on Kafka.", ""),
+    ("Launched in 2015, their Terraform registry grew fast.", ""), ("Hosted on Kubernetes, its storefront rarely stops.", ""),
+    ("Advertised on your careers page: a Kafka engineer post.", ""), ("Published in the vacancy text: Spark and Kafka.", ""),
+    ("Attracted to your Spark roadmap, I sent my CV.", ""), ("Used by thousands of shops, your Spark platform is stable.", ""),
+    # a participle that opens work done stays a claim, also with a preposition after it
+    ("Worked on Kafka streams for three years.", "Kafka"), ("Worked on Kafka, then moved to Spark.", "Kafka"),
+    ("Designed Spark jobs for the billing team.", "Spark"), ("Deployed to Kubernetes, then watched the pods.", "Kubernetes"),
+    # "used" is a past tense too: as a fragment and as a second verb
+    ("Used Kafka to stream billing events.", "Kafka"), ("I attended a course and used Spark at work.", "Spark"),
+]
+
+
+@pytest.mark.parametrize("sentence, term", _VERBS)
+def test_the_verb_and_what_it_acts_on_decide_a_claim(sentence, term):
+    assert ClaimCheck(["Kafka", "Spark", "Terraform", "Xero", "CPR", "Kubernetes"]).claimed_in(sentence) == term, sentence
+
+
+# ── #113 fix round: an opening phrase hides work only where it is about the employer, and writing to them is no work ──
+_NARROWED = [   # (sentence, the technology claimed, or "" for none)
+    # "the" or "this" after the comma, with no year before it: work done, then what it was
+    ("Built on Airflow, the nightly loader cut errors at Fabrikam.", "Airflow"),
+    ("Moved to Redis, this cache halved the load times.", "Redis"),
+    # "your" or a posting word later in the phrase: work done for them or in their field
+    ("Worked with Snowflake in your sector for four years.", "Snowflake"),
+    ("Consulted on Terraform rollouts for your rivals in logistics.", "Terraform"),
+    ("Worked on Redis listing caches for a marketplace.", "Redis"),
+    # the rare false alarm the rule accepts: a phrase about the product before "the" with no year reads as a claim
+    ("Engineered for speed, the Kafka platform is your pride.", "Kafka"), ("Built on Spark, the suite you sell scales well.", "Spark"),
+    # still about them: a year before "the" or "this", "your" or the posting right after the preposition, a possessive
+    ("Founded in 2009, the studio ships Spark tools.", ""), ("Opened in the 1990s, this agency now runs Terraform.", ""),
+    ("Shared in your newsletter: a Redis case study.", ""), ("Featured in the vacancy notes: Airflow and Redis.", ""),
+    ("Tested at scale, their Redis layer never fails.", ""),
+    # writing to the reader is the letter's frame; writing code, or to anything else, is work
+    ("Drawn to your Kafka roadmap, I wrote to you.", ""), ("Spark caught my eye, so I wrote to your hiring team.", ""),
+    ("Your Redis talk was great; I emailed to you the next day.", ""), ("I read your Airflow post and wrote to you.", ""),
+    ("I wrote Airflow operators for the billing team.", "Airflow"), ("I wrote to the Kafka topic from three services.", "Kafka"),
+    ("I emailed Snowflake exports to the finance desk.", "Snowflake"),
+]
+
+
+@pytest.mark.parametrize("sentence, term", _NARROWED)
+def test_an_opening_phrase_hides_only_words_about_the_employer_and_writing_to_them_is_no_work(sentence, term):
+    check = ClaimCheck(["Airflow", "Redis", "Snowflake", "Terraform", "Kafka", "Spark"])
+    assert check.claimed_in(sentence) == term, sentence
+
+
+def test_a_wish_and_an_honest_bridge_still_hide_a_second_verb_and_a_fragment():
+    """#113: the owner's decisions stay: what a wish names is no claim, and an honest bridge is none with honest_ok."""
+    check = ClaimCheck(["Kafka", "Spark"])
+    assert check.claimed_in("I attended a meetup and would love to build Kafka pipelines.") == ""
+    assert check.claimed_in("Keen to learn Kafka and build Spark jobs.") == ""
+    assert check.claimed_in("I have not used Kafka, and built queues instead.", honest_ok=True) == ""
+    assert check.claimed_in("I have not used Kafka, and built queues instead.") == "Kafka"
+
+
+def test_a_long_hostile_text_is_read_for_work_done_in_linear_time():
+    """#113: the clause reader walks the model's text word by word; a long run of joiners, verbs or subjects must not
+    take long. Nor may the language levels and the figures (versions, quarters) of a long text."""
+    import time
+    check = ClaimCheck(["Kafka", "German"])
+    for hostile in ("I " + "and " * 12500 + "Kafka", "I built " + ", " * 25000 + "Kafka", "Built " * 8500 + "Kafka",
+                    "I trained " + "the team " * 5500 + "on Kafka", "I and " * 10000 + "Kafka", "Built, " * 7000 + "Kafka",
+                    "I read about Kafka and " + "the team " * 5500 + "built it", "I really " + "really " * 7000 + "x Kafka",
+                    "I speak " + "German and " * 5000 + "x", "fluent " * 7000 + "in German", "German" + " " * 50_000 + "(C1)",
+                    "German (" * 7000 + "x", "your " * 8000 + "I speak German", "Germanic" * 6000 + " native",
+                    "A" + "a" * 50_000 + " speaker", "fluent in " + "Aaaaa, " * 7000 + "German", "not, " * 10000 + "fluent German",
+                    "Built on " + "x " * 25000 + "Kafka", "Used by " + "your " * 9000 + "Kafka", "Founded in" + " ," * 25000,
+                    "Founded in " + "1998 " * 10000 + ", the Kafka", "Worked on " + "x " * 25000 + ", the Kafka",
+                    "I wrote to " + "you " * 12500 + "Kafka", "Founded in " + "your " * 10000 + ", the Kafka",
+                    "Fluent German" + " " * 50_000 + "is a must", "German (C1" + " " * 50_000 + ") is required",
+                    "German C1" + " level" * 8000 + " is required", "Fluent German is " * 3000, "German C1 " + "– " * 25000 + "is"):
+        assert len(hostile) > 40_000
+        start = time.perf_counter()
+        check.claimed_in(hostile)
+        check.unbacked(hostile)
+        assert time.perf_counter() - start < 1.5, hostile[:40]     # ~0.05 s here, CI ~3x slower; a square takes minutes
+    for hostile in ("Python3" + ".1" * 25000, "Python " + "3.1 " * 12500, "Q4 " * 17000, "1" + " " * 50_000 + "+ years",
+                    "I used Java " + "1.8 " * 12000 + "years", "v" + "2.1." * 12500 + "x"):
+        assert len(hostile) > 40_000
+        start = time.perf_counter()
+        claims.unbacked_figures(hostile, ("a CV",))
+        assert time.perf_counter() - start < 1.5, hostile[:40]
+
+
+# ── #113: more ways a letter places the candidate at an employer ──
+_EMPLOYERS = [   # (sentence, the employer that must be named, or "" for none)
+    # "joined" and "employed by" say the job; the name right after the verb counts
+    ("I joined Proseware Labs in 2021 as a tester.", "Proseware Labs"), ("I graduated and then joined Trey Research.", "Trey Research"),
+    ("Joined Woodgrove Bank in 2019.", "Woodgrove Bank"), ("I was employed by Coho Winery for two years.", "Coho Winery"),
+    ("Employed by Fourth Coffee since 2020.", "Fourth Coffee"), ("I recently joined proseware labs.", "proseware labs"),
+    ("My experience at Alpine Ski House shaped how I test.", "Alpine Ski House"),
+    # a role of the candidate's own before "for"
+    ("Data Analyst for Lucerne Publishing since 2022.", "Lucerne Publishing"),
+    ("I worked as a junior tester for Proseware Labs.", "Proseware Labs"),
+    ("As an accountant for Woodgrove Bank, I closed the books.", "Woodgrove Bank"), ("I was a bookkeeper for Coho Winery Ltd.", "Coho Winery Ltd"),
+    ("I have been a trainer for Fourth Coffee since 2021.", "Fourth Coffee"), ("I'm a support engineer for Trey Research.", "Trey Research"),
+    ("As an applied scientist for Trey Research, I built models.", "Trey Research"),
+    # a curly possessive, and a place of work after a possessive
+    ("I fixed the build at Litware\u2019s last year.", "Litware"), ("I led the move at Litware\u2019s office in Brno.", "Litware"),
+    # a word the CV writes only in lowercase never clears a name
+    ("I worked at Present Labs on the release.", "Present Labs"), ("I joined Initech Software in 2020.", "Initech Software"),
+    # no employer: the team, a webinar, a call, someone else joining, a thing made for a product, someone else's role
+    ("I joined the team in May.", ""), ("I joined your Kafka webinar.", ""), ("I joined a call with Trey Research.", ""),
+    ("I noticed that Proseware Labs joined Trey Research.", ""), ("I would love to join Trey Research.", ""),
+    ("I built a password manager for Slack.", ""), ("I made an assistant for Excel.", ""), ("I wrote an add-in for SolidWorks.", ""),
+    ("My first project was a test manager for Jira.", ""), ("I wrote a macro for Xero users.", ""),
+    ("The Lead Developer for Trey Research told me about the role.", ""), ("Ms Novak, Lead Engineer for Trey Research, called me.", ""),
+    ("I applied as a developer for Proseware Labs.", ""), ("I was at Litware\u2019s launch event last spring.", ""),
+    ("I worked for Dr. Novak's office as a volunteer.", ""),
+    # the CV's own employer is still known, also after the new forms
+    ("I joined Northwind Parcel in 2024.", ""), ("Developer for Northwind Parcel since 2024.", ""),
+    ("I built the API at Northwind\u2019s office.", ""), ("I was employed by EY in Prague.", ""),
+]
+
+
+@pytest.mark.parametrize("sentence, employer", _EMPLOYERS)
+def test_joined_employed_by_a_role_for_and_a_possessive_name_an_employer(sentence, employer):
+    cv = "Junior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built tools.\nAuditor – EY, Prague (2020 – 2022): audits.\n"
+    assert claims.EmployerCheck(cv).invented(sentence, "Acme", "We run Linux servers.") == ([employer] if employer else []), sentence
+
+
+def test_a_word_clears_a_name_only_where_a_source_writes_it_as_a_name():
+    """#113: "present" in "2024 – present" cleared "Present Labs". A capital in the dates does not count either; a CV in
+    capitals still clears its employer."""
+    cv = "Tester – Northwind Parcel, Brno (2024 – Present): tests in software.\n"
+    check = claims.EmployerCheck(cv)
+    assert check.invented("I worked at Present Dynamics.") == ["Present Dynamics"]
+    assert check.invented("I worked at Present Dynamics.", "Acme", "Present Dynamics is our partner.") == []
+    assert check.invented("I worked at Initech Software.") == ["Initech Software"]
+    capitals = claims.EmployerCheck("Tester – NORTHWIND PARCEL, Brno (2024 – present): tests.\n")
+    assert capitals.invented("I worked at Northwind Logistics.") == [] and capitals.invented("I joined Northwind.") == []
+
+
+def test_a_long_hostile_text_is_read_for_the_new_employer_forms_in_linear_time():
+    """#113: "joined", "employed by", a role and "for", and a possessive read the model's text to its end."""
+    import time
+    check = claims.EmployerCheck("Junior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built tools.\n")
+    for hostile in ("I joined " + "Contoso " * 6000 + "x", "Joined " + "Contoso " * 6000 + "x",
+                    "I was employed by " + "contoso " * 6000 + "x", "I was a " + "developer for Contoso and " * 2000,
+                    "As a " + "developer " * 5000 + "for Contoso x", "As " * 16000 + "a developer for Contoso Labs.",
+                    "I worked at " + "Contoso\u2019s " * 5000 + "x", "My experience at " + "Contoso " * 6000 + "x",
+                    "I applied " + "and applied " * 4000 + "for your role", "I applied " + "the fix to " * 4500 + "x",
+                    "I was a " + "tester for " * 4500 + "Contoso", "I joined " + "Contoso joined " * 3500 + "x"):
+        assert len(hostile) > 40_000
+        start = time.perf_counter()
+        check.invented(hostile, "Acme", "We run Linux servers. " * 500)
+        assert time.perf_counter() - start < 1.5, hostile[:40]     # CI ~3x slower; a square takes minutes
+
+
 def test_a_digit_inside_a_name_is_no_figure():
     assert claims.unbacked_figures("I run k8s on S3 and EC2 with Python3.") == []
     assert claims.unbacked_figures("It made the build 10x faster.") == ["10"]
+
+
+def test_a_version_glued_to_a_name_or_dotted_after_a_tool_is_no_figure():
+    """#113: "Python3.12" gave the figure "12", and "Python 3.12" gave "3.12". A number without a dot after a name may count
+    something ("Kafka 3 clusters"), so "Java 17" stays a figure, and a unit after a version makes it an amount again."""
+    for said in ("I moved the service to Python3.12 last spring.", "I upgraded to Python 3.12 and Java 1.8.",
+                 "We pinned v2.1 of the client and Node 18.4.", "I tuned .NET 8.0 builds."):
+        assert claims.unbacked_figures(said) == [], said
+    assert claims.unbacked_figures("I moved the service to Java 17.") == ["17"]
+    assert claims.unbacked_figures("I used Python 2.5 years.") == ["2.5"]                 # an amount, not a version
+    assert claims.unbacked_figures("The budget grew to EUR 1.5 by spring.") == ["1.5"]     # a currency is no tool
+
+
+def test_a_quarter_or_a_half_year_is_no_figure_but_a_figure_beside_it_is():
+    """#113, owner's decision: "Q4" and "H2" name a time, not an amount; a year next to them is judged as before."""
+    for said in ("I shipped it in Q1.", "Sales doubled from Q2 to Q3.", "The audit closed in Q4.", "We planned H1 and H2."):
+        assert claims.unbacked_figures(said) == [], said
+    assert claims.unbacked_figures("I finished the move by Q4 2025.", ("Analyst at Contoso, 2025",)) == []
+    assert claims.unbacked_figures("I finished the move by Q4 2025.") == ["2025"]
+    assert claims.unbacked_figures("I cut costs by 30 % in Q4.") == ["30"]
+    assert claims.unbacked_figures("In H2 I onboarded 12 clients.") == ["12"]
+
+
+def test_a_spoken_language_said_with_a_level_is_a_claim():
+    """#113, owner's decision: a language the CV lacks, said with a level, claims it; the bare name is reported."""
+    check = ClaimCheck(["Kafka", "German", "French", "Czech"])
+    for said, term in (("I am fluent in German and help the support desk.", "German"), ("I speak Czech at home.", "Czech"),
+                       ("I also speak French with our Lyon office.", "French"), ("As a native French speaker, I write the guides.", "French"),
+                       ("Native Czech speaker.", "Czech"), ("Languages: English (C2), German (C1).", "German"),
+                       ("I can read contracts in German at B2 level.", "German"), ("I am bilingual in French and English.", "French"),
+                       ("I bring business-level German to the role.", "German"), ("I speak English, Spanish and Czech.", "Czech"),
+                       ("German is my mother tongue.", "German"), ("I am a native speaker of Czech.", "Czech"),
+                       ("I have a working knowledge of French.", "French"), ("German – B2, written and spoken.", "German")):
+        assert check.claimed_in(said) == term, said
+        assert check.unbacked(f"I enjoy teamwork. {said}") == term, said
+
+
+def test_a_language_named_without_a_level_wished_for_or_backed_is_no_claim():
+    """#113: a language as an adjective about others, after a claim verb, as a wish, after "not", in an honest bridge, or
+    in the CV is no claim; "excel" is an ordinary verb."""
+    check = ClaimCheck(["Kafka", "German", "French"])
+    for said in ("I built reports for a German retailer.", "I worked with German clients for two years.",
+                 "I answered German-speaking customers by phone.", "I would like to improve my German.",
+                 "I hope to become fluent in French.", "Your partners in Lyon speak French.", "The role needs fluent German.",
+                 "I support customers who speak German.", "I trained new colleagues with native German speakers.",
+                 "I don't speak French yet.", "I am not fluent in German.", "I excel at planning.", "Germany is a big market.",
+                 "I visited Paris and loved French food."):
+        assert check.claimed_in(said) == "", said
+    assert ClaimCheck(["Kafka"]).claimed_in("I speak fluent German daily.") == ""              # the CV shows German
+    assert check.claimed_in("I am not fluent in German; the closest is my A1 course.", honest_ok=True) == ""
+    assert check.claimed_in("I am fluent in French, and I ran Kafka clusters.") == "Kafka"   # the list's order decides
+
+
+def test_a_level_and_a_language_the_job_needs_are_no_claim():
+    """#113: a level and its language followed by what the job needs state the job's need; said as the person's own they
+    are still a claim."""
+    check = ClaimCheck(["Kafka", "German", "French", "Czech"])
+    for said in ("Native Czech is a must.", "Fluent French is essential for this post.", "French (B2) is needed.",
+                 "German at C1 level or above is mandatory.", "Business-level German and French are an advantage.",
+                 "German – C2 – is expected in this team.", "Czech C1 is preferred, and Kafka is a plus."):
+        assert check.claimed_in(said) == "", said
+    for said, term in (("I speak fluent French, which is a plus here.", "French"), ("Native Czech speaker, a must for you.", "Czech"),
+                       ("German is my mother tongue and is required here.", "German")):
+        assert check.claimed_in(said) == term, said
+
+
+def test_the_letter_s_list_holds_the_missing_languages_and_the_cv_s_list_does_not(isolate_data, monkeypatch):
+    """#113: the letter, the form answers and the interview build their check from cover_letter.unverified_terms, so the
+    languages enter there; cv_tailor.enforce takes out every skill line that names a term of its own list, and the adapted
+    CV must keep "German (B2)"."""
+    from jobhelper import config
+    monkeypatch.setattr(config, "experience_notes", lambda: "I also speak French with suppliers.")
+    cv = "Dana Novak\nSupport Analyst – Contoso (2022 – present)\nLanguages: English (C1), Czech (native)"
+    terms = cover_letter.unverified_terms(cv, "We need Kafka and fluent German.")
+    assert "German" in terms and "Czech" not in terms and "English" not in terms and "French" not in terms   # notes back French
+    assert "German" not in cv_tailor.unverified_terms(cv, "We need Kafka and fluent German.")
+    assert ClaimCheck(terms).unbacked("I read your posting closely. I am fluent in German.") == "German"
+    assert interview_prep.unbacked("I speak German with my team.", terms) == "German"
+    assert interview_prep.unbacked("I have not used German at work; the closest is a course.", terms) == ""
 
 
 # ── #111: the job's title, company and place are fenced in every prompt ─────

@@ -88,10 +88,16 @@ A few decisions worth highlighting, each with the problem that led to it.
   they were.
 - PDFs are made with LibreOffice; without it only the Word files are written.
 - A letter or CV is checked against the master CV and your notes, so a posting far from your
-  experience gives a short, plain letter. The checks are plain code and do not catch everything: a
-  duration ("over the past year") and a claim that names no job ("used Docker daily") are not caught,
-  and an employer the model invented is caught only when a sentence about you names it ("I built the API
-  at Contoso Labs"). Read each letter before you send it.
+  experience gives a short, plain letter. The checks are plain code and do not catch everything. A
+  duration ("over the past year") and a claim that names no job ("used Docker daily") are not caught.
+  An employer the model invented is caught only when a sentence about you names it. Only Czech,
+  German and French are checked as spoken languages; English never counts as missing. "My time at
+  PyCon Prague was fun" is named as an employer. A role said of
+  another person with "as" is read as yours. "I completed the Kafka module." reads as work.
+  "Java 17" still reads as a figure. "Designed for scale, the platform is …" reads as a claim.
+  A level said as "My German is at B2 level." is not read as a claim.
+  An invented employer in lowercase that ends in a field of work ("globex audit") is not caught.
+  Read each letter before you send it.
 
 **The assistant**
 
