@@ -64,6 +64,19 @@ def test_unbacked_experience_claim_is_rejected_but_a_wish_is_fine():
     assert cover_letter.content_problems(wish, ["Terraform", "Kubernetes"]) == []
 
 
+def test_the_language_the_texts_are_written_in_is_never_missing(isolate_data, monkeypatch):
+    """#113: the letter, the answers and the interview preparation are in English, so a CV that never names English
+    still backs it; another language the CV lacks is still a claim."""
+    monkeypatch.setattr(config, "experience_notes", lambda: "")
+    cv = "Mira Kovac\nWarehouse Planner – Tailspin Freight (2021 – present)\nLanguages: Czech (native)"
+    terms = cover_letter.unverified_terms(cv, "We ship across Europe and want fluent German.")
+    assert cover_letter.WRITTEN_IN not in terms and "German" in terms
+    english, german = "I write shift reports in fluent English.", "I speak business-level German with the drivers."
+    assert claims.ClaimCheck(terms).claimed_in(english) == "" and claims.ClaimCheck(terms).claimed_in(german) == "German"
+    kept = cover_letter.enforce([f"I plan routes daily. {english} {german}"], terms)[0]
+    assert english in kept and german not in kept
+
+
 def test_date_format():
     assert cover_letter.letter_date(date(2026, 10, 6)) == "6 October 2026"
 

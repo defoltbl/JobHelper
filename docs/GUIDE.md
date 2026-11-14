@@ -863,6 +863,10 @@ removed. A sentence about a skill that your CV and your notes do not show is rem
 that says what you lack is removed too. If a skill is true of you, add it under **More about
 your work** in **About you**. The next letter can then say it.
 
+A spoken language with a level, such as fluent German, is a term too when your CV and
+your notes do not show it. English is not a term, because the letter is in English. To clear a
+language, add it to your CV or to **More about your work**.
+
 ### The cover letter
 
 The letter is written to the company, about this role, from the facts in your CV.

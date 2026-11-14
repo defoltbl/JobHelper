@@ -2,7 +2,7 @@
 from pathlib import Path
 import pytest
 
-from jobhelper import word_document, job_sources, api_core, agent2_search, config, db, insights, interview_prep, llm, store, ui_api
+from jobhelper import word_document, job_sources, api_core, agent2_search, config, db, insights, interview_prep, keywords, llm, store, ui_api
 
 CV = ("Alex Novak\nJunior Software Developer\nPython, Kotlin, SQL, PostgreSQL, FastAPI, Docker, Azure, Git, Linux, React.\n"
       "Built a document search service with FastAPI and pgvector. English B2.")
@@ -98,6 +98,17 @@ def test_skill_gaps_lists_what_postings_ask_and_the_cv_lacks():
     assert g["skills"][0]["skill"] == "Kubernetes"                                # asked most in postings close to you
     assert g["languages"] == [{"language": "German", "postings": 1}]
     assert "Python" in g["in_cv"] and "English" not in g["in_cv"]
+
+
+@pytest.mark.parametrize("language", keywords.SPOKEN)
+def test_every_spoken_language_is_a_language_in_insights_not_a_skill(language):
+    job = store.new_job(id="1", title="A", company="A", match_score=60, description=f"Fluent {language} and Kafka.")
+    g = insights.skill_gaps([job], "Python")
+    assert g["languages"] == [{"language": language, "postings": 1}] and [r["skill"] for r in g["skills"]] == ["Kafka"]
+    assert language not in insights.skill_gaps([job], f"Python. {language} C1.")["in_cv"]
+    low = [store.new_job(id=str(i), title="T", company="C", match_score=10, match_reason=f"Needs {language} and Kafka.")
+           for i in (1, 2)]
+    assert insights.low_score_reasons(low, "Python", threshold=30)["technologies"] == [{"skill": "Kafka", "jobs": 2}]
 
 
 def test_skill_gaps_never_change_the_cv_or_a_letter(isolate_data, monkeypatch):

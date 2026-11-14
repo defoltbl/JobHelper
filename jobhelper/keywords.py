@@ -11,6 +11,8 @@ from __future__ import annotations
 import functools
 import re
 
+SPOKEN = ("English", "Czech", "German", "French")          # spoken languages: a skill of another kind than a tool
+
 # canonical name -> spellings to look for (the canonical name is always included)
 VOCABULARY: dict[str, list[str]] = {
     # languages
@@ -87,7 +89,7 @@ VOCABULARY: dict[str, list[str]] = {
     "Public procurement": [], "Grant writing": [], "Policy analysis": [], "Project management": [],
     "MS Office": ["Microsoft Office"], "PowerPoint": [],
     # spoken languages
-    "English": [], "Czech": [], "German": [], "French": [],
+    **{name: [] for name in SPOKEN},
 }
 
 # Names that are also ordinary words: single letters need language context, the
@@ -154,7 +156,6 @@ def read_ahead(texts: list[str], pause: float = 0.004) -> int:
     return done
 
 
-SPOKEN = ("English", "Czech", "German", "French")          # spoken languages: a skill of another kind than a tool
 # Names a case-blind search finds in ordinary sentences ("I excel at", "a swift reply", "I go"): never a claim to look for
 # by name alone. The single letters and the other _STRICT names need their context; these are English words as well.
 _ORDINARY = frozenset({*_STRICT, "React", "Swift", "Express", "Spark", "Rust", "Ruby", "Oracle", "Excel", "Flask", "Angular",
@@ -167,6 +168,14 @@ def claimable_missing(description: str, have: str) -> list[str]:
     look for by name: what a letter or an answer must not claim as done (#78). Names that are also ordinary words and
     spoken languages are left out (_ORDINARY)."""
     return [k for k in compare(description, have)["missing"] if k not in _ORDINARY]
+
+
+def spoken_missing(have: str) -> list[str]:
+    """The spoken languages (SPOKEN) that `have` (the CV and your own notes) does not show, found as extract() finds them:
+    "German" needs its capital, and "Germany" or "Czech Republic" is no language. A letter or an answer that names one of
+    these with a level ("German (C1)", "fluent French") claims a skill the person has not shown (#113). Not limited to
+    the posting: a letter can claim a language the posting never asks for."""
+    return [name for name in SPOKEN if not _PATTERNS[name].search(have or "")]
 
 
 # A spelling a case-blind search will not find in an ordinary sentence: a digit, a capital after the first letter or a

@@ -58,6 +58,30 @@ def test_empty_inputs():
     assert keywords.compare("Python", "") == {"matched": [], "missing": ["Python"]}
 
 
+def test_the_spoken_languages_are_one_vocabulary_group():
+    assert set(keywords.SPOKEN) <= set(keywords.VOCABULARY)
+    assert keywords.extract("Fluent English, Czech, German and French.") == list(keywords.SPOKEN)
+
+
+@pytest.mark.parametrize("have, missing", [
+    ("Languages: German (C1), French B2.", ["English", "Czech"]),
+    ("English B2, Czech beginner, German (C1), fluent French.", []),
+    ("Two years in Germany; I moved to the Czech Republic.", ["English", "Czech", "German", "French"]),
+    ("I worked for a Czech market team and a German team.", ["English", "Czech", "French"]),
+    ("english and french in lower case", ["English", "Czech", "German", "French"]),   # names need their capital, as extract()
+    ("", ["English", "Czech", "German", "French"]),
+    (None, ["English", "Czech", "German", "French"]),
+])
+def test_spoken_missing_names_the_languages_the_cv_does_not_show(have, missing):
+    assert keywords.spoken_missing(have) == missing
+
+
+def test_spoken_missing_is_not_limited_to_what_a_posting_asks():
+    # a claim check reads the whole letter: a language the posting never named still counts (#113)
+    assert keywords.compare("Python developer", "Python")["missing"] == [] and "German" in keywords.spoken_missing("Python")
+    assert not set(keywords.SPOKEN) & set(keywords.claimable_missing("Fluent German and English.", ""))   # unchanged
+
+
 def test_extract_remembers_a_text_and_hands_out_fresh_lists():
     from jobhelper import keywords
     text = "We use Python, Docker and Kubernetes every day."

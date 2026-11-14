@@ -1,5 +1,5 @@
 {
- "about": "The golden set of the letter checks (#78): invented people, postings and letter sentences, each labelled with what the checks must say. Run before a change to a prompt or to a claim rule ships: tests/test_letter_evals.py. Add a case for every false alarm or missed claim found; never change a label to make a run pass. The inv-* cases were written before the #109 rules, but many of their sentences are also development rows in tests/test_claims.py, so their recall is a development number, not a held-out one; a fresh held-out batch should come from another writer. A case with \"gap\" is a known miss: it keeps its true label and runs as a strict expected failure, so a fix shows at once.",
+ "about": "The golden set of the letter checks (#78): invented people, postings and letter sentences, each labelled with what the checks must say. Run before a change to a prompt or to a claim rule ships: tests/test_letter_evals.py. Add a case for every false alarm or missed claim found; never change a label to make a run pass. The inv-* cases were written before the #109 rules, but many of their sentences are also development rows in tests/test_claims.py, so their recall is a development number, not a held-out one; a fresh held-out batch should come from another writer. A case with \"gap\" is a known miss: it keeps its true label and runs as a strict expected failure, so a fix shows at once. The h113-* cases (#113) are held-out: another writer wrote them before the #113 code, and they must never be copied into tests/test_claims.py. The wording of some h113-* cases was seen during development, so their recall counts as development, not held-out: exact copies h113-1n-dev-course, h113-4-dev-present-labs, h113-6-acc-fluent; near copies h113-1n-dev-reviewed-posting, h113-1n-care-course, h113-2n-dev-new-subject, h113-4n-dev-tool-for-slack, h113-4n-acc-macro-for-excel, h113-5n-dev-python-version, h113-6-dev-native-speaker, h113-6n-dev-company, h113-6n-acc-fluent-excel. The h113r-* cases (#113, fix round) are hard negatives and true positives written after the first #113 code, for past-participle openings, requirement wording and the English exemption.",
  "people": {
   "developer": {
    "cv": "Alex Novak\nJunior Developer\nalex@example.com · +420 600 000 000\nEXPERIENCE\nJunior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built an internal REST API in Django and Python; wrote tests with pytest.\nIT Intern – Fabrikam Labs, Brno (2023 – 2024): maintained Python scripts for data imports.\nSKILLS\nPython, Django, PostgreSQL, Git, Docker\n",
@@ -305,7 +305,12 @@
    "id": "acc-spoken-language",
    "person": "accountant",
    "text": "I speak German with suppliers every week.",
-   "expect": {}
+   "expect": {
+    "claimed": [
+     "German"
+    ]
+   },
+   "why": "Relabelled by the owner's decision (b) of 13 Nov: a spoken language said with a level word is a claim when the CV lacks it."
   },
   {
    "id": "eng-rest-of",
@@ -427,7 +432,8 @@
      "globex audit"
     ]
    },
-   "gap": "Known gap (#109): a lowercase name that ends in a field of work, not a firm or a place, cannot be told from \"good at internal audit\" without a dictionary. The label stays true; claims.EmployerCheck.invented says it is not caught."
+   "gap": "Known gap (#109): a lowercase name that ends in a field of work, not a firm or a place, cannot be told from \"good at internal audit\" without a dictionary. The label stays true; claims.EmployerCheck.invented says it is not caught.",
+   "now": {}
   },
   {
    "id": "inv-acc-firm-not-in-cv",
@@ -519,7 +525,8 @@
      "globex tooling"
     ]
    },
-   "gap": "Known gap (#109): a lowercase name that ends in a field of work, not a firm or a place, cannot be told from \"good at internal audit\" without a dictionary. The label stays true; claims.EmployerCheck.invented says it is not caught."
+   "gap": "Known gap (#109): a lowercase name that ends in a field of work, not a firm or a place, cannot be told from \"good at internal audit\" without a dictionary. The label stays true; claims.EmployerCheck.invented says it is not caught.",
+   "now": {}
   },
   {
    "id": "inv-eng-name-then-year",
@@ -654,6 +661,777 @@
    "person": "engineer",
    "text": "I worked at scale on large assemblies.",
    "expect": {}
+  },
+  {
+   "id": "h113-1-dev-trained-team",
+   "person": "developer",
+   "text": "I trained the interns on Terraform modules.",
+   "expect": {
+    "claimed": [
+     "Terraform"
+    ]
+   }
+  },
+  {
+   "id": "h113-1-dev-completed-migration",
+   "person": "developer",
+   "text": "I completed a Kafka migration for the tracking service.",
+   "expect": {
+    "claimed": [
+     "Kafka"
+    ]
+   }
+  },
+  {
+   "id": "h113-1-dev-reviewed-charts",
+   "person": "developer",
+   "text": "I reviewed Helm charts for every release.",
+   "expect": {
+    "claimed": [
+     "Helm"
+    ]
+   }
+  },
+  {
+   "id": "h113-1-dev-spotted-bug",
+   "person": "developer",
+   "text": "I spotted a bug in our Snowflake queries before the release.",
+   "expect": {
+    "claimed": [
+     "Snowflake"
+    ]
+   }
+  },
+  {
+   "id": "h113-1-acc-reviewed-ifrs",
+   "person": "accountant",
+   "text": "I reviewed IFRS adjustments before each close.",
+   "expect": {
+    "claimed": [
+     "IFRS"
+    ]
+   }
+  },
+  {
+   "id": "h113-1-acc-trained-xero",
+   "person": "accountant",
+   "text": "I trained new colleagues on Xero.",
+   "expect": {
+    "claimed": [
+     "Xero"
+    ]
+   }
+  },
+  {
+   "id": "h113-1-care-trained-others-cpr",
+   "person": "carer",
+   "text": "I trained new colleagues in CPR on the night shift.",
+   "expect": {
+    "claimed": [
+     "CPR"
+    ]
+   }
+  },
+  {
+   "id": "h113-1-care-completed-medication",
+   "person": "carer",
+   "text": "I completed medication administration rounds on the ward.",
+   "expect": {
+    "claimed": [
+     "Medication administration"
+    ],
+    "borrowed": [
+     "medication administration"
+    ]
+   }
+  },
+  {
+   "id": "h113-1-eng-completed-fmea",
+   "person": "engineer",
+   "text": "I completed an FMEA for the new gearbox bracket.",
+   "expect": {
+    "claimed": [
+     "FMEA"
+    ]
+   }
+  },
+  {
+   "id": "h113-1-eng-spotted-gdt",
+   "person": "engineer",
+   "text": "I spotted a GD&T error on the frame drawing.",
+   "expect": {
+    "claimed": [
+     "GD&T"
+    ]
+   }
+  },
+  {
+   "id": "h113-1n-dev-course",
+   "person": "developer",
+   "text": "I completed a course in Kafka.",
+   "expect": {}
+  },
+  {
+   "id": "h113-1n-dev-trained-in",
+   "person": "developer",
+   "text": "I trained in Terraform.",
+   "expect": {}
+  },
+  {
+   "id": "h113-1n-dev-application",
+   "person": "developer",
+   "text": "I submitted my application for the Terraform Engineer position.",
+   "expect": {}
+  },
+  {
+   "id": "h113-1n-dev-reviewed-posting",
+   "person": "developer",
+   "text": "I reviewed the posting for the Kafka Engineer role.",
+   "expect": {}
+  },
+  {
+   "id": "h113-1n-dev-webinar",
+   "person": "developer",
+   "text": "I completed a Snowflake webinar last month.",
+   "expect": {}
+  },
+  {
+   "id": "h113-1n-acc-class",
+   "person": "accountant",
+   "text": "I completed an evening class in IFRS.",
+   "expect": {}
+  },
+  {
+   "id": "h113-1n-acc-reviewed-posting",
+   "person": "accountant",
+   "text": "I reviewed your posting for the IFRS Accountant role.",
+   "expect": {}
+  },
+  {
+   "id": "h113-1n-care-course",
+   "person": "carer",
+   "text": "I completed a CPR course last year.",
+   "expect": {}
+  },
+  {
+   "id": "h113-1n-care-application",
+   "person": "carer",
+   "text": "I submitted my application for the CPR Instructor role.",
+   "expect": {}
+  },
+  {
+   "id": "h113-1n-eng-degree-module",
+   "person": "engineer",
+   "text": "I completed a degree module on FMEA.",
+   "expect": {}
+  },
+  {
+   "id": "h113-1n-eng-trained-in",
+   "person": "engineer",
+   "text": "I trained in FMEA at a short workshop.",
+   "expect": {}
+  },
+  {
+   "id": "h113-2-dev-sent-then-wrote",
+   "person": "developer",
+   "text": "I sent Kafka messages and then wrote the consumers myself.",
+   "expect": {
+    "claimed": [
+     "Kafka"
+    ]
+   }
+  },
+  {
+   "id": "h113-2-acc-submitted-reconciled",
+   "person": "accountant",
+   "text": "I submitted Xero reports and reconciled the differences.",
+   "expect": {
+    "claimed": [
+     "Xero"
+    ]
+   }
+  },
+  {
+   "id": "h113-2-care-attended-ran",
+   "person": "carer",
+   "text": "I attended CPR sessions, then ran refreshers for the team.",
+   "expect": {
+    "claimed": [
+     "CPR"
+    ]
+   }
+  },
+  {
+   "id": "h113-2-eng-sent-led",
+   "person": "engineer",
+   "text": "I sent FMEA sheets to suppliers and led the follow-up meetings.",
+   "expect": {
+    "claimed": [
+     "FMEA"
+    ]
+   }
+  },
+  {
+   "id": "h113-2n-dev-new-subject",
+   "person": "developer",
+   "text": "I asked about Kafka and the team built consumers.",
+   "expect": {}
+  },
+  {
+   "id": "h113-2n-acc-new-subject",
+   "person": "accountant",
+   "text": "I heard about IFRS and the finance team rewrote the policies.",
+   "expect": {}
+  },
+  {
+   "id": "h113-2n-eng-new-subject",
+   "person": "engineer",
+   "text": "I saw the CATIA demo and the supplier built the fixtures.",
+   "expect": {}
+  },
+  {
+   "id": "h113-3-dev-deployed",
+   "person": "developer",
+   "text": "Deployed batch jobs on Kubernetes.",
+   "expect": {
+    "claimed": [
+     "Kubernetes"
+    ]
+   }
+  },
+  {
+   "id": "h113-3-dev-led-squad",
+   "person": "developer",
+   "text": "Led a squad on Terraform migrations.",
+   "expect": {
+    "claimed": [
+     "Terraform"
+    ]
+   }
+  },
+  {
+   "id": "h113-3-acc-posted",
+   "person": "accountant",
+   "text": "Prepared IFRS statements for the group.",
+   "expect": {
+    "claimed": [
+     "IFRS"
+    ]
+   }
+  },
+  {
+   "id": "h113-3-care-led",
+   "person": "carer",
+   "text": "Led CPR refreshers for the night staff.",
+   "expect": {
+    "claimed": [
+     "CPR"
+    ]
+   }
+  },
+  {
+   "id": "h113-3-eng-modelled",
+   "person": "engineer",
+   "text": "Modelled gearbox housings in CATIA.",
+   "expect": {
+    "claimed": [
+     "CATIA"
+    ]
+   }
+  },
+  {
+   "id": "h113-3-eng-applied",
+   "person": "engineer",
+   "text": "Applied GD&T to technical drawings.",
+   "expect": {
+    "claimed": [
+     "GD&T"
+    ]
+   }
+  },
+  {
+   "id": "h113-3n-dev-present-day",
+   "person": "developer",
+   "text": "Present day teams rely on Kafka.",
+   "expect": {}
+  },
+  {
+   "id": "h113-3n-dev-interested",
+   "person": "developer",
+   "text": "Interested in Kafka and Terraform.",
+   "expect": {}
+  },
+  {
+   "id": "h113-3n-dev-inspired-by",
+   "person": "developer",
+   "text": "Inspired by your Kubernetes talk at the meetup.",
+   "expect": {}
+  },
+  {
+   "id": "h113-3n-acc-looking-forward",
+   "person": "accountant",
+   "text": "Looking forward to using Xero in your team.",
+   "expect": {}
+  },
+  {
+   "id": "h113-3n-care-interested",
+   "person": "carer",
+   "text": "Interested in CPR training.",
+   "expect": {}
+  },
+  {
+   "id": "h113-3n-eng-fascinated",
+   "person": "engineer",
+   "text": "Fascinated by how GD&T keeps a frame true.",
+   "expect": {}
+  },
+  {
+   "id": "h113-4-dev-joined",
+   "person": "developer",
+   "text": "I joined Initech Software after my degree.",
+   "expect": {
+    "invented": [
+     "Initech Software"
+    ]
+   }
+  },
+  {
+   "id": "h113-4-dev-developer-for",
+   "person": "developer",
+   "text": "I was a Developer for Stark Dynamics.",
+   "expect": {
+    "invented": [
+     "Stark Dynamics"
+    ]
+   }
+  },
+  {
+   "id": "h113-4-dev-present-labs",
+   "person": "developer",
+   "text": "I worked at Present Labs.",
+   "expect": {
+    "invented": [
+     "Present Labs"
+    ]
+   }
+  },
+  {
+   "id": "h113-4-dev-curly-possessive",
+   "person": "developer",
+   "text": "I wrote reports at Initech’s and learned a lot.",
+   "expect": {
+    "invented": [
+     "Initech"
+    ]
+   }
+  },
+  {
+   "id": "h113-4-acc-employed-by",
+   "person": "accountant",
+   "text": "I was employed by Hooli Partners last year.",
+   "expect": {
+    "invented": [
+     "Hooli Partners"
+    ]
+   }
+  },
+  {
+   "id": "h113-4-acc-tester-for",
+   "person": "accountant",
+   "text": "I was a bookkeeper for Vandelay Imports last year.",
+   "expect": {
+    "invented": [
+     "Vandelay Imports"
+    ]
+   }
+  },
+  {
+   "id": "h113-4-acc-curly-possessive",
+   "person": "accountant",
+   "text": "I reconciled accounts at Hooli’s.",
+   "expect": {
+    "invented": [
+     "Hooli"
+    ]
+   }
+  },
+  {
+   "id": "h113-4-care-my-experience-at",
+   "person": "carer",
+   "text": "My experience at Umbrella Care taught me patience.",
+   "expect": {
+    "invented": [
+     "Umbrella Care"
+    ]
+   }
+  },
+  {
+   "id": "h113-4-care-role-for",
+   "person": "carer",
+   "text": "I was a care assistant for Bluth Home Care.",
+   "expect": {
+    "invented": [
+     "Bluth Home Care"
+    ]
+   }
+  },
+  {
+   "id": "h113-4-eng-my-experience-at",
+   "person": "engineer",
+   "text": "My experience at Stark Tooling made me check every drawing twice.",
+   "expect": {
+    "invented": [
+     "Stark Tooling"
+    ]
+   }
+  },
+  {
+   "id": "h113-4-eng-present-machines",
+   "person": "engineer",
+   "text": "I was at Present Machines last year.",
+   "expect": {
+    "invented": [
+     "Present Machines"
+    ]
+   }
+  },
+  {
+   "id": "h113-4-eng-tester-for",
+   "person": "engineer",
+   "text": "I was a design engineer for Soylent Motors.",
+   "expect": {
+    "invented": [
+     "Soylent Motors"
+    ]
+   }
+  },
+  {
+   "id": "h113-4n-dev-tool-for-slack",
+   "person": "developer",
+   "text": "I wrote a small tool for Slack.",
+   "expect": {}
+  },
+  {
+   "id": "h113-4n-acc-macro-for-excel",
+   "person": "accountant",
+   "text": "I wrote a macro for Excel.",
+   "expect": {}
+  },
+  {
+   "id": "h113-4n-care-rota-for",
+   "person": "carer",
+   "text": "I wrote a rota for Sunday shifts.",
+   "expect": {}
+  },
+  {
+   "id": "h113-4n-eng-plugin-for",
+   "person": "engineer",
+   "text": "I wrote a plugin for Inventor.",
+   "expect": {}
+  },
+  {
+   "id": "h113-4n-dev-curly-event",
+   "person": "developer",
+   "text": "I was at Hooli’s hackathon last spring.",
+   "expect": {}
+  },
+  {
+   "id": "h113-4n-dev-at-work",
+   "person": "developer",
+   "text": "I stayed late at work to ship the release.",
+   "expect": {}
+  },
+  {
+   "id": "h113-4n-dev-at-present",
+   "person": "developer",
+   "text": "At present I maintain Django APIs.",
+   "expect": {}
+  },
+  {
+   "id": "h113-4n-dev-joined-known",
+   "person": "developer",
+   "text": "I joined Northwind Parcel in 2024 as a Junior Developer.",
+   "expect": {}
+  },
+  {
+   "id": "h113-4n-acc-employed-known",
+   "person": "accountant",
+   "text": "I was employed by Litware Finance in Prague.",
+   "expect": {}
+  },
+  {
+   "id": "h113-4n-care-experience-known",
+   "person": "carer",
+   "text": "My experience at Sunrise Home taught me patience.",
+   "expect": {}
+  },
+  {
+   "id": "h113-4n-eng-role-for-known",
+   "person": "engineer",
+   "text": "I was a design engineer for Contoso Machines.",
+   "expect": {}
+  },
+  {
+   "id": "h113-5n-dev-python-version",
+   "person": "developer",
+   "text": "I moved the importer to Python3.12.",
+   "expect": {}
+  },
+  {
+   "id": "h113-5n-acc-quarter",
+   "person": "accountant",
+   "text": "I closed the books for Q4 on time.",
+   "expect": {}
+  },
+  {
+   "id": "h113-5n-acc-by-quarter-year",
+   "person": "accountant",
+   "text": "I prepared the accounts by Q4 2024.",
+   "expect": {}
+  },
+  {
+   "id": "h113-5n-eng-half-year",
+   "person": "engineer",
+   "text": "I planned the frame tests for H2.",
+   "expect": {}
+  },
+  {
+   "id": "h113-5-dev-version-and-figure",
+   "person": "developer",
+   "text": "I moved the build to Python3.12 and cut CI time by 45%.",
+   "expect": {
+    "figures": [
+     "45"
+    ]
+   }
+  },
+  {
+   "id": "h113-5-acc-quarter-and-figure",
+   "person": "accountant",
+   "text": "I closed the books for Q4 and cut the close time by 30%.",
+   "expect": {
+    "figures": [
+     "30"
+    ]
+   }
+  },
+  {
+   "id": "h113-5-care-figure",
+   "person": "carer",
+   "text": "I helped reduce falls on the ward by 20%.",
+   "expect": {
+    "figures": [
+     "20"
+    ]
+   }
+  },
+  {
+   "id": "h113-6-acc-fluent",
+   "person": "accountant",
+   "text": "I am fluent in German.",
+   "expect": {
+    "claimed": [
+     "German"
+    ]
+   }
+  },
+  {
+   "id": "h113-6-acc-speak",
+   "person": "accountant",
+   "text": "I speak German at a business level.",
+   "expect": {
+    "claimed": [
+     "German"
+    ]
+   }
+  },
+  {
+   "id": "h113-6-dev-native-speaker",
+   "person": "developer",
+   "text": "I am a native German speaker.",
+   "expect": {
+    "claimed": [
+     "German"
+    ]
+   }
+  },
+  {
+   "id": "h113-6-eng-level-code",
+   "person": "engineer",
+   "text": "I talk to suppliers in German (C1).",
+   "expect": {
+    "claimed": [
+     "German"
+    ]
+   }
+  },
+  {
+   "id": "h113-6-care-speaker",
+   "person": "carer",
+   "text": "As a French speaker I helped families at the home.",
+   "expect": {
+    "claimed": [
+     "French"
+    ]
+   }
+  },
+  {
+   "id": "h113-6n-dev-company",
+   "person": "developer",
+   "text": "I applied to a German company.",
+   "expect": {}
+  },
+  {
+   "id": "h113-6n-eng-clients",
+   "person": "engineer",
+   "text": "I prepared drawings for German clients.",
+   "expect": {}
+  },
+  {
+   "id": "h113-6n-acc-excel-ordinary",
+   "person": "accountant",
+   "text": "I excel at planning the month-end close.",
+   "expect": {}
+  },
+  {
+   "id": "h113-6n-acc-fluent-excel",
+   "person": "accountant",
+   "text": "I am fluent in Excel formulas.",
+   "expect": {}
+  },
+  {
+   "id": "h113-6n-acc-speaking-suppliers",
+   "person": "accountant",
+   "text": "I worked with German-speaking suppliers every day.",
+   "expect": {}
+  },
+  {
+   "id": "h113-6n-care-wish",
+   "person": "carer",
+   "text": "I would like to reach B2 in French.",
+   "expect": {}
+  },
+  {
+   "id": "h113-7n-dev-cv",
+   "person": "developer",
+   "text": "At Northwind Parcel I built an internal REST API in Django and wrote tests with pytest.",
+   "expect": {}
+  },
+  {
+   "id": "h113-7n-acc-cv",
+   "person": "accountant",
+   "text": "At Litware Finance I prepared weekly payment runs and reconciled supplier statements.",
+   "expect": {}
+  },
+  {
+   "id": "h113-7n-care-cv",
+   "person": "carer",
+   "text": "At Sunrise Home I helped residents with daily care and meals.",
+   "expect": {}
+  },
+  {
+   "id": "h113-7n-eng-cv",
+   "person": "engineer",
+   "text": "At Contoso Machines I designed welded frames in SolidWorks and prepared technical drawings.",
+   "expect": {}
+  },
+  {
+   "id": "h113r-1n-dev-designed-for-scale",
+   "person": "developer",
+   "text": "Designed for scale, your Kubernetes setup is impressive.",
+   "expect": {}
+  },
+  {
+   "id": "h113r-2n-dev-posted-in-ad",
+   "person": "developer",
+   "text": "Posted in your job ad: Kafka and Terraform.",
+   "expect": {}
+  },
+  {
+   "id": "h113r-3n-acc-used-by-firms",
+   "person": "accountant",
+   "text": "Used by thousands of firms, your Xero ledger looks well kept.",
+   "expect": {}
+  },
+  {
+   "id": "h113r-4n-care-attracted-by",
+   "person": "carer",
+   "text": "Attracted by your CPR training, I am writing to apply.",
+   "expect": {}
+  },
+  {
+   "id": "h113r-5n-eng-built-on",
+   "person": "engineer",
+   "text": "Built on CATIA, your design platform is impressive.",
+   "expect": {}
+  },
+  {
+   "id": "h113r-6n-dev-founded-in",
+   "person": "developer",
+   "text": "Founded in 2024, your Terraform team sounds close-knit.",
+   "expect": {}
+  },
+  {
+   "id": "h113r-7n-dev-english-required",
+   "person": "developer",
+   "text": "Fluent English is required for the role.",
+   "expect": {}
+  },
+  {
+   "id": "h113r-8n-acc-german-must",
+   "person": "accountant",
+   "text": "German is a must for this job.",
+   "expect": {}
+  },
+  {
+   "id": "h113r-9n-acc-german-preferred",
+   "person": "accountant",
+   "text": "Business-level German is preferred.",
+   "expect": {}
+  },
+  {
+   "id": "h113r-10n-care-english-level",
+   "person": "carer",
+   "text": "I write in English at C1 level.",
+   "expect": {}
+  },
+  {
+   "id": "h113r-11n-eng-english-fluent",
+   "person": "engineer",
+   "text": "My English is fluent.",
+   "expect": {}
+  },
+  {
+   "id": "h113r-12-dev-used-kafka",
+   "person": "developer",
+   "text": "Used Kafka for event streaming.",
+   "expect": {
+    "claimed": [
+     "Kafka"
+    ]
+   }
+  },
+  {
+   "id": "h113r-13-eng-used-catia",
+   "person": "engineer",
+   "text": "Used CATIA for assembly drawings.",
+   "expect": {
+    "claimed": [
+     "CATIA"
+    ]
+   }
+  },
+  {
+   "id": "h113r-14-acc-german-b2",
+   "person": "accountant",
+   "text": "My German is at B2 level.",
+   "expect": {
+    "claimed": [
+     "German"
+    ]
+   },
+   "gap": "Known gap (#113 fix round): the level rule reads a level word before the language or a level right after it, not \"My <language> is at <level> level\". The label stays true.",
+   "now": {}
   }
  ]
 }

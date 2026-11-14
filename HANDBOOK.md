@@ -500,15 +500,48 @@ data/                your data; only the *.example.* files are in git
   the interview preparation ask it; only the interview allows the honest bridge ("I have not used X"). Its terms are
   the never-claim list plus the posting's skills that the CV and the notes do not show (`keywords.claimable_missing`,
   #78, with their other spellings, `keywords.names_of`: "k8s", "M365", only spellings unlike a word, `_UNLIKE_A_WORD`; names that are also ordinary words,
-  `keywords._ORDINARY`: "Excel", "Swift", "Go", "REST", "PLC", "Agile", and spoken languages are left out, because the
-  check is case blind). A claim is CLAIM's wording, any first-person verb in the past tense, or ongoing work ("I have
+  `keywords._ORDINARY`: "Excel", "Swift", "Go", "REST", "PLC", "Agile", are left out, because the
+  check is case blind; the spoken languages, `keywords.SPOKEN`, the one list of keywords, insights and prefilter, have their own rule below).
+  A claim is CLAIM's wording, any first-person verb in the past tense, or ongoing work ("I have
   been using", "I'm running"), an adverb allowed before it (`claims._DONE`; not `_NOT_DONE`: noticed, reached out,
-  completed a course, joined, "I'm looking forward", "I did not"). A digit right after a letter ("k8s", "S3") is no
-  figure in the text checked (`claims.STATED`; a source still backs with any digit, `FIGURE`). Measured read-only on 53 real letters with their job: 0 letters flagged before, 8 after:
+  joined, "I'm looking forward", "I did not"). A few verbs are judged by what they act on, not by a list (#113,
+  `claims._BY_OBJECT`, `_work`): trained, completed, reviewed, submitted, spotted, applied, finished, passed, earned are work
+  ("I trained the team on Terraform") unless they act on learning (`_LEARNING`: course, training, webinar, certificate,
+  class, degree, exam …), on the application (`_APPLYING`: my application, CV, letter) or on the posting ("the role",
+  "your posting"); "applied for / to" a job is no work. A second verb joined by "and", "," or "then" in the same
+  first-person clause counts too ("I sent Kafka events and built consumers") until a new subject starts it
+  (`_clause`). Owner's decision (a, #113): a CV-style fragment that opens with a past-tense verb ("Built pipelines in
+  Kafka.") is the person's own claim (`_fragment`; a name that looks like a verb, "Ahmed built", is none). A digit right after a letter ("k8s", "S3") is no
+  figure in the text checked (`claims.STATED`; a source still backs with any digit, `FIGURE`). Owner's decision (c, #113):
+  "Q4" and "H2" are no figures, and nor is a version, a dotted number after a tool's name ("Python 3.12", "Python3.12",
+  "v2.1"; `claims._version`); "Java 17" and "Python 2.5 years" still are. Measured read-only on 53 real letters with their job: 0 letters flagged before, 8 after:
   7 "Troubleshooting" and 1 "Microsoft 365", neither named by the CV or the notes (true claims by the rule). Owner's decision
   (8 Nov, #113): a soft skill such as troubleshooting stays as strict as a tool, and a sentence cut after the retry
   is named in the job window (`cover_letter.cut_claims` / `note_cut` → `letter_cut`, one decision per sentence in
   `_cut_reason`, also for a sentence that admits a gap), pointing to More about your work.
+  Owner's decision (b, #113): a spoken language (`keywords.SPOKEN`: English, Czech, German, French) said with a level
+  word (fluent, native, bilingual, speak, speaker, mother tongue, A1–C2 …) is a claim when the CV and the person's notes
+  lack it (`claims.spoken_claims`, `keywords.spoken_missing`; the terms of `cover_letter.unverified_terms`). "German
+  company", "German-speaking customers", a wish, "your clients speak German", "I do not speak German" and "I excel at" are
+  not claims; Excel stays out of the name check. The languages go only into the check list of the letter and the answers,
+  never into the adapted CV's never-claim list, which would cut its language lines. English is never missing (main session,
+  14 Nov, final): the letter, the answers and the interview preparation are in English, so "I write in English at C1" is no claim
+  even when the CV lacks the word; Czech, German and French still are. A level that states what the job needs ("Fluent English is
+  required", "German is a must", "… preferred") is no claim (requirement skip). An opening past participle + preposition is about
+  the employer (no claim) in three cases only: the clause after the first comma starts with your / their / its ("Designed for scale,
+  your platform is impressive"); it starts with the / this and the phrase before the comma holds a year ("Founded in 1998, the firm
+  …"); or "your" or a posting word comes right after the preposition ("Attracted by your …", "Posted in your job ad: …"). So "Worked
+  on Kafka, the event bus, at Contoso." and "Worked with Kafka in your industry for years." are claims; "Worked on your Kafka
+  migration" may still read as no claim. "Used <tool> for …" as a CV-style line is a claim. Known false alarm: "Designed for scale, the
+  platform is …" reads as a claim (a missed claim costs more). "wrote / emailed to you / to your …" is no work (the letter's own
+  frame): "Attracted by your Kafka stack, I wrote to you." is no claim; "I wrote Kafka consumers" is. Known gap: a level said as "My
+  German is at B2 level." is not read as a claim (h113r-14). More known misses (main session, 14 Nov: no code change, they go on a follow-up issue): an
+  opening phrase with a year before a "the" clause hides work ("Migrated to Kafka in 2021, the team saved hours." reads as no claim);
+  "the" plus a posting word right after the preposition hides work ("Worked on the listing pages …" reads as no claim); "I have
+  written to you" still reads as a claim when a missing tool is in the sentence ("written" is a claim word); "sent" and "e-mailed"
+  are not read as verbs on purpose ("…, I sent my CV" stays clean), so "I sent Kafka events to the warehouse" is no claim.
+  Measured read-only (#113, 14 Nov): 53 real letters read only – invented employers 0
+  before and after, letters with warnings 8 before and after with the same texts.
   The golden set `tests/fixtures/letter_evals.json` (invented people in four professions, every case labelled) runs in
   `tests/test_letter_evals.py`: change a prompt or a claim rule only with it passing in every profession, and add a
   case for each false alarm or missed claim; never change a label to make a run pass. In the
@@ -554,10 +587,12 @@ data/                your data; only the *.example.* files are in git
   An employer the model invented is `EmployerCheck.invented` (#63, #109): a first-person sentence of work "at" a name, "for" a
   name only after a word of employment (worked, interned, intern ...), "with" a name only with a legal ending (Ltd, Inc;
   not Labs or Group), the name followed by punctuation, a linking word or a time word ("last year", a number). Also
-  caught: the second of two names ("at Contoso Labs and Globex Labs"), "my work / time at X", a lowercase name that ends in a
+  caught: the second of two names ("at Contoso Labs and Globex Labs"), "my work / time / experience at X", a name after "joined" or "employed by", after a role noun and "for" that is the
+  candidate's own ("Developer for X", "as a tester for X", `_roles_for`; "I built a manager for Slack" is a thing), a
+  curly possessive ("Fabrikam’s office"), a lowercase name that ends in a
   firm or workplace word (`_WORKPLACE`: "at contoso labs"), and a name after character 500. A name is known when the
   whole name, or its first word that is not a generic word (`_GENERIC`: software, cloud, systems ...), is in the CV, the
-  company or the posting. No name: forms of address, weekdays, months, events ("PyCon Prague"), idioms ("at Scale",
+  company or the posting and a source writes that word with a capital ("Present Labs" is not cleared by "2024 – present", #113). No name: forms of address, weekdays, months, events ("PyCon Prague"), idioms ("at Scale",
   `_AT_IDIOMS`), a one-word name the CV or the posting writes in lowercase (never the letter itself: the model would
   clear the name it made up), a place right after a visit ("I interviewed / spoke / presented at X"), and what a wish
   names; "at Contoso's" is Contoso. Sent back once, then
@@ -565,9 +600,9 @@ data/                your data; only the *.example.* files are in git
   Measured read-only on 53 real letters (13 Nov): 0 flagged before and after #109, and no other letter warning
   changed. A fixed labelled set of sentences in tests/test_claims.py must stay as labelled. Not caught (the list is in the
   docstring of `invented`; owner, 13 Nov: first person only): a lowercase name that ends in a field of work ("at globex
-  audit"; two strict expected failures in the golden set), the middle names of a list of three, a lowercase name after
-  "my work at", "we built ... at X". Known false alarm: "my time at" an event whose name has no event word ("My time at
-  PyCon Prague was fun"). Still not caught: a duration ("over the
+  audit"; one of three known gaps of the golden set (the other two: a second lowercase "… tooling" name, and h113r-14 above), which pins its current output; the 85 held-out cases h113-* were written before the code, but some ids were seen during development: exact copies h113-1n-dev-course, h113-4-dev-present-labs, h113-6-acc-fluent, and nine near copies named in the fixture's `about`), the middle names of a list of three, a lowercase name after
+  "my work at", "we built ... at X". Known false alarms: "my time at" an event whose name has no event word ("My time at
+  PyCon Prague was fun"); "Java 17" is still a figure (no dot); "applied" counts as work unless it is for or to a role, job or application; a role said of another person with "as" is read as the candidate's. Still not caught: a duration ("over the
   past year"), a claim no position names ("used Docker daily"), and a job whose noun is not in `claims._JOB_WORDS` (#66 added the nouns at places of study: pianist,
   postdoc, fellow, dean, director …, and the phrase "working student" in `_JOB_PHRASES`; "student" alone stays study).
 - **The claim rules read a wish, a team and an interest more closely** (#82): a wish also ends at ", having / after /

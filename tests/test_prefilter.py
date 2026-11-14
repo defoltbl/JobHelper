@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from jobhelper import agent3_letters, config, llm, prefilter, store
+from jobhelper import agent3_letters, config, keywords, llm, prefilter, store
 
 CV = "Python, Kotlin, SQL, PostgreSQL, FastAPI, Docker, Azure, Git, Linux, React, Android. English B2."
 CV_KEYS = {"Python", "Kotlin", "SQL", "PostgreSQL", "FastAPI", "Docker", "Azure", "Git", "Linux", "React", "Android", "English"}
@@ -51,6 +51,14 @@ def test_levels_far_above_a_graduate_are_skipped(title):
 def test_posting_with_none_of_your_technologies_is_skipped():
     job = _job("Field IT Support", "Office 365, Active Directory, Networking and ServiceNow on site.")
     assert "None of the skills and tools the posting names are in your CV" in _skip(job)
+
+
+@pytest.mark.parametrize("language", keywords.SPOKEN)
+def test_a_spoken_language_is_not_a_skill_the_cv_lacks(language):
+    # only two skills are left once the language is set aside: too few to call the posting another profession
+    job = _job("Field IT Support", f"Office 365 and ServiceNow on site. Fluent {language}.")
+    assert _skip(job) == ""
+    assert "None of the skills" in _skip(_job("Field IT Support", f"Office 365, ServiceNow and Networking. Fluent {language}."))
 
 
 # ── what must always reach the model (each scored 30+ in the first real runs) ──

@@ -99,7 +99,7 @@ def _language_named(found: str) -> str:
 
 
 # Named in postings of every profession: they say nothing about which profession a posting is.
-_EVERYWHERE = {"English", "Czech", "German", "French", "Agile", "Scrum", "Excel", "Jira", "Confluence", "Troubleshooting",
+_EVERYWHERE = {*keywords.SPOKEN, "Agile", "Scrum", "Excel", "Jira", "Confluence", "Troubleshooting",
                "Project management", "MS Office", "PowerPoint", "B2B", "UX", "GDPR", "Driving licence"}
 
 
