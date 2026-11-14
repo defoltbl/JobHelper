@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Documents:** the README says that GitHub Actions runs the tests for every pull request and every push to main, and the technical documentation names Python 3.14. Before, they said "after every push" and "Python 3.10 or newer".
 - **Form assistant:** more fields that you cannot see or reach are left empty: a box cut away or hidden by its parent, far to the side, very small, nearly see-through, covered by something else, switched off, a box that cannot be clicked, or inside a hidden frame. A see-through box that fades in within about 2 seconds is still filled. Before, only a box outside the page or fully see-through was left out.
 - **Form assistant:** a page in a right-to-left language that scrolls sideways keeps its fields. Before, real fields at its left edge were taken for traps.
 - **Form assistant:** the assistant checks each field again just before it writes into it. A page can no longer trick it into filling another field. A page that is still loading gets its own message. Before, the message said that the tab changed.

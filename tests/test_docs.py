@@ -386,7 +386,7 @@ def test_the_ste100_checker_counts_the_way_the_rule_says(tmp_path):
 
 
 def test_ci_runs_what_the_readme_says_on_a_mac_with_the_locked_packages():
-    """GitHub Actions runs the README's two test commands after every push, with the hash-checked packages."""
+    """GitHub Actions runs the README's two test commands for every pull request and every push to main, with the hash-checked packages."""
     workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     commands = readme.split("## Testing")[1].split("```bash")[1].split("```")[0].strip().splitlines()

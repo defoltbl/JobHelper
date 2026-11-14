@@ -27,7 +27,7 @@ API key, no per-token bill – and your data stays on your Mac, encrypted.
   Submit.
 - **Private by design.** AES-256-GCM encrypted data, keys in the macOS Keychain, signed rule files.
 - **A real Mac app** with a desktop widget and a weekly run with the window closed.
-- **2,000+ offline tests**, run on every core here and by GitHub Actions on every push.
+- **2,000+ offline tests**, run on every core here and by GitHub Actions on every pull request and every push to main.
 
 ## Quick start
 
@@ -55,7 +55,7 @@ python -m pytest
 ```
 
 The tests run offline in temporary folders and never touch real data, the Keychain, Claude, a
-mailbox or a browser. GitHub Actions runs the same two commands on a Mac after every push.
+mailbox or a browser. GitHub Actions runs the same two commands on a Mac for every pull request and every push to main.
 
 ## Documentation
 
