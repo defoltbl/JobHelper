@@ -1,4 +1,4 @@
-# Runs the checks of README "Testing" on every push and pull request: pyflakes, then the whole test suite.
+# Runs the checks of README "Testing" on every pull request and every push to main: pyflakes, then the whole test suite.
 # macOS, because the app is a Mac app (Keychain, Qt Quick off-screen, the bundled Claude program).
 # The tests are offline: they never ask Claude, read a job board or a mailbox, or touch a real Keychain.
 name: Tests

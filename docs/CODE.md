@@ -1,6 +1,6 @@
 # JobHelper technical documentation
 
-**Applies to:** the JobHelper source code, on macOS with Python 3.10 or newer.
+**Applies to:** the JobHelper source code, on macOS with Python 3.14.
 
 This document is for people who work with the code. It tells you how to install the app and
 how to run it from the command line. It also shows how the code is organised, and how to test
@@ -79,7 +79,7 @@ Table 2.1 lists what the app itself is written in.
 
 | Technology | Used for | Why it was chosen |
 |---|---|---|
-| Python 3.10 or newer | All the logic | The libraries for Word files, Excel files, mail and web pages are mature in Python, and the official Claude library is a Python library. One language for everything keeps the project small enough for one person |
+| Python 3.14 | All the logic | The libraries for Word files, Excel files, mail and web pages are mature in Python, and the official Claude library is a Python library. One language for everything keeps the project small enough for one person |
 | Qt Quick (QML) with PySide6 | The window | It draws a native window on the graphics card, so the robots and the lists move smoothly. It needs no web browser inside the app. An earlier window was a web page, and the app removed it. Two front ends had to stay the same, and the web window was slower and looked foreign on macOS |
 | QML for layout, Python for logic | The split between `ui_qt/` and `jobhelper/` | A QML file only shows things and calls the bridge; it never reads a file. The logic can therefore be tested without a window, and the window can be tested without real data |
 | Threads with Qt signals | Searches, scans and rewrites | Long work must not freeze the window. A worker thread does it and answers through a signal, which Qt delivers on the window's own thread |
@@ -178,7 +178,7 @@ Table 2.7 lists parts that were considered and left out.
 Before you install, make sure you have:
 
 - macOS.
-- Python 3.10 or newer.
+- Python 3.14 (the version the locked packages and the CI use).
 - A Claude subscription. The SDK carries its own copy of the Claude Code program. Sign in one time:
   select **Sign in** in the Account card, or run `claude auth login`.
 - Optional: LibreOffice, for PDF copies of the documents.
