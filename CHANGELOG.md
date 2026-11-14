@@ -7,6 +7,17 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Form assistant:** in a review, a payment card number, an IBAN or a US social security number stays private in any field, whatever the field is called. Before, an IBAN or a social security number went to Claude from a "Notes" box.
+- **Form assistant:** a card number is found with spaces, new lines, tabs, dashes, dots or other signs between the groups, and inside a sentence. A number may mix gaps ("4111-1111 1111-1111"). A social security number may use any kind of dash. A list of dates or years ("2019-2021 2021-2023") is not taken for a card.
+- **Form assistant:** more fields are left to you: a password or secret on its own ("Passphrase", "Heslo", "Kennwort", "Client secret") and a key or a code that is a secret ("API key", "SMS code", "Access code").
+- **Form assistant:** more fields are left to you: a card ("Debit card", "Company card") and blood type.
+- **Form assistant:** questions about what you know are still filled: "Pass rate", "Postcode", "Key skills", "Product code", "Auth token experience" and "Payment cards experience".
+- **Form assistant:** a label with look-alike letters or hidden signs ("Ｐａｓｓｗｏｒｄ") is read as the plain word. Before, it passed as not private.
+- **Form assistant:** in a review, a list or radios with a plain label ("Your answer") and options that give consent ("I agree") is private. Before, only its label was read.
+- **Form assistant:** a text box is left to you as consent when the name the page gives it says consent or terms ("consent_required", "accept_terms"). A **Portfolio** box named "agreement_url" and an email box named "terms_email" are filled. Before, they were left to you.
+- **Form assistant:** an "I work here now" box is ticked also when the name the page gives it says "notify" or "contact". It is never ticked when that name says consent, terms, privacy, policy or marketing.
+- **Form assistant:** "Do you agree to relocate?" is no longer filled with a year as the end date of a job.
+- **Form assistant:** a field named "Period to" gets the end date of the job. Before, it got the start date.
 - **Cover letters and answers:** more work is checked as a claim. Verbs such as "trained", "completed", "reviewed", "submitted", "spotted" and "applied" count when they act on real work ("I trained the team on Terraform"). They do not count when they act on a course, a training, a certificate, your application or the posting ("I completed a course in Kafka", "I submitted my application"). Before, a fixed list of verbs was skipped.
 - **Cover letters and answers:** a second verb in the same sentence is checked too ("I sent Kafka events and built consumers"), until a new subject starts.
 - **Cover letters and answers:** a short line that starts with a verb in the past tense, as in a CV ("Built pipelines in Kafka."), is checked as your own claim.

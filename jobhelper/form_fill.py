@@ -641,14 +641,18 @@ REVIEW = r"""
       if (type === 'radio') {
         if (!el.name) continue;
         var set = el.closest('fieldset'), asked = set && set.querySelector('legend') ? text(set.querySelector('legend')) : el.name;
-        if (seen[el.name] === undefined) { seen[el.name] = out.length; out.push({label: asked.slice(0, 200), value: '', required: !!el.required, kind: 'radio',
+        if (seen[el.name] === undefined) { seen[el.name] = out.length; out.push({label: asked.slice(0, 200), value: '', required: !!el.required, kind: 'radio', options: [],
                                                                                  name: String(el.name).slice(0, 100), id: '', hint: '', auto: String(el.getAttribute('autocomplete') || '').slice(0, 100)}); }
-        if (el.checked) out[seen[el.name]].value = (el.labels && el.labels.length ? text(el.labels[0]) : clean(el.value)).slice(0, 200);
+        var says = el.labels && el.labels.length ? text(el.labels[0]) : clean(el.value);
+        if (out[seen[el.name]].options.length < 300) out[seen[el.name]].options.push(says.slice(0, 80));     // "I agree" under "Your answer": consent
+        if (el.checked) out[seen[el.name]].value = says.slice(0, 200);
         continue;
       }
       if (r.width < 2 || r.height < 2) continue;
       var value = tag === 'SELECT' ? (chosen(el) ? clean(el.options[el.selectedIndex].text) : '') : String(el.value || '');
-      out.push({label: name(el).slice(0, 200), value: value.slice(0, 3000), required: !!(el.required || el.getAttribute('aria-required') === 'true'), kind: type,
+      var options = [];
+      if (tag === 'SELECT') for (var k = 0; k < el.options.length && k < 300; k++) options.push(clean(el.options[k].text).slice(0, 80));
+      out.push({label: name(el).slice(0, 200), value: value.slice(0, 3000), required: !!(el.required || el.getAttribute('aria-required') === 'true'), kind: type, options: options,
                 name: String(el.name || '').slice(0, 100), id: String(el.id || '').slice(0, 100),
                 hint: clean(el.getAttribute('placeholder') || el.getAttribute('aria-label') || '').slice(0, 200),
                 auto: String(el.getAttribute('autocomplete') || '').slice(0, 100)});
@@ -661,8 +665,10 @@ REVIEW = r"""
 
 
 def review_answer(text: str) -> dict[str, Any]:
-    """What the REVIEW script gave back, checked. A field whose name marks it as personal or as payment keeps
-    only whether it is filled in: its value goes no further."""
+    """What the REVIEW script gave back, checked. A field whose name marks it as personal or as payment, or whose
+    value has the shape of a card number, an IBAN or a social security number (PrivateShape), keeps only whether it
+    is filled in: its value goes no further. Consent is read as the planner reads it: a list or radios also by their
+    options ("Your answer": "Yes" / "I agree")."""
     data = page_reply(text, FORM_REFUSED)
     if not isinstance(data.get("fields"), list):
         raise ValueError(FORM_REFUSED)
@@ -672,11 +678,14 @@ def review_answer(text: str) -> dict[str, Any]:
             continue
         label = " ".join(str(raw.get("label") or "").split())[:200]
         value = str(raw.get("value") or "")[:3000]
-        named = {"label": label, "name": raw.get("name"), "id": raw.get("id"), "hint": raw.get("hint"), "auto": raw.get("auto")}
+        kind = str(raw.get("kind") or "text")[:20]
+        options = raw.get("options") if isinstance(raw.get("options"), list) else []
+        named = {"label": label, "name": raw.get("name"), "id": raw.get("id"), "hint": raw.get("hint"), "auto": raw.get("auto"),
+                 "options": [str(o)[:80] for o in options[:300]]}
         nameless = not label and not str(raw.get("name") or "").strip() and not str(raw.get("id") or "").strip()
-        private = nameless or _private(named) or _consent(named) or _card_number(value)
+        private = nameless or _private(named) or _consent(named, _picks_by_options(kind)) or PrivateShape(value).found
         fields.append({"label": label or "A field with no name", "value": "" if private else value, "filled": bool(value.strip()),
-                       "required": bool(raw.get("required")), "private": private, "kind": str(raw.get("kind") or "text")[:20]})
+                       "required": bool(raw.get("required")), "private": private, "kind": kind})
     return {"url": str(data.get("url") or ""), "title": str(data.get("title") or "")[:300], "fields": fields}
 
 
@@ -869,12 +878,30 @@ _PRIVATE = re.compile(r"passw|captcha|card ?number|credit card|\biban\b|\bbank|a
                       r"|da[ňn]ov[ée] identifika|\bdi[čc]\b|rodinn[ýy] stav|[čc][íi]slo (?:karty|[úu][čc]tu|op\b|pasu|pas\b)|platnost karty"
                       r"|geburt|geboren|geschlecht|staatsangeh|staatsb(?:[üu]|ue)rger|nationalit|steuer(?:liche)? ?(?:nummer|nr\b|-?id|ident)"
                       r"|ausweis|reisepass|sozialversicherung|rentenversicherung|\bsv ?nummer|kreditkart|kartennummer|karteninhaber"
-                      r"|ablaufdatum|kontonummer|\bkonto ?nr\b|\balter\b|familienstand|national insurance")
+                      r"|ablaufdatum|kontonummer|\bkonto ?nr\b|\balter\b|familienstand|national insurance"
+                      # #89: a secret by its own noun; the same in Czech and German ("Heslo", "Číslo platební karty",
+                      # "Kartenprüfnummer"); a key, a code, a token or a card: see _PRIVATE_WHOLE
+                      r"|passphrase|kennw[oö]rt|\bhesl(?:o|a|em)\b|\bacct\b"
+                      r"|\b(?:platebn|kreditn|debetn|bankovn)[íi] kart|karten ?(?:nummer|nr\b|pr(?:ü|ue)f|inhaber|daten)"
+                      r"|(?:bank|debit|giro|\bec|zahlungs) ?karte|blood (?:type|group)|krevn[íi] skupin|blutgruppe")
 # what a page's autocomplete names as payment or personal: never filled, whatever the label says. One token at a time:
 # autocomplete may start with a section or "billing" ("section-a cc-csc", "billing cc-number").
 _PRIVATE_AUTO = re.compile(r"cc-.*|bday.*|sex|transaction-.*|current-password|new-password|one-time-code")
 # short words that are private only as the whole label ("SWIFT", "TIN", "Username"), not inside a question ("Swift experience")
-_PRIVATE_ALONE = re.compile(r"^[\s*]*(?:swift|bic|tin|sin|d ?o ?b|user ?name)(?: code| no| number)?[\s*:.]*$")
+_PRIVATE_ALONE = re.compile(r"^[\s*]*(?:swift|bic|tin|sin|d ?o ?b|user ?name|card|karta|karte)(?: code| no| number)?[\s*:.]*$")
+# what is private only as the end of a part of the field's name (its label, hint, inner name or id, one at a time, its
+# "(...)" hints left out): a short code word ("pass", "pan", "nin"); a token or a secret; a key, a code or a token beside a
+# word of security ("API key", "SMS code (6 digits)", not "Key skills" or "API key management"); a card by a payment word
+# ("Debit card", "Company card", not "Payment card industry experience") (#89)
+_PRIVATE_WHOLE = re.compile(r"(?:^[\s*]*(?:pass|pan|nino?)|\b(?:tokens?|secrets?)"
+                            r"|\b(?:api|secret|private|access|security|auth(?:entication|orization)?|sms|recovery|backup|activation"
+                            r"|verification|confirmation|log ?in|sign ?in|licen[cs]e) ?(?:keys?|codes?|tokens?|pins?)|\bproduct ?keys?"
+                            r"|\b(?:debit|credit|payment|prepaid|company|business) ?cards?|\bon (?:the |your )?card|\bcard (?:details|code|pin))"
+                            r"(?: no| number)?[\s*:.?]*$")
+# a part that asks what you know ("Experience with access tokens (OAuth)", "Years with API keys") names no secret of yours
+_ASKS_EXPERIENCE = re.compile(r"experience|\byears?\b|familiar|knowledge|\bskills?\b")
+# a hint in brackets after a field's name ("SMS code (6 digits)"): one level, no nesting, so it reads in one pass
+_HINT = re.compile(r"\([^()]*\)")
 # an option that gives consent: the consent words, and the short answers to a consent question ("Accept" / "Decline",
 # "Agree" / "Disagree", "I do not accept"); the question it answers is yours
 _CONSENT_OPTION = re.compile(r"^[\s*]*(?:yes,? )?(?:i )?(?:agree|accept|consent|certify|confirm|authori[sz]e|acknowledge|decline|disagree)"
@@ -885,8 +912,17 @@ _CONSENT_OPTION = re.compile(r"^[\s*]*(?:yes,? )?(?:i )?(?:agree|accept|consent|
 # personal data or a background check stay questions
 _TYPED_CONSENT = re.compile(r"\bi (?:hereby )?(?:agree|consent|accept|confirm|declare|certify)\b|\btype (?:yes|agree|accept|i agree)\b"
                             r"|to certify|to agree", re.IGNORECASE)
-# a text box the page itself names for consent ("consent_text", "accept_terms")
-_CONSENT_NAME = re.compile(r"\b(?:consent|agree|agreement|accept|acceptance|terms|gdpr)\b")
+# the words a page names a consent field with ("consent_text", "accept_terms"); "conditions" counts only beside "terms"
+# ("terms_and_conditions" has "terms"), so "working_conditions" and "medical_conditions" are no consent (#89)
+_CONSENT_NAME_WORDS = r"consent|agree|agreement|accept|acceptance|terms|gdpr"
+_CONSENT_NAME_WORD = re.compile(r"\b(?:" + _CONSENT_NAME_WORDS + r")\b")
+# a text box the page itself names for consent has one of those words in its name or id ("consent_required",
+# "termsAccepted"), unless the name also says what else the box holds: a link, an address, a phone, a date, notes
+# ("agreement_url", "terms_email", "acceptance_date") (#89)
+_NOT_CONSENT_NOUN = re.compile(r"\b(?:url|uri|link|href|e ?mail|phone|tel|site|website|date|notes?|comments?|experience|tool)\b")
+# a tick box is never ticked with one of those words, or a word of privacy or marketing, in its inner name: "accept_terms",
+# "privacy_current" or "tos" behind "I currently work here" (#89)
+_NEVER_TICK_NAME = re.compile(r"\b(?:" + _CONSENT_NAME_WORDS + r"|tos|ccpa)\b|privacy|polic|marketing")
 # a question in a list or a set of radios that gives consent in your name: yours to answer, never the model's
 # ("Are you authorized to work in …?" is a question about you, not consent: "authorize" alone is)
 # ("Do you agree to relocate?" and "Experience with GDPR compliance" are questions about you, not consent)
@@ -953,9 +989,16 @@ ROW_NEAR = 5                   # a field this close after a job's own field stil
 ROW_PLACE = "This asks where the school was, which My details does not hold. Fill it in yourself."
 ROW_WORDS = "This asks about your studies in your own words. Write it yourself."
 MORE_ROWS = "You listed {have} in My details, and this is one more. Add it there, or type it."
-_ROW_START = re.compile(r"\bstart(?:ed)?\b|\bfrom\b|\bbegan\b|date from|od\b")
-_ROW_END = re.compile(r"\bend(?:ed)?\b|\bto\b|\buntil\b|\bfinish|\bleft\b|date to|graduat")
-_NOT_A_ROW_DATE = re.compile(r"earliest|availab|can you|notice|birth|expected|preferred|interview|deadline|today|valid|expir|issue")
+_ROW_START = re.compile(r"\bstart(?:ed)?\b|\bfrom\b|\bbegan\b|date from|\bod\b")       # "od" alone (Czech), not the end of "period"
+# "to" ends a job's dates alone or before a date word or a hint ("To", "To year", "To (optional)", "To (e.g. 03/2022)",
+# "To the present"), never before another word ("Do you agree to relocate", "Which year did you move to Prague") (#89)
+_ROW_END = re.compile(r"\bend(?:ed)?\b|\bto\b(?! (?!(?:months?|years?|dates?|day|mm|yy|yyyy|dd|mon|present|the present|now|current|when"
+                      r"|optional|e|eg|i|ie|if|or|leave|blank|empty)\b)[^\W\d_])|\buntil\b|\bfinish|\bleft\b|date to|graduat")
+# a question asked of you ("Are you willing to start within a month?", "Do you agree to relocate?") is not a job's date
+_NOT_A_ROW_DATE = re.compile(r"earliest|availab|can you|notice|birth|expected|preferred|interview|deadline|today|valid|expir|issue"
+                             r"|\b(?:are|do|would|will|could) you\b|willing|\bable to\b")
+# a question mark leaves a job's date only with one of these words ("When did you start this job?", "Start date (MM/YYYY)?")
+_DATE_WORD = re.compile(r"\b(?:when|dates?|months?|years?|mm|yy|yyyy)\b")
 # when you can start: asked as "earliest start date", "available from", "when can you start" (a plain "start date" may be a job's)
 _AVAILABLE = re.compile(r"earliest (?:possible )?(?:start|date)|availab|when (?:can|could|would) you (?:start|join|begin)|(?:possible|desired|preferred|expected|proposed) start"
                         r"|date of (?:joining|entry)|joining date|can you start|start working|nástup")
@@ -1133,37 +1176,181 @@ def _private(field: dict[str, Any]) -> bool:
     """Whether the field is personal or payment information: its name read as written ("DoB", "PassWord") or as
     plain words ("Tax_ID", "Card-number"), or its autocomplete value ("cc-number", "one-time-code"). The planner and
     the review of a form both ask this, so a value the planner leaves alone never goes to Claude in a review either."""
-    written = " ".join(str(field.get(k) or "") for k in ("label", "hint", "name", "id")).lower()
-    auto = str(field.get("auto") or "").lower().split()
-    alone = bool(_PRIVATE_ALONE.match(_words({"label": field.get("label")})))      # the label only: name="username" on an email box
-    return bool(_PRIVATE.search(written) or _PRIVATE.search(_words(field)) or alone or any(_PRIVATE_AUTO.fullmatch(t) for t in auto))
+    written = _readable(" ".join(str(field.get(k) or "") for k in ("label", "hint", "name", "id"))).lower()
+    auto = _readable(str(field.get("auto") or "")).lower().split()
+    parts = [_words({"label": _HINT.sub(" ", _readable(str(field.get(k) or "")))}) for k in ("label", "hint", "name", "id")]
+    alone = bool(_PRIVATE_ALONE.match(parts[0]))      # the label only: name="username" on an email box
+    whole = any(_PRIVATE_WHOLE.search(part) and not _ASKS_EXPERIENCE.search(part) for part in parts)
+    return bool(_PRIVATE.search(written) or _PRIVATE.search(_words(field)) or alone or whole or any(_PRIVATE_AUTO.fullmatch(t) for t in auto))
 
 
-def _card_number(value: str) -> bool:
-    """Whether a typed value is shaped like a payment card number: 13 to 19 digits that pass the Luhn check."""
-    digits = re.sub(r"[\s-]", "", unicodedata.normalize("NFKC", value or ""))     # fullwidth digits become plain digits
-    if not 13 <= len(digits) <= 19 or not digits.isdecimal():                       # "፩" is a digit sign int() refuses
+# the hyphen and the dashes from "\u2010" to "\u2015"
+_DASH_SIGNS = r"\u2010-\u2015-"
+# a run of digits in groups ("4111 1111 1111 1111", "4111 - 1111 - 1111 - 1111", "01/05/2024"): a gap is one or more
+# spaces, dots, commas, slashes, underscores, colons, bars, plus signs, middle dots, minus signs or dashes. No gap sign
+# is a digit, so the run reads in one pass.
+_GAP_SIGNS = r"\s._,/:|+\u00b7\u2212" + _DASH_SIGNS
+_DIGIT_RUN = re.compile(r"[0-9]+(?:[" + _GAP_SIGNS + r"]+[0-9]+)*")
+_DIGIT_GAP = re.compile(r"([" + _GAP_SIGNS + r"]+)")
+_DASHES = dict.fromkeys([*range(0x2010, 0x2016), 0x2212], "-")
+# where an IBAN can start: two letters and two check digits at the start of a word; the rest is read from there.
+# A gap is spaces, dots, underscores, slashes or dashes; no gap sign is a letter or a digit.
+_IBAN_GAP_SIGNS = r"[\s._/-]"
+_IBAN_START = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{2}[0-9]{2}")
+_IBAN_GROUPS = re.compile(r"[A-Za-z0-9]+(?:" + _IBAN_GAP_SIGNS + r"+[A-Za-z0-9]+)*")
+_IBAN_GAP = re.compile(_IBAN_GAP_SIGNS + r"+")
+# ddd-dd-dddd, with a hyphen or any dash, and no more digits or dashes on either side ("2019-24-1234-5" is no number
+# of a person); spaces are no SSN's gap ("123 45 6789" is as likely a phone)
+_SSN_DASH = r"[" + _DASH_SIGNS + r"]"
+_SSN = re.compile(r"(?<![0-9" + _DASH_SIGNS + r"])([0-9]{3})" + _SSN_DASH + r"([0-9]{2})" + _SSN_DASH + r"([0-9]{4})(?![0-9"
+                  + _DASH_SIGNS + r"])")
+
+
+class PrivateShape:
+    """What a typed value looks like, whatever the field is called: a payment card number (13 to 19 digits that pass
+    the Luhn check), an IBAN (its check digits give 1 modulo 97) or a US social security number, alone or inside a
+    sentence ("My card is 4111.1111.1111.1111, thanks"). The review asks it, so a "Reference" or "Notes" box with such
+    a value keeps it private. A phone number, a date, a postcode or an order number that fails the check is no match."""
+
+    CARD_DIGITS = (13, 19)
+    IBAN_LENGTH = (15, 34)                          # the shortest IBAN (Norway) and the longest the standard allows
+
+    def __init__(self, value: str) -> None:
+        self._text = _readable(value or "")         # fullwidth digits become plain digits; a hidden space is taken out
+
+    @property
+    def found(self) -> bool:
+        """Any of the three shapes."""
+        return self.card or self.iban or self.ssn
+
+    @property
+    def card(self) -> bool:
+        """A card number: digits in the groups a card is printed in ("4111 1111 1111 1111", "4111.1111.1111.1111", the
+        4-6-5 of an American Express card), or one block of 13 to 19 digits, that pass the Luhn check. A card that is
+        the whole run of digits may mix its gaps ("4111-1111 1111-1111"); a card inside a longer run has one kind of gap
+        all through ("Ref 12 4111 1111 1111 1111" holds one). A list of years, dates or versions is not printed so
+        ("2019-2021 2021-2023 2023-2025 2017-2019")."""
+        for run in _DIGIT_RUN.finditer(self._text):
+            parts = _DIGIT_GAP.split(run.group())
+            groups, gaps = parts[::2], [_gap_kind(gap) for gap in parts[1::2]]
+            for first in range(len(groups)):
+                if any(_luhn("".join(window)) for window in _card_windows(groups, gaps, first)):
+                    return True
         return False
-    total = sum(int(d) for d in digits[-1::-2]) + sum(sum(divmod(2 * int(d), 10)) for d in digits[-2::-2])
+
+    @property
+    def iban(self) -> bool:
+        """An IBAN, in groups or in one piece, upper or lower case ("CZ65 0800 0000 1920 0014 5399"): each end of a
+        group from 15 to 34 signs is tried, so the words after the number do not hide it."""
+        least, most = self.IBAN_LENGTH
+        for start in _IBAN_START.finditer(self._text):
+            # at most `most` signs with a gap of up to two signs (" - ") between each pair: the longest an IBAN can be when written out
+            groups = _IBAN_GAP.split(_IBAN_GROUPS.match(self._text, start.start(), start.start() + 3 * most).group())
+            compact = ""
+            for group in groups:
+                compact += group
+                if len(compact) > most:
+                    break
+                if len(compact) >= least and _mod97(compact[4:] + compact[:4]) == 1:
+                    return True
+        return False
+
+    @property
+    def ssn(self) -> bool:
+        """A US social security number: no area 000, 666 or 900-999, no group 00 and no serial 0000 (numbers that are
+        never given out)."""
+        return any(area not in ("000", "666") and area[0] != "9" and group != "00" and serial != "0000"
+                   for area, group, serial in _SSN.findall(self._text))
+
+
+def _gap_kind(gap: str) -> str:
+    """What kind of gap cuts a card's groups: "  ", a tab or a new line are all a space, " - " and "‐" are a dash."""
+    return "".join(gap.translate(_DASHES).split()) or " "
+
+
+def _card_windows(groups: list[str], gaps: list[str], first: int) -> list[list[str]]:
+    """The groups from `first` on that are printed as a card: the block alone when it has 13 to 19 digits; groups of 4
+    with the last one of 1 to 7 (16 to 19 digits as 4-4-4-4, 4-4-4-7, 4-4-4-4-3); or 4-6-5 and 4-6-4. All gaps of one
+    window are one kind, unless the window is the whole run (a person mixes "-" and " ", a list of years repeats one);
+    a window has at most five groups, so a long run is read in one pass."""
+    least, most = PrivateShape.CARD_DIGITS
+    windows = [groups[first:first + 1]] if least <= len(groups[first]) <= most else []
+    if len(groups[first]) != 4:
+        return windows
+    one_kind = True
+    for last in range(first + 1, min(first + 5, len(groups))):
+        one_kind = one_kind and gaps[last - 1] == gaps[first]
+        if not one_kind and not (first == 0 and last == len(groups) - 1):
+            continue
+        window = groups[first:last + 1]
+        if least <= sum(map(len, window)) <= most and (all(len(g) == 4 for g in window[:-1]) and len(window[-1]) <= 7
+                                                       or [len(g) for g in window] in ([4, 6, 5], [4, 6, 4])):
+            windows.append(window)
+    return windows
+
+
+def _luhn(digits: str) -> bool:
+    """The check digit of a card number: from the right, every second digit doubled (less 9 when over 9), the sum ends in 0."""
+    total = sum(int(d) for d in digits[-1::-2]) + sum(2 * int(d) - 9 * (int(d) > 4) for d in digits[-2::-2])
     return total % 10 == 0
 
 
+def _mod97(text: str) -> int:
+    """The IBAN check: letters as numbers (A = 10 … Z = 35), the whole read as one number, modulo 97."""
+    return int("".join(str(int(sign, 36)) for sign in text)) % 97
+
+
 def _consent(field: dict[str, Any], picked: bool = False) -> bool:
-    """Whether answering the field gives consent in your name: by its label (a text box's hint, name or id say nothing:
-    "We never share your personal data" under an email box is no question), and for a list or radios also by its own
-    words and its options ("Please select one": "I agree" / "I do not agree")."""
+    """Whether answering the field gives consent in your name: by its label (a text box's hint says nothing: "We never
+    share your personal data" under an email box is no question; its name or id as _consent_name reads them), and
+    for a list or radios also by its own words and its options ("Please select one": "I agree" / "I do not agree")."""
     label = _words({"label": field.get("label")})
     if not picked:
-        return bool(_TYPED_CONSENT.search(label) or _CONSENT_NAME.search(_words({"name": field.get("name"), "id": field.get("id")})))
+        return bool(_TYPED_CONSENT.search(label) or any(_consent_name(field.get(key)) for key in ("name", "id")))
     if _CONSENT.search(label) or _CONSENT.search(_words(field)):
         return True
     # an option by the short answers only: "Company newsletter" as an answer to "How did you hear about us?" is no consent
     return any(_CONSENT_OPTION.search(str(o)) or re.search(r"\bconsent\b", str(o), re.IGNORECASE) for o in field.get("options") or [])
 
 
+def _picks_by_options(kind: Any, combo: Any = False) -> bool:
+    """Whether a field is answered by picking one of its options (a list, radios, a menu the page draws, a box that lists
+    as you type), so that its consent is read by its options too. The planner and the review of a form both ask this."""
+    return str(kind or "").lower() in ("select", "radio", "menu") or bool(combo)
+
+
+def _consent_name(name: Any) -> bool:
+    """Whether a field's inner name or id names it for consent ("consent", "acceptTerms", "gdpr_consent_1"), and not for
+    something else beside it ("agreement_url")."""
+    words = _words({"name": name})
+    return bool(_CONSENT_NAME_WORD.search(words) and not _NOT_CONSENT_NOUN.search(words))
+
+
+def _row_date(field: dict[str, Any]) -> str:
+    """Which of a job's dates the field is ("row_start", "row_end"), or '' when it is none or a question asked of you.
+    Each part of its name (label, hint, inner name, id) is read alone: behind "To" the inner name "q_12" is no word
+    that follows "to"."""
+    parts = [_words({key: field.get(key)}) for key in ("label", "hint", "name", "id")]
+    whole = " ".join(parts)
+    if _NOT_A_ROW_DATE.search(whole) or ("?" in whole and not _DATE_WORD.search(whole)):
+        return ""
+    if any(_ROW_START.search(part) for part in parts):
+        return "row_start"
+    return "row_end" if any(_ROW_END.search(part) for part in parts) else ""
+
+
+def _readable(text: str) -> str:
+    """Text as a person reads it: the hidden signs taken out (every format sign, Unicode category Cf: zero-width spaces,
+    soft hyphens, bidi marks, "Pass\u200bword"), then NFKC (fullwidth "Ｐａｓｓｗｏｒｄ" is "Password", and "č" stays one
+    letter). Every rule that reads a field's name or value reads it through this."""
+    if not text.isascii():                          # no format sign is ASCII
+        text = "".join(sign for sign in text if unicodedata.category(sign) != "Cf")
+    return unicodedata.normalize("NFKC", text)
+
+
 def _words(field: dict[str, Any]) -> str:
     """What the page calls the field, as plain lower-case words (firstName, first_name -> first name)."""
-    parts = unicodedata.normalize("NFC", " ".join(str(field.get(k) or "") for k in ("label", "hint", "name", "id")))   # "č" as one letter
+    parts = _readable(" ".join(str(field.get(k) or "") for k in ("label", "hint", "name", "id")))
     parts = re.sub(r"([a-z])([A-Z])", r"\1 \2", parts)
     return " ".join(re.sub(r"[_\-.\[\]:()]+", " ", parts).lower().split())
 
@@ -1234,7 +1421,7 @@ when the field is left to the person."""
         field = self._raw
         kind = str(field.get("type") or "text").lower()
         words = _words(field)
-        picked = kind in ("select", "radio", "menu") or bool(field.get("combo"))
+        picked = _picks_by_options(kind, field.get("combo"))
         if kind == "password":
             return "", PASSWORD
         if kind == "file":
@@ -1245,21 +1432,14 @@ when the field is left to the person."""
             return "", CONSENT                          # a list, a radio or a text box ("Type I AGREE"): yours alone
         if field.get("part") and kind in ("text", "number", "tel"):
             # one box of a date that is split into a month and a year: the pair's own name says whose date it is
-            pair = _words({"label": field.get("group")})
-            if not _NOT_A_ROW_DATE.search(pair):
-                if _ROW_START.search(pair):
-                    return "row_start", ""
-                if _ROW_END.search(pair):
-                    return "row_end", ""
-            return "", DATE
+            row = _row_date({"label": field.get("group")})
+            return (row, "") if row else ("", DATE)
         if kind in ("date", "month") and _AVAILABLE.search(words):
             return "start", ""
         if kind in ("date", "month") or (kind == "text" and re.search(r"\bdates?\b|mm.?yyyy", words)):
-            if not _NOT_A_ROW_DATE.search(words):
-                if _ROW_START.search(words):
-                    return "row_start", ""
-                if _ROW_END.search(words):
-                    return "row_end", ""
+            row = _row_date(field)
+            if row:
+                return row, ""
             if kind != "text":
                 return "", DATE
         if kind in ("week", "time", "datetime-local"):
@@ -1284,18 +1464,20 @@ when the field is left to the person."""
         has_words = bool(re.search(r"[^\W\d_]{2}", str(field.get("label") or "")))
         if kind == "checkbox":                          # the two kinds of tick box that are reported: "I work here now", "I am fluent in this language"
             said = _words({"label": field.get("label")}).strip(" *") or words
-            if _NEVER_TICK.search(said) or _NEVER_TICK.search(_words({"name": field.get("name"), "id": field.get("id")})):
+            # the label is what a tick says, read in full; an inner name vetoes it only with a word of consent, privacy or
+            # marketing: "accept_terms" behind "I currently work here" is refused, "current_notify_1" or "contact_current" is not (#89)
+            inner = _words({"name": field.get("name"), "id": field.get("id")})
+            if _NEVER_TICK.search(said) or _CONSENT.search(inner) or _NEVER_TICK_NAME.search(inner):
                 return "", CHOICE
             if _FLUENT.search(said):
                 return "fluent_box", ""
             return ("current_box", "") if _CURRENT_BOX.search(said) else ("", CHOICE)
         if _LANG_NAME.fullmatch(_words({"label": field.get("label")}).strip(" *")):
             return "lang_name", ""                      # "Language" in a list of languages: one of yours, row by row
-        if kind == "select" and not _NOT_A_ROW_DATE.search(words) and re.search(r"month|year|date|\bfrom\b|\bto\b|start|end", words):
-            if _ROW_START.search(words):
-                return "row_start", ""
-            if _ROW_END.search(words):
-                return "row_end", ""
+        if kind == "select" and re.search(r"month|year|date|\bfrom\b|\bto\b|start|end", words):
+            row = _row_date(field)
+            if row:
+                return row, ""
         if picked:
             if kind == "select" and what == "country":
                 return "country", ""

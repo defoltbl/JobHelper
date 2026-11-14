@@ -651,11 +651,19 @@ data/                your data; only the *.example.* files are in git
   authorized to work …", "Do you agree to relocate?" and "Experience with GDPR" are questions about you and stay the
   model's. "Tax" and "VAT" are private only as a number ("Tax ID"), never in "salary before tax".
 - **A text box gives consent only when it asks you to type it** (`form_fill._consent`, `_TYPED_CONSENT`: "I agree",
-  "Type I AGREE", or a box the page names "consent_text"): a question that only mentions personal data or a background
+  "Type I AGREE"), or when a consent word is in its inner name (`_consent_name`: "consent_required", "marketing_consent",
+  "agree_to_terms") unless the name also holds a non-consent noun (`_NOT_CONSENT_NOUN`: url, email, phone, site, date …):
+  "agreement_url" and "terms_email" are filled (#89). A question that only mentions personal data or a background
   check stays a question. A list or radios is read by its words and its options ("Accept" / "Decline"). Short words
   that are private only as a whole label ("SWIFT", "TIN", "Username") are in `_PRIVATE_ALONE`, so "Swift experience"
   stays a question. The signature words ("to certify", "I declare") are in both lists: a list gives consent, a box asks
-  for your name. In a review, a value shaped like a card number (13 to 19 digits, Luhn) is private whatever its name.
+  for your name. In a review, a value shaped like a card number (13 to 19 digits, Luhn, only in card-shaped groups; the gap
+  signs are space, new line, tab, "_", ",", ":", "|", "+", a middle dot, "." and a dash or minus of any kind. Groups that
+  make up the whole value may mix gaps ("4111-1111 1111-1111"); groups inside a longer run of numbers need one kind of
+  gap, so a list of dates or year ranges is no card), an IBAN (mod 97, spaces, hyphens, ".", "_" or "/" allowed) or a
+  US social security number (any kind of dash, never spaces) (`form_fill.PrivateShape`) is private
+  whatever its name. A card number with a typo is not caught: closed with a reason, a mistyped number fails Luhn and
+  cannot be told from any other number.
 - **A text box that a person cannot see is never read** (READ's `trap()`, #77): placed above or left of the page
   (counting the scroll of every box around it up to the page's own scroller, across a shadow root's edge, so a scrolled
   sheet is no trap), or see-through (opacity 0 on it, a parent or a shadow host, unless the browser is fading it in
@@ -672,7 +680,16 @@ data/                your data; only the *.example.* files are in git
   only the fault's kind (`trouble.kind_of`), its text goes to the log of problems.
 - **A field is private by its name, its words or its autocomplete value** (`form_fill._private`), and the review of a
   form asks the same function with what the REVIEW script reports (label, `name`, `autocomplete`), so a value the
-  planner leaves alone never goes to Claude in a review.
+  planner leaves alone never goes to Claude in a review. The regexes are built from word parts (#89): a secret noun alone
+  ("passphrase", "Heslo"), a key, code, token or card only at the END of a part of the label ("API key", "SMS code", "Debit
+  card", "Company card"; `_PRIVATE_WHOLE`, with `_ASKS_EXPERIENCE`: "Auth token experience", "Payment cards experience" and
+  "Product code" are questions); `pass`, `pan` and `nin` count only as the whole name. Every format sign (Unicode Cf) is
+  removed and the rest is NFKC-read by `_readable` first; `_words`, `_private` and `PrivateShape` all read through it. A
+  list or radios in a review is read by its options too (the REVIEW script reports them, `review_answer` does not keep
+  them). An "I work here now" box is vetoed by its inner name only with a consent word, or privacy, policy, marketing, tos
+  or ccpa (`_CONSENT`, `_NEVER_TICK_NAME`), never by "notify" or "contact". `_row_date` reads a job's date: "to" ends it
+  alone or before a date word or a hint ("To (optional)", "To the present"), not before a verb ("agree to relocate"); a "?"
+  leaves a job's date only when there is no date word ("When did you start this job?" stays a start); "Period to" is an end.
 - **The work-note boxes are the master CV's jobs** (`claims.EmployerCheck.job_names`, else My details; `AboutYou.job_boxes`).
   A saved note keeps the name the CV gave its job (`from`), so a box you renamed keeps its notes and a removed job
   (`removed`) does not come back; a note from before has no `from` and matches by its name. The "why and where" lines
