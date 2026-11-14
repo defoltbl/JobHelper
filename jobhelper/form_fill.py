@@ -99,33 +99,177 @@ NEVER_TICK_WORDS = (CONSENT_WORDS + r"|agree|terms|privacy|policy|marketing|keep
 _CHOSEN = ("function chosen(el) { var o = el.options[el.selectedIndex]; "
            "return el.selectedIndex > 0 && !!o && !o.disabled && String(o.value) !== ''; }")
 
-READ = r"""
-(function () {
+# What a person can see of a box (#77, #91), one set of rules for every page script that asks it: shown() says whether the
+# browser draws the box at all, trap() whether a text box it draws is out of a person's sight or reach. Robots fill such
+# "honeypots", and the page then throws the application away. Lists and radios are often see-through on purpose (a styled
+# look over them), so trap() is asked of text boxes and the page's own menus only. (aria-hidden is skipped before this.)
+_SEEN = r"""
+  // every frame it sits in is drawn too (a box in a frame the page hides is as hidden as the frame)
+  function shown(el) {
+    for (var k = 0; el && k < 10; k++, el = el.ownerDocument.defaultView.frameElement) {
+      var r = el.getBoundingClientRect(), s = el.ownerDocument.defaultView.getComputedStyle(el);
+      if (!(r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && s.display !== 'none')) return false;
+    }
+    return true;
+  }
+  // the box a person sees around this one: through a slot into a component, across a shadow root's edge, and out of a frame
+  // (a closed shadow root gives no slot: its own scrolled box is not seen, so a field scrolled out in it is left out)
+  function up(p) {
+    var root = p.getRootNode ? p.getRootNode() : null;
+    return p.assignedSlot || p.parentElement || (root && root.host) || (root && root.nodeType === 9 && root.defaultView ? root.defaultView.frameElement : null) || null;
+  }
+  // how far a box is scrolled from the left end of what it holds: right-to-left content starts on the right and scrolls to negative numbers
+  function back(q, s, page) {
+    var rtl = s.direction === 'rtl' && (page || /auto|scroll/.test(s.overflowX));
+    return q.scrollLeft + (rtl ? q.scrollWidth - q.clientWidth : 0);
+  }
+  function inset(v, size) { return /%$/.test(v) ? parseFloat(v) * size / 100 : (parseFloat(v) || 0); }
+  // a clip-path shape that leaves (almost) nothing of the box: an inset past its middle, a circle or an ellipse of no radius, a
+  // polygon with no area. shortcut: a polygon that crosses itself is measured by its signed area
+  function cut(kind, args, w, h) {
+    if (kind === 'inset') {
+      var v = args.split(' round ')[0].trim().split(/\s+/), t = v[0], rt = v[1] || t, b = v[2] || t, l = v[3] || rt;
+      return h - inset(t, h) - inset(b, h) < 2 || w - inset(l, w) - inset(rt, w) < 2;
+    }
+    if (kind === 'circle' || kind === 'ellipse') {
+      var radii = args.split(' at ')[0].trim().split(/\s+/), round = Math.sqrt((w * w + h * h) / 2);
+      return radii.some(function (r, k) { return /^[\d.]/.test(r) && inset(r, kind === 'circle' ? round : (k ? h : w)) < 1; });
+    }
+    var pts = args.replace(/^\s*(nonzero|evenodd)\s*,/, '').split(',').slice(0, 200).map(function (pt) {
+      var xy = pt.trim().split(/\s+/);
+      return [inset(xy[0] || '', w), inset(xy[1] || '', h)];
+    }), area = 0;
+    for (var i = 0; i < pts.length; i++) { var q = pts[(i + 1) % pts.length]; area += pts[i][0] * q[1] - q[0] * pts[i][1]; }
+    return Math.abs(area) / 2 < 4;
+  }
+  // cut down to nothing: the "visually hidden" class (clip: rect(0 0 0 0), clip-path: inset(50%)), a clip-path shape with no
+  // area, or a parent with no width or height that hides what spills out of it. A clip-path that only rounds the corners keeps the box.
+  function clipped(p, s, parent) {
+    var r = p.getBoundingClientRect(), c = /^rect\(/.test(s.clip) ? s.clip.match(/-?[\d.]+(?=px)/g) : null, shape = /^(inset|circle|ellipse|polygon)\(([^)]*)\)/.exec(s.clipPath);
+    if (c && c.length === 4 && /absolute|fixed/.test(s.position) && (c[1] - c[3] < 2 || c[2] - c[0] < 2)) return true;
+    if (shape && cut(shape[1], shape[2], r.width, r.height)) return true;
+    return parent && !/^(contents|inline)$/.test(s.display) && ((r.width < 2 && s.overflowX !== 'visible') || (r.height < 2 && s.overflowY !== 'visible'));
+  }
+  // the browser fades it in right now and is done within about 2 s (a step or a window still appearing): the opacity it ends at
+  // is one a person sees. A box that only spins, fades for a minute or for ever, fades out, or fades to almost nothing stays see-through.
+  // shortcut: a fade done by a script, step by step, still reads as a trap; ask again a moment later
+  function fading(p) {
+    var all = p.getAnimations ? p.getAnimations() : [];
+    for (var i = 0; i < all.length; i++) {
+      var a = all[i], e = a.effect, rate = Math.abs(a.playbackRate || 0);
+      if (!e || !e.getKeyframes || a.playState !== 'running' || !rate) continue;
+      var keys = e.getKeyframes().filter(function (k) { return 'opacity' in k; }), t = e.getTiming();
+      if (!keys.length) continue;
+      // played backwards (a negative rate, a reverse direction, an even number of turns back and forth) it ends at its first keyframe
+      var turns = /alternate/.test(t.direction) && Math.ceil(t.iterations) % 2 === 0;
+      var end = keys[(a.playbackRate < 0) !== (/reverse/.test(t.direction) !== turns) ? 0 : keys.length - 1];
+      if (!(parseFloat(end.opacity) >= 0.1)) continue;
+      var left = (a.playbackRate < 0 ? a.currentTime || 0 : e.getComputedTiming().endTime - (a.currentTime || 0)) / rate;   // played backwards it counts down to 0
+      if (isFinite(left) && left <= 2000) return true;
+    }
+    return false;
+  }
+  // words the box's own component draws over it (a list's "Select..."): no taller than the box, inside a wrapper around it (up
+  // to 3 parents) that holds no other field
+  function overlay(el, hit, r) {
+    if (!String(hit.textContent || '').trim() || hit.querySelector('input, select, textarea')) return false;
+    var h = hit.getBoundingClientRect();
+    if (h.height > r.height + 8) return false;
+    for (var node = el.parentElement, k = 0; node && k < 3; node = node.parentElement, k++) {
+      if (node.querySelectorAll('input:not([type=hidden]), select, textarea').length > 1) return false;
+      if (node.contains(hit)) return h.width <= node.getBoundingClientRect().width + 1;
+    }
+    return false;
+  }
+  // another box lies over its middle. Its own label (a floating label), words its own component draws over it (a list's
+  // "Select..."), and a fixed or sticky bar (a header the page scrolls under) are no cover; a label of another field or a big
+  // block of words is. Asked only where a person can see the middle now: not when it is off the screen, or scrolled out of its sheet.
+  function covered(el, r) {
+    var doc = el.ownerDocument, view = doc.defaultView, cx = r.left + r.width / 2, cy = r.top + r.height / 2, chain = [], q;
+    if (cx < 0 || cy < 0 || cx >= view.innerWidth || cy >= view.innerHeight) return false;
+    for (q = up(el); q && q.nodeType === 1 && q.ownerDocument === doc; q = up(q)) {
+      var s = view.getComputedStyle(q), b = q.getBoundingClientRect();
+      if ((s.overflowX !== 'visible' || s.overflowY !== 'visible') && (cx < b.left || cx >= b.right || cy < b.top || cy >= b.bottom)) return false;
+      chain.push(q);
+    }
+    var root = el.getRootNode(), hit = root.elementFromPoint ? root.elementFromPoint(cx, cy) : null, tag = hit ? hit.closest('label') : null;
+    if (!hit || hit === el || el.contains(hit)) return false;
+    if (tag && (tag.control === el || Array.prototype.indexOf.call(el.labels || [], tag) >= 0)) return false;
+    if ((!tag || !tag.control) && overlay(el, hit, r)) return false;
+    for (q = hit; q && q.nodeType === 1 && q.ownerDocument === doc && chain.indexOf(q) < 0; q = up(q)) if (/fixed|sticky/.test(view.getComputedStyle(q).position)) return false;
+    return true;
+  }
+  function trap(el) {
+    var doc = el.ownerDocument, view = doc.defaultView, page = doc.scrollingElement || doc.documentElement, top = view.getComputedStyle(doc.documentElement);
+    var r = el.getBoundingClientRect(), s = view.getComputedStyle(el), w = view.innerWidth, from = r.left + view.scrollX, to = r.right + view.scrollX;
+    if (s.pointerEvents === 'none') return true;                                  // no click or tap reaches it
+    if ((r.width < 5 || r.height < 5) && el.getAttribute('role') !== 'combobox' && !el.getAttribute('aria-autocomplete')) return true;   // a dot (a list's own search box is drawn that small on purpose)
+    // screens away to the side of where the page starts: forms run down the page, never sideways. A right-to-left page starts on
+    // the right and cannot scroll further right than that. (A page that is not drawn has no window width to measure by.)
+    if (w > 0 && (top.direction === 'rtl' ? from >= w || to <= -w : from >= 2 * w)) return true;
+    var x = r.right + back(page, top, true), y = r.bottom + view.scrollY, faint = null, seen = 1;
+    // up to the top page, out of every frame: what is see-through or cut off out there hides the box too (scrolls count in its own page)
+    for (var p = el; p && p.nodeType === 1; p = up(p)) {
+      var ps = p === el ? s : p.ownerDocument.defaultView.getComputedStyle(p);
+      if (p !== el && p !== page && p.ownerDocument === doc) { x += back(p, ps, false); y += p.scrollTop; }   // a scrolled sheet or modal
+      if (p.inert || clipped(p, ps, p !== el)) return true;
+      seen *= parseFloat(ps.opacity) || 0;                                        // see-through boxes inside each other add up
+      if (!faint && seen < 0.1) faint = p;                                        // where it first gets see-through decides, alone
+    }
+    if (x <= 0 || y <= 0) return true;                                             // placed above or left of the page
+    if (faint) return !fading(faint);
+    return covered(el, r);
+  }
+"""
+
+# Which box READ marked, asked again by every script that writes to it, presses it, attaches to it or reads it (#91): a page
+# script may copy a mark onto another box after READ, or move it. READ stamps each box it marks with what the box is (sign);
+# a box whose stamp no longer says what it is now is not the one READ saw. sees() is READ's sight rule for each kind of box: a
+# file field is often hidden under the page's own button, a list or a radio needs only a box or a label; it needs _SEEN beside it.
+# A file field with nothing a person can press to open it is the page's own tool: READ reports it as such (bare), never to attach to.
+_SAME = r"""
+  var SIGN = 'data-jobhelper-sign';
+  function sign(el) { return [el.tagName, String(el.getAttribute('type') || '').toLowerCase(), el.getAttribute('name') || '', el.id || ''].join('|').slice(0, 400); }
+  function same(el) { return !!el && el.getAttribute(SIGN) === sign(el); }
+  // a file field a person can open: drawn itself, or with a label of its own, or something to press drawn around or beside it (a
+  // button, a link, a box the keyboard reaches or with a click of its own, a label of no other field: a drop zone, an "Attach"
+  // link), never past another file field.
+  // shortcut: up to 5 parents out and 50 boxes per parent, so a big page stays quick; a button further out reads as none
+  var OPENERS = 'button, [role=button], label, a, [tabindex], [onclick]';
+  function opens(b, el) {
+    return b.type !== 'submit' && b.type !== 'reset' && (b.tagName !== 'LABEL' || !b.control || b.control === el) && shown(b);
+  }
+  function reach(el) {
+    if (shown(el) || Array.prototype.some.call(el.labels || [], shown)) return true;
+    for (var node = el.parentElement, k = 0; node && k < 5; node = node.parentElement, k++) {
+      if (node.querySelectorAll('input[type=file]').length > 1) return false;
+      if (node.matches(OPENERS) && opens(node, el)) return true;
+      var near = node.querySelectorAll(OPENERS);
+      for (var i = 0; i < near.length && i < 50; i++) if (opens(near[i], el)) return true;
+    }
+    return false;
+  }
+  function sees(el) {
+    try {
+      var type = el.tagName === 'INPUT' ? String(el.getAttribute('type') || 'text').toLowerCase() : '';
+      if (type === 'file') return reach(el);
+      if (type === 'checkbox' || type === 'radio') return shown(el) || !!(el.labels && el.labels.length);
+      return shown(el) && (el.tagName === 'SELECT' || !trap(el));
+    } catch (e) { return false; }                 // a page that breaks the measuring: not known to be seen, so never used
+  }
+"""
+
+_READ = r"""
+(function (host) {
+  // another site is in front than the one asked for: nothing on it is marked
+  if (host && String(location.hostname).replace(/^\[|\]$/g, '').toLowerCase() !== host) return JSON.stringify({moved: true, url: String(location.href).slice(0, 2000)});
   __CHOSEN__
   var MARK = 'data-jobhelper', OPT = 'data-jobhelper-opt', ADD = 'data-jobhelper-add', fields = [], frames = [], groups = {}, adds = [], n = 0, boxes = 0;
   function clean(t) { return String(t || '').replace(/\s+/g, ' ').trim().slice(0, 300); }
   function text(el) { return el ? clean(el.innerText || el.textContent) : ''; }
-  function shown(el) {
-    var r = el.getBoundingClientRect(), s = el.ownerDocument.defaultView.getComputedStyle(el);
-    return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && s.display !== 'none';
-  }
-  // a box a person cannot see (#77): placed above or left of the page, or see-through. Robots fill such "honeypots",
-  // and the page then throws the application away. Lists and radios are often see-through on purpose (a styled look
-  // over them), so this is asked of text boxes only. (aria-hidden is skipped for every field before this.)
-  // the box a person sees around this one: through a slot into a component, and across a shadow root's edge
-  function up(p) { return p.assignedSlot || p.parentElement || (p.getRootNode && p.getRootNode().host) || null; }
-  function trap(el) {
-    var doc = el.ownerDocument, view = doc.defaultView, r = el.getBoundingClientRect(), x = r.right + view.scrollX, y = r.bottom + view.scrollY;
-    for (var q = up(el); q && q !== doc.scrollingElement; q = up(q)) { x += q.scrollLeft; y += q.scrollTop; }   // a scrolled sheet or modal
-    if (x <= 0 || y <= 0) return true;
-    for (var p = el; p && p.nodeType === 1; p = up(p)) {
-      if (view.getComputedStyle(p).opacity !== '0') continue;
-      // see-through, unless the browser is fading it in right now (a step or a window still appearing)
-      // shortcut: a fade done by a script, step by step, still reads as a trap; ask again a moment later
-      return !(p.getAnimations && p.getAnimations().length);
-    }
-    return false;
-  }
+  __SEEN__
+  __SAME__
+  function stamp(el, attr, value) { el.setAttribute(attr, value); el.setAttribute(SIGN, sign(el)); }
   function byId(root, id) {
     try { return root.getElementById ? root.getElementById(id) : root.querySelector('#' + CSS.escape(id)); } catch (e) { return null; }
   }
@@ -193,6 +337,15 @@ READ = r"""
     }
     return '';
   }
+  function strip(root) {                         // what a page planted in a frame out of sight: no mark there stays
+    var all = root.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      [MARK, OPT, ADD, SIGN].forEach(function (attr) { el.removeAttribute(attr); });
+      if (el.shadowRoot) strip(el.shadowRoot);
+      if (el.tagName === 'IFRAME') { var inner = null; try { inner = el.contentDocument; } catch (e) { inner = null; } if (inner && inner.body) strip(inner); }
+    }
+  }
   function walk(root) {
     var all = root.querySelectorAll('*');
     for (var i = 0; i < all.length && fields.length < __MOST__; i++) {
@@ -201,13 +354,15 @@ READ = r"""
       if (tag === 'IFRAME') {
         var inner = null;
         try { inner = el.contentDocument; } catch (e) { inner = null; }
-        if (inner && inner.body) walk(inner); else if (el.src && shown(el)) frames.push(String(el.src).slice(0, 300));
+        if (inner && inner.body) { if (shown(el) && !trap(el)) walk(inner); else strip(inner); }      // a frame out of sight holds no field a person fills
+        else if (el.src && shown(el)) frames.push(String(el.src).slice(0, 300));
         continue;
       }
       if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
         var role = el.getAttribute('role');
         el.removeAttribute(MARK);
         el.removeAttribute(ADD);
+        el.removeAttribute(SIGN);
         if (!shown(el)) continue;
         if ((tag === 'BUTTON' || tag === 'A' || role === 'button') && el.type !== 'submit' && !el.disabled) {
           var says = text(el).slice(0, 80);       // "Add another job": noted, so that a row can be asked for
@@ -217,9 +372,10 @@ READ = r"""
           }
         }
         if (role === 'combobox' || el.getAttribute('aria-haspopup') === 'listbox') {      // a menu drawn by the page itself
+          if (!sees(el)) continue;                // out of sight like a trap box: never opened
           var now = text(el);
           n++;
-          el.setAttribute(MARK, String(n));
+          stamp(el, MARK, String(n));
           fields.push({n: n, type: 'menu', name: '', id: clean(el.id).slice(0, 80), auto: '', label: label(el, root), hint: '',
                        required: el.getAttribute('aria-required') === 'true', most: 0, options: [], combo: false,
                        filled: !!now && !/^(select|choose|please|pick|none|-|\u2014|\.)/i.test(now)});
@@ -228,17 +384,18 @@ READ = r"""
       }
       el.removeAttribute(MARK);
       el.removeAttribute(OPT);
+      el.removeAttribute(SIGN);
       var type = tag === 'INPUT' ? String(el.getAttribute('type') || 'text').toLowerCase() : tag.toLowerCase();
       if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'reset' || type === 'image') continue;
       // A box the page keeps out of sight of screen readers is its own tool (a list's check that something was chosen), not a field.
       if (type !== 'file' && (el.getAttribute('aria-hidden') === 'true' || el.closest('[aria-hidden=true]'))) continue;
       if (type === 'checkbox' || type === 'radio') {
-        if (!(shown(el) || (el.labels && el.labels.length))) continue;
+        if (!sees(el)) continue;
         if (type === 'checkbox' && !el.disabled) {
           var says = clean(el.labels && el.labels.length ? text(el.labels[0]) : (el.getAttribute('aria-label') || '')).slice(0, 120);
           if (/__TICK__/i.test(says) && !/__NEVER_TICK__/i.test(says)) {
             n++;
-            el.setAttribute(MARK, String(n));
+            stamp(el, MARK, String(n));
             fields.push({n: n, type: 'checkbox', name: clean(el.name).slice(0, 80), id: clean(el.id).slice(0, 80), auto: '', label: says, hint: '',
                          required: false, filled: !!el.checked, most: 0, options: [], combo: false});
             continue;
@@ -252,16 +409,16 @@ READ = r"""
                                      hint: '', required: !!el.required, filled: false, most: 0, options: [], combo: false};
           fields.push(group);
         }
-        el.setAttribute(OPT, group.n + ':' + group.options.length);
+        stamp(el, OPT, group.n + ':' + group.options.length);
         group.options.push(clean(el.labels && el.labels.length ? text(el.labels[0]) : (el.getAttribute('aria-label') || el.value)).slice(0, 80));
         if (el.checked) group.filled = true;
         continue;
       }
-      if (type !== 'file' && !shown(el)) continue;
-      if (type !== 'file' && tag !== 'SELECT' && trap(el)) continue;
+      var bare = type === 'file' && !sees(el);    // a file field with nothing to open it by: reported, so the person is told, never attached to
+      if (!bare && !sees(el)) continue;
       if (el.disabled || (el.readOnly && el.getAttribute('role') !== 'combobox')) continue;       // a list's box is often read-only: it is pressed, not typed in
       n++;
-      el.setAttribute(MARK, String(n));
+      stamp(el, MARK, String(n));
       var options = [];
       if (tag === 'SELECT') for (var k = 0; k < el.options.length && k < 300; k++) options.push(clean(el.options[k].text).slice(0, 80));
       var filled = false;
@@ -283,7 +440,7 @@ READ = r"""
         code = (clean(el.options[el.selectedIndex].text).match(/\+\d{1,4}\b/) || [''])[0];
       fields.push({n: n, type: type, name: clean(el.name).slice(0, 80), id: clean(el.id).slice(0, 80),
                    auto: clean(el.getAttribute('autocomplete')).slice(0, 60), label: called,
-                   hint: hint, accept: type === 'file' ? clean(el.getAttribute('accept')).slice(0, 200) : '', code: code, part: part, group: group.slice(0, 120),
+                   hint: hint, accept: type === 'file' ? clean(el.getAttribute('accept')).slice(0, 200) : '', bare: bare, code: code, part: part, group: group.slice(0, 120),
                    required: !!(el.required || el.getAttribute('aria-required') === 'true'),
                    filled: filled, most: el.maxLength > 0 ? el.maxLength : 0, options: options,
                    combo: !el.readOnly && (el.getAttribute('role') === 'combobox' || !!el.getAttribute('aria-autocomplete') || el.getAttribute('aria-haspopup') === 'listbox')});
@@ -291,15 +448,26 @@ READ = r"""
   }
   walk(document);
   return JSON.stringify({url: location.href, title: clean(document.title), from: String(document.referrer || '').slice(0, 2000), fields: fields, frames: frames.slice(0, 5), boxes: boxes, adds: adds.slice(0, 20)});
-})()
-""".replace("__MOST__", str(MAX_FIELDS)).replace("__CHOSEN__", _CHOSEN).replace("__TICK__", CURRENT_BOX_WORDS + "|" + FLUENT_WORDS) \
-    .replace("__NEVER_TICK__", NEVER_TICK_WORDS).strip()
+})(__HOST__)
+""".replace("__MOST__", str(MAX_FIELDS)).replace("__CHOSEN__", _CHOSEN).replace("__SEEN__", _SEEN.strip()).replace("__SAME__", _SAME.strip()) \
+    .replace("__TICK__", CURRENT_BOX_WORDS + "|" + FLUENT_WORDS).replace("__NEVER_TICK__", NEVER_TICK_WORDS).strip()
+
+
+def read_script(host: str) -> str:
+    """The READ script for the form at this host: on a page of another host (or of none) it marks nothing and answers
+    {moved, url}. An empty host checks nothing: that is READ."""
+    return with_values(_READ, host=str(host or "").lower())
+
+
+READ = read_script("")
 
 FILL = r"""
 (function (items, url, typed) {
   __CHOSEN__
   if (location.href !== url) return JSON.stringify({moved: true});
-  var MARK = 'data-jobhelper', found = {}, done = [], skipped = [];
+  var MARK = 'data-jobhelper', found = Object.create(null), done = [], skipped = [];
+  __SEEN__
+  __SAME__
   function walk(root) {
     var all = root.querySelectorAll('*');
     for (var i = 0; i < all.length; i++) {
@@ -312,15 +480,27 @@ FILL = r"""
         continue;
       }
       var mark = el.getAttribute(MARK);
-      if (mark) found[mark] = el;
+      if (mark) found[mark] = mark in found ? null : el;      // a mark on two boxes: the page copied it, neither is written
     }
+  }
+  // where typing goes now: the box in front, followed into components and into frames of the same site
+  function focused() {
+    var at = document.activeElement;
+    for (var k = 0; at && k < 20; k++) {
+      var inner = at.shadowRoot ? at.shadowRoot.activeElement : null;
+      if (!inner && at.tagName === 'IFRAME') { try { inner = at.contentDocument ? at.contentDocument.activeElement : null; } catch (e) { inner = null; } }
+      if (!inner) break;
+      at = inner;
+    }
+    return at;
   }
   function tell(el, name) { el.dispatchEvent(new (el.ownerDocument.defaultView.Event)(name, {bubbles: true})); }
   function norm(t) { return String(t || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
   walk(document);
   items.forEach(function (item) {
     var el = found[String(item.n)];
-    if (!el || el.disabled || el.readOnly) { skipped.push(item.n); return; }
+    // the box READ marked, still what it was then and still where a person sees it
+    if (!el || !same(el) || !sees(el) || el.disabled || el.readOnly) { skipped.push(item.n); return; }
     var view = el.ownerDocument.defaultView;
     if (el.tagName === 'SELECT') {
       if (chosen(el)) { skipped.push(item.n); return; }
@@ -335,7 +515,8 @@ FILL = r"""
       var proto = el.tagName === 'TEXTAREA' ? view.HTMLTextAreaElement.prototype : view.HTMLInputElement.prototype, put = false;
       if (typed) {              // the way typing arrives: some pages believe nothing else
         el.focus();
-        try { put = el.ownerDocument.execCommand('insertText', false, item.value) && String(el.value || '') !== ''; } catch (e) { put = false; }
+        // typing goes to the box in front: written that way only when it is this box (a page may pass the focus on to another)
+        if (focused() === el) { try { put = el.ownerDocument.execCommand('insertText', false, item.value) && String(el.value || '') !== ''; } catch (e) { put = false; } }
         if (!put) {             // the page is not in front: the same events typing makes, made by hand
           Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, item.value);
           el.dispatchEvent(new view.InputEvent('input', {bubbles: true, inputType: 'insertText', data: item.value}));
@@ -351,7 +532,7 @@ FILL = r"""
   });
   return JSON.stringify({done: done, skipped: skipped});
 })(__ITEMS__, __URL__, __TYPED__)
-""".replace("__CHOSEN__", _CHOSEN).strip()
+""".replace("__CHOSEN__", _CHOSEN).replace("__SEEN__", _SEEN.strip()).replace("__SAME__", _SAME.strip()).strip()
 
 # A file goes to the page in pieces (a request to the browser has a size limit), then the pieces are made into the file the
 # field is given, the way a file chosen by hand arrives. Only a file field that holds nothing is given one.
@@ -361,12 +542,14 @@ PUT = r"""
 
 ATTACH = r"""
 (function (n, key, name, kind, url) {
-  var MARK = 'data-jobhelper', data = window[key] || '', found = null;
+  var MARK = 'data-jobhelper', data = window[key] || '', found = null, twice = false;
   try { delete window[key]; } catch (e) { window[key] = ''; }
   if (location.href !== url) return JSON.stringify({moved: true});
+  __SEEN__
+  __SAME__
   function walk(root) {
     var all = root.querySelectorAll('*');
-    for (var i = 0; i < all.length && !found; i++) {
+    for (var i = 0; i < all.length; i++) {
       var el = all[i];
       if (el.shadowRoot) walk(el.shadowRoot);
       if (el.tagName === 'IFRAME') {
@@ -375,11 +558,12 @@ ATTACH = r"""
         if (inner && inner.body) walk(inner);
         continue;
       }
-      if (el.getAttribute(MARK) === String(n)) found = el;
+      if (el.getAttribute(MARK) === String(n)) { twice = twice || !!found; found = el; }
     }
   }
   walk(document);
-  if (!found || found.tagName !== 'INPUT' || String(found.type).toLowerCase() !== 'file' || found.disabled) return JSON.stringify({ok: false, why: 'gone'});
+  // a mark on two boxes, or on a box that is not the one READ marked: the page copied or moved it
+  if (twice || !same(found) || !sees(found) || found.tagName !== 'INPUT' || String(found.type).toLowerCase() !== 'file' || found.disabled) return JSON.stringify({ok: false, why: 'gone'});
   if (found.files && found.files.length) return JSON.stringify({ok: false, why: 'has'});
   try {
     var view = found.ownerDocument.defaultView, raw = atob(data), bytes = new view.Uint8Array(raw.length);
@@ -393,13 +577,15 @@ ATTACH = r"""
   var has = found.files && found.files.length === 1 ? found.files[0].size : -1;
   return JSON.stringify({ok: has >= 0, size: has});
 })(__N__, __KEY__, __NAME__, __KIND__, __URL__)
-""".strip()
+""".replace("__SEEN__", _SEEN.strip()).replace("__SAME__", _SAME.strip()).strip()
 
 EMPTY = r"""
 (function (wanted, url) {
   __CHOSEN__
   if (location.href !== url) return JSON.stringify({moved: true, empty: wanted});     // another page: nothing is known to be there
-  var MARK = 'data-jobhelper', empty = [], found = {};
+  var MARK = 'data-jobhelper', empty = [], found = Object.create(null);
+  __SEEN__
+  __SAME__
   function walk(root) {
     var all = root.querySelectorAll('*');
     for (var i = 0; i < all.length; i++) {
@@ -408,25 +594,28 @@ EMPTY = r"""
       if (el.tagName === 'IFRAME') { var inner = null; try { inner = el.contentDocument; } catch (e) { inner = null; } if (inner && inner.body) walk(inner); continue; }
       var mark = Number(el.getAttribute(MARK));
       if (!mark || wanted.indexOf(mark) < 0) continue;
-      found[mark] = true;
-      if (el.tagName === 'SELECT' ? !chosen(el) : String(el.value || '').trim() === '') empty.push(mark);
+      found[mark] = mark in found ? null : el;
     }
   }
   walk(document);
-  for (var k = 0; k < wanted.length; k++) if (!found[wanted[k]]) empty.push(wanted[k]);   // the page drew the field anew: not known to hold it
+  for (var k = 0; k < wanted.length; k++) {
+    // drawn anew by the page, or its mark copied onto a second box or moved to another one: not known to hold it
+    var el = found[wanted[k]];
+    if (!same(el) || (el.tagName === 'SELECT' ? !chosen(el) : String(el.value || '').trim() === '')) empty.push(wanted[k]);
+  }
   return JSON.stringify({empty: empty});
 })(__WANTED__, __URL__)
-""".replace("__CHOSEN__", _CHOSEN).strip()
+""".replace("__CHOSEN__", _CHOSEN).replace("__SEEN__", _SEEN.strip()).replace("__SAME__", _SAME.strip()).strip()
 
 
 CHOOSE = r"""
 (function (action, n, arg, url) {
   if (location.href !== url) return JSON.stringify({moved: true});
-  var MARK = 'data-jobhelper', OPT = 'data-jobhelper-opt', ADD = 'data-jobhelper-add', target = null, entries = [], marked = {}, adders = {};
-  function shown(el) {
-    var r = el.getBoundingClientRect(), s = el.ownerDocument.defaultView.getComputedStyle(el);
-    return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && s.display !== 'none';
-  }
+  var MARK = 'data-jobhelper', OPT = 'data-jobhelper-opt', ADD = 'data-jobhelper-add', target = null, hits = 0, entries = [], numbered = [];
+  var marked = Object.create(null), adders = Object.create(null);
+  __SEEN__
+  __SAME__
+  function keep(map, key, el) { if (key) map[key] = key in map ? null : el; }      // a mark on two boxes: the page copied it, neither is pressed
   function walk(root) {
     var all = root.querySelectorAll('*');
     for (var i = 0; i < all.length; i++) {
@@ -438,9 +627,10 @@ CHOOSE = r"""
         if (inner && inner.body) walk(inner);
         continue;
       }
-      if (el.getAttribute(MARK) === String(n)) target = el;
-      if (el.getAttribute(OPT)) marked[el.getAttribute(OPT)] = el;
-      if (el.getAttribute(ADD)) adders[el.getAttribute(ADD)] = el;
+      if (el.getAttribute(MARK) === String(n)) { hits++; target = el; }
+      keep(marked, el.getAttribute(OPT), el);
+      keep(adders, el.getAttribute(ADD), el);
+      if (/^m/.test(el.getAttribute(OPT) || '')) numbered.push(el);
       if (el.getAttribute('role') === 'option' && shown(el)) entries.push(el);
     }
   }
@@ -459,6 +649,9 @@ CHOOSE = r"""
   }
   function mark(el) { el.style.outline = '2px solid #f59e0b'; el.style.outlineOffset = '1px'; }
   walk(document);
+  // the box READ marked, still what it was then, else the page copied or moved the mark; first touched (opened) only where a
+  // person sees it. An open menu may make the page under it take no click (pointer-events: none): it is still read, picked and closed.
+  if (hits > 1 || (target && !same(target)) || (target && /^(open|tick)$/.test(action) && !sees(target))) target = null;
   if (action === 'add') {
     // A button that adds an empty row for another job or degree, and nothing else: its words are read again here.
     var more = adders[String(arg)], words = more ? String(more.innerText || more.textContent || '').replace(/\s+/g, ' ').trim() : '';
@@ -479,7 +672,7 @@ CHOOSE = r"""
   }
   if (action === 'radio') {
     var radio = marked[n + ':' + arg];
-    if (!may(radio) || radio.type !== 'radio') return JSON.stringify({ok: false});
+    if (!may(radio) || radio.type !== 'radio' || !same(radio) || !sees(radio)) return JSON.stringify({ok: false});
     if (!radio.checked) press(radio);
     if (radio.checked) mark(radio.labels && radio.labels.length ? radio.labels[0] : radio);
     return JSON.stringify({ok: radio.checked});
@@ -521,6 +714,7 @@ CHOOSE = r"""
       if (box) own = own.concat(Array.prototype.slice.call(box.querySelectorAll('[role=option]')).filter(shown));
     });
     var list = (own.length ? own : entries).slice(0, 300);
+    numbered.forEach(function (el) { el.removeAttribute(OPT); });       // the entries of a list read before: one number, one entry
     list.forEach(function (el, k) { el.setAttribute(OPT, 'm' + k); });
     return JSON.stringify({options: list.map(function (el) { return String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80); })});
   }
@@ -537,7 +731,7 @@ CHOOSE = r"""
   }
   return JSON.stringify({ok: false});
 })(__ACTION__, __N__, __ARG__, __URL__)
-""".replace("__TICK__", CURRENT_BOX_WORDS + "|" + FLUENT_WORDS).replace("__NEVER_TICK__", NEVER_TICK_WORDS).strip()
+""".replace("__SEEN__", _SEEN.strip()).replace("__SAME__", _SAME.strip()).replace("__TICK__", CURRENT_BOX_WORDS + "|" + FLUENT_WORDS).replace("__NEVER_TICK__", NEVER_TICK_WORDS).strip()
 
 
 def choose_script(action: str, n: int, arg: Any, url: str) -> str:
@@ -559,7 +753,9 @@ def choose_answer(text: str) -> dict[str, Any]:
 VALUES = r"""
 (function (wanted, url) {
   if (location.href !== url) return JSON.stringify({moved: true});
-  var MARK = 'data-jobhelper', out = {};
+  var MARK = 'data-jobhelper', out = {}, found = Object.create(null);
+  __SEEN__
+  __SAME__
   function walk(root) {
     var all = root.querySelectorAll('*');
     for (var i = 0; i < all.length; i++) {
@@ -572,20 +768,26 @@ VALUES = r"""
         continue;
       }
       var mark = el.getAttribute(MARK);
-      if (!mark || wanted.indexOf(Number(mark)) < 0 || el.type === 'password' || el.type === 'file') continue;
-      if (el.tagName === 'SELECT') out[mark] = el.selectedIndex >= 0 ? String(el.options[el.selectedIndex].text).replace(/\s+/g, ' ').trim() : '';
-      else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') out[mark] = String(el.value || '').slice(0, 3000);
+      if (mark && wanted.indexOf(Number(mark)) >= 0) found[mark] = mark in found ? null : el;
     }
   }
   walk(document);
+  for (var mark in found) {
+    var el = found[mark];
+    if (!same(el) || el.type === 'password' || el.type === 'file') continue;      // copied or moved by the page: left out
+    if (el.tagName === 'SELECT') out[mark] = el.selectedIndex >= 0 ? String(el.options[el.selectedIndex].text).replace(/\s+/g, ' ').trim() : '';
+    else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') out[mark] = String(el.value || '').slice(0, 3000);
+  }
   return JSON.stringify({values: out});
 })(__WANTED__, __URL__)
-""".strip()
+""".replace("__SEEN__", _SEEN.strip()).replace("__SAME__", _SAME.strip()).strip()
 
 WATCH = r"""
 (function () {
   __CHOSEN__
   var names = [], empty = 0;
+  __SEEN__
+  __SAME__
   function walk(root) {
     var all = root.querySelectorAll('input, textarea, select, iframe, *');
     for (var i = 0; i < all.length && names.length < 400; i++) {
@@ -594,8 +796,7 @@ WATCH = r"""
       if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && el.tagName !== 'SELECT') continue;
       var type = String(el.getAttribute('type') || '').toLowerCase();
       if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'password' || type === 'file' || type === 'checkbox' || type === 'radio') continue;
-      var r = el.getBoundingClientRect();
-      if (r.width < 2 || r.height < 2) continue;
+      if (!sees(el)) continue;                   // out of a person's sight, as READ counts it
       names.push(el.name || el.id || el.tagName);
       if (el.tagName === 'SELECT' ? !chosen(el) : String(el.value || '').trim() === '') empty++;
     }
@@ -603,13 +804,15 @@ WATCH = r"""
   walk(document);
   return JSON.stringify({url: location.href, fields: names.length, first: names.slice(0, 12).join('|').slice(0, 400), empty: empty});
 })()
-""".replace("__CHOSEN__", _CHOSEN).strip()
+""".replace("__CHOSEN__", _CHOSEN).replace("__SEEN__", _SEEN.strip()).replace("__SAME__", _SAME.strip()).strip()
 
 
 REVIEW = r"""
 (function () {
   __CHOSEN__
   var out = [], seen = {};
+  __SEEN__
+  __SAME__
   function clean(t) { return String(t || '').replace(/\s+/g, ' ').trim(); }
   function text(el) { return el ? clean(el.innerText || el.textContent) : ''; }
   function name(el) {
@@ -637,7 +840,6 @@ REVIEW = r"""
       if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') continue;
       var type = tag === 'INPUT' ? String(el.getAttribute('type') || 'text').toLowerCase() : tag.toLowerCase();
       if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'reset' || type === 'image' || type === 'password' || type === 'file' || type === 'checkbox') continue;
-      var r = el.getBoundingClientRect();
       if (type === 'radio') {
         if (!el.name) continue;
         var set = el.closest('fieldset'), asked = set && set.querySelector('legend') ? text(set.querySelector('legend')) : el.name;
@@ -648,7 +850,7 @@ REVIEW = r"""
         if (el.checked) out[seen[el.name]].value = says.slice(0, 200);
         continue;
       }
-      if (r.width < 2 || r.height < 2) continue;
+      if (!sees(el)) continue;                   // out of a person's sight, as READ counts it
       var value = tag === 'SELECT' ? (chosen(el) ? clean(el.options[el.selectedIndex].text) : '') : String(el.value || '');
       var options = [];
       if (tag === 'SELECT') for (var k = 0; k < el.options.length && k < 300; k++) options.push(clean(el.options[k].text).slice(0, 80));
@@ -661,7 +863,7 @@ REVIEW = r"""
   walk(document);
   return JSON.stringify({url: location.href, title: clean(document.title).slice(0, 300), fields: out});
 })()
-""".replace("__CHOSEN__", _CHOSEN).strip()
+""".replace("__CHOSEN__", _CHOSEN).replace("__SEEN__", _SEEN.strip()).replace("__SAME__", _SAME.strip()).strip()
 
 
 def review_answer(text: str) -> dict[str, Any]:
@@ -1390,6 +1592,11 @@ class Field:
         return bool(self._raw.get("filled"))
 
     @property
+    def bare(self) -> bool:
+        """A file field a person cannot open on the page: not drawn, with no label or button of its own (READ's reach())."""
+        return bool(self._raw.get("bare"))
+
+    @property
     def combo(self) -> bool:
         """A text box that opens a list as you type."""
         return bool(self._raw.get("combo"))
@@ -1802,11 +2009,11 @@ class FormPlanner:
                                     "kind": "detail", "check": START_CHECK.format(text=said[:60]) if worked else ""})
 
     def _file(self, field: Field) -> None:
-        wants = field.file_kind()
+        wants = "" if field.bare else field.file_kind()
         if wants:
             self._plan.attach.append({"n": field.n, "label": field.name, "kind": wants, "accept": str(field.get("accept") or "")})
-        elif not str(field.get("label") or field.get("hint") or "").strip():
-            # a file field with no words of its own is the page's tool behind its "Select file" buttons: said once, not once per field
+        elif field.bare or not str(field.get("label") or field.get("hint") or "").strip():
+            # a file field with no words of its own, or with nothing to open it by, is the page's tool behind its own buttons: said once
             if not self._plan.leaves(FILE_BUTTON):
                 self._plan.leave("Files", FILE_BUTTON)
         else:
@@ -1934,6 +2141,8 @@ def plan(fields: list[dict[str, Any]], mine: dict[str, str], letter: str = "", h
 def read_answer(text: str) -> dict[str, Any]:
     """What the READ script gave back, checked: a page may answer anything."""
     data = page_reply(text, FORM_REFUSED)
+    if data.get("moved") is True:         # read_script(host): another site was in front, and nothing on it was marked
+        return {"url": str(data.get("url") or "")[:2000], "title": "", "from": "", "fields": [], "frames": [], "boxes": 0, "adds": [], "moved": True}
     if not isinstance(data.get("fields"), list):
         raise ValueError(FORM_REFUSED)
     fields = []
@@ -1941,10 +2150,10 @@ def read_answer(text: str) -> dict[str, Any]:
         if not isinstance(raw, dict) or not isinstance(raw.get("n"), int):
             continue
         fields.append({"n": raw["n"], "filled": bool(raw.get("filled")), "required": bool(raw.get("required")), "combo": bool(raw.get("combo")),
-                       "most": raw.get("most") if isinstance(raw.get("most"), int) else 0,
+                       "bare": bool(raw.get("bare")), "most": raw.get("most") if isinstance(raw.get("most"), int) else 0,
                        "options": [str(o)[:80] for o in (raw.get("options") or [])[:300]] if isinstance(raw.get("options"), list) else [],
                        **{key: " ".join(str(raw.get(key) or "").split())[:300] for key in ("type", "name", "id", "auto", "label", "hint", "accept", "code", "part", "group")}})
-    return {"url": str(data.get("url") or ""), "title": str(data.get("title") or "")[:300], "from": str(data.get("from") or "")[:2000], "fields": fields,
+    return {"url": str(data.get("url") or ""), "title": str(data.get("title") or "")[:300], "from": str(data.get("from") or "")[:2000], "fields": fields, "moved": False,
             "frames": [str(f)[:300] for f in (data.get("frames") or [])[:5]] if isinstance(data.get("frames"), list) else [],
             "boxes": data.get("boxes") if isinstance(data.get("boxes"), int) else 0,
             "adds": [{"k": a["k"], "text": " ".join(str(a.get("text") or "").split())[:80], "kind": add_kind(str(a.get("text") or ""))}

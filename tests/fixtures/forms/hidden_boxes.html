@@ -1,0 +1,90 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Junior Analyst - Fabrikam Careers</title>
+<style>
+  body { font: 13px sans-serif; margin: 8px; }
+  p { margin: 4px 0; }
+  label, .lbl { display: block; }
+  input { width: 300px; }
+  .menu { border: 1px solid #999; padding: 4px; width: 200px; }
+  #sheet { height: 120px; overflow: auto; border: 1px solid #888; width: 330px; }
+  #sheet .row { height: 60px; }
+  #sheet2 { height: 140px; overflow: auto; border: 1px solid #888; width: 330px; }
+  #sheet2 .bar { position: sticky; top: 0; height: 70px; background: #fff; z-index: 1; }
+  #closed { position: fixed; top: 20px; left: 560px; width: 190px; display: block; }
+</style></head>
+<body>
+<!-- Robot traps of many kinds beside real fields that look a little like them. Every box named hp... stays empty. -->
+<form id="f" action="/never-sent" onsubmit="window.sent = true; return false;">
+  <p><label for="fn">First name</label><input id="fn" name="first_name"></p>
+  <!-- a floating label drawn over its own box -->
+  <p style="position: relative"><input id="ln" name="last_name" style="height: 34px"><label for="ln" style="position: absolute; left: 0; top: 0; width: 300px; height: 34px; padding: 2px 6px; box-sizing: border-box">Last name</label></p>
+  <!-- a card with rounded corners cut by a clip-path that keeps the whole box -->
+  <p style="clip-path: inset(0 round 8px); padding: 4px; background: #eef"><label for="em">Email</label><input id="em" type="email" name="email"></p>
+  <!-- a sheet that scrolls: the postal code is below its visible part, still on the screen under it -->
+  <div id="sheet">
+    <div class="row"><label for="city">City</label><input id="city" name="city"></div>
+    <div class="row"></div>
+    <div class="row"></div>
+    <div class="row"><label for="pc">Postal code</label><input id="pc" name="postcode"></div>
+  </div>
+  <!-- a sheet with a sticky title: the street box has scrolled under it -->
+  <div id="sheet2">
+    <div class="bar">Your address</div>
+    <div style="height: 120px"></div>
+    <label for="st">Street address</label><input id="st" name="street">
+    <div style="height: 200px"></div>
+  </div>
+  <h3>Work experience</h3>
+  <p><label for="w1">Company</label><input id="w1" name="work[0][company]"></p>
+  <p><label for="w2">Job title</label><input id="w2" name="work[0][title]"></p>
+  <p><label for="w5">Start date</label><input id="w5" name="work[0][from]" type="month"></p>
+  <p><label for="w6">End date</label><input id="w6" name="work[0][to]" type="month"></p>
+  <p><label><input type="checkbox" id="wc" name="work[0][current]" style="width: 16px; height: 16px"> I currently work here</label></p>
+  <span class="lbl" id="tooll">Main tool</span><div class="menu" role="button" aria-haspopup="listbox" aria-labelledby="tooll" tabindex="0" id="tool" data-menu="SQL|Python">Select one</div><div id="tool-list"></div>
+
+  <!-- the traps -->
+  <div style="height: 0; overflow: hidden"><label for="hpa1">Phone</label><input id="hpa1" type="tel" name="phone_check"></div>
+  <div style="width: 0; overflow: clip"><label for="hpa2">LinkedIn</label><input id="hpa2" type="url" name="linkedin_check"></div>
+  <div style="position: absolute; clip: rect(0 0 0 0)"><label for="hpb1">Phone</label><input id="hpb1" type="tel" name="phone_alt"></div>
+  <p><label for="hpb2">LinkedIn</label><input id="hpb2" type="url" name="homepage" style="clip-path: inset(50%)"></p>
+  <div style="position: absolute; left: 9999px; top: 300px"><label for="hpc1">Email</label><input id="hpc1" type="email" name="email_check"></div>
+  <p style="transform: translateX(9999px)"><label for="hpc2">City</label><input id="hpc2" name="city_check"></p>
+  <p><label for="hpd">Phone</label><input id="hpd" type="tel" name="phone_dot" style="width: 2px; height: 2px; padding: 0; border: 0"></p>
+  <p style="opacity: 0.01"><label for="hpe">LinkedIn</label><input id="hpe" type="url" name="website"></p>
+  <div inert><label for="hpf1">Phone</label><input id="hpf1" type="tel" name="phone_inert"></div>
+  <div inert><x-box id="ibox"></x-box></div>
+  <p><label for="hpg">Email</label><input id="hpg" type="email" name="email_none" style="pointer-events: none"></p>
+  <p style="position: relative"><label for="hph">Phone</label><input id="hph" type="tel" name="phone_under"><span style="position: absolute; left: 0; bottom: 0; width: 320px; height: 30px; background: #fff"></span></p>
+  <iframe id="hidden_frame" style="position: absolute; left: -9999px" srcdoc="<label for='hpi'>Email</label><input id='hpi' type='email' name='email_frame'>"></iframe>
+  <span class="lbl" id="snackl">Office snack</span><div class="menu" role="button" aria-haspopup="listbox" aria-labelledby="snackl" tabindex="0" id="snack" data-menu="Pretzels|Fruit" style="opacity: 0.01">Select one</div><div id="snack-list"></div>
+  <button type="submit" id="send">Submit application</button>
+</form>
+<!-- a dialog component with a CLOSED shadow root: its own box scrolls, and the page cannot see it -->
+<x-closed id="closed">
+  <label for="hpj">City</label><input id="hpj" name="city_slot" style="width: 150px">
+  <div style="height: 600px"></div>
+</x-closed>
+<script>
+  document.getElementById('ibox').attachShadow({mode: 'open'}).innerHTML = '<label for="hpf2">City</label><input id="hpf2" name="city_inert">';
+  var inner = document.getElementById('closed').attachShadow({mode: 'closed'});
+  inner.innerHTML = '<div id="box" style="height: 200px; overflow: auto"><slot></slot></div>';
+  inner.getElementById('box').scrollTop = 400;          // the slotted box is far above the top of the dialog's own box
+  var sheet2 = document.getElementById('sheet2');
+  sheet2.scrollTop = document.getElementById('st').offsetTop - sheet2.offsetTop - 20;   // the street box sits under the sticky title
+  document.getElementById('sheet').scrollTop = 0;
+  window.chosen = {}; window.opened = [];
+  document.querySelectorAll('[data-menu]').forEach(function (box) {
+    var list = document.getElementById(box.id + '-list');
+    box.addEventListener('mousedown', function () {
+      window.opened.push(box.id);
+      setTimeout(function () {
+        list.innerHTML = box.getAttribute('data-menu').split('|').map(function (w) { return '<div role="option" style="padding:4px">' + w + '</div>'; }).join('');
+        Array.prototype.forEach.call(list.children, function (item) {
+          item.addEventListener('mousedown', function () { window.chosen[box.id] = item.textContent; box.textContent = item.textContent; list.innerHTML = ''; });
+        });
+      }, 100);
+    });
+  });
+  document.getElementById('send').addEventListener('click', function (e) { e.preventDefault(); window.clicked = true; });
+</script>
+</body></html>

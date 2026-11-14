@@ -136,7 +136,7 @@ class AssistantService:
             chrome.pause(wait)
             try:
                 tab = chrome.active_tab()
-                ready = form_fill.host_of(tab["url"]) == host and bool(form_fill.read_answer(chrome.run(form_fill.READ))["fields"])
+                ready = form_fill.host_of(tab["url"]) == host and bool(form_fill.read_answer(chrome.run(form_fill.read_script(host)))["fields"])
             except (chrome.ChromeError, ValueError):
                 ready = False
             if ready:

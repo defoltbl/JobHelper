@@ -43,7 +43,7 @@ class FormFillRun:
         self._left: list[dict] = []           # what is left to the person, with the reason
         self._written: list[int] = []         # numbers of the fields the page took
         self._stopped = ""                    # why the fill stopped after the page was changed
-        self._wrote = False                   # something was written into the page (a fault after it still reports)
+        self._wrote = False                   # something may be on the page that the report does not show as filled
 
     def result(self) -> dict[str, Any]:
         """Do the whole fill and say what happened (see `AssistantService.assistant_fill`)."""
@@ -62,17 +62,23 @@ class FormFillRun:
             self._write()
             self._attach_files()
         except Stop as stop:
-            if not self._filled:
+            if not self._touched:
                 return stop.answer
             self._stopped = str(stop)
             self._left_unreached()
         except Exception as e:  # noqa: BLE001 - what was written is on the page: it is reported, and the fault named (#77)
-            if not (self._filled or self._wrote):
+            if not self._touched:
                 raise
             trouble.note("filling in a form", e)
             self._stopped = f"Something went wrong: {trouble.kind_of(e)}"
             self._left_unreached()
         return self._report(host)
+
+    @property
+    def _touched(self) -> bool:
+        """The page may hold something of this fill: filled, chosen, attached, or written but not seen to hold (#91).
+        From then on a stop or a fault still gives the report, so that you know what to look at."""
+        return bool(self._filled or self._wrote)
 
     def learned(self) -> dict[str, Any]:
         """What the assistant itself wrote as answers: the only fields it may read back later, to learn your corrections."""
@@ -89,6 +95,9 @@ class FormFillRun:
             raise Stop("I do not know your details yet. Fill in My details once, save, then ask me again.", action="details")
         self._mine["start"] = str(self._app.options().get("about_start") or "").strip()     # when you can start: said once, in About you
 
+    LOADING = "The page in front is still loading or empty. Wait until the form shows, then ask me again."
+    MOVED_READING = "The tab changed while I was reading the form, so I wrote nothing. Go back to the form and ask me again."
+
     def _read_page(self) -> str:
         try:
             tab = chrome.active_tab()
@@ -100,9 +109,12 @@ class FormFillRun:
             raise Stop(f"The tab in front is not a web page with a form. Open the application form in {chrome.short()}, bring its tab to the front, and ask me again.")
         if address.refused:
             raise Stop(address.refusal("fill in forms on this site"))
-        self._page = self._read()
-        if form_fill.PageAddress(self._page["url"]).host != host:     # the tab changed between the check and the reading (#77)
-            raise Stop("The tab changed while I was reading the form, so I wrote nothing. Go back to the form and ask me again.")
+        self._page = self._read(host)                                  # on a tab that changed to another site, nothing is marked
+        read_host = form_fill.PageAddress(self._page["url"]).host
+        if not read_host:                                              # about:blank, or a page that has not loaded yet (#91)
+            raise Stop(self.LOADING)
+        if self._page["moved"] or read_host != host:                   # the tab changed between the check and the reading (#77)
+            raise Stop(self.MOVED_READING)
         if not self._page["fields"]:
             if self._page["frames"]:
                 inner = form_fill.host_of(self._page["frames"][0]) or "another site"
@@ -112,9 +124,9 @@ class FormFillRun:
             raise Stop(f"I found no form fields on this page ({self._page['title'] or host}). Open the page with the application form and ask me again.")
         return host
 
-    def _read(self) -> dict[str, Any]:
+    def _read(self, host: str) -> dict[str, Any]:
         try:
-            return form_fill.read_answer(chrome.run(form_fill.READ))
+            return form_fill.read_answer(chrome.run(form_fill.read_script(host)))
         except (chrome.ChromeError, ValueError) as e:
             raise Stop(str(e)) from e
 
@@ -135,7 +147,7 @@ class FormFillRun:
         try:                                # the form shows fewer rows than you have jobs or degrees: ask it for more, then read it again
             self._added = self._more_rows()
             if self._added:
-                again = self._read()
+                again = self._read(form_fill.host_of(self._page["url"]))     # moved to another site: no fields, the first reading stays
                 if again["url"] == self._page["url"] and again["fields"]:
                     self._page = again
                     self._todo = form_fill.plan(self._page["fields"], self._mine, self._letter_text(), has_job=self._job is not None)
@@ -184,10 +196,13 @@ class FormFillRun:
         maker = FormChoices(self._page["url"], self._mine, self._job, self._cv)
         try:
             values, chosen, open_ones = maker.make(self._todo["choose"])
-        except chrome.ChromeError as e:
-            self._filled += maker.chosen          # pressed before Chrome stopped answering: the report names them all
-            self._left += maker.unsure            # and the one being chosen then, to be checked (#82)
-            raise Stop(str(e)) from e
+        except Exception as e:
+            self._filled += maker.chosen          # pressed before Chrome stopped answering or a fault: the report names them all
+            self._left += maker.left + maker.unsure     # with their own reasons, and the one being chosen then, to be checked (#82)
+            self._wrote = self._wrote or bool(maker.chosen or maker.unsure)
+            if isinstance(e, chrome.ChromeError):
+                raise Stop(str(e)) from e
+            raise
         self._fill += values
         self._filled += chosen
         self._left += open_ones
@@ -203,6 +218,8 @@ class FormFillRun:
             else:
                 self._left.append({"label": box["label"], "why": "The page did not take the tick. Tick it yourself."})
 
+    MOVED_WRITING = "The tab changed while I was working, so I wrote nothing. Go back to the form and ask me again."
+
     def _write(self) -> None:
         fill, url = self._fill, self._page["url"]
         if not fill:
@@ -212,61 +229,80 @@ class FormFillRun:
         except (chrome.ChromeError, ValueError) as e:
             raise Stop(str(e)) from e
         if done["moved"]:
-            raise Stop("The tab changed while I was working, so I wrote nothing. Go back to the form and ask me again.")
-        self._wrote = bool(done["done"])
-        thrown = self._type_again([i["n"] for i in fill if i["n"] in done["done"]])
-        self._written = [n for n in done["done"] if n not in thrown]
+            raise Stop(self.MOVED_WRITING)
+        self._wrote = self._wrote or bool(done["done"])
+        thrown, unchecked = self._type_again([i["n"] for i in fill if i["n"] in done["done"]])
+        self._written = [n for n in done["done"] if n not in thrown and n not in unchecked]
         for item in fill:
             if item["n"] in self._written:
                 self._filled.append({"label": item["label"], "kind": item["kind"], "check": item.get("check", ""),
                                     "value": item["value"] if len(item["value"]) <= SHOWN else item["value"][:SHOWN].rstrip() + "…"})
             elif item["n"] in thrown:
                 self._left.append({"label": item["label"], "why": form_fill.THROWN})
+            elif item["n"] in unchecked:
+                self._left.append({"label": item["label"], "why": self.NOT_CHECKED})
             else:
                 self._left.append({"label": item["label"], "why": "The page did not take it: the field changed or was filled in the meantime. Type this one yourself."})
 
-    def _type_again(self, texts: list[int]) -> list[int]:
+    NOT_CHECKED = ("I could not check this field: Chrome stopped answering or the tab changed. "
+                   "Look at it on the page and type it yourself if it is empty.")
+
+    def _type_again(self, texts: list[int]) -> tuple[list[int], list[int]]:
         """Some pages throw away what did not arrive as typing: look again, and write those the way typing arrives.
-        Returns the fields that are still empty after that."""
+        Returns (the fields still empty after that, the fields that could not be checked: Chrome stopped answering
+        or the tab changed)."""
         if not texts:
-            return []
+            return [], []
         url, lost = self._page["url"], set(texts)       # not looked at yet: not known to be written
         try:
             chrome.pause(0.35)
             lost = set(form_fill.empty_answer(chrome.run(form_fill.empty_script(texts, url)), texts))
             if not lost:
-                return []
+                return [], []
             again = form_fill.fill_answer(chrome.run(form_fill.fill_script([i for i in self._fill if i["n"] in lost], url, typed=True)))
             if again["moved"]:
-                return sorted(lost)         # the tab changed: what was thrown away was not written again
+                return [], sorted(lost)     # the tab changed: what was thrown away was not written again, nor looked at
             chrome.pause(0.35)
-            still = set(form_fill.empty_answer(chrome.run(form_fill.empty_script(sorted(lost), url)), lost))
-            return sorted(still | (lost - set(again["done"])))      # empty again, or never written the second time
+            look = chrome.run(form_fill.empty_script(sorted(lost), url))
+            said = set(form_fill.empty_answer(look))         # the page's own word: none when it moved or gave no readable answer
+            thrown = said | (lost - set(again["done"]))      # empty again, or never written the second time
+            return sorted(thrown), sorted(set(form_fill.empty_answer(look, lost)) - thrown)
         except (chrome.ChromeError, ValueError):
-            return sorted(lost)             # Chrome stopped answering: every field not seen to hold its value is reported (#77)
+            return [], sorted(lost)         # Chrome stopped answering: every field not seen to hold its value is reported (#77)
 
     def _attach_files(self) -> None:
         if not self._todo["attach"]:
             return
+        files = FormFiles(self._page, self._job)
         try:
-            attached, not_attached, stopped = FormFiles(self._page, self._job).attach(self._todo["attach"])
-        except (chrome.ChromeError, ValueError) as e:
-            raise Stop(str(e)) from e
+            attached, not_attached, stopped = files.attach(self._todo["attach"])
+        except Exception as e:
+            self._filled += files.attached       # a file the form took is reported, also when a fault stopped the next one
+            self._left += files.left
+            if isinstance(e, (chrome.ChromeError, ValueError)):
+                raise Stop(str(e)) from e
+            raise
         self._filled += attached                 # a file the form took is reported, also when the next one stopped
         self._left += not_attached
         if stopped:
             raise Stop(stopped)
 
     NOT_REACHED = "Not filled: I stopped before I came to it. Fill it in yourself, or ask me again."
+    UNLISTED = " I could not list every field I did not come to, so look at the whole form."
 
     def _left_unreached(self) -> None:
-        """After a stop, every field still waiting for a value, a choice, a tick or a file is listed as left to you."""
-        said = {i["label"] for i in self._filled} | {i["label"] for i in self._left}
-        waiting = [*self._fill, *self._todo.get("choose", []), *self._todo.get("tick", []), *self._todo.get("attach", [])]
-        for item in waiting:
-            if item["label"] not in said:
-                said.add(item["label"])
-                self._left.append({"label": item["label"], "why": self.NOT_REACHED})
+        """After a stop, every field still waiting for a value, a choice, a tick or a file is listed as left to you.
+        A fault here never hides the report of what is already on the page."""
+        try:
+            said = {i["label"] for i in self._filled} | {i["label"] for i in self._left}
+            waiting = [*self._fill, *self._todo.get("choose", []), *self._todo.get("tick", []), *self._todo.get("attach", [])]
+            for item in waiting:
+                if item["label"] not in said:
+                    said.add(item["label"])
+                    self._left.append({"label": item["label"], "why": self.NOT_REACHED})
+        except Exception as e:  # noqa: BLE001 - noted, and the report says the list of fields left may be short
+            trouble.note("listing the fields a stopped fill did not reach", e)
+            self._stopped += self.UNLISTED
 
     def _report(self, host: str) -> dict[str, Any]:
         page, job, filled, left, added = self._page, self._job, self._filled, self._left, self._added
@@ -366,12 +402,13 @@ class FormChoices:
         self._url, self._mine, self._job, self._cv = url, mine, job, cv
         self.chosen: list[dict[str, Any]] = []     # what was pressed so far, also when a later step fails
         self.unsure: list[dict[str, Any]] = []     # a choice being made when Chrome stopped answering: it may have taken
+        self.left: list[dict[str, Any]] = []       # what is left so far, with the reason, also when a later step fails
 
     def make(self, choices: list[dict[str, Any]]) -> tuple[list[dict], list[dict], list[dict]]:
         """Decide and make the choices of a form. Returns (values for plain lists and number fields, to be
         written with the rest; what was chosen by pressing; what is left, with the reason)."""
         url, mine, job = self._url, self._mine, self._job
-        to_fill, chosen, left = [], self.chosen, []
+        to_fill, chosen, left = [], self.chosen, self.left
         for extra in choices[form_choices.MAX_CHOICES + 8:]:
             left.append({"label": extra["label"], "why": form_choices.TOO_MANY})
         choices = choices[:form_choices.MAX_CHOICES + 8]
@@ -465,6 +502,8 @@ class FormFiles:
 
     def __init__(self, page: dict[str, Any], job) -> None:
         self._page, self._job = page, job
+        self.attached: list[dict[str, Any]] = []   # what the form took so far, also when a later step fails
+        self.left: list[dict[str, Any]] = []       # what was not attached so far, with the reason
 
     MOVED = "The tab changed while I was attaching your files. Go back to the form, look what it holds, and ask me again."
 
@@ -474,7 +513,7 @@ class FormFiles:
         Only a field that holds no file is given one; the field for further documents gets the letter when the
         form has no place of its own for it. Nothing is sent: the page holds the file until you press its button."""
         page, job = self._page, self._job
-        filled, left = [], []
+        filled, left = self.attached, self.left
         docs = self.docs() if job else {"cv": [], "letter": []}
         letter_placed = any(form_fill.classify(f)[0] == "letter" for f in page["fields"]) or any(i["kind"] == "letter" for i in wanted)
         for item in wanted:

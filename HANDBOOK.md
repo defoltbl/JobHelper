@@ -672,11 +672,35 @@ data/                your data; only the *.example.* files are in git
   see-through on purpose, so they are not asked; a combobox's box is. `trap.html` and `trap_scrolled.html` prove it in
   a real browser engine (Submit, Next, a password, a scrolled page), `sheet.html` that a scrolled sheet, a component and
   a step fading in are still filled. A test page's name has letters and "_" only (the test server refuses others).
-  Not caught yet (#91): clipping, far right or below, tiny or nearly see-through boxes, `inert`, covered boxes, frames.
+  More traps are caught (#91): see the next entry.
+- **What a person cannot see or reach is left out, by one set of rules** (`form_fill._SEEN`, shared by every page script
+  that asks; #91). A text box is a trap when it sits in a parent of width or height 0 that hides its overflow; is
+  "visually hidden" (`clip` or `clip-path` that leaves no area, also a `circle` or `ellipse` with no radius and a polygon with no area; a rounded card still fills); sits 2 window widths or more
+  to the right (on a right-to-left page: right of the page start, or more than one window width to its left); is under
+  5 px wide or high (a combobox's own search box is not counted); has opacity under 0.1 (not only 0; the opacity is multiplied up the chain, and the first box where the product falls below 0.1 decides); is inside an `inert`
+  part; has `pointer-events: none`; is covered by another element (another field's label or a block of words over the box is a cover; only the box's own label and small words inside its own wrapper, a sticky or fixed bar and a list's own text are not); is inside a hidden frame (frames are seen from inside, and READ takes the old marks off a frame it skips); or is a page-drawn menu that is see-through. Right-to-left pages
+  scrolled sideways keep their fields (`back()`). A field slotted into a component with a closed shadow root and
+  scrolled out of its box is left out: the safe side (owner decision).
+- **A see-through box is "fading in" only when a fade of its opacity ends within about 2 s, and ends at opacity 0.1 or more** (`fading()`, owner
+  decision; the time is divided by the playback rate). A fade OUT does not count. A spinning, slowly fading or endlessly fading box is a trap. Shortcuts, each closed with a reason: a box
+  placed far BELOW (`top: 9999px`) cannot be told from a long real form, so it is not caught; a real page more than 2
+  screens wide loses fields; a page that draws an unlabelled, wordless box over a real field loses that field; a fade
+  done step by step by a script still reads as a trap.
+- **A mark is checked again before the assistant writes, chooses or attaches** (#91): a page script could copy the
+  assistant's `data-jobhelper` mark onto another box after the form was read. A mark seen on two boxes is skipped. Each
+  box is checked again before the action: still shown, not a trap, and the same kind, name and id as when it was read.
+  Typed writing goes only to the box itself: when the page moves the focus away, the box gets the value another way, and
+  no other box is written. A box whose measuring throws is left out. CHOOSE asks the sight rule only when it opens a menu or ticks a box: an open menu can always be read, picked and closed (Radix sets `pointer-events: none` on the page while its menu is open). WATCH and the review use the same sight rule. The form is read only when the tab in front still has the expected site; an empty page (still
+  loading) has its own message, not "the tab changed" (`FormFillRun.LOADING`). A file field counts as one a person can open when a press target is near it: a button, a link, a focusable box such as a drop zone, or a label of no other field, up to 5 parents out. Only a file field with nothing to press near it (`Field.bare`) is left to the person with the "own buttons" reason. After a stop the run still reports whenever the page was touched (`_touched`): a written field that was thrown or not checked, or a radio being pressed when Chrome stopped; a choice the page refused keeps its own reason.
+- **A field the page filled by itself between the writing and the check counts as thrown away** (owner decision 8,
+  #91, not changed in code): a rare race, and the report then asks the person to look at the field.
 - **A field the page emptied again is written again by typing, and checked again** (`FormFillRun._type_again`): a field
   is reported written only when a look saw it hold its value. When Chrome stops answering, the tab changes, the page
   drew the field anew, gives no readable answer or refuses the second writing, it is reported as not written. A fault
-  after something was written keeps the report of what was written (`FormFillRun.result`, `_wrote`); the screen names
+  after something was written keeps the report of what was written (`FormFillRun.result`, `_wrote`); a file or a choice made before a
+  fault is still reported as filled. When Chrome stops answering or the tab changes during the second check, the reason is
+  `FormFillRun.NOT_CHECKED` ("I could not check this field …"), not "threw the value away"; a fault while listing the fields not
+  reached still gives the report, with `UNLISTED`. The screen names
   only the fault's kind (`trouble.kind_of`), its text goes to the log of problems.
 - **A field is private by its name, its words or its autocomplete value** (`form_fill._private`), and the review of a
   form asks the same function with what the REVIEW script reports (label, `name`, `autocomplete`), so a value the

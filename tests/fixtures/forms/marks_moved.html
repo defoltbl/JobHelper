@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Data Analyst - Apply | Larkfield</title>
+<style>body{font:14px sans-serif;max-width:640px;margin:24px auto} .field{margin:12px 0} label{display:block;font-weight:600} input{width:100%;padding:6px;box-sizing:border-box}</style></head>
+<body>
+<h1>Apply for Data Analyst</h1>
+<!-- A page script that copies the filler's mark of a real box onto a hidden one, and moves the mark of another real box
+     (with all the filler put on it) to a box beside it with another name. The script runs when the marks change, so no
+     wait decides what the filler finds. -->
+<form id="f" onsubmit="window.sent = true; return false;">
+  <div class="field"><label for="fn">First name</label><input id="fn" name="first_name"></div>
+  <div class="field"><label for="ln">Last name</label><input id="ln" name="last_name"></div>
+  <div class="field"><label for="em">Email</label><input id="em" name="email" type="email"></div>
+  <div class="field"><label for="nick">Nickname</label><input id="nick" name="nickname" aria-hidden="true"></div>
+  <input id="fn_twin" name="first_name_2" style="position: absolute; left: -10000px; top: 0">
+  <button type="submit" id="send">Submit</button>
+</form>
+<script>
+  window.sent = false; window.clicked = false;
+  var MARK = 'data-jobhelper', SIGN = 'data-jobhelper-sign';
+  new MutationObserver(function (all) {
+    all.forEach(function (m) {
+      var el = m.target;
+      if (el.id === 'fn' && el.hasAttribute(MARK)) document.getElementById('fn_twin').setAttribute(MARK, el.getAttribute(MARK));
+      if (el.id === 'em' && el.hasAttribute(MARK)) {
+        var to = document.getElementById('nick');
+        [MARK, SIGN].forEach(function (a) { if (el.hasAttribute(a)) { to.setAttribute(a, el.getAttribute(a)); el.removeAttribute(a); } });
+      }
+    });
+  }).observe(document.body, {subtree: true, attributes: true, attributeFilter: [MARK, SIGN]});
+  document.getElementById('send').addEventListener('click', function () { window.clicked = true; });
+</script>
+</body></html>

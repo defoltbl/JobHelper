@@ -1,0 +1,21 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Data Analyst - Apply | Larkfield</title>
+<style>body{font:14px sans-serif;max-width:640px;margin:24px auto} .field{margin:12px 0} label{display:block;font-weight:600} input{width:100%;padding:6px;box-sizing:border-box}</style></head>
+<body>
+<h1>Apply for Data Analyst</h1>
+<!-- The first name keeps only what arrives the way typing does, and the moment it gets the focus the page passes the focus
+     on to another box. Typing into the box in front would write the name there. -->
+<form id="f" onsubmit="window.sent = true; return false;">
+  <div class="field"><label for="fn">First name</label><input id="fn" name="first_name"></div>
+  <div class="field"><label for="ln">Last name</label><input id="ln" name="last_name"></div>
+  <div class="field"><label for="other">Search</label><input id="other" name="search" aria-hidden="true"></div>
+  <button type="submit" id="send">Submit</button>
+</form>
+<script>
+  window.sent = false; window.clicked = false;
+  var fn = document.getElementById('fn'), other = document.getElementById('other');
+  fn.addEventListener('input', function (e) { if (e.inputType !== 'insertText') fn.value = ''; });
+  fn.addEventListener('focus', function () { other.focus(); });
+  document.getElementById('send').addEventListener('click', function () { window.clicked = true; });
+</script>
+</body></html>

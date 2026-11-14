@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Junior Analyst - Fabrikam Careers</title>
+<style>
+  body { font: 13px sans-serif; margin: 8px; }
+  label, .lbl { display: block; }
+  input { width: 300px; }
+  [role=listbox] { pointer-events: auto; }
+</style></head>
+<body>
+<!-- A menu drawn the way Radix and shadcn draw it: while it is open, the page under it takes no click (pointer-events: none on the body). -->
+<form id="f" action="/never-sent" onsubmit="window.sent = true; return false;">
+  <p><label for="fn">First name</label><input id="fn" name="first_name"></p>
+  <span class="lbl" id="tooll">Main tool</span>
+  <button type="button" role="combobox" aria-expanded="false" aria-controls="tool-list" aria-labelledby="tooll" id="tool" data-menu="SQL|Python">Select one</button>
+  <p><label for="ln">Last name</label><input id="ln" name="last_name"></p>
+  <button type="submit" id="send">Submit application</button>
+</form>
+<div id="tool-list" role="listbox"></div>
+<script>
+  window.chosen = {}; window.opened = [];
+  var box = document.getElementById('tool'), list = document.getElementById('tool-list');
+  function shut() { list.innerHTML = ''; box.setAttribute('aria-expanded', 'false'); document.body.style.pointerEvents = ''; }
+  box.addEventListener('mousedown', function () {
+    window.opened.push(box.id);
+    document.body.style.pointerEvents = 'none';
+    box.setAttribute('aria-expanded', 'true');
+    list.innerHTML = box.getAttribute('data-menu').split('|').map(function (w) { return '<div role="option" style="padding:4px">' + w + '</div>'; }).join('');
+    Array.prototype.forEach.call(list.children, function (item) {
+      item.addEventListener('mousedown', function () { window.chosen[box.id] = item.textContent; box.textContent = item.textContent; shut(); });
+    });
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') shut(); });
+  document.getElementById('send').addEventListener('click', function (e) { e.preventDefault(); window.clicked = true; });
+</script>
+</body></html>

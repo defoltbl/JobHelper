@@ -473,6 +473,11 @@ def _engine_did_not_start(done):
     pytest.skip(said)
 
 
+def _reads(script, url):
+    """The script is the READ a fill sends to the form at this address: it checks the host before it marks a field."""
+    return script == form_fill.read_script(form_fill.host_of(url))
+
+
 def _in_page(*scripts, page="plain.html"):
     done = subprocess.run([sys.executable, str(FIXTURES / "run_in_page.py"), str(FIXTURES / "forms" / page)],
                           input=json.dumps(list(scripts)), capture_output=True, text=True, timeout=120,
@@ -589,7 +594,7 @@ def _browser(monkeypatch, fields, url="https://careers.northwind.example/jobs/42
         if "empty.push" in script:               # the look after a fill: everything stayed where it was written
             return json.dumps({"empty": []})
         ran.append(script)
-        if script == form_fill.READ:
+        if _reads(script, url):
             return json.dumps({"url": url, "title": title, "fields": fields, "frames": list(frames), "boxes": boxes})
         if script == form_fill.PAGE:
             return json.dumps({"url": url, "title": title, "text": "", "stated": None})
@@ -909,7 +914,7 @@ def test_choosing_goes_through_the_page_step_by_step(isolate, monkeypatch):
     steps = []
 
     def run(script):
-        if script == form_fill.READ:
+        if _reads(script, "https://careers.northwind.example/jobs/42"):
             return json.dumps({"url": "https://careers.northwind.example/jobs/42", "title": "t", "fields": fields, "frames": [], "boxes": 0})
         action, n, arg, _url = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
         steps.append((action, n, arg))
@@ -939,7 +944,7 @@ def test_choices_made_before_chrome_stops_answering_are_still_reported(isolate, 
     steps = []
 
     def run(script):
-        if script == form_fill.READ:
+        if _reads(script, "https://careers.northwind.example/jobs/42"):
             return json.dumps({"url": "https://careers.northwind.example/jobs/42", "title": "t", "fields": fields, "frames": [], "boxes": 0})
         action, n, arg, _url = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
         steps.append((action, n, arg))
@@ -968,7 +973,7 @@ def test_a_radio_choice_chrome_stopped_in_is_in_the_report_to_be_checked(isolate
     fields = [_field("Country", kind="menu", n=1), _field("Do you need sponsorship?", kind="radio", n=2, options=["Yes", "No"])]
 
     def run(script):
-        if script == form_fill.READ:
+        if _reads(script, "https://careers.northwind.example/jobs/42"):
             return json.dumps({"url": "https://careers.northwind.example/jobs/42", "title": "t", "fields": fields, "frames": [], "boxes": 0})
         action, n, _arg, _url = json.loads("[" + script.rsplit("})(", 1)[1][:-1] + "]")
         if action == "radio":
@@ -1044,7 +1049,7 @@ def test_what_you_change_on_the_page_is_learned_from_the_assistants_own_fields_o
     asked_for = []
 
     def run(script):
-        if script == form_fill.READ:
+        if _reads(script, url):
             return json.dumps({"url": url, "title": "t", "frames": [], "boxes": 0, "fields": [_field("Email", n=1), _field("Why Northwind?", kind="textarea", n=2)]})
         if "empty.push" in script:
             return json.dumps({"empty": []})
@@ -1076,7 +1081,7 @@ def _typing(monkeypatch, second, first=None):
     looks = []
 
     def run(script):
-        if script == form_fill.READ:
+        if _reads(script, url):
             return json.dumps({"url": url, "title": "t", "frames": [], "boxes": 0, "fields": [_field("First name", n=1), _field("Email", n=2)]})
         if "empty.push" in script:
             looks.append(script)
@@ -1090,18 +1095,20 @@ def _typing(monkeypatch, second, first=None):
     monkeypatch.setattr(chrome, "run", run)
 
 
-@pytest.mark.parametrize("second", [lambda: (_ for _ in ()).throw(chrome.ChromeError(chrome.NO_ANSWER)),
-                                    lambda: json.dumps({"moved": True}), lambda: json.dumps({"done": [], "skipped": [1]}), lambda: "junk"])
-def test_a_field_the_page_threw_away_is_never_reported_written_unless_the_second_writing_took(isolate, monkeypatch, second):
+@pytest.mark.parametrize("second, why", [(lambda: (_ for _ in ()).throw(chrome.ChromeError(chrome.NO_ANSWER)), form_run.FormFillRun.NOT_CHECKED),
+                                         (lambda: json.dumps({"moved": True}), form_run.FormFillRun.NOT_CHECKED),
+                                         (lambda: json.dumps({"done": [], "skipped": [1]}), form_fill.THROWN),
+                                         (lambda: "junk", form_run.FormFillRun.NOT_CHECKED)])
+def test_a_field_the_page_threw_away_is_never_reported_written_unless_the_second_writing_took(isolate, monkeypatch, second, why):
     """#77: when Chrome failed, the tab changed or the page refused the second, typed writing, the field was still said
-    to be filled in."""
+    to be filled in. A refusal says the page threw it away; the rest say it could not be checked (#91)."""
     store.save_jobs([_job()])
     details.save(MINE)
     _typing(monkeypatch, second)
     out = ui_api.Api().assistant_fill("nw1")
     assert out["ok"], out
     assert [f["label"] for f in out["filled"]] == ["Email"]
-    assert {i["label"]: i["why"] for i in out["left"]}["First name"] == form_fill.THROWN
+    assert {i["label"]: i["why"] for i in out["left"]}["First name"] == why
 
 
 @pytest.mark.parametrize("first", [lambda: (_ for _ in ()).throw(chrome.ChromeError(chrome.NO_ANSWER)), lambda: json.dumps({"moved": True}),
