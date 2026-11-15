@@ -285,6 +285,37 @@ def test_area_read_for_another_host_marks_nothing_on_the_page():
     assert form_fill.read_script("Careers.Example") == form_fill.read_script("careers.example")
 
 
+# many_fields.html: the box, the button and the component's box after the most fields READ reads, and how many marks they hold
+LATE = ("String([document.getElementById('late'), document.getElementById('late_add'), document.getElementById('host').shadowRoot"
+        ".getElementById('late_shadow')].reduce(function (all, el) { return all + Array.prototype.filter.call(el.attributes,"
+        " function (a) { return /^data-jobhelper/.test(a.name); }).length; }, 0))")
+ROWS_OUT = "window.held = document.getElementById('rows'); held.remove(); 'ok'"
+ROWS_IN = "document.getElementById('form').insertBefore(held, document.getElementById('form').firstChild); 'ok'"
+
+
+def test_area_marks_after_the_most_fields_read_reads_are_taken_off_and_nothing_there_is_pressed():
+    """#135: READ stopped at the most fields it reads and left the marks of an earlier READ on everything after. A page that put
+    more rows in front between two readings kept the old "Add" mark on its button, and CHOOSE pressed a button READ never saw."""
+    add = form_fill.choose_script("add", 0, 0, "X").replace('"X")', "location.href)")
+    _, first, _, marked, second, left, said, added = ta._in_page(ROWS_OUT, form_fill.READ, ROWS_IN, LATE, form_fill.READ, LATE, add,
+                                                                 "String(window.added)", page="many_fields.html")
+    assert {f["id"] for f in form_fill.read_answer(first)["fields"]} == {"late", "late_shadow"} and int(marked) == 5, "the rows out: all read"
+    again = form_fill.read_answer(second)
+    assert len(again["fields"]) == form_fill.MAX_FIELDS and again["adds"] == [], "the rows in front: only the most fields are read"
+    assert left == "0", "no mark stays after the most fields"
+    assert form_fill.choose_answer(said)["ok"] is False and added == "false", "the button READ did not read this time is never pressed"
+
+
+def test_area_a_mark_planted_after_the_most_fields_read_reads_is_taken_off_and_never_written():
+    """#135: a mark with the right stamp a page planted on a box after the most fields READ reads stayed, and FILL wrote the box."""
+    plant = ("(function () { var box = document.getElementById('late'); box.setAttribute('data-jobhelper', '250');"
+             " box.setAttribute('data-jobhelper-sign', 'INPUT||late|late'); return 'ok'; })()")
+    fill = form_fill.fill_script([{"n": 250, "value": "Alex"}], "X").replace('"X", false)', "location.href, false)")
+    _, read, left, said, value = ta._in_page(plant, form_fill.READ, LATE, fill, "document.getElementById('late').value", page="many_fields.html")
+    assert "late" not in {f["id"] for f in form_fill.read_answer(read)["fields"]} and left == "0"
+    assert form_fill.fill_answer(said)["skipped"] == [250] and value == "", "the box READ did not read this time is never written"
+
+
 def test_the_run_reads_the_form_for_the_host_of_the_tab_and_writes_nothing_when_it_moved(isolate_data, monkeypatch):
     """#91: the run sent READ with no host, so a tab that changed to another site had its fields marked before the check."""
     details.save(ta.MINE)

@@ -1,0 +1,23 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Survey - Fernwick</title>
+<style>body{font:14px sans-serif;max-width:640px;margin:24px auto} p{margin:6px 0} label{display:block} input{width:100%;box-sizing:border-box}</style></head>
+<body>
+<!-- More fields than READ reads (230 rows, made below), then a box, a button that adds a row and a box in a component: all
+     after the most fields READ reads. The page may take its rows out and put them back between two readings. -->
+<form id="form" onsubmit="window.sent = true; return false;">
+  <div id="rows"></div>
+  <p><label for="late">Last note</label><input id="late" name="late"></p>
+  <p><button type="button" id="late_add" onclick="window.added = true">Add another job</button></p>
+  <div id="host"></div>
+</form>
+<script>
+  var rows = document.getElementById('rows');
+  for (var i = 1; i <= 230; i++) {
+    var p = document.createElement('p');
+    p.innerHTML = '<label for="r' + i + '">Note ' + i + '</label><input id="r' + i + '" name="r' + i + '">';
+    rows.appendChild(p);
+  }
+  document.getElementById('host').attachShadow({mode: 'open'}).innerHTML = '<label for="late_shadow">Shadow note</label><input id="late_shadow">';
+  window.added = false;
+</script>
+</body></html>

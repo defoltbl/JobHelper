@@ -7,6 +7,10 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Form assistant:** a card number with mixed gaps is found also when more digits follow it in the same box ("Card 4111-1111 1111-1111, 12/26"). Before, mixed gaps counted only when the card was the whole box. A list of years or year ranges, also after another number ("Room 1005, 2012-2013 2013-2018"), is never taken for a card. Before, such a list was sometimes taken for one.
+- **Form assistant:** the short labels "From?", "To?", "To Jan" and "To Quarter" count as a job's dates again. "To" with a month or "quarter" counts only when it opens the label, so "Open to March" is no date. Questions such as "Start now?" and "Ready to start?" stay questions.
+- **Form assistant:** a US social security number or an IBAN written with the minus sign "−" or another dash is kept private. Before, such a number went to Claude.
+- **Form assistant:** in a long form with more than 200 fields, a box past the limit is never written and a button past it is never pressed. Before, such a box kept the mark of an earlier read, so a later fill or "Add another" press could reach it, and a page could plant a mark there.
 - **Documents:** the README says that GitHub Actions runs the tests for every pull request and every push to main, and the technical documentation names Python 3.14. Before, they said "after every push" and "Python 3.10 or newer".
 - **Form assistant:** more fields that you cannot see or reach are left empty: a box cut away or hidden by its parent, far to the side, very small, nearly see-through, covered by something else, switched off, a box that cannot be clicked, or inside a hidden frame. A see-through box that fades in within about 2 seconds is still filled. Before, only a box outside the page or fully see-through was left out.
 - **Form assistant:** a page in a right-to-left language that scrolls sideways keeps its fields. Before, real fields at its left edge were taken for traps.

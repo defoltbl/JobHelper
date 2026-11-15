@@ -337,9 +337,11 @@ _READ = r"""
     }
     return '';
   }
-  function strip(root) {                         // what a page planted in a frame out of sight: no mark there stays
+  // what READ does not read this time (a frame out of sight, the rest of the page past the most fields): no mark a page planted
+  // there, or an earlier READ left there, stays
+  function strip(root, from) {
     var all = root.querySelectorAll('*');
-    for (var i = 0; i < all.length; i++) {
+    for (var i = from || 0; i < all.length; i++) {
       var el = all[i];
       [MARK, OPT, ADD, SIGN].forEach(function (attr) { el.removeAttribute(attr); });
       if (el.shadowRoot) strip(el.shadowRoot);
@@ -445,6 +447,7 @@ _READ = r"""
                    filled: filled, most: el.maxLength > 0 ? el.maxLength : 0, options: options,
                    combo: !el.readOnly && (el.getAttribute('role') === 'combobox' || !!el.getAttribute('aria-autocomplete') || el.getAttribute('aria-haspopup') === 'listbox')});
     }
+    if (fields.length >= __MOST__) strip(root, i);
   }
   walk(document);
   return JSON.stringify({url: location.href, title: clean(document.title), from: String(document.referrer || '').slice(0, 2000), fields: fields, frames: frames.slice(0, 5), boxes: boxes, adds: adds.slice(0, 20)});
@@ -1192,14 +1195,21 @@ ROW_PLACE = "This asks where the school was, which My details does not hold. Fil
 ROW_WORDS = "This asks about your studies in your own words. Write it yourself."
 MORE_ROWS = "You listed {have} in My details, and this is one more. Add it there, or type it."
 _ROW_START = re.compile(r"\bstart(?:ed)?\b|\bfrom\b|\bbegan\b|date from|\bod\b")       # "od" alone (Czech), not the end of "period"
-# "to" ends a job's dates alone or before a date word or a hint ("To", "To year", "To (optional)", "To (e.g. 03/2022)",
-# "To the present"), never before another word ("Do you agree to relocate", "Which year did you move to Prague") (#89)
+# "to" ends a job's dates alone or before a date word, a month's name or a hint ("To", "To year", "To Jan", "To Quarter",
+# "To (optional)", "To (e.g. 03/2022)", "To the present"), never before another word ("Do you agree to relocate",
+# "Which year did you move to Prague") (#89, #133). A month's name or "quarter" ends the dates only after a "to" that opens
+# the label ("To Jan"): "Open to March" and "Move to May" ask you. The month names are `_MONTHS`, full and short, escaped.
+_MONTHS = {name.lower(): n for n, name in enumerate(calendar.month_name) if name}
+_MONTHS.update({name.lower(): n for n, name in enumerate(calendar.month_abbr) if name})
+_MONTH_NAMES = "|".join(map(re.escape, sorted({*_MONTHS, "sept"}, key=len, reverse=True)))
 _ROW_END = re.compile(r"\bend(?:ed)?\b|\bto\b(?! (?!(?:months?|years?|dates?|day|mm|yy|yyyy|dd|mon|present|the present|now|current|when"
-                      r"|optional|e|eg|i|ie|if|or|leave|blank|empty)\b)[^\W\d_])|\buntil\b|\bfinish|\bleft\b|date to|graduat")
+                      r"|optional|e|eg|i|ie|if|or|leave|blank|empty)\b)[^\W\d_])|^\W*to (?:quarter|" + _MONTH_NAMES + r")\b"
+                      r"|\buntil\b|\bfinish|\bleft\b|date to|graduat")
 # a question asked of you ("Are you willing to start within a month?", "Do you agree to relocate?") is not a job's date
 _NOT_A_ROW_DATE = re.compile(r"earliest|availab|can you|notice|birth|expected|preferred|interview|deadline|today|valid|expir|issue"
                              r"|\b(?:are|do|would|will|could) you\b|willing|\bable to\b")
-# a question mark leaves a job's date only with one of these words ("When did you start this job?", "Start date (MM/YYYY)?")
+# a question mark leaves a job's date only with one of these words ("When did you start this job?", "Start date (MM/YYYY)?"),
+# or on a label of one word ("From?", "To?"): "Start now?" and "Ready to start?" ask you, not about a job
 _DATE_WORD = re.compile(r"\b(?:when|dates?|months?|years?|mm|yy|yyyy)\b")
 # when you can start: asked as "earliest start date", "available from", "when can you start" (a plain "start date" may be a job's)
 _AVAILABLE = re.compile(r"earliest (?:possible )?(?:start|date)|availab|when (?:can|could|would) you (?:start|join|begin)|(?:possible|desired|preferred|expected|proposed) start"
@@ -1208,8 +1218,6 @@ _LONE_START = re.compile(r"\bstart(?:ing)? date\b|\bdate of start\b")
 START_UNKNOWN = "Tell me when you can start in About you (under Options), and ask me again. Or pick the date yourself."
 START_NO_DATE = "I cannot turn “{text}” (About you) into a date. Pick the date yourself."
 START_CHECK = "Worked out from “{text}” in About you: check the date."
-_MONTHS = {name.lower(): n for n, name in enumerate(calendar.month_name) if name}
-_MONTHS.update({name.lower(): n for n, name in enumerate(calendar.month_abbr) if name})
 _COUNT = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
 
 
@@ -1386,22 +1394,24 @@ def _private(field: dict[str, Any]) -> bool:
     return bool(_PRIVATE.search(written) or _PRIVATE.search(_words(field)) or alone or whole or any(_PRIVATE_AUTO.fullmatch(t) for t in auto))
 
 
-# the hyphen and the dashes from "\u2010" to "\u2015"
-_DASH_SIGNS = r"\u2010-\u2015-"
+# the dashes from "\u2010" to "\u2015" and the minus sign "\u2212": each reads as the hyphen "-". The one list of them:
+# the character class, the gaps of a card and the dashes of an SSN all come from it.
+_DASH_POINTS = (*range(0x2010, 0x2016), 0x2212)
+_DASH_SIGNS = "".join(map(chr, _DASH_POINTS)) + "-"            # the hyphen last, so a character class reads it as itself
+_DASHES = dict.fromkeys(_DASH_POINTS, "-")
 # a run of digits in groups ("4111 1111 1111 1111", "4111 - 1111 - 1111 - 1111", "01/05/2024"): a gap is one or more
 # spaces, dots, commas, slashes, underscores, colons, bars, plus signs, middle dots, minus signs or dashes. No gap sign
 # is a digit, so the run reads in one pass.
-_GAP_SIGNS = r"\s._,/:|+\u00b7\u2212" + _DASH_SIGNS
+_GAP_SIGNS = r"\s._,/:|+\u00b7" + _DASH_SIGNS
 _DIGIT_RUN = re.compile(r"[0-9]+(?:[" + _GAP_SIGNS + r"]+[0-9]+)*")
 _DIGIT_GAP = re.compile(r"([" + _GAP_SIGNS + r"]+)")
-_DASHES = dict.fromkeys([*range(0x2010, 0x2016), 0x2212], "-")
 # where an IBAN can start: two letters and two check digits at the start of a word; the rest is read from there.
-# A gap is spaces, dots, underscores, slashes or dashes; no gap sign is a letter or a digit.
-_IBAN_GAP_SIGNS = r"[\s._/-]"
+# A gap is spaces, dots, underscores, slashes, the hyphen, any dash or the minus sign; no gap sign is a letter or a digit.
+_IBAN_GAP_SIGNS = r"[\s._/" + _DASH_SIGNS + r"]"
 _IBAN_START = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{2}[0-9]{2}")
 _IBAN_GROUPS = re.compile(r"[A-Za-z0-9]+(?:" + _IBAN_GAP_SIGNS + r"+[A-Za-z0-9]+)*")
 _IBAN_GAP = re.compile(_IBAN_GAP_SIGNS + r"+")
-# ddd-dd-dddd, with a hyphen or any dash, and no more digits or dashes on either side ("2019-24-1234-5" is no number
+# ddd-dd-dddd, with a hyphen, any dash or the minus sign, and no more digits or dashes on either side ("2019-24-1234-5" is no number
 # of a person); spaces are no SSN's gap ("123 45 6789" is as likely a phone)
 _SSN_DASH = r"[" + _DASH_SIGNS + r"]"
 _SSN = re.compile(r"(?<![0-9" + _DASH_SIGNS + r"])([0-9]{3})" + _SSN_DASH + r"([0-9]{2})" + _SSN_DASH + r"([0-9]{4})(?![0-9"
@@ -1415,6 +1425,7 @@ class PrivateShape:
     a value keeps it private. A phone number, a date, a postcode or an order number that fails the check is no match."""
 
     CARD_DIGITS = (13, 19)
+    YEAR_STARTS = ("19", "20")                      # a group of four that starts so reads as a year; no card number does
     IBAN_LENGTH = (15, 34)                          # the shortest IBAN (Norway) and the longest the standard allows
 
     def __init__(self, value: str) -> None:
@@ -1428,10 +1439,10 @@ class PrivateShape:
     @property
     def card(self) -> bool:
         """A card number: digits in the groups a card is printed in ("4111 1111 1111 1111", "4111.1111.1111.1111", the
-        4-6-5 of an American Express card), or one block of 13 to 19 digits, that pass the Luhn check. A card that is
-        the whole run of digits may mix its gaps ("4111-1111 1111-1111"); a card inside a longer run has one kind of gap
-        all through ("Ref 12 4111 1111 1111 1111" holds one). A list of years, dates or versions is not printed so
-        ("2019-2021 2021-2023 2023-2025 2017-2019")."""
+        4-6-5 of an American Express card), or one block of 13 to 19 digits, that pass the Luhn check. A card may mix its
+        gaps, also inside a longer run ("4111-1111 1111-1111 123", "Card 4111-1111 1111-1111, 12/26"); groups with two
+        or more years keep one kind of gap, so a list of years or year ranges is no card ("2019-2021 2021-2023 2023-2025
+        2017-2019", "2012-2013 2013-2018", "1005 2019-2021 2021-2023"). A list of dates or versions is not printed in groups of four."""
         for run in _DIGIT_RUN.finditer(self._text):
             parts = _DIGIT_GAP.split(run.group())
             groups, gaps = parts[::2], [_gap_kind(gap) for gap in parts[1::2]]
@@ -1466,25 +1477,24 @@ class PrivateShape:
 
 
 def _gap_kind(gap: str) -> str:
-    """What kind of gap cuts a card's groups: "  ", a tab or a new line are all a space, " - " and "‐" are a dash."""
+    """What kind of gap cuts a card's groups: "  ", a tab or a new line are all a space, " - ", "‐" and "−" are a dash."""
     return "".join(gap.translate(_DASHES).split()) or " "
 
 
 def _card_windows(groups: list[str], gaps: list[str], first: int) -> list[list[str]]:
     """The groups from `first` on that are printed as a card: the block alone when it has 13 to 19 digits; groups of 4
     with the last one of 1 to 7 (16 to 19 digits as 4-4-4-4, 4-4-4-7, 4-4-4-4-3); or 4-6-5 and 4-6-4. All gaps of one
-    window are one kind, unless the window is the whole run (a person mixes "-" and " ", a list of years repeats one);
-    a window has at most five groups, so a long run is read in one pass."""
+    window may mix kinds (a person mixes "-" and " "), unless two or more of its groups read as years
+    (`PrivateShape.YEAR_STARTS`): a list of years or year ranges, also after a number ("Room 1005, 2012-2013 2013-2018").
+    A window has at most five groups, so a long run is read in one pass."""
     least, most = PrivateShape.CARD_DIGITS
     windows = [groups[first:first + 1]] if least <= len(groups[first]) <= most else []
     if len(groups[first]) != 4:
         return windows
-    one_kind = True
     for last in range(first + 1, min(first + 5, len(groups))):
-        one_kind = one_kind and gaps[last - 1] == gaps[first]
-        if not one_kind and not (first == 0 and last == len(groups) - 1):
-            continue
         window = groups[first:last + 1]
+        if len(set(gaps[first:last])) > 1 and sum(g.startswith(PrivateShape.YEAR_STARTS) for g in window) > 1:
+            break                              # a longer window keeps both the mixed gaps and the years
         if least <= sum(map(len, window)) <= most and (all(len(g) == 4 for g in window[:-1]) and len(window[-1]) <= 7
                                                        or [len(g) for g in window] in ([4, 6, 5], [4, 6, 4])):
             windows.append(window)
@@ -1534,7 +1544,8 @@ def _row_date(field: dict[str, Any]) -> str:
     that follows "to"."""
     parts = [_words({key: field.get(key)}) for key in ("label", "hint", "name", "id")]
     whole = " ".join(parts)
-    if _NOT_A_ROW_DATE.search(whole) or ("?" in whole and not _DATE_WORD.search(whole)):
+    asked = any("?" in part and len(part.split()) > 1 for part in parts)
+    if _NOT_A_ROW_DATE.search(whole) or (asked and not _DATE_WORD.search(whole)):
         return ""
     if any(_ROW_START.search(part) for part in parts):
         return "row_start"

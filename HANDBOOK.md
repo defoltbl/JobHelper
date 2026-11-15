@@ -658,11 +658,13 @@ data/                your data; only the *.example.* files are in git
   that are private only as a whole label ("SWIFT", "TIN", "Username") are in `_PRIVATE_ALONE`, so "Swift experience"
   stays a question. The signature words ("to certify", "I declare") are in both lists: a list gives consent, a box asks
   for your name. In a review, a value shaped like a card number (13 to 19 digits, Luhn, only in card-shaped groups; the gap
-  signs are space, new line, tab, "_", ",", ":", "|", "+", a middle dot, "." and a dash or minus of any kind. Groups that
-  make up the whole value may mix gaps ("4111-1111 1111-1111"); groups inside a longer run of numbers need one kind of
-  gap, so a list of dates or year ranges is no card), an IBAN (mod 97, spaces, hyphens, ".", "_" or "/" allowed) or a
-  US social security number (any kind of dash, never spaces) (`form_fill.PrivateShape`) is private
-  whatever its name. A card number with a typo is not caught: closed with a reason, a mistyped number fails Luhn and
+  signs are space, new line, tab, ".", "_", ",", "/", ":", "|", "+", a middle dot and any kind of dash or the minus sign
+  (`_DASH_POINTS`, one list). Gaps may mix ("4111-1111 1111-1111"), also when more digits follow in the same box
+  ("Card 4111-1111 1111-1111, 12/26"). A card that mixes gap kinds is no card when two or more of its groups start
+  with 19 or 20 (`PrivateShape.YEAR_STARTS`), so a list of years or year ranges is no card, also after another number
+  ("Room 1005, 2012-2013 2013-2018")), an IBAN (mod 97; spaces, ".", "_", "/" and any kind of dash or the minus sign
+  allowed) or a US social security number (any kind of dash or the minus sign, never spaces) (`form_fill.PrivateShape`)
+  is private whatever its name. A card number with a typo is not caught: closed with a reason, a mistyped number fails Luhn and
   cannot be told from any other number.
 - **A text box that a person cannot see is never read** (READ's `trap()`, #77): placed above or left of the page
   (counting the scroll of every box around it up to the page's own scroller, across a shadow root's edge, so a scrolled
@@ -684,7 +686,12 @@ data/                your data; only the *.example.* files are in git
 - **A see-through box is "fading in" only when a fade of its opacity ends within about 2 s, and ends at opacity 0.1 or more** (`fading()`, owner
   decision; the time is divided by the playback rate). A fade OUT does not count. A spinning, slowly fading or endlessly fading box is a trap. Shortcuts, each closed with a reason: a box
   placed far BELOW (`top: 9999px`) cannot be told from a long real form, so it is not caught; a real page more than 2
-  screens wide loses fields; a page that draws an unlabelled, wordless box over a real field loses that field; a fade
+  screens wide loses fields (the browser turns a box that scrolls only up and down, as most dialogs do, into one that
+  also scrolls sideways, so the page cannot tell a wide table that scrolls on purpose from a dialog with a trap placed
+  screens to its right; a rule that trusted such a box would fill the very trap that is left out, so a field two window
+  widths or more to the right stays left out and the person fills it); a page that replaces the browser's built-in functions
+  (for example `getBoundingClientRect`, `getComputedStyle` or `getAttribute`) can undo every check the scripts make inside
+  the page, also the mark, button and Submit checks; this cannot be fixed from inside the page; a page that draws an unlabelled, wordless box over a real field loses that field; a fade
   done step by step by a script still reads as a trap.
 - **A mark is checked again before the assistant writes, chooses or attaches** (#91): a page script could copy the
   assistant's `data-jobhelper` mark onto another box after the form was read. A mark seen on two boxes is skipped. Each
@@ -713,7 +720,13 @@ data/                your data; only the *.example.* files are in git
   them). An "I work here now" box is vetoed by its inner name only with a consent word, or privacy, policy, marketing, tos
   or ccpa (`_CONSENT`, `_NEVER_TICK_NAME`), never by "notify" or "contact". `_row_date` reads a job's date: "to" ends it
   alone or before a date word or a hint ("To (optional)", "To the present"), not before a verb ("agree to relocate"); a "?"
-  leaves a job's date only when there is no date word ("When did you start this job?" stays a start); "Period to" is an end.
+  leaves a job's date only when there is no date word and the part before it has more than one word ("When did you
+  start this job?" stays a start; "Start now?" and "Ready to start?" stay questions); short labels count as dates:
+  "From?" (start), "To?", "To Jan" (any month name) and "To Quarter" (end), but only when "to" opens the label ("Open to March" and
+  "Move to May" are no date); "Period to" is an end.
+  READ reads at most 200 fields (`MAX_FIELDS`). `strip` takes every mark off what READ does not read this time (the
+  rest of the page past the limit, and a frame out of sight). So a later fill or "Add another" press never reaches a
+  box or button that READ did not see (#135).
 - **The work-note boxes are the master CV's jobs** (`claims.EmployerCheck.job_names`, else My details; `AboutYou.job_boxes`).
   A saved note keeps the name the CV gave its job (`from`), so a box you renamed keeps its notes and a removed job
   (`removed`) does not come back; a note from before has no `from` and matches by its name. The "why and where" lines
