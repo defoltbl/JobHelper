@@ -95,7 +95,7 @@ A few decisions worth highlighting, each with the problem that led to it.
   PyCon Prague was fun" is named as an employer. A role said of
   another person with "as" is read as yours. "I completed the Kafka module." reads as work.
   "Java 17" still reads as a figure. "Designed for scale, the platform is …" reads as a claim.
-  A level said as "My German is at B2 level." is not read as a claim.
+  "Founded in 2012 around Kafka, the startup …" reads as work when the CV lacks Kafka.
   An invented employer in lowercase that ends in a field of work ("globex audit") is not caught.
   Read each letter before you send it.
 

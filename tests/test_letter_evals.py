@@ -1,7 +1,10 @@
 """The golden set of the letter checks (#78): invented people, postings and sentences in tests/fixtures/letter_evals.json,
 each labelled with what the checks must say. The bar is every case as labelled, in every profession; the report names
 the cases that differ, by profession, so a gain in one group cannot hide a loss in another."""
+import ast
+import difflib
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -54,7 +57,7 @@ def test_the_letter_checks_meet_the_golden_set(isolate_data):
     assert not wrong, f"golden set: {report}\n" + "\n".join(wrong)
 
 
-@pytest.mark.parametrize("case", [c for c in SET["cases"] if not c["expect"]], ids=lambda c: c["id"])
+@pytest.mark.parametrize("case", [c for c in CASES if not c["expect"]], ids=lambda c: c["id"])
 def test_a_clean_case_raises_nothing(isolate_data, case):
     """Read on their own, so a false alarm names its case."""
     assert not any(said(case).values()), case["text"]
@@ -79,13 +82,62 @@ def test_each_kind_recall_and_false_alarms(isolate_data, kind):
     assert not false_alarms, f"false alarms: {false_alarms}"
 
 
+NEAR_COPY = 0.8                  # the share of one wording's words that a development string may repeat, in order
+
+
+def words_of(text: str) -> list[str]:
+    """A sentence as lower case words with no punctuation, so a changed case or a comma hides no copy."""
+    return re.findall(r"[a-z0-9]+(?:['’][a-z]+)?", text.lower())
+
+
+def near_copies(text: str, literals: list[str]) -> list[str]:
+    """The strings among `literals` that repeat `text` or nearly: the word lists are alike (difflib ratio >= NEAR_COPY),
+    or the held-out words sit unbroken inside a longer string (a prefix or a part copied, NEAR_COPY of the held-out words).
+    A string shorter than the held-out sentence is a fragment ("I was a"), not a copy of it, so only the ratio judges it.
+    No length pre-filter: a short sentence can be most of a long string. The two quick ratios are upper bounds, so they
+    only skip what cannot match by the ratio; the containment test runs for every string with a shared word."""
+    mine = words_of(text)
+    if not mine:
+        return []
+    found = []
+    for literal in literals:
+        theirs = words_of(literal)
+        if not theirs:
+            continue
+        matcher = difflib.SequenceMatcher(None, mine, theirs, autojunk=False)
+        if matcher.real_quick_ratio() >= NEAR_COPY and matcher.quick_ratio() >= NEAR_COPY and matcher.ratio() >= NEAR_COPY:
+            found.append(literal)
+        elif len(mine) <= len(theirs) and matcher.find_longest_match(0, len(mine), 0, len(theirs)).size >= NEAR_COPY * len(mine):
+            found.append(literal)
+    return found
+
+
+def test_the_copy_guard_sees_a_near_copy_and_passes_an_unrelated_sentence():
+    seen = ["I moved the build to a new runner and cut the time by half.", "Unrelated words about something else entirely."]
+    assert near_copies("i MOVED the build, to a new runner and cut the time by half!", seen) == seen[:1]
+    assert near_copies("I moved the build to a new runner and trimmed the time by half.", seen) == seen[:1]     # one word changed
+    assert not near_copies("At the care home I helped residents with their daily meals.", seen)
+
+
+def test_the_copy_guard_sees_a_short_sentence_that_opens_a_longer_string():
+    """A held-out sentence that is the start of a longer development string: the word ratio is 0.8 but the lengths differ."""
+    seen = ["We mapped every bus route in the old town last winter.", "Nothing alike in this one at all."]
+    assert near_copies("We mapped every bus route.", seen) == seen[:1]                       # most of the longer string, in order
+    assert near_copies("I mapped every bus route in town.", seen) == []                      # a short shared run is not a copy
+    assert near_copies("Every bus route in the old town last winter was mapped by a team of ten.", seen) == []      # a longer text only by the ratio
+
+
 def test_no_held_out_sentence_is_a_development_row():
-    """The held-out h113 cases stay apart from the development rows in tests/test_claims.py: no such sentence appears
-    there as a whole quoted string. (The inv-* and older cases are development rows by the fixture's own note.)"""
-    source = (Path(__file__).parent / "test_claims.py").read_text(encoding="utf-8")
-    quoted = lambda text: f'"{text.strip()}"' in source or f"'{text.strip()}'" in source
-    copies = [c["id"] for c in SET["cases"] if c["id"].startswith("h113") and quoted(c["text"])]
-    assert not copies, f"sentences copied into tests/test_claims.py: {copies}"
+    """The held-out h113 and h131 cases stay apart from the development rows in tests/test_claims.py: no string there
+    repeats such a sentence, as it is or nearly (case, punctuation and a word or two aside). The h113 cases whose wording
+    was seen in development were rewritten in #131: the guard exempts no case. (The inv-* and older cases are
+    development rows by the fixture's own note.)"""
+    tree = ast.parse((Path(__file__).parent / "test_claims.py").read_text(encoding="utf-8"))
+    literals = sorted({n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                       and len(words_of(n.value)) >= 3})
+    held_out = [c for c in SET["cases"] if c["id"].startswith(("h113", "h131"))]
+    copies = {c["id"]: near_copies(c["text"], literals)[:1] for c in held_out if near_copies(c["text"], literals)}
+    assert not copies, f"sentences copied or nearly copied into tests/test_claims.py: {copies}"
 
 
 @pytest.mark.parametrize("case", GAPS, ids=lambda c: c["id"])

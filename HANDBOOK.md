@@ -529,17 +529,20 @@ data/                your data; only the *.example.* files are in git
   even when the CV lacks the word; Czech, German and French still are. A level that states what the job needs ("Fluent English is
   required", "German is a must", "… preferred") is no claim (requirement skip). An opening past participle + preposition is about
   the employer (no claim) in three cases only: the clause after the first comma starts with your / their / its ("Designed for scale,
-  your platform is impressive"); it starts with the / this and the phrase before the comma holds a year ("Founded in 1998, the firm
-  …"); or "your" or a posting word comes right after the preposition ("Attracted by your …", "Posted in your job ad: …"). So "Worked
+  your platform is impressive"); it starts with the / this and the phrase before the comma holds a year and names no tool the CV lacks
+  ("Founded in 1998, the firm …"); or "your" or a posting word comes right after the preposition and the phrase names no tool the CV lacks ("Attracted by your …", "Posted in your job ad: …"). So "Worked
   on Kafka, the event bus, at Contoso." and "Worked with Kafka in your industry for years." are claims; "Worked on your Kafka
   migration" may still read as no claim. "Used <tool> for …" as a CV-style line is a claim. Known false alarm: "Designed for scale, the
   platform is …" reads as a claim (a missed claim costs more). "wrote / emailed to you / to your …" is no work (the letter's own
-  frame): "Attracted by your Kafka stack, I wrote to you." is no claim; "I wrote Kafka consumers" is. Known gap: a level said as "My
-  German is at B2 level." is not read as a claim (h113r-14). More known misses (main session, 14 Nov: no code change, they go on a follow-up issue): an
-  opening phrase with a year before a "the" clause hides work ("Migrated to Kafka in 2021, the team saved hours." reads as no claim);
-  "the" plus a posting word right after the preposition hides work ("Worked on the listing pages …" reads as no claim); "I have
-  written to you" still reads as a claim when a missing tool is in the sentence ("written" is a claim word); "sent" and "e-mailed"
-  are not read as verbs on purpose ("…, I sent my CV" stays clean), so "I sent Kafka events to the warehouse" is no claim.
+  frame): "Attracted by your Kafka stack, I wrote to you." is no claim; "I wrote Kafka consumers" is. Fixed in #131 (15 Nov): an opening phrase with a
+  year that names a missing tool before ", the …" ("Migrated to Kafka in 2021, the team saved hours.") is work, while a founding
+  phrase with no such tool stays clean; "the" plus a posting word before a missing tool ("Worked on the listing pages for Kafka")
+  is work; a language as the subject with a level ("My German is at B2 level.", "My German level is C1.") is a claim (English
+  never); past forms with "re-" (rebuilt, rewrote …) are work; a dotted name (Node.js) in an opening phrase does not end it;
+  "I have written to you", "I emailed you", "I messaged you about …" and "I phoned your office about …" are the letter's own
+  frame, no work. "your" plus the people the letter goes to ("your recruiter", "your hiring team", "your office") is the letter; "your" plus a thing ("I wrote your Kafka connector about retries") stays work. Known false alarm: a founding phrase that names a missing tool ("Founded in 2012 around Kafka, the startup …")
+  reads as work. "sent" and "e-mailed" are not read as verbs on purpose ("…, I sent my CV" stays clean), so "I sent Kafka events
+  to the warehouse" is no claim.
   Measured read-only (#113, 14 Nov): 53 real letters read only – invented employers 0
   before and after, letters with warnings 8 before and after with the same texts.
   The golden set `tests/fixtures/letter_evals.json` (invented people in four professions, every case labelled) runs in
@@ -600,9 +603,9 @@ data/                your data; only the *.example.* files are in git
   Measured read-only on 53 real letters (13 Nov): 0 flagged before and after #109, and no other letter warning
   changed. A fixed labelled set of sentences in tests/test_claims.py must stay as labelled. Not caught (the list is in the
   docstring of `invented`; owner, 13 Nov: first person only): a lowercase name that ends in a field of work ("at globex
-  audit"; one of three known gaps of the golden set (the other two: a second lowercase "… tooling" name, and h113r-14 above), which pins its current output; the 85 held-out cases h113-* were written before the code, but some ids were seen during development: exact copies h113-1n-dev-course, h113-4-dev-present-labs, h113-6-acc-fluent, and nine near copies named in the fixture's `about`), the middle names of a list of three, a lowercase name after
+  audit"; one of three known gaps of the golden set (the other two: a second lowercase "… tooling" name, and a misplaced-work case where the employer check does not take the words as named work), which pins its current output; the 85 held-out cases h113-* were written before the code, but some ids were seen during development: exact copies h113-1n-dev-course, h113-4-dev-present-labs, h113-6-acc-fluent, and nine near copies named in the fixture's `about`), the middle names of a list of three, a lowercase name after
   "my work at", "we built ... at X". Known false alarms: "my time at" an event whose name has no event word ("My time at
-  PyCon Prague was fun"); "Java 17" is still a figure (no dot); "applied" counts as work unless it is for or to a role, job or application; a role said of another person with "as" is read as the candidate's. Still not caught: a duration ("over the
+  PyCon Prague was fun"); "Java 17" is still a figure (no dot; owner to confirm later); "applied" counts as work unless it is for or to a role, job or application; a role said of another person with "as" is read as the candidate's. Still not caught: a duration ("over the
   past year"), a claim no position names ("used Docker daily"), and a job whose noun is not in `claims._JOB_WORDS` (#66 added the nouns at places of study: pianist,
   postdoc, fellow, dean, director …, and the phrase "working student" in `_JOB_PHRASES`; "student" alone stays study).
 - **The claim rules read a wish, a team and an interest more closely** (#82): a wish also ends at ", having / after /
@@ -659,7 +662,7 @@ data/                your data; only the *.example.* files are in git
   stays a question. The signature words ("to certify", "I declare") are in both lists: a list gives consent, a box asks
   for your name. In a review, a value shaped like a card number (13 to 19 digits, Luhn, only in card-shaped groups; the gap
   signs are space, new line, tab, ".", "_", ",", "/", ":", "|", "+", a middle dot and any kind of dash or the minus sign
-  (`_DASH_POINTS`, one list). Gaps may mix ("4111-1111 1111-1111"), also when more digits follow in the same box
+  (`_DASH_POINTS`, one list; it also holds the hyphen bullet U+2043, the Armenian hyphen U+058A and the Katakana middle dot U+30FB). Gaps may mix ("4111-1111 1111-1111"), also when more digits follow in the same box
   ("Card 4111-1111 1111-1111, 12/26"). A card that mixes gap kinds is no card when two or more of its groups start
   with 19 or 20 (`PrivateShape.YEAR_STARTS`), so a list of years or year ranges is no card, also after another number
   ("Room 1005, 2012-2013 2013-2018")), an IBAN (mod 97; spaces, ".", "_", "/" and any kind of dash or the minus sign
@@ -715,7 +718,10 @@ data/                your data; only the *.example.* files are in git
   ("passphrase", "Heslo"), a key, code, token or card only at the END of a part of the label ("API key", "SMS code", "Debit
   card", "Company card"; `_PRIVATE_WHOLE`, with `_ASKS_EXPERIENCE`: "Auth token experience", "Payment cards experience" and
   "Product code" are questions); `pass`, `pan` and `nin` count only as the whole name. Every format sign (Unicode Cf) is
-  removed and the rest is NFKC-read by `_readable` first; `_words`, `_private` and `PrivateShape` all read through it. A
+  removed, and so is every other invisible sign that Unicode marks with the property Default_Ignorable_Code_Point (for example
+  U+034F, the Hangul fillers, the Braille blank U+2800, the variation selectors, the Mongolian free variation selectors,
+  the Khmer inherent vowels, the tag characters and the reserved ignorable code points). Visible signs stay out on purpose, so a real
+  letter is never changed. The rest is NFKC-read by `_readable` first; `_words`, `_private` and `PrivateShape` all read through it. A
   list or radios in a review is read by its options too (the REVIEW script reports them, `review_answer` does not keep
   them). An "I work here now" box is vetoed by its inner name only with a consent word, or privacy, policy, marketing, tos
   or ccpa (`_CONSENT`, `_NEVER_TICK_NAME`), never by "notify" or "contact". `_row_date` reads a job's date: "to" ends it
@@ -723,7 +729,9 @@ data/                your data; only the *.example.* files are in git
   leaves a job's date only when there is no date word and the part before it has more than one word ("When did you
   start this job?" stays a start; "Start now?" and "Ready to start?" stay questions); short labels count as dates:
   "From?" (start), "To?", "To Jan" (any month name) and "To Quarter" (end), but only when "to" opens the label ("Open to March" and
-  "Move to May" are no date); "Period to" is an end.
+  "Move to May" are no date); "Period to" is an end. A list whose real options are only Yes and No (English, Czech, German,
+  Spanish, French; empty and "Select…" entries left out) is never a job's date (`_yes_or_no`, used in `Field.meaning`): "Started?"
+  stays a choice for you, not "Pick the date yourself." (#139).
   READ reads at most 200 fields (`MAX_FIELDS`). `strip` takes every mark off what READ does not read this time (the
   rest of the page past the limit, and a frame out of sight). So a later fill or "Add another" press never reaches a
   box or button that READ did not see (#135).

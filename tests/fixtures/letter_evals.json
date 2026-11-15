@@ -1,5 +1,5 @@
 {
- "about": "The golden set of the letter checks (#78): invented people, postings and letter sentences, each labelled with what the checks must say. Run before a change to a prompt or to a claim rule ships: tests/test_letter_evals.py. Add a case for every false alarm or missed claim found; never change a label to make a run pass. The inv-* cases were written before the #109 rules, but many of their sentences are also development rows in tests/test_claims.py, so their recall is a development number, not a held-out one; a fresh held-out batch should come from another writer. A case with \"gap\" is a known miss: it keeps its true label and runs as a strict expected failure, so a fix shows at once. The h113-* cases (#113) are held-out: another writer wrote them before the #113 code, and they must never be copied into tests/test_claims.py. The wording of some h113-* cases was seen during development, so their recall counts as development, not held-out: exact copies h113-1n-dev-course, h113-4-dev-present-labs, h113-6-acc-fluent; near copies h113-1n-dev-reviewed-posting, h113-1n-care-course, h113-2n-dev-new-subject, h113-4n-dev-tool-for-slack, h113-4n-acc-macro-for-excel, h113-5n-dev-python-version, h113-6-dev-native-speaker, h113-6n-dev-company, h113-6n-acc-fluent-excel. The h113r-* cases (#113, fix round) are hard negatives and true positives written after the first #113 code, for past-participle openings, requirement wording and the English exemption.",
+ "about": "The golden set of the letter checks (#78): invented people, postings and letter sentences, each labelled with what the checks must say. Run before a change to a prompt or to a claim rule ships: tests/test_letter_evals.py. Add a case for every false alarm or missed claim found; never change a label to make a run pass. The inv-* cases were written before the #109 rules, but many of their sentences are also development rows in tests/test_claims.py, so their recall is a development number, not a held-out one; a fresh held-out batch should come from another writer. A case with \"gap\" is a known miss: it keeps its true label and runs as a strict expected failure, so a fix shows at once. The h113-* cases (#113) are held-out: another writer wrote them before the #113 code, and they must never be copied into tests/test_claims.py. The wording of some h113-* cases was seen during development, so their recall counts as development, not held-out: exact copies h113-1n-dev-course, h113-4-dev-present-labs, h113-6-acc-fluent; near copies h113-1n-dev-reviewed-posting, h113-1n-care-course, h113-2n-dev-new-subject, h113-4n-dev-tool-for-slack, h113-4n-acc-macro-for-excel, h113-5n-dev-python-version, h113-6-dev-native-speaker, h113-6n-dev-company, h113-6n-acc-fluent-excel. The h113r-* cases (#113, fix round) are hard negatives and true positives written after the first #113 code, for past-participle openings, requirement wording and the English exemption. The h131-* cases (#131) are held-out: written before the #131 code, for fresh participle frames about the employer, true positives in new frames, misplaced, figures and borrowed, and the known misses of #113 in new wording; the ones the code got wrong then are gaps. The guard in tests/test_letter_evals.py compares every h113 and h131 sentence with each string in tests/test_claims.py by its words (lower case, no punctuation, difflib ratio of 0.8 or more), so a near copy is caught, not only an exact one. The fuzzy guard found two near copies of development rows, h113-4n-acc-employed-known and h113-7n-dev-cv; both were rewritten in #131 as fresh held-out sentences. The guard now exempts nothing (no length pre-filter, and a held-out sentence that is most of a longer string counts as a copy): the cases listed above as seen during development stay as history, and the six that the stricter guard flagged were rewritten in #131 as fresh sentences with the same label (h113-1n-dev-course, h113-1n-dev-trained-in, h113-4-dev-present-labs, h113-4n-acc-macro-for-excel, h113-6-acc-fluent, h131-d8-acc-german-c1). The h131-e* cases measure the cost of the term-based exception: an employer description that opens with a participle phrase holding a year and a tool the CV lacks still reads as a claim; they are accepted false alarms.",
  "people": {
   "developer": {
    "cv": "Alex Novak\nJunior Developer\nalex@example.com · +420 600 000 000\nEXPERIENCE\nJunior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built an internal REST API in Django and Python; wrote tests with pytest.\nIT Intern – Fabrikam Labs, Brno (2023 – 2024): maintained Python scripts for data imports.\nSKILLS\nPython, Django, PostgreSQL, Git, Docker\n",
@@ -768,14 +768,16 @@
   {
    "id": "h113-1n-dev-course",
    "person": "developer",
-   "text": "I completed a course in Kafka.",
-   "expect": {}
+   "text": "I sat a short Kafka seminar at a meetup.",
+   "expect": {},
+   "why": "rewritten in #131: the old text was a near copy of a development row"
   },
   {
    "id": "h113-1n-dev-trained-in",
    "person": "developer",
-   "text": "I trained in Terraform.",
-   "expect": {}
+   "text": "I took a weekend bootcamp on Terraform.",
+   "expect": {},
+   "why": "rewritten in #131: the old text was a near copy of a development row"
   },
   {
    "id": "h113-1n-dev-application",
@@ -1008,12 +1010,13 @@
   {
    "id": "h113-4-dev-present-labs",
    "person": "developer",
-   "text": "I worked at Present Labs.",
+   "text": "Before Northwind I spent a year at Present Labs.",
    "expect": {
     "invented": [
      "Present Labs"
     ]
-   }
+   },
+   "why": "rewritten in #131: the old text was a near copy of a development row"
   },
   {
    "id": "h113-4-dev-curly-possessive",
@@ -1114,8 +1117,9 @@
   {
    "id": "h113-4n-acc-macro-for-excel",
    "person": "accountant",
-   "text": "I wrote a macro for Excel.",
-   "expect": {}
+   "text": "Last month I recorded a small macro for Excel.",
+   "expect": {},
+   "why": "rewritten in #131: the old text was a near copy of a development row"
   },
   {
    "id": "h113-4n-care-rota-for",
@@ -1156,8 +1160,9 @@
   {
    "id": "h113-4n-acc-employed-known",
    "person": "accountant",
-   "text": "I was employed by Litware Finance in Prague.",
-   "expect": {}
+   "text": "Since 2024 my salary has come from Litware Finance, where I work at the Prague office.",
+   "expect": {},
+   "why": "rewritten in #131: the old text was a near copy of a development row"
   },
   {
    "id": "h113-4n-care-experience-known",
@@ -1228,12 +1233,13 @@
   {
    "id": "h113-6-acc-fluent",
    "person": "accountant",
-   "text": "I am fluent in German.",
+   "text": "I have fluent German and use it daily.",
    "expect": {
     "claimed": [
      "German"
     ]
-   }
+   },
+   "why": "rewritten in #131: the old text was a near copy of a development row"
   },
   {
    "id": "h113-6-acc-speak",
@@ -1314,8 +1320,9 @@
   {
    "id": "h113-7n-dev-cv",
    "person": "developer",
-   "text": "At Northwind Parcel I built an internal REST API in Django and wrote tests with pytest.",
-   "expect": {}
+   "text": "My Django and pytest work at Northwind Parcel produced an internal REST API for the team.",
+   "expect": {},
+   "why": "rewritten in #131: the old text was a near copy of a development row"
   },
   {
    "id": "h113-7n-acc-cv",
@@ -1429,9 +1436,417 @@
     "claimed": [
      "German"
     ]
+   }
+  },
+  {
+   "id": "h131-a1-dev-powered-by",
+   "person": "developer",
+   "text": "Powered by Kafka, your platform handles parcel events at scale.",
+   "expect": {},
+   "why": "Product description: Powered by, then the employer's platform."
+  },
+  {
+   "id": "h131-a2-dev-backed-by",
+   "person": "developer",
+   "text": "Backed by Snowflake, the company has grown quickly since 2024.",
+   "expect": {},
+   "why": "Backed by describes the employer; the year is after the comma.",
+   "gap": "Known miss (#131): an opening phrase about the employer with no year, then a comma and \"the company\", reads as the person's own work; the code only knows your/their/its or a year.",
+   "now": {
+    "claimed": [
+     "Snowflake"
+    ]
+   }
+  },
+  {
+   "id": "h131-a3-dev-funded-by",
+   "person": "developer",
+   "text": "Funded by investors in 2023, the company runs Kubernetes clusters in production.",
+   "expect": {},
+   "why": "About the employer, not the person's work."
+  },
+  {
+   "id": "h131-a4-dev-headquartered",
+   "person": "developer",
+   "text": "Headquartered in Brno, its engineers work with Terraform every day.",
+   "expect": {},
+   "why": "Headquartered in describes the employer; its engineers are theirs."
+  },
+  {
+   "id": "h131-a5-dev-run-by",
+   "person": "developer",
+   "text": "Run by Kubernetes veterans, your team ships every week.",
+   "expect": {},
+   "why": "Run by describes the employer's team."
+  },
+  {
+   "id": "h131-a6-dev-loved-by",
+   "person": "developer",
+   "text": "Loved by Snowflake users, your product has a wide audience.",
+   "expect": {},
+   "why": "Loved by describes the product."
+  },
+  {
+   "id": "h131-a7-dev-trusted-by",
+   "person": "developer",
+   "text": "Trusted by Node.js teams worldwide, its platform is a market leader.",
+   "expect": {},
+   "why": "Trusted by describes the product."
+  },
+  {
+   "id": "h131-a8-acc-owned-by",
+   "person": "accountant",
+   "text": "Owned by an IFRS advisory group, the holding is well known in Prague.",
+   "expect": {},
+   "why": "Owned by describes the employer.",
+   "gap": "Known miss (#131): an owner phrase before a comma and \"the holding\" has no year, so it reads as the person's own work.",
+   "now": {
+    "claimed": [
+     "IFRS"
+    ]
+   }
+  },
+  {
+   "id": "h131-a9-care-trusted-by",
+   "person": "carer",
+   "text": "Trusted by CPR instructors, your centre is well known in the area.",
+   "expect": {},
+   "why": "Trusted by describes the employer."
+  },
+  {
+   "id": "h131-b1-dev-after-years",
+   "person": "developer",
+   "text": "After a year of study I deployed Terraform modules for our staging area.",
+   "expect": {
+    "claimed": [
+     "Terraform"
+    ]
    },
-   "gap": "Known gap (#113 fix round): the level rule reads a level word before the language or a level right after it, not \"My <language> is at <level> level\". The label stays true.",
+   "why": "Own past work after an opening phrase."
+  },
+  {
+   "id": "h131-b2-dev-last-spring",
+   "person": "developer",
+   "text": "Last spring we tuned Snowflake queries for the sales team.",
+   "expect": {
+    "claimed": [
+     "Snowflake"
+    ]
+   },
+   "why": "Own past work, with a time opening."
+  },
+  {
+   "id": "h131-b3-dev-together",
+   "person": "developer",
+   "text": "Together with a colleague I wrote Airflow DAGs for the nightly imports.",
+   "expect": {
+    "claimed": [
+     "Airflow"
+    ]
+   },
+   "why": "Own past work, with a partner."
+  },
+  {
+   "id": "h131-b4-acc-each-month",
+   "person": "accountant",
+   "text": "Each month I posted supplier invoices in Xero.",
+   "expect": {
+    "claimed": [
+     "Xero"
+    ]
+   },
+   "why": "Own past work with an unbacked tool."
+  },
+  {
+   "id": "h131-b5-care-each-morning",
+   "person": "carer",
+   "text": "Each morning I performed CPR drills with the residents.",
+   "expect": {
+    "claimed": [
+     "CPR"
+    ]
+   },
+   "why": "Own past work with an unbacked skill."
+  },
+  {
+   "id": "h131-b6-eng-during-training",
+   "person": "engineer",
+   "text": "Throughout my training I modelled brackets in CATIA.",
+   "expect": {
+    "claimed": [
+     "CATIA"
+    ]
+   },
+   "why": "Own past work with an unbacked tool."
+  },
+  {
+   "id": "h131-c1-dev-misplaced-api",
+   "person": "developer",
+   "text": "At Fabrikam Labs I built a REST API for the data imports.",
+   "expect": {
+    "misplaced": [
+     "Fabrikam Labs"
+    ]
+   },
+   "why": "A REST API is the work named under Northwind Parcel."
+  },
+  {
+   "id": "h131-c2-dev-misplaced-pytest",
+   "person": "developer",
+   "text": "During my time at Fabrikam Labs I wrote pytest tests for Django views.",
+   "expect": {
+    "misplaced": [
+     "Fabrikam Labs"
+    ]
+   },
+   "why": "pytest and Django are named under the other employer."
+  },
+  {
+   "id": "h131-c3-dev-misplaced-imports",
+   "person": "developer",
+   "text": "At Northwind Parcel I maintained scripts for the data imports.",
+   "expect": {
+    "misplaced": [
+     "Northwind Parcel"
+    ]
+   },
+   "why": "Data imports are named under Fabrikam Labs.",
+   "gap": "Known miss (#131): work named under the other employer is not seen when it is worded with a verb and words the employer check does not take as named work.",
    "now": {}
+  },
+  {
+   "id": "h131-c4-dev-figure-latency",
+   "person": "developer",
+   "text": "I reduced API response time by 35% last quarter.",
+   "expect": {
+    "figures": [
+     "35"
+    ]
+   },
+   "why": "A percentage no source gives."
+  },
+  {
+   "id": "h131-c5-acc-figure-invoices",
+   "person": "accountant",
+   "text": "I processed 800 supplier invoices a week in SAP.",
+   "expect": {
+    "figures": [
+     "800"
+    ]
+   },
+   "why": "The CV says 300 a month."
+  },
+  {
+   "id": "h131-c6-care-figure-residents",
+   "person": "carer",
+   "text": "I looked after 25 residents on every shift.",
+   "expect": {
+    "figures": [
+     "25"
+    ]
+   },
+   "why": "No source gives 25."
+  },
+  {
+   "id": "h131-c7-eng-figure-review",
+   "person": "engineer",
+   "text": "I shortened the drawing review by 15% with a new checklist.",
+   "expect": {
+    "figures": [
+     "15"
+    ]
+   },
+   "why": "A percentage no source gives."
+  },
+  {
+   "id": "h131-c8-dev-borrowed-quarterly",
+   "person": "developer",
+   "text": "I owned the zebra migrations for the parcel team.",
+   "expect": {
+    "borrowed": [
+     "zebra migrations"
+    ]
+   },
+   "why": "Two posting words, none in the CV, said as done."
+  },
+  {
+   "id": "h131-c9-acc-borrowed-vendor",
+   "person": "accountant",
+   "text": "I kept the vendor master data current for our suppliers.",
+   "expect": {
+    "borrowed": [
+     "vendor master",
+     "master data"
+    ]
+   },
+   "why": "Two posting phrases absent from the CV, said as done."
+  },
+  {
+   "id": "h131-c10-eng-borrowed-fmea",
+   "person": "engineer",
+   "text": "I led FMEA sessions with the line team.",
+   "expect": {
+    "claimed": [
+     "FMEA"
+    ],
+    "borrowed": [
+     "FMEA sessions"
+    ]
+   },
+   "why": "A posting term the CV lacks, said as done."
+  },
+  {
+   "id": "h131-d1-dev-year-then-team",
+   "person": "developer",
+   "text": "Switched to Kubernetes in 2024, the team deployed twice a day.",
+   "expect": {
+    "claimed": [
+     "Kubernetes"
+    ]
+   },
+   "why": "A fragment, the person's work, with a year and an unbacked tool."
+  },
+  {
+   "id": "h131-d2-dev-year-then-team-2",
+   "person": "developer",
+   "text": "Rebuilt on Terraform in 2023, the team shipped faster.",
+   "expect": {
+    "claimed": [
+     "Terraform"
+    ]
+   },
+   "why": "A fragment, the person's work, with a year and an unbacked tool."
+  },
+  {
+   "id": "h131-d3-dev-worked-on-the-ad",
+   "person": "developer",
+   "text": "Worked on the advert pipelines with Airflow for a year.",
+   "expect": {
+    "claimed": [
+     "Airflow"
+    ]
+   },
+   "why": "The word advert here is the work's own subject, not the posting."
+  },
+  {
+   "id": "h131-d4-dev-posted-on-board",
+   "person": "developer",
+   "text": "Posted on the vacancy board, the opening names Terraform.",
+   "expect": {},
+   "why": "About the posting; no work claimed."
+  },
+  {
+   "id": "h131-d5-dev-contacted-about",
+   "person": "developer",
+   "text": "I have contacted you about the Kafka role.",
+   "expect": {},
+   "why": "Contact about the role, not work."
+  },
+  {
+   "id": "h131-d6-dev-messaged-about",
+   "person": "developer",
+   "text": "I messaged you about Terraform last week.",
+   "expect": {},
+   "why": "Contact, not work."
+  },
+  {
+   "id": "h131-d7-dev-phoned-about",
+   "person": "developer",
+   "text": "I phoned your office about the Kubernetes opening.",
+   "expect": {},
+   "why": "Contact, not work."
+  },
+  {
+   "id": "h131-d8-acc-german-c1",
+   "person": "accountant",
+   "text": "My command of German is C1.",
+   "expect": {
+    "claimed": [
+     "German"
+    ]
+   },
+   "why": "rewritten in #131: the old text was a near copy of a development row"
+  },
+  {
+   "id": "h131-d9-acc-german-level-is",
+   "person": "accountant",
+   "text": "My German level is C1.",
+   "expect": {
+    "claimed": [
+     "German"
+    ]
+   },
+   "why": "A language level for a language the CV lacks."
+  },
+  {
+   "id": "h131-d10-acc-english",
+   "person": "accountant",
+   "text": "My English is at C2 level.",
+   "expect": {},
+   "why": "English is never checked."
+  },
+  {
+   "id": "h131-d11-acc-german-needed",
+   "person": "accountant",
+   "text": "A German level of B2 is required for this role.",
+   "expect": {},
+   "why": "The level is the job's need."
+  },
+  {
+   "id": "h131-d12-acc-established",
+   "person": "accountant",
+   "text": "Established in 2024, the holding group serves clients across Prague.",
+   "expect": {},
+   "why": "Founding opening about the employer."
+  },
+  {
+   "id": "h131-d13-dev-established",
+   "person": "developer",
+   "text": "Established in 2023, the company runs Kubernetes clusters for its customers.",
+   "expect": {},
+   "why": "Founding opening about the employer."
+  },
+  {
+   "id": "h131-e1-dev-employer-participle",
+   "person": "developer",
+   "text": "Launched in 2019 on Kafka, the Acme Data platform has grown every year.",
+   "expect": {},
+   "gap": "An employer description that opens with a participle phrase holding a year and a tool the CV lacks reads as a claim: the term-based exception does not cover it. Accepted false-alarm family (owner, 15 Nov: a missed claim costs more).",
+   "now": {
+    "claimed": [
+     "Kafka"
+    ],
+    "figures": [
+     "2019"
+    ]
+   }
+  },
+  {
+   "id": "h131-e2-dev-employer-participle",
+   "person": "developer",
+   "text": "Migrated to Kubernetes in 2023, the Acme Data platform now serves every team.",
+   "expect": {},
+   "gap": "An employer description that opens with a participle phrase holding a year and a tool the CV lacks reads as a claim: the term-based exception does not cover it. Accepted false-alarm family (owner, 15 Nov: a missed claim costs more).",
+   "now": {
+    "claimed": [
+     "Kubernetes"
+    ]
+   }
+  },
+  {
+   "id": "h131-e3-dev-employer-participle",
+   "person": "developer",
+   "text": "Rebuilt on Snowflake in 2022, the Acme Data warehouse is the heart of the product.",
+   "expect": {},
+   "gap": "An employer description that opens with a participle phrase holding a year and a tool the CV lacks reads as a claim: the term-based exception does not cover it. Accepted false-alarm family (owner, 15 Nov: a missed claim costs more).",
+   "now": {
+    "claimed": [
+     "Snowflake"
+    ],
+    "figures": [
+     "2022"
+    ]
+   }
   }
  ]
 }

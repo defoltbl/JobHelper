@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import time
+from datetime import date
 
 import pytest
 
@@ -485,3 +486,99 @@ def test_the_review_reads_a_lists_consent_by_its_kind_alone():
     assert _reviewed({"label": "Your answer", "kind": "select", "name": "q_7", "value": "I agree",
                       "options": ["Please select", "I agree", "I do not agree"]}) == [(True, "")]
     assert _reviewed({"label": "Your answer", "kind": "text", "name": "q_8", "value": "Blue"}) == [(False, "Blue")]
+
+
+# #139: a yes-or-no list behind a one-word "?" label asks you; it holds no job's date
+YES_NO_OPTIONS = [["Yes", "No"], ["", "Yes", "No"], ["Select…", "Yes", "No"], ["-- Please choose --", "yes", "no"], ["Choose one", "YES.", "NO."],
+                  ["Ano", "Ne"], ["Vyberte", "ano", "ne"], ["Ja", "Nein"], ["Bitte wählen", "Ja", "Nein"], ["Sí", "No"], ["Si", "No"],
+                  ["Oui", "Non"], ["Ｙｅｓ", "Ｎｏ"]]
+
+
+@pytest.mark.parametrize("label", ["Started?", "Ended?", "From?", "To?", "Start?", "End?"])
+@pytest.mark.parametrize("options", YES_NO_OPTIONS)
+def test_a_one_word_question_with_yes_and_no_is_a_choice_and_never_a_date(label, options):
+    """A "Started?" list with "Yes" / "No" was read as a job's start and left with "Pick the date yourself."."""
+    field = _field(label, "select", options=options)
+    assert form_fill.classify(field) == ("choice", "")
+    job = {"employer": "Northwind Traders", "title": "Clerk", "start": "2020-01", "end": "", "current": True}
+    todo = form_fill.plan([field], {**details.empty(), "experience": [job]})
+    assert all(left["why"] != form_fill.DATE for left in todo["left"])
+    assert [entry["n"] for entry in todo["choose"]] == [1]
+
+
+@pytest.mark.parametrize("label, options, what", [
+    ("From?", ["Jan", "Feb", "Mar"], "row_start"), ("From?", ["Select…", "January", "February"], "row_start"),
+    ("From?", ["", "2019", "2020", "2021"], "row_start"), ("To?", ["Jan", "Feb"], "row_end"), ("To?", ["2019", "2020"], "row_end"),
+    ("Started?", ["2019", "2020"], "row_start"), ("Ended?", ["Jan", "Feb"], "row_end"),
+    ("Started?", ["Yes", "No", "2020"], "row_start")])
+def test_a_one_word_date_list_with_months_or_years_still_counts_as_a_jobs_date(label, options, what):
+    assert form_fill.classify(_field(label, "select", options=options)) == (what, "")
+
+
+@pytest.mark.parametrize("label, kind, what", [("Started?", "month", "row_start"), ("Ended?", "date", "row_end"), ("From?", "date", "row_start")])
+def test_a_one_word_date_field_keeps_its_jobs_date(label, kind, what):
+    assert form_fill.classify(_field(label, kind, options=["Yes", "No"])) == (what, "")
+
+
+NEW_HIDDEN = ["͏", "ㅤ", "⠀", "︀", "️", "\U000e0100", "\U000e01ef", "ᅟ", "ᅠ", "ﾠ"]
+NEW_DASHES = ["⁃", "֊", "・"]
+
+
+@pytest.mark.parametrize("sign", NEW_HIDDEN)
+def test_a_card_an_ssn_and_an_iban_hidden_with_a_blank_sign_are_private(sign):
+    for value in ("4111 1111 1111 1111", "123-45-6789", "CZ65 0800 0000 1920 0014 5399"):
+        hidden = sign.join(value)
+        assert form_fill.PrivateShape(hidden).found, (hidden, value)
+        assert _reviewed({"label": "Notes", "value": hidden}) == [(True, "")]
+
+
+@pytest.mark.parametrize("sign", NEW_HIDDEN)
+def test_a_label_written_with_a_blank_sign_is_read_as_it_shows(sign):
+    assert form_fill.classify(_field(sign.join("Password"))) == ("", form_fill.PRIVATE)
+
+
+# the Default_Ignorable_Code_Point signs outside Cf that the first list missed (fix round 1 of #139)
+IGNORABLE_HIDDEN = ["឴", "឵", "᠋", "᠌", "᠍", "᠏", "⁥", "￰", "￸",
+                    "\U000e0000", "\U000e0020", "\U000e0080", "\U000e01f0", "\U000e0fff"]
+
+
+@pytest.mark.parametrize("sign", IGNORABLE_HIDDEN)
+def test_a_card_an_ssn_an_iban_and_a_label_hidden_with_an_ignorable_sign_are_private(sign):
+    assert form_fill.PrivateShape(sign.join(["4111", "1111", "1111", "1111"])).card
+    assert form_fill.PrivateShape(sign.join("123-45-6789")).ssn
+    assert form_fill.PrivateShape(sign.join("CZ65 0800 0000 1920 0014 5399")).iban
+    assert form_fill.PrivateShape(sign.join("4111 1111 1111 1111")).card
+    assert _reviewed({"label": "Notes", "value": f"Card 4111{sign}1111{sign}1111{sign}1111, thanks"}) == [(True, "")]
+    assert form_fill.classify(_field(sign.join("Password"))) == ("", form_fill.PRIVATE)
+    assert not form_fill.PrivateShape(sign.join(["4111", "1111", "1111", "1112"])).found        # a bad Luhn check stays plain
+
+
+@pytest.mark.parametrize("sign", NEW_DASHES)
+def test_a_card_an_ssn_and_an_iban_with_a_new_dash_are_private(sign):
+    assert form_fill.PrivateShape(sign.join(["4111", "1111", "1111", "1111"])).card
+    assert form_fill.PrivateShape(f"123{sign}45{sign}6789").ssn
+    assert form_fill.PrivateShape(sign.join(["CZ65", "0800", "0000", "1920", "0014", "5399"])).iban
+    assert _reviewed({"label": "Notes", "value": f"Card 4111{sign}1111{sign}1111{sign}1111, thanks"}) == [(True, "")]
+
+
+@pytest.mark.parametrize("sign", NEW_HIDDEN + NEW_DASHES)
+def test_a_plain_value_with_a_blank_sign_or_a_new_dash_is_not_private(sign):
+    for value in (f"Room{sign} 12", f"2019{sign}2021 2021{sign}2023", f"+420{sign}777{sign}123{sign}456", f"4111{sign}1111{sign}1111{sign}1112"):
+        assert not form_fill.PrivateShape(value).found, value
+
+
+@pytest.mark.parametrize("text, day, worked", [
+    ("1 March 2027", date(2027, 3, 1), False), ("March 2027", date(2027, 3, 1), True), ("1st of March 2027", date(2027, 3, 1), False),
+    ("March 2 2027", date(2027, 3, 2), False), ("3 Sep 2027", date(2027, 9, 3), False), ("Dec. 2027", date(2027, 12, 1), True)])
+def test_a_start_text_with_a_months_name_still_reads_as_a_day(text, day, worked):
+    """#139: the month names in `start_day` are escaped now; what it reads stays the same."""
+    assert form_fill.start_day(text, date(2026, 11, 15)) == (day, worked)
+
+
+@pytest.mark.parametrize("value", ["".join(NEW_HIDDEN) * 5_000, "".join(IGNORABLE_HIDDEN) * 5_000, "1⠀" * 25_000, "ㅤ " * 25_000, "ab12・" * 10_000,
+                                   ("4111" + "️" * 10) * 2_000])
+def test_a_long_hostile_value_full_of_blank_signs_is_read_at_once(value):
+    start = time.perf_counter()
+    found = form_fill.PrivateShape(value).found
+    _reviewed({"label": "Notes", "value": value})
+    assert time.perf_counter() - start < 1.5 and not found

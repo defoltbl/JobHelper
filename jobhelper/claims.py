@@ -31,11 +31,12 @@ _TEAM_CLAUSE = re.compile(r"\bwhere\s+we\s+(?:use|run|work|build|deploy|manage|h
 _WISH_END = r".*?(?=\b(?:I|I've|I'm|[Ww]e|but)\b|;|,\s*(?:having|after|since|while)\b|$)"
 # Wording that claims hands-on experience.
 # "lead with" / "lead by" is a manner, not leading a project (#82). A team clause ("a team where we use Kafka") is taken
-# out before this is asked (_TEAM_CLAUSE). "I wrote" is read by _work, which knows "I wrote to you" is the letter (#113).
+# out before this is asked (_TEAM_CLAUSE). "I wrote" and "I have written" are read by _work, which knows "I wrote to you" is
+# the letter (#113, #131).
 CLAIM = re.compile(
     r"\b(I|I've|we)\s+(have\s+|also\s+|regularly\s+|currently\s+)*(work(ed)?|use[ds]?|built|build|"
     r"deploy(ed)?|ran|run|administer(ed)?|manage[ds]?|configure[ds]?|operate[ds]?|maintain(ed)?|"
-    r"written|set up|automate[ds]?|implemented?|develop(ed)?|lead(?!\s+(?:with|by)\b)|led|design(ed)?|create[ds]?|"
+    r"set up|automate[ds]?|implemented?|develop(ed)?|lead(?!\s+(?:with|by)\b)|led|design(ed)?|create[ds]?|"
     r"deliver(ed)?|migrate[ds]?|own(ed)?)\b|"
     r"\bhaving\s+(?:built|used|worked|deployed|run|written|developed|designed|created|maintained|led|delivered|migrated)\b|"
     r"\b(experience(d)? (with|in)|hands-on|proficient|skilled|familiar with|expertise|background in|"
@@ -43,8 +44,9 @@ CLAIM = re.compile(
 # Work done, said with any verb in the past tense ("I scheduled", "we reconciled", "I gave CPR"): CLAIM's verbs are a fixed
 # list, and a letter can claim a tool with any other (#78). Verbs of seeing, wanting, learning about or joining are no
 # claim of the work itself (_NOT_DONE); a few say work or learning by what they act on (_BY_OBJECT, #113). "used" is
-# too short for the "-ed" pattern, so it is named (#113).
-_PAST = r"[a-z]{3,}ed|used|gave|made|wrote|drew|drove|held|kept|taught|sold|brought|fed|ran|led|built|done|troubleshot|cut|put"
+# too short for the "-ed" pattern, so it is named (#113). A form with "re" is done again ("rebuilt", "rewrote": #131).
+_PAST = (r"[a-z]{3,}ed|(?:re)?(?:used|gave|made|wrote|written|drew|drove|held|kept|taught|sold|brought|fed|ran|led|built|done|"
+         r"troubleshot|cut|put)")
 _PAST_WORD = re.compile(_PAST)
 _DONE = re.compile(r"\b(?:I|I've|we)\s+(?:have\s+|also\s+|then\s+|once\s+|\w+ly\s+)*(" + _PAST + r")\b"
                    r"|\b(?:I'm|I am|I've been|I have been|we're|we've been|we have been)\s+(?:\w+ly\s+)?([a-z]{2,}ing)\b",
@@ -70,9 +72,10 @@ _NOT_DONE = frozenset({"noticed", "noted", "learned", "wanted", "hoped", "liked"
 # Verbs that are work or learning by what they act on: "I trained the team on Terraform" is work, "I trained in
 # Terraform", "I completed a course in Kafka" and "I submitted my application" are not (#113).
 _BY_OBJECT = frozenset("trained completed reviewed submitted spotted finished passed earned".split())
-# Verbs of the letter's own frame by who they go to: "I wrote to you", "I emailed to your team" is the letter, "I wrote
-# Kafka consumers" is work (#113). "sent" and "e-mailed" are no past form the walk reads (_PAST), so they are not here.
-_TO_THEM = frozenset("wrote emailed".split())
+# Verbs of the letter's own frame by who they go to: "I wrote to you", "I emailed to your team", "I emailed you", "I phoned
+# your office about the role" is the letter, "I wrote Kafka consumers" and "I wrote your Kafka connector about retries" are
+# work (#113, #131). "sent" and "e-mailed" are no past form the walk reads (_PAST), so they are not here.
+_TO_THEM = frozenset("wrote written emailed messaged phoned".split())
 _LEARNING = frozenset("""course courses training trainings webinar webinars certificate certificates certification
     certifications class classes degree degrees bootcamp bootcamps workshop workshops tutorial tutorials exam exams lesson
     lessons lecture lectures diploma""".split())
@@ -84,21 +87,25 @@ _APPLIED_TO = _APPLYING | frozenset("job jobs position positions company roles y
 # where the words a verb acts on end ("a course | in Kafka")
 _PREPOSITIONS = frozenset("in on at for with about from to by of into using via during under over through across as like "
                           "before after".split())
-_TOKEN = re.compile(r"[A-Za-z][A-Za-z'’-]*|[,;:.!?]")
+_TOKEN = re.compile(r"[A-Za-z][A-Za-z'’-]*(?:\.[A-Za-z][A-Za-z'’-]*)*|[,;:.!?]")     # "Node.js" is one word (#131)
 _SUBJECTS = frozenset("i i've i’ve i'm i’m we we've we’ve we're we’re".split())
 _JOINERS = frozenset({"and", ",", "then"})
 _STOPS = frozenset(".;:!?")
 
 
-def _work(verb: str, acts_on: list[str], after: str, then: list[str]) -> bool:
+def _work(verb: str, acts_on: list[str], after: str, then: list[str], terms=()) -> bool:
     """Whether a verb said as done is work, by the verb and what it acts on (`acts_on`, up to `after`, the preposition
-    or mark that ends it, and `then`, the words after that preposition)."""
+    or mark that ends it, and `then`, the words after that preposition). "your" and at most two words before "about"
+    are the people the letter goes to ("your hiring team") unless they name one of `terms`, the ones the CV lacks
+    ("your Kafka connector" is a thing worked on, #131)."""
     verb = verb.lower()
     if verb in _NOT_DONE:
         return False
     if verb == "applied":   # a method applied to work is work; applying with no object, or for a job, is not (#113)
         return bool(acts_on) and not (after in ("for", "to") and any(w in _APPLIED_TO for w in then))
-    if verb in _TO_THEM and not acts_on and after == "to" and then[:1] in (["you"], ["your"]):
+    to_your = acts_on[:1] == ["your"] and len(acts_on) <= 3 and after == "about"
+    if verb in _TO_THEM and (acts_on == ["you"] or (to_your and not any(mentions(" ".join(acts_on), t) for t in terms))
+                             or (not acts_on and after == "to" and then[:1] in (["you"], ["your"]))):
         return False
     if verb not in _BY_OBJECT:
         return True
@@ -110,9 +117,10 @@ def _work(verb: str, acts_on: list[str], after: str, then: list[str]) -> bool:
 
 
 def _words(tokens: list[str], i: int) -> tuple[list[str], int]:
-    """The words from token `i` up to a preposition, a joiner or a stop, and where they end."""
+    """The words from token `i` up to a preposition, a joiner, a stop or a new subject, and where they end. The subject
+    ends them too, so a long run of clauses ("I noticed your I noticed your …") is read once, not once per verb (#131)."""
     words = []
-    while i < len(tokens) and tokens[i] not in _JOINERS and tokens[i] not in _STOPS and tokens[i].lower() not in _PREPOSITIONS:
+    while i < len(tokens) and tokens[i] not in _JOINERS and not _ends_clause(tokens[i]) and tokens[i].lower() not in _PREPOSITIONS:
         words.append(tokens[i].lower())
         i += 1
     return words, i
@@ -163,34 +171,39 @@ _THEIRS = frozenset("your their its".split())
 _YEAR = re.compile(r"\b(?:19|20)\d{2}s?\b")
 
 
-def _describes_them(tokens: list[str], k: int, sentence: str, starts: list[int]) -> bool:
+def _describes_them(tokens: list[str], k: int, sentence: str, starts: list[int], terms=()) -> bool:
     """Whether the past participle at token `k` opens a phrase about the employer, its product or its posting, not work
     done (#113): a preposition follows it, and right after that preposition comes "your" or the posting ("Advertised on
     your careers page: …", "Published in the vacancy text: …"), or the clause after the phrase's comma starts with
     "your", "their" or "its" ("Hosted on Kubernetes, its storefront …"), or with "the" or "this" when the phrase holds a
     year ("Founded in 1998, the firm …"). `sentence` and `starts` (where each token starts) give the year, which is no
-    token. A "your" later in the phrase is the candidate's work for them ("Worked with Kafka in your field", #113).
+    token. A "your" later in the phrase is the candidate's work for them ("Worked with Kafka in your field", #113). The
+    posting and the year count only when the phrase names none of `terms` (the ones the CV lacks): "Migrated to Kafka in
+    2021, the team …" and "Worked on the listing pages for Kafka" are work done (#131).
     shortcut: an opening phrase about the product before "the" with no year ("Designed for scale, the platform is …")
-    reads as a claim; add a rule only if letters show it often."""
+    reads as a claim; add a rule only if letters show it often. A founding phrase that names a missing term ("Founded in
+    2012 around Kafka, the startup …") reads as work too: a false alarm the owner accepted (15 Nov)."""
     if k + 1 >= len(tokens) or tokens[k + 1].lower() not in _PREPOSITIONS:
         return False
     end = next((i for i in range(k + 1, len(tokens)) if tokens[i] == "," or tokens[i] in _STOPS), len(tokens))
+    phrase_end = starts[end] if end < len(tokens) else len(sentence)
+    own = any(mentions(sentence[starts[k + 1]:phrase_end], term) for term in terms)
     head = [t.lower() for t in tokens[k + 2:min(end, k + 4)]]          # the first words after the preposition
     if head[:1] in (["the"], ["this"]):
         head = head[1:]
-    if head[:1] == ["your"] or (head and head[0] in _POSTING):
+    if head[:1] == ["your"] or (head and head[0] in _POSTING and not own):
         return True
     if tokens[end:end + 1] != [","] or end + 1 >= len(tokens):
         return False
     then = tokens[end + 1].lower()
-    return then in _THEIRS or (then in ("the", "this") and bool(_YEAR.search(sentence, starts[k + 1], starts[end])))
+    return then in _THEIRS or (then in ("the", "this") and not own and bool(_YEAR.search(sentence, starts[k + 1], phrase_end)))
 
 
-def _fragment(tokens: list[str], sentence: str, starts: list[int]) -> int:
+def _fragment(tokens: list[str], sentence: str, starts: list[int], terms=()) -> int:
     """Where the verb of a sentence that opens with one is ("Built pipelines in Kafka.", "Recently led a team"), or -1. A
     name that only looks like a verb is none when a verb or a possessive follows it ("Ahmed built", "Ahmed's"), or a
     comma without a verb after it ("Alfred, your CTO, …"). A participle that describes the employer is none either
-    (_describes_them).
+    (_describes_them, which reads `terms`).
     shortcut: a name ending in "-ed" before another kind of verb ("Ahmed told me") still reads as work; add a list of
     names only if a letter shows one."""
     k = 1 if tokens and tokens[0].lower().endswith("ly") else 0
@@ -201,16 +214,17 @@ def _fragment(tokens: list[str], sentence: str, starts: list[int]) -> int:
         return -1
     if after[:1] == [","] and not (len(after) > 1 and _PAST_WORD.fullmatch(after[1])):
         return -1
-    return -1 if _describes_them(tokens, k, sentence, starts) else k
+    return -1 if _describes_them(tokens, k, sentence, starts, terms) else k
 
 
-def _deeds(sentence: str):
+def _deeds(sentence: str, terms=()):
     """Each verb the sentence says as done by the person, with what it acts on: after "I" or "we" (_DONE), joined to one
-    of those, or opening a sentence without a subject (the candidate's own: owner's decision on #113)."""
+    of those, or opening a sentence without a subject (the candidate's own: owner's decision on #113). `terms` are the
+    ones the CV lacks (_describes_them)."""
     found = list(_TOKEN.finditer(sentence))
     tokens, starts = [m.group(0) for m in found], [m.start() for m in found]
     done = {m.start(): (m.group(1) or m.group(2), bisect.bisect_left(starts, m.end())) for m in _DONE.finditer(sentence)}
-    k = _fragment(tokens, sentence, starts)
+    k = _fragment(tokens, sentence, starts, terms)
     if k >= 0:
         yield from _clause(tokens, tokens[k], k + 1)
     for k, token in enumerate(tokens):
@@ -219,9 +233,9 @@ def _deeds(sentence: str):
             yield from _clause(tokens, *done.get(starts[k], ("", skip)))
 
 
-def _done(sentence: str) -> bool:
+def _done(sentence: str, terms=()) -> bool:
     """Whether the sentence says, in the first person or as a fragment, that work was done (see _deeds and _work)."""
-    return any(_work(*deed) for deed in _deeds(sentence))
+    return any(_work(*deed, terms) for deed in _deeds(sentence, terms))
 
 
 # An honest bridge names the missing thing on purpose (in an interview that is the right answer).
@@ -265,14 +279,15 @@ def names_candidate(text: str, first_name: str) -> bool:
 
 
 # A spoken language said with a level is a claim of it (owner's decision on #113): "I am fluent in German", "I speak
-# English and German", "native German speaker", "German (C1)", "German at B2 level". Named any other way ("German
+# English and German", "native German speaker", "German (C1)", "German at B2 level", "My German is at C1 level", "My
+# German level is B2" (#131). Named any other way ("German
 # clients", "German-speaking customers", "I worked with German clients") it is no claim of the language.
 _LANGUAGE = r"[A-Z][a-z]++(?![\w'’-])"                     # any language a list names: "fluent in Spanish and German"
 _LANGUAGE_LIST = _LANGUAGE + r"(?:\s*(?:,\s*(?:(?:and|or)\s+)?|(?:and|or|&)\s+)" + _LANGUAGE + r")*"
 _LEVEL_BEFORE = (r"(?i:\b(?:fluent(?:ly)?|native|bilingual|speaks?|spoke|speaking|speaker|proficient|business[- ]level|"
                  r"working\s+knowledge|mother\s+tongue))\s+(?:(?i:in|of)\s+)?"
                  r"(?:(?i:fluent|native|good|basic|some|conversational|excellent|business[- ]level)\s+)?")
-_LEVEL_AFTER = (r"(?:\s*\(\s*|\s*[:–-]\s*|\s+(?:(?i:is\s+my|at)\s+)?(?:(?i:an?)\s+)?(?:(?i:level)\s+)?)"
+_LEVEL_AFTER = (r"(?:\s*\(\s*|\s*[:–-]\s*|\s+(?:(?i:is\s+my|is\s+at|is|at|level\s+is)\s+)?(?:(?i:an?)\s+)?(?:(?i:level)\s+)?)"
                 r"(?:[ABC][12]\b|(?i:native|fluent(?:ly)?|bilingual|business[- ]level|proficient|mother\s+tongue|speaker)\b)")
 _SPOKEN_LEVEL = re.compile(rf"{_LEVEL_BEFORE}(?P<listed>{_LANGUAGE_LIST})"
                            rf"|(?<![\w-])(?P<named>{'|'.join(map(re.escape, keywords.SPOKEN))})(?![\w'’-])(?=(?P<level>{_LEVEL_AFTER}))")
@@ -327,7 +342,7 @@ class ClaimCheck:
             return ""
         said = unwished(sentence)
         spoken = spoken_claims(said) if self._spoken else set()
-        claims_any = bool(CLAIM.search(said)) or _done(said)
+        claims_any = bool(CLAIM.search(said)) or _done(said, self.terms)
         return next((term for term in self.terms if (term in spoken if term in self._spoken else
                                                      mentions(said, term) and (claims_any or _owned(said, term)))), "")
 
