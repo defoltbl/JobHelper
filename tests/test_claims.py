@@ -461,6 +461,128 @@ def test_an_opening_phrase_hides_only_words_about_the_employer_and_writing_to_th
     assert check.claimed_in(sentence) == term, sentence
 
 
+# ── #131: an opening phrase that names a missing term is work, writing or calling the reader is the letter ──
+_PHRASE_TERMS = [   # (sentence, the technology claimed, or "" for none)
+    # a year before ", the" hides the phrase only when it names no missing term
+    ("Migrated to Kafka in 2021, the team saved hours.", "Kafka"),
+    ("Moved the nightly loads onto Airflow during 2022, this scheduler cut the reruns.", "Airflow"),
+    ("Worked with Kafka in 2019, the team grew.", "Kafka"),
+    ("Worked in 2019, the team grew.", ""),     # no term in the sentence: nothing to claim
+    ("Established in 2004, the agency now builds Redis tooling for banks.", ""),
+    ("Started out in 1987, this firm moved its billing to Snowflake.", ""),
+    # the rare false alarm the rule accepts: a founding phrase that names a missing term reads as work
+    ("Founded in 2012 around Kafka, the startup grew to forty people.", "Kafka"),
+    # a posting word after the preposition hides the phrase only when it names no missing term
+    ("Worked on the listing pages for Kafka search.", "Kafka"),
+    ("Coded on the ad server that streamed Spark results to shops.", "Spark"),
+    ("Advertised on the listing page: Kafka and Spark skills.", ""),
+    ("Quoted in the advert, the stack lists Redis and Snowflake.", ""),
+    # "written", "emailed", "messaged" and "phoned" with the reader as their whole object, or "your …" before "about"
+    ("Spark fits my plans, so I have written to you.", ""), ("I have written to you twice before about Spark.", ""),
+    ("I emailed you after the Airflow meetup in Brno.", ""), ("I emailed you on Monday, and Snowflake came up.", ""),
+    ("We messaged your hiring desk about Airflow on Friday morning.", ""),
+    # writing or mailing work stays a claim, and so does a form with "re"
+    ("I have written Kafka consumers in Go.", "Kafka"), ("I wrote Kafka consumers.", "Kafka"),
+    ("I emailed the Kafka team's alerts to the on-call rota.", "Kafka"), ("I messaged Kafka topics from four services.", "Kafka"),
+    ("Rewrote the Spark jobs in Scala.", "Spark"), ("I rebuilt the Terraform modules last spring.", "Terraform"),
+    ("Having written Airflow operators, I know its quirks.", "Airflow"),
+    # a dotted name is one word: the "." inside it ends no phrase
+    ("Relied on by Node.js shops, its runtime keeps growing.", ""), ("Written in Go, your Kafka gateway is fast.", ""),
+]
+
+
+@pytest.mark.parametrize("sentence, term", _PHRASE_TERMS)
+def test_an_opening_phrase_that_names_a_missing_term_is_work_and_the_reader_as_object_is_the_letter(sentence, term):
+    check = ClaimCheck(["Airflow", "Redis", "Snowflake", "Terraform", "Kafka", "Spark", "Node.js"])
+    assert check.claimed_in(sentence) == term, sentence
+
+
+def test_the_terms_reach_the_opening_phrase_only_from_the_check_that_knows_them():
+    """#131: the employer check asks _deeds with no terms, so a year still hides the phrase there."""
+    assert claims._done("Migrated to Kafka in 2021, the team saved hours.") is False
+    assert claims._done("Migrated to Kafka in 2021, the team saved hours.", ["Kafka"]) is True
+    assert claims._done("Worked on the listing pages for Kafka search.", ["Spark"]) is False
+
+
+_TO_YOUR = [   # (sentence, the technology claimed, or "" for none)
+    # "your" and the people the letter goes to, before "about": the letter's frame
+    ("I phoned your hiring team about Kafka.", ""), ("I messaged your recruiter about Kafka.", ""),
+    ("I phoned your office about Kafka.", ""), ("I emailed you about Kafka.", ""), ("I have written to you about Kafka.", ""),
+    ("We messaged your talent partner about the Airflow opening.", ""), ("I emailed your HR about Spark.", ""),
+    ("Last week I phoned your recruitment office about Terraform.", ""),
+    # "your" and a thing that names a missing term, or more than two words: work done on it
+    ("I wrote your Kafka connector about retries.", "Kafka"), ("I rewrote your Kafka consumer about the offsets bug.", "Kafka"),
+    ("We wrote your Airflow sensors about late files.", "Airflow"), ("I phoned your Redis desk about pricing.", "Redis"),
+    ("I wrote your Apache Spark notebook about churn.", "Spark"),
+    ("I emailed your Spark job logs about the outage to ops.", "Spark"),
+]
+
+
+@pytest.mark.parametrize("sentence, term", _TO_YOUR)
+def test_your_people_before_about_are_the_letter_and_your_thing_with_a_missing_term_is_work(sentence, term):
+    """#131 fix round 1: "your" + the people the letter goes to is the letter; "your" + a missing term is work."""
+    check = ClaimCheck(["Airflow", "Redis", "Snowflake", "Terraform", "Kafka", "Spark", "Node.js"])
+    assert check.claimed_in(sentence) == term, sentence
+
+
+def test_your_thing_before_about_is_work_only_for_the_check_that_knows_the_terms():
+    """#131: the employer check asks _work with no terms, so "your" and two words before "about" stay the letter there."""
+    deed = ("wrote", ["your", "kafka", "connector"], "about", ["retries"])
+    assert claims._work(*deed) is False
+    assert claims._work(*deed, ["Kafka"]) is True
+    assert claims._work("phoned", ["your", "hiring", "team"], "about", ["kafka"], ["Kafka"]) is False
+    assert claims._done("I wrote your Kafka connector about retries.") is False
+
+
+@pytest.mark.parametrize("sentence, tokens, term", [
+    # "e.g." and "i.e." are one word and a stop: the stop ends the clause before them
+    ("I tuned queues, e.g. Kafka topics, for years.", ["I", "tuned", "queues", ",", "e.g", ".", "Kafka", "topics", ",", "for",
+                                                       "years", "."], "Kafka"),
+    ("Some stacks, i.e. Spark ones, scale.", ["Some", "stacks", ",", "i.e", ".", "Spark", "ones", ",", "scale", "."], ""),
+    ("I emailed you, i.e. the recruiter, about Kafka.", ["I", "emailed", "you", ",", "i.e", ".", "the", "recruiter", ",",
+                                                         "about", "Kafka", "."], ""),
+    # a dot with no space after it joins the words; a URL keeps its dotted host as one word
+    ("I tested Kafka.Then I left.", ["I", "tested", "Kafka.Then", "I", "left", "."], "Kafka"),
+    ("See https://kafka.example.org/guide for more.", ["See", "https", ":", "kafka.example.org", "guide", "for", "more", "."], ""),
+    # a dotted name at the end of a sentence keeps its own dot, and the last one is the stop
+    ("I shipped services in Node.js.", ["I", "shipped", "services", "in", "Node.js", "."], "Node.js"),
+])
+def test_a_dotted_word_is_one_token_and_a_dot_before_a_space_is_a_stop(sentence, tokens, term):
+    """#131: _TOKEN as it reads dots today: "Node.js" is one word, "e.g." is a word and a stop."""
+    assert [m.group(0) for m in claims._TOKEN.finditer(sentence)] == tokens
+    assert ClaimCheck(["Kafka", "Spark", "Node.js"]).claimed_in(sentence) == term, sentence
+
+def test_a_language_as_the_subject_with_its_level_is_a_claim():
+    """#131, owner's decision b of 13 Nov: "My <language> is at <level>", "… level is <level>", "… is <level word>"."""
+    check = ClaimCheck(["Kafka", "German", "French", "Czech"])
+    for said, term in (("My French is at a C1 level these days.", "French"), ("These days my Czech level is B2 or so.", "Czech"),
+                       ("My Czech is fluent after six years in Brno.", "Czech"), ("Thanks to my mother, my French is native.", "French"),
+                       ("I moved to Graz, and my German is at B1 now.", "German")):
+        assert check.claimed_in(said) == term, said
+    for said in ("Their German is at C1 level, so we can talk.", "Your French level is B2 according to the brief.",
+                 "The team's Czech is fluent.", "French at B2 is required here.", "My German is at a basic stage.",
+                 "Czech level is B2 or higher is preferred.", "A French level of C1 is needed for this post."):
+        assert check.claimed_in(said) == "", said
+
+
+def test_a_long_hostile_text_is_read_for_the_131_forms_in_linear_time():
+    """#131: the dotted words, the language after its subject, the re- forms, the reader as object and the terms in an
+    opening phrase must stay linear on a long text."""
+    import time
+    check = ClaimCheck(["Kafka", "German", "Node.js"])
+    for hostile in ("Built " + "a." * 25000 + "x Kafka", "Trusted by " + "Node.js " * 6000 + ", its", "German is " * 5000 + "x",
+                    "German level is " * 3000 + "x", "German is at " * 4000 + "x", "German" + " " * 50_000 + "is at",
+                    "I " + "rebuilt " * 6000 + "Kafka", "I emailed you " * 4000 + "Kafka", "I phoned your " * 4000 + "about Kafka",
+                    "Migrated to " + "x " * 25000 + "in 2021, the Kafka", "Worked on the listing " + "x " * 25000 + "Kafka",
+                    "Migrated to " + "Kafka " * 8000 + "in 2021, the team", "I noticed your " * 4000 + "about Kafka",
+                    "I completed the " * 4000 + "course on Kafka"):
+        assert len(hostile) > 40_000
+        start = time.perf_counter()
+        check.claimed_in(hostile)
+        check.unbacked(hostile)
+        assert time.perf_counter() - start < 1.5, hostile[:40]     # ~0.05 s here, CI ~3x slower; a square takes minutes
+
+
 def test_a_wish_and_an_honest_bridge_still_hide_a_second_verb_and_a_fragment():
     """#113: the owner's decisions stay: what a wish names is no claim, and an honest bridge is none with honest_ok."""
     check = ClaimCheck(["Kafka", "Spark"])

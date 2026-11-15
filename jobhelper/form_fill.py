@@ -1201,7 +1201,15 @@ _ROW_START = re.compile(r"\bstart(?:ed)?\b|\bfrom\b|\bbegan\b|date from|\bod\b")
 # the label ("To Jan"): "Open to March" and "Move to May" ask you. The month names are `_MONTHS`, full and short, escaped.
 _MONTHS = {name.lower(): n for n, name in enumerate(calendar.month_name) if name}
 _MONTHS.update({name.lower(): n for n, name in enumerate(calendar.month_abbr) if name})
-_MONTH_NAMES = "|".join(map(re.escape, sorted({*_MONTHS, "sept"}, key=len, reverse=True)))
+
+
+def _either(names: Any) -> str:
+    """The names as one regex alternation, each escaped, the longest first ("sept" before "sep")."""
+    return "|".join(map(re.escape, sorted(names, key=len, reverse=True)))
+
+
+_MONTH_NAMES = _either({*_MONTHS, "sept"})
+_MONTH_KEYS = _either(_MONTHS)                  # only the names `_MONTHS` holds: `start_day` looks the match up there
 _ROW_END = re.compile(r"\bend(?:ed)?\b|\bto\b(?! (?!(?:months?|years?|dates?|day|mm|yy|yyyy|dd|mon|present|the present|now|current|when"
                       r"|optional|e|eg|i|ie|if|or|leave|blank|empty)\b)[^\W\d_])|^\W*to (?:quarter|" + _MONTH_NAMES + r")\b"
                       r"|\buntil\b|\bfinish|\bleft\b|date to|graduat")
@@ -1237,7 +1245,7 @@ def start_day(text: str, today: date | None = None) -> tuple[date | None, bool]:
             if m:
                 found = date(int(m[3]), int(m[2]), int(m[1]))
         if not found:
-            names = "|".join(sorted(_MONTHS, key=len, reverse=True))
+            names = _MONTH_KEYS
             m = re.search(rf"\b(\d{{1,2}})(?:st|nd|rd|th)? (?:of )?({names})\.? (\d{{4}})\b", low) or None
             if m:
                 found = date(int(m[3]), _MONTHS[m[2]], int(m[1]))
@@ -1394,9 +1402,10 @@ def _private(field: dict[str, Any]) -> bool:
     return bool(_PRIVATE.search(written) or _PRIVATE.search(_words(field)) or alone or whole or any(_PRIVATE_AUTO.fullmatch(t) for t in auto))
 
 
-# the dashes from "\u2010" to "\u2015" and the minus sign "\u2212": each reads as the hyphen "-". The one list of them:
-# the character class, the gaps of a card and the dashes of an SSN all come from it.
-_DASH_POINTS = (*range(0x2010, 0x2016), 0x2212)
+# the dashes from "\u2010" to "\u2015", the minus sign "\u2212", the hyphen bullet "\u2043", the Armenian hyphen "\u058a"
+# and the katakana middle dot "\u30fb": each reads as the hyphen "-". The one list of them: the character class, the gaps
+# of a card and an IBAN and the dashes of an SSN all come from it.
+_DASH_POINTS = (*range(0x2010, 0x2016), 0x2212, 0x2043, 0x058A, 0x30FB)
 _DASH_SIGNS = "".join(map(chr, _DASH_POINTS)) + "-"            # the hyphen last, so a character class reads it as itself
 _DASHES = dict.fromkeys(_DASH_POINTS, "-")
 # a run of digits in groups ("4111 1111 1111 1111", "4111 - 1111 - 1111 - 1111", "01/05/2024"): a gap is one or more
@@ -1538,6 +1547,22 @@ def _consent_name(name: Any) -> bool:
     return bool(_CONSENT_NAME_WORD.search(words) and not _NOT_CONSENT_NOUN.search(words))
 
 
+# the short answers of a yes-or-no list in the languages the form rules read (English, Czech, German, Spanish, French)
+_YES_NO_ANSWER = re.compile(r"[\W_]*(?:yes|no|ano|ne|ja|nein|sí|si|oui|non)[\W_]*")
+# an entry that only asks you to pick ("Select…", "-- Please choose --", "Vyberte"), or one of signs only ("--", "…")
+_PICK_PROMPT = re.compile(r"[\W_]*(?:(?:select|choose|please|pick|none|vyberte|zvolte|bitte|wählen|seleccione|elija|choisissez"
+                          r"|sélectionnez)\b|$)")
+
+
+def _yes_or_no(options: Any) -> bool:
+    """Whether every real entry of a list is a yes or a no ("Started?": "Yes" / "No", "Ano" / "Ne", "Oui" / "Non"), past
+    its empty entries and the prompt to pick: such a list asks you, it holds no job's date."""
+    if not isinstance(options, list):
+        return False
+    real = [text for text in (_readable(str(o)).lower() for o in options) if not _PICK_PROMPT.match(text)]
+    return bool(real) and all(_YES_NO_ANSWER.fullmatch(text) for text in real)
+
+
 def _row_date(field: dict[str, Any]) -> str:
     """Which of a job's dates the field is ("row_start", "row_end"), or '' when it is none or a question asked of you.
     Each part of its name (label, hint, inner name, id) is read alone: behind "To" the inner name "q_12" is no word
@@ -1552,12 +1577,23 @@ def _row_date(field: dict[str, Any]) -> str:
     return "row_end" if any(_ROW_END.search(part) for part in parts) else ""
 
 
+# signs that show nothing and are no format sign (Cf): every Unicode Default_Ignorable_Code_Point outside Cf \u2013 the
+# combining grapheme joiner, the Hangul fillers (NFKC turns "\u3164" and "\uffa0" into "\u1160", so all of them go), the
+# Khmer inherent vowels, the Mongolian variation selectors, the variation selectors, the unassigned U+2065 and U+FFF0\u2013U+FFF8,
+# and the whole tag block (with the variation selectors supplement) \u2013 and the blank braille pattern U+2800. Signs that
+# show (U+FFFC, a combining mark over a digit, U+2E3A, U+301C) stay: a person sees them, so they are no hidden trick.
+_HIDDEN = frozenset(chr(code) for first, last in (
+    (0x034F, 0x034F), (0x115F, 0x1160), (0x17B4, 0x17B5), (0x180B, 0x180F), (0x2065, 0x2065), (0x2800, 0x2800),
+    (0x3164, 0x3164), (0xFE00, 0xFE0F), (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8), (0xE0000, 0xE0FFF)) for code in range(first, last + 1))
+
+
 def _readable(text: str) -> str:
     """Text as a person reads it: the hidden signs taken out (every format sign, Unicode category Cf: zero-width spaces,
-    soft hyphens, bidi marks, "Pass\u200bword"), then NFKC (fullwidth "Ｐａｓｓｗｏｒｄ" is "Password", and "č" stays one
-    letter). Every rule that reads a field's name or value reads it through this."""
-    if not text.isascii():                          # no format sign is ASCII
-        text = "".join(sign for sign in text if unicodedata.category(sign) != "Cf")
+    soft hyphens, bidi marks, "Pass\u200bword"; and the blank signs of `_HIDDEN`: "4111\u2800 1111", "Pass\ufe0fword"),
+    then NFKC (fullwidth "Ｐａｓｓｗｏｒｄ" is "Password", and "č" stays one letter). NFKC makes no hidden sign of a sign
+    that shows. Every rule that reads a field's name or value reads it through this."""
+    if not text.isascii():                          # no hidden sign is ASCII
+        text = "".join(sign for sign in text if sign not in _HIDDEN and unicodedata.category(sign) != "Cf")
     return unicodedata.normalize("NFKC", text)
 
 
@@ -1692,7 +1728,7 @@ when the field is left to the person."""
             return ("current_box", "") if _CURRENT_BOX.search(said) else ("", CHOICE)
         if _LANG_NAME.fullmatch(_words({"label": field.get("label")}).strip(" *")):
             return "lang_name", ""                      # "Language" in a list of languages: one of yours, row by row
-        if kind == "select" and re.search(r"month|year|date|\bfrom\b|\bto\b|start|end", words):
+        if kind == "select" and re.search(r"month|year|date|\bfrom\b|\bto\b|start|end", words) and not _yes_or_no(field.get("options")):
             row = _row_date(field)
             if row:
                 return row, ""
