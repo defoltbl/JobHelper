@@ -381,10 +381,82 @@ def test_a_card_with_mixed_or_other_gaps_an_iban_with_dots_and_an_ssn_with_a_das
 
 
 @pytest.mark.parametrize("value", ["2019-2021 2021-2023 2023-2025 2017-2019", "1.2.2019 3.4.2020 5.6.2021 7.8.2022 9.10.2023",
-                                   "123 45 6789", "10:30", "1|2|3", "12:30 4111-1111 1111-1111 3"])
-def test_a_list_a_time_or_a_card_inside_a_longer_run_with_mixed_gaps_is_not_private(value):
-    """Mixed gaps count only when the card is the whole run of digits."""
+                                   "123 45 6789", "10:30", "1|2|3", "2012-2013 2013-2018", "2012–2013, 2013–2018",
+                                   "From 2012-2013 2013-2018 2018-2020", "1999-2004 2004-2012 2012",
+                                   "1005 2019-2021 2021-2023", "Room 1005, 2012-2013 2013-2018", "Room 1002, 2012-2013 2013-2018",
+                                   "1234-2019 2020-2021 5", "1001-2019 2020-2021 5"])
+def test_a_list_of_years_dates_or_times_with_mixed_gaps_is_not_private(value):
+    """Mixed gaps do not make a card of a list whose groups all look like years, dates or times."""
     assert not form_fill.PrivateShape(value).found
+    assert _reviewed({"label": "Notes", "value": value}) == [(False, value)]
+
+
+@pytest.mark.parametrize("value", ["4111-1111 1111-1111 123", "Card 4111-1111 1111-1111, 12/26", "4111 1111-1111 1111 and 12/26",
+                                   "12:30 4111-1111 1111-1111 3"])  # the last one holds a real card after a time
+def test_a_card_with_mixed_gaps_inside_a_longer_run_of_digits_is_private(value):
+    assert form_fill.PrivateShape(value).found
+    assert _reviewed({"label": "Notes", "value": value}) == [(True, "")]
+
+
+@pytest.mark.parametrize("sign", ["\u2010", "\u2011", "\u2012", "\u2013", "\u2014", "\u2015", "\u2212"])
+def test_every_dash_sign_and_the_minus_is_read_like_a_hyphen_in_a_card_and_an_ssn(sign):
+    assert form_fill.PrivateShape(f"4111{sign}1111{sign}1111{sign}1111").found
+    assert form_fill.PrivateShape(f"123{sign}45{sign}6789").found
+
+
+@pytest.mark.parametrize("value", ["2019 4111-1111 1111-1111", "4111 1111 1111 1111 2020-2021"])
+def test_a_card_next_to_a_year_is_still_private(value):
+    assert form_fill.PrivateShape(value).found
+
+
+@pytest.mark.parametrize("point", form_fill._DASH_POINTS)
+def test_an_iban_with_any_dash_or_the_minus_as_its_gap_is_private(point):
+    """The IBAN's gaps were only spaces, dots, underscores, slashes and the hyphen, so "CZ65–0800–…" went to Claude."""
+    sign = chr(point)
+    assert form_fill.PrivateShape(sign.join(["CZ65", "0800", "0000", "1920", "0014", "5399"])).iban
+    assert not form_fill.PrivateShape(sign.join(["CZ65", "0800", "0000", "1920", "0014", "5398"])).iban   # bad check digits
+
+
+def test_a_long_hostile_iban_value_reads_fast():
+    started = time.perf_counter()
+    assert not form_fill.PrivateShape("ab12\u2013" * 10000).found
+    assert time.perf_counter() - started < 1.5
+
+
+@pytest.mark.parametrize("label, kind", [(label, kind) for label in (
+    "Open to March", "Free to May", "Move to May", "Relocate to March", "Contract to March", "Reply to Mar",
+    "Date moved to May") for kind in ("month", "select")])
+def test_a_month_after_a_to_inside_the_label_is_no_jobs_date(label, kind):
+    """A month's name ends a job's dates only after a "to" that opens the label: "Open to March" asks you."""
+    assert form_fill.classify(_field(label, kind, options=["Jan", "Feb"] if kind == "select" else []))[0] != "row_end"
+
+
+@pytest.mark.parametrize("label, kind, what", [
+    *[(label, kind, what) for label, what in (("From?", "row_start"), ("To Sept", "row_end"), ("To?", "row_end"), ("To Jan", "row_end"),
+                                              ("To January", "row_end"), ("To Quarter", "row_end"),
+                                              ("To quarter (Q1-Q4)", "row_end")) for kind in ("month", "select")]])
+def test_a_short_date_label_with_a_mark_or_a_month_still_counts_as_a_jobs_date(label, kind, what):
+    assert form_fill.classify(_field(label, kind, options=["Jan", "Feb"] if kind == "select" else [])) == (what, "")
+
+
+@pytest.mark.parametrize("label, kind", [("Ready to start?", "select"), ("Free to start?", "select"), ("Start now?", "select"),
+                                         ("Ready to start?", "month"), ("Free to start?", "month"), ("Start now?", "month")])
+def test_a_short_question_about_starting_work_is_no_jobs_date(label, kind):
+    assert form_fill.classify(_field(label, kind, options=["Yes", "No"]))[0] not in ("row_start", "row_end")
+
+
+@pytest.mark.parametrize("value", ["4111-1111 " * 5000, "2019-2020 " * 5000])
+def test_a_long_hostile_value_is_read_for_a_card_at_once(value):
+    start = time.perf_counter()
+    form_fill.PrivateShape(value).found
+    assert time.perf_counter() - start < 1.5
+
+
+@pytest.mark.parametrize("label", ["to jan " * 7000, "to quarter " * 4500, "? " * 25000])
+def test_a_long_hostile_short_date_label_is_read_at_once_by_the_new_rules(label):
+    start = time.perf_counter()
+    form_fill.classify(_field(label, "month"))
+    assert time.perf_counter() - start < 1.5
 
 
 @pytest.mark.parametrize("name", ["working_conditions", "medical_conditions", "conditions", "workingConditions"])
