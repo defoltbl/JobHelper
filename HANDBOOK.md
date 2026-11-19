@@ -660,13 +660,13 @@ data/                your data; only the *.example.* files are in git
   check stays a question. A list or radios is read by its words and its options ("Accept" / "Decline"). Short words
   that are private only as a whole label ("SWIFT", "TIN", "Username") are in `_PRIVATE_ALONE`, so "Swift experience"
   stays a question. The signature words ("to certify", "I declare") are in both lists: a list gives consent, a box asks
-  for your name. In a review, a value shaped like a card number (13 to 19 digits, Luhn, only in card-shaped groups; the gap
-  signs are space, new line, tab, ".", "_", ",", "/", ":", "|", "+", a middle dot and any kind of dash or the minus sign
-  (`_DASH_POINTS`, one list; it also holds the hyphen bullet U+2043, the Armenian hyphen U+058A and the Katakana middle dot U+30FB). Gaps may mix ("4111-1111 1111-1111"), also when more digits follow in the same box
+  for your name. In a review, a value shaped like a card number (13 to 19 digits, Luhn, only in card-shaped groups; a gap
+  is any sign that is no letter and no digit, except currency signs and "%", so Luhn tells a card from a list of amounts
+  ("4000€ 4500€ 5000€ 5500€"; `_DASH_POINTS` still lists the dashes, with the hyphen bullet U+2043, the Armenian hyphen U+058A and the Katakana middle dot U+30FB). Gaps may mix ("4111-1111 1111-1111"), also when more digits follow in the same box
   ("Card 4111-1111 1111-1111, 12/26"). A card that mixes gap kinds is no card when two or more of its groups start
   with 19 or 20 (`PrivateShape.YEAR_STARTS`), so a list of years or year ranges is no card, also after another number
-  ("Room 1005, 2012-2013 2013-2018")), an IBAN (mod 97; spaces, ".", "_", "/" and any kind of dash or the minus sign
-  allowed) or a US social security number (any kind of dash or the minus sign, never spaces) (`form_fill.PrivateShape`)
+  ("Room 1005, 2012-2013 2013-2018")), an IBAN (mod 97; any sign that is no letter and no digit may be a gap, a
+  middle dot included) or a US social security number (any kind of dash or the minus sign, never spaces) (`form_fill.PrivateShape`)
   is private whatever its name. A card number with a typo is not caught: closed with a reason, a mistyped number fails Luhn and
   cannot be told from any other number.
 - **A text box that a person cannot see is never read** (READ's `trap()`, #77): placed above or left of the page
@@ -712,6 +712,8 @@ data/                your data; only the *.example.* files are in git
   `FormFillRun.NOT_CHECKED` ("I could not check this field …"), not "threw the value away"; a fault while listing the fields not
   reached still gives the report, with `UNLISTED`. The screen names
   only the fault's kind (`trouble.kind_of`), its text goes to the log of problems.
+- **Look-alike letters are not NFKC letters.** NFKC keeps Cyrillic and Greek letters, so `form_fill.PrivacyReading.latin` folds the look-alikes to Latin first (`_LOOK_ALIKE`, a fixed map: the Latin letters of the private words are a closed set; it holds the IPA "ɑ" and "ɡ" and the small capitals inside the Latin blocks, such as "ʀ" "ɪ" "ꜱ"). It also folds the Greek μ to "u". The privacy rules read two Latin readings: one with the spacing modifier letters (U+02B0–U+02FF) as NFKC makes them ("Passʷord"), one with them taken out before NFKC ("Passʼword"). A match in either reading counts. A word that mixes alphabets is private: Latin with any non-Latin letter (Cyrillic, Greek, Armenian, Cherokee, Coptic, small capitals outside the Latin blocks such as "ᴡ"), and Cyrillic with Greek. Chinese, Japanese and Korean letters next to Latin ("Eメール", "GitHub链接") are not a mixed word. A unit sign is the one exemption: μ (also the micro sign) with no letter before it, and Ω (also the ohm sign) with no letter after it, as in "Size (µm)" and "10 kΩ". "Прiзвище" (a Latin i in a Ukrainian word) and "ВІС" stay private on the safe side (owner's decision).
+- **Private words by alphabet.** The Polish and Slovak words are in `_PRIVATE` and read `.latin`. Only the Ukrainian and Russian-alphabet words (`_PRIVATE_CYRILLIC`) read `.written`, through `PrivacyReading.private_in_cyrillic`. The private search reads the label with its bracket hints and without them, so a private word in a hint counts ("Документ (паспорт)") and the whole-label word in "Пол (м/ж)" is found. The experience exemption reads the label without hints and applies only when the experience word opens it: "Досвід роботи з паролями" and "Досвід (пароль)" are open, "Пароль (досвід)" is private. A Ukrainian or Russian invoice number ("Номер рахунку-фактури") is not private. `form_fill.PrivateShape` reads any Unicode digit as its ASCII digit and any sign that is not a letter or a digit as a gap (except currency signs, per cent signs and brackets).
 - **A field is private by its name, its words or its autocomplete value** (`form_fill._private`), and the review of a
   form asks the same function with what the REVIEW script reports (label, `name`, `autocomplete`), so a value the
   planner leaves alone never goes to Claude in a review. The regexes are built from word parts (#89): a secret noun alone
@@ -721,7 +723,7 @@ data/                your data; only the *.example.* files are in git
   removed, and so is every other invisible sign that Unicode marks with the property Default_Ignorable_Code_Point (for example
   U+034F, the Hangul fillers, the Braille blank U+2800, the variation selectors, the Mongolian free variation selectors,
   the Khmer inherent vowels, the tag characters and the reserved ignorable code points). Visible signs stay out on purpose, so a real
-  letter is never changed. The rest is NFKC-read by `_readable` first; `_words`, `_private` and `PrivateShape` all read through it. A
+  letter is never changed. The rest is NFKC-read: `_private` and `PrivateShape` read through `PrivacyReading` (`.written` is `_readable`; `.latin` folds the look-alikes and other digits; the Cyrillic rules read `.written`). A
   list or radios in a review is read by its options too (the REVIEW script reports them, `review_answer` does not keep
   them). An "I work here now" box is vetoed by its inner name only with a consent word, or privacy, policy, marketing, tos
   or ccpa (`_CONSENT`, `_NEVER_TICK_NAME`), never by "notify" or "contact". `_row_date` reads a job's date: "to" ends it

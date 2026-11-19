@@ -1088,7 +1088,22 @@ _PRIVATE = re.compile(r"passw|captcha|card ?number|credit card|\biban\b|\bbank|a
                       # "Kartenprüfnummer"); a key, a code, a token or a card: see _PRIVATE_WHOLE
                       r"|passphrase|kennw[oö]rt|\bhesl(?:o|a|em)\b|\bacct\b"
                       r"|\b(?:platebn|kreditn|debetn|bankovn)[íi] kart|karten ?(?:nummer|nr\b|pr(?:ü|ue)f|inhaber|daten)"
-                      r"|(?:bank|debit|giro|\bec|zahlungs) ?karte|blood (?:type|group)|krevn[íi] skupin|blutgruppe")
+                      r"|(?:bank|debit|giro|\bec|zahlungs) ?karte|blood (?:type|group)|krevn[íi] skupin|blutgruppe"
+                      # the same in Polish and Slovak ("Hasło", "Numer karty", "Data urodzenia", "Dátum narodenia")
+                      r"|\bhas[łl](?:o|a|em)\b|\bnumer (?:karty|konta|rachunku)\b|\burodzeni|\bnarodeni[ae]\b")
+# the same in Ukrainian, and as Russian spells it, because pages copy those labels ("Пароль", "Номер картки",
+# "Код безпеки", "Дата народження", "Серія паспорта", "ІПН", "ПІН-код", "Номер счёта"), not an invoice ("Номер
+# рахунку-фактури") or "Народжених дітей"; gender, citizenship, nationality, age and marital status as `_PRIVATE` has
+# them ("Стать", not the verb in "хотите стать частью"; "Вік", not "Вікно"; Russian "Пол" only as the whole label: it
+# also means "floor"). Read as written, never as `PrivacyReading.latin` makes it: there a Cyrillic word is half Latin.
+# A stem before "\w*" starts a word, so the rest of each word is read once (linear also for "кредитнкредитн…"); the
+# invoice look-aheads keep their cap: a longer ending they miss leaves the account number private, the safe side.
+_PRIVATE_CYRILLIC = re.compile(r"парол|\bномер[аиу]? (?:карт|рахунк(?!\w{0,3}[\s-]фактур)|сч[её]т(?!\w{0,3}[\s-]фактур))"
+                               r"|\b(?:банківськ|банковск|кредитн|платіжн|платежн)\w* карт"
+                               r"|\bкод безпек|\bкод безопасн|\bп[іи]н\b|народженн|\bрождени|паспорт"
+                               r"|\b(?:іпн|рнокпп|инн)\b|\bідентифікаційн\w* (?:номер|код)"
+                               r"|\bстать\b(?! \w|\?)|\bгендер|громадянств|гражданств|національніст|национальност|народніст|народност"
+                               r"|\bвік\b|\bвозраст|\bсімейн\w* стан|\bсемейн\w* положени|^[\s*]*пол[\s*:.]*$")
 # what a page's autocomplete names as payment or personal: never filled, whatever the label says. One token at a time:
 # autocomplete may start with a section or "billing" ("section-a cc-csc", "billing cc-number").
 _PRIVATE_AUTO = re.compile(r"cc-.*|bday.*|sex|transaction-.*|current-password|new-password|one-time-code")
@@ -1103,8 +1118,12 @@ _PRIVATE_WHOLE = re.compile(r"(?:^[\s*]*(?:pass|pan|nino?)|\b(?:tokens?|secrets?
                             r"|verification|confirmation|log ?in|sign ?in|licen[cs]e) ?(?:keys?|codes?|tokens?|pins?)|\bproduct ?keys?"
                             r"|\b(?:debit|credit|payment|prepaid|company|business) ?cards?|\bon (?:the |your )?card|\bcard (?:details|code|pin))"
                             r"(?: no| number)?[\s*:.?]*$")
-# a part that asks what you know ("Experience with access tokens (OAuth)", "Years with API keys") names no secret of yours
-_ASKS_EXPERIENCE = re.compile(r"experience|\byears?\b|familiar|knowledge|\bskills?\b")
+# a part that asks what you know ("Experience with access tokens (OAuth)", "Years with API keys", "Досвід роботи з
+# паролями", "Опыт работы с паспортами") names no secret of yours. No Cyrillic "years": "Вік, років" asks your age
+_ASKS_EXPERIENCE = re.compile(r"experience|\byears?\b|familiar|knowledge|\bskills?\b|досвід|\bстаж|\bзнан|\bопыт")
+# the same words as the first word of a part: a Ukrainian or Russian part asks what you know only when it opens with one
+# ("Досвід роботи з паролями"), not when one follows the private word ("Пароль досвід")
+_OPENS_ASKING_EXPERIENCE = re.compile(r"[\W_]*(?:" + _ASKS_EXPERIENCE.pattern + ")")
 # a hint in brackets after a field's name ("SMS code (6 digits)"): one level, no nesting, so it reads in one pass
 _HINT = re.compile(r"\([^()]*\)")
 # an option that gives consent: the consent words, and the short answers to a consent question ("Accept" / "Decline",
@@ -1390,16 +1409,121 @@ WHAT = {"job_location": "job's place (under your jobs: Where it was)", "job_desc
         "study_field": "degrees", "salary": "salary", **{key: label.lower() for key, label in details.LABELS.items()}}
 
 
+# the Cyrillic and Greek letters that look like a Latin letter, from the Unicode confusables, and the Latin letter each
+# shows; and the small capitals inside the Latin blocks ("ʀ", "ɪ", "ꜱ" …) and the IPA "ɑ" and "ɡ": Azerbaijani and
+# African alphabets write the other IPA letters ("ə", "ɛ", "ɗ"), so the IPA block counts as Latin. A fixed list is
+# enough here: the private words are a closed set of Latin words, so only the look-alikes of their letters matter; a
+# word that mixes alphabets is private anyway (`PrivacyReading.mixes_alphabets`). The Greek "μ" reads as "u"
+# ("μsername").
+_LOOK_ALIKE = str.maketrans(
+    "\u0430\u0435\u043e\u0440\u0441\u0443\u0445\u0456\u0458\u0455\u0501\u051b\u051d\u04bb\u04cf\u0475"   # Cyrillic а е о р с у х і ј ѕ ԁ ԛ ԝ һ ӏ ѵ
+    "\u0410\u0412\u0415\u041a\u041c\u041d\u041e\u0420\u0421\u0422\u0425\u0406\u0408\u0405\u0423\u051a\u051c\u04c0"   # А В Е К М Н О Р С Т Х І Ј Ѕ У Ԛ Ԝ Ӏ
+    "\u03bf\u03b1\u03b5\u03c1\u03bd\u03c4\u03ba\u03b9\u03c5\u03c7\u03bc"   # Greek ο α ε ρ ν τ κ ι υ χ μ
+    "\u0391\u0392\u0395\u0396\u0397\u0399\u039a\u039c\u039d\u039f\u03a1\u03a4\u03a5\u03a7"   # Α Β Ε Ζ Η Ι Κ Μ Ν Ο Ρ Τ Υ Χ
+    "\u0251\u0261\u0262\u026a\u0274\u0280\u028f\u0299\u029c\u029f\ua730\ua731",   # IPA ɑ ɡ ɢ ɪ ɴ ʀ ʏ ʙ ʜ ʟ, Latin ꜰ ꜱ
+    "aeopcyxijsdqwhlv" "ABEKMHOPCTXIJSYQWI" "oaepvtkiuxu" "ABEZHIKMNOPTYX" "agGINRYBHLFS")
+# the spacing modifier letters (U+02B0 to U+02FF: "ʼ", "ˈ", "ʰ"). NFKC makes some of them a plain letter ("ʷ" is "w",
+# "ˢ" is "s") and leaves the rest, so the privacy rules read a text both ways (`PrivacyReading.latin_readings`): with
+# NFKC's letters ("Passʷord" is "Password") and with all of them taken out ("Passʼword" and "Pasʰsword" are "Password")
+_MODIFIER_LETTERS = dict.fromkeys(range(0x2B0, 0x300))
+# a word: letters only, so digits, "_", "-", an apostrophe (also the letter apostrophe "ʼ" and the other spacing
+# modifiers, U+02B0 to U+02FF) and a space cut words
+_WORD = re.compile(r"[^\W\d_\u02b0-\u02ff]+")
+# the alphabets a word can mix: Latin (with or without a diacritic: "č", "ü", "ł", "ß", "ø", "đ", and the IPA block),
+# Cyrillic, Greek, and every other script as one more ("ᴡ" U+1D21, Armenian "Օ", Cherokee "Ꮲ", Coptic "Ⲣ"). Each other
+# script counts as the same one, so Japanese "メール履歴" (kana and kanji) is one word in one alphabet. Han, kana
+# (also halfwidth), Bopomofo and Hangul count as no alphabet: they are written together with Latin ("Eメール", "CV简历",
+# "LinkedIn프로필").
+_LATIN, _CYRILLIC, _GREEK = (r"A-Za-z\u00c0-\u02af\u1e00-\u1eff\u2c60-\u2c7f\ua720-\ua7ff",
+                             r"\u0400-\u052f\u1c80-\u1c8f\u2de0-\u2dff\ua640-\ua69f", r"\u0370-\u03ff\u1f00-\u1fff")
+_EAST_ASIAN = (r"\u1100-\u11ff\u3005-\u3007\u3040-\u30ff\u3100-\u318f\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff"
+               r"\ua960-\ua97f\uac00-\ud7ff\uf900-\ufaff\uff66-\uffdc\U00020000-\U0003ffff")
+_ALPHABETS = (*(re.compile("[" + letters + "]") for letters in (_LATIN, _CYRILLIC, _GREEK)),
+              re.compile("[^" + _LATIN + _CYRILLIC + _GREEK + _EAST_ASIAN + "]"))
+# a unit sign, not a letter: the micro sign "µ" before a unit ("µm", "10µg") and the ohm sign "Ω" after a prefix
+# ("kΩ"). NFKC makes them the Greek "μ" and "Ω", the letters a page often writes for them, so the rule reads those
+_UNIT_SIGN = re.compile(r"(?<![^\W\d_])\u03bc|\u03a9(?![^\W\d_])")
+_OTHER_DIGIT = re.compile(r"(?![0-9])\d")             # a decimal digit of another script ("٤", "४")
+# the parts of a field's name, in the order they are read
+_NAME_KEYS = ("label", "hint", "name", "id")
+
+
+class PrivacyReading:
+    """A text from the page as the privacy rules read it: the name of a field (`_private`) or a typed value
+    (`PrivateShape`). `written` is the text as a person reads it (`_readable`); `latin` also reads each look-alike
+    Cyrillic, Greek or IPA letter as the Latin letter it shows ("Password" or an IBAN "CZ65 …" typed with a Cyrillic "a"
+    U+0430 or "C" U+0421) and each decimal digit of another script as its ASCII digit ("٤١١١"); `latin_readings` adds
+    the same reading with no spacing modifier letter (`_MODIFIER_LETTERS`). Only the privacy rules read them: every
+    other rule reads `_readable`, so a word written wholly in Cyrillic ("пароль") stays as written."""
+
+    def __init__(self, text: str | None) -> None:
+        self._text = text or ""
+        self.written = _readable(self._text)
+
+    @property
+    def latin(self) -> str:
+        """The text with its modifier letters left to NFKC ("Passʷord" is "Password")."""
+        return self._folded(self._text)
+
+    @property
+    def latin_readings(self) -> tuple[str, str]:
+        """`latin`, and the text with every spacing modifier letter taken out before NFKC ("Passʼword", "Pasʰsword"),
+        the same twice when there is none. A rule that matches either one counts; each is read on its own, as joined
+        their digits would make new groups."""
+        return self.latin, self._folded(self._text.translate(_MODIFIER_LETTERS))
+
+    @staticmethod
+    def _folded(text: str) -> str:
+        text = _readable(text).translate(_LOOK_ALIKE)
+        return text if text.isascii() else _OTHER_DIGIT.sub(lambda digit: str(unicodedata.decimal(digit.group())), text)
+
+    @property
+    def mixes_alphabets(self) -> bool:
+        """Whether one word holds letters of two alphabets (`_ALPHABETS`), the shape of a hidden word: "Name" with a
+        Cyrillic "a", "Парοль" with a Greek "ο", "Passᴡord". "Ім'я / Name" is two words, each in one alphabet; a unit
+        sign is no letter (`_UNIT_SIGN`: "Size (µm)", "10 kΩ"), but a "μ" inside a word is ("Accoμnt"). A Latin letter in
+        a Cyrillic word ("Прiзвище" with a Latin "i", "ВІС") is mixed too: private on the safe side."""
+        if self.written.isascii():
+            return False
+        words = _WORD.findall(_UNIT_SIGN.sub(" ", self.written))
+        return any(sum(bool(alphabet.search(word)) for alphabet in _ALPHABETS) > 1 for word in words)
+
+    @property
+    def private_in_cyrillic(self) -> bool:
+        """Whether the text names private information in Ukrainian or Russian (`_PRIVATE_CYRILLIC`: "Пароль", "Стать"),
+        as written or as plain words ("номер_картки"), also with its "(...)" hints left out ("Пол (м/ж)"), and asks for
+        it: not a part that opens with what you know ("Досвід роботи з паролями"), read without its hints, so "Пароль
+        (досвід)" stays private. A private word inside a hint still counts ("Документ (паспорт)")."""
+        plain = _HINT.sub(" ", self.written)
+        asked = (plain.lower(), _words({"label": plain}))
+        forms = (self.written.lower(), _words({"label": self.written}), *asked)
+        return any(map(_PRIVATE_CYRILLIC.search, forms)) and not any(map(_OPENS_ASKING_EXPERIENCE.match, asked))
+
+
 def _private(field: dict[str, Any]) -> bool:
     """Whether the field is personal or payment information: its name read as written ("DoB", "PassWord") or as
-    plain words ("Tax_ID", "Card-number"), or its autocomplete value ("cc-number", "one-time-code"). The planner and
-    the review of a form both ask this, so a value the planner leaves alone never goes to Claude in a review either."""
-    written = _readable(" ".join(str(field.get(k) or "") for k in ("label", "hint", "name", "id"))).lower()
-    auto = _readable(str(field.get("auto") or "")).lower().split()
-    parts = [_words({"label": _HINT.sub(" ", _readable(str(field.get(k) or "")))}) for k in ("label", "hint", "name", "id")]
+    plain words ("Tax_ID", "Card-number"), with look-alike letters read as Latin ("Password" with a Cyrillic "a"); a
+    word that mixes alphabets; the same in Ukrainian or Russian ("Пароль"); or its autocomplete value ("cc-number",
+    "one-time-code"). The planner and the review of a form both ask this, so a value the planner leaves alone never
+    goes to Claude in a review either."""
+    readings = {key: PrivacyReading(str(field.get(key) or "")) for key in _NAME_KEYS}
+    if any(reading.mixes_alphabets or reading.private_in_cyrillic for reading in readings.values()):
+        return True
+    if any(_PRIVATE_AUTO.fullmatch(t) for t in _readable(str(field.get("auto") or "")).lower().split()):
+        return True
+    # the whole name in each Latin reading (`PrivacyReading.latin_readings`), once when the two are the same
+    latin_names = dict.fromkeys(zip(*(reading.latin_readings for reading in readings.values())))
+    return any(_names_private(dict(zip(readings, name))) for name in latin_names)
+
+
+def _names_private(latin: dict[str, str]) -> bool:
+    """Whether the parts of a field's name (`_NAME_KEYS`), read as Latin, name personal or payment information, as
+    written or as plain words."""
+    written = " ".join(latin.values()).lower()
+    parts = [_words({"label": _HINT.sub(" ", text)}) for text in latin.values()]
     alone = bool(_PRIVATE_ALONE.match(parts[0]))      # the label only: name="username" on an email box
     whole = any(_PRIVATE_WHOLE.search(part) and not _ASKS_EXPERIENCE.search(part) for part in parts)
-    return bool(_PRIVATE.search(written) or _PRIVATE.search(_words(field)) or alone or whole or any(_PRIVATE_AUTO.fullmatch(t) for t in auto))
+    return bool(_PRIVATE.search(written) or _PRIVATE.search(_words(latin)) or alone or whole)
 
 
 # the dashes from "\u2010" to "\u2015", the minus sign "\u2212", the hyphen bullet "\u2043", the Armenian hyphen "\u058a"
@@ -1408,15 +1532,19 @@ def _private(field: dict[str, Any]) -> bool:
 _DASH_POINTS = (*range(0x2010, 0x2016), 0x2212, 0x2043, 0x058A, 0x30FB)
 _DASH_SIGNS = "".join(map(chr, _DASH_POINTS)) + "-"            # the hyphen last, so a character class reads it as itself
 _DASHES = dict.fromkeys(_DASH_POINTS, "-")
-# a run of digits in groups ("4111 1111 1111 1111", "4111 - 1111 - 1111 - 1111", "01/05/2024"): a gap is one or more
-# spaces, dots, commas, slashes, underscores, colons, bars, plus signs, middle dots, minus signs or dashes. No gap sign
-# is a digit, so the run reads in one pass.
-_GAP_SIGNS = r"\s._,/:|+\u00b7" + _DASH_SIGNS
-_DIGIT_RUN = re.compile(r"[0-9]+(?:[" + _GAP_SIGNS + r"]+[0-9]+)*")
-_DIGIT_GAP = re.compile(r"([" + _GAP_SIGNS + r"]+)")
+# a run of digits in groups ("4111 1111 1111 1111", "4111 - 1111 - 1111 - 1111", "4111~1111~1111~1111", "01/05/2024"): a
+# gap is one or more signs that are no letter and no digit (spaces, dots, dashes, "~", "*", "#", "•" …); the Luhn check,
+# not the gap, tells a card from a list. A sign that belongs to its number is no gap: a currency sign ("4000€ 4500€",
+# "$4000-$4500"), a per cent sign ("10% 20%") or a bracket ("1234(5678)", a number with a note). A regex cannot test the
+# currency category (Sc), so the signs are read from Unicode once, from the first plane only (the six signs past it
+# are rare). No gap sign is a digit, so the run reads in one pass.
+_CURRENCY_SIGNS = "".join(sign for sign in map(chr, range(0x10000)) if unicodedata.category(sign) == "Sc")
+_GAP_SIGN = r"(?:[^\w" + re.escape(_CURRENCY_SIGNS) + r"%\u2030\u2031()\[\]{}]|_)"
+_DIGIT_RUN = re.compile(r"[0-9]+(?:" + _GAP_SIGN + r"+[0-9]+)*")
+_DIGIT_GAP = re.compile(r"(" + _GAP_SIGN + r"+)")
 # where an IBAN can start: two letters and two check digits at the start of a word; the rest is read from there.
-# A gap is spaces, dots, underscores, slashes, the hyphen, any dash or the minus sign; no gap sign is a letter or a digit.
-_IBAN_GAP_SIGNS = r"[\s._/" + _DASH_SIGNS + r"]"
+# A gap is any sign that is no letter and no digit (spaces, dots, dashes, "~", "*"), so the groups read in one pass.
+_IBAN_GAP_SIGNS = r"[\W_]"
 _IBAN_START = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{2}[0-9]{2}")
 _IBAN_GROUPS = re.compile(r"[A-Za-z0-9]+(?:" + _IBAN_GAP_SIGNS + r"+[A-Za-z0-9]+)*")
 _IBAN_GAP = re.compile(_IBAN_GAP_SIGNS + r"+")
@@ -1438,7 +1566,8 @@ class PrivateShape:
     IBAN_LENGTH = (15, 34)                          # the shortest IBAN (Norway) and the longest the standard allows
 
     def __init__(self, value: str) -> None:
-        self._text = _readable(value or "")         # fullwidth digits become plain digits; a hidden space is taken out
+        # "٤" and fullwidth "４" are "4", a Cyrillic "C" (U+0421) is "C", a hidden space goes; each Latin reading once
+        self._texts = tuple(dict.fromkeys(PrivacyReading(value).latin_readings))
 
     @property
     def found(self) -> bool:
@@ -1452,7 +1581,7 @@ class PrivateShape:
         gaps, also inside a longer run ("4111-1111 1111-1111 123", "Card 4111-1111 1111-1111, 12/26"); groups with two
         or more years keep one kind of gap, so a list of years or year ranges is no card ("2019-2021 2021-2023 2023-2025
         2017-2019", "2012-2013 2013-2018", "1005 2019-2021 2021-2023"). A list of dates or versions is not printed in groups of four."""
-        for run in _DIGIT_RUN.finditer(self._text):
+        for run in (run for text in self._texts for run in _DIGIT_RUN.finditer(text)):
             parts = _DIGIT_GAP.split(run.group())
             groups, gaps = parts[::2], [_gap_kind(gap) for gap in parts[1::2]]
             for first in range(len(groups)):
@@ -1465,9 +1594,9 @@ class PrivateShape:
         """An IBAN, in groups or in one piece, upper or lower case ("CZ65 0800 0000 1920 0014 5399"): each end of a
         group from 15 to 34 signs is tried, so the words after the number do not hide it."""
         least, most = self.IBAN_LENGTH
-        for start in _IBAN_START.finditer(self._text):
+        for text, start in ((text, start) for text in self._texts for start in _IBAN_START.finditer(text)):
             # at most `most` signs with a gap of up to two signs (" - ") between each pair: the longest an IBAN can be when written out
-            groups = _IBAN_GAP.split(_IBAN_GROUPS.match(self._text, start.start(), start.start() + 3 * most).group())
+            groups = _IBAN_GAP.split(_IBAN_GROUPS.match(text, start.start(), start.start() + 3 * most).group())
             compact = ""
             for group in groups:
                 compact += group
@@ -1482,7 +1611,7 @@ class PrivateShape:
         """A US social security number: no area 000, 666 or 900-999, no group 00 and no serial 0000 (numbers that are
         never given out)."""
         return any(area not in ("000", "666") and area[0] != "9" and group != "00" and serial != "0000"
-                   for area, group, serial in _SSN.findall(self._text))
+                   for text in self._texts for area, group, serial in _SSN.findall(text))
 
 
 def _gap_kind(gap: str) -> str:
@@ -1599,7 +1728,7 @@ def _readable(text: str) -> str:
 
 def _words(field: dict[str, Any]) -> str:
     """What the page calls the field, as plain lower-case words (firstName, first_name -> first name)."""
-    parts = _readable(" ".join(str(field.get(k) or "") for k in ("label", "hint", "name", "id")))
+    parts = _readable(" ".join(str(field.get(k) or "") for k in _NAME_KEYS))
     parts = re.sub(r"([a-z])([A-Z])", r"\1 \2", parts)
     return " ".join(re.sub(r"[_\-.\[\]:()]+", " ", parts).lower().split())
 
