@@ -1,8 +1,9 @@
 # JobHelper dependencies
 claude-agent-sdk>=0.1.0   # drives the Claude Code CLI -> uses your subscription
 requests>=2.31            # Adzuna job search API
+certifi>=2026.10.18       # the trusted certificates for the mail server check (email_client.tls_context)
 openpyxl>=3.1             # Excel tracking table
-pypdf>=4.0                # read CV from PDF
+pypdf>=6.21.4,<7          # read CV from PDF (6.21.4 closes known holes)
 python-docx>=1.1          # read .docx CV + write .docx cover letters
 python-dotenv>=1.0        # load .env config
 beautifulsoup4>=4.12      # parse jobs.cz / prace.cz search pages

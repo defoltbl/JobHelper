@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Security:** the packages pypdf, soupsieve, urllib3, certifi, PyJWT and opentelemetry-api are updated to versions without known holes (checked with pip-audit). Before, the locked versions had known holes, for example a slow-down on hostile page code in soupsieve and a compressed answer that grows far too large in urllib3.
 - **Form assistant:** a list whose real options are only Yes and No (also in Czech, German, Spanish and French) stays a choice for you, even when its label is one word such as "Started?". Before, such a list was read as a job's date and you got "Pick the date yourself."
 - **Form assistant:** more invisible signs, for example blank characters and signs that change only how a letter looks, are ignored, and the dashes "⁃", "֊" and "・" count as a hyphen. Before, such signs could hide a card number, an IBAN, a social security number or a private label from the check.
 - **Cover letters:** the claim check now finds a missing tool in "Migrated to Kafka in 2021, the team saved hours." and in "Worked on the listing pages for Kafka". It also finds a language level said as "My German is at B2 level." and work said with "rebuilt" or "rewrote". Before, these gave no warning. "Founded in 1998, the firm …" is still clean.

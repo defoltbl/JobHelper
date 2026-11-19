@@ -64,6 +64,10 @@ A few decisions worth highlighting, each with the problem that led to it.
   reset; a running search pauses and goes on by itself.
 - The size of text and controls (100% to 150%) is read when the app starts, so a change needs
   a restart.
+- The window uses PySide6 (Qt), under the LGPL-3.0. The repository does not contain it: pip
+  installs it on your Mac. If you give a built JobHelper.app to another person, add the LGPL
+  text and a notice that the app uses Qt and PySide6, and let that person replace those
+  libraries. The built app also contains the Claude Code program, which has its own terms.
 
 **Finding and scoring jobs**
 
