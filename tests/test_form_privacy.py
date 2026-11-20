@@ -649,7 +649,9 @@ def test_a_long_hostile_value_with_the_new_gaps_or_look_alike_letters_is_read_at
     form_fill.PrivateShape(value)
     _reviewed({"label": "Notes", "value": value})
     form_fill._private({"label": value, "hint": value, "name": value, "id": value})
-    assert time.perf_counter() - start < 1.5
+    # ~0.4 s here for 100,000 signs in every part (the page sends at most 300); CI is ~3x slower, and a pattern that
+    # grows with the square of the length takes minutes at this size, so 4 s still catches one
+    assert time.perf_counter() - start < 4.0
 
 
 # ── round two: the fold itself, other scripts, units, gaps, currency, experience, more languages, gender and age ──
