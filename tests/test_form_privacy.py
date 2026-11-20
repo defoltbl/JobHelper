@@ -582,3 +582,303 @@ def test_a_long_hostile_value_full_of_blank_signs_is_read_at_once(value):
     found = form_fill.PrivateShape(value).found
     _reviewed({"label": "Notes", "value": value})
     assert time.perf_counter() - start < 1.5 and not found
+
+
+# ── look-alike letters, labels in other languages, and cards or IBANs in other digits or gaps ──
+# Letters are written as escapes so no reader mistakes a Cyrillic or Greek letter for a Latin one.
+CY_A, CY_O, CY_C, CY_P, GR_O = "\u0430", "\u043e", "\u0421", "\u0420", "\u03bf"
+LOOK_ALIKE_PRIVATE = [
+    f"Card n{CY_A}mber", f"P{CY_A}ssword", f"Security c{CY_O}de", f"Passw{GR_O}rd", f"{CY_C}ard number", f"{CY_P}IN",
+    # a word that mixes alphabets is private on the safe side
+    f"N{CY_A}me"]
+LOOK_ALIKE_NOT_PRIVATE = ["Ім'я / Name", "Місто", "Прізвище", "Ім'я", "Досвід роботи", "Мова", "Όνομα", "Příjmení", "Straße"]
+OTHER_LANGUAGE_PRIVATE = [
+    "Пароль", "Номер картки", "Номер карты", "Код безпеки", "Код безопасности", "CVV", "Дата народження", "Дата рождения", "Паспорт",
+    "Серія паспорта", "ІПН", "РНОКПП", "ИНН", "IBAN", "ПІН-код", "Hasło", "Numer karty", "Data urodzenia", "Dátum narodenia"]
+OTHER_LANGUAGE_NOT_PRIVATE = ["Код вакансії", "Номер телефону", "Номер замовлення"]
+
+
+@pytest.mark.parametrize("label", LOOK_ALIKE_PRIVATE + OTHER_LANGUAGE_PRIVATE)
+def test_a_label_with_look_alike_letters_or_in_another_language_is_left_to_you(label):
+    assert form_fill._private(_field(label))
+    assert _reviewed({"label": label, "value": "x1"}) == [(True, "")]
+
+
+@pytest.mark.parametrize("label", LOOK_ALIKE_NOT_PRIVATE + OTHER_LANGUAGE_NOT_PRIVATE + NOT_PRIVATE_LABELS)
+def test_a_plain_label_in_another_alphabet_or_language_is_not_private(label):
+    assert not form_fill._private(_field(label))
+    assert _reviewed({"label": label, "value": "x1"}) == [(False, "x1")]
+
+
+@pytest.mark.parametrize("name", [f"p{CY_A}ssword", f"passw{GR_O}rd", f"{CY_C}ard_number", f"api_k{CY_O}y"])
+def test_a_private_inner_name_written_with_look_alike_letters_is_left_to_you(name):
+    assert form_fill._private(_field("Your answer", name=name))
+    assert form_fill._private(_field("Your answer", id=name))
+    assert _reviewed({"label": "Your answer", "name": name, "value": "x1"}) == [(True, "")]
+
+
+CARD_OTHER_FORMS = ["٤١١١ ١١١١ ١١١١ ١١١١", "४१११ ११११ ११११ ११११", "4111~1111~1111~1111", "4111*1111*1111*1111", "4111•1111•1111•1111",
+                    "4111#1111#1111#1111"]
+
+
+@pytest.mark.parametrize("value", CARD_OTHER_FORMS + ["CZ65·0800·0000·1920·0014·5399"])
+def test_a_card_in_other_digits_or_gaps_and_an_iban_with_middle_dots_stay_out_of_the_review(value):
+    assert form_fill.PrivateShape(value).found
+    assert _reviewed({"label": "Notes", "value": value}) == [(True, "")]
+
+
+def test_each_new_form_is_told_apart_as_a_card_or_an_iban():
+    for value in CARD_OTHER_FORMS:
+        shape = form_fill.PrivateShape(value)
+        assert (shape.card, shape.iban) == (True, False), value
+    iban = form_fill.PrivateShape("CZ65·0800·0000·1920·0014·5399")
+    assert (iban.card, iban.iban) == (False, True)
+
+
+@pytest.mark.parametrize("value", ["2019~2021 2021~2023 2023~2025 2017~2019", "2019*2021*2021*2023", "+420 (777) 123-456",
+                                   "Order 4111~1111~1111~1112", "Order 4111#1111#1111#1112", "٤١١١ ١١١١ ١١١١ ١١١٢"])
+def test_year_lists_phones_and_numbers_that_fail_the_check_stay_not_private_with_the_new_gaps(value):
+    assert not form_fill.PrivateShape(value).found
+    assert _reviewed({"label": "Notes", "value": value}) == [(False, value)]
+
+
+@pytest.mark.parametrize("value", ["1" + "~1" * 50_000, "1" + "*1" * 50_000, "1" + "•1" * 50_000, "1" + "#1" * 50_000,
+                                   "١" + " ١" * 50_000, "а" * 100_000 + "x", "1" + "·" + "1" * 100_000])
+def test_a_long_hostile_value_with_the_new_gaps_or_look_alike_letters_is_read_at_once(value):
+    start = time.perf_counter()
+    form_fill.PrivateShape(value)
+    _reviewed({"label": "Notes", "value": value})
+    form_fill._private({"label": value, "hint": value, "name": value, "id": value})
+    # ~0.4 s here for 100,000 signs in every part (the page sends at most 300); CI is ~3x slower, and a pattern that
+    # grows with the square of the length takes minutes at this size, so 4 s still catches one
+    assert time.perf_counter() - start < 4.0
+
+
+# ── round two: the fold itself, other scripts, units, gaps, currency, experience, more languages, gender and age ──
+# Every letter that is not Latin is written as an escape; the comment after it says what the word shows.
+def _luhn_ok(digits: str) -> bool:
+    total = 0
+    for place, char in enumerate(reversed(digits)):
+        number = int(char) * (2 if place % 2 else 1)
+        total += number - 9 if number > 9 else number
+    return total % 10 == 0
+
+
+def _card_groups(first=("4000", "4500", "5000", "550")) -> list[str]:
+    """Four groups of four digits that pass the Luhn check: the last digit is the one that makes it pass."""
+    head = "".join(first)
+    last = next(d for d in "0123456789" if _luhn_ok(head + d))
+    return [*first[:-1], first[-1] + last]
+
+
+def test_the_card_helper_makes_numbers_that_pass_the_check():
+    groups = _card_groups()
+    assert len(groups) == 4 and all(len(g) == 4 for g in groups) and _luhn_ok("".join(groups))
+    assert form_fill.PrivateShape(" ".join(groups)).card
+
+
+# A. words made only of look-alikes: private only after the fold
+@pytest.mark.parametrize("text, latin", [("\u0455\u0435\u0445", "sex"), ("\u0420\u0410\u0405\u0405", "PASS"),
+                                         ("\u03a1\u0399\u039d", "PIN"), ("\u0421\u0412\u0412", "CBB")])
+def test_a_text_of_look_alikes_is_read_as_the_latin_letters_it_shows(text, latin):
+    assert form_fill.PrivacyReading(text).latin == latin
+
+
+@pytest.mark.parametrize("text", ["\u0455\u0435\u0445", "\u0420\u0410\u0405\u0405", "\u03a1\u0399\u039d"])
+def test_a_word_made_only_of_look_alikes_is_private_as_a_label_a_name_a_hint_and_in_a_review(text):
+    assert form_fill._private(_field(text))
+    assert form_fill._private(_field("Your answer", name=text))
+    assert form_fill._private(_field("Your answer", id=text))
+    assert form_fill._private(_field("Your answer", hint=text))
+    assert _reviewed({"label": text, "value": "x1"}) == [(True, "")]
+    assert _reviewed({"label": "Your answer", "name": text, "value": "x1"}) == [(True, "")]
+
+
+def test_an_iban_typed_with_a_cyrillic_c_is_an_iban():
+    shape = form_fill.PrivateShape("\u0421Z65 0800 0000 1920 0014 5399")
+    assert (shape.card, shape.iban, shape.found) == (False, True, True)
+    assert _reviewed({"label": "Notes", "value": "\u0421Z65 0800 0000 1920 0014 5399"}) == [(True, "")]
+    assert form_fill.PrivacyReading("\u0421Z65 0800").latin == "CZ65 0800"
+
+
+def test_without_the_look_alike_fold_those_tests_could_not_pass(monkeypatch):
+    """The fold is what makes them pass: with it gone a word made only of look-alikes is no longer private."""
+    assert form_fill._private(_field("\u0455\u0435\u0445"))
+    monkeypatch.setattr(form_fill, "_LOOK_ALIKE", {})
+    assert not form_fill._private(_field("\u0455\u0435\u0445"))
+    assert not form_fill.PrivateShape("\u0421Z65 0800 0000 1920 0014 5399").iban
+
+
+# B. a Cyrillic word with a Greek letter, and other scripts that look like Latin letters
+MIXED_ALPHABET_PRIVATE = [
+    "\u041f\u0430\u0440\u03bf\u043b\u044c",             # Парοль: Cyrillic with a Greek omicron
+    "Pass\u1d21ord",                                   # small capital w
+    "P\u0251ssword",                                   # Latin alpha
+    "Pass\u0555ord",                                   # Armenian Oh
+    "\u13e2\u13aaSS\u13d4\u13be\u13a1\u13a0",           # Cherokee with Latin S
+    "\u2c62\u2c81ssword"]                                  # Coptic with Latin letters
+
+
+@pytest.mark.parametrize("label", MIXED_ALPHABET_PRIVATE)
+def test_a_password_written_with_letters_of_other_scripts_is_left_to_you(label):
+    assert form_fill._private(_field(label))
+    assert _reviewed({"label": label, "value": "x1"}) == [(True, "")]
+
+
+# C. units are no private word; the safe side stays private
+UNITS = ["Size (\u00b5m)", "Rate (\u00b5g/mL)", "Pull-up 10 k\u03a9", "Size (\u03bcm)"]
+
+
+@pytest.mark.parametrize("label", UNITS)
+def test_a_unit_with_a_micro_or_ohm_sign_is_no_private_word(label):
+    assert not form_fill._private(_field(label))
+    assert _reviewed({"label": label, "value": "x1"}) == [(False, "x1")]
+
+
+@pytest.mark.parametrize("label", ["\u041f\u0440i\u0437\u0432\u0438\u0449\u0435", "\u0412\u0406\u0421"])
+def test_a_word_with_a_stray_latin_letter_in_a_ukrainian_label_stays_private(label):
+    assert form_fill._private(_field(label))
+
+
+# D. an IBAN with any sign as its gap
+@pytest.mark.parametrize("sign", ["~", "*", "#", "\u2022", "|", "+", ",", ":"])
+def test_an_iban_with_any_sign_as_its_gap_is_an_iban(sign):
+    value = sign.join(["CZ65", "0800", "0000", "1920", "0014", "5399"])
+    shape = form_fill.PrivateShape(value)
+    assert (shape.card, shape.iban) == (False, True), value
+    assert _reviewed({"label": "Notes", "value": value}) == [(True, "")]
+
+
+# E. a currency sign or a percent sign is no gap: a list of amounts is no card, though its digits pass the check
+@pytest.mark.parametrize("sign", ["\u20ac", "$", "\u00a3", "\u00a5", "\u20b4", "%"])
+def test_a_list_of_amounts_with_a_currency_or_percent_sign_is_no_card(sign):
+    groups = _card_groups()
+    assert _luhn_ok("".join(groups))
+    for value in [" ".join(g + sign for g in groups), " ".join(sign + g for g in groups),
+                  f"{sign}{groups[0]}-{sign}{groups[1]} {sign}{groups[2]}-{sign}{groups[3]}", f"{groups[0]}{sign}, {groups[1]}{sign}, {groups[2]}{sign}, {groups[3]}{sign}"]:
+        assert not form_fill.PrivateShape(value).found, value
+        assert _reviewed({"label": "Notes", "value": value}) == [(False, value)]
+
+
+@pytest.mark.parametrize("sign", ["~", "*", "#", "\u2022"])
+def test_the_same_digits_with_a_real_gap_are_a_card(sign):
+    value = sign.join(_card_groups())
+    assert form_fill.PrivateShape(value).card
+    assert _reviewed({"label": "Notes", "value": value}) == [(True, "")]
+
+
+# F. experience and invoice labels in Ukrainian and Russian
+NOT_PRIVATE_CYRILLIC = ["\u0414\u043e\u0441\u0432\u0456\u0434 \u0440\u043e\u0431\u043e\u0442\u0438 \u0437 \u043f\u0430\u0440\u043e\u043b\u044f\u043c\u0438",
+                        "\u0414\u043e\u0441\u0432\u0456\u0434 \u0437 \u0443\u043f\u0440\u0430\u0432\u043b\u0456\u043d\u043d\u044f \u043f\u0430\u0441\u043f\u043e\u0440\u0442\u043d\u0438\u043c \u0441\u0442\u043e\u043b\u043e\u043c",
+                        "\u041e\u043f\u044b\u0442 \u0440\u0430\u0431\u043e\u0442\u044b \u0441 \u043f\u0430\u0440\u043e\u043b\u044f\u043c\u0438",
+                        "\u041d\u043e\u043c\u0435\u0440 \u0440\u0430\u0445\u0443\u043d\u043a\u0443-\u0444\u0430\u043a\u0442\u0443\u0440\u0438",
+                        "\u041d\u0430\u0440\u043e\u0434\u0436\u0435\u043d\u0438\u0445 \u0434\u0456\u0442\u0435\u0439"]
+
+
+@pytest.mark.parametrize("label", NOT_PRIVATE_CYRILLIC)
+def test_an_experience_or_invoice_label_in_ukrainian_or_russian_is_no_private_field(label):
+    assert not form_fill._private(_field(label))
+    assert _reviewed({"label": label, "value": "x1"}) == [(False, "x1")]
+
+
+@pytest.mark.parametrize("label", ["\u041d\u043e\u043c\u0435\u0440 \u0440\u0430\u0445\u0443\u043d\u043a\u0443",
+                                   "\u041c\u0456\u0441\u0446\u0435 \u043d\u0430\u0440\u043e\u0434\u0436\u0435\u043d\u043d\u044f"])
+def test_an_account_number_and_a_place_of_birth_stay_private(label):
+    assert form_fill._private(_field(label))
+    assert _reviewed({"label": label, "value": "x1"}) == [(True, "")]
+
+
+# G. more Ukrainian, Russian, Polish and Slovak labels
+MORE_PRIVATE = [
+    "\u041d\u043e\u043c\u0435\u0440 \u0440\u0430\u0445\u0443\u043d\u043a\u0443", "\u041d\u043e\u043c\u0435\u0440 \u0441\u0447\u0451\u0442\u0430", "\u041d\u043e\u043c\u0435\u0440 \u0441\u0447\u0435\u0442\u0430",
+    "\u0411\u0430\u043d\u043a\u0456\u0432\u0441\u044c\u043a\u0430 \u043a\u0430\u0440\u0442\u043a\u0430", "\u041a\u0440\u0435\u0434\u0438\u0442\u043d\u0430 \u043a\u0430\u0440\u0442\u043a\u0430",
+    "\u041f\u043b\u0430\u0442\u0456\u0436\u043d\u0430 \u043a\u0430\u0440\u0442\u043a\u0430", "\u0411\u0430\u043d\u043a\u043e\u0432\u0441\u043a\u0430\u044f \u043a\u0430\u0440\u0442\u0430",
+    "\u041f\u0418\u041d", "\u0406\u0434\u0435\u043d\u0442\u0438\u0444\u0456\u043a\u0430\u0446\u0456\u0439\u043d\u0438\u0439 \u043d\u043e\u043c\u0435\u0440",
+    "\u0406\u0434\u0435\u043d\u0442\u0438\u0444\u0456\u043a\u0430\u0446\u0456\u0439\u043d\u0438\u0439 \u043a\u043e\u0434",
+    "Numer konta", "Numer rachunku", "Has\u0142a", "D\u00e1tum narodenie"]
+NOT_PRIVATE_MORE = ["Numer zam\u00f3wienia", "Data publikacji", "D\u00e1tum n\u00e1stupu", "Imi\u0119", "Nazwisko",
+                    "\u041c\u0456\u0441\u0446\u0435 \u0440\u043e\u0431\u043e\u0442\u0438"]
+
+
+@pytest.mark.parametrize("label", MORE_PRIVATE)
+def test_more_private_labels_in_ukrainian_russian_polish_and_slovak_are_left_to_you(label):
+    assert form_fill._private(_field(label))
+    assert _reviewed({"label": label, "value": "x1"}) == [(True, "")]
+
+
+@pytest.mark.parametrize("label", NOT_PRIVATE_MORE)
+def test_ordinary_polish_slovak_and_ukrainian_labels_are_no_private_field(label):
+    assert not form_fill._private(_field(label))
+    assert _reviewed({"label": label, "value": "x1"}) == [(False, "x1")]
+
+
+def test_a_private_word_in_the_inner_name_with_underscores_is_read_as_words():
+    name = "\u043d\u043e\u043c\u0435\u0440_\u043a\u0430\u0440\u0442\u043a\u0438"      # номер_картки
+    assert form_fill._private(_field("Your answer", name=name))
+    assert _reviewed({"label": "Your answer", "name": name, "value": "x1"}) == [(True, "")]
+
+
+@pytest.mark.parametrize("hint", ["\u041f\u0430\u0440\u043e\u043b\u044c", "P\u0430ssword", "Passw\u03bfrd", "\u041d\u043e\u043c\u0435\u0440 \u043a\u0430\u0440\u0442\u043a\u0438"])
+def test_a_private_word_in_the_hint_alone_is_left_to_you(hint):
+    assert form_fill._private(_field("Your answer", hint=hint))
+    assert _reviewed({"label": "Your answer", "hint": hint, "value": "x1"}) == [(True, "")]
+
+
+# H. gender, citizenship, nationality, age and marital status in Ukrainian and Russian
+PERSONAL_CYRILLIC = [
+    "\u0421\u0442\u0430\u0442\u044c", "\u0413\u0440\u043e\u043c\u0430\u0434\u044f\u043d\u0441\u0442\u0432\u043e", "\u0413\u0440\u0430\u0436\u0434\u0430\u043d\u0441\u0442\u0432\u043e",
+    "\u041d\u0430\u0446\u0456\u043e\u043d\u0430\u043b\u044c\u043d\u0456\u0441\u0442\u044c", "\u041d\u0430\u0446\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u043e\u0441\u0442\u044c",
+    "\u0412\u0456\u043a", "\u0412\u043e\u0437\u0440\u0430\u0441\u0442", "\u0421\u0456\u043c\u0435\u0439\u043d\u0438\u0439 \u0441\u0442\u0430\u043d",
+    "\u0421\u0435\u043c\u0435\u0439\u043d\u043e\u0435 \u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435", "\u041f\u043e\u043b"]
+NOT_PERSONAL_CYRILLIC = ["\u0421\u0442\u0430\u0442\u0443\u0441", "\u0421\u0442\u0430\u0442\u0442\u0456", "\u0421\u0442\u0430\u0436", "\u0412\u0456\u043a\u043d\u043e"]
+
+
+@pytest.mark.parametrize("label", PERSONAL_CYRILLIC)
+def test_gender_age_citizenship_and_marital_status_in_ukrainian_or_russian_are_private_like_in_english(label):
+    assert form_fill._private(_field(label))
+    assert _reviewed({"label": label, "value": "x1"}) == [(True, "")]
+
+
+@pytest.mark.parametrize("label", NOT_PERSONAL_CYRILLIC)
+def test_a_word_that_only_starts_like_gender_or_age_is_no_private_field(label):
+    assert not form_fill._private(_field(label))
+    assert _reviewed({"label": label, "value": "x1"}) == [(False, "x1")]
+
+
+# J. speed
+@pytest.mark.parametrize("value", ["CZ65" + "~0" * 50_000, "CZ65" + "*0" * 50_000, "a\u1d21" * 50_000, "CZ65" + " 0" * 50_000])
+def test_a_long_hostile_iban_gap_or_mixed_word_is_read_at_once(value):
+    start = time.perf_counter()
+    form_fill.PrivateShape(value)
+    _reviewed({"label": "Notes", "value": value})
+    form_fill._private({"label": value, "hint": value, "name": value, "id": value})
+    assert time.perf_counter() - start < 1.5
+
+
+# K. round 3: bracket hints, more Cyrillic forms, modifier letters, CJK next to Latin words
+ROUND3_PRIVATE = [
+    "\u041f\u0430\u0440\u043e\u043b\u044c (\u0434\u043e\u0441\u0432\u0456\u0434)", "\u041f\u0430\u0441\u043f\u043e\u0440\u0442 (\u0441\u0442\u0430\u0436)", "\u041f\u0430\u0440\u043e\u043b\u044c \u0434\u043e\u0441\u0432\u0456\u0434", "\u0414\u0430\u0442\u0430 \u043d\u0430\u0440\u043e\u0434\u0436\u0435\u043d\u043d\u044f (\u0441\u0442\u0430\u0436)", "\u041d\u043e\u043c\u0435\u0440 \u043f\u0430\u0441\u043f\u043e\u0440\u0442\u0430 (\u0437\u043d\u0430\u043d\u043d\u044f \u043d\u0435 \u043f\u043e\u0442\u0440\u0456\u0431\u043d\u0435)",
+    "\u041f\u043e\u043b (\u043c/\u0436)", "\u041f\u043e\u043b:", "\u0421\u0442\u0430\u0442\u044c (\u043c/\u0436)", "\u0421\u0442\u0430\u0442\u044c:", "\u0412\u0430\u0448\u0430 \u0441\u0442\u0430\u0442\u044c", "\u041d\u043e\u043c\u0435\u0440 \u043a\u0440\u0435\u0434\u0438\u0442\u043d\u043e\u0457 \u043a\u0430\u0440\u0442\u043a\u0438", "\u041a\u0440\u0435\u0434\u0438\u0442\u043d\u043e\u044e \u043a\u0430\u0440\u0442\u043a\u043e\u044e",
+    "\u0406\u0434\u0435\u043d\u0442\u0438\u0444\u0456\u043a\u0430\u0446\u0456\u0439\u043d\u043e\u0433\u043e \u043d\u043e\u043c\u0435\u0440\u0430", "\u0421\u0456\u043c\u0435\u0439\u043d\u043e\u0433\u043e \u0441\u0442\u0430\u043d\u0443", "E\u043c\u0435\u0439\u043b", "\u03bcsername", "Pass\u02bcword", "Pass\u02c8word", "Pas\u02b0sword", "Pass\u02b7ord", "Pa\u02e2sword", "Pas\u02b3sword"]
+ROUND3_NOT_PRIVATE = [
+    "\u0414\u043e\u0441\u0432\u0456\u0434 \u0440\u043e\u0431\u043e\u0442\u0438 \u0437 \u043f\u0430\u0440\u043e\u043b\u044f\u043c\u0438", "\u041e\u043f\u044b\u0442 \u0440\u0430\u0431\u043e\u0442\u044b \u0441 \u043f\u0430\u0441\u043f\u043e\u0440\u0442\u0430\u043c\u0438", "\u0417\u043d\u0430\u043d\u043d\u044f \u0441\u0438\u0441\u0442\u0435\u043c \u043f\u0430\u0440\u043e\u043b\u0456\u0432", "\u0421\u0442\u0430\u0436 \u0440\u043e\u0431\u043e\u0442\u0438", "\u0445\u043e\u0442\u0438\u0442\u0435 \u0441\u0442\u0430\u0442\u044c \u0447\u0430\u0441\u0442\u044c\u044e \u043a\u043e\u043c\u0430\u043d\u0434\u044b",
+    "\u042d\u0442\u0430\u0436, \u043f\u043e\u043b", "E\u30e1\u30fc\u30eb", "T\u30b7\u30e3\u30c4", "CV\u7b80\u5386", "GitHub\u94fe\u63a5", "Email\u90ae\u7bb1", "LinkedIn\ud504\ub85c\ud544", "\u0406\u043c\u02bc\u044f", "Size (\u00b5m)"]
+
+
+@pytest.mark.parametrize("label", ROUND3_PRIVATE)
+def test_a_private_label_with_a_bracket_hint_a_new_word_form_or_a_modifier_letter_is_left_to_you(label):
+    assert form_fill._private(_field(label))
+    assert _reviewed({"label": label, "value": "x1"}) == [(True, "")]
+
+
+@pytest.mark.parametrize("label", ROUND3_NOT_PRIVATE)
+def test_an_experience_question_or_a_latin_word_beside_cjk_is_no_private_field(label):
+    assert not form_fill._private(_field(label))
+    assert _reviewed({"label": label, "value": "x1"}) == [(False, "x1")]
+
+
+@pytest.mark.parametrize("label", ["\u043a\u0440\u0435\u0434\u0438\u0442\u043d" + "\u044e" * 100_000 + " \u043a\u0430\u0440\u0442", "Pass" + "\u02bc" * 100_000 + "word", "Pass" + "\u02b7" * 100_000 + "ord"])
+def test_a_long_hostile_word_form_or_modifier_run_is_read_at_once(label):
+    start = time.perf_counter()
+    form_fill._private(_field(label))
+    assert time.perf_counter() - start < 1.5
