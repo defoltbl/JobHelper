@@ -7,6 +7,7 @@ in a version go under `## Unreleased`; a released version's heading is `## 1.1.0
 
 ## Unreleased
 
+- **Security:** the packages pypdf, soupsieve, urllib3, certifi, PyJWT and opentelemetry-api are updated to versions without known holes (checked with pip-audit). Before, the locked versions had known holes, for example a slow-down on hostile page code in soupsieve and a compressed answer that grows far too large in urllib3.
 - **Form assistant:** a page that swaps letters for letters that only look like Latin letters (a Cyrillic "а" in "Card nаmber") no longer hides a private field. A word that mixes alphabets is private. A unit such as "Size (µm)" or "10 kΩ" stays open to fill. Before, such a field could go to Claude in the review of a form.
 - **Form assistant:** labels in Ukrainian, Polish and Slovak are private too ("пароль", "номер картки", "hasło", "numer karty"), and a Ukrainian label spelled the Russian way counts too. Questions about experience ("Досвід роботи з паролями") and the labels "Код вакансії" and "Номер телефону" stay open to fill. Before, such a private value could go to Claude in the review of a form.
 - **Form assistant:** a card number with other kinds of digits or other signs between the groups ("4111~1111~1111~1111") is found, and so is an IBAN with any gap, also a middle dot. A list of amounts such as "4000€ 4500€ 5000€ 5500€" is no card. Before, such a number could go to Claude in the review of a form.
