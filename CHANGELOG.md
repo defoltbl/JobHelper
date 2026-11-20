@@ -5,7 +5,7 @@ Format: a `## ` heading, then one `- ` line per change; `**words**` are shown in
 in a version go under `## Unreleased`; a released version's heading is `## 1.1.0 – 18 October 2026`
 (its tag is `v1.1.0` on GitHub). Version 1.0.0 is everything up to 17 October 2026, listed by date.
 
-## Unreleased
+## 1.3.0 – 20 November 2026
 
 - **Security:** the packages pypdf, soupsieve, urllib3, certifi, PyJWT and opentelemetry-api are updated to versions without known holes (checked with pip-audit). Before, the locked versions had known holes, for example a slow-down on hostile page code in soupsieve and a compressed answer that grows far too large in urllib3.
 - **Form assistant:** a page that swaps letters for letters that only look like Latin letters (a Cyrillic "а" in "Card nаmber") no longer hides a private field. A word that mixes alphabets is private. A unit such as "Size (µm)" or "10 kΩ" stays open to fill. Before, such a field could go to Claude in the review of a form.
