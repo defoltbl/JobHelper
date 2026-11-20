@@ -21,9 +21,11 @@ is yours.
 from __future__ import annotations
 
 import calendar
+import functools
 import json
 import os
 import re
+import sys
 import unicodedata
 from datetime import date, timedelta
 from typing import Any
@@ -1443,7 +1445,15 @@ _ALPHABETS = (*(re.compile("[" + letters + "]") for letters in (_LATIN, _CYRILLI
 # a unit sign, not a letter: the micro sign "µ" before a unit ("µm", "10µg") and the ohm sign "Ω" after a prefix
 # ("kΩ"). NFKC makes them the Greek "μ" and "Ω", the letters a page often writes for them, so the rule reads those
 _UNIT_SIGN = re.compile(r"(?<![^\W\d_])\u03bc|\u03a9(?![^\W\d_])")
-_OTHER_DIGIT = re.compile(r"(?![0-9])\d")             # a decimal digit of another script ("٤", "४")
+
+
+@functools.cache
+def _ascii_digits() -> dict[int, str]:
+    """The translate table that reads each decimal digit of another script ("٤", "४") as its ASCII digit: every sign
+    `\\d` matches (Unicode category Nd). Made once; one pass in C, so a long value stays fast."""
+    return {code: str(unicodedata.decimal(chr(code))) for code in range(sys.maxunicode + 1)
+            if chr(code).isdecimal() and not "0" <= chr(code) <= "9"}
+
 # the parts of a field's name, in the order they are read
 _NAME_KEYS = ("label", "hint", "name", "id")
 
@@ -1475,7 +1485,7 @@ class PrivacyReading:
     @staticmethod
     def _folded(text: str) -> str:
         text = _readable(text).translate(_LOOK_ALIKE)
-        return text if text.isascii() else _OTHER_DIGIT.sub(lambda digit: str(unicodedata.decimal(digit.group())), text)
+        return text if text.isascii() else text.translate(_ascii_digits())
 
     @property
     def mixes_alphabets(self) -> bool:
@@ -1486,6 +1496,8 @@ class PrivacyReading:
         if self.written.isascii():
             return False
         words = _WORD.findall(_UNIT_SIGN.sub(" ", self.written))
+        if sum(bool(alphabet.search(" ".join(words))) for alphabet in _ALPHABETS) < 2:
+            return False                            # one alphabet in the whole text: no word can mix two
         return any(sum(bool(alphabet.search(word)) for alphabet in _ALPHABETS) > 1 for word in words)
 
     @property
@@ -1494,6 +1506,8 @@ class PrivacyReading:
         as written or as plain words ("номер_картки"), also with its "(...)" hints left out ("Пол (м/ж)"), and asks for
         it: not a part that opens with what you know ("Досвід роботи з паролями"), read without its hints, so "Пароль
         (досвід)" stays private. A private word inside a hint still counts ("Документ (паспорт)")."""
+        if not _ALPHABETS[1].search(self.written):
+            return False                            # every word of the list is Cyrillic
         plain = _HINT.sub(" ", self.written)
         asked = (plain.lower(), _words({"label": plain}))
         forms = (self.written.lower(), _words({"label": self.written}), *asked)
@@ -1722,8 +1736,17 @@ def _readable(text: str) -> str:
     then NFKC (fullwidth "Ｐａｓｓｗｏｒｄ" is "Password", and "č" stays one letter). NFKC makes no hidden sign of a sign
     that shows. Every rule that reads a field's name or value reads it through this."""
     if not text.isascii():                          # no hidden sign is ASCII
-        text = "".join(sign for sign in text if sign not in _HIDDEN and unicodedata.category(sign) != "Cf")
+        text = text.translate(_dropped())           # one pass in C: a long hostile value stays fast
     return unicodedata.normalize("NFKC", text)
+
+
+@functools.cache
+def _dropped() -> dict[int, None]:
+    """The translate table of `_readable`: every format sign (Unicode category Cf) and every sign of `_HIDDEN`, each
+    taken out. Made once, on the first text that is not ASCII."""
+    table = {code: None for code in range(sys.maxunicode + 1) if unicodedata.category(chr(code)) == "Cf"}
+    table.update((ord(sign), None) for sign in _HIDDEN)
+    return table
 
 
 def _words(field: dict[str, Any]) -> str:
