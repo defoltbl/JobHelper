@@ -88,7 +88,7 @@ class SystemService:
         cv = agent1_cv.find_cv()
         changed = integrity.changed_titles()        # a check that could not run stops a run too, never "nothing changed"
         unchecked = integrity.not_checked(changed)  # then the window offers Check again, never Approve
-        return {"vault": vault.state(), "changed_files": changed, "pdf": pdf.available(),
+        return {"vault": vault.state(), "backup_kept": vault.how_kept(vault.enabled()), "changed_files": changed, "pdf": pdf.available(),
                 "changes_unchecked": unchecked, "changes_msg": integrity.NOT_CHECKED_CARD if unchecked else "",
                 "claude": claude, "plan": plan if claude else "",
                 "claude_unsure": unsure, "claude_msg": "" if claude else (UNSURE if unsure else SIGN_IN),
@@ -297,13 +297,14 @@ class SystemService:
         return {"ok": True}
 
     def backup_all(self):
-        """One encrypted backup of everything: the data, your CV, your letters, the documents, the rules."""
+        """One backup of everything (encrypted while protection is on): the data, your CV, your letters, the documents, the rules."""
         try:
             done = vault.backup_everything()
         except Exception as e:  # noqa: BLE001 - shown as the reason
             return {"ok": False, "msg": f"The backup was not made: {trouble._safe(e)}"}
         return {"ok": True, "folder": done["folder"].name,
-                "msg": f"Backed up {done['files']} files ({done['bytes'] / 1_048_576:.1f} MB), encrypted, in the folder {done['folder'].name} of the app's backups."}
+                "msg": f"Backed up {done['files']} files ({done['bytes'] / 1_048_576:.1f} MB), {vault.how_kept(done['encrypted'])}, "
+                       f"in the folder {done['folder'].name} of the app's backups."}
 
     def backup_check(self):
         """Prove that backups can be restored: make one, restore it into a throwaway folder, compare."""

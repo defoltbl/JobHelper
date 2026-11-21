@@ -220,7 +220,7 @@ class JobsService:
             ok = planner.save_company_notes(company, dict(fields or {}))
         except vault.VaultError:
             return {"ok": False, "msg": planner.CompanyNotes.UNREADABLE}
-        return {"ok": ok} if ok else {"ok": False, "msg": "Notes need a company name."}
+        return {"ok": True, "msg": planner.CompanyNotes.saved(company)} if ok else {"ok": False, "msg": "Notes need a company name."}
 
     @staticmethod
     def _asked_text(j, suffix=""):

@@ -668,9 +668,14 @@ def everything() -> list[tuple[Path, str]]:
     return [(path, name) for name, path in sorted(found.items())]
 
 
+def how_kept(encrypted: bool) -> str:
+    """How a backup's files are kept, in the words the window and status.py both say (`encrypted` from backup_everything)."""
+    return "encrypted" if encrypted else "not encrypted, because protection is off on this Mac"
+
+
 def backup_everything() -> dict:
-    """Write one encrypted backup folder holding everything (see `everything`).
-    Restore it with restore_backup(folder, destination). {folder, files, bytes}"""
+    """Write one backup folder holding everything (see `everything`), encrypted while protection is on (`enabled`, the
+    rule each copy follows). Restore it with restore_backup(folder, destination). {folder, files, bytes, encrypted}"""
     if state() == "locked":
         data_key()                                  # raises with the reason and the way out
     dest = backups_dir() / f"everything_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -680,4 +685,4 @@ def backup_everything() -> dict:
         _backup_copy(dest / name, plain)
         files += 1
         size += len(plain)
-    return {"folder": dest, "files": files, "bytes": size}
+    return {"folder": dest, "files": files, "bytes": size, "encrypted": enabled()}

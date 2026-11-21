@@ -24,6 +24,10 @@ Dialog {
     closePolicy: pending.length > 0 ? Popup.NoAutoClose : Popup.CloseOnEscape
     property bool confirmClose: false
     property string closeNote: ""
+    property string closeAgain: ""        // how to discard, as the line says it: "close" or "press <button>"
+    function sayPending() {               // the one "Not saved yet" line: what is unsaved, then how to discard it
+        closeNote = "Not saved yet: " + pending.join(", ") + ". Save it, or " + closeAgain + " once more to discard it.";
+    }
     property string confirmAction: ""     // the button that was asked about once ("apply", "dismiss")
     // A button that closes this window with text still unsaved asks once, as the ✕ does. The press that asks starts
     // the decision pause, so the second click of a double-click is not taken as "discard" (#81).
@@ -32,7 +36,7 @@ Dialog {
         if (decisionPaused) return false;
         if (confirmAction !== action) {
             confirmAction = action; confirmClose = false;
-            closeNote = "Not saved yet: " + pending.join(", ") + ". Save it, or press " + label + " once more to discard it.";
+            closeAgain = "press " + label; sayPending();
             decided();
             return false;
         }
@@ -95,7 +99,7 @@ Dialog {
             if (decisionPaused) return;   // the second click of a double-click: not "discard"
             if (!confirmClose) {
                 confirmClose = true; confirmAction = "";
-                closeNote = "Not saved yet: " + pending.join(", ") + ". Save it, or close once more to discard it.";
+                closeAgain = "close"; sayPending();
                 decided();
                 return;
             }
@@ -299,8 +303,13 @@ Dialog {
         }
         var r = bridge.saveCompanyNotes(job.company || "", { contact: cnContact.text, salary: cnSalary.text, asked: cnAsked.text, notes: cnNotes.text });
         notesBad = !(r && r.ok);
-        notesInfo = (r && r.ok) ? "Saved for " + (job.company || "this company") + "." : ((r && r.msg) || "Couldn't save the notes.");
-        if (r && r.ok) refresh("notes");
+        notesInfo = (r && r.ok) ? (r.msg || "Saved for " + (job.company || "this company") + ".") : ((r && r.msg) || "Couldn't save the notes.");
+        if (r && r.ok) { refresh("notes"); notePending(); }
+    }
+    function notePending() {              // after a save: the "Not saved yet" line names only what is still unsaved, or goes
+        if (closeNote === "") return;
+        if (pending.length === 0) { confirmClose = false; confirmAction = ""; closeNote = ""; return; }
+        sayPending();
     }
     function fileReply() {
         replyErr = ""; replyInfo = "";

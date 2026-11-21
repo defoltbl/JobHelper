@@ -349,7 +349,8 @@ ApplicationWindow {
     readonly property var windows: [tableDialog, detailDialog, compareDialog, formDialog, assistantDialog, prepEditDialog, helpDialog, prepDialog, letterDialog, responseDialog, limitDialog, optDialog, aboutDialog, remoteDialog, schedDialog]
     Component.onCompleted: {
         for (var i = 0; i < windows.length; i++) {
-            (function (w) { w.aboutToShow.connect(function () { win.openedAt[w.objectName] = ++win.openSeq; }); })(windows[i]);
+            // the number first, then openSeq: its change makes every onTop ask again, and the new window must already be the last
+            (function (w) { w.aboutToShow.connect(function () { var next = win.openSeq + 1; win.openedAt[w.objectName] = next; win.openSeq = next; }); })(windows[i]);
         }
     }
     function onTop(w) {

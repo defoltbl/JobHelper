@@ -2799,3 +2799,12 @@ def test_a_hint_or_inner_name_that_only_contains_a_person_word_keeps_your_field(
     assert form_fill.classify(_field("Country", kind="text", name="referral_country"))[0] == "country", "referral is not a referee"
     assert form_fill.classify(_field("City", hint="We share with partner companies"))[0] == "city"
     assert form_fill.classify(_field("Email", kind="email", hint="Re-enter email to confirm"))[0] == "email"
+
+
+def test_a_briefing_line_that_ends_in_a_full_stop_gets_no_second_one(isolate, monkeypatch):
+    from jobhelper import summary, textfmt
+    monkeypatch.setattr(summary, "briefing_lines", lambda week: ["1 ready to send", "interview · Tailspin Toys s.r.o."])
+    monkeypatch.setattr(summary, "nudges", lambda jobs, responses, now: [])
+    assert ui_api.Api().assistant_briefing()["headline"] == "1 ready to send; interview · Tailspin Toys s.r.o."
+    assert [textfmt.sentence(t) for t in ("Acme", "Acme s.r.o.", "Ready?", "Go!", "Acme  ", "")] == \
+        ["Acme.", "Acme s.r.o.", "Ready?", "Go!", "Acme.", ""]

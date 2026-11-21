@@ -265,3 +265,43 @@ def test_a_command_that_only_reads_takes_no_lock_and_rewrites_no_data_file(isola
     for argv in (["list"], ["usage"], ["followups"], ["security", "status"]):
         assert _run(monkeypatch, *argv) == 0, argv
     assert taken == [] and protected == []
+
+
+# ── the hands-on check before 1.3.0: nothing said that the next line takes back ──
+def test_a_mail_command_without_a_mailbox_names_no_empty_address(isolate_data, monkeypatch, capsys):
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="waiting", date_applied="2026-09-01")])
+    for name in ("IMAP_USER", "IMAP_PASSWORD", "IMAP_USER_2", "IMAP_PASSWORD_2"):
+        monkeypatch.setattr(config, name, "")
+    for command in (["sync"], ["responses", "--scan"]):
+        assert _run(monkeypatch, *command) == 1, command
+        out = capsys.readouterr().out
+        assert "()" not in out and "Reading inbox" in out and out.strip().endswith("No mailbox is connected. Add your job email in the app's Account card."), out
+    monkeypatch.setattr(config, "IMAP_USER", "alex.novak@example.com")         # an address with no password: named, then refused
+    assert _run(monkeypatch, "sync") == 1
+    assert "Reading inbox (alex.novak@example.com), last" in capsys.readouterr().out
+
+
+def test_backup_all_says_encrypted_only_when_protection_is_on(isolate_data, monkeypatch, capsys):
+    config.ensure_dirs()
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme")])
+    assert _run(monkeypatch, "security", "backup-all") == 0
+    out = capsys.readouterr().out
+    assert ", encrypted, in" in out and "not encrypted" not in out
+    monkeypatch.setenv("JOBHELPER_ENCRYPT", "0")                                 # protection off: what test-restore says too
+    assert _run(monkeypatch, "security", "backup-all") == 0
+    out = capsys.readouterr().out
+    assert ", encrypted, in" not in out and "not encrypted, because protection is off on this Mac" in out
+    assert _run(monkeypatch, "security", "test-restore") == 1
+    assert "Protection is off on this Mac" in capsys.readouterr().out
+
+
+def test_recovery_key_says_why_there_is_none_before_any_header(isolate_data, monkeypatch, capsys):
+    config.ensure_dirs()
+    monkeypatch.setenv("JOBHELPER_ENCRYPT", "0")
+    assert _run(monkeypatch, "security", "recovery-key") == 1
+    out = capsys.readouterr().out
+    assert out.startswith("✗ ") and "Keep this somewhere safe" not in out
+    monkeypatch.delenv("JOBHELPER_ENCRYPT")
+    assert _run(monkeypatch, "security", "recovery-key") == 0
+    assert capsys.readouterr().out.startswith("Keep this somewhere safe")

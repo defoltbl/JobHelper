@@ -702,7 +702,10 @@ def test_reminder_slot_sends_one_notification_per_due_date(bridge, monkeypatch):
 def test_notes_and_compare_slots(bridge):
     from jobhelper import planner, store
     store.save_jobs([store.new_job(id="a", title="Developer", company="Acme", status="waiting")])
-    assert bridge.saveCompanyNotes("Acme", {"contact": "Jana"}) == {"ok": True}
+    assert bridge.saveCompanyNotes("Acme", {"contact": "Jana"}) == {
+        "ok": True,
+        "msg": "Saved for Acme.",
+    }
     assert planner.company_notes("ACME")["contact"] == "Jana"
     assert bridge.saveCompanyNotes("", {"contact": "Jana"})["ok"] is False
     assert bridge.cvCompare("a")["ok"] is False                 # no adapted CV: a reason, not a crash

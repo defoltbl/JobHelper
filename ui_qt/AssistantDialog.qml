@@ -755,7 +755,8 @@ Dialog {
                         background: Rectangle { radius: 7; color: theme.surface; border.width: 1
                             border.color: assistantDialog.jobFindErr !== "" ? theme.crit : (jobFind.activeFocus ? theme.accent : theme.line) }
                         onTextEdited: assistantDialog.findJob(text)
-                        Keys.onEscapePressed: { text = ""; assistantDialog.findJob("") } }
+                        // Esc empties a typed search; in an empty box it goes on to the window's own close rule
+                        Keys.onEscapePressed: { if (text !== "") { text = ""; assistantDialog.findJob(""); } else assistantDialog.tryClose(); } }
                     ThemedCombo { id: jobBox; objectName: "asJob"; Layout.fillWidth: true; enabled: !assistantDialog.busy
                         model: assistantDialog.jobs; textRole: "label"
                         onActivated: assistantDialog.jobId = assistantDialog.jobs[currentIndex] ? assistantDialog.jobs[currentIndex].id : "" } }

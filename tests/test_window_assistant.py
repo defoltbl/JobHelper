@@ -334,6 +334,78 @@ def test_the_country_picker_lets_go_of_its_search_box_when_you_press_the_list(ui
     assert picker.property("visible") is False and ui.warnings == []
 
 
+def _esc_in(ui, field):
+    """Esc pressed while the cursor is in `field`, as a person does it."""
+    from PySide6.QtCore import Qt
+    ui.js("forceActiveFocus()", field)
+    assert _until_true(ui, lambda: field.property("activeFocus") is True)
+    ui.win.requestActivate()
+    QTest.keyClick(ui.win, Qt.Key_Escape)
+
+
+def test_esc_in_the_country_search_box_asks_once_before_a_tick_is_lost(ui):
+    """Hands-on check R2 (b): in the picker opened from Options, with the cursor in the search box, Esc did nothing."""
+    from PySide6.QtCore import Qt
+    options, picker, field = ui.find("optDialog"), ui.find("remoteDialog"), ui.find("countrySearch")
+    ui.js("optsData = bridge.options()")
+    _open(ui, options, 450)
+    try:
+        ui.js('cityCombo.editText = "Prague"; countryField.text = ""; remoteWhere = "country"; pickedRemote = ["germany"]', options)
+        ui.js("remoteAddBtn.clicked()", options)
+        _until_open(ui, "remoteDialog")
+        ui.js("forceActiveFocus()", field)
+        for key in (Qt.Key_A, Qt.Key_U, Qt.Key_S):                        # typed, then ticked with a click, as a person does
+            QTest.keyClick(ui.win, key)
+        assert _until_true(ui, lambda: ui.js("remoteDialog.shown.length") >= 1)
+        row = ui.drawn("country_austria", root="countryList")
+        QTest.mouseClick(ui.win, Qt.LeftButton, Qt.NoModifier, row.mapToScene(QPointF(row.width() / 2, row.height() / 2)).toPoint())
+        assert _until_true(ui, lambda: ui.js("remoteDialog.picked.indexOf('austria') >= 0"))
+        _esc_in(ui, field)
+        assert _until_true(ui, lambda: "did not press Done" in ui.js("err", picker)) and picker.property("opened") is True, "it asks once"
+        assert options.property("opened") is True, "and the Options window under it stays"
+        _esc_in(ui, field)                                                # asked once: the second Esc discards
+        _until_closed(ui, "remoteDialog")
+        assert options.property("opened") is True
+        ui.js("remoteAddBtn.clicked()", options)
+        _until_open(ui, "remoteDialog")
+        _esc_in(ui, field)                                                # nothing changed: Esc closes at once
+        _until_closed(ui, "remoteDialog")
+    finally:
+        ui.js("confirmClose = true; close()", picker)
+        _until_closed(ui, "remoteDialog")
+        ui.js("confirmClose = true; close()", options)
+        _until_closed(ui, options)
+        ui.js("optsData = bridge.options()")
+    assert ui.warnings == []
+
+
+def test_esc_in_the_answers_for_box_reaches_the_assistant_close_rule(ui, monkeypatch):
+    """Hands-on check R2 (a): with the cursor in "Answers are for", Esc did nothing, however often it was pressed."""
+    monkeypatch.setattr(ui_api.Api, "assistant_briefing", lambda self: {"headline": "", "lines": [], "nudges": []})
+    dialog, find = ui.find("assistantDialog"), ui.find("asJobFind")
+    ui.js("assistantDialog.show()")
+    _until_open(ui, "assistantDialog")
+    try:
+        ui.js('assistantDialog.page = "ask"')
+        ui.js('text = "Beta"; assistantDialog.findJob(text)', find)
+        _esc_in(ui, find)                                                 # the first Esc empties a typed search, as before
+        assert _until_true(ui, lambda: find.property("text") == "") and dialog.property("opened") is True
+        _esc_in(ui, find)                                                 # an empty box: Esc closes a clean window
+        _until_closed(ui, "assistantDialog")
+        ui.js("assistantDialog.show()")
+        _until_open(ui, "assistantDialog")
+        ui.js('assistantDialog.page = "ask"; askBox.text = "mark it applied"', dialog)
+        _esc_in(ui, find)                                                 # a request typed and not sent: it asks once
+        assert _until_true(ui, lambda: "did not send" in dialog.property("askErr")) and dialog.property("opened") is True
+        _esc_in(ui, find)
+        _until_closed(ui, "assistantDialog")
+    finally:
+        ui.js('askBox.text = ""', dialog)
+        ui.js("assistantDialog.close()")
+        _until_closed(ui, "assistantDialog")
+    assert ui.warnings == []
+
+
 def test_the_job_table_lets_go_of_its_search_box_when_you_press_the_list(ui):
     from PySide6.QtCore import QPointF, Qt
     ui.js('openView("new")')

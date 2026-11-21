@@ -176,12 +176,13 @@ Dialog {
         }
         return "";
     }
+    // what is wrong with the typed city ('' = nothing): the back end's rule, asked as you type; the text is never cut.
+    // An empty box says nothing yet: Save says that case.
+    readonly property string cityErr: (cityCombo.editText || "").trim() !== "" ? bridge.cityProblem(cityCombo.editText) : ""
     // the first thing that stops a save ('' = none); a source missing is said by its own red line
     function firstProblem() {
-        var city = (cityCombo.editText || "").trim();
-        if (city === "") return "Enter a city (e.g. Prague) before saving.";
-        if (win.hasNonLatin(city)) return "City must be in English (Latin letters), e.g. Prague.";
-        if (city.length > win.limits.options.where) return "“City” takes up to " + win.limits.options.where + " characters.";
+        var city = bridge.cityProblem(cityCombo.editText || "");     // asked here: a change handler can run before cityErr follows
+        if (city !== "") return city;
         if (countryProblem(countryField.text) !== "") return countryProblem(countryField.text);
         var both = wantedTags.all().filter(function (w) { return unwantedTags.all().indexOf(w) >= 0; });
         if (both.length > 0) return "“" + both[0] + "” is under both the roles you want and the roles you do not want. Remove it from one.";
@@ -343,7 +344,13 @@ Dialog {
                         SRow { label: win.limits.labels.where
                             ThemedCombo { id: cityCombo; objectName: "cityCombo"; editable: true; plainText: true
                                 implicitWidth: 200; model: win.limits.choices.cities
-                                onEditTextChanged: optDialog.recheck() } }
+                                onEditTextChanged: optDialog.recheck()
+                                background: Rectangle { radius: 7; color: theme.surface; border.width: 1
+                                    border.color: optDialog.cityErr !== "" ? theme.crit : (cityCombo.activeFocus ? theme.accent : theme.line) } } }
+                        // one red line per fault: this one goes while the footer says the same
+                        Text { objectName: "cityErrLine"; visible: optDialog.cityErr !== "" && optDialog.optErr !== optDialog.cityErr
+                            text: optDialog.cityErr; wrapMode: Text.WordWrap; color: theme.crit; font.pixelSize: 11
+                            Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 12 }
                         Sep {}
                         // which postings of a company's career site, and which remote jobs, count as "here"
                         SRow { label: win.limits.labels.country; hint: "for career sites and remote jobs · empty = the city's country"
@@ -652,8 +659,9 @@ Dialog {
                             color: optDialog.shelfBad ? theme.crit : optDialog.confirmTidy ? theme.warn : optDialog.shelfDone ? theme.good : theme.faint
                             text: optDialog.shelfNote !== "" ? optDialog.shelfNote : optDialog.shelfSummary() }
                         Sep {}
-                        // everything in one encrypted backup, a proof that backups restore, and a readable copy to take away
-                        SRow { label: "Back up everything"; hint: "data, CV, letters, documents, rules · encrypted"
+                        // everything in one backup (kept as the back end says), a proof that backups restore, and a readable copy to take away
+                        SRow { objectName: "backupRow"; label: "Back up everything"
+                            hint: "data, CV, letters, documents, rules" + (connData.backup_kept ? " · " + connData.backup_kept : "")
                             RowLayout { spacing: 6
                                 SmallButton { objectName: "backupNow"; enabled: optDialog.storageBusy === ""
                                     text: optDialog.storageBusy === "backup" ? "Backing up…" : "Back up now"; onClicked: optDialog.storage("backup", "") }

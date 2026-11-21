@@ -1241,6 +1241,45 @@ def _esc(ui):
     QTest.keyClick(ui.win, Qt.Key_Escape)
 
 
+def test_saved_notes_take_the_not_saved_line_away_and_the_next_esc_closes(ui):
+    """Hands-on check R5: after Save notes the red "Not saved yet" line stayed, and Esc asked again."""
+    dialog = ui.find("detailDialog")
+    _open_job(ui, "app")
+    try:
+        ui.js('cnAsked.text = "Why do you like testing?"')
+        _esc(ui)
+        assert _until_true(ui, lambda: "the notes about the company" in dialog.property("closeNote")) and dialog.property("opened") is True
+        ui.js("detailDialog.saveNotes()")
+        assert ui.find("notesLine").property("text") == "Saved for Beta."
+        assert dialog.property("closeNote") == "" and dialog.property("confirmClose") is False, "saved: the red line goes"
+        _esc(ui)                                                           # nothing is pending: Esc closes without a question
+        _until_closed(ui, "detailDialog")
+        _open_job(ui, "app")
+        ui.js('cnAsked.text = "Tell me about a bug you found."; dateField.text = "2026-11-02"')
+        _esc(ui)
+        assert _until_true(ui, lambda: "the day you applied" in dialog.property("closeNote"))
+        ui.js("detailDialog.saveNotes()")
+        note = dialog.property("closeNote")
+        assert "the day you applied" in note and "the notes about the company" not in note, "it names only what is still pending"
+    finally:
+        ui.js('cnAsked.text = ""; detailDialog.saveNotes(); detailDialog.confirmClose = true; detailDialog.close()')
+        _until_closed(ui, "detailDialog")
+    assert ui.warnings == []
+
+
+def test_saved_notes_show_the_back_end_message_as_it_is(ui, monkeypatch):
+    """Hands-on check R6: "Saved for " + a company that ends in "s.r.o." showed two stops; the back end's message is shown."""
+    monkeypatch.setattr(ui_api.Api, "save_company_notes", lambda self, company, fields: {"ok": True, "msg": "Saved for Example s.r.o."})
+    _open_job(ui, "app")
+    try:
+        ui.js("detailDialog.saveNotes()")
+        assert ui.find("notesLine").property("text") == "Saved for Example s.r.o."
+    finally:
+        ui.js("detailDialog.confirmClose = true; detailDialog.close()")
+        _until_closed(ui, "detailDialog")
+    assert ui.warnings == []
+
+
 def test_esc_in_the_letter_and_the_preparation_asks_once_and_closes_a_clean_window(ui, monkeypatch):
     from jobhelper import cover_letter
     paras = ["First paragraph of the letter.", "Second one.", "Third one.", "Fourth one.", "Fifth one."]

@@ -84,6 +84,8 @@ def _pipeline(args: argparse.Namespace, saved: dict) -> int:
         except (FileNotFoundError, ValueError) as e:
             print(f"   ✗ {e}")
             return 1
+        except llm.STOPS_A_RUN as stop:
+            return _stopped(stop)
         print(f"   CV: {profile.get('_cv_file')} | seniority: {profile.get('seniority')} "
               f"| target roles: {', '.join(profile.get('target_roles', [])[:4])}")
     else:
@@ -152,18 +154,8 @@ def _pipeline(args: argparse.Namespace, saved: dict) -> int:
     print(f"\n③ Agent 3: scoring jobs, writing cover letters & tailoring CVs (threshold {args.threshold}) …")
     try:
         stats = agent3_letters.process(jobs, profile, threshold=args.threshold, cv_text=cv_text, cv_path=cv_path)
-    except llm.CallTimedOut as e:
-        store.save_jobs(jobs)                    # Claude stopped answering: the scores and letters made so far are kept
-        agent4_tracker.render_all(jobs)
-        print(f"\n✗ {e}\n   What was finished is saved.")
-        return 1
-    except llm.LimitReached as e:
-        store.save_jobs(jobs)
-        agent4_tracker.render_all(jobs)
-        notify.send(notify.PAUSED + " Run it again after the reset.", "Search stopped early")
-        print(f"\n⏸  {e}\n   What was finished is saved. Run again after the reset: the remaining jobs\n"
-              "   are scored then, and nothing that is done is repeated.")
-        return 3
+    except llm.STOPS_A_RUN as stop:
+        return _stopped(stop, jobs)
     store.save_jobs(jobs)
     if not args.skip_search:                # the app's Last run card shows a command-line or weekly run too
         from datetime import datetime
@@ -192,6 +184,24 @@ def _pipeline(args: argparse.Namespace, saved: dict) -> int:
     print(usage.format_report())
     notify.send(notify.search_text(added if not args.skip_search else 0, stats["letters"]), "Search finished")
     return 0
+
+
+def _stopped(stop: Exception, jobs: list | None = None) -> int:
+    """Claude stopped the run (llm.STOPS_A_RUN): one line that says why and a non-zero exit, never a traceback. Given
+    the job list (Agent 3), the scores and letters made so far are saved first. 3 for Claude's limit, else 1."""
+    limit = isinstance(stop, llm.LimitReached)
+    if jobs is None:                             # Agent 1: nothing was made yet
+        print(f"   ⏸  {stop}" if limit else f"   ✗ {stop}")
+        return 3 if limit else 1
+    store.save_jobs(jobs)
+    agent4_tracker.render_all(jobs)
+    if not limit:
+        print(f"\n✗ {stop}\n   What was finished is saved.")
+        return 1
+    notify.send(notify.PAUSED + " Run it again after the reset.", "Search stopped early")
+    print(f"\n⏸  {stop}\n   What was finished is saved. Run again after the reset: the remaining jobs\n"
+          "   are scored then, and nothing that is done is repeated.")
+    return 3
 
 
 if __name__ == "__main__":

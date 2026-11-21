@@ -409,7 +409,8 @@ def test_api_events_show_up_and_are_announced_once(api):
 
 def test_api_company_notes_follow_the_company(api):
     store.save_jobs([_job("a", company="Valeo s.r.o."), _job("b", company="Valeo", status="found")])
-    assert api.save_company_notes("Valeo s.r.o.", {"contact": "Jana", "asked": "SQL joins"}) == {"ok": True}
+    assert api.save_company_notes("Valeo s.r.o.", {"contact": "Jana", "asked": "SQL joins"}) == {"ok": True, "msg": "Saved for Valeo s.r.o."}
+    assert api.save_company_notes("Beta", {"contact": "Tom"}) == {"ok": True, "msg": "Saved for Beta."}       # the job window shows msg
     assert api.job_detail("b")["company_notes"]["asked"] == "SQL joins"           # the other job at the same company
     assert api.save_company_notes("", {"contact": "x"})["ok"] is False
 
@@ -564,3 +565,9 @@ def test_api_says_why_notes_answers_and_a_pasted_reply_were_refused(api, monkeyp
     assert api.form_answers("a")["items"] == []                                  # not saved in a cut form
     got = api.add_reply("a", "x" * 8001)
     assert got["ok"] is False and "Paste only the message itself" in got["msg"] and "8001 characters" in got["msg"]
+
+
+def test_the_saved_line_names_the_company_with_one_full_stop():
+    assert planner.CompanyNotes.saved("Tailspin Toys s.r.o.") == "Saved for Tailspin Toys s.r.o."
+    assert planner.CompanyNotes.saved("Beta") == "Saved for Beta."
+    assert planner.CompanyNotes.saved("  ") == "Saved for this company."

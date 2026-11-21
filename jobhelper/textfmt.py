@@ -103,6 +103,12 @@ NON_LATIN_RANGES = ("\u3040-\u30ff", "\u3400-\u9fff", "\uac00-\ud7af", "\u0400-\
 _NON_LATIN = re.compile("[" + "".join(NON_LATIN_RANGES) + "]")
 
 
+def sentence(text) -> str:
+    """The text as a sentence with one full stop: a name such as "Tailspin Toys s.r.o." or a question already ends it."""
+    text = str(text or "").rstrip()
+    return text if not text or text.endswith((".", "!", "?")) else text + "."
+
+
 def has_non_latin(text) -> bool:
     """Whether a text has letters of another script than Latin (punctuation such as ’ or – is fine)."""
     return bool(_NON_LATIN.search(str(text or "")))

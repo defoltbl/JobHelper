@@ -24,14 +24,14 @@ Item {
     property string testNote: ""
     property bool testBad: false
     property var testLines: []            // one {text, bad} for each mailbox tried: each line in its own colour
-    property bool mainFailed: false       // the main mailbox's last test did not sign in: its row loses its green tick
+    property bool mainFailed: false       // the main mailbox's last test did not sign in: no green tick until a test signs in or it is saved again
     function savedMailbox(box) {          // saved again: that mailbox's old test result is gone, its red line and lost tick too
         if (box === 1) mainFailed = false;
         testLines = testLines.filter(function (l) { return l.box !== box; });
     }
     function testMail() {
         if (testBusy) return;
-        testNote = ""; testBad = false; testLines = []; mainFailed = false; emailNote = "";
+        testNote = ""; testBad = false; testLines = []; emailNote = "";
         testBusy = true; testLeft = connData.email2 === true ? 2 : 1;
         bridge.testMailbox(1);
         if (connData.email2 === true) bridge.testMailbox(2);
@@ -53,7 +53,9 @@ Item {
         if (r && r.ok) { restoreErr = ""; bridge.checkConnections(); win.reloadAll(); }
         else restoreErr = (r && r.msg) || "The key could not be used.";
     }
-    onShownChanged: if (!shown) { testNote = ""; testBad = false; testLines = []; mainFailed = false; emailNote = ""; changes = []; keyText = ""; keyErr = ""; keyCopied = false; restoreErr = ""; }
+    // closing keeps the main mailbox's failed test line with its lost tick: the reason stays until the next test or save
+    onShownChanged: if (!shown) { testNote = ""; testBad = false; emailNote = ""; changes = []; keyText = ""; keyErr = ""; keyCopied = false; restoreErr = "";
+                                  testLines = testLines.filter(function (l) { return mainFailed && l.box === 1 && l.bad; }); }
     Timer { interval: 60000; running: welcome.keyText !== ""; onTriggered: { welcome.keyText = ""; welcome.keyCopied = false; } }
     property bool emailBusy: false        // the mailbox is being tried with the address and password just entered
     property string emailNote: ""         // saved, but something to know (the server could not be reached)
@@ -118,7 +120,7 @@ Item {
             welcome.testNote = (welcome.testNote !== "" ? welcome.testNote + " " : "") + ((r && r.msg) || "");
             welcome.testLines = welcome.testLines.concat([{ box: (r && r.box) || 0, text: (r && r.msg) || "", bad: !(r && r.ok) }])
                                                  .sort(function (a, b) { return a.box - b.box; });      // the main mailbox first, whichever answered first
-            if (r && r.box === 1 && !r.ok) welcome.mainFailed = true;
+            if (r && r.box === 1) welcome.mainFailed = !r.ok;
             if (welcome.testLeft <= 0) welcome.testBusy = false;
         }
         function onEmailSaved(r) {
