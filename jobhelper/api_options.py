@@ -337,8 +337,8 @@ class OptionsService:
     def save_companies(self, companies):
         config.ensure_dirs()
         clean, said = self._companies_checked(companies)
-        (config.DATA_DIR / "companies.json").write_text(
-            json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
+        vault.write_plain(config.DATA_DIR / "companies.json",          # whole or not at all: a half file reads as changed
+                          json.dumps(clean, ensure_ascii=False, indent=2).encode("utf-8"))
         integrity.approve(["companies"])          # changed through the app: trusted
         return {"ok": False, "count": len(clean), "msg": said} if said else {"ok": True, "count": len(clean)}
 

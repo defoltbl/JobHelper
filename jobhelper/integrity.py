@@ -12,11 +12,15 @@ import hashlib
 import hmac
 import json
 import re
+import threading
 from pathlib import Path
 
 from . import vault
 
 BASELINE_FLAG = "integrity_baseline"     # kept in the Keychain: "a manifest must exist"
+# one read-change-write of the signed list at a time: the master CV is approved on a worker thread while Options can
+# approve the career-site list, and without it one write loses the other's entry (re-entrant: ensure_baseline approves)
+_MANIFEST_LOCK = threading.RLock()
 
 TITLES = {
     "cv_rules": "CV rules",
@@ -185,34 +189,36 @@ def what_changed(name: str) -> dict:
 
 def approve(names: list[str] | None = None) -> list[str]:
     """Accept the current content of the given files (default: all) as trusted."""
-    if vault.state() != "ok":
-        return []
-    manifest, done = _load(), []
-    for name, path in protected_files().items():
-        if names is not None and name not in names:
-            continue
-        if path and Path(path).is_file():
-            manifest[name] = {"file": Path(path).name, "mac": _signature(name, Path(path))}
-            _keep(name, Path(path))
-        else:
-            manifest.pop(name, None)
-        done.append(name)
-    _save(manifest)
-    vault.set_secret(BASELINE_FLAG, "1")
-    return done
+    with _MANIFEST_LOCK:
+        if vault.state() != "ok":
+            return []
+        manifest, done = _load(), []
+        for name, path in protected_files().items():
+            if names is not None and name not in names:
+                continue
+            if path and Path(path).is_file():
+                manifest[name] = {"file": Path(path).name, "mac": _signature(name, Path(path))}
+                _keep(name, Path(path))
+            else:
+                manifest.pop(name, None)
+            done.append(name)
+        _save(manifest)
+        vault.set_secret(BASELINE_FLAG, "1")
+        return done
 
 
 def ensure_baseline() -> bool:
     """Sign everything once, the first time protection is set up. True if it did. A signed list that is already there,
     also a damaged one, is never signed over (#75): only the Keychain's mark of it is put back, so a changed file is
     still found (a damaged list shows every file as not signed, for the person to approve)."""
-    if vault.state() != "ok" or vault.get_secret(BASELINE_FLAG) == "1":
-        return False
-    if _signed_list_there():
-        vault.set_secret(BASELINE_FLAG, "1")
-        return False
-    approve()
-    return True
+    with _MANIFEST_LOCK:                     # the check and the signing are one step: two starts sign once
+        if vault.state() != "ok" or vault.get_secret(BASELINE_FLAG) == "1":
+            return False
+        if _signed_list_there():
+            vault.set_secret(BASELINE_FLAG, "1")
+            return False
+        approve()
+        return True
 
 
 def changed_titles() -> list[str]:

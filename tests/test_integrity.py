@@ -1,5 +1,6 @@
 """Tamper detection for the rules, template, master CV and career-site list."""
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -198,3 +199,60 @@ def test_weekly_run_stops_when_the_data_is_locked(files, monkeypatch, capsys):
     monkeypatch.setattr(agent1_cv, "load_profile", lambda current_only=False: pytest.fail("the run must stop before any agent"))
     monkeypatch.setattr("sys.argv", ["run.py", "--reuse-profile"])
     assert run.main() == 2
+
+
+def _meet_once(monkeypatch, name):
+    """Make the first call of integrity.<name> wait (at most half a second) until a second thread calls it too: without
+    the lock both threads read the same signed list; with it the second one waits outside and the meeting times out."""
+    real, meeting = getattr(integrity, name), threading.Barrier(2, timeout=0.5)
+
+    def meet(*args, **kwargs):
+        result = real(*args, **kwargs)
+        try:
+            meeting.wait()
+        except threading.BrokenBarrierError:
+            pass
+        return result
+    monkeypatch.setattr(integrity, name, meet)
+
+
+def _at_once(*calls):
+    results, errors = [None] * len(calls), []
+
+    def run_one(i, call):
+        try:
+            results[i] = call()
+        except Exception as e:  # noqa: BLE001 - reported by the test below
+            errors.append(e)
+    threads = [threading.Thread(target=run_one, args=(i, call)) for i, call in enumerate(calls)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=5)
+    assert not errors and not any(t.is_alive() for t in threads)
+    return results
+
+
+def test_two_approvals_at_once_both_stay_signed(files, monkeypatch):
+    integrity.approve(["cv_rules"])
+    _meet_once(monkeypatch, "_load")
+    _at_once(lambda: integrity.approve(["master_cv"]), lambda: integrity.approve(["companies"]))
+    signed = json.loads((config.DATA_DIR / "integrity.json").read_text(encoding="utf-8"))["files"]
+    assert {"cv_rules", "master_cv", "companies"} <= set(signed)
+    assert _states()["master_cv"] == "ok" and _states()["companies"] == "ok"
+
+
+def test_two_starts_at_once_sign_the_baseline_once(files, monkeypatch):
+    vault.data_key()
+    _meet_once(monkeypatch, "_signed_list_there")
+    assert sorted(_at_once(integrity.ensure_baseline, integrity.ensure_baseline)) == [False, True]
+
+
+def test_saving_companies_is_whole_or_not_at_all(files, monkeypatch):
+    def no_rename(*args, **kwargs):
+        raise OSError("disk full")
+    monkeypatch.setattr(vault.os, "replace", no_rename)
+    with pytest.raises(OSError):
+        ui_api.Api().save_companies([{"name": "Proton", "ats": "greenhouse", "token": "proton"}])
+    assert (config.DATA_DIR / "companies.json").read_text(encoding="utf-8") == "[]"
+    assert not list(config.DATA_DIR.glob("companies.json*.tmp"))

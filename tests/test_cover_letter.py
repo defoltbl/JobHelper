@@ -185,6 +185,46 @@ def test_a_letter_that_states_the_posting_s_terms_as_experience_is_noticed():
     assert claims(said, POSTING, ACCOUNTANT + " I assigned tax codes and cost centers to every invoice.") == []
 
 
+CARER = "Care assistant with two years of personal care, meal support and mobility help in a small home for older people."
+CARE_POSTING = "You will handle medication administration and wound dressing for our residents on the night shift."
+
+
+def test_a_letter_that_learns_a_posting_term_borrows_nothing():
+    claims = cover_letter.borrowed_claims
+    # a course, a class, a workshop or a lesson the candidate takes is learning, not experience (#143)
+    for learning in ("I am taking a weekend course in wound dressing.",
+                     "I am attending a short class on medication administration at the local college.",
+                     "I am doing a two-day workshop in wound dressing this spring.",
+                     "I completed an online module on medication administration last month.",
+                     "I am learning medication administration from a senior nurse.",
+                     "I am studying wound dressing in my free time."):
+        assert claims([learning], CARE_POSTING, CARER) == [], learning
+    # the work itself stays a claim, also beside a course
+    for work in ("I am running the medication administration for twelve residents.",
+                 "I did wound dressing on every morning round.",
+                 "I took a course in first aid and handled wound dressing on my ward.",
+                 "I ran a workshop on medication administration for new staff."):
+        assert claims([work], CARE_POSTING, CARER) != [], work
+
+
+def test_a_letter_that_learns_a_posting_term_and_also_does_the_work_still_borrows():
+    """Fix round of #143: a course beside work said in the present tense, with "my" or with "have" and a past form is no
+    pure learning, so the note stays."""
+    claims = cover_letter.borrowed_claims
+    for work in ("I am learning wound dressing and I run wound dressing on the night round.",
+                 "I am on a weekend course in wound dressing and use it on every round.",
+                 "I am studying medication administration and maintain the medication administration charts.",
+                 "I follow an evening class in wound dressing; I work with wound dressing each night.",
+                 "I am attending a lecture series on wound dressing, and my wound dressing rounds cover twelve residents.",
+                 "I learned medication administration and have managed medication administration for twelve residents.",
+                 "I am learning wound dressing and I dress wounds with wound dressing kits daily."):
+        assert claims([work], CARE_POSTING, CARER) != [], work
+    # pure learning, also with a present verb of learning or of feeling, is still no claim
+    for learning in ("I am taking an evening class in wound dressing, and I enjoy it.",
+                     "I am studying medication administration and I hope to pass the exam.",
+                     "I completed a module on wound dressing and enjoyed it."):
+        assert claims([learning], CARE_POSTING, CARER) == [], learning
+
 def test_a_letter_that_borrows_is_sent_back_and_what_is_left_is_noted(isolate_data, monkeypatch):
     title, body, _ = _example()
     monkeypatch.setattr(config, "LETTER_TEMPLATE", TEMPLATE)

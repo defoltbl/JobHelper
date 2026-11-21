@@ -1137,6 +1137,63 @@ def test_letter_editor_explains_wrong_steps(ui, monkeypatch):
     assert ui.warnings == []
 
 
+def test_letter_rewrite_waits_while_the_letter_is_saved(ui, monkeypatch):
+    """A rewrite during a save changed the window while the old text went to the file; after the save the window
+    called the old text saved, and the window and the file disagreed."""
+    import threading
+    from jobhelper import cover_letter
+    paras = ["First paragraph of the letter.", "Second one.", "Third one.", "Fourth one.", "Fifth one."]
+    monkeypatch.setattr(ui_api.Api, "letter_for_edit", lambda self, job_id: {"ok": True, "id": "lead", "company": "Acme", "title": "Dev",
+                        "title_line": "Dev", "date_text": "", "paragraphs": list(paras), "min_words": cover_letter.MIN_WORDS, "max_words": cover_letter.MAX_WORDS})
+    release, release_rewrite, asked, saves = threading.Event(), threading.Event(), [], []
+
+    def held_save(self, job_id, texts):                                       # LibreOffice still at work until the test lets it go
+        saves.append(list(texts))
+        release.wait(30)
+        return {"ok": True, "warnings": []}
+
+    def held_rewrite(self, *a, **k):                                          # Claude still at work until the test lets it go
+        asked.append(a)
+        release_rewrite.wait(30)
+        return {"ok": True, "paragraph": "Rewritten."}
+    monkeypatch.setattr(ui_api.Api, "save_letter", held_save)
+    monkeypatch.setattr(ui_api.Api, "rewrite_paragraph", held_rewrite)
+    ui.js('letterDialog.show("lead")')
+    _until_open(ui, "letterDialog")
+    dialog, err = ui.find("letterDialog"), ui.find("letterErr")
+    todo, drawn = [dialog.property("contentItem")], []                      # a Repeater's row: drawn, not in the object tree
+    while todo:
+        drawn.append(todo.pop())
+        todo.extend(drawn[-1].childItems())
+    button = next(item for item in drawn if item.objectName() == "rewrite0")
+    try:
+        ui.js('letterDialog.setText(1, "Second one, changed."); letterDialog.save()')
+        assert ui.js("letterDialog.saving") is True
+        assert button.property("enabled") is False and button.property("opacity") == ui.js("theme.disabledOpacity")   # looks it
+        ui.js("letterDialog.rewrite(0)")
+        assert ui.js("letterDialog.busyIndex") == -1 and err.property("text") == "The letter is still being saved. Wait for it, then rewrite."
+        ui.js("letterDialog.save()")                                          # not only the button: save() itself refuses
+        assert err.property("text") == "The letter is still being saved. Wait for it, then save." and len(saves) == 1
+    finally:
+        release.set()
+    _until_true(ui, lambda: ui.js("letterDialog.saving") is False)
+    assert button.property("enabled") is True and asked == [] and ui.js("letterDialog.dirty") is False   # the file has what the window shows
+    try:
+        ui.js("letterDialog.rewrite(2)")
+        _until_true(ui, lambda: len(asked) == 1)
+        ui.js("letterDialog.rewrite(0)")
+        assert "still rewriting paragraph 3" in err.property("text") and ui.js("letterDialog.busyIndex") == 2   # one paragraph at a time
+        ui.js("letterDialog.save()")
+        assert err.property("text") == "Claude is still rewriting paragraph 3. Wait for it, then save." and len(saves) == 1
+    finally:
+        release_rewrite.set()
+    _until_true(ui, lambda: ui.js("letterDialog.busyIndex") == -1)
+    assert "was rewritten" in ui.js("letterDialog.info") and err.property("text") == ""                  # no stale red line beside the green one
+    ui.js("letterDialog.tryClose(); letterDialog.tryClose()")                 # the rewrite is not saved: Close twice discards it
+    _until_closed(ui, dialog)
+    assert ui.warnings == []
+
+
 def test_esc_asks_once_before_unsaved_answers_are_thrown_away(ui):
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest

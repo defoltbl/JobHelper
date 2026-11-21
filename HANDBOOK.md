@@ -161,6 +161,8 @@ data/                your data; only the *.example.* files are in git
   one person only), and a proxy set in the environment is still used. `textfmt.fold` is the one accent fold.
 - **A source that fails is never "nothing found"** (#76): `agent2_search._collect` names it in the log and in
   `failed` (a career site of many through `JobSource.failures()`); with no answer at all it raises `SourcesDown`.
+  A career site read only in part (a later page gave no answer) keeps the postings it read and is still named in
+  "Not read this time"; "No career site could be read." comes only when every company gave nothing.
   `take_in(failed=...)` then keeps the earlier Filtered out rows of those sources only, never one now in the job
   list (`_with_earlier`). A source that failed as a whole is named once; `failures()` gives only the names of its
   parts (one company), and `_collect` alone writes "careers (Fabrikam)". Words are compared without accents
@@ -419,7 +421,11 @@ data/                your data; only the *.example.* files are in git
 - **A Keychain that does not answer is not "no check".** `integrity.changed_titles()` gives `integrity.NOT_CHECKED`
   on `VaultError`, so the Account card and the start-up check say so and a search is refused. The card's Data protection row shows `integrity.NOT_CHECKED_CARD` (`connections()["changes_unchecked"]`, `["changes_msg"]`; `integrity.not_checked(titles)` tells the case) in the warning colour with a **Check again** pill (busy until the answer), and offers no Approve or See what changed for files that were not checked. `ensure_baseline()` never
   signs a new list while a signed list is on the disk, even a damaged one, or when the Keychain lost its mark: that
-  would approve a changed file (a damaged list shows every file as not signed, for the person to approve). The signed list is written with `vault.write_plain` (whole or not at all).
+  would approve a changed file (a damaged list shows every file as not signed, for the person to approve). The signed list is written with `vault.write_plain` (whole or not at all), and so is the career-site list
+  `companies.json` (`api_options`): a half file would read as changed. Approving is one step at a time
+  (`integrity._MANIFEST_LOCK`, re-entrant): the master CV is approved on a worker thread while Options approves the
+  career-site list, and without the lock one write lost the other's entry; the first signing (`ensure_baseline`) checks and
+  signs inside it, so two starts sign once.
 - **Every write of a data file reaches the disk before the app goes on:** `vault._write_atomic` flushes and syncs
   the file, then the folder after `os.replace`. A restore copies the damaged file aside (`set_aside(..., move=False)`)
   and writes over it only after that, so a failed write leaves it in place.
@@ -626,7 +632,33 @@ data/                your data; only the *.example.* files are in git
   with its own interest words): the wish runs from its word to the next "I", "we", "but" or semicolon. Before (audit, 30
   Oct), one wish word anywhere freed the whole sentence ("I built Kafka pipelines and am keen to grow"). "I led", "I
   designed", "I created", "I delivered", "I migrated", "I owned" and "my/our" up to two words before a term are claims too.
+  The check also reads a tool the CV lacks when it is stated as knowing, a role or a duty ("I know Kafka well", "I am a
+  Kafka engineer", "Responsible for Kafka clusters", "Managing Kafka clusters since 2020"), and after a wish that OPENS the
+  sentence and ends at a comma before work done ("Eager to learn Spark, built Kafka pipelines"). A sentence that only
+  describes the work ("Building Kafka platforms is demanding work") is not cut; a wish after a subject ("I would love to
+  join you, building Kafka pipelines") and a wish that goes on stay one wish; "I know your team uses Kafka" stays clean.
+  The fixed word lists for these forms (`_DUTIES`, `_KNOWS`, `_NOVICES` and the words added to `_NOT_DONE`) are accepted
+  because the golden set (`tests/fixtures/letter_evals.json`, held-out batches) and a read-only measurement on the real
+  letters gate each change before it ships; a new word there needs a case in the golden set first. The fixer saw the
+  held-out batch h142 through its case ids, so its recall counts as development; the blind batch h143 (neutral ids) gives
+  the held-out number. Low recall is tracked in issue #146.
+  A sentence that opens with an "-ing" phrase used as the subject is not a claim: a verb in "-s" right after the
+  phrase's object, before an article, a possessive or an "-ing" word, marks it ("Working with Airflow at a client means
+  owning the nightly pipelines"; "Managing Kafka clusters since 2020" still is a claim). Known left-over: "Running Kafka
+  takes discipline." still reads as a claim. An "-ing" verb is judged by its past form in one place, so "taking a
+  course" is learning like "completed a course" (no claim, no "borrowed" note; "I am doing an online class in Spark").
+  Blind batch h143 (30 cases, neutral ids): h143-17 and h143-28 were shown to the fixer in the #143 fix round, so they
+  count as development. The blind held-out number is the other 28 cases: claimed recall 14/17, false alarms 0/11.
+  Its three misses (a present-tense routine like "I regularly perform CPR ...", a gerund subject about one's own work,
+  "I serve as the X administrator") are tracked in issue #146.
+  False-alarm shapes left, also in issue #146: "Running Kafka takes discipline.", "Tuning SAP matters most.", "Keen to
+  work on large, distributed Kafka systems.", "I know Kafka from your posting.", "I am responsible for learning Kafka."
+  Decision: "Knowing Kafka, I applied." is a claim, like "I know Kafka well".
+  `learns()`: a learning sentence drops the "borrowed" note only when the text shows no work at all (no claim wording, no
+  statement, no "my ... pipelines", no other first-person verb of work).
   Measured on the 74 real letters: one more letter flagged, and its sentence already admitted a gap ("limited").
+  On 21 November 2026 the main session measured 53 real letters, read-only (checksums unchanged): no invented claim on
+  main or on the branch, and the same 8 letters with warnings, with identical texts – no new false alarm.
 - **A skill is in the master CV where a word starts** (`cv_tailor._named_in`): "Docker" in "Dockerized" counts, "Rust" in
   "trust" and "Go" in "good" do not (a name under 4 letters must be a whole word or its plural), unless the master has
   one of its longer names in `_INSIDE` ("Golang", "GitHub", "PyQt", "PySpark", "VueJS"); an abbreviation in capitals
@@ -648,11 +680,18 @@ data/                your data; only the *.example.* files are in git
   a double-click never asks and discards at once (#81).
 - **Consent is never the model's** (`form_fill.CONSENT_WORDS`, one list for the planner and the page scripts): "I agree",
   agree to terms or to the use of data, accept terms, acknowledge, authorize, certify, "I confirm/declare", a background
-  check, a privacy policy, newsletters, job alerts, "keep my data on file", also in Czech, German, Spanish and French. It
+  check, a privacy policy, newsletters, job alerts, "keep my data on file", also in Czech, German, Spanish and French. German
+  splits the verb around its object ("Ich stimme der Datenverarbeitung zu", "Ich willige in die Verarbeitung meiner Daten
+  ein"), so "zu" or "ein" counts up to ten words after "stimme" or "willige"; the window is linear (`\s` and `\S` never match
+  the same sign, the count is fixed), where a capped filter would let the long forms through. "Stimmen Sie der Aussage zu: …"
+  in a skills question is left to the person too. It
   holds for every field kind but tick boxes, which have the longer `NEVER_TICK_WORDS` (it starts with the consent
   words). A consent field is left with `form_fill.CONSENT`, before answer memory can replay an earlier "Yes". "Are you
   authorized to work …", "Do you agree to relocate?" and "Experience with GDPR" are questions about you and stay the
   model's. "Tax" and "VAT" are private only as a number ("Tax ID"), never in "salary before tax".
+- **The assistant's name rules** (`form_fill._RULES`, `FormPlanner._meaning`): a label that names both parts ("First and
+  last name", "Jméno a příjmení", "Last name, first name") gets the full name (`_BOTH_NAMES`); a bare "Name" or "Jméno" gets
+  the first name when the form also has a surname field, else the full name; "Middle name" is left to the person.
 - **A text box gives consent only when it asks you to type it** (`form_fill._consent`, `_TYPED_CONSENT`: "I agree",
   "Type I AGREE"), or when a consent word is in its inner name (`_consent_name`: "consent_required", "marketing_consent",
   "agree_to_terms") unless the name also holds a non-consent noun (`_NOT_CONSENT_NOUN`: url, email, phone, site, date …):

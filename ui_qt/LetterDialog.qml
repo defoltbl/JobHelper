@@ -10,7 +10,8 @@ import QtQuick.Effects
 Dialog {
     id: letterDialog; objectName: "letterDialog"
     modal: true; anchors.centerIn: parent
-    readonly property bool holdsWork: dirty || busyIndex >= 0 || saving      // unsaved changes, Claude rewriting, or a save on its way
+    readonly property bool idle: busyIndex < 0 && !saving                 // neither Claude rewriting nor a save on its way: the text may change
+    readonly property bool holdsWork: dirty || !idle                      // unsaved changes, Claude rewriting, or a save on its way
     closePolicy: holdsWork ? Popup.NoAutoClose : Popup.CloseOnEscape      // Esc must not throw away edits ...
     Shortcut { sequence: "Escape"; enabled: letterDialog.holdsWork && win.onTop(letterDialog)   // ... nor do nothing
                onActivated: letterDialog.tryClose() }
@@ -51,9 +52,13 @@ Dialog {
         for (var i = 0; i < texts.length; i++) if (("" + texts[i]).trim() === "") out.push(i + 1);
         return out.length === 0 ? "" : out.join(" and ");
     }
+    // one rule for "not now": the text may not change while Claude rewrites or a save is on its way; "" when idle
+    function busyRefusal(then) {
+        if (busyIndex >= 0) return "Claude is still rewriting paragraph " + (busyIndex + 1) + ". Wait for it, then " + then + ".";
+        return saving ? "The letter is still being saved. Wait for it, then " + then + "." : "";
+    }
     function tryClose() {
-        if (busyIndex >= 0) { info = ""; err = "Claude is still rewriting paragraph " + (busyIndex + 1) + ". Wait for it, then close."; return; }
-        if (saving) { info = ""; err = "The letter is still being saved. Wait for it, then close."; return; }
+        if (!idle) { info = ""; err = busyRefusal("close"); return; }
         if (dirty && !confirmClose) {
             confirmClose = true; info = "";
             err = "You changed the letter and did not save it. Press Save, or Close once more to discard the changes.";
@@ -64,12 +69,14 @@ Dialog {
     // the rewrite note at its limit: its box turns red and says so beside it, as long as it stays full
     readonly property bool hintFull: hintField.maximumLength > 0 && hintField.text.length >= hintField.maximumLength
     function rewrite(i) {
-        if (busyIndex >= 0) return;
+        // a rewrite during a save changed the window while the old text went to the file: they disagreed after the save
+        if (!idle) { info = ""; err = busyRefusal("rewrite"); return; }
         if (("" + texts[i]).trim() === "") { info = ""; err = "Paragraph " + (i + 1) + " is empty. Write something for Claude to rewrite, or undo your changes."; return; }
         err = ""; info = ""; busyIndex = i;
         bridge.rewriteParagraph(meta.id, texts, i, hintField.text);
     }
     function save() {
+        if (!idle) { info = ""; err = busyRefusal("save"); return; }        // not only the button: a second save or one during a rewrite
         err = ""; info = ""; confirmClose = false;
         var empty = emptyOnes();
         if (empty !== "") { err = "Paragraph " + empty + (empty.indexOf("and") > 0 ? " are" : " is") + " empty. A letter needs all " + texts.length + " paragraphs."; return; }
@@ -92,6 +99,7 @@ Dialog {
             if (!letterDialog.visible || res.job_id !== letterDialog.meta.id) return;
             letterDialog.busyIndex = -1;
             if (res.ok) { paraModel.setProperty(res.index, "body", res.paragraph); letterDialog.setText(res.index, res.paragraph);
+                          letterDialog.err = "";              // a "still rewriting" refusal is over too
                           letterDialog.info = "Paragraph " + (res.index + 1) + " was rewritten. Read it, then Save or change it back."; }
             else letterDialog.err = "Paragraph " + (res.index + 1) + " was not rewritten: " + (res.msg || "unknown reason");
         } }
@@ -132,7 +140,7 @@ Dialog {
                                 text: (letterDialog.texts[index] || "").split(/\s+/).filter(function (w) { return w !== ""; }).length + " words" }
                             SmallButton { objectName: "rewrite" + index
                                 text: letterDialog.busyIndex === index ? "Rewriting…" : "Rewrite this paragraph"
-                                enabled: letterDialog.busyIndex < 0; onClicked: letterDialog.rewrite(index) }
+                                enabled: letterDialog.idle; onClicked: letterDialog.rewrite(index) }
                         }
                         Rectangle { Layout.fillWidth: true; radius: 9; color: theme.inset; border.width: 1
                             border.color: pEdit.text.trim() === "" ? theme.crit : (pEdit.activeFocus ? theme.accent : theme.line)
@@ -172,7 +180,7 @@ Dialog {
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }
         DialogFooter {
             SmallButton { text: "Open in Word"; onClicked: win.openDoc("letter", detailDialog.job.letter || "") }
-            SmallButton { text: "Undo my changes"; enabled: letterDialog.dirty && letterDialog.busyIndex < 0 && !letterDialog.saving
+            SmallButton { text: "Undo my changes"; enabled: letterDialog.dirty && letterDialog.idle
                 onClicked: { letterDialog.texts = letterDialog.original.slice();
                              for (var i = 0; i < letterDialog.original.length; i++) paraModel.setProperty(i, "body", letterDialog.original[i]);
                              letterDialog.err = ""; letterDialog.info = ""; } }
@@ -180,7 +188,7 @@ Dialog {
             Text { visible: letterDialog.dirty; text: "not saved"; color: theme.warn; font.pixelSize: 11; font.bold: true }
             SmallButton { objectName: "letterClose"; text: "Close"; onClicked: letterDialog.tryClose() }
             PillButton { objectName: "letterSave"; primaryStyle: true; text: letterDialog.saving ? "Saving…" : "Save"
-                enabled: letterDialog.dirty && letterDialog.busyIndex < 0 && !letterDialog.saving; onClicked: letterDialog.save() }
+                enabled: letterDialog.dirty && letterDialog.idle; onClicked: letterDialog.save() }
         }
     }
 }
