@@ -18,26 +18,27 @@ from . import keywords
 GAP = re.compile(
     r"\b(not yet|have not|haven't|do not have|don't have|lack(s|ing)?|gaps?|honest(ly)?|limited|"
     r"unfamiliar|despite|although|no experience|little experience|never (used|worked))\b", re.IGNORECASE)
-# A forward-looking wish: naming a technology this way is not a claim.
-WISH = re.compile(r"\b(would like|would love|keen|look(ing)? forward|want to|eager|hope to|"
-                  r"excited to|wish to|aim to|motivated to)\b", re.IGNORECASE)
+# A forward-looking wish: naming a technology this way is not a claim. Its "-ing" forms open a sentence too ("Hoping to
+# learn Spark, …"), and "aspiring" says what someone is not yet ("an aspiring Kafka engineer", #142).
+WISH = re.compile(r"\b(would like|would love|keen|look(ing)? forward|looking to|want(ing)? to|eager|hop(e|ing) to|"
+                  r"excited to|wish(ing)? to|aim(ing)? to|motivated to|aspir(e|es|ing))\b", re.IGNORECASE)
 # A clause that describes a team as it works now ("a team where we use Kafka"), not the candidate's own work: present
 # tense only, so "a team where we built Kafka pipelines" is still a claim (#82). It ends at the next "I" or "but" (a
 # claim may start there) as well as at a stop.
 _TEAM_CLAUSE = re.compile(r"\bwhere\s+we\s+(?:use|run|work|build|deploy|manage|have|are|love|value)\b"
                           r"(?:(?!\b(?:I|but)\b)[^.;,])*", re.IGNORECASE)
-# Where a wish ends: the next "I" or "we" (a new claim may start there), "but", a semicolon, or a clause about what was
-# done ("eager to learn Spark, having built Kafka pipelines": #82).
-_WISH_END = r".*?(?=\b(?:I|I've|I'm|[Ww]e|but)\b|;|,\s*(?:having|after|since|while)\b|$)"
 # Wording that claims hands-on experience.
 # "lead with" / "lead by" is a manner, not leading a project (#82). A team clause ("a team where we use Kafka") is taken
 # out before this is asked (_TEAM_CLAUSE). "I wrote" and "I have written" are read by _work, which knows "I wrote to you" is
 # the letter (#113, #131).
+# Its verbs of work also say a claim after "and" in a first-person sentence ("… and use Kafka daily": _works_now).
+_CLAIM_VERBS = (r"work(ed)?|use[ds]?|built|build|"
+                r"deploy(ed)?|ran|run|administer(ed)?|manage[ds]?|configure[ds]?|operate[ds]?|maintain(ed)?|"
+                r"set up|automate[ds]?|implemented?|develop(ed)?|lead(?!\s+(?:with|by)\b)|led|design(ed)?|create[ds]?|"
+                r"deliver(ed)?|migrate[ds]?|own(ed)?")
+_CLAIM_VERB = re.compile(_CLAIM_VERBS, re.IGNORECASE)
 CLAIM = re.compile(
-    r"\b(I|I've|we)\s+(have\s+|also\s+|regularly\s+|currently\s+)*(work(ed)?|use[ds]?|built|build|"
-    r"deploy(ed)?|ran|run|administer(ed)?|manage[ds]?|configure[ds]?|operate[ds]?|maintain(ed)?|"
-    r"set up|automate[ds]?|implemented?|develop(ed)?|lead(?!\s+(?:with|by)\b)|led|design(ed)?|create[ds]?|"
-    r"deliver(ed)?|migrate[ds]?|own(ed)?)\b|"
+    r"\b(I|I've|we)\s+(have\s+|also\s+|regularly\s+|currently\s+)*(" + _CLAIM_VERBS + r")\b|"
     r"\bhaving\s+(?:built|used|worked|deployed|run|written|developed|designed|created|maintained|led|delivered|migrated)\b|"
     r"\b(experience(d)? (with|in)|hands-on|proficient|skilled|familiar with|expertise|background in|"
     r"knowledge of|my work with)\b", re.IGNORECASE)
@@ -48,9 +49,24 @@ CLAIM = re.compile(
 _PAST = (r"[a-z]{3,}ed|(?:re)?(?:used|gave|made|wrote|written|drew|drove|held|kept|taught|sold|brought|fed|ran|led|built|done|"
          r"troubleshot|cut|put)")
 _PAST_WORD = re.compile(_PAST)
+# Where a wish ends: the next "I" or "we" (a new claim may start there), "but", a semicolon, or a clause about what was
+# done ("eager to learn Spark, having built Kafka pipelines": #82). An "-ing" word after a comma goes on with the wish:
+# "I would love to join you, building Kafka pipelines".
+_WISH_ENDS = r"\b(?:I|I've|I'm|[Ww]e|but)\b|;|,\s*(?:having|after|since|while)\b|$"
+_WISH_END = r".*?(?=" + _WISH_ENDS + r")"
+# A wish that opens a sentence without a subject ("Eager to learn Spark, …") ends at a comma before a past form in lower
+# case too: the past form says what the same person did ("…, built Kafka pipelines", #142). After a subject a past form
+# there can only be in a list of adjectives, which goes on with the wish ("I would love to build reliable, automated Kafka
+# pipelines"), as does a list after an "-ing" word ("Keen to join a growing, distributed team").
+# shortcut: an opening wish with such a list ("Keen to work on large, distributed Kafka systems") still ends at it; tell an
+# adjective from a verb only if a letter shows one.
+_OPENING_WISH_END = (r".*?(?=" + _WISH_ENDS + r"|(?<!ing),\s*(?-i:(?:[a-z]+ly\s+)?(?:" + _PAST + r"))\b)")
 _DONE = re.compile(r"\b(?:I|I've|we)\s+(?:have\s+|also\s+|then\s+|once\s+|\w+ly\s+)*(" + _PAST + r")\b"
                    r"|\b(?:I'm|I am|I've been|I have been|we're|we've been|we have been)\s+(?:\w+ly\s+)?([a-z]{2,}ing)\b",
                    re.IGNORECASE)
+# Words that only look like an "-ing" verb of work: they join what follows like a preposition ("services including Kafka",
+# #142, #143).
+_ING_PREPOSITIONS = frozenset("regarding concerning including according excluding pending".split())
 _NOT_DONE = frozenset({"noticed", "noted", "learned", "wanted", "hoped", "liked", "loved", "enjoyed",
                        "decided", "discovered", "realised", "realized", "followed", "watched", "admired",
                        "appreciated", "considered", "wondered", "mentioned", "attended", "researched", "studied", "started",
@@ -67,11 +83,15 @@ _NOT_DONE = frozenset({"noticed", "noted", "learned", "wanted", "hoped", "liked"
                        # a sentence that opens with how someone feels or where something is: "Based in Prague, …" (#113)
                        "fascinated", "based", "located", "thrilled", "motivated", "honoured", "honored", "humbled", "amazed",
                        "convinced", "detailed", "listed", "outlined", "described", "required", "requested", "preferred",
+                       # seeing or hearing of something (#142)
+                       "seeing", "hearing",
                        # words that only look like a past tense
-                       "indeed", "speed", "proceed", "succeed", "exceed", "hundred"})
+                       "indeed", "speed", "proceed", "succeed", "exceed", "hundred"}) | _ING_PREPOSITIONS
 # Verbs that are work or learning by what they act on: "I trained the team on Terraform" is work, "I trained in
-# Terraform", "I completed a course in Kafka" and "I submitted my application" are not (#113).
-_BY_OBJECT = frozenset("trained completed reviewed submitted spotted finished passed earned".split())
+# Terraform", "I completed a course in Kafka" and "I submitted my application" are not (#113); "I did Kafka migrations" is
+# work, "I did a Kafka course" is not (#142); "I am taking over the Kafka platform" is work, "I am taking a class in Kafka"
+# is not (#143: an "-ing" verb is judged by its past, _as_past).
+_BY_OBJECT = frozenset("trained completed reviewed submitted spotted finished passed earned did took".split())
 # Verbs of the letter's own frame by who they go to: "I wrote to you", "I emailed to your team", "I emailed you", "I phoned
 # your office about the role" is the letter, "I wrote Kafka consumers" and "I wrote your Kafka connector about retries" are
 # work (#113, #131). "sent" and "e-mailed" are no past form the walk reads (_PAST), so they are not here.
@@ -109,11 +129,16 @@ def _work(verb: str, acts_on: list[str], after: str, then: list[str], terms=()) 
         return False
     if verb not in _BY_OBJECT:
         return True
-    if not acts_on or acts_on[0] == "that" or "your" in acts_on:   # "I trained in …", "I spotted that …", "your posting"
+    if not acts_on:                   # "I trained in …" is learning; "took over" or "took on" the work is work (#143)
+        return verb == "took" and after in ("over", "on")
+    if acts_on[0] == "that" or "your" in acts_on:                   # "I spotted that …", "your posting"
         return False
-    if any(w in _LEARNING or w in _APPLYING for w in acts_on):
-        return False
-    return not (acts_on[-1] in ("module", "modules") and after in ("on", "in", "about", "of"))   # "a module on Kafka"
+    return not (any(w in _APPLYING for w in acts_on) or _a_lesson(acts_on, after))
+
+
+def _a_lesson(acts_on: list[str], after: str) -> bool:
+    """Whether what a verb acts on is a lesson: "a course | in Kafka", "an evening class", "a module | on Kafka"."""
+    return any(w in _LEARNING for w in acts_on) or (acts_on[-1:] in (["module"], ["modules"]) and after in ("on", "in", "about", "of"))
 
 
 def _words(tokens: list[str], i: int) -> tuple[list[str], int]:
@@ -206,7 +231,10 @@ def _fragment(tokens: list[str], sentence: str, starts: list[int], terms=()) -> 
     (_describes_them, which reads `terms`).
     shortcut: a name ending in "-ed" before another kind of verb ("Ahmed told me") still reads as work; add a list of
     names only if a letter shows one."""
-    k = 1 if tokens and tokens[0].lower().endswith("ly") else 0
+    k = 0
+    while k < len(tokens) and tokens[k] == ",":                 # a wish cut before it: "Eager to learn Spark, | built …" (#142)
+        k += 1
+    k += k < len(tokens) and tokens[k].lower().endswith("ly")
     if k >= len(tokens) or not _PAST_WORD.fullmatch(tokens[k].lower()):
         return -1
     after = tokens[k + 1:k + 3]
@@ -219,11 +247,13 @@ def _fragment(tokens: list[str], sentence: str, starts: list[int], terms=()) -> 
 
 def _deeds(sentence: str, terms=()):
     """Each verb the sentence says as done by the person, with what it acts on: after "I" or "we" (_DONE), joined to one
-    of those, or opening a sentence without a subject (the candidate's own: owner's decision on #113). `terms` are the
-    ones the CV lacks (_describes_them)."""
+    of those, or opening a sentence without a subject (the candidate's own: owner's decision on #113). An "-ing" verb after
+    "I am" is judged by its past (_as_past: "I am attending a class" is no work, #143). `terms` are the ones the CV lacks
+    (_describes_them)."""
     found = list(_TOKEN.finditer(sentence))
     tokens, starts = [m.group(0) for m in found], [m.start() for m in found]
-    done = {m.start(): (m.group(1) or m.group(2), bisect.bisect_left(starts, m.end())) for m in _DONE.finditer(sentence)}
+    done = {m.start(): (m.group(1) or _as_past(m.group(2).lower()), bisect.bisect_left(starts, m.end()))
+            for m in _DONE.finditer(sentence)}
     k = _fragment(tokens, sentence, starts, terms)
     if k >= 0:
         yield from _clause(tokens, tokens[k], k + 1)
@@ -236,6 +266,301 @@ def _deeds(sentence: str, terms=()):
 def _done(sentence: str, terms=()) -> bool:
     """Whether the sentence says, in the first person or as a fragment, that work was done (see _deeds and _work)."""
     return any(_work(*deed, terms) for deed in _deeds(sentence, terms))
+
+
+# The verbs of learning in _NOT_DONE, by their past and their "-ing" form (_as_past keeps "learning" and "studying").
+_LEARNS = frozenset("learned learning studied studying attended trained".split())
+
+
+def learns(text: str, term: str) -> bool:
+    """Whether `text` says the person learns or learned `term`, not that they worked with it (#143): a verb of learning
+    names it ("I am learning Kafka", "I studied Kafka") or a lesson does ("I am taking an evening course in Kafka", "I
+    completed a module on Kafka"), and the text (its wishes cut) shows no sign of work at all: no verb said as done is work
+    ("I took a course in Kafka and ran its clusters"), no claiming wording (CLAIM), no statement of knowing, being or a
+    duty (_stated), no "my Kafka pipelines" (_owned) and no work said in the present (_works_now: "… and use Kafka daily")."""
+    said = unwished(text)
+    deeds = list(_deeds(said))
+    return (any((verb.lower() in _LEARNS or _a_lesson(acts_on, after)) and mentions(" ".join(acts_on + then), term)
+                for verb, acts_on, after, then in deeds)
+            and not (any(_work(*deed) for deed in deeds) or CLAIM.search(said) or _stated(said) or _owned(said, term)
+                     or _works_now(said)))
+
+
+# Present forms whose past is no "-ed" form, as _work reads them; the rest add "-ed" ("use" → "used", "study" → "studied").
+_PRESENT_PAST = {"do": "did", "take": "took", "write": "wrote", "make": "made", "run": "ran", "lead": "led", "build": "built"}
+_STILL = frozenset("also then still now".split())                         # and every word in "-ly"
+
+
+def _present_past(verb: str) -> str:
+    """The past form _work judges a present first-person verb by."""
+    if verb in _PRESENT_PAST:
+        return _PRESENT_PAST[verb]
+    if verb.endswith("e"):
+        return verb + "d"
+    return verb[:-1] + "ied" if len(verb) > 2 and verb[-1] == "y" and verb[-2] not in "aeiou" else verb + "ed"
+
+
+def _works_now(said: str) -> bool:
+    """Whether a first-person sentence says work in the present or with "have" after a joiner, which _deeds (past forms and
+    "I am …ing") does not read: right after "I" or "we" any verb in lower case that is no auxiliary (_FINITE, _BEING) and
+    no verb of learning, seeing or feeling (_NOT_DONE) is judged by its past ("I run Kafka", "I take a class in Kafka" is
+    learning); after "and", "," or "then" in such a sentence only a verb of CLAIM ("… and use it daily") or "have" and a
+    past form ("… and have used Kafka") counts, since a noun can follow a joiner ("a course in Kafka and data").
+    shortcut: another verb after a joiner ("… and process events with it") is not read; add it only if a letter shows one.
+    Each token is read a few times at most."""
+    tokens = [m.group(0) for m in _TOKEN.finditer(said)]
+    lower = [t.lower() for t in tokens]
+    first = False
+    for k, word in enumerate(lower):
+        if word in _STOPS:
+            first = False
+            continue
+        by_subject = word in _SUBJECTS
+        if not (by_subject or (first and word in _JOINERS)):
+            continue
+        first = True
+        j = k + 1
+        while j < len(lower) and (lower[j] in _STILL or lower[j].endswith("ly")):
+            j += 1
+        if j >= len(lower) or not tokens[j].isalpha() or not tokens[j].islower():
+            continue
+        verb = lower[j]
+        if verb in ("have", "has") and j + 1 < len(lower) and _PAST_WORD.fullmatch(lower[j + 1]):
+            if not by_subject and _work(lower[j + 1], *_acts_on(tokens, j + 2)):
+                return True                                     # after "I", _deeds reads "I have used"
+        elif not by_subject:
+            if _CLAIM_VERB.fullmatch(verb):
+                return True
+        elif not (verb in _FINITE or verb in _BEING or verb in _NOT_DONE or _not_done(verb) or _PAST_WORD.fullmatch(verb)
+                  or verb.endswith("ing")) and _work(_present_past(verb), *_acts_on(tokens, j + 1)):
+            return True
+    return False
+
+
+# ── #142: knowing, being and a duty, said about a term ──
+# Verbs of knowing or doing that CLAIM's list lacks, in the first person: "I know Kafka well", "I handle the Kafka side", "I
+# specialise in SAP", "I did Kafka migrations". They claim only what they act on (_stated): "I know your team uses Kafka"
+# claims nothing.
+_KNOWS = frozenset("know knew understand handle specialise specialize did".split())
+# A duty and the word before what it is over: "Responsible for …", "I took ownership of …", "I was in charge of …".
+_DUTIES = {"responsible": "for", "accountable": "for", "responsibility": "for", "ownership": "of", "charge": "of", "care": "of"}
+_BEING = frozenset("am are was were been".split())
+_TAKES = frozenset("take takes took taken have has had".split())             # a duty taken on or had
+_I = frozenset("i i'm i’m i've i’ve".split())
+_I_AM = frozenset("i'm i’m we're we’re".split())
+_ADVERBS = frozenset("also well very quite".split())                         # and every word in "-ly"
+# What a statement acts on ends where a clause of its own starts ("I know that …", "… while learning Kafka") or where the
+# speaker is acted on ("Managing a team taught me …").
+_ME = frozenset("me us myself ourselves".split())
+_OWN_CLAUSE = frozenset("that which who whom whose while when whereas because although though if unless until where how what "
+                        "why whether but".split()) | _ME
+# A verb of its own makes it a clause about something ("I know Kafka is central to you", "Managing expectations is key"), and
+# the reader, another party or a "not" make it no claim ("I know your team uses Kafka", "I did not use Kafka").
+_FINITE = frozenset("is are was were has have had do does did can could will would shall should may might must".split())
+_NOT_ACTED = _FINITE | frozenset("you your yours they their them he she his her not never no without".split())
+# After the comma of an opening phrase, these start another subject: "Using Kafka, the platform …".
+_NEW_SUBJECT = frozenset("the this these those a an its their your his her our my".split())
+# The words that open what a verb in "-s" acts on but never follow a plural noun a phrase acts on: an article or a
+# possessive ("… takes a steady hand"; not "this", "these" or "those": "clusters this year", #143).
+_DETERMINERS = _NEW_SUBJECT - {"this", "these", "those"}
+# People new to a thing or fond of it, not doing it: "a Kafka fan", "a Kafka beginner". The doer of a verb of _NOT_DONE
+# ("learner", "follower", "attendee") is none either (_a_doer).
+_NOVICES = frozenset("fan enthusiast beginner newcomer novice newbie student member candidate applicant".split())
+
+
+def _not_done(stem: str) -> bool:
+    """Whether a verb's stem ("learn" of "learner", "lov" of "lover", "study") is a verb of _NOT_DONE in one of its forms."""
+    return any(form in _NOT_DONE for form in (stem + "ed", stem + "d", stem[:-1] + "ied", stem + "ing"))
+
+
+# The irregular pasts of the verbs _work's lists name ("did", "took"); every other one there ends in "-ed".
+_IRREGULAR = {"doing": "did", "taking": "took"}
+
+
+def _an_ing_verb(word: str) -> bool:
+    """Whether a lower-case word has the shape of an "-ing" verb: a vowel before "-ing" ("string" and "thing" have none,
+    "nothing" is no verb), and no preposition ("during", "using", "including")."""
+    return (word.endswith("ing") and word.isalpha() and any(ch in "aeiouy" for ch in word[:-3]) and not word.endswith("thing")
+            and word not in _PREPOSITIONS and word not in _ING_PREPOSITIONS)
+
+
+def _as_past(ing: str) -> str:
+    """How _work judges a lower-case "-ing" verb, in an opening phrase and after "I am" alike (#143): as itself when
+    _NOT_DONE names it ("learning"), else as its past, by _IRREGULAR ("doing" → "did", "taking" → "took") or by its ending
+    ("managing" → "managed", "studying" → "studied", "attending" → "attended")."""
+    if ing in _IRREGULAR:
+        return _IRREGULAR[ing]
+    if ing in _NOT_DONE:
+        return ing
+    stem = ing[:-3]
+    return stem[:-1] + "ied" if len(stem) > 2 and stem[-1] == "y" and stem[-2] not in "aeiou" else stem + "ed"
+
+
+def _a_doer(noun: str) -> bool:
+    """Whether the last word of "I am a …" names a person by what they do ("engineer", "expert", "lead", "specialist"), not
+    by an interest or a start (_NOVICES) or by a verb of _NOT_DONE ("learner", "follower", "attendee")."""
+    word = singular(noun)
+    stem = re.sub(r"(?:er|or|ee)$", "", word)
+    return word not in _NOVICES and not (stem != word and _not_done(stem))
+
+
+def _in_clause(tokens: list[str], j: int) -> bool:
+    """Whether token `j` is still in the clause a statement opens: no stop, no "I" or "we", and no comma before a new
+    subject ("Using Kafka, | the platform …")."""
+    return j < len(tokens) and not _ends_clause(tokens[j]) and not (
+        tokens[j] == "," and j + 1 < len(tokens) and tokens[j + 1].lower() in _NEW_SUBJECT)
+
+
+def _verb_in_s(tokens: list[str], i: int) -> bool:
+    """Whether token `i` is a verb in "-s" after its subject, told by the word after it: a determiner (_DETERMINERS: "… takes
+    a steady hand") or an "-ing" verb in lower case ("… means guarding every message", #143). A plural noun is followed by
+    a preposition, a joiner, a stop, a clause of its own, "this" or "every" ("clusters since 2020", "clusters, I …",
+    "workloads every night").
+    shortcut: a plural noun before "a" or "the", or before an "-ing" verb of its own ("Processing Kafka events a second",
+    "Running Kafka clusters serving shops"), reads as a verb, and a verb before a bare noun or an adjective ("… takes
+    discipline", "… matters most") does not; tell them apart only if a letter shows one."""
+    word = tokens[i]
+    if len(word) < 4 or not (word.isalpha() and word.islower() and word.endswith("s")) or word.endswith(("ss", "us", "is")):
+        return False
+    then = tokens[i + 1] if i + 1 < len(tokens) else ""
+    return then.lower() in _DETERMINERS or (then.islower() and _an_ing_verb(then))
+
+
+def _has_a_verb(tokens: list[str], i: int) -> bool:
+    """Whether the clause from token `i` holds a verb of its own: a finite one (_FINITE, "isn't"), also past a clause of its
+    own ("the platforms on which our apps are deployed is …"), or one that acts on the speaker (_ME: "… matters to me").
+    After a phrase that opens a sentence with an "-ing" word, such a verb makes the phrase its subject, which says what the
+    work is, not that the person did it ("Managing expectations is key", "Running Kafka for a bank is demanding", #142).
+    Each token is read once.
+    A verb in "-s" counts after the first word, which is what the "-ing" word acts on (_verb_in_s: "Running Kafka at a bank
+    means guarding …", but "Leading teams shipping …", #143). Each token is read once, and the one after it once more.
+    shortcut: the verb of a clause of its own counts too, so "Managing Kafka clusters that are critical" is no claim;
+    count only the main verb if a letter shows one (a clause's own verb is often no word of _FINITE: "systems that scale")."""
+    first = i
+    while _in_clause(tokens, i):
+        word = tokens[i].lower()
+        if word in _FINITE or word in _ME or word.endswith(("n't", "n’t")) or (i > first and _verb_in_s(tokens, i)):
+            return True
+        i += 1
+    return False
+
+
+def _object(tokens: list[str], i: int, whole: bool) -> tuple[int, int]:
+    """The tokens a statement acts on, from token `i`, as a range: up to a stop, a new subject or a word of _OWN_CLAUSE,
+    and, unless `whole` (a duty or an opening verb, which act on the rest of their clause), up to a preposition or a
+    joiner. Empty when a word of _NOT_ACTED is in it. Each token is read once."""
+    j = i
+    while _in_clause(tokens, j) and tokens[j].lower() not in _OWN_CLAUSE and \
+            (whole or (tokens[j].lower() not in _JOINERS and tokens[j].lower() not in _PREPOSITIONS)):
+        j += 1
+    acted = [t.lower() for t in tokens[i:j]]
+    return (i, j) if acted and not any(w in _NOT_ACTED or w.endswith(("n't", "n’t")) for w in acted) else (i, i)
+
+
+def _duty(lower: list[str], d: int) -> int:
+    """Where what a duty from token `d` is over starts ("responsible for |", "in charge of |", "full ownership of |"), or 0."""
+    if lower[d:d + 1] == ["in"]:
+        d += 1
+    elif d + 1 < len(lower) and lower[d + 1] in _DUTIES and lower[d] not in _NEW_SUBJECT and lower[d] not in _NOT_ACTED:
+        d += 1                                                  # one word before the duty: "full", "sole", "good"
+    return d + 2 if d + 1 < len(lower) and _DUTIES.get(lower[d]) == lower[d + 1] else 0
+
+
+def _opening(tokens: list[str], lower: list[str], c: int, first: bool, last_subject: int, terms) -> tuple[int, int]:
+    """What a clause that opens without a subject at token `c` acts on, CV style: a duty ("Responsible for …", "Took
+    ownership of …"), an "-ing" verb of work judged by _work as its past form ("Managing Kafka clusters since 2020"; not
+    "Looking forward", "Training in …", "Regarding"), "Having" and a past form, either of them not the subject of a verb
+    after it (_has_a_verb: "Building Kafka platforms is engineering"), or "As a" / "Being a" and a role in a
+    sentence that goes on in the first person ("As a Kafka engineer, I …"). An "-ing" word in capitals after the first word
+    is a name ("Spring"), and one with no vowel before "-ing" is no verb ("String", "Thing")."""
+    if c < len(lower) and lower[c].endswith("ly"):              # "Currently managing …"
+        c += 1
+    if c + 1 >= len(lower):
+        return c, c
+    word, then = lower[c], lower[c + 1]
+    if word in ("as", "being") and then in ("a", "an"):
+        i, j = _object(tokens, c + 2, False)
+        return (i, j) if i < j < last_subject and _a_doer(lower[j - 1]) else (c, c)
+    duty = _duty(lower, c + 1 if word in _TAKES else c)
+    if duty:
+        return _object(tokens, duty, True)
+    if word == "having" and _PAST_WORD.fullmatch(then):         # "Having managed Kafka clusters, …"
+        c, verb = c + 1, then
+    elif _an_ing_verb(word) and word not in ("being", "having") and (first or tokens[c][0].islower()):
+        verb = _as_past(word)               # "Knowing Kafka, …" is a claim, as "I know Kafka well" is (fix round of #143)
+    else:
+        return c, c
+    if _has_a_verb(tokens, c + 1) or not _work(verb, *_acts_on(tokens, c + 1), terms):
+        return c, c
+    return _object(tokens, c + 1, True)
+
+
+def _being(tokens: list[str], lower: list[str], b: int, by_i: bool, terms) -> tuple[int, int]:
+    """What "I am", "we were" … from token `b` says the speaker is: in charge of something ("responsible for …", "in charge
+    of …"), a role ("a Kafka engineer", said by "I" only), or versed in something (a past form of work before "in", "with"
+    or "at": "well versed in SAP"; not "interested in Kafka" or "trained in Kafka")."""
+    duty = _duty(lower, b)
+    if duty:
+        return _object(tokens, duty, True)
+    if b + 1 >= len(lower):
+        return b, b
+    if lower[b] in ("a", "an", "the") and by_i:
+        i, j = _object(tokens, b + 1, False)
+        return (i, j) if i < j and _a_doer(lower[j - 1]) else (b, b)
+    done = lower[b].rsplit("-", 1)[-1]                          # "well-versed", "self-taught"
+    if _PAST_WORD.fullmatch(done) and lower[b + 1] in ("in", "with", "at") and \
+            _work(done, [], lower[b + 1], _words(tokens, b + 2)[0], terms):
+        return _object(tokens, b + 2, True)
+    return b, b
+
+
+def _first_person(tokens: list[str], lower: list[str], k: int, terms) -> tuple[int, int]:
+    """What "I" or "we" at token `k` know, do, are or have taken on: "I know Kafka", "I handle …", "I did …", "I specialise in
+    …", "I know how to …", and _being's forms, "I took care of …", "I had ownership of …"."""
+    j = k + 1
+    while j < len(lower) and (lower[j].endswith("ly") or lower[j] in _ADVERBS):
+        j += 1
+    if j + 1 < len(lower) and lower[j] in ("have", "has", "had") and lower[j + 1] in ("been", "taken"):
+        j += 1                                                  # "I have been", "I have taken"
+    if j >= len(lower):
+        return k, k
+    if lower[k] in _I_AM or lower[j] in _BEING:
+        b = j if lower[k] in _I_AM else j + 1
+        while b < len(lower) and (lower[b].endswith("ly") or lower[b] in _ADVERBS):
+            b += 1
+        return _being(tokens, lower, b, lower[k] in _I, terms)
+    if lower[j] in _TAKES:
+        duty = _duty(lower, j + 1)
+        return _object(tokens, duty, True) if duty else (k, k)
+    if lower[j] not in _KNOWS or (lower[j] == "did" and not _work("did", *_acts_on(tokens, j + 1), terms)):
+        return k, k
+    i = j + 1
+    if lower[i:i + 2] == ["how", "to"]:                         # "I know how to run Kafka"
+        i += 2
+    elif i < len(lower) and lower[i] in _PREPOSITIONS:          # "I specialise in SAP"
+        i += 1
+    span = _object(tokens, i, False)
+    return span if span[0] == span[1] or not _not_done(lower[span[0]]) else (k, k)   # "I did learn Kafka"
+
+
+def _stated(said: str, terms=()) -> list[str]:
+    """What each statement of knowing, being or a duty in a sentence (its wishes cut) acts on, as text (#142): "Kafka well"
+    in "I know Kafka well", "Kafka engineer" in "I'm a Kafka engineer", "the Kafka clusters" in "Responsible for the Kafka
+    clusters", "I took care of the Kafka clusters" or "Managing the Kafka clusters". A term claimed so must be in that text.
+    A clause opens without a subject at the sentence's start, after a semicolon, and after a comma right behind "I" or "I
+    am" (where a wish was cut: "I am eager to learn Spark, having built …"). Each token is read a few times at most."""
+    found = list(_TOKEN.finditer(said))
+    tokens, lower = [m.group(0) for m in found], [m.group(0).lower() for m in found]
+    last_subject = max((k for k, w in enumerate(lower) if w in _SUBJECTS), default=-1)
+    start = next((k for k, w in enumerate(lower) if w != ","), len(lower))
+    spans = [_opening(tokens, lower, start, True, last_subject, terms)]
+    for k, w in enumerate(lower):
+        if w in _SUBJECTS:
+            spans.append(_first_person(tokens, lower, k, terms))
+        elif w == ";" or (w == "," and k and (lower[k - 1] in _SUBJECTS or (lower[k - 1] in _BEING and k > 1
+                                                                            and lower[k - 2] in _SUBJECTS))):
+            spans.append(_opening(tokens, lower, k + 1, False, last_subject, terms))
+    return [said[found[i].start():found[j].start() if j < len(found) else len(said)] for i, j in spans if i < j]
 
 
 # An honest bridge names the missing thing on purpose (in an interview that is the right answer).
@@ -251,7 +576,9 @@ def unwished(sentence: str, wish: re.Pattern = WISH) -> str:
     sentence never hides a claim. The team clause goes first: a wish ends at its "we" and would leave "we use Kafka"
     without its "where" (#109)."""
     kept = _TEAM_CLAUSE.sub(" ", sentence)
-    return re.sub(f"(?:{wish.pattern}){_WISH_END}", " ", kept, flags=(wish.flags & re.IGNORECASE) | re.DOTALL)
+    flags = (wish.flags & re.IGNORECASE) | re.DOTALL
+    kept = re.sub(r"^\W*(?:\w+ly\s+)?(?:" + wish.pattern + ")" + _OPENING_WISH_END, " ", kept, count=1, flags=flags)
+    return re.sub(f"(?:{wish.pattern}){_WISH_END}", " ", kept, flags=flags)
 
 
 def sentences(text: str) -> list[str]:
@@ -335,16 +662,19 @@ class ClaimCheck:
         self._spoken = frozenset(t for t in self.terms if t in keywords.SPOKEN)
 
     def claimed_in(self, sentence: str, honest_ok: bool = False) -> str:
-        """The first technology this sentence presents as experience ('' if none): claiming wording, or "my"/"our" up
-        to two words before it ("my Kafka pipelines"); a language said with a level. What a wish names is never a claim;
-        with `honest_ok` an honest bridge is not one either."""
+        """The first technology this sentence presents as experience ('' if none): claiming wording, "my"/"our" up to
+        two words before it ("my Kafka pipelines"), or a statement of knowing, being or a duty that acts on it ("I know
+        Kafka well", "Responsible for Kafka clusters": _stated, #142); a language said with a level. What a wish names is
+        never a claim; with `honest_ok` an honest bridge is not one either."""
         if honest_ok and HONEST.search(sentence):
             return ""
         said = unwished(sentence)
         spoken = spoken_claims(said) if self._spoken else set()
         claims_any = bool(CLAIM.search(said)) or _done(said, self.terms)
+        stated = _stated(said, self.terms)
         return next((term for term in self.terms if (term in spoken if term in self._spoken else
-                                                     mentions(said, term) and (claims_any or _owned(said, term)))), "")
+                                                     mentions(said, term) and (claims_any or _owned(said, term)
+                                                                               or any(mentions(s, term) for s in stated)))), "")
 
     def unbacked(self, text: str, honest_ok: bool = False) -> str:
         """The first technology a text presents as experience though the CV lacks it ('' if none)."""

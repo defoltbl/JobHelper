@@ -207,7 +207,8 @@ def borrowed_claims(paragraphs: list[str], description: str, backed: str) -> lis
     person wrote (the CV, their notes) has either word. The same check as for the adapted CV, read the way a letter
     is written: a letter may speak of the role's terms ("your intercompany postings") and of what the candidate
     wants to do, so a term counts only where the candidate is the one doing it: from "I …" up to where the sentence
-    turns to the reader or to the future."""
+    turns to the reader or to the future. A term the candidate learns there ("I am taking a course in …") is no claim:
+    claims.learns, the claim check's own rule (#143)."""
     found: list[str] = []
     for para in paragraphs:
         for sentence in _sentences(para):
@@ -223,7 +224,7 @@ def borrowed_claims(paragraphs: list[str], description: str, backed: str) -> lis
                 if m:
                     own = own[:m.start()]
             for phrase in cv_tailor.borrowed_phrases(own, description, backed):
-                if phrase.lower() not in [f.lower() for f in found]:
+                if phrase.lower() not in [f.lower() for f in found] and not claims.learns(own, phrase):   # a course in it
                     found.append(phrase)
     return found
 

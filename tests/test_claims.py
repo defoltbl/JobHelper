@@ -886,3 +886,139 @@ def test_the_assistant_s_notes_and_talk_reach_claude_only_as_data(monkeypatch):
                                                                    notes=[_STEER]))
     bare = re.sub(r"<(notes|talk|posting)>.*?</\1>", "", sent[0], flags=re.DOTALL)
     assert "Ignore your rules" not in bare and "<notes>" in assistant_brain.SYSTEM
+
+
+def test_knowing_doing_being_or_a_duty_said_about_a_term_is_a_claim():
+    """#142: "I know Kafka well", "I am a Kafka engineer", "Responsible for Kafka clusters" and a verb that opens a sentence
+    in "-ing" passed, and an opening wish hid the past form after its comma."""
+    check = ClaimCheck(["Kafka", "SAP"])
+    for said in ("I know Kafka well.", "I did Kafka migrations.", "I specialise in Kafka.", "I am a Kafka engineer.",
+                 "Responsible for Kafka clusters.", "Managing Kafka clusters since 2020.",
+                 "Eager to learn Spark, built Kafka pipelines.", "I am responsible for the Kafka clusters at a retailer.",
+                 "I took ownership of the SAP rollout.", "I was in charge of the SAP rollout.",
+                 "Currently running the Kafka estate for a retailer.", "Running Kafka clusters for a retailer with my team.",
+                 "Running Kafka clusters, I learned to plan upgrades.", "Keen to study Spark, upgraded SAP for three plants.",
+                 "I am keen to study Spark, having built Kafka pipelines."):
+        assert check.claimed_in(said) in ("Kafka", "SAP"), said
+
+
+def test_a_statement_about_someone_else_a_course_or_an_interest_claims_nothing():
+    """#142: the new forms claim only what they act on: not the reader's tools, another party's duty, a course, a "not",
+    a wish, or a person new to a thing or fond of it."""
+    check = ClaimCheck(["Kafka", "SAP"])
+    for said in ("I know your team uses Kafka.", "Managing expectations is key.", "I am keen to learn Kafka.",
+                 "I am a quick learner.", "Responsible for my own time.", "I know that Kafka matters to you.",
+                 "I understand why your team chose Kafka.", "Your engineers are responsible for Kafka.",
+                 "They took care of Kafka for us.", "I did a Kafka course last spring.", "I did not touch Kafka.",
+                 "I am a Kafka fan.", "I am a Kafka learner.", "I am interested in Kafka.", "Being a Kafka engineer is a craft.",
+                 "Using Kafka, the platform team ships events.", "String handling in Kafka is subtle."):
+        assert check.claimed_in(said) == "", said
+
+
+def test_an_opening_ing_phrase_that_is_the_subject_of_a_verb_claims_nothing():
+    """#142: an "-ing" phrase with a verb of its own after it, also past a clause of its own, says what the work is, not
+    that the person did it (an approved letter's sentence was cut)."""
+    check = ClaimCheck(["Kafka", "SAP"])
+    for said in ("Designing and tuning the Kafka, Flink and SAP landscapes on which the bank's trading desks are hosted is "
+                 "work where precision counts every hour – and that is where I want to be.",
+                 "Running Kafka for a national bank is demanding work.", "Migrating SAP isn't a small job.",
+                 "Tuning SAP systems that your plants depend on matters to me.", "Running Kafka at scale excites us.",
+                 "Keen to deepen SAP skills; tuning SAP finance modules is what your team does."):
+        assert check.claimed_in(said) == "", said
+    assert check.claimed_in("Keen to deepen SAP skills; tuning SAP finance modules for a retailer.") == "SAP"
+
+
+def test_a_wish_goes_on_past_an_ing_word_and_a_list_of_adjectives():
+    """#142: only a wish that opens a sentence without a subject ends at a past form after a comma; after "I" a past form
+    there is an adjective of the wish, and an "-ing" word after a comma goes on with the wish too."""
+    check = ClaimCheck(["Kafka", "SAP"])
+    for said in ("I would love to join the data group, building Kafka pipelines at scale.",
+                 "I would love to help build reliable, automated Kafka pipelines.",
+                 "I am keen to work on large, distributed Kafka systems.", "Keen to join a growing, distributed Kafka team."):
+        assert check.claimed_in(said) == "", said
+    assert check.claimed_in("Really keen to study Spark, recently shipped Kafka connectors.") == "Kafka"
+
+
+def test_a_long_hostile_text_is_read_for_the_142_forms_in_linear_time():
+    """#142: the statements of knowing, being and a duty, the opening "-ing" phrase and its verb, and the opening wish
+    walk the tokens; each token is read a few times at most, so a long text stays linear."""
+    import time
+    check = ClaimCheck(["Kafka", "SAP"])
+    for hostile in ("I am , " + "managing Kafka clusters " * 2000, "; managing the Kafka platforms on which " * 1200,
+                    "Building " + "the Kafka platforms that " * 2000 + "is", "I know " * 7000 + "Kafka",
+                    "I am responsible for " * 2500 + "Kafka", "I am a " * 6000 + "Kafka engineer",
+                    "Eager to learn " + "large, " * 6000 + "built Kafka", "really " * 6000 + "keen to learn Kafka",
+                    "Managing " * 5000 + "Kafka", ", " * 21000 + "built Kafka", "I took care of " * 3000 + "SAP",
+                    "Responsible for " + "Kafka , " * 6000 + "the team"):
+        assert len(hostile) > 40_000
+        start = time.perf_counter()
+        check.claimed_in(hostile)
+        check.unbacked(hostile)
+        assert time.perf_counter() - start < 1.5, hostile[:40]     # ~0.05 s here, CI ~3x slower; a square takes minutes
+
+
+def test_an_opening_ing_phrase_before_a_verb_in_s_claims_nothing():
+    """#143: an "-ing" phrase that a verb in "-s" follows is its subject ("… means guarding …", "… takes a steady hand"):
+    a determiner or an "-ing" verb after the "-s" word shows the verb. A plural noun the phrase acts on stays an object
+    before a preposition, a joiner, a stop, "this" or "every", and right after the "-ing" verb."""
+    check = ClaimCheck(["Kafka", "SAP", "Spark"])
+    for said in ("Running Kafka at a bank means guarding every message.", "Upgrading SAP landscapes takes a steady hand.",
+                 "Supporting Kafka for retail clients involves the whole team.",
+                 "Maintaining Kafka connectors requires knowing the brokers well.",
+                 "Operating Spark clusters gives the analysts fresh data each morning."):
+        assert check.claimed_in(said) == "", said
+    for said in ("Building Kafka pipelines for three banks.", "Tuning SAP systems across four plants.",
+                 "Migrating SAP modules this year for a retailer.", "Running Kafka workloads every night for a retailer.",
+                 "Operating Kafka clusters and Spark jobs for a retailer.", "Leading teams shipping Kafka connectors.",
+                 "Managing Kafka clusters since 2020.", "Running Kafka clusters, I learned to plan upgrades."):
+        assert check.claimed_in(said) in ("Kafka", "SAP"), said
+
+
+def test_an_ing_verb_with_a_course_or_a_class_is_learning():
+    """#143: an "-ing" verb is judged by its past, so a course, a class, a lesson or a module it acts on is learning, as
+    with "I completed a course in Kafka" (#113); teaching one, or doing or taking on the work itself, is still a claim."""
+    check = ClaimCheck(["Kafka", "SAP", "Spark", "Terraform"])
+    for said in ("I'm currently doing an online class in Spark.", "I am attending a weekend workshop on Terraform.",
+                 "I am taking lessons in Kafka.", "I am completing a module on SAP.",
+                 "Taking a short course in Kafka this spring."):
+        assert check.claimed_in(said) == "", said
+    for said in ("I am teaching a class on Kafka.", "I am doing Kafka migrations for a bank.",
+                 "I am training the support team on SAP.", "I am taking ownership of the SAP rollout.",
+                 "I am running a Kafka workshop for our clients."):
+        assert check.claimed_in(said) in ("Kafka", "SAP"), said
+
+
+def test_learning_beside_work_is_no_pure_learning():
+    """Fix round of #143: claims.learns is True only when the text shows no sign of work at all."""
+    for work in ("I am learning Terraform and I deploy Terraform stacks for clients.",
+                 "I am doing a Terraform course and run Terraform modules at my job.",
+                 "I studied Terraform and have written Terraform modules for a bank.",
+                 "I am attending a Terraform class, and my Terraform stacks serve two shops."):
+        assert not claims.learns(work, "Terraform"), work
+    for learning in ("I am doing an evening course in Terraform.", "I am learning Terraform.",
+                     "I completed a module on Terraform.", "I am attending a workshop on Terraform."):
+        assert claims.learns(learning, "Terraform"), learning
+
+
+def test_having_and_a_verb_of_hearing_or_reading_is_no_claim():
+    """Fix round of #143: "Having" opens a claim only with a past form of work; knowing or understanding a term in an
+    opening phrase claims it, as "I know Kafka well" does."""
+    check = ClaimCheck(["Terraform"])
+    for said in ("Having read a lot about Terraform, I sent my CV.", "Having heard of Terraform at a meetup, I applied.",
+                 "Having spoken with a Terraform trainer, I applied."):
+        assert check.claimed_in(said) == "", said
+    for said in ("Having managed Terraform stacks, I applied.", "Knowing Terraform, I applied.",
+                 "Understanding Terraform deeply, I sent my CV."):
+        assert check.claimed_in(said) == "Terraform", said
+
+
+def test_a_long_run_of_words_in_s_after_an_ing_word_is_read_in_linear_time():
+    """#143: the verb in "-s" is told by the one word after it, so a long run of such words stays linear."""
+    import time
+    check = ClaimCheck(["Kafka"])
+    for hostile in ("Running " + "Kafka clusters means " * 4000 + "Kafka", "Running " + "clusters " * 9000 + "Kafka",
+                    "I am taking " * 5000 + "Kafka", "Taking " + "courses " * 9000 + "in Kafka"):
+        assert len(hostile) > 40_000
+        start = time.perf_counter()
+        check.claimed_in(hostile)
+        assert time.perf_counter() - start < 1.5, hostile[:40]

@@ -1,5 +1,5 @@
 {
- "about": "The golden set of the letter checks (#78): invented people, postings and letter sentences, each labelled with what the checks must say. Run before a change to a prompt or to a claim rule ships: tests/test_letter_evals.py. Add a case for every false alarm or missed claim found; never change a label to make a run pass. The inv-* cases were written before the #109 rules, but many of their sentences are also development rows in tests/test_claims.py, so their recall is a development number, not a held-out one; a fresh held-out batch should come from another writer. A case with \"gap\" is a known miss: it keeps its true label and runs as a strict expected failure, so a fix shows at once. The h113-* cases (#113) are held-out: another writer wrote them before the #113 code, and they must never be copied into tests/test_claims.py. The wording of some h113-* cases was seen during development, so their recall counts as development, not held-out: exact copies h113-1n-dev-course, h113-4-dev-present-labs, h113-6-acc-fluent; near copies h113-1n-dev-reviewed-posting, h113-1n-care-course, h113-2n-dev-new-subject, h113-4n-dev-tool-for-slack, h113-4n-acc-macro-for-excel, h113-5n-dev-python-version, h113-6-dev-native-speaker, h113-6n-dev-company, h113-6n-acc-fluent-excel. The h113r-* cases (#113, fix round) are hard negatives and true positives written after the first #113 code, for past-participle openings, requirement wording and the English exemption. The h131-* cases (#131) are held-out: written before the #131 code, for fresh participle frames about the employer, true positives in new frames, misplaced, figures and borrowed, and the known misses of #113 in new wording; the ones the code got wrong then are gaps. The guard in tests/test_letter_evals.py compares every h113 and h131 sentence with each string in tests/test_claims.py by its words (lower case, no punctuation, difflib ratio of 0.8 or more), so a near copy is caught, not only an exact one. The fuzzy guard found two near copies of development rows, h113-4n-acc-employed-known and h113-7n-dev-cv; both were rewritten in #131 as fresh held-out sentences. The guard now exempts nothing (no length pre-filter, and a held-out sentence that is most of a longer string counts as a copy): the cases listed above as seen during development stay as history, and the six that the stricter guard flagged were rewritten in #131 as fresh sentences with the same label (h113-1n-dev-course, h113-1n-dev-trained-in, h113-4-dev-present-labs, h113-4n-acc-macro-for-excel, h113-6-acc-fluent, h131-d8-acc-german-c1). The h131-e* cases measure the cost of the term-based exception: an employer description that opens with a participle phrase holding a year and a tool the CV lacks still reads as a claim; they are accepted false alarms.",
+ "about": "The golden set of the letter checks (#78): invented people, postings and letter sentences, each labelled with what the checks must say. Run before a change to a prompt or to a claim rule ships: tests/test_letter_evals.py. Add a case for every false alarm or missed claim found; never change a label to make a run pass. The inv-* cases were written before the #109 rules, but many of their sentences are also development rows in tests/test_claims.py, so their recall is a development number, not a held-out one; a fresh held-out batch should come from another writer. A case with \"gap\" is a known miss: it keeps its true label and runs as a strict expected failure, so a fix shows at once. The h113-* cases (#113) are held-out: another writer wrote them before the #113 code, and they must never be copied into tests/test_claims.py. The wording of some h113-* cases was seen during development, so their recall counts as development, not held-out: exact copies h113-1n-dev-course, h113-4-dev-present-labs, h113-6-acc-fluent; near copies h113-1n-dev-reviewed-posting, h113-1n-care-course, h113-2n-dev-new-subject, h113-4n-dev-tool-for-slack, h113-4n-acc-macro-for-excel, h113-5n-dev-python-version, h113-6-dev-native-speaker, h113-6n-dev-company, h113-6n-acc-fluent-excel. The h113r-* cases (#113, fix round) are hard negatives and true positives written after the first #113 code, for past-participle openings, requirement wording and the English exemption. The h131-* cases (#131) are held-out: written before the #131 code, for fresh participle frames about the employer, true positives in new frames, misplaced, figures and borrowed, and the known misses of #113 in new wording; the ones the code got wrong then are gaps. The guard in tests/test_letter_evals.py compares every h113 and h131 sentence with each string in tests/test_claims.py by its words (lower case, no punctuation, difflib ratio of 0.8 or more), so a near copy is caught, not only an exact one. The fuzzy guard found two near copies of development rows, h113-4n-acc-employed-known and h113-7n-dev-cv; both were rewritten in #131 as fresh held-out sentences. The guard now exempts nothing (no length pre-filter, and a held-out sentence that is most of a longer string counts as a copy): the cases listed above as seen during development stay as history, and the six that the stricter guard flagged were rewritten in #131 as fresh sentences with the same label (h113-1n-dev-course, h113-1n-dev-trained-in, h113-4-dev-present-labs, h113-4n-acc-macro-for-excel, h113-6-acc-fluent, h131-d8-acc-german-c1). The h131-e* cases measure the cost of the term-based exception: an employer description that opens with a participle phrase holding a year and a tool the CV lacks still reads as a claim; they are accepted false alarms. The h142-* cases (#142) are held-out: another writer wrote them before the fix for first-person and CV-style claims and for wishes that end at a comma before done work, and they must never be copied into tests/test_claims.py; the guard in tests/test_letter_evals.py covers them. The h142 cases the code missed then are gaps. The h143-* cases (#143) are held-out: another writer wrote them blind after the #142 code, for first-person claims of knowing, being and doing, duties, CV-style openers and claims after a wish, with hard negatives in the same shapes, and they must never be copied into tests/test_claims.py; the guard in tests/test_letter_evals.py covers them. The h143 cases the code got wrong are gaps. The cases h143-17 and h143-28 were shown to the fixer in the #143 fix round, so they count as development; the blind held-out numbers are the other 28 cases: claimed false alarms 0/11, claimed recall 14/17 (the three misses are known gaps).",
  "people": {
   "developer": {
    "cv": "Alex Novak\nJunior Developer\nalex@example.com · +420 600 000 000\nEXPERIENCE\nJunior Developer – Northwind Parcel s.r.o., Brno (2024 – present): built an internal REST API in Django and Python; wrote tests with pytest.\nIT Intern – Fabrikam Labs, Brno (2023 – 2024): maintained Python scripts for data imports.\nSKILLS\nPython, Django, PostgreSQL, Git, Docker\n",
@@ -1847,6 +1847,498 @@
      "2022"
     ]
    }
-  }
+  },
+  {
+   "id": "h142-p1-dev-versed-kafka",
+   "person": "developer",
+   "text": "I'm well versed in Kafka and its consumer groups.",
+   "expect": {
+    "claimed": [
+     "Kafka"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p2-dev-an-x-developer",
+   "person": "developer",
+   "text": "I'm a Terraform developer with a focus on cloud tooling.",
+   "expect": {
+    "claimed": [
+     "Terraform"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p3-dev-handle",
+   "person": "developer",
+   "text": "I handle Kubernetes upgrades for small teams.",
+   "expect": {
+    "claimed": [
+     "Kubernetes"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p4-dev-took-care",
+   "person": "developer",
+   "text": "I took care of Airflow scheduling for the nightly jobs.",
+   "expect": {
+    "claimed": [
+     "Airflow"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p5-dev-accountable",
+   "person": "developer",
+   "text": "Accountable for Snowflake cost reports across the department.",
+   "expect": {
+    "claimed": [
+     "Snowflake"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p6-dev-ownership",
+   "person": "developer",
+   "text": "Ownership of Kafka topics and their retention rules.",
+   "expect": {
+    "claimed": [
+     "Kafka"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks.",
+   "gap": "Known miss (#142, written before the fix): a first-person or CV-style statement of knowing, being or doing, or a wish that ends at a comma before done work, names a tool the CV lacks and the claim check does not see it.",
+   "now": {}
+  },
+  {
+   "id": "h142-p7-dev-led",
+   "person": "developer",
+   "text": "Led Terraform adoption across three squads.",
+   "expect": {
+    "claimed": [
+     "Terraform"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p8-dev-hands-on",
+   "person": "developer",
+   "text": "Hands-on with Kubernetes in a busy staging cluster.",
+   "expect": {
+    "claimed": [
+     "Kubernetes"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p9-dev-specialised",
+   "person": "developer",
+   "text": "Specialised in Airflow pipelines for retail data.",
+   "expect": {
+    "claimed": [
+     "Airflow"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p10-dev-wish-grow-shipped",
+   "person": "developer",
+   "text": "Keen to grow in Snowflake, shipped Kafka services for a year.",
+   "expect": {
+    "claimed": [
+     "Kafka"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p11-dev-wish-hoping-migrated",
+   "person": "developer",
+   "text": "Hoping to learn Terraform, migrated Kubernetes services last year.",
+   "expect": {
+    "claimed": [
+     "Kubernetes"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p12-dev-wish-eager-deployed",
+   "person": "developer",
+   "text": "Eager to study Airflow, deployed Kafka brokers on my own.",
+   "expect": {
+    "claimed": [
+     "Kafka"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p13-acc-versed",
+   "person": "accountant",
+   "text": "I'm well versed in Xero and its bank feeds.",
+   "expect": {
+    "claimed": [
+     "Xero"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p14-acc-an-x-specialist",
+   "person": "accountant",
+   "text": "I'm an IFRS specialist for mid-sized firms.",
+   "expect": {
+    "claimed": [
+     "IFRS"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p15-acc-handle",
+   "person": "accountant",
+   "text": "I handle German correspondence with suppliers.",
+   "expect": {
+    "claimed": [
+     "German"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks.",
+   "gap": "Known miss (#142, written before the fix): a first-person or CV-style statement of knowing, being or doing, or a wish that ends at a comma before done work, names a tool the CV lacks and the claim check does not see it.",
+   "now": {}
+  },
+  {
+   "id": "h142-p16-acc-accountable",
+   "person": "accountant",
+   "text": "Accountable for IFRS reporting packs each quarter.",
+   "expect": {
+    "claimed": [
+     "IFRS"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p17-acc-hands-on",
+   "person": "accountant",
+   "text": "Hands-on with Xero reconciliations.",
+   "expect": {
+    "claimed": [
+     "Xero"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p18-acc-ownership",
+   "person": "accountant",
+   "text": "Ownership of the Xero month-end close.",
+   "expect": {
+    "claimed": [
+     "Xero"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p19-acc-wish-grow-prepared",
+   "person": "accountant",
+   "text": "Keen to grow in IFRS, prepared Xero reports for a small shop.",
+   "expect": {
+    "claimed": [
+     "Xero"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p20-care-versed",
+   "person": "carer",
+   "text": "I'm well versed in CPR and basic life support.",
+   "expect": {
+    "claimed": [
+     "CPR"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p21-care-took-care",
+   "person": "carer",
+   "text": "I took care of Medication administration for the evening round.",
+   "expect": {
+    "claimed": [
+     "Medication administration"
+    ],
+    "borrowed": [
+     "Medication administration"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p22-care-accountable",
+   "person": "carer",
+   "text": "Accountable for CPR refreshers on the ward.",
+   "expect": {
+    "claimed": [
+     "CPR"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p23-care-wish-hoping-led",
+   "person": "carer",
+   "text": "Hoping to learn Medication administration, led CPR drills for staff.",
+   "expect": {
+    "claimed": [
+     "CPR"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p24-eng-an-x-designer",
+   "person": "engineer",
+   "text": "I'm a CATIA designer by trade.",
+   "expect": {
+    "claimed": [
+     "CATIA"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p25-eng-handle",
+   "person": "engineer",
+   "text": "I handle FMEA reviews for new parts.",
+   "expect": {
+    "claimed": [
+     "FMEA"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p26-eng-specialised",
+   "person": "engineer",
+   "text": "Specialised in GD&T for machined housings.",
+   "expect": {
+    "claimed": [
+     "GD&T"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p27-eng-led",
+   "person": "engineer",
+   "text": "Led the CATIA migration for the drawing office.",
+   "expect": {
+    "claimed": [
+     "CATIA"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-p28-eng-experienced",
+   "person": "engineer",
+   "text": "Experienced in FMEA across the plant.",
+   "expect": {
+    "claimed": [
+     "FMEA"
+    ]
+   },
+   "why": "A first-person or CV-style claim of a tool the CV lacks."
+  },
+  {
+   "id": "h142-n1-dev-know-uses",
+   "person": "developer",
+   "text": "I understand that your group runs Terraform in production.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n2-dev-managing-noun",
+   "person": "developer",
+   "text": "Managing stakeholders matters, and your Airflow setup sounds interesting.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n3-dev-keen-pick-up",
+   "person": "developer",
+   "text": "I'm eager to pick up Snowflake.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n4-dev-quick-study",
+   "person": "developer",
+   "text": "I'm a quick study, and I would love to work with Terraform.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n5-dev-responsible-own",
+   "person": "developer",
+   "text": "Responsible for my own notes, I am glad to see Airflow in the posting.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n6-dev-wish-list",
+   "person": "developer",
+   "text": "Eager to learn Kafka, Terraform and Kubernetes.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n7-dev-wish-list-2",
+   "person": "developer",
+   "text": "Keen to explore Snowflake, Airflow and Node.js.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n8-dev-wish-participle",
+   "person": "developer",
+   "text": "Eager to learn Kafka, used by your team.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n9-dev-wish-as-described",
+   "person": "developer",
+   "text": "Hoping to learn Terraform, as described in the posting.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n10-dev-aware",
+   "person": "developer",
+   "text": "I am aware that your team relies on Kubernetes.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n11-acc-know-uses",
+   "person": "accountant",
+   "text": "I know your department uses Xero.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n12-acc-managing-noun",
+   "person": "accountant",
+   "text": "Managing deadlines is routine, and I would like to learn IFRS.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n13-acc-keen",
+   "person": "accountant",
+   "text": "I'm keen to learn German.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n14-acc-wish-participle",
+   "person": "accountant",
+   "text": "Looking forward to Xero, used by your finance team.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n15-care-patient-listener",
+   "person": "carer",
+   "text": "I'm a patient listener and eager to learn CPR.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n16-care-wish-required",
+   "person": "carer",
+   "text": "Hoping to learn Medication administration, required by your day centre.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n17-care-know-trains",
+   "person": "carer",
+   "text": "I know your centre trains staff in CPR.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n18-eng-understand",
+   "person": "engineer",
+   "text": "I understand your drawing office relies on CATIA.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n19-eng-wish-list",
+   "person": "engineer",
+   "text": "Keen to learn CATIA, FMEA and GD&T.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n20-eng-managing-noun",
+   "person": "engineer",
+   "text": "Managing workloads well is something I value.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+  {
+   "id": "h142-n21-eng-responsible-own",
+   "person": "engineer",
+   "text": "Responsible for my own drawings, I want to learn FMEA.",
+   "expect": {},
+   "why": "No work is claimed: a wish, the employer's use, or a non-tool noun."
+  },
+    {"id": "h143-01", "person": "developer", "text": "In 2023 I took ownership of the Airflow scheduler at my last job.", "expect": {"claimed": ["Airflow"]}},
+    {"id": "h143-02", "person": "accountant", "text": "Accountable for the monthly close checklist, I kept every deadline.", "expect": {}},
+    {"id": "h143-03", "person": "carer", "text": "I am certified in CPR and renew it every year.", "expect": {"claimed": ["CPR"]}},
+    {"id": "h143-04", "person": "carer", "text": "Responsible for Medication administration on the night shift, I kept careful records.", "expect": {"claimed": ["Medication administration"]}},
+    {"id": "h143-05", "person": "accountant", "text": "I closed the books on time every month; accountable for the Xero rollout in our office.", "expect": {"claimed": ["Xero"]}},
+    {"id": "h143-06", "person": "engineer", "text": "Since 2022 I have been in charge of CATIA licences and templates.", "expect": {"claimed": ["CATIA"], "figures": ["2022"]}},
+    {"id": "h143-07", "person": "engineer", "text": "Responsible for the drawing archive on a shared folder, I kept it tidy.", "expect": {}},
+    {"id": "h143-08", "person": "carer", "text": "I regularly perform CPR on training dummies and on real residents.", "expect": {"claimed": ["CPR"]}, "gap": "Known gap (#143): a wish-free positive in a new frame is not read as a claim. The label stays true; the claim check says otherwise today.", "now": {}},
+    {"id": "h143-09", "person": "engineer", "text": "Leading FMEA sessions for my team every quarter is what I do best.", "expect": {"claimed": ["FMEA"]}, "gap": "Known gap (#143): a wish-free positive in a new frame is not read as a claim. The label stays true; the claim check says otherwise today.", "now": {}},
+    {"id": "h143-10", "person": "developer", "text": "I am curious about Terraform, Snowflake, Kafka and Node.js.", "expect": {}},
+    {"id": "h143-11", "person": "developer", "text": "I am responsible for the weekly newsletter of my sports club.", "expect": {}},
+    {"id": "h143-12", "person": "developer", "text": "I want to be a Kubernetes engineer one day.", "expect": {}},
+    {"id": "h143-13", "person": "carer", "text": "I would like to become the CPR trainer at your day centre.", "expect": {}},
+    {"id": "h143-14", "person": "developer", "text": "I know Terraform well and have used it on four projects.", "expect": {"claimed": ["Terraform"], "figures": ["4"]}},
+    {"id": "h143-15", "person": "developer", "text": "Managing the team calendar and booking rooms for demos.", "expect": {}},
+    {"id": "h143-16", "person": "accountant", "text": "I am an IFRS specialist by training.", "expect": {"claimed": ["IFRS"]}},
+    {"id": "h143-17", "person": "developer", "text": "Working with Airflow at Acme Data means owning the nightly pipelines.", "expect": {}},
+    {"id": "h143-18", "person": "developer", "text": "Your team knows Kafka better than anyone I have met.", "expect": {}},
+    {"id": "h143-19", "person": "developer", "text": "I am a big fan of Snowflake and a keen reader of its release notes.", "expect": {}},
+    {"id": "h143-20", "person": "engineer", "text": "I am well versed in GD&T and apply it on every drawing.", "expect": {"claimed": ["GD&T"]}},
+    {"id": "h143-21", "person": "engineer", "text": "I am a CATIA power user who also draws in SolidWorks.", "expect": {"claimed": ["CATIA"]}},
+    {"id": "h143-22", "person": "developer", "text": "I serve as the Kubernetes administrator for our small team.", "expect": {"claimed": ["Kubernetes"]}, "gap": "Known gap (#143): a wish-free positive in a new frame is not read as a claim. The label stays true; the claim check says otherwise today.", "now": {}},
+    {"id": "h143-23", "person": "accountant", "text": "I am a fast learner who enjoys new software such as Xero.", "expect": {}},
+    {"id": "h143-24", "person": "developer", "text": "My main duty was maintaining Snowflake warehouses; I also reviewed code.", "expect": {"claimed": ["Snowflake"]}},
+    {"id": "h143-25", "person": "accountant", "text": "I have hands-on command of Xero from my last two jobs.", "expect": {"claimed": ["Xero"]}},
+    {"id": "h143-26", "person": "developer", "text": "I am proficient in Kafka and use it every day.", "expect": {"claimed": ["Kafka"]}},
+    {"id": "h143-27", "person": "developer", "text": "Having worked daily with Terraform since 2022, I wrote modules for our staging area.", "expect": {"claimed": ["Terraform"], "figures": ["2022"]}},
+    {"id": "h143-28", "person": "carer", "text": "I am taking an evening course in Medication administration.", "expect": {}},
+    {"id": "h143-29", "person": "developer", "text": "Currently running Kubernetes clusters for three teams.", "expect": {"claimed": ["Kubernetes"], "figures": ["3"]}},
+    {"id": "h143-30", "person": "engineer", "text": "Eager to learn FMEA, I joined the safety club at my plant.", "expect": {}}
  ]
 }

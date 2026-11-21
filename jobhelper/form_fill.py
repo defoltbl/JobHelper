@@ -90,6 +90,12 @@ CONSENT_WORDS = (r"\bi (?:hereby )?agree\b|\bagree (?:to|with) (?:the |our |thes
                  r"|talent (?:community|pool|network)|contact(?:ed)? (?:you|me) (?:about|for|with) (?:future|other|new|similar)"
                  r"|future (?:openings|opportunities|vacancies)|^[\s*]*declaration[\s*:]*$|please confirm (?:all|the above|that)"
                  r"|souhlas|zpracov[áa]n[íi] osobn|prohla[šs]uji|potvrzuji|beru na v[ěe]dom[íi]|obchodn[íi] podm[íi]nky"
+                 # German splits the verb around its object: "Ich stimme der Datenverarbeitung zu", "Willigen Sie in … ein?",
+                 # also with "du" and "ihr": "Stimmst du … zu?", "Stimmt ihr … zu?", "Willigst du … ein?". A word window, not a
+                 # capped filter: an object is a few words, so "zu" up to ten words after the verb counts. Linear: \s and \S
+                 # never match the same sign, so each word is read one way, the verb's endings are fixed words before a \b,
+                 # and the window is fixed. "Stimmen Sie der Aussage zu: …" in a skills question counts too – the person answers it.
+                 r"|\bstimm(?:e|en|st|t)\b(?:\s+\S+){0,10}?\s+zu\b|\bwillig(?:e|en|st|t)\b(?:\s+\S+){0,10}?\s+ein\b"
                  r"|einwillig|zustimm|einverstanden|ich stimme zu|datenschutz|dsgvo|best[äa]tige|versichere|akzeptiere"
                  r"|nutzungsbedingungen|\bagb\b|acepto|j['’]accepte")
 NEVER_TICK_WORDS = (CONSENT_WORDS + r"|agree|terms|privacy|policy|marketing|keep me|notify|\bupdates?\b|alert"
@@ -1154,7 +1160,7 @@ _NEVER_TICK_NAME = re.compile(r"\b(?:" + _CONSENT_NAME_WORDS + r"|tos|ccpa)\b|pr
 # ("Do you agree to relocate?" and "Experience with GDPR compliance" are questions about you, not consent)
 _CONSENT = re.compile(CONSENT_WORDS, re.IGNORECASE)
 _NOT_MINE = re.compile(r"company|employer|organi[sz]ation|school|universit|college|referr|referee|reference|emergency|manager|recruiter"
-                       r"|supervisor|\btitle\b|position|\brole\b|degree|skill|user ?name|login|nick")
+                       r"|supervisor|\btitle\b|position|\brole\b|degree|skill|user ?name|login|nick|middle ?name")
 # what forms ask again and again; when it is not in My details, an open question is drafted instead
 SOFT = ("employer", "job_title", "school", "degree", "study_field", "notice_period", "salary", "start")
 # asked once per job or per degree: the first such field gets the first entry of the list, the next one the second
@@ -1212,6 +1218,7 @@ def level_option(options: list[str], level: str) -> str:
 _ROW_TEXT = re.compile(r"descri(?:ption|be)|responsibilit|duties|what (?:did you|you did)|achievement|accomplishment|tasks?\b|summary of|"
                        r"náplň práce|popis")
 ROW_NEAR = 5                   # a field this close after a job's own field still belongs to that job
+NAME_NEAR = 3                  # a surname field this close to a bare "Name" (before or after) makes it the first name
 ROW_PLACE = "This asks where the school was, which My details does not hold. Fill it in yourself."
 ROW_WORDS = "This asks about your studies in your own words. Write it yourself."
 MORE_ROWS = "You listed {have} in My details, and this is one more. Add it there, or type it."
@@ -1380,6 +1387,20 @@ def _yours(key: str, words: str, everything: str = "") -> bool:
     return not (key == "start" and _YES_NO.search(words))
 
 
+# a first-name word and a last-name word joined ("First and last name", "Jméno a příjmení", "Surname, first name"):
+# the whole name in one field. Never two words in a row alone: "Last name" holds "name", "Křestní jméno" two first-name words.
+# One list of words for the one-name rules and for the joined rule below, so a new word reaches both.
+FIRST_NAME_WORDS = ("first", "given", "fore")
+LAST_NAME_WORDS = ("last", "family", "sur")
+_FIRST_STEM, _LAST_STEM = "(?:" + "|".join(FIRST_NAME_WORDS) + ")", "(?:" + "|".join(LAST_NAME_WORDS) + ")"
+_FIRST_WORD = (_FIRST_STEM + "(?: ?name)?|(?:křestní )?jméno|"
+               + "".join("(?<!" + word + " )" for word in LAST_NAME_WORDS) + r"\bname")   # a bare "name", not "Last name"
+_LAST_WORD = _LAST_STEM + " ?name|příjmení"
+_JOINED = r" ?(?:,|/|&|\+|\band\b|\ba\b) ?"
+_BOTH_NAMES = re.compile("(?:" + _FIRST_WORD + ")" + _JOINED + "(?:" + _LAST_WORD + ")|(?:" + _LAST_WORD + ")" + _JOINED + "(?:" + _FIRST_WORD + ")")
+# a bare "Name" or "Jméno": the whole name, or only the first name when the form asks the surname in a field of its own
+_BARE_NAME = re.compile(r"(?:name|jméno) ?\*?")
+
 _RULES = (("linkedin", re.compile(r"linked ?in")),
           ("github", re.compile(r"git ?hub")),
           ("email", re.compile(r"e ?mail")),
@@ -1392,8 +1413,9 @@ _RULES = (("linkedin", re.compile(r"linked ?in")),
           ("study_field", re.compile(r"field of study|\bmajor\b|area of study|specialisation|specialization|discipline")),
           ("school", re.compile(r"universit|\bschool\b|college|alma mater|institution")),
           ("degree", re.compile(r"\bdegree\b|qualification")),
-          ("first_name", re.compile(r"first ?name|given ?name|fore ?name|\bfname\b|křestní")),
-          ("last_name", re.compile(r"last ?name|sur ?name|family ?name|\blname\b|příjmení")),
+          ("full_name", _BOTH_NAMES),               # before the first and the last name: it holds both
+          ("first_name", re.compile(_FIRST_STEM + r" ?name|\bfname\b|křestní")),
+          ("last_name", re.compile(_LAST_WORD + r"|\blname\b")),
           ("full_name", re.compile(r"full ?name|your name|^name\b|\bname$|\bname \*|jméno")),
           ("website", re.compile(r"web ?site|portfolio|personal site|home ?page|\bblog\b|\burl\b")),
           ("postcode", re.compile(r"post ?code|postal|\bzip\b|psč")),
@@ -2134,6 +2156,10 @@ class FormPlanner:
         if self._rows.last == "languages" and self._rows.within(at, LANG_NEAR) and what != "lang_name" and kind != "checkbox" \
                 and _LANG_LEVEL.search(_words({"label": field.get("label")}).strip(" *")):
             what = "lang_level"
+        if what == "full_name" and "last_name" in kinds[max(0, at - NAME_NEAR):at] + kinds[at + 1:at + NAME_NEAR + 1] \
+                and "first_name" not in kinds \
+                and _BARE_NAME.fullmatch(_words({"label": field.get("label")}) or field.words):
+            what = "first_name"                         # "Jméno" above "Příjmení": the surname has a field of its own
         if what in LISTED or what in ("row_start", "row_end", "current_box", "lang_level", "fluent_box"):
             self._rows.mark(at)
         return what, why

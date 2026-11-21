@@ -128,14 +128,14 @@ def test_the_copy_guard_sees_a_short_sentence_that_opens_a_longer_string():
 
 
 def test_no_held_out_sentence_is_a_development_row():
-    """The held-out h113 and h131 cases stay apart from the development rows in tests/test_claims.py: no string there
+    """The held-out h113, h131, h142 and h143 cases stay apart from the development rows in tests/test_claims.py: no string there
     repeats such a sentence, as it is or nearly (case, punctuation and a word or two aside). The h113 cases whose wording
     was seen in development were rewritten in #131: the guard exempts no case. (The inv-* and older cases are
     development rows by the fixture's own note.)"""
     tree = ast.parse((Path(__file__).parent / "test_claims.py").read_text(encoding="utf-8"))
     literals = sorted({n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
                        and len(words_of(n.value)) >= 3})
-    held_out = [c for c in SET["cases"] if c["id"].startswith(("h113", "h131"))]
+    held_out = [c for c in SET["cases"] if c["id"].startswith(("h113", "h131", "h142", "h143"))]
     copies = {c["id"]: near_copies(c["text"], literals)[:1] for c in held_out if near_copies(c["text"], literals)}
     assert not copies, f"sentences copied or nearly copied into tests/test_claims.py: {copies}"
 

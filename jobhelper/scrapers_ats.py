@@ -13,7 +13,7 @@ list the companies you care about in ``data/companies.json``::
 The ``token`` is the slug in the board URL (e.g. boards.greenhouse.io/**gitlab**).
 
 NOT supported (they block scraping or are bespoke): SAP (jobs.sap.com) and
-Microsoft careers. For those, set up their own "job agent" email alert — Agent 5
+Microsoft careers. For those, set up their own "job agent" email alert – Agent 5
 reads the replies into your tracker.
 """
 from __future__ import annotations
@@ -33,7 +33,35 @@ _DELAY = 0.3
 
 # cache a company's roles for the session so repeated queries don't refetch
 _cache: dict[tuple[str, str], list[dict[str, Any]]] = {}
-_failed: dict[tuple[str, str], str] = {}        # the career sites this search could not read, by name (#76)
+
+
+class _Unread:
+    """The career sites this search could not read, by name (#76): those that gave nothing, and those read only in
+    part. Both are named to the person and keep their Filtered out rows; only a site that gave nothing counts as down."""
+
+    def __init__(self) -> None:
+        self._names: dict[tuple[str, str], str] = {}
+        self._in_part: set[tuple[str, str]] = set()
+
+    def note(self, key: tuple[str, str], name: str, in_part: bool = False) -> None:
+        self._names[key] = name
+        if in_part:
+            self._in_part.add(key)
+        else:
+            self._in_part.discard(key)                  # a site that later failed whole gave nothing after all
+
+    def names(self) -> list[str]:
+        return list(self._names.values())
+
+    def gave_nothing(self, key: tuple[str, str]) -> bool:
+        return key in self._names and key not in self._in_part
+
+    def clear(self) -> None:
+        self._names.clear()
+        self._in_part.clear()
+
+
+_unread = _Unread()
 
 
 def _strip_html(raw: str) -> str:
@@ -102,7 +130,7 @@ def _smartrecruiters_postings(token: str) -> tuple[list[dict[str, Any]], bool]:
 def _smartrecruiters(name: str, token: str) -> list[dict[str, Any]]:
     postings, whole = _smartrecruiters_postings(token)
     if not whole:
-        _failed[("smartrecruiters", token)] = name          # read in part: named, and its Filtered out rows are kept
+        _unread.note(("smartrecruiters", token), name, in_part=True)    # named, and its Filtered out rows are kept
     out = []
     for j in postings:
         loc = " ".join(str(x) for x in [(j.get("location") or {}).get("city"),
@@ -147,12 +175,12 @@ def is_token(token: str) -> bool:
 def forget() -> None:
     """Forget what the career sites answered: each search asks them again (the app can stay open for days)."""
     _cache.clear()
-    _failed.clear()
+    _unread.clear()
 
 
 def failed() -> list[str]:
-    """The companies whose career site this search could not read."""
-    return list(_failed.values())
+    """The companies whose career site this search could not read, or read only in part."""
+    return _unread.names()
 
 
 def load_companies() -> list[dict[str, str]]:
@@ -176,12 +204,14 @@ def _company_jobs(name: str, ats: str, token: str) -> list[dict[str, Any]]:
             _cache[key] = _FETCHERS[ats](name, token)
         except requests.RequestException as e:
             print(f"  ! the career site of {name} could not be read ({type(e).__name__}); the others go on")
-            _cache[key], _failed[key] = [], name
+            _cache[key] = []
+            _unread.note(key, name)
         except Exception as e:  # noqa: BLE001 - one career site that answers in a shape nobody expects must not stop the others
             from . import trouble
             trouble.note(f"reading the career site of {name}", RuntimeError(type(e).__name__))
             print(f"  ! the career site of {name} answered in a way the app cannot read; the others go on")
-            _cache[key], _failed[key] = [], name
+            _cache[key] = []
+            _unread.note(key, name)
         time.sleep(_DELAY)
     return _cache[key]
 
@@ -227,6 +257,6 @@ def careers(keyword: str, where: str, limit: int, with_description: bool = True)
             results.append(job)
             if len(results) >= limit * 3:
                 return results
-    if all((c["ats"], c["token"]) in _failed for c in companies):
+    if all(_unread.gave_nothing((c["ats"], c["token"])) for c in companies):    # a site read in part gave postings
         raise requests.ConnectionError("No career site could be read.")        # not "no posting fits" (#76)
     return results

@@ -117,3 +117,73 @@ def test_a_career_site_read_in_part_is_named_as_not_read(monkeypatch):
     with pytest.raises(ValueError):
         scrapers_ats._smartrecruiters("Fabrikam", "fabrikam")
     scrapers_ats.forget()
+
+
+def _careers_of(monkeypatch, companies, fetchers):
+    """`careers` over these companies and fake fetchers, from a fresh search (no pause between sites)."""
+    scrapers_ats.forget()
+    monkeypatch.setattr(scrapers_ats, "load_companies", lambda: companies)
+    monkeypatch.setattr(scrapers_ats, "_DELAY", 0)
+    monkeypatch.setattr(scrapers_ats, "_FETCHERS", fetchers)
+    return lambda: scrapers_ats.careers("python", "Prague", 100)
+
+
+def _sr_page_two_down(url, params=None, **kw):
+    if params["offset"] >= 100:
+        raise scrapers_ats.requests.ConnectionError("down")
+    return _Answer({"totalFound": 300, "content": [{"id": f"p{i}", "name": "Python Developer",
+                                                    "location": {"city": "Prague"}} for i in range(100)]})
+
+
+def _down(name, token):
+    raise scrapers_ats.requests.ConnectionError("down")
+
+
+def test_one_career_site_read_in_part_keeps_its_postings(monkeypatch):
+    """Audit: page 1 of the only company gave 100 postings, page 2 timed out – the search raised and lost all 100."""
+    monkeypatch.setattr(scrapers_ats.requests, "get", _sr_page_two_down)
+    search = _careers_of(monkeypatch, [{"name": "Fabrikam", "ats": "smartrecruiters", "token": "fabrikam"}],
+                         {"smartrecruiters": scrapers_ats._smartrecruiters})
+    assert len(search()) == 100
+    assert scrapers_ats.failed() == ["Fabrikam"], "still named, so its earlier Filtered out rows are kept"
+    scrapers_ats.forget()
+
+
+def test_one_career_site_that_gave_nothing_still_says_none_could_be_read(monkeypatch):
+    search = _careers_of(monkeypatch, [{"name": "Fabrikam", "ats": "greenhouse", "token": "fabrikam"}],
+                         {"greenhouse": _down})
+    with pytest.raises(scrapers_ats.requests.ConnectionError, match="No career site could be read."):
+        search()
+    assert scrapers_ats.failed() == ["Fabrikam"]
+    scrapers_ats.forget()
+
+
+def test_a_career_site_read_whole_with_nothing_that_fits_is_not_down(monkeypatch):
+    other = lambda name, token: [scrapers_ats._norm("gh-1", "Accountant", name, "Prague", "u", "", "")]
+    search = _careers_of(monkeypatch, [{"name": "Fabrikam", "ats": "greenhouse", "token": "fabrikam"}],
+                         {"greenhouse": other})
+    assert search() == [] and scrapers_ats.failed() == []
+    scrapers_ats.forget()
+
+
+def test_a_site_down_and_a_site_read_in_part_keep_the_postings_read(monkeypatch):
+    monkeypatch.setattr(scrapers_ats.requests, "get", _sr_page_two_down)
+    search = _careers_of(monkeypatch, [{"name": "Contoso", "ats": "greenhouse", "token": "contoso"},
+                                       {"name": "Fabrikam", "ats": "smartrecruiters", "token": "fabrikam"}],
+                         {"greenhouse": _down, "smartrecruiters": scrapers_ats._smartrecruiters})
+    assert {j["company"] for j in search()} == {"Fabrikam"}
+    assert scrapers_ats.failed() == ["Contoso", "Fabrikam"]
+    scrapers_ats.forget()
+
+
+def test_a_site_read_in_part_whose_postings_cannot_be_read_counts_as_down(monkeypatch):
+    def get(url, params=None, **kw):
+        if params["offset"] >= 100:
+            raise scrapers_ats.requests.ConnectionError("down")
+        return _Answer({"totalFound": 300, "content": [{"id": "p1", "location": "Prague"}] * 100})   # not a place record
+    monkeypatch.setattr(scrapers_ats.requests, "get", get)
+    search = _careers_of(monkeypatch, [{"name": "Fabrikam", "ats": "smartrecruiters", "token": "fabrikam"}],
+                         {"smartrecruiters": scrapers_ats._smartrecruiters})
+    with pytest.raises(scrapers_ats.requests.ConnectionError, match="No career site could be read."):
+        search()
+    scrapers_ats.forget()
