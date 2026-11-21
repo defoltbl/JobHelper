@@ -906,7 +906,7 @@ def test_backups_are_made_checked_and_copied_out_from_the_window(isolate_data, t
     store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="found")])
     api = ui_api.Api()
     made = api.backup_all()
-    assert made["ok"] is True and made["folder"].startswith("everything_") and "encrypted" in made["msg"]
+    assert made["ok"] is True and made["folder"].startswith("everything_") and ", encrypted, in the folder" in made["msg"]
     assert (vault.backups_dir() / made["folder"]).is_dir()
     checked = api.backup_check()
     assert checked["ok"] is True and "can be restored" in checked["msg"]
@@ -1181,6 +1181,34 @@ def test_a_country_must_be_known_unless_it_was_saved_before(api):
     assert limits["list_max"] == api.MAX_LIST and limits["labels"]["queries"] == "Search roles" and limits["companies_max"] == api.MAX_COMPANIES
 
 
+def test_the_city_rule_is_the_back_end_s_own(api):
+    """Hands-on check R4: the City box took 120 characters with no word, and its rule was built in the window."""
+    most = api.OPTION_TEXTS["where"]
+    assert api.city_problem("") == api.city_problem("   ") == "Enter a city (e.g. Prague) before saving."
+    assert api.city_problem("Прага") == "City must be in English (Latin letters), e.g. Prague."
+    assert api.city_problem("P" * (most + 40)) == f"“City” takes up to {most} characters; you typed {most + 40}. Shorten it."
+    assert api.city_problem(" Prague ") == api.city_problem("x" * most) == api.city_problem("Kraków") == ""
+    assert api.save_options({**api.options(), "where": "Прага"})["msg"] == api.city_problem("Прага"), "Save asks the same rule"
+    assert api.save_options({**api.options(), "where": "Prague"})["ok"] is True
+    config.save_ui_settings({**config.ui_settings(), "where": "Praha 東"})         # as an older version could have saved it
+    assert api.save_options({**api.options(), "threshold": 55})["ok"] is True, "an unchanged old city never blocks a save"
+
+
+def test_a_too_long_new_city_is_said_by_the_city_rule_alone(api):
+    """Check of the hands-on fixes: the generic text limit said a long city in its own words before city_problem ran."""
+    long = "P" * (api.OPTION_TEXTS["where"] + 1)
+    assert api.save_options({**api.options(), "where": long})["msg"] == api.city_problem(long), "one wording for one fault"
+    assert api.save_options({**api.options(), "where": "  Prague  "})["ok"] is True and api.options()["where"] == "Prague"
+
+
+@pytest.mark.parametrize("on", [True, False])
+def test_connections_say_how_a_backup_is_kept(api, monkeypatch, on):
+    """Check of the hands-on fixes: the Options row said "encrypted" while a backup was plain with protection off."""
+    _fake_cli(monkeypatch, "not json")
+    monkeypatch.setattr(api_system.vault, "enabled", lambda: on)
+    assert api.connections()["backup_kept"] == api_system.vault.how_kept(on)
+
+
 def test_a_list_over_the_cap_is_said_apart_from_a_wrong_token(api):
     many = api.save_companies([{"name": f"C{n}", "ats": "lever", "token": f"c{n}"} for n in range(api.MAX_COMPANIES + 3)])
     assert many["ok"] is False and many["count"] == api.MAX_COMPANIES and "the last 3 were not saved" in many["msg"]
@@ -1188,6 +1216,16 @@ def test_a_list_over_the_cap_is_said_apart_from_a_wrong_token(api):
                               + [{"name": f"C{n}", "ats": "lever", "token": f"c{n}"} for n in range(api.MAX_COMPANIES + 1)])
     assert "Bad4 and 2 more" in both["msg"] and "the last 1 were not saved" in both["msg"], "both faults are said"
     assert api.save_options({**api.options(), "keep_words": ["x" * 101]})["msg"].startswith("An entry under “but keep titles with”")
+
+
+def test_a_backup_from_the_window_says_encrypted_only_when_protection_is_on(isolate_data, monkeypatch):
+    """Hands-on check before 1.3.0: the window said "encrypted" also when protection was off and the files were plain."""
+    from jobhelper import vault
+    store.save_jobs([store.new_job(id="a", title="Dev", company="Acme", status="found")])
+    monkeypatch.setenv("JOBHELPER_ENCRYPT", "0")
+    made = ui_api.Api().backup_all()
+    assert made["ok"] is True and ", not encrypted, because protection is off on this Mac, in the folder" in made["msg"], made
+    assert not list((vault.backups_dir() / made["folder"]).rglob("*.enc"))
 
 
 def test_a_start_date_that_has_passed_says_so(api):

@@ -10,7 +10,7 @@ from datetime import date
 from typing import Any
 
 from . import (agent1_cv, agent3_letters, agent4_tracker, answer_memory, assistant, assistant_brain, assistant_notes, chrome,
-    config, db, details, form_answers, form_choices, form_fill, insights, llm, planner, salary, store, trouble)
+    config, db, details, form_answers, form_choices, form_fill, insights, llm, planner, salary, store, textfmt, trouble)
 from .api_base import _holding_jobs
 
 _PLAIN = re.compile(r"\b(?:but|skip|except|without|only|not|don't|do not|leave|and)\b")
@@ -624,7 +624,7 @@ class TalkService:
         now = date.today()
         lines = summary.briefing_lines(summary.week(jobs, responses, self._app.followup_days(), now))
         nudges = summary.nudges(jobs, responses, now)
-        headline = nudges[0]["text"] if nudges else ("; ".join(lines[:3]) + "." if lines else "")
+        headline = nudges[0]["text"] if nudges else textfmt.sentence("; ".join(lines[:3]))
         return {"headline": headline[:220], "lines": lines, "nudges": nudges}
 
     def assistant_nudge_done(self, job_id, kind):

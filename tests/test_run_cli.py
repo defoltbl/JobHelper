@@ -4,7 +4,7 @@ import json
 import pytest
 
 import run
-from jobhelper import agent1_cv, agent2_search, agent3_letters, agent4_tracker, config, letters, store, usage
+from jobhelper import agent1_cv, agent2_search, agent3_letters, agent4_tracker, config, letters, llm, store, usage
 
 
 @pytest.fixture
@@ -30,12 +30,12 @@ def cli(isolate_data, monkeypatch):
     monkeypatch.setattr(agent4_tracker, "render_all", lambda jobs: None)
     monkeypatch.setattr(usage, "format_report", lambda: "")
 
-    def go(*args, settings=None):
+    def go(*args, settings=None, code=0):
         config.ensure_dirs()
         if settings is not None:
             (config.DATA_DIR / "ui_settings.json").write_text(json.dumps(settings), encoding="utf-8")
         monkeypatch.setattr("sys.argv", ["run.py", "--reuse-profile", *args])
-        assert run.main() == 0
+        assert run.main() == code
         return seen
 
     return go
@@ -166,3 +166,54 @@ def test_the_pipeline_still_runs_holding_the_job_list(cli, monkeypatch):
     monkeypatch.setattr(agent3_letters, "process", process)
     cli("--skip-search")
     assert held == [1] and store.RunLock._held == 0
+
+
+# ── the hands-on check before 1.3.0: a run that cannot go on says why in one line ──
+def _no_profile_run(isolate_data, monkeypatch, cv_text=""):
+    """run.py --skip-search with no saved CV analysis, so Agent 1 reads the CV (none when `cv_text` is empty)."""
+    config.ensure_dirs()
+    if cv_text:
+        (config.CV_DIR / "Alex_Novak_CV.txt").write_text(cv_text, encoding="utf-8")
+    monkeypatch.setattr(usage, "limit_status", lambda: {"blocked": False, "resets_at": 0, "window": ""})
+    monkeypatch.setattr(usage, "format_report", lambda: "")
+    monkeypatch.setattr("sys.argv", ["run.py", "--skip-search"])
+
+
+def test_a_signed_out_claude_stops_the_cv_analysis_with_one_line(isolate_data, monkeypatch, capsys):
+    _no_profile_run(isolate_data, monkeypatch, cv_text="Alex Novak, QA engineer. Python, SQL, Selenium, five years of testing.\n")
+
+    async def signed_out(*a, **k):
+        raise RuntimeError("Not logged in · Please run /login")
+    monkeypatch.setattr(llm, "_ask_async", signed_out)
+    assert run.main() == 1
+    out = capsys.readouterr().out
+    assert "✗ " + str(llm.SignedOut()) in out and "Traceback" not in out
+
+
+@pytest.mark.parametrize("stop, code", [(llm.CallTimedOut(), 1), (llm.LimitReached("Claude's 5-hour limit is used up."), 3)])
+def test_every_stop_of_claude_in_the_cv_analysis_is_one_line(isolate_data, monkeypatch, capsys, stop, code):
+    _no_profile_run(isolate_data, monkeypatch)
+
+    def analyze():
+        raise stop
+    monkeypatch.setattr(agent1_cv, "analyze", analyze)
+    assert run.main() == code
+    assert str(stop) in capsys.readouterr().out
+
+
+def test_a_signed_out_claude_while_writing_letters_keeps_what_was_finished(cli, monkeypatch, capsys):
+    saved = []
+
+    def process(jobs, profile, **kw):
+        raise llm.SignedOut()
+    monkeypatch.setattr(agent3_letters, "process", process)
+    monkeypatch.setattr(store, "save_jobs", lambda jobs: saved.append(len(jobs)))
+    cli("--skip-search", code=1)
+    out = capsys.readouterr().out
+    assert "✗ " + str(llm.SignedOut()) in out and "What was finished is saved." in out and saved
+
+
+def test_no_cv_stops_the_run_with_a_failure_code(isolate_data, monkeypatch, capsys):
+    _no_profile_run(isolate_data, monkeypatch)
+    assert run.main() == 1
+    assert "✗ No CV found. Put your CV" in capsys.readouterr().out

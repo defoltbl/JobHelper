@@ -1717,6 +1717,122 @@ def test_the_weekly_run_save_never_reaches_the_real_launch_agent_in_a_test_copy(
     assert ui.warnings == []
 
 
+def test_a_failed_mailbox_test_keeps_its_lost_tick_when_the_card_opens_again(ui):
+    """Hands-on check R3: closing and opening the account card brought back the green tick of an unreachable mailbox."""
+    welcome = ui.find("welcome")
+    ui.js("welcome.openCard()")
+    try:
+        ui.js("welcome.testBusy = true; welcome.testLeft = 1")
+        ui.bridge.emailTested.emit({"box": 1, "ok": False, "msg": "The mail server imap.example.test cannot be reached."})
+        assert _until_true(ui, lambda: welcome.property("mainFailed") is True)
+        ui.js("welcome.finish()")
+        assert _until_true(ui, lambda: welcome.property("shown") is False)
+        ui.js("welcome.openCard()")
+        assert _until_true(ui, lambda: welcome.property("shown") is True)
+        assert welcome.property("mainFailed") is True, "the failure stays until a new test signs in"
+        line = lambda: next((i for i in ui.seen("welcome") if i.objectName() == "testNote_0"), None)    # noqa: E731 - drawn by a Repeater
+        assert _until_true(ui, lambda: line() is not None and line().property("visible") is True), "the reason stays with the lost tick"
+        assert line().property("text") == "The mail server imap.example.test cannot be reached."
+        assert ui.js("wrapMode === Text.WordWrap && color === theme.crit", line()) is True, "a red line that wraps"
+        ui.bridge.emailTested.emit({"box": 1, "ok": True, "msg": "Signed in."})
+        assert _until_true(ui, lambda: welcome.property("mainFailed") is False), "a test that signs in brings the tick back"
+    finally:
+        ui.js("welcome.testBusy = false; welcome.mainFailed = false; welcome.testLines = []; welcome.finish()")
+    assert ui.warnings == []
+
+
+def test_the_city_box_says_its_fault_as_you_type_and_keeps_what_you_typed(ui):
+    """Hands-on check R4: the City box took 120 characters with no word; only Save said "“City” takes up to 80 characters"."""
+    dialog = ui.find("optDialog")
+    ui.js("optsData = bridge.options()")
+    _open(ui, dialog, 450)
+    line = ui.find("cityErrLine")
+    red = lambda: ui.js("Qt.colorEqual(cityCombo.background.border.color, theme.crit)", dialog)
+    try:
+        long = "P" * 120
+        ui.js(f'cityCombo.editText = "{long}"', dialog)
+        said = ui.bridge.cityProblem(long)
+        assert ui.js("cityCombo.editText", dialog) == long, "nothing typed is cut"
+        assert said != "" and line.property("text") == said, "the back end's own words, never a copy here"
+        assert _until_true(ui, lambda: line.property("visible") is True) and red()
+        assert ui.js("wrapMode === Text.WordWrap", line) is True, "the line wraps, never cut"
+        ui.js("optSaveBtn.clicked()", dialog)
+        assert dialog.property("opened") is True and ui.js("optErr", dialog) == said
+        assert line.property("visible") is False, "one red line per fault: the footer says it now"
+        ui.js('cityCombo.editText = "Прага"', dialog)
+        assert ui.js("optErr", dialog) == ui.bridge.cityProblem("Прага") != "" and red()
+        ui.js('cityCombo.editText = "Prague"', dialog)
+        assert ui.js("optErr", dialog) == "" and line.property("visible") is False and not red()
+        source = (ROOT / "ui_qt" / "OptionsDialog.qml").read_text(encoding="utf-8")
+        assert "options.where" not in source and "e.g. Prague" not in source, "the window keeps no copy of the city rule"
+    finally:
+        ui.js("confirmClose = true; close()", dialog)
+        _until_closed(ui, dialog)
+        ui.js("optsData = bridge.options()")
+    assert ui.warnings == []
+
+
+def test_an_empty_city_box_says_nothing_until_save(ui):
+    """Check of the hands-on fixes: the City box said "Enter a city" in red as soon as Options opened with no city."""
+    dialog = ui.find("optDialog")
+    ui.js('optsData = Object.assign({}, bridge.options(), {where: ""})')
+    _open(ui, dialog, 450)
+    line = ui.find("cityErrLine")
+    try:
+        assert ui.js("cityCombo.editText", dialog) == "" and ui.js("cityErr", dialog) == ""
+        assert line.property("visible") is False, "no red line before the person has done anything"
+        ui.js("optSaveBtn.clicked()", dialog)
+        assert dialog.property("opened") is True and ui.js("optErr", dialog) == ui.bridge.cityProblem("") != ""
+        ui.js('cityCombo.editText = "П"', dialog)
+        said = ui.bridge.cityProblem("П")
+        assert said != "" and ui.js("cityErr", dialog) == said, "a typed city is checked as you type"
+        assert ui.js("optErr", dialog) == said and line.property("visible") is False, "one red line per fault: the footer says it"
+    finally:
+        ui.js("confirmClose = true; close()", dialog)
+        _until_closed(ui, dialog)
+        ui.js("optsData = bridge.options()")
+    assert ui.warnings == []
+
+
+@pytest.mark.parametrize("on", [True, False])
+def test_the_backup_row_says_how_the_back_end_keeps_a_backup(ui, on):
+    """Check of the hands-on fixes: the row said "encrypted" while a backup was plain with protection off."""
+    from jobhelper import vault
+    row, kept = ui.find("backupRow"), vault.how_kept(on)
+    ui.js("win.connData = Object.assign({}, win.connData, {backup_kept: %s})" % json.dumps(kept))
+    try:
+        assert row.property("hint") == "data, CV, letters, documents, rules · " + kept
+        source = (ROOT / "ui_qt" / "OptionsDialog.qml").read_text(encoding="utf-8")
+        assert "· encrypted" not in source, "the window keeps no copy of the back end's words"
+    finally:
+        ui.js("win.connData = Object.assign({}, win.connData, {backup_kept: undefined})")
+    assert ui.warnings == []
+
+
+def test_esc_closes_only_the_window_opened_last_over_another(ui):
+    """Esc root cause (hands-on R2): a window opened over another was numbered after every window had asked which one is
+    on top, so its own Esc stayed off for as long as it was open, and Esc did nothing at all."""
+    from PySide6.QtTest import QTest
+    options, sched = ui.find("optDialog"), ui.find("schedDialog")
+    ui.js("optsData = bridge.options()")
+    _open(ui, options, 450)
+    try:
+        _open(ui, sched, 500)
+        ui.win.requestActivate()
+        QTest.keyClick(ui.win, Qt.Key_Escape)
+        _until_closed(ui, "schedDialog")
+        assert options.property("opened") is True, "only the window in front closes"
+        QTest.keyClick(ui.win, Qt.Key_Escape)                            # now Options is in front: its Esc works again
+        _until_closed(ui, "optDialog")
+    finally:
+        ui.js("confirmClose = true; close()", sched)
+        _until_closed(ui, "schedDialog")
+        ui.js("confirmClose = true; close()", options)
+        _until_closed(ui, "optDialog")
+        ui.js("optsData = bridge.options()")
+    assert ui.warnings == []
+
+
 def test_esc_in_a_welcome_email_field_leaves_the_field(ui):
     """Window review H8: Esc did nothing inside the welcome card's email fields."""
     from PySide6.QtTest import QTest

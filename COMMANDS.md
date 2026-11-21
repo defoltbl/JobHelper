@@ -66,7 +66,7 @@ Inside the window:
   grey **Resume** button whose tooltip says when the limit resets. When it has reset the
   button turns blue; press it and the run continues with the job it was on. A small
   **Stop** button next to it ends the run instead. From the command line `run.py` saves and
-  exits with a message; run it again later and only the unfinished jobs are done. A call that gets no answer for
+  exits with a message (a signed-out Claude stops it the same way); run it again later and only the unfinished jobs are done. A call that gets no answer for
   5 minutes stops a run the same way: what was finished is saved first.
 - **Scan email** – runs Agent 5 (Postman reads inbox replies), with a real progress bar.
 - **New Jobs / Applications / Responses / Analytics** – click to see tables;
@@ -159,8 +159,8 @@ Inside the window:
   interview invitation. The weekly run notifies too.
 - **Keep backups** (Options) – only the newest N backups in `data/backups/` are kept; older ones
   are deleted for good at every start (0 = keep all). Weekly log files keep their last 400 lines.
-- **Back up everything** (Options → Notifications and storage) – **Back up now** (one encrypted
-  backup of the data, your CV, your letters, the documents and the rules), **Check backups**
+- **Back up everything** (Options → Notifications and storage) – **Back up now** (one backup
+  of the data, your CV, your letters, the documents and the rules, encrypted while data protection is on), **Check backups**
   (restores one into a throwaway folder and compares it. Only the newest test copy is kept. Test copies do not
   count toward Keep backups. 0 keeps all) and **Save a readable copy…** (the
   newest full backup, not encrypted, into an empty folder you choose). The same as
@@ -645,7 +645,7 @@ What is protected:
 
 - **The mailbox passwords** are in the macOS **Keychain**, not in `.env` (`.env` keeps only the address).
 - **`jobs.json`, `profile.json`, `ui_settings.json`, `responses.db`** and everything in
-  **`data/backups/`** are AES-256 encrypted. The key is in the Keychain too.
+  **`data/backups/`** are AES-256 encrypted while data protection is on. The key is in the Keychain too.
 - **CV rules, cover-letter rules, letter template, master CV, career-site list** are signed.
   If one changes outside the app, the app and the weekly run stop and ask you to approve it.
 - CVs, cover letters and Excel trackers stay normal files so Word and Excel can open them.

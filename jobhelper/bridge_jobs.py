@@ -142,6 +142,11 @@ class JobSlots:
         return self._api.country_of(city)
 
     @Slot(str, result=str)
+    def cityProblem(self, text):
+        """What is wrong with a typed city ('' = nothing): the Options' own check, as you type and at Save."""
+        return self._api.city_problem(text)
+
+    @Slot(str, result=str)
     def countryProblem(self, text):
         """What is wrong with a typed country ('' = nothing): the Options' own check, as you type."""
         return self._api.country_problem(text)

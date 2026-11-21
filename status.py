@@ -197,13 +197,18 @@ def fetch_mail(days):
         raise _mail_failed(e) from e
 
 
+def _say_reading_inbox(rest: str) -> None:
+    """The line before a scan: the address only when one is set (with none, the scan's refusal is the next line)."""
+    print("Reading inbox" + (f" ({config.IMAP_USER})" if config.IMAP_USER else "") + rest)
+
+
 def cmd_sync(args) -> int:
     jobs = store.load_jobs()
     if not jobs:
         print("No jobs tracked yet. Run: python run.py")
         return 0
     days = args.days or config.scan_days()
-    print(f"Reading inbox ({config.IMAP_USER}), last {days} days – read-only, nothing is sent or deleted …")
+    _say_reading_inbox(f", last {days} days – read-only, nothing is sent or deleted …")
     stats = scan_inbox(jobs, days)
     pruned = agent5_responses.after_scan(jobs)         # leads now applied to are dropped
     if pruned:
@@ -236,7 +241,7 @@ def cmd_sync(args) -> int:
 def cmd_responses(args) -> int:
     jobs = store.load_jobs()
     if args.scan:
-        print(f"Reading inbox ({config.IMAP_USER}) – read-only …")
+        _say_reading_inbox(" – read-only …")
         stats = scan_inbox(jobs, args.days or config.scan_days())
         agent5_responses.annotate_progress(jobs)
         store.save_jobs(jobs)
@@ -397,8 +402,9 @@ def cmd_security(args) -> int:
             done = integrity.approve()
             print("Approved: " + ", ".join(integrity.TITLES[n] for n in done))
         elif args.action == "recovery-key":
+            key = vault.recovery_key()             # first: no key, no header (it says why instead)
             print("Keep this somewhere safe (a password manager). Anyone with it can read your data:\n")
-            print("  " + vault.recovery_key())
+            print("  " + key)
         elif args.action == "restore-key":
             vault.restore_key(getpass.getpass("Recovery key: "))
             print("Key restored to the Keychain.")
@@ -406,7 +412,7 @@ def cmd_security(args) -> int:
             print(f"Encrypted backup written to {vault.make_backup('manual')}")
         elif args.action == "backup-all":
             done = vault.backup_everything()
-            print(f"Everything backed up: {done['files']} files, {done['bytes'] / 1_048_576:.1f} MB, encrypted, in\n  {done['folder']}")
+            print(f"Everything backed up: {done['files']} files, {done['bytes'] / 1_048_576:.1f} MB, {vault.how_kept(done['encrypted'])}, in\n  {done['folder']}")
             print("It holds the app's data, your master CV, your own letters, the letters and CVs the app wrote,\n"
                   "the rule files and the letter template. To get it back:\n"
                   f"  python status.py security restore \"{done['folder']}\" <an empty folder>")

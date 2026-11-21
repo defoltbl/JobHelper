@@ -155,6 +155,17 @@ class OptionsService:
     def _label(cls, key: str) -> str:
         return cls._LABELS.get(key, key.replace("_", " ")).lstrip("…")
 
+    def city_problem(self, text):
+        """What is wrong with a typed city ('' = nothing): the Options' own check, as you type and before a save."""
+        name, most = str(text or "").strip(), self.OPTION_TEXTS["where"]
+        if not name:
+            return "Enter a city (e.g. Prague) before saving."
+        if textfmt.has_non_latin(name):
+            return f"{self._label('where')} must be in English (Latin letters), e.g. Prague."
+        if len(name) > most:
+            return f"“{self._label('where')}” takes up to {most} characters; you typed {len(name)}. Shorten it."
+        return ""
+
     def country_problem(self, text):
         """What is wrong with a typed country ('' = nothing): it must be a country the app knows, by its English name."""
         name = " ".join(str(text or "").split())
@@ -220,7 +231,7 @@ class OptionsService:
                 text = str(clean[key] or "").strip() if isinstance(clean[key], (str, type(None))) else None
                 if text is None:
                     return {}, f"“{self._label(key)}” must be text."
-                if len(text) > limit:
+                if len(text) > limit and key != "where":     # the city's length is said by city_problem, below
                     return {}, f"“{self._label(key)}” is {len(text)} characters long; the most is {limit}. Shorten it."
                 clean[key] = text
         if "salary_by_role" in clean:
@@ -259,8 +270,9 @@ class OptionsService:
                 return {}, f"“{key}” must be one of: " + ", ".join(allowed) + "."
         if "assistant_browser" in clean and (not isinstance(clean["assistant_browser"], str) or clean["assistant_browser"] not in chrome.BROWSERS):
             return {}, "“assistant browser” must be one of: " + ", ".join(chrome.BROWSERS) + "."
-        # a country saved by an older version stays as it is: only a changed one must be one the app knows
-        problem = self.country_problem(clean["country"]) if clean.get("country") and clean["country"] != self.options().get("country") else ""
+        # a city or country saved by an older version stays as it is: only a changed one is checked
+        problem = self.city_problem(clean["where"]) if clean.get("where") and clean["where"] != self.options().get("where") else ""
+        problem = problem or (self.country_problem(clean["country"]) if clean.get("country") and clean["country"] != self.options().get("country") else "")
         if problem:
             return {}, problem
         remote_problem = places.RemoteReach.problem(clean)

@@ -346,7 +346,7 @@ def test_backup_everything_holds_documents_and_data_encrypted(isolate_data):
                      "cover_letters/Letter_a.docx.enc", "cover_letters/Letter_a.pdf.enc", "cv/Alex_Novak_CV.docx.enc",
                      "cv_adaptation_instruction.md.enc", "jobs.json.enc", "my_letters/Alex_Novak_CoverLetter_Acme.docx.enc",
                      "responses.db.enc", "tailored_cvs/CV_a.docx.enc"]
-    assert done["files"] == len(names) and done["bytes"] > 0
+    assert done["files"] == len(names) and done["bytes"] > 0 and done["encrypted"] is True
     for path in done["folder"].rglob("*.enc"):
         assert path.read_bytes().startswith(b"JHENC1\n") and b"master cv" not in path.read_bytes()
     assert all(path.read_bytes() == data for path, data in docs.items())            # the originals were only read
@@ -558,3 +558,11 @@ def test_a_saved_file_and_its_folder_reach_the_disk_before_the_save_returns(isol
     vault.write_plain(isolate_data / "signed.json", b"{}")
     assert (isolate_data / "signed.json").read_bytes() == b"{}"
     assert synced == [False, True], "the file first, then the folder that names it"
+
+
+def test_backup_everything_says_it_is_not_encrypted_while_protection_is_off(isolate_data, monkeypatch):
+    from jobhelper import vault
+    _everything(isolate_data)
+    monkeypatch.setenv("JOBHELPER_ENCRYPT", "0")
+    done = vault.backup_everything()
+    assert done["encrypted"] is False and not list(done["folder"].rglob("*.enc"))      # the result says what the files are

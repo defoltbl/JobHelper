@@ -13,7 +13,7 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from . import email_client, store, trouble, vault
+from . import email_client, store, textfmt, trouble, vault
 
 KINDS = ["interview", "deadline", "test task", "call", "other"]
 NOTE_FIELDS = ["contact", "salary", "asked", "notes"]
@@ -250,6 +250,11 @@ class CompanyNotes:
 
     def __init__(self, file: vault.JsonFile) -> None:
         self._file = file
+
+    @staticmethod
+    def saved(company: str) -> str:
+        """What the job window says after a save: "Saved for Beta." ("this company" when the name is empty)."""
+        return textfmt.sentence("Saved for " + (str(company or "").strip() or "this company"))
 
     @property
     def path(self):

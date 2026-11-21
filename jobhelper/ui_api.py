@@ -96,6 +96,7 @@ class Api:
     profession_fields = _Via("_settings")
     currencies = _Via("_settings")
     country_of = _Via("_settings")
+    city_problem = _Via("_settings")
     country_problem = _Via("_settings")
     company_token_problem = _Via("_settings")
     labels = _Via("_settings")
