@@ -57,8 +57,9 @@ def untrusted(label: str, text: str) -> str:
     return f"<{label}>\n{_without(_tags((label,)), str(text))}\n</{label}>"
 
 
-# Every label the app puts text inside (untrusted): the page labels, a mail, and the assistant's notes and talk (#117).
-OWN_TAGS = (*PAGE_LABELS, "email", "notes", "talk")
+# Every label the app puts text inside (untrusted): the page labels, a mail, the assistant's notes and talk (#117), and
+# a rewrite's hint (cover_letter.RewriteHint).
+OWN_TAGS = (*PAGE_LABELS, "email", "notes", "talk", "hint")
 
 
 def unfence(text: str) -> str:

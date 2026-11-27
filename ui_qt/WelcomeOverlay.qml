@@ -24,9 +24,21 @@ Item {
     property string testNote: ""
     property bool testBad: false
     property var testLines: []            // one {text, bad} for each mailbox tried: each line in its own colour
-    property bool mainFailed: false       // the main mailbox's last test did not sign in: no green tick until a test signs in or it is saved again
+    // the mailboxes (1 main, 2 second) whose last test did not sign in: they stay failed until a test signs in or they are saved again
+    property var failedBoxes: []
+    readonly property bool mainFailed: failedBoxes.indexOf(1) >= 0
+    function setFailed(box, failed) { failedBoxes = failedBoxes.filter(function (b) { return b !== box; }).concat(failed ? [box] : []); }
+    // a saved mailbox that did not sign in: its row shows it and the heading names it (mailboxes are optional, so the line still runs)
+    function boxFailed(box) { return failedBoxes.indexOf(box) >= 0 && (box === 1 ? connData.email : connData.email2) === true; }
+    readonly property bool mailboxFailed: boxFailed(1) || boxFailed(2)
+    function failedText() {
+        var which = boxFailed(1) && boxFailed(2) ? "Your main and second mailboxes did not sign in – replies are not read until they do."
+                  : boxFailed(2) ? "Your second mailbox did not sign in – replies to it are not read until it does."
+                  : "Your mailbox did not sign in – replies are not read until it does.";
+        return "Your assembly line is ready. " + which;
+    }
     function savedMailbox(box) {          // saved again: that mailbox's old test result is gone, its red line and lost tick too
-        if (box === 1) mainFailed = false;
+        setFailed(box, false);
         testLines = testLines.filter(function (l) { return l.box !== box; });
     }
     function testMail() {
@@ -53,9 +65,9 @@ Item {
         if (r && r.ok) { restoreErr = ""; bridge.checkConnections(); win.reloadAll(); }
         else restoreErr = (r && r.msg) || "The key could not be used.";
     }
-    // closing keeps the main mailbox's failed test line with its lost tick: the reason stays until the next test or save
+    // closing keeps a failed mailbox's red test line: the reason stays until the next test or save
     onShownChanged: if (!shown) { testNote = ""; testBad = false; emailNote = ""; changes = []; keyText = ""; keyErr = ""; keyCopied = false; restoreErr = "";
-                                  testLines = testLines.filter(function (l) { return mainFailed && l.box === 1 && l.bad; }); }
+                                  testLines = testLines.filter(function (l) { return l.bad && failedBoxes.indexOf(l.box) >= 0; }); }
     Timer { interval: 60000; running: welcome.keyText !== ""; onTriggered: { welcome.keyText = ""; welcome.keyCopied = false; } }
     property bool emailBusy: false        // the mailbox is being tried with the address and password just entered
     property string emailNote: ""         // saved, but something to know (the server could not be reached)
@@ -120,7 +132,7 @@ Item {
             welcome.testNote = (welcome.testNote !== "" ? welcome.testNote + " " : "") + ((r && r.msg) || "");
             welcome.testLines = welcome.testLines.concat([{ box: (r && r.box) || 0, text: (r && r.msg) || "", bad: !(r && r.ok) }])
                                                  .sort(function (a, b) { return a.box - b.box; });      // the main mailbox first, whichever answered first
-            if (r && r.box === 1) welcome.mainFailed = !r.ok;
+            if (r && (r.box === 1 || r.box === 2)) welcome.setFailed(r.box, !r.ok);
             if (welcome.testLeft <= 0) welcome.testBusy = false;
         }
         function onEmailSaved(r) {
@@ -238,9 +250,10 @@ Item {
                     Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter
                         color: theme.ink; font.pixelSize: 21; font.bold: true; font.letterSpacing: -0.2
                         text: !welcome.first ? "Account & connections" : (welcome.ready ? "Welcome back" : "Let's get you set up") }
-                    Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
+                    Text { objectName: "welcomeStatus"; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
                         color: theme.soft; font.pixelSize: 12
-                        text: welcome.ready ? "Everything is connected. Your assembly line is ready."
+                        text: welcome.ready && welcome.mailboxFailed ? welcome.failedText()
+                            : welcome.ready ? "Everything is connected. Your assembly line is ready."
                             : !welcome.protectedOk ? "Your data protection needs a look before the line can run."
                             : welcome.neededText() }
                 }
@@ -272,7 +285,7 @@ Item {
                 ColumnLayout { Layout.fillWidth: true; spacing: 0
                 StepRow {
                     order: 1; label: "2"; title: "Job email"
-                    ok: connData.email === true && !welcome.mainFailed
+                    ok: connData.email === true && !welcome.boxFailed(1)
                     sub: connData.email === true ? ((connData.email_addr || "") + " · read-only")
                                                  : "Optional. Reads replies from your mailbox, never sends or deletes."
                     SmallButton { objectName: "mailTest"; visible: !welcome.editEmail && connData.email === true; enabled: !welcome.testBusy
@@ -293,16 +306,16 @@ Item {
                 RowLayout { objectName: "secondMailRow"
                     visible: connData.email === true && !welcome.editEmail
                     Layout.fillWidth: true; Layout.leftMargin: 38; Layout.topMargin: 4; spacing: 6
-                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
-                        color: connData.email2 === true ? theme.soft : theme.faint
+                    Text { objectName: "secondMailText"; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 11
+                        color: welcome.boxFailed(2) ? theme.crit : connData.email2 === true ? theme.soft : theme.faint
                         text: connData.email2 === true ? ("Second mailbox: " + (connData.email2_addr || "") + " · read-only")
                                                        : "Second mailbox (optional)" }
                     SmallButton { objectName: "secondMailAdd"; text: connData.email2 === true ? "Change" : "Add"
                         onClicked: { welcome.editBox = 2; welcome.emailDraft = connData.email2_addr || ""; welcome.hostDraft = connData.email2_host || "";
                                      welcome.pwDraft = "";
                                      welcome.emailErr = ""; welcome.editEmail = true; wEmail.forceActiveFocus(); } }
-                    SmallButton { visible: connData.email2 === true; text: "Remove"
-                        onClicked: { bridge.removeEmail2(); bridge.checkConnections(); } }
+                    SmallButton { objectName: "secondMailRemove"; visible: connData.email2 === true; text: "Remove"
+                        onClicked: { welcome.savedMailbox(2); bridge.removeEmail2(); bridge.checkConnections(); } }   // its old test result goes too
                 }
                 Item {
                     Layout.fillWidth: true; clip: true

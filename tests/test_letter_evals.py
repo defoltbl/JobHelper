@@ -13,7 +13,7 @@ import pytest
 from jobhelper import claims, cover_letter, store
 
 SET = json.loads((Path(__file__).parent / "fixtures" / "letter_evals.json").read_text(encoding="utf-8"))
-KINDS = ("claimed", "borrowed", "figures", "misplaced", "invented")
+KINDS = ("claimed", "borrowed", "figures", "misplaced", "invented", "impact")
 CASES = [c for c in SET["cases"] if "gap" not in c]          # a known gap runs on its own, pinned to what it says today
 GAPS = [c for c in SET["cases"] if "gap" in c]
 
@@ -28,7 +28,8 @@ def said(case: dict) -> dict[str, list[str]]:
     cover_letter.LetterNotes(job, [case["text"]], person["cv"]).put_on(job)
     return {"claimed": found, "borrowed": job.get("letter_check", []), "figures": job.get("letter_figures", []),
             "misplaced": [note.rsplit(" at ", 1)[-1] for note in job.get("letter_misplaced", [])],      # the employer, not the wording
-            "invented": job.get("letter_invented", [])}
+            "invented": job.get("letter_invented", []),
+            "impact": ["claim"] if job.get("letter_impact") else []}
 
 
 def test_the_golden_set_is_well_formed():
@@ -128,14 +129,14 @@ def test_the_copy_guard_sees_a_short_sentence_that_opens_a_longer_string():
 
 
 def test_no_held_out_sentence_is_a_development_row():
-    """The held-out h113, h131, h142 and h143 cases stay apart from the development rows in tests/test_claims.py: no string there
+    """The held-out h113, h131, h142, h143 and h149 cases stay apart from the development rows in tests/test_claims.py: no string there
     repeats such a sentence, as it is or nearly (case, punctuation and a word or two aside). The h113 cases whose wording
     was seen in development were rewritten in #131: the guard exempts no case. (The inv-* and older cases are
     development rows by the fixture's own note.)"""
     tree = ast.parse((Path(__file__).parent / "test_claims.py").read_text(encoding="utf-8"))
     literals = sorted({n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
                        and len(words_of(n.value)) >= 3})
-    held_out = [c for c in SET["cases"] if c["id"].startswith(("h113", "h131", "h142", "h143"))]
+    held_out = [c for c in SET["cases"] if c["id"].startswith(("h113", "h131", "h142", "h143", "h149"))]
     copies = {c["id"]: near_copies(c["text"], literals)[:1] for c in held_out if near_copies(c["text"], literals)}
     assert not copies, f"sentences copied or nearly copied into tests/test_claims.py: {copies}"
 

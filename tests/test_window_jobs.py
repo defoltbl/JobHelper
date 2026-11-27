@@ -162,6 +162,23 @@ def test_scan_all_folders_switch_is_saved(ui):
     assert ui.warnings == []
 
 
+def test_a_result_the_letter_states_without_the_cv_has_its_own_line(ui):
+    """#149: letter_impact is shown in its own amber line while the job has a letter, and goes when the note goes."""
+    (config.LETTERS_DIR / "L_lead.docx").write_bytes(b"x")
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(cover_letter_file="L_lead.docx"), render=False)
+    _open_job(ui, "lead")
+    assert ui.find("letterImpact").property("visible") is False
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_impact=["greatly simplified", "became the basis"]), render=False)
+    ui.js("detailDialog.refresh()")
+    _until_true(ui, lambda: ui.find("letterImpact").property("visible") is True)
+    text = ui.find("letterImpact").property("text")
+    assert "It states results your CV does not show: greatly simplified; became the basis." in text and "Edit letter" in text
+    assert "where your CV does not show it" not in text, "each note its own words"
+    ui.bridge._api.editor.change("lead", lambda jobs, j: j.update(letter_impact=[], cover_letter_file=""), render=False)
+    ui.js("detailDialog.refresh()")
+    _until_true(ui, lambda: ui.find("letterImpact").property("visible") is False)
+
+
 def test_application_only_cards_are_hidden_for_a_new_job_and_nothing_overflows(ui, monkeypatch):
     from jobhelper import planner
     for name in ("cv_lead.docx", "cv_lead.pdf"):
@@ -1114,6 +1131,11 @@ def test_letter_editor_explains_wrong_steps(ui, monkeypatch):
     _until_open(ui, "letterDialog")
     dialog, err = ui.find("letterDialog"), ui.find("letterErr")
     assert dialog.property("opened") is True
+    # a message can quote the model's paragraph: "<img src=…>" in it is shown as text, never rendered (review of #149)
+    from PySide6.QtQml import QQmlEngine, QQmlExpression
+    plain = [QQmlExpression(QQmlEngine.contextForObject(ui.find(name)), ui.find(name), "textFormat === Text.PlainText").evaluate()[0]
+             for name in ("letterErr", "letterInfo")]
+    assert plain == [True, True]
     ui.js('letterDialog.setText(1, "   "); letterDialog.setText(3, "")')
     ui.js("letterDialog.save()")
     assert err.property("text") == "Paragraph 2 and 4 are empty. A letter needs all 5 paragraphs." and saved == []

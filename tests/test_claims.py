@@ -93,9 +93,20 @@ def test_every_label_a_prompt_uses_for_page_text_is_named_by_the_rule():
     code = "".join(f.read_text(encoding="utf-8") for f in (Path(__file__).resolve().parent.parent / "jobhelper").glob("*.py"))
     from jobhelper import assistant_brain
     # a mail has its own rule (agent5_responses); the assistant's notes and talk are named in its system prompt (#117)
-    used = set(re.findall(r'llm\.untrusted\("(\w+)"', code)) - {"email", "notes", "talk"}
+    literal = set(re.findall(r'llm\.untrusted\("(\w+)"', code))
+    used = literal - {"email", "notes", "talk"}
     assert used and used <= set(llm.PAGE_LABELS) and all(f"<{label}>" in llm.POSTING_RULE for label in llm.PAGE_LABELS)
     assert all(f"<{label}>" in assistant_brain.SYSTEM for label in ("notes", "talk")) and set(llm.OWN_TAGS) >= used | {"notes", "talk"}
+    # a label given through a class constant (cover_letter.RewriteHint.LABEL) is read from its assignment; any other
+    # kind of label argument would slip past this guard, so the calls must be one kind or the other
+    constants = set(re.findall(r"llm\.untrusted\((?:self|cls|[A-Z]\w*)\.([A-Z_]+)\b", code))
+    through = {name: set(re.findall(r'^\s*' + name + r'\s*=\s*"(\w+)"', code, re.MULTILINE)) for name in constants}
+    calls = len(re.findall(r"llm\.untrusted\(", code))
+    assert calls == len(re.findall(r'llm\.untrusted\("\w+"', code)) + len(re.findall(
+        r"llm\.untrusted\((?:self|cls|[A-Z]\w*)\.[A-Z_]+\b", code)), "a label passed some other way is not checked"
+    assert all(through.values()), through
+    named = set().union(*through.values())
+    assert "hint" in named and set(llm.OWN_TAGS) >= literal | named, "unfence must strip every label the app fences with"
 
 
 # ── work given to the wrong employer (hands-on check, 29 Oct) ──
@@ -1022,3 +1033,193 @@ def test_a_long_run_of_words_in_s_after_an_ing_word_is_read_in_linear_time():
         start = time.perf_counter()
         check.claimed_in(hostile)
         assert time.perf_counter() - start < 1.5, hostile[:40]
+
+
+SKILLS_CV = """Lena Example
+Support Engineer
+EXPERIENCE
+Support Engineer – Tailspin Toys, Ostrava (2022 – present): ran Linux servers, shortened the release checklist and kept Bash scripts.
+QA Intern – Wide World Importers, Ostrava (2021 – 2022): tested the Android app by hand.
+SKILLS
+Bash, Terraform, Kubernetes, Grafana
+Technical skills: Ansible, Jenkins
+"""
+
+
+def test_a_skill_the_cv_names_under_no_position_is_not_given_to_one_employer():
+    """#149: a skill of the CV's skills part placed at a former employer is work the CV does not show there."""
+    check = claims.EmployerCheck(SKILLS_CV)
+    assert check.misplaced("While I was with Wide World Importers, I deployed Grafana boards for the warehouse.") == \
+        ["'Grafana' at Wide World Importers"]
+    assert check.misplaced("Kubernetes clusters were part of my routine at Tailspin Toys, next to Terraform.") == \
+        ["'Kubernetes', 'Terraform' at Tailspin Toys"], "a skills term opening the sentence is named too"
+    assert check.misplaced("For Tailspin Toys I set up Ansible and Jenkins jobs.") == ["'Ansible', 'Jenkins' at Tailspin Toys"], \
+        "a skills label line counts too"
+
+
+def test_a_skills_term_first_in_the_sentence_is_named_but_an_ordinary_first_word_is_not():
+    """#149 fix round: "Docker containers … at Northwind" lost Docker, the first word, while the later skills were named."""
+    check = claims.EmployerCheck(SKILLS_CV)
+    assert check.misplaced("Jenkins pipelines were mine to keep green at Wide World Importers.") == \
+        ["'Jenkins' at Wide World Importers"]
+    assert check.misplaced("During my years at Tailspin Toys I kept the Bash tooling tidy.") == [], "'During' is no skill"
+    assert check.misplaced("Every Friday at Wide World Importers I tested the Android app by hand.") == [], "'Every' is no skill"
+
+
+def test_a_skill_named_under_that_employer_learned_there_or_wished_for_is_no_misplaced_work():
+    check = claims.EmployerCheck(SKILLS_CV)
+    assert check.misplaced("At Tailspin Toys I kept our Bash tooling tidy.") == [], "the CV names it under that employer"
+    assert check.misplaced("Terraform and Kubernetes are tools I enjoy using.") == [], "no employer"
+    assert check.misplaced("At Wide World Importers I studied Kubernetes during evening sessions.") == [], "learning is no work"
+    assert check.misplaced("I picked up the fundamentals of Terraform at Tailspin Toys.") == [], "learning the basics"
+    assert check.misplaced("Once my time at Tailspin Toys ends, I am keen to try Terraform.") == [], "a wish"
+    assert check.misplaced("Tailspin Toys runs Grafana for every service.", company="Tailspin Toys") == [], "the employer written to"
+    assert claims.EmployerCheck(SKILLS_CV.replace("SKILLS\n", "")).misplaced("At Wide World Importers I wired Grafana alerts.") == [], \
+        "with no skills heading the list is part of the position before it"
+
+
+def test_a_result_of_own_work_the_cv_does_not_show_is_noted():
+    """#149: an inflated result of the candidate's own work ("vastly quieter") that the CV and the notes do not give."""
+    check = claims.ImpactCheck(SKILLS_CV)
+    assert check.unbacked("The Bash scripts I wrote considerably shortened every deployment.") == []      # the CV says "shortened"
+    assert check.unbacked("The Ansible roles I wrote considerably simplified each rollout.") == ["considerably simplified"]
+    assert check.unbacked("My test plans became the basis of the whole QA process.") == ["became the basis"]
+    assert check.unbacked("I rebuilt the alerting, and the nights on call got vastly quieter.") == ["vastly quieter"]
+
+
+def test_a_result_that_is_theirs_wished_for_or_backed_is_not_noted():
+    check = claims.ImpactCheck(SKILLS_CV + "\nMy own notes: my Grafana boards markedly lowered alert noise.")
+    assert check.unbacked("My Grafana work markedly lowered the alert noise on our team.") == [], "the notes back it"
+    assert check.unbacked("Your monitoring stack has become the cornerstone of many teams.") == [], "not first person"
+    assert check.unbacked("I noticed that the new release flow made support noticeably calmer.") == [], "seen, not done"
+    assert check.unbacked("I built a dashboard for your team, whose rollouts became markedly safer.") == [], "their result"
+    assert check.unbacked("I would like to make your on-call rota far lighter.") == [], "a wish"
+    assert check.unbacked("I stayed far after midnight on the release.") == [], "no comparative"
+    assert check.unbacked("We greatly simplified the rollout.") == [], "the team: not caught on purpose (see the class)"
+
+
+def test_a_result_that_points_back_to_own_work_is_noted():
+    """#149 fix round: "It made …" right after a sentence of the candidate's own done work is that work's result."""
+    check = claims.ImpactCheck(SKILLS_CV)
+    assert check.unbacked("I rewrote the alert rules for the warehouse team. It made the night shifts markedly calmer.") == \
+        ["markedly calmer"]
+    assert check.unbacked("I rewrote the alert rules for the warehouse team. This made the night shifts markedly calmer.") == \
+        ["markedly calmer"]
+    assert check.unbacked("I tuned the alert rules myself, a habit that made the night shifts markedly calmer.") == ["markedly calmer"]
+
+
+def test_a_result_that_points_back_to_their_work_or_to_no_done_work_is_not_noted():
+    check = claims.ImpactCheck(SKILLS_CV)
+    for text, why in (("Your release flow is well known. It made support noticeably calmer.", "their work before"),
+                      ("I admired your rollout tooling. It made support noticeably calmer.", "seen, and theirs"),
+                      ("I rewrote the alert rules for your warehouse team. It made the night shifts markedly calmer.",
+                       "their team after the own work"),
+                      ("I would like to rewrite your alerts. It would make support noticeably calmer.", "a wish"),
+                      ("The team rebuilt the pipeline. It made releases noticeably calmer.", "not first person"),
+                      ("I rewrote the alert rules. The company's flow made support noticeably calmer.", "no pointing back")):
+        assert check.unbacked(text) == [], why
+
+
+def test_a_result_on_myself_a_feeling_or_a_fit_is_not_noted():
+    """#149 fix round: what the work did to me ("sharpened my eye"), a feeling ("greatly enjoyed") or a fit ("better
+    suited to … than") is no result of the candidate's work."""
+    check = claims.ImpactCheck(SKILLS_CV)
+    for text, why in (("My apprenticeship greatly improved my written French.", "on me"),
+                      ("I patched the kernels, and two winters on call significantly sharpened my eye for outages.", "on me"),
+                      ("I kept the Bash scripts, and that habit made me considerably calmer during incidents.", "made me"),
+                      ("I rebuilt the staging rota and greatly enjoyed the planning with the testers.", "a feeling"),
+                      ("I tested the Android build by hand and was greatly impressed by the new camera screen.", "a feeling"),
+                      ("I drafted the runbook, which greatly relied on the old wiki pages.", "a state"),
+                      ("I moved the nightly backups onto object storage. It is far better suited to cold archives than tape.",
+                       "a comparison of two things")):
+        assert check.unbacked(text) == [], why
+    assert check.unbacked("I wrote the Bash checks, and they made deployments far faster than before.") == ["far faster"], \
+        "than before is still a result"
+
+
+def test_a_result_said_by_the_verb_of_i_or_pointing_back_in_more_shapes_is_noted():
+    """#149 fix round: the result is the verb of "I" itself ("I hugely cut"), the wider intensifiers, and "It", "This",
+    "They" after own work with "far more" or "a great deal"."""
+    check = claims.ImpactCheck(SKILLS_CV)
+    assert check.unbacked("I hugely cut the hours lost to manual restarts.") == ["hugely cut"]
+    assert check.unbacked("For the mobile team I radically simplified the test matrix.") == ["radically simplified"]
+    assert check.unbacked("I tremendously lowered the noise in the pager channel.") == ["tremendously lowered"]
+    assert check.unbacked("I cleaned up the deploy scripts. It left every engineer far more confident on Fridays.") == ["far more"]
+    assert check.unbacked("I sorted the wiki by service. That improved searching a great deal on call.") == \
+        ["improved searching a great deal"]
+    assert check.unbacked("I tidied the Kubernetes manifests. They saved us a lot of guesswork.") == ["saved us a lot"]
+    for text, why in (("I worked a lot with Terraform modules.", "an amount of work, no result"),
+                      ("I learned a great deal from the platform team.", "learning"),
+                      ("I greatly shortened the release checklist.", "the CV says shortened")):
+        assert check.unbacked(text) == [], why
+
+
+def test_the_result_check_stays_linear_on_a_long_sentence():
+    import time
+    check = claims.ImpactCheck(SKILLS_CV)
+    hostile = "I fixed it and the tool greatly simplified " * 4000 + "the work."
+    start = time.perf_counter()
+    assert check.unbacked(hostile) == ["greatly simplified"]
+    assert time.perf_counter() - start < 1.5
+
+
+QUALITIES_CV = """Tomas Example
+Warehouse Coordinator
+EXPERIENCE
+Shift Lead – Proseware Logistics, Brno (2023 – present): planned the loading rota and trained new staff.
+Warehouse Clerk – Adventure Works, Brno (2021 – 2023): counted stock and packed parcels.
+SKILLS
+Zendesk, Tableau, Leadership, Collaboration, Scrum
+Languages: Polish, Spanish
+Soft skills: Patience, Punctuality
+"""
+
+
+def test_a_language_or_a_quality_from_the_skills_at_an_employer_is_no_note():
+    """#149 fix round: spoken languages, soft skills and ways of working in the skills part are no tools."""
+    check = claims.EmployerCheck(QUALITIES_CV)
+    for text, why in (("At Adventure Works I trained two interns in Polish.", "a spoken language"),
+                      ("Spanish and Polish were both spoken on the ramp at Proseware Logistics.", "two spoken languages"),
+                      ("Leadership came with the night shifts at Proseware Logistics.", "a quality"),
+                      ("Collaboration with the drivers filled my days at Adventure Works.", "a quality"),
+                      ("We planned each week in Scrum sprints at Adventure Works.", "a way of working"),
+                      ("Patience was what the busy mornings at Adventure Works needed.", "a soft skills line")):
+        assert check.misplaced(text) == [], why
+    assert check.misplaced("At Adventure Works I logged every complaint in Zendesk.") == ["'Zendesk' at Adventure Works"]
+    assert check.misplaced("Tableau charts were part of my Monday at Proseware Logistics.") == ["'Tableau' at Proseware Logistics"]
+    coder = claims.EmployerCheck(QUALITIES_CV.replace("Languages: Polish, Spanish", "Languages: Kotlin, Polish"))
+    assert coder.misplaced("At Adventure Works I wrote a Kotlin app for stock counts.") == ["'Kotlin' at Adventure Works"], \
+        "a programming language on a Languages line is a tool"
+
+
+CURRENT_CV = """Mira Testova
+Junior Developer
+EXPERIENCE
+Junior Developer – Kestrel Freight, Plzen (2023 – present): built Django REST endpoints and wrote pytest suites.
+IT Intern – Bluefin Media, Plzen (2021 – 2022): repaired office laptops.
+KEY SKILLS
+Python, Docker, Git, Grafana
+"""
+
+
+def test_my_current_role_names_the_position_whose_dates_end_now():
+    """#149: "in my current role" places the work at the CV's present position, though the sentence gives no name."""
+    check = claims.EmployerCheck(CURRENT_CV)
+    assert check.misplaced("In my current role I rely on Git for every change.") == ["'Git' at Kestrel Freight"]
+    assert check.misplaced("At my current employer I deploy Grafana dashboards each week.") == ["'Grafana' at Kestrel Freight"]
+    assert check.misplaced("In my present job I package each service with Docker.") == ["'Docker' at Kestrel Freight"]
+    assert check.misplaced("In my current position at Kestrel Freight I keep Git tidy.") == ["'Git' at Kestrel Freight"], \
+        "the phrase and the name are one position"
+
+
+def test_my_current_role_with_its_own_work_learning_a_wish_or_no_present_position_is_no_note():
+    check = claims.EmployerCheck(CURRENT_CV)
+    assert check.misplaced("In my current role I write pytest suites.") == [], "the CV names it under that position"
+    assert check.misplaced("I rely on Git for every change.") == [], "no employer"
+    assert check.misplaced("In my current role I am learning Docker.") == [], "learning is no work"
+    assert check.misplaced("I would like to use Docker in my next role.") == [], "a wish"
+    assert check.misplaced("I hope to run Grafana in my current role soon.") == [], "a wish about the current role"
+    ended = claims.EmployerCheck(CURRENT_CV.replace("2023 – present", "2023 – 2024"))
+    assert ended.misplaced("In my current role I rely on Git for every change.") == [], "no position ends now"
+    two = claims.EmployerCheck(CURRENT_CV.replace("2021 – 2022", "2021 – now"))
+    assert two.misplaced("In my current role I rely on Git for every change.") == [], "two positions end now: unclear"

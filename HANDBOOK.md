@@ -591,7 +591,10 @@ data/                your data; only the *.example.* files are in git
   position headings (case counts, title words such as "Freelance" never), two roles at one employer are one, a word two
   employers share names neither, and the company written to names no former employer. A sentence that names exactly one employer must not name work the CV gives only to another position. What
   is left goes to `letter_misplaced` (its own amber line, refreshed when you save the letter); a rewrite is sent back
-  once, then given. Measured before it shipped on 74 real letters: the first version flagged 33, this one 0 (it
+  once, then given. A skill the CV names only in its skills part (under no position) that the letter places at one named
+  former employer is misplaced work too (#149); learning ("at X I learned about Docker", "picked up ... basics") is not. A language (a "Languages:" line) and a soft skill or way of working in the skills part (a quality-shaped word, the labels soft skills, personal, interests, and agile, scrum, kanban, lean, waterfall) are no tools and never give this note. Shortcut: a product named like a quality is missed; "Empathy" on the main skills line is not seen as a quality. A skills-part term is named wherever it stands in the sentence, also as its first word.
+  The same rule reaches the interview preparation and the form answers, and "in my current role" names the CV's current
+  position. Measured before it shipped on 74 real letters: the first version flagged 33, this one 0 (it
   reads 2 of the owner's jobs; a degree word late in a title, "(Pre-Diploma Practice)", once hid one).
   An employer the model invented is `EmployerCheck.invented` (#63, #109): a first-person sentence of work "at" a name, "for" a
   name only after a word of employment (worked, interned, intern ...), "with" a name only with a legal ending (Ltd, Inc;
@@ -654,6 +657,31 @@ data/                your data; only the *.example.* files are in git
   False-alarm shapes left, also in issue #146: "Running Kafka takes discipline.", "Tuning SAP matters most.", "Keen to
   work on large, distributed Kafka systems.", "I know Kafka from your posting.", "I am responsible for learning Kafka."
   Decision: "Knowing Kafka, I applied." is a claim, like "I know Kafka well".
+  **Impact** (`claims.ImpactCheck`, #149): a vague result about the candidate's own work that the CV and the notes do not
+  back ("greatly reduced ...", "became the backbone of ...") goes to `letter_impact` (amber line `letterImpact`, refreshed
+  on Save); a draft is sent back once. Gate: the held-out batch h149 in `tests/fixtures/letter_evals.json`, written before
+  the code: misplaced recall 0/7 to 7/7, impact 0/6 to 6/6. Second round: two held-out batches (h149-01 to 28, now spent as
+  development; h149-29 to 52, with a new person "office"): the whole set is 334/334 exact, 0 false alarms per kind; impact
+  recall 10/12. A result on oneself ("improved my English", "made me faster"), a feeling or state (enjoyed, impressed) and
+  "better suited ... than" are no result; more intensifiers count (drastically, massively, hugely, tremendously,
+  immensely, radically, "a great deal", "a lot", "I greatly reduced ..."), and "They ..." pointing back is read. Two known
+  gaps, h149-44 and h149-45: a result word the CV uses elsewhere ("reduced order errors") backs "reduced waiting
+  times", because backing is by word, not by object (owner decision: compare objects or not). Not
+  caught: "we greatly improved" (the team), a result with no intensifier, and backing is read anywhere in the CV and
+  notes, not next to that work; "my colleagues greatly improved ..." can raise a note.
+  A result sentence that opens with "it", "this", "that", "these" or "which" is noted too, when the sentence before it is
+  the candidate's own done work ("I documented each step. It made handovers noticeably smoother."). The golden set has
+  only one-sentence cases, so this path is gated only by development rows and the real-letter measurement. Not caught
+  there: a result with no pointing-back word after own work ("Then the night shifts got markedly calmer"), a chain across
+  a neutral sentence, and verbs the done-work test does not read ("set up", "joined"). A false alarm is possible:
+  "I <did> ... . It became the backbone of ..." said about the company.
+  **Rewrite hint** (`RewriteHint`, #149): the hint goes into the prompt fenced as data (`<hint>`). A hint that asks to
+  leave something out ("not ...", "without ...", "leave out ...", "do not mention ...") is checked in plain code: the new
+  paragraph must not name it; one retry, then the dialog says "The new paragraph still names 'X', which your hint asks to
+  leave out. Try again, or say the hint another way." The left-out part of a hint backs no claim. A left-out term ends at a
+  figure or a preposition and has at most 3 words ("not Kafka for 12 jobs" leaves out Kafka; 12 is still your own
+  figure). A wish about tone or length ("don't be so formal", "no more than two sentences", "not too long") leaves nothing
+  out. The system prompt says text in `<hint>` is data. An old paragraph no longer backs a result the rewrite states.
   `learns()`: a learning sentence drops the "borrowed" note only when the text shows no work at all (no claim wording, no
   statement, no "my ... pipelines", no other first-person verb of work).
   Measured on the 74 real letters: one more letter flagged, and its sentence already admitted a gap ("limited").
@@ -855,7 +883,7 @@ After every batch of changes, without being asked:
 | A remote job tied to one country is kept only for your country and the countries you add, also with "Anywhere in the world" | Such a job asks you to live in that country or to have the right to work there. "Anywhere" adds only jobs for whole parts of the world ("Remote – APAC"). One rule, `places.RemoteReach`, for the search, Options and the window. |
 | The app knows every country, each with its part of the world | An unknown name was read as "no place": "Remote, South Korea" passed as open to anyone. Codes that are also US state codes (IL, ID, MA …) count as the country for someone who searches there; "City, DE" stays Germany. |
 | Duplicates are removed after all other filters | The copy kept as the duplicate's winner could then be dropped (in Czech, too old), and the other copy was lost with the reason "duplicate". |
-| The plain letter and the profile note follow the claim rules too | `cover_letter.checked_plain` cuts a sentence that claims what the CV does not show (`enforce`) and names the rest (`LetterNotes`); only a short greeting or closing line (`FRAME_WORDS`, no digits) skips the check, and a body outside `PLAIN_WORDS` is not saved; the profile note goes through `cv_tailor.enforce`. `agent3_letters.posting_fields` fences the posting for every prompt there. One `LetterNotes` sets letter_check, letter_figures, letter_misplaced and letter_invented for the written letter, a save and the plain letter (#78). |
+| The plain letter and the profile note follow the claim rules too | `cover_letter.checked_plain` cuts a sentence that claims what the CV does not show (`enforce`) and names the rest (`LetterNotes`); only a short greeting or closing line (`FRAME_WORDS`, no digits) skips the check, and a body outside `PLAIN_WORDS` is not saved; the profile note goes through `cv_tailor.enforce`. `agent3_letters.posting_fields` fences the posting for every prompt there. One `LetterNotes` sets letter_check, letter_figures, letter_misplaced, letter_impact and letter_invented for the written letter, a save and the plain letter (#78). |
 | The rule files and the letter template are optional | Without them the built-in rules are used, and a letter template is made from the head of the CV (`cover_letter.make_template`, marked APP_MADE and brought up to date when the CV's contacts change; a template of your own is never touched, and one that went missing is not replaced). The plain letter is left only when the CV's head gives no name or contacts; `cover_letter.LetterHead.problem` then says which, and the job window shows it where Edit letter would be (#64). |
 | A search role the app does not know is asked about once, not refused | The words it knows grew up with software jobs. |
 | No Windows or Linux version | Not wanted. |

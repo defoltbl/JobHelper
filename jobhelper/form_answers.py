@@ -159,6 +159,7 @@ def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str
     first_name = cover_letter.candidate_first_name(cv_text)
     numbered = "\n".join(f"{n}. {q}" for n, q in enumerate(questions, 1))
     known = cover_letter.figure_sources(job, cv_text, own=(notes, _salary_line(job)))
+    employers, company = claims.EmployerCheck(cv_text), job.get("company", "")
     feedback, items = "", []
     for _attempt in range(2):
         data = llm.ask_json(PROMPT.format(
@@ -174,19 +175,21 @@ def generate(job: dict[str, Any], cv_text: str, questions: list[str], notes: str
         third = [i["question"] for i in items if claims.names_candidate(i["answer"], first_name)]
         found = {n: _invented(i["answer"], known, i["question"]) for n, i in enumerate(items)}
         figures = [(items[n]["question"], f) for n, fs in found.items() for f in fs]
-        if not bad and not third and not figures:
+        moved = [p for i in items for p in cover_letter.misplaced_problems(i["answer"], employers, f"The answer to \"{i['question'][:70]}\"", company)]
+        if not bad and not third and not figures and not moved:
             break
         feedback = claims.rejected(
             [f"The answer to \"{q[:70]}\" presents '{term}' as experience, but it is not in the CV. Say so plainly instead."
              for q, term in bad] +
             [f"The answer to \"{q[:70]}\" talks about the candidate by name. Write it in the first person." for q in third] +
             [p for q, f in figures for p in cover_letter.figure_problems(
-                [f], f"The answer to \"{q[:70]}\"", "Leave it out, or put [square brackets] around what the candidate must fill in.")])
+                [f], f"The answer to \"{q[:70]}\"", "Leave it out, or put [square brackets] around what the candidate must fill in.")] + moved)
     for n, item in enumerate(items):
         unbacked = _unbacked_check(item["answer"], unverified)
         invented = _figures_check(found[n])
-        if unbacked or invented:                            # still there after the retry: shown, never hidden, added to what was asked
-            item["check"] = " ".join(x for x in (unbacked, invented, item["check"]) if x)
+        misplaced = " ".join(cover_letter.misplaced_problems(item["answer"], employers, "It", company))
+        if unbacked or invented or misplaced:               # still there after the retry: shown, never hidden, added to what was asked
+            item["check"] = " ".join(x for x in (unbacked, invented, misplaced, item["check"]) if x)
         elif not item["answer"]:
             item["check"] = "No answer was drafted. Write this one yourself."
         elif unfilled(item["answer"]) and not item["check"]:

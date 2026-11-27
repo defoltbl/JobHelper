@@ -852,7 +852,13 @@ one page. If the skill matters for this job, add it back in the Word file.
 
 The line **It puts work at an employer where your CV does not show it** names work, for
 example "'REST' at Fabrikam". Select **Edit letter** and keep each piece of work with
-the job where you did it.
+the job where you did it. This also holds for a skill that your CV names only in its skills
+part. Claude can say that you learned a skill at a job. That is not work, and it gives no line.
+
+The line **It states results your CV does not show** names a result of your work, for example
+"greatly reduced the load". Your CV and your own notes do not give this result. The app already
+asked Claude once to remove it. Keep the result only if it is true. If it is not true, select
+**Edit letter** and change the sentence. The app cannot find every such result.
 
 The line **It names … as a place of your work, but your CV does not name it** names an
 employer. Neither your CV nor the posting gives that name. The app already asked Claude once
@@ -893,7 +899,9 @@ this check.
 1. Open the job and select **Edit letter**.
 2. Change the words of any paragraph yourself.
 3. To have one paragraph written again, type what to change in **For a rewrite**, for example
-   "shorter". Then select **Rewrite this paragraph**.
+   "shorter". Then select **Rewrite this paragraph**. If the hint asks to leave something out,
+   for example "not Kafka", the new paragraph must not name it. If it still does, a red line
+   says so. Try again, or say the hint another way.
 4. Select **Save**. The Word file and the PDF are updated.
 
 Figure 7.2 shows the letter editor.
@@ -1793,6 +1801,7 @@ Table 12.4 lists problems with replies, and what to do.
 | A rejection is missing | It did not arrive in a scanned mailbox, or it is in another folder | Turn on **Also archived mail and spam**, or paste the reply into the application (section 11) |
 | A reply was filed to the wrong application, or to none | Two applications at the same company, or a sender the app could not place | Open the reply and select **File under…** |
 | A warning about the second mailbox | Its password was cancelled or mistyped, or its mail server could not be reached. The warning says which | Check the second mailbox in the Account card. For a password, select **Change** |
+| The Account card heading says that a mailbox did not sign in | The test of that mailbox failed. The heading names it: "Your mailbox" is the main one | Test the mailbox again, or enter its password again. To drop the second mailbox, select **Remove** |
 
 ---
 

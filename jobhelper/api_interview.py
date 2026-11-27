@@ -183,7 +183,8 @@ class InterviewService:
             prep = j.get("interview_prep") or {}
             if not prep.get("questions"):
                 return {"ok": False, "msg": "There is no saved preparation for this job any more."}
-            new, problem = interview_prep.apply_parts(prep, list(edited or []), cv_text, notes, j.get("description") or "")
+            new, problem = interview_prep.apply_parts(prep, list(edited or []), cv_text, notes, j.get("description") or "",
+                                                       j.get("company") or "")
             if problem:
                 return {"ok": False, "msg": problem}
             j["interview_prep"] = new

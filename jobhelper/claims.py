@@ -91,14 +91,14 @@ _NOT_DONE = frozenset({"noticed", "noted", "learned", "wanted", "hoped", "liked"
 # Terraform", "I completed a course in Kafka" and "I submitted my application" are not (#113); "I did Kafka migrations" is
 # work, "I did a Kafka course" is not (#142); "I am taking over the Kafka platform" is work, "I am taking a class in Kafka"
 # is not (#143: an "-ing" verb is judged by its past, _as_past).
-_BY_OBJECT = frozenset("trained completed reviewed submitted spotted finished passed earned did took".split())
+_BY_OBJECT = frozenset("trained completed reviewed submitted spotted finished passed earned did took picked".split())
 # Verbs of the letter's own frame by who they go to: "I wrote to you", "I emailed to your team", "I emailed you", "I phoned
 # your office about the role" is the letter, "I wrote Kafka consumers" and "I wrote your Kafka connector about retries" are
 # work (#113, #131). "sent" and "e-mailed" are no past form the walk reads (_PAST), so they are not here.
 _TO_THEM = frozenset("wrote written emailed messaged phoned".split())
 _LEARNING = frozenset("""course courses training trainings webinar webinars certificate certificates certification
     certifications class classes degree degrees bootcamp bootcamps workshop workshops tutorial tutorials exam exams lesson
-    lessons lecture lectures diploma""".split())
+    lessons lecture lectures diploma basics fundamentals""".split())         # "I picked up Kafka basics" (#149)
 # the posting the text answers (the reader's own text), and the application itself
 _POSTING = frozenset("posting vacancy advert advertisement ad listing description".split())
 _APPLYING = _POSTING | frozenset("application cv résumé resume letter form documents opening role".split())
@@ -693,6 +693,8 @@ _MONTH_END = re.compile(r"[\s,(]*\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|o
 _SEPARATOR = re.compile(r"\s[–—|-]\s|,\s")
 # Study, not work: a section of it, a place of it, or a degree as the first word ("BSc, Computer Science – …").
 # "Research Intern (Pre-Diploma Practice) – Diskret" is a job: a degree word later in the line does not count.
+# The part of a CV that lists skills outside any position ("SKILLS", "Technical skills:", "TOOLS AND TECHNOLOGIES", #149)
+_SKILLS_SECTION = re.compile(r"skill|tool|technolog", re.IGNORECASE)
 _STUDY_SECTION = re.compile(r"(education|studies|certificat|course|training|language|award|publication|conference)", re.IGNORECASE)
 # a course, whatever job it trains for: "Teacher Training Course, …", "Data Analyst Bootcamp, …"
 _COURSE = re.compile(r"\b(training|course|bootcamp|diploma|degree|programme|program|certificate|studies)\b", re.IGNORECASE)
@@ -761,6 +763,7 @@ class _Position:
     names: tuple[str, ...]          # the employer's own words in the position's heading ("Fabrikam", "Labs")
     words: frozenset[str]           # the stems of every word of the position
     named_work: frozenset[str]      # the things its description names (see _named_work)
+    current: bool = False           # its dates end now ("2024 – present"): "my current role" names it
 
 
 class EmployerCheck:
@@ -777,6 +780,43 @@ class EmployerCheck:
         raw = self._read(cv_text or "")
         heads = " ".join(head for head, _body in raw)
         self._positions = self._merged([self._position(head, body, cv_text or "", heads) for head, body in raw])
+        self._skills = self._skill_words(cv_text or "")
+        now = [p for p in self._positions if p.current]
+        self._current = now[0] if len(now) == 1 else None     # several, or none: "my current role" names no one
+
+    # A part or a line of the skills that names no tool: "Soft skills: …", "PERSONAL QUALITIES", "Interests: …" (#149)
+    _NO_TOOLS = re.compile(r"\b(?:soft|personal|interest|hobb|strength|qualit)", re.IGNORECASE)
+    _LANGUAGES = re.compile(r"(?:spoken\s+|foreign\s+)?languages?", re.IGNORECASE)
+    # A quality or a way of working, not a tool: "Communication", "Teamwork", "Leadership", "Flexibility", "Agile".
+    # shortcut: a product named like one ("Airship") is no tool here; a quality of another shape ("Empathy") still is one.
+    _QUALITY = re.compile(r"[a-z]*(?:ation|ship|ness|ility|ivity|ality|work)|agile|scrum|kanban|lean|waterfall", re.IGNORECASE)
+
+    @classmethod
+    def _skill_words(cls, cv_text: str) -> frozenset[str]:
+        """The stems of the tools a CV's skills part names, outside every position (#149): each capitalised word under a
+        skills heading ("SKILLS" and then "Python, Docker") or after a skills label ("Technical skills: Git, Docker"), a
+        label before a colon left out. Qualities (_QUALITY) and the lines of soft skills or interests name no tool; a
+        "Languages:" line names only the programming languages the keywords know ("Python, SQL", not "English, Czech")."""
+        out: set[str] = set()
+        inside = False
+        for line in cv_text.splitlines():
+            line = line.strip()
+            label, colon, items = line.partition(":")
+            if _heading(line):
+                name = re.sub(r"\s+", "", line)                                      # also "K E Y  S K I L L S"
+                inside = bool(_SKILLS_SECTION.search(name)) and not cls._NO_TOOLS.search(name)
+                continue
+            labelled = bool(colon) and len(label.split()) <= 3
+            if labelled and cls._NO_TOOLS.search(label):
+                continue
+            if not (labelled and _SKILLS_SECTION.search(label)):    # else the items after the label
+                if not inside:
+                    continue
+                items = line.rsplit(":", 1)[-1]
+            spoken = labelled and cls._LANGUAGES.fullmatch(label.strip())
+            out |= {singular(w) for w in _WORD.findall(items) if (w[0].isupper() or sum(ch.isupper() for ch in w) >= 2)
+                    and ((w in keywords.VOCABULARY and w not in keywords.SPOKEN) if spoken else not cls._QUALITY.fullmatch(w))}
+        return frozenset(out)
 
     @staticmethod
     def _head_end(line: str) -> int:
@@ -841,8 +881,10 @@ class EmployerCheck:
         employer = _SEPARATOR.split(_DATES.sub(" ", head), maxsplit=1)[-1]     # after the title: "Freelance" names no one
         candidates = [w for w in _WORD.findall(employer) if len(w) >= 3 and w[0].isupper() and w.lower() not in _ROLE_WORDS]
         names = tuple(dict.fromkeys(w for w in candidates if count(cv_text, w) == count(heads, w)))
+        dates = _DATES.search(head)
         return _Position(names, frozenset(singular(w) for w in _WORD.findall(" ".join([head, *body]))),
-                         frozenset().union(*map(_named_work, body)))
+                         frozenset().union(*map(_named_work, body)),
+                         bool(dates and EmployerCheck._ONGOING.search(dates.group(0))))
 
     @staticmethod
     def _merged(positions: list[_Position]) -> list[_Position]:
@@ -855,10 +897,15 @@ class EmployerCheck:
                 out.append(p)
             else:
                 out[out.index(same)] = _Position(tuple(dict.fromkeys(same.names + p.names)), same.words | p.words,
-                                                 same.named_work | p.named_work)
+                                                 same.named_work | p.named_work, same.current or p.current)
         # a word in the headings of two employers ("Brno", "Labs") names neither of them
         shared = {n for p in out for q in out if q is not p for n in p.names if n in q.names}
-        return [_Position(tuple(n for n in p.names if n not in shared), p.words, p.named_work) for p in out]
+        return [_Position(tuple(n for n in p.names if n not in shared), p.words, p.named_work, p.current) for p in out]
+
+    # dates that end now ("2024 – present", "(Mar 2023 – now)"): the CV's current position
+    _ONGOING = re.compile(r"\b(?:present|now|today|current)\b", re.IGNORECASE)
+    # "in my current role", "at my present employer": the sentence names the current position without its name
+    _MY_CURRENT = re.compile(r"\b(?:in|at)\s+my\s+(?:current|present)\s+(?:role|job|position|employer|company)\b", re.IGNORECASE)
 
     # "I built the API at Contoso Labs", "I worked for Contoso": a name after "at", after "for" only right after a word of
     # employment (so "a tool for Slack" is no employer), after "with" only with a legal ending ("with Contoso Ltd"). It is
@@ -1027,24 +1074,105 @@ class EmployerCheck:
         return len(words) == 1 and (words[0].lower() in self._AT_IDIOMS or words[0].lower() in lowercase)
 
     def misplaced(self, text: str, company: str = "") -> list[str]:
-        """For each sentence that names one employer and the work the CV names under another one, a note such as
+        """For each sentence that names one employer and work the CV names under another one, or a skill the CV names
+        under no position ("At Fabrikam Labs I ran Docker" when Docker is only in the skills, #149), a note such as
         "'REST', 'APIs' at Fabrikam Labs" (empty: nothing is out of place). Words of `company` (the employer the text
-        is written to) name no former employer: "join Contoso Labs" is no "Fabrikam Labs"."""
+        is written to) name no former employer: "join Contoso Labs" is no "Fabrikam Labs". "In my current role" names the
+        position whose dates end now (none when the CV has no such position, or several). What a wish names and what
+        the sentence says was learned there ("I learned about Docker at …": learns) is no work."""
         target = {singular(w) for w in _WORD.findall(company or "")}
         out = []
         for sentence in sentences(text):
+            now = self._current if self._current and self._MY_CURRENT.search(sentence) else None
             named = [p for p in self._positions
-                     if any(_names(sentence, n) for n in p.names if singular(n) not in target)]
+                     if p is now or any(_names(sentence, n) for n in p.names if singular(n) not in target)]
             if len(named) != 1:
                 continue                        # no employer, or several: the sentence ties nothing to one of them
             here = named[0]
-            others = set().union(*(p.named_work for p in self._positions if p is not here))
-            words = [w for w in dict.fromkeys(_WORD.findall(sentence))
-                     if singular(w) in others and singular(w) not in here.words and singular(w) in _named_work(sentence)]
+            others = self._skills.union(*(p.named_work for p in self._positions if p is not here))
+            said = unwished(sentence)
+            things = _named_work(said)
+            # a skills-part term written with its capital names a thing wherever it stands, also first ("Docker images …")
+            words = [w for w in dict.fromkeys(_WORD.findall(said)) if singular(w) in others and singular(w) not in here.words
+                     and (singular(w) in things or (w[0].isupper() and singular(w) in self._skills))
+                     and not learns(sentence, w)]
             if words:
-                out.append(", ".join(f"'{w}'" for w in words) + " at " + " ".join(here.names))
+                out.append(", ".join(f"'{w}'" for w in words) + " at " + (" ".join(here.names) or "the current position"))
         return out
 
+
+
+class ImpactCheck:
+    """Results a first-person sentence gives the candidate's own work that nothing the person wrote shows (#149): "my
+    scripts greatly reduced the manual work", "the API I built became the foundation for …". The work is the candidate's
+    when "my" or a verb of work said as done comes before the result (_done), with no "your", "their" or "whose" between:
+    "your platform is the backbone" and "I admired how your tools greatly improved …" are no claim, and what a wish says
+    ("I hope to make it noticeably smoother") is none either. A sentence that opens by pointing back ("It made …", "This made …") gives
+    its result to the sentence before it when that one is the candidate's own work with nothing of theirs after it. The result word backs itself when the CV or the person's
+    notes use it ("reduced", "foundation").
+    shortcut: the ways of saying a big result are a short list on purpose (an intensifier with a past form or a
+    comparative, a result verb with "a great deal" or "a lot", or "became the backbone of"); "we greatly improved" and a
+    result said with no such word are not caught. What the work did to me ("improved my German"), a feeling ("greatly
+    enjoyed") and a fit ("better suited to … than") are no result. The word alone backs a result: "reduced" in the CV
+    backs "greatly reduced waiting times" too."""
+
+    _INTENSIFIER = (r"(?:greatly|significantly|dramatically|noticeably|considerably|substantially|vastly|markedly|far|drastically|"
+                    r"massively|hugely|tremendously|immensely|radically)")
+    # "far over", "far after" are no comparative
+    _NOT_MORE = r"(?!(?:over|under|after|other|ever|never|rather|whether|either|neither|later|together)\b)"
+    # no result of work: what it did to me ("improved my German"), a fit or a comparison ("far better suited to", "than email")
+    _NOT_ON_ME = r"(?!\s+(?:my|me|myself|suited)\b|\s+than\b(?!\s+(?:before|ever)\b))"
+    # "made me considerably faster" is about me too; group `i`: "I" right before the result ("I greatly reduced waste")
+    _RESULT = re.compile(r"(?<!\bme\s)(?P<i>(?<=\b(?-i:I)\s))?(?:"
+                         r"\b" + _INTENSIFIER + r"\s+" + _NOT_MORE + r"(?P<word>[a-z]{3,}(?:ed|er)|cut|sped|better|fewer|less|more)\b"
+                         + _NOT_ON_ME +
+                         r"|\b(?P<did>improved|reduced|cut|saved|increased|lowered|raised|simplified|shortened|boosted|sped)\b"
+                         + _NOT_ON_ME + r"\s+(?:[a-z]+\s+)?a\s+(?:great\s+deal|lot)\b"
+                         r"|\b(?:became|become|becomes)\s+(?:the|a|an)\s+(?:[a-z]+\s+)?(?P<role>backbone|foundation|cornerstone|basis)\b)",
+                         re.IGNORECASE)
+    # a feeling or a state, not a result: "greatly enjoyed", "greatly impressed", "greatly relied on", "greatly shaped"
+    _NOT_RESULT = _NOT_DONE | {"relied", "shaped", "deepened", "surprised", "influenced", "valued", "broadened", "widened"}
+    _THEIRS_BETWEEN = re.compile(r"\b(?:your|you|their|whose|his|her)\b", re.IGNORECASE)
+    _MY = re.compile(r"\bmy\b", re.IGNORECASE)          # "My scripts greatly reduced …": the work is the candidate's
+    # a sentence that opens by pointing back ("It made …", "This habit made …") is about the sentence before it
+    _BACK = re.compile(r"\W*(?:it|this|that|these|they|which)\b", re.IGNORECASE)
+
+    def __init__(self, backed: str) -> None:
+        self._backed = {singular(w) for w in _WORD.findall(backed or "")}
+
+    def unbacked(self, text: str) -> list[str]:
+        """The result phrases of `text` no source backs, as written ("greatly reduced", "became the foundation"); [] when
+        none. Each sentence is read a fixed number of times, however many results it states."""
+        out: dict[str, None] = {}
+        after_own = False                   # the sentence before was the candidate's own work, none of theirs after it
+        for sentence in sentences(text):
+            said = unwished(sentence)
+            found = list(self._RESULT.finditer(said))
+            own = self._own_from(said, found[-1].start()) if found else -1
+            if own < 0:                     # "I greatly reduced waste": the result is the verb of "I" itself
+                own = next((m.start() for m in found if m.group("i") is not None), -1)
+            back = self._BACK.match(said) if found and own < 0 and after_own else None
+            own = back.end() if back else own   # "I rewrote the alerts. It made the nights markedly calmer."
+            whole = self._own_from(said, len(said))
+            after_own = whole >= 0 and not self._THEIRS_BETWEEN.search(said, whole)
+            theirs = [m.start() for m in self._THEIRS_BETWEEN.finditer(said)] if own >= 0 else []
+            for result in found:
+                k = bisect.bisect_left(theirs, own)
+                if own < 0 or result.start() < own or (k < len(theirs) and theirs[k] < result.start()) \
+                        or (result.group("word") or "").lower() in self._NOT_RESULT:
+                    continue
+                if singular(result.group("word") or result.group("did") or result.group("role")) not in self._backed:
+                    out[" ".join(result.group(0).split())] = None
+        return list(out)
+
+    def _own_from(self, said: str, last: int) -> int:
+        """Where the candidate's own work starts in a sentence, before its last result at `last`: after "my", or after the
+        first "I" when a verb of work said as done comes before that result (_done); -1 when neither."""
+        mine = self._MY.search(said, 0, last)
+        if mine:
+            return mine.end()
+        first = FIRST_PERSON.search(said, 0, last)
+        return first.end() if first and _done(said[:last]) else -1
 
 # A figure, with its thousands groups ("60 000", "60,000", "60.000") read as one number.
 FIGURE = re.compile(r"(?<![\d.,])\d{1,3}(?:[ \u00a0\u202f,.]\d{3})+(?!\d)(?:[.,]\d{1,2}(?!\d))?|\d+(?:[.,]\d+)*")

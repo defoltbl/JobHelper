@@ -110,7 +110,7 @@ Dialog {
         DialogHeader {
             ColumnLayout { Layout.fillWidth: true; spacing: 2
                 DialogTitle { text: "Cover letter" }
-                Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 12
+                Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: theme.soft; font.pixelSize: 12; textFormat: Text.PlainText
                     text: (letterDialog.meta.company || "") + "  ·  " + (letterDialog.meta.title || letterDialog.meta.title_line || "") } }
             Text { objectName: "letterWords"; font.pixelSize: 12; font.bold: true
                 color: (letterDialog.words < (letterDialog.meta.min_words || 0) || letterDialog.words > (letterDialog.meta.max_words || 9999)) ? theme.warn : theme.soft
@@ -169,12 +169,14 @@ Dialog {
                 }
                 Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.faint; font.pixelSize: 11
                     text: "A rewrite asks Claude once or twice and uses your limit. It follows your letter rules and your CV; nothing is saved until you press Save." }
-                Text { objectName: "letterErr"; visible: letterDialog.err !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                // a message can quote the model's paragraph or the posting: shown as plain text, never as markup
+                Text { objectName: "letterErr"; visible: letterDialog.err !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText
                     color: theme.crit; font.pixelSize: 12; font.bold: true; text: letterDialog.err }
-                Text { objectName: "letterInfo"; visible: letterDialog.info !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                Text { objectName: "letterInfo"; visible: letterDialog.info !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText
                     color: theme.good; font.pixelSize: 12; font.bold: true; text: letterDialog.info }
                 Repeater { model: letterDialog.warnings
-                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: theme.warn; font.pixelSize: 12; text: "• " + modelData } }
+                    Text { objectName: "letterWarning"; Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText
+                        color: theme.warn; font.pixelSize: 12; text: "• " + modelData } }
             }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.line }

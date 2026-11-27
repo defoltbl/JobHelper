@@ -483,6 +483,12 @@ Dialog {
                         text: "Check your cover letter before you send it. It puts work at an employer where your CV does not show it: "
                               + (detailDialog.job.letter_misplaced || []).join("; ")
                               + ". Keep each piece of work with the job where you did it; Edit letter lets you change the sentence." }
+                    // a result of your work the letter states that your CV and your notes do not show (#149)
+                    Text { objectName: "letterImpact"; visible: (detailDialog.job.letter_impact || []).length > 0
+                        Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true
+                        text: "Check your cover letter before you send it. It states results your CV does not show: "
+                              + (detailDialog.job.letter_impact || []).join("; ")
+                              + ". Keep a result only if it is true; Edit letter lets you change the sentence." }
                     // a sentence the app took out of the letter because your CV and notes do not show it (#113): never silent
                     Text { objectName: "letterCut"; visible: (detailDialog.job.letter_cut || []).length > 0
                         Layout.fillWidth: true; wrapMode: Text.WrapAtWordBoundaryOrAnywhere; color: theme.warn; font.pixelSize: 12; font.bold: true
