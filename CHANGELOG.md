@@ -5,7 +5,7 @@ Format: a `## ` heading, then one `- ` line per change; `**words**` are shown in
 in a version go under `## Unreleased`; a released version's heading is `## 1.1.0 – 18 October 2026`
 (its tag is `v1.1.0` on GitHub). Version 1.0.0 is everything up to 17 October 2026, listed by date.
 
-## 1.3.0 – 20 November 2026
+## 1.3.0 – 27 November 2026
 
 - **Cover letters:** a skill that your CV names only in its skills part, placed in the letter at one former employer, now gives the "work at an employer where your CV does not show it" line. Learning ("at Fabrikam I learned about Docker", "picked up the basics"), a language and a soft skill are no misplaced work. Before, such a skill passed the check.
 - **Interview preparation and form answers:** the same rule now reaches the interview preparation and the form answers, and "in my current role" names the current position of your CV.
