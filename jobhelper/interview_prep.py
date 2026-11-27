@@ -210,6 +210,7 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
     unverified = cover_letter.unverified_terms(cv_text + "\n" + notes, job.get("description") or "")
     first_name = cover_letter.candidate_first_name(cv_text)
     mail_lines = "\n".join(f"- {m.get('stage', '')}: {m.get('summary', '')}" for m in (emails or [])[:6]) or "(nothing yet)"
+    employers, company = claims.EmployerCheck(cv_text), job.get("company", "")
     feedback, prep = "", Preparation({})
     for _attempt in range(2):
         data = llm.ask_json(PROMPT.format(
@@ -224,13 +225,14 @@ def generate(job: dict[str, Any], cv_text: str, emails: list[dict[str, Any]] | N
             raise ValueError("The model returned no questions.")
         # everything said in the candidate's own voice is held to the CV: the answers, the pitch, the stories, the projects
         bad, third = prep.problems(unverified, first_name)
-        if not bad and not third:
+        moved = prep.misplaced(employers, company)
+        if not bad and not third and not moved:
             break
         feedback = claims.rejected(
             [f"{where} presents '{term}' as experience, but it is not in the CV. Use the honest bridge." for where, term in bad] +
-            [f"{where} talks about the candidate by name. Write it in the first person." for where in third])
+            [f"{where} talks about the candidate by name. Write it in the first person." for where in third] + moved)
     # Whatever still claims unbacked experience after the retry is marked, not hidden: the user must see it.
-    prep.mark(unverified)
+    prep.mark(unverified, employers, company)
     saved = prep.as_dict()
     facts = config.candidate_facts(cv_text)
     for key in ("ask_hr", "ask_technical", "ask_them"):       # the app's own check, whatever the model wrote
@@ -428,12 +430,20 @@ class Preparation:
         third = [where for where, text in said if claims.names_candidate(text, first_name)]
         return bad, third
 
-    def mark(self, unverified: list[str]) -> None:
-        """Mark, in the saved preparation, what still claims more than the CV: each answer, and a list of checks."""
+    def misplaced(self, employers: claims.EmployerCheck, company: str = "") -> list[str]:
+        """Work the candidate's voice gives to an employer the CV does not name it under (#149), in the words it is sent
+        back with and marked with."""
+        return [note for where, text in self.voice() if text.strip()
+                for note in cover_letter.misplaced_problems(text, employers, where, company)]
+
+    def mark(self, unverified: list[str], employers: claims.EmployerCheck | None = None, company: str = "") -> None:
+        """Mark, in the saved preparation, what still claims more than the CV: each answer, and a list of checks (with
+        the misplaced work too, when `employers` is given)."""
         for q in self.questions:
             q["check"] = unbacked(q.get("answer", ""), unverified)
         self._data["checks"] = [f"{label} mentions {term} as experience, which is not in your CV."
-                                for label, term in ((label, unbacked(text, unverified)) for label, text in self._sheet_voice()) if term]
+                                for label, term in ((label, unbacked(text, unverified)) for label, text in self._sheet_voice()) if term] \
+            + (self.misplaced(employers, company) if employers is not None else [])
 
 
 def _clean(data: Any) -> dict[str, Any]:
@@ -519,9 +529,10 @@ def parts(prep: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def apply_parts(prep: dict[str, Any], edited: list[dict[str, Any]], cv_text: str = "", notes: str = "",
-                posting: str = "") -> tuple[dict[str, Any], str]:
+                posting: str = "", company: str = "") -> tuple[dict[str, Any], str]:
     """The preparation with the user's edits put in. Returns (new preparation, '') or
-    (the old one untouched, what is wrong). Nothing is cut silently: text that is too long is refused."""
+    (the old one untouched, what is wrong). Nothing is cut silently: text that is too long is refused.
+    `company` is the employer the preparation is for: "join Contoso Labs" names no former "Fabrikam Labs"."""
     import copy
     new = copy.deepcopy(prep)
     labels = {p["key"]: p["label"] for p in parts(prep)}
@@ -553,6 +564,7 @@ def apply_parts(prep: dict[str, Any], edited: list[dict[str, Any]], cv_text: str
                 return prep, f"“{label[:70]}” is empty. Write it, or leave the draft as it was."
             new[section][int(index)][field] = text
     if cv_text.strip():                                   # without the CV nothing can be judged: the checks stay as they were
-        Preparation(new).mark(cover_letter.unverified_terms(cv_text + "\n" + (notes or ""), posting))   # as generate checks it
+        Preparation(new).mark(cover_letter.unverified_terms(cv_text + "\n" + (notes or ""), posting),   # as generate checks it
+                              claims.EmployerCheck(cv_text), company)
     new["edited"] = date.today().isoformat()
     return new, ""

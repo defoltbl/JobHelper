@@ -73,3 +73,62 @@ def test_editing_by_hand_runs_the_same_check_as_making_it():
     # the CV could not be read this time: the checks stay as they were, they are not wiped
     again, problem = ip.apply_parts(new, [{"key": "projects.0.what", "text": "I built it and ran it on Kubernetes, at scale."}], cv_text="")
     assert problem == "" and again["checks"] == new["checks"]
+
+
+
+def test_editing_by_hand_knows_the_company_the_preparation_is_for(isolate_data):
+    """Review of #149: after an edit, "Contoso Labs" (the company written to) was read as the former "Fabrikam Labs"."""
+    from tests.test_claims import TWO_JOBS
+    prep = ip.Preparation.from_reply({"questions": [{"question": "Why us?", "answer": "A plain answer.", "kind": "about you", "audience": "hr"}]}).as_dict()
+    edit = [{"key": "questions.0.answer", "text": "At Contoso Labs I would build REST APIs."}]
+    new, problem = ip.apply_parts(prep, edit, TWO_JOBS, company="Contoso Labs")
+    assert problem == "" and new["checks"] == []
+    blind, _ = ip.apply_parts(prep, edit, TWO_JOBS)
+    assert any("at Fabrikam Labs" in c for c in blind["checks"]), "without the company the same edit is marked"
+
+
+def test_saving_edited_parts_passes_the_job_s_company(isolate_data, monkeypatch):
+    from jobhelper import api_core, config, store, ui_api
+    from tests.test_claims import TWO_JOBS
+    config.ensure_dirs()
+    monkeypatch.setattr(api_core.CvSource, "text", lambda self: TWO_JOBS)
+    store.save_jobs([store.new_job(id="a", title="Developer", company="Contoso Labs", status="interview")])
+    api = ui_api.Api()
+    prep = ip.Preparation.from_reply({"questions": [{"question": "Why us?", "answer": "A plain answer.", "kind": "about you", "audience": "hr"}]}).as_dict()
+    api.editor.change("a", lambda jobs, j: j.update(interview_prep=prep), render=False)
+    assert api.save_prep_parts("a", [{"key": "questions.0.answer", "text": "At Contoso Labs I would build REST APIs."}]) == {"ok": True, "to_check": 0}
+
+
+PLACED_CV = """Mira Testova
+Junior Developer
+EXPERIENCE
+Junior Developer – Kestrel Freight (2023 – present): built Django REST endpoints and wrote pytest suites.
+KEY SKILLS
+Python, Docker, Git
+"""
+_PLACED = {"summary": "s", "pitch": "I build web services in Python.",
+           "questions": [{"kind": "technical", "question": "How do you work with others?", "why": "",
+                          "answer": "In my current role I branch and review every change in Git."}]}
+_FIXED = {"summary": "s", "pitch": "I build web services in Python.",
+          "questions": [{"kind": "technical", "question": "How do you work with others?", "why": "",
+                         "answer": "I know Git well and review changes with care."}]}
+
+
+def test_a_skills_only_tool_placed_in_my_current_role_is_sent_back_once(isolate_data, monkeypatch):
+    """#149: the sheet put a tool of the skills list "in my current role"; the model is told so once, and a fixed sheet
+    keeps no check."""
+    from jobhelper import llm
+    prompts, replies = [], [_PLACED, _FIXED]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or replies.pop(0))
+    prep = ip.generate({"title": "Python Developer", "company": "Contoso", "description": "Python."}, PLACED_CV)
+    assert len(prompts) == 2 and "'Git' at Kestrel Freight" in prompts[1] and "'Git' at" not in prompts[0]
+    assert prep["checks"] == []
+
+
+def test_a_skills_only_tool_still_placed_after_the_retry_is_in_the_checks(isolate_data, monkeypatch):
+    from jobhelper import llm
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: dict(_PLACED))
+    prep = ip.generate({"title": "Python Developer", "company": "Contoso", "description": "Python."}, PLACED_CV)
+    assert [c for c in prep["checks"] if "'Git' at Kestrel Freight" in c] == [
+        "The answer to \"How do you work with others?\" puts 'Git' at Kestrel Freight, but the CV does not name that work "
+        "under that position. Keep each piece of work with the job where it was done."]

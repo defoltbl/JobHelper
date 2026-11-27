@@ -1049,7 +1049,7 @@ def test_a_main_mailbox_that_cannot_be_reached_loses_its_green_tick(ui, monkeypa
         assert not (lines.toVariant() if hasattr(lines, "toVariant") else lines)
     finally:
         ui.win.setProperty("connData", dict(READY))
-        ui.js("welcome.finish()")
+        ui.js("welcome.testBusy = false; welcome.failedBoxes = []; welcome.testLines = []; welcome.finish()")
     assert ui.warnings == []
 
 

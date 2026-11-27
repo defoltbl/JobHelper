@@ -345,3 +345,29 @@ def test_the_salary_list_by_role_is_checked(isolate_data):
         assert result["ok"] is False and part in result["msg"], wrong
     assert api.save_options({**api.options(), "salary_by_role": [{"role": " support ", "amount": 42000}]})["ok"] is True
     assert api.options()["salary_by_role"] == [{"role": "support", "amount": 42000}]
+
+
+PLACED_CV = """Mira Testova
+Junior Developer
+EXPERIENCE
+Junior Developer – Kestrel Freight (2023 – present): built Django REST endpoints and wrote pytest suites.
+KEY SKILLS
+Python, Docker, Git
+"""
+
+
+def test_a_skills_only_tool_placed_in_my_current_role_is_sent_back_once(monkeypatch):
+    """#149: an answer put a tool of the skills list "in my current role"; it is sent back once, and a fixed answer is clean."""
+    prompts, replies = [], [_reply(("In my current role I ship every service in Docker.", "")),
+                            _reply(("I know Docker and use it in my own projects.", ""))]
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **k: prompts.append(prompt) or replies.pop(0))
+    items = form_answers.generate(JOB, PLACED_CV, ["How do you deploy your work?"])
+    assert len(prompts) == 2 and "'Docker' at Kestrel Freight" in prompts[1]
+    assert items[0]["check"] == ""
+
+
+def test_a_skills_only_tool_still_placed_after_the_retry_is_flagged(monkeypatch):
+    monkeypatch.setattr(llm, "ask_json", lambda *a, **k: _reply(("In my current role I ship every service in Docker.", "")))
+    items = form_answers.generate(JOB, PLACED_CV, ["How do you deploy your work?"])
+    assert items[0]["check"] == ("It puts 'Docker' at Kestrel Freight, but the CV does not name that work under that "
+                                 "position. Keep each piece of work with the job where it was done.")

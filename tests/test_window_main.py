@@ -1737,9 +1737,101 @@ def test_a_failed_mailbox_test_keeps_its_lost_tick_when_the_card_opens_again(ui)
         ui.bridge.emailTested.emit({"box": 1, "ok": True, "msg": "Signed in."})
         assert _until_true(ui, lambda: welcome.property("mainFailed") is False), "a test that signs in brings the tick back"
     finally:
-        ui.js("welcome.testBusy = false; welcome.mainFailed = false; welcome.testLines = []; welcome.finish()")
+        ui.js("welcome.testBusy = false; welcome.failedBoxes = []; welcome.testLines = []; welcome.finish()")
     assert ui.warnings == []
 
+
+def test_the_account_heading_names_a_mailbox_that_did_not_sign_in(ui):
+    """Hands-on check P4: the heading said "Everything is connected" under a red mailbox line."""
+    welcome, status = ui.find("welcome"), ui.find("welcomeStatus")
+    ui.win.setProperty("connData", dict(READY))
+    ui.js("welcome.openCard()")
+    try:
+        assert _until_true(ui, lambda: welcome.property("shown") is True)
+        assert status.property("text").startswith("Everything is connected")
+        ui.js("welcome.testBusy = true; welcome.testLeft = 1")
+        ui.bridge.emailTested.emit({"box": 1, "ok": False, "msg": "The mail server imap.example.test cannot be reached."})
+        assert _until_true(ui, lambda: "mailbox did not sign in" in status.property("text"))
+        text = status.property("text")
+        assert "Everything is connected" not in text and "assembly line is ready" in text, "optional: the line still runs"
+        assert ui.js("wrapMode === Text.WordWrap", status) is True, "the longer heading wraps, never cut"
+        ui.js("welcome.savedMailbox(1)")                       # saved again: the old failure is gone
+        assert _until_true(ui, lambda: status.property("text").startswith("Everything is connected"))
+        ui.js("welcome.testBusy = true; welcome.testLeft = 1")
+        ui.bridge.emailTested.emit({"box": 1, "ok": False, "msg": "The mail server imap.example.test cannot be reached."})
+        assert _until_true(ui, lambda: "mailbox did not sign in" in status.property("text"))
+        ui.bridge.emailTested.emit({"box": 1, "ok": True, "msg": "Signed in."})
+        assert _until_true(ui, lambda: status.property("text").startswith("Everything is connected")), "a test that signs in clears it"
+    finally:
+        ui.js("welcome.testBusy = false; welcome.failedBoxes = []; welcome.testLines = []; welcome.finish()")
+        ui.win.setProperty("connData", dict(READY))
+    assert ui.warnings == []
+
+
+def test_the_account_heading_names_the_second_mailbox_that_did_not_sign_in(ui):
+    """P4 for every mailbox: a failed test of the second mailbox left "Everything is connected" in the heading."""
+    welcome, status, second = ui.find("welcome"), ui.find("welcomeStatus"), ui.find("secondMailText")
+    failed = {"ok": False, "msg": "The mail server imap.example.test cannot be reached."}
+    ui.js("welcome.openCard()")
+    ui.win.setProperty("connData", {**READY, "email2": True, "email2_addr": "second@example.com"})
+    try:
+        assert _until_true(ui, lambda: welcome.property("shown") is True)
+        assert _until_true(ui, lambda: status.property("text").startswith("Everything is connected"))
+        ui.js("welcome.testBusy = true; welcome.testLeft = 1")
+        ui.bridge.emailTested.emit({"box": 2, **failed})
+        assert _until_true(ui, lambda: "second mailbox did not sign in" in status.property("text"))
+        text = status.property("text")
+        assert "Everything is connected" not in text and "assembly line is ready" in text, "optional: the line still runs"
+        assert "replies to it are not read" in text and "–" in text and "—" not in text
+        assert welcome.property("mainFailed") is False, "the main mailbox keeps its tick"
+        assert ui.js("color === theme.crit", second) is True, "the second mailbox's row asks the same rule"
+        ui.js("welcome.savedMailbox(2)")                       # saved again: the old failure is gone
+        assert _until_true(ui, lambda: status.property("text").startswith("Everything is connected"))
+        assert ui.js("color === theme.soft", second) is True
+        ui.bridge.emailTested.emit({"box": 2, **failed})
+        assert _until_true(ui, lambda: "second mailbox did not sign in" in status.property("text"))
+        ui.bridge.emailTested.emit({"box": 2, "ok": True, "msg": "Signed in."})
+        assert _until_true(ui, lambda: status.property("text").startswith("Everything is connected")), "a test that signs in clears it"
+        ui.bridge.emailTested.emit({"box": 1, **failed})
+        ui.bridge.emailTested.emit({"box": 2, **failed})
+        assert _until_true(ui, lambda: "main and second mailboxes did not sign in" in status.property("text")), "both are named"
+        assert ui.js("wrapMode === Text.WordWrap", status) is True, "the longer heading wraps, never cut"
+    finally:
+        ui.js("welcome.testBusy = false; welcome.failedBoxes = []; welcome.testLines = []; welcome.finish()")
+        ui.win.setProperty("connData", dict(READY))
+    assert ui.warnings == []
+
+
+def test_removing_the_second_mailbox_forgets_its_failed_test(ui, monkeypatch):
+    """#149 check: after a failed test of the second mailbox, Remove kept its red line, also on close and reopen."""
+    removed = []
+    monkeypatch.setattr(config, "remove_imap2", lambda: removed.append(2))
+    monkeypatch.setattr(ui_api.Api, "connections", lambda self, sign_in=None: {**READY, "email2": False, "email2_addr": ""})
+    welcome = ui.find("welcome")
+    ui.js("welcome.openCard()")
+    ui.win.setProperty("connData", {**READY, "email2": True, "email2_addr": "second@example.com"})
+    lines = lambda: [i for i in ui.seen("welcome") if i.objectName().startswith("testNote_") and i.property("visible")]   # noqa: E731
+    try:
+        assert _until_true(ui, lambda: welcome.property("shown") is True)
+        ui.js("welcome.testBusy = true; welcome.testLeft = 1")
+        ui.bridge.emailTested.emit({"box": 2, "ok": False, "msg": "The second mailbox imap.example.test cannot be reached."})
+        assert _until_true(ui, lambda: ui.js("welcome.failedBoxes.indexOf(2) >= 0") is True)
+        assert _until_true(ui, lambda: len(lines()) == 1), "the red line of the failed test"
+        ui.js("clicked()", ui.find("secondMailRemove"))
+        assert removed == [2]
+        assert ui.js("welcome.failedBoxes.length === 0 && welcome.testLines.length === 0") is True, "its failure goes with it"
+        assert _until_true(ui, lambda: ui.js("connData.email2") is False), "the connection check after Remove has answered"
+        assert _until_true(ui, lambda: lines() == []), "no red line for a mailbox that is gone"
+        ui.js("welcome.finish()")
+        assert _until_true(ui, lambda: welcome.property("shown") is False)
+        ui.js("welcome.openCard()")
+        assert _until_true(ui, lambda: welcome.property("shown") is True)
+        assert ui.js("welcome.failedBoxes.length === 0 && welcome.testLines.length === 0") is True, "nothing comes back on reopen"
+        assert lines() == []
+    finally:
+        ui.js("welcome.testBusy = false; welcome.failedBoxes = []; welcome.testLines = []; welcome.finish()")
+        ui.win.setProperty("connData", dict(READY))
+    assert ui.warnings == []
 
 def test_the_city_box_says_its_fault_as_you_type_and_keeps_what_you_typed(ui):
     """Hands-on check R4: the City box took 120 characters with no word; only Save said "“City” takes up to 80 characters"."""
